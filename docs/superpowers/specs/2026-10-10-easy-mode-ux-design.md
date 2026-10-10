@@ -330,3 +330,12 @@ local iPhone simulators were checked, but neither had the XBRW++ native client
 installed. No native build was started and no actual updated runtime screenshot
 was obtained. Real phone layout, large-text scrolling, VoiceOver/TalkBack and
 machine receipt/recovery behavior remain manual qualification gates.
+
+The compact LAB entry also opens the restore-gated tea trial panel. Eligibility
+comes only from `nextTeaProbeCandidate(record)`: after a durably restored first
+trial it labels the approved next trial as A flag 0x04, with the same tea blob
+and unchanged B/C snapshots and 0x02 flags. It offers no generic reset or repeat,
+no new trial in production, and no further trial after the second restoration.
+Copy includes the current trial and the complete archived first-trial evidence.
+Connection, serial, busy/native-operation and original-set validation still gate
+every explicit write. This is experiment presentation, not tea capability proof.

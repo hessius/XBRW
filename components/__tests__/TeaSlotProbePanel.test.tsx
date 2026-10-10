@@ -100,7 +100,7 @@ it("keeps pending and cancelled candidates unconfirmed and requires explicit rec
     expect(options.onRestore).toHaveBeenCalledTimes(1);
 });
 
-it("retains restoration and copy in production, and never offers another trial after restoration", async () => {
+it("retains restoration and copy in production, and only offers the approved next trial in development", async () => {
     const store = seeded();
     await writeTeaSlotProbe(store, identity, port);
     Object.defineProperty(global, "__DEV__", {value: false});
@@ -117,7 +117,56 @@ it("retains restoration and copy in production, and never offers another trial a
     expect(notify).toHaveBeenCalledWith({tone: "success", message: "Tea slot probe evidence copied"});
     Object.defineProperty(global, "__DEV__", {value: true});
     await view.rerender(<TeaSlotProbePanel {...options} record={store.read("one")}/>);
+    expect(screen.getByText("Next trial: A flag 0x04")).toBeOnTheScreen();
+    expect(screen.getByRole("button", {name: "WRITE PROBE"})).toBeEnabled();
+    expect(options.onWriteProbe).not.toHaveBeenCalled();
+    await fireEvent.press(screen.getByRole("button", {name: "WRITE PROBE"}));
+    expect(options.onWriteProbe).toHaveBeenCalledTimes(1);
+    await writeTeaSlotProbe(store, identity, port);
+    await restoreTeaSlotOriginal(store, identity, port);
+    const retained = store.read("one");
+    await view.rerender(<TeaSlotProbePanel {...options} record={retained}/>);
     expect(screen.queryByRole("button", {name: "WRITE PROBE"})).toBeNull();
+    expect(screen.queryByText(/Next trial:/)).toBeNull();
+    expect(screen.getByText(/No further trial is approved/)).toBeOnTheScreen();
+    await fireEvent.press(screen.getByRole("button", {name: "COPY PROBE EVIDENCE"}));
+    expect(Clipboard.setStringAsync).toHaveBeenLastCalledWith(
+        formatTeaProbeEvidence(retained.experiment!, retained.experimentHistory));
+    const copied = JSON.parse(jest.mocked(Clipboard.setStringAsync).mock.calls.at(-1)![0]);
+    expect(copied.archivedTrials).toHaveLength(1);
+    expect(copied.archivedTrials[0].candidateId).toBe("tea-slot-0x02-one-steep-v1");
+    expect(copied.candidateId).toBe("tea-slot-0x04-one-steep-v1");
+});
+
+it("labels the first candidate and the active second candidate without suggesting changed B/C flags", async () => {
+    const store = seeded();
+    const options = props(store.read("one"));
+    const view = await renderWithProviders(<TeaSlotProbePanel {...options}/>);
+    expect(screen.getByText("Next trial: A flag 0x02")).toBeOnTheScreen();
+    await writeTeaSlotProbe(store, identity, port);
+    expect(options.onWriteProbe).not.toHaveBeenCalled();
+    await restoreTeaSlotOriginal(store, identity, port);
+    await writeTeaSlotProbe(store, identity, port);
+    await view.rerender(<TeaSlotProbePanel {...options} record={store.read("one")}/>);
+    expect(screen.getByText("This trial: A flag 0x04")).toBeOnTheScreen();
+    expect(screen.getByText(/B and C keep the exact original snapshots and flag 0x02/)).toBeOnTheScreen();
+    expect(screen.queryByText(/All slot flags remain 0x02/)).toBeNull();
+    expect(screen.queryByRole("button", {name: "WRITE PROBE"})).toBeNull();
+    expect(screen.getByRole("button", {name: "RESTORE ORIGINAL SET"})).toBeEnabled();
+});
+
+it("blocks the approved second trial for stale identity, offline, busy or running state", async () => {
+    const store = seeded();
+    await writeTeaSlotProbe(store, identity, port);
+    await restoreTeaSlotOriginal(store, identity, port);
+    const options = props(store.read("one"));
+    const view = await renderWithProviders(<TeaSlotProbePanel {...options}/>);
+    for (const change of [{serial: "other"}, {connected: false}, {busy: true}, {running: true}]) {
+        await view.rerender(<TeaSlotProbePanel {...options} {...change}/>);
+        expect(screen.getByRole("button", {name: "WRITE PROBE"})).toBeDisabled();
+        await fireEvent.press(screen.getByRole("button", {name: "WRITE PROBE"}));
+        expect(options.onWriteProbe).not.toHaveBeenCalled();
+    }
 });
 
 it("records actual display, fractional held time, drain and note separately without deriving physical success", async () => {

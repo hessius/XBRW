@@ -6,7 +6,9 @@ import {notify} from "@/components/XbrwToast";
 import {palette} from "@/constants/colors";
 import {prepareSet, SLOT_NAMES, type SlotObservation, type SlotRecord} from "@/library/slots/slotModel";
 import {teaProbeOriginal} from "@/library/slots/teaSlotCandidate";
-import {formatTeaProbeEvidence, teaProbeStatus} from "@/library/slots/teaSlotProbe";
+import {
+    formatTeaProbeEvidence, nextTeaProbeCandidate, teaProbeFlags, teaProbeStatus
+} from "@/library/slots/teaSlotProbe";
 
 export type TeaSlotProbePanelProps = {
     record: SlotRecord;
@@ -23,12 +25,12 @@ export type TeaSlotProbePanelProps = {
 };
 
 const STATUS = {
-    none: "UNTESTED candidate. One trial only.",
+    none: "UNTESTED candidate. One trial per approved candidate.",
     "pending-candidate": "Candidate saving is unresolved. Do not start A. Close this panel and use RETRY WRITE or CANCEL THIS WRITE.",
     "candidate-written": "Candidate storage confirmed. Tea hold/drain behavior is still UNTESTED until manually observed.",
     "candidate-unconfirmed": "Candidate or restoration was not confirmed. Do not start A. Restore the original set after resolving any incomplete write.",
     "pending-restore": "Original-set saving is unresolved. Do not brew. Close this panel and use RETRY WRITE or CANCEL THIS WRITE.",
-    restored: "Original set restored. This trial is retained and copyable. No second trial is allowed."
+    restored: "Original set restored. This trial is retained and copyable."
 };
 
 export default function TeaSlotProbePanel({
@@ -37,6 +39,10 @@ export default function TeaSlotProbePanel({
 }: TeaSlotProbePanelProps) {
     const experiment = record.experiment;
     const status = teaProbeStatus(record);
+    const nextCandidate = nextTeaProbeCandidate(record);
+    const shownCandidate = nextCandidate ?? experiment?.candidateId;
+    const flags = shownCandidate === undefined ? null
+        : `0x${teaProbeFlags(shownCandidate).toString(16).padStart(2, "0")}`;
     const [display, setDisplay] = useState(experiment?.observation?.display ?? "");
     const [held, setHeld] = useState(experiment?.observation?.heldSeconds?.toString() ?? "");
     const [drained, setDrained] = useState<boolean | null>(experiment?.observation?.drainedAsTea ?? null);
@@ -63,7 +69,7 @@ export default function TeaSlotProbePanel({
                         : serial === null || serial.trim() === "" ? "Wait for the machine's reported serial."
                             : busy ? "Finish the running or held brew first."
                                 : !available ? "The shared machine transport is unavailable." : null;
-    const canWrite = __DEV__ && status === "none" && block === null && preparationError === null;
+    const canWrite = __DEV__ && nextCandidate !== null && block === null && preparationError === null;
     const canRestore = experiment?.phase === "active" && block === null;
 
     function saveObservation(): void {
@@ -82,7 +88,7 @@ export default function TeaSlotProbePanel({
     async function copy(): Promise<void> {
         if (experiment === undefined) return;
         try {
-            await Clipboard.setStringAsync(formatTeaProbeEvidence(experiment));
+            await Clipboard.setStringAsync(formatTeaProbeEvidence(experiment, record.experimentHistory));
             notify({tone: "success", message: "Tea slot probe evidence copied"});
         } catch (error) {
             notify({tone: "error", message: `Could not copy tea slot probe evidence: ${
@@ -94,11 +100,20 @@ export default function TeaSlotProbePanel({
         <ScrollView testID="tea-slot-probe-panel" keyboardShouldPersistTaps="handled"
             contentContainerStyle={{gap: 16, paddingBottom: 24}} contentInsetAdjustmentBehavior="automatic">
             <Text selectable color={palette.warn}>{STATUS[status]}</Text>
+            {flags !== null && <Text selectable color={palette.text} fontWeight="600">
+                {`${nextCandidate === null ? "This trial" : "Next trial"}: A flag ${flags}`}
+            </Text>}
+            {status === "restored" && nextCandidate === null && <Text color={palette.dim}>
+                No further trial is approved. Current and archived evidence remain copyable.
+            </Text>}
             <Text selectable color={palette.text}>
                 A: 1 steep, 60 ml, 70 C, 60 s. Grinder OFF. No agitation or bypass. No leaves.
-                B and C keep the exact original snapshots. All slot flags remain 0x02.
+                B and C keep the exact original snapshots and flag 0x02.
                 The encoded nominal dose is 5 g; do not put leaves in the brewer.
             </Text>
+            {flags === "0x04" && <Text color={palette.dim}>
+                Only A&apos;s flag changes from 0x02 to 0x04. The tea blob is unchanged.
+            </Text>}
             {original !== undefined && <YStack gap="$2">
                 <Text selectable color={palette.text}>
                     {original.source === "written"
@@ -133,7 +148,7 @@ export default function TeaSlotProbePanel({
             {[error, localError, block, preparationError].filter((value): value is string => value !== null)
                 .map((value, index) => <Text key={index} selectable accessibilityRole="alert"
                     color={palette.danger}>{value}</Text>)}
-            {status === "none" && __DEV__ && <Button height="auto" minHeight={44} paddingVertical="$3"
+            {nextCandidate !== null && __DEV__ && <Button height="auto" minHeight={44} paddingVertical="$3"
                 disabled={!canWrite} onPress={() => { if (canWrite) onWriteProbe(); }}>WRITE PROBE</Button>}
             {experiment?.phase === "active" && <Button height="auto" minHeight={44} paddingVertical="$3"
                 disabled={!canRestore} onPress={() => { if (canRestore) onRestore(); }}>RESTORE ORIGINAL SET</Button>}
@@ -166,7 +181,9 @@ export default function TeaSlotProbePanel({
                 <Button height="auto" minHeight={44} paddingVertical="$3" onPress={() => void copy()}>
                     COPY PROBE EVIDENCE
                 </Button>
-                <Text color={palette.dim}>Copy includes saved observations only. Save edits before copying.</Text>
+                <Text color={palette.dim}>
+                    Copy includes current and archived trials with saved observations only. Save edits before copying.
+                </Text>
             </YStack>}
         </ScrollView>
     );
