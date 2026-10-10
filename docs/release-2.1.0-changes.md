@@ -26,6 +26,12 @@ Recovery copy describes the saving screen and the available actions, not
 frames or "verified evidence". Home cards use dot-matrix A/B/C beside the star;
 incomplete-write messages stay on the slot screen.
 
+The write overlay is removed synchronously on dismissal, without an exit
+animation retaining its modal accessibility flags while the host restores
+focus on the next frame. Its entrance and reduced-motion behaviour are
+unchanged. Sheets retain their existing dismissal contract: their modal flag
+clears immediately even while the closing visual remains mounted.
+
 The ten-stage NFC-card ceiling no longer leaks into coffee Bluetooth brewing
 or slot snapshots. Bluetooth validation instead checks the segment body's
 one-byte length; both encoders reject overflow rather than wrapping. The slot

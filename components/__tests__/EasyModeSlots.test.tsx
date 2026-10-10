@@ -1,5 +1,5 @@
 import React from "react";
-import {fireEvent, screen, waitFor, within} from "@testing-library/react-native";
+import {act, fireEvent, screen, waitFor, within} from "@testing-library/react-native";
 import {AccessibilityInfo, Dimensions, StyleSheet} from "react-native";
 import {renderWithProviders, SHEET_PRESS_TIMEOUT} from "@/test-utils/render";
 import EasyModeSlots from "@/components/EasyModeSlots";
@@ -11,6 +11,7 @@ import {createTestDatabase} from "@/test-utils/sqlite";
 import {SlotDatabase} from "@/library/slots/SlotDatabase";
 import {useEasyModeSlots} from "@/hooks/useEasyModeSlots";
 import {palette} from "@/constants/colors";
+import * as motion from "@/constants/motion";
 
 const recipes = [coffee("Morning"), coffee("Evening")];
 const native = jest.requireActual<typeof import("react-native")>("react-native");
@@ -470,6 +471,38 @@ describe("accessibility focus restoration", () => {
             deviceId: "one", serial: "serial", operation: "write", status: "error"
         }}/>);
         await expectFocus("Retry slot write");
+    });
+
+    it.each([false, true])("removes the modal before restoring focus on the next frame (reduced motion: %s)", async (reducedMotion) => {
+        const reduced = jest.spyOn(motion, "useReducedMotion").mockReturnValue(reducedMotion);
+        const options = interruptedOptions();
+        const view = await renderWithProviders(<EasyModeSlots {...options} available running attempt={{
+            deviceId: "one", serial: "serial", operation: "write", status: "writing"
+        }}/>);
+        const frames: FrameRequestCallback[] = [];
+        const raf = jest.spyOn(global, "requestAnimationFrame").mockImplementation(callback => {
+            frames.push(callback);
+            return frames.length;
+        });
+        try {
+            expect(screen.getByTestId("easy-mode-write-overlay").props.exiting).toBeUndefined();
+            await view.rerender(<EasyModeSlots {...options} available attempt={{
+                deviceId: "one", serial: "serial", operation: "write", status: "error"
+            }}/>);
+            expect(screen.queryByTestId("easy-mode-write-overlay", {includeHiddenElements: true})).toBeNull();
+            expect(screen.getByTestId("easy-mode-host").props).toMatchObject({
+                accessibilityElementsHidden: false, importantForAccessibility: "auto", pointerEvents: "auto"
+            });
+            expect(focus).not.toHaveBeenCalled();
+            expect(frames).toHaveLength(1);
+            await act(async () => frames[0](0));
+            expect(handle.mock.calls.at(-1)?.[0]?.props?.accessibilityLabel).toBe("Retry slot write");
+            expect(focus).toHaveBeenCalledTimes(1);
+            expect(focus).toHaveBeenLastCalledWith(42);
+        } finally {
+            raf.mockRestore();
+            reduced.mockRestore();
+        }
     });
 });
 

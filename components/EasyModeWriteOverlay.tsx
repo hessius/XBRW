@@ -1,6 +1,6 @@
 import React, {useEffect, useEffectEvent} from "react";
 import {AccessibilityInfo, ScrollView, View} from "react-native";
-import Animated, {FadeIn, FadeOut} from "react-native-reanimated";
+import Animated, {FadeIn} from "react-native-reanimated";
 import {Text, XStack, YStack} from "tamagui";
 import type {SlotAttempt} from "@/hooks/useEasyModeSlots";
 import Recipe from "@/library/Recipe";
@@ -53,10 +53,10 @@ export default function EasyModeWriteOverlay({record, attempt, onDismissSuccess}
     }, [success]);
 
     if (!visible) return null;
+    // No exit retention: the host restores focus on the next frame after dismissal.
     return (
         <Animated.View testID="easy-mode-write-overlay" accessibilityViewIsModal aria-modal
             entering={FadeIn.duration(reduced ? DURATION.fast : DURATION.base)}
-            exiting={FadeOut.duration(DURATION.fast)}
             style={{position: "absolute", top: 0, bottom: 0, left: 0, right: 0,
                 backgroundColor: palette.base, opacity: 0.96}}>
             <ScrollView contentContainerStyle={{flexGrow: 1, justifyContent: "center",

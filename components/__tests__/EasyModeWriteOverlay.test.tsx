@@ -106,6 +106,23 @@ it("retains the same receipt and saving status with reduced motion", async () =>
     }
 });
 
+it.each([false, true])("never retains the modal for an exit animation (reduced motion: %s)", async (reducedMotion) => {
+    const reduced = jest.spyOn(motion, "useReducedMotion").mockReturnValue(reducedMotion);
+    try {
+        const view = await renderWithProviders(<EasyModeWriteOverlay record={record()} attempt={attempt}/>);
+        const overlay = screen.getByTestId("easy-mode-write-overlay");
+        expect(overlay.props.accessibilityViewIsModal).toBe(true);
+        expect(overlay.props["aria-modal"]).toBe(true);
+        expect(overlay.props.entering).toBeDefined();
+        // Jest does not retain native exiting views; pin the retention trigger itself.
+        expect(overlay.props.exiting).toBeUndefined();
+        await view.rerender(<EasyModeWriteOverlay record={record()} attempt={{...attempt, status: "error"}}/>);
+        expect(screen.queryByTestId("easy-mode-write-overlay", {includeHiddenElements: true})).toBeNull();
+    } finally {
+        reduced.mockRestore();
+    }
+});
+
 it("covers the old running-only contract without inventing success", async () => {
     await renderWithProviders(<EasyModeSlots record={record(1)} recipes={[]} deviceId="one"
         connected available running error={null} onAssign={jest.fn()} onWrite={jest.fn()}
