@@ -15,12 +15,13 @@ type Props = {
     recovery: boolean;
     locked: boolean;
     updateProblem: string | null;
+    changeRef?: React.Ref<React.ComponentRef<typeof Button>>;
     onChange: () => void;
     onUpdate: () => void;
 };
 
 export default function EasyModeSlotCard({
-    index, snapshot, needsWrite, status, recovery, locked, updateProblem, onChange, onUpdate
+    index, snapshot, needsWrite, status, recovery, locked, updateProblem, changeRef, onChange, onUpdate
 }: Props) {
     const name = SLOT_NAMES[index];
     const recipe = snapshot === null ? null : new Recipe(undefined, snapshot.recipeJSON);
@@ -54,7 +55,7 @@ export default function EasyModeSlotCard({
             {status === "removed" && <DotMatrixText fontSize={11} weight="bold" color={ink}>
                 REMOVED FROM LIBRARY
             </DotMatrixText>}
-            {!locked && <Button height="auto" minHeight={44} paddingVertical="$3"
+            {!locked && <Button ref={changeRef} height="auto" minHeight={44} paddingVertical="$3"
                 accessibilityLabel={`Change slot ${name} recipe`} onPress={onChange}
                 backgroundColor={palette.base} color={palette.text}>
                 {snapshot === null ? "CHOOSE RECIPE" : "CHANGE"}

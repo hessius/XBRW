@@ -133,6 +133,9 @@ Replace warning-heavy footers with one focused interruption panel: a short
 heading, one reason, A/B/C received/unconfirmed/pending summary, RETRY WRITE and
 CANCEL THIS WRITE. Use amber for interruption and restrained red for an actual
 refusal or validation/storage failure. Do not render internal protocol jargon.
+Map copy and severity together: identity and internal consistency failures are
+also red, with a concise explanation rather than raw transport or database text.
+Connection loss and background interruption retain distinct, actionable reasons.
 
 Example heading: Writing stopped at B.
 Example connection reason: The connection was lost before B was confirmed.
@@ -250,6 +253,10 @@ accessibility on both platforms. Announce meaningful step, saving, failure and
 completion changes, not animation ticks. Colour and motion are never the only
 status indication. Preserve focus on dismissal and make all recovery actions
 reachable at large text sizes.
+Picker and help dismissal return accessibility focus to their originating
+CHANGE or HELP control; closing or keeping a recovery confirmation returns it
+to RETRY or CANCEL. A completed write or cancellation returns focus to the
+surviving WRITE control, only after the covering presentation is dismissed.
 
 ## Acceptance and release qualification
 

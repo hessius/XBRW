@@ -1,5 +1,5 @@
-import React, {useEffect, useState} from "react";
-import {AccessibilityInfo, FlatList, Pressable, ScrollView, View} from "react-native";
+import React, {useEffect, useRef, useState} from "react";
+import {AccessibilityInfo, findNodeHandle, FlatList, Pressable, ScrollView, View} from "react-native";
 import {Button, Input, Text, XStack, YStack, type ColorTokens} from "tamagui";
 import {useSafeAreaInsets} from "react-native-safe-area-context";
 import Recipe from "@/library/Recipe";
@@ -20,17 +20,95 @@ import {onAccent, palette} from "@/constants/colors";
 const BREW_BUSY = "The machine is busy with a running or held brew. Finish the brew before writing or recovering.";
 const SERIAL_BLOCK = "This incomplete write belongs to a different machine. Reconnect to the machine you started with.";
 
-function writeError(message: string): string {
-    if (/persist|storage|database|sqlite/i.test(message)) {
-        return `XBRW++ could not save the write record. ${message}`;
+type WriteFailure = {message: string; tone: "error" | "interruption"};
+const UNCONFIRMED: WriteFailure = {
+    message: "The write was not confirmed. Check the machine's display, then retry or cancel.",
+    tone: "interruption"
+};
+const BACKGROUND: WriteFailure = {
+    message: "Writing stopped because the app moved to the background. Keep it open when retrying.",
+    tone: "interruption"
+};
+const STORAGE: WriteFailure = {
+    message: "XBRW++ could not save changes on this phone. Check available storage and try again.",
+    tone: "error"
+};
+const IDENTITY: WriteFailure = {message: SERIAL_BLOCK, tone: "error"};
+const RECIPE: WriteFailure = {
+    message: "This recipe cannot be written. Check its settings before trying again.", tone: "error"
+};
+
+// Exact producer messages also cover journals restored after relaunch.
+const WRITE_FAILURES: Readonly<Record<string, WriteFailure>> = {
+    "Receipt unknown": UNCONFIRMED,
+    "Retrying the unconfirmed slot.": UNCONFIRMED,
+    "Easy Mode writing stopped; its recovery journal is retained.": UNCONFIRMED,
+    "The write stopped before the machine confirmed it. Check the machine before retrying.": UNCONFIRMED,
+    "The machine did not confirm this slot. Check its display before retrying.": UNCONFIRMED,
+    "The machine did not confirm that the slots were saved. Check its display before retrying.": UNCONFIRMED,
+    "The machine sent an unexpected reply. The write was not confirmed.": UNCONFIRMED,
+    "The machine did not confirm the write in order. Please check its display.": UNCONFIRMED,
+    "Easy Mode writing stopped because the app entered the background.": BACKGROUND,
+    "Easy Mode writing is unavailable in the background.": BACKGROUND,
+    "The machine refused the Easy Mode write. Fill the tank if needed, then retry.": {
+        message: "The machine refused the Easy Mode write. Fill the tank if needed, then retry.", tone: "error"
+    },
+    "The connected machine serial must match.": IDENTITY,
+    "The recovery journal serial belongs to a different machine.": IDENTITY,
+    "This write belongs to a different machine. Its serial must match.": IDENTITY,
+    "The selected machine is not the connected peripheral.": {
+        message: "Connect to the selected machine before writing.", tone: "error"
+    },
+    "The machine is busy. Easy Mode writing stopped.": {
+        message: "Writing stopped because the machine is busy. Finish its operation before retrying.", tone: "interruption"
+    },
+    "The machine is busy. Finish its operation before writing Easy Mode slots.": {
+        message: "The machine is busy. Finish its operation before writing.", tone: "error"
+    },
+    "Fill the water tank and wait for the machine to return to normal, then retry.": {
+        message: "Fill the water tank and wait for the machine to return to normal, then retry.", tone: "error"
+    },
+    "The machine is still busy or saving. Wait until it is back to normal before restarting or cancelling. If it is already back to normal, reconnect first.": {
+        message: "Wait until the machine is back to normal before retrying or cancelling. If it already is, reconnect first.",
+        tone: "error"
+    },
+    "A recipe is too large for this Bluetooth connection. Reduce its stages or volumes before writing.": {
+        message: "A recipe is too large to send. Reduce its stages or volumes before writing.", tone: "error"
+    },
+    "Choose all three recipes before writing.": {
+        message: "Choose all three recipes before writing.", tone: "error"
+    },
+    "The recipe's source identity is invalid.": RECIPE,
+    "The recipe's grinder state is invalid.": RECIPE,
+    "The recipe's brewer settings are invalid.": RECIPE,
+    "The recipe identity or stages are missing.": RECIPE,
+    "The Easy Mode snapshot's grinder settings are invalid.": RECIPE,
+    "The Easy Mode snapshot's brewer settings are invalid.": RECIPE,
+    "Choose a valid grind speed before assigning this recipe.": RECIPE,
+    "Set each stage's agitation before assigning this recipe.": RECIPE,
+    "Choose a valid pour pattern before assigning this recipe.": RECIPE
+};
+
+function writeError(message: string, journal: SlotJournal | null): WriteFailure {
+    if (["Easy Mode link lost. Receipt is unknown.", "Easy Mode connection was replaced.",
+        "The Easy Mode connection changed. Receipt is unknown.",
+        "The machine connection changed during the write."].includes(message)) {
+        return {
+            message: journal !== null && journal.acknowledged < 3
+                ? `The connection was lost before ${SLOT_NAMES[journal.acknowledged]} was confirmed.`
+                : "The connection was lost before saving was confirmed.",
+            tone: "interruption"
+        };
     }
-    if (/refused.*Easy Mode/i.test(message)) {
-        return "The machine refused the Easy Mode write. Fill the tank if needed, then retry.";
-    }
-    if (/receipt|verified.*evidence|native dispatch/i.test(message)) {
-        return "The write was not confirmed. Check the machine's display, then retry or cancel.";
-    }
-    return message;
+    if (message.startsWith("Could not persist the incomplete Easy Mode write:")
+        || message.startsWith("Easy Mode storage") || message.startsWith("SQLite")
+        || message === "disk full" || message === "Error: disk full") return STORAGE;
+    if (message.startsWith("The Easy Mode dose must be ")) return RECIPE;
+    // Unrecognised validation/native/invariant failures are errors, never missing confirmation.
+    return Object.hasOwn(WRITE_FAILURES, message) ? WRITE_FAILURES[message] : {
+        message: "XBRW++ could not complete this write. Your recipes are kept. Try again; if it repeats, contact support.",
+        tone: "error"
+    };
 }
 
 function recipeProblem(recipe: Recipe): string | null {
@@ -83,10 +161,9 @@ function RecipeChoice({recipe, onPick}: {recipe: Recipe; onPick: () => void}) {
 function StoppedWrite({journal, failure}: {journal: SlotJournal; failure: string | null}) {
     const heading = journal.acknowledged === 3 ? "Saving was not confirmed."
         : `Writing stopped at ${SLOT_NAMES[journal.acknowledged]}.`;
-    const reason = failure === null ? "The write stopped before it was confirmed. Your recipes are kept."
-        : writeError(failure);
-    const colour = failure !== null && /refus|persist|storage|database|invalid/i.test(failure)
-        ? palette.danger : palette.warn;
+    const mapped = failure === null ? null : writeError(failure, journal);
+    const reason = mapped?.message ?? "The write stopped before it was confirmed. Your recipes are kept.";
+    const colour = mapped?.tone === "error" ? palette.danger : palette.warn;
     useEffect(() => {
         AccessibilityInfo.announceForAccessibility(`${heading} ${reason}`);
     }, [heading, reason]);
@@ -114,6 +191,16 @@ export default function EasyModeSlots({
     const [usedIncoming, setUsedIncoming] = useState<string | null>(null);
     const [confirmation, setConfirmation] = useState<{deviceId: string; kind: "retry" | "cancel"} | null>(null);
     const [help, setHelp] = useState(false);
+    const changeA = useRef<React.ComponentRef<typeof Button>>(null);
+    const changeB = useRef<React.ComponentRef<typeof Button>>(null);
+    const changeC = useRef<React.ComponentRef<typeof Button>>(null);
+    const changeRefs = [changeA, changeB, changeC];
+    const helpRef = useRef<React.ComponentRef<typeof Button>>(null);
+    const retryRef = useRef<React.ComponentRef<typeof Button>>(null);
+    const cancelRef = useRef<React.ComponentRef<typeof Button>>(null);
+    const writeRef = useRef<React.ComponentRef<typeof Button>>(null);
+    const focusOrigin = useRef<React.RefObject<React.ComponentRef<typeof Button> | null> | null>(null);
+    const wasCovered = useRef(false);
     const insets = useSafeAreaInsets();
     const currentAttempt: SlotAttempt | null = attempt === null && running
         ? {deviceId, serial: serial ?? record.journal?.serial ?? null, operation: "write", status: "writing"}
@@ -130,7 +217,24 @@ export default function EasyModeSlots({
     const confirmationOpen = confirmationKind !== null && !overlay && !active;
     const helpOpen = help && !overlay && !active;
     const covered = overlay || pickerOpen || confirmationOpen || helpOpen;
+    useEffect(() => {
+        const dismissed = wasCovered.current && !covered;
+        wasCovered.current = covered;
+        if (!dismissed) return;
+        // Wait for the host to be accessible and for surviving action refs to attach.
+        const frame = requestAnimationFrame(() => {
+            const target = focusOrigin.current?.current ?? retryRef.current ?? writeRef.current ?? helpRef.current;
+            if (target !== null && "nodeType" in target) {
+                target.focus();
+                return;
+            }
+            const handle = findNodeHandle(target);
+            if (handle !== null) AccessibilityInfo.setAccessibilityFocus(handle);
+        });
+        return () => cancelAnimationFrame(frame);
+    }, [covered]);
     const failure = error ?? journal?.error ?? null;
+    const displayedFailure = failure === null ? null : writeError(failure, journal);
     const completeDraft = record.drafts.every(slot => slot !== null);
     const availability = deviceId === "" ? "Choose a machine in Settings before assigning slots."
         : !serialMatches ? SERIAL_BLOCK : busy ? BREW_BUSY
@@ -158,7 +262,8 @@ export default function EasyModeSlots({
                         {journal === null && <Text color={palette.dim}>
                             {`${dirty} ${dirty === 1 ? "slot" : "slots"} not written`}
                         </Text>}
-                        <Button accessibilityLabel="About Easy Mode" onPress={() => setHelp(true)}
+                        <Button ref={helpRef} accessibilityLabel="About Easy Mode"
+                            onPress={() => { focusOrigin.current = helpRef; setHelp(true); }}
                             height="auto" minHeight={44}>HELP</Button>
                     </XStack>
                     {incoming !== undefined && usedIncoming !== incomingKey && (
@@ -185,7 +290,11 @@ export default function EasyModeSlots({
                             needsWrite={slotNeedsWrite(record, slotIndex)} status={status}
                             recovery={journal !== null} locked={locked}
                             updateProblem={status === "edited" && current !== undefined ? recipeProblem(current) : null}
-                            onChange={() => { setSearch(""); setPicker({deviceId, index: slotIndex}); }}
+                            changeRef={changeRefs[index]}
+                            onChange={() => {
+                                focusOrigin.current = changeRefs[index];
+                                setSearch(""); setPicker({deviceId, index: slotIndex});
+                            }}
                             onUpdate={() => { if (current !== undefined) onAssign(slotIndex, current); }}/>;
                     })}
                 </ScrollView>
@@ -193,8 +302,10 @@ export default function EasyModeSlots({
                     style={{flexGrow: 0, flexShrink: 1, maxHeight: "60%", backgroundColor: palette.surface}}
                     contentContainerStyle={{padding: 16, gap: 12, paddingBottom: Math.max(insets.bottom, 16)}}>
                     {journal !== null && !active && <StoppedWrite journal={journal} failure={failure}/>}
-                    {journal === null && failure !== null && <Text selectable accessibilityRole="alert"
-                        color={palette.danger}>{writeError(failure)}</Text>}
+                    {journal === null && displayedFailure !== null && <Text selectable accessibilityRole="alert"
+                        color={displayedFailure.tone === "error" ? palette.danger : palette.warn}>
+                        {displayedFailure.message}
+                    </Text>}
                     {availability !== null && <Text color={palette.dim}>{availability}</Text>}
                     {overflow && <Text color={palette.dim}>
                         Stored slots do not run the app&apos;s automatic pause protection.
@@ -202,20 +313,25 @@ export default function EasyModeSlots({
                     {journal === null ? (
                         <>
                             <Text color={palette.dim} fontSize={13}>Writes A, B and C. Switches to EASY.</Text>
-                            <Button accessibilityLabel="Write all three slots" height="auto" minHeight="$4"
-                                paddingVertical="$3" disabled={blocked} onPress={onWrite}>WRITE TO MACHINE</Button>
+                            <Button ref={writeRef} accessibilityLabel="Write all three slots" height="auto" minHeight="$4"
+                                paddingVertical="$3" disabled={blocked}
+                                onPress={() => { focusOrigin.current = writeRef; onWrite(); }}>WRITE TO MACHINE</Button>
                             {record.written !== null && <Text color={palette.dim} fontSize={12}>
                                 {`Last written by XBRW++ ${new Date(record.written.at).toLocaleString()}.`}
                             </Text>}
                         </>
                     ) : !active && (
                         <XStack gap="$2" flexWrap="wrap">
-                            <Button accessibilityLabel="Retry slot write" height="auto" minHeight="$4"
+                            <Button ref={retryRef} accessibilityLabel="Retry slot write" height="auto" minHeight="$4"
                                 paddingVertical="$3" disabled={blocked}
-                                onPress={() => setConfirmation({deviceId, kind: "retry"})}>RETRY WRITE</Button>
-                            <Button accessibilityLabel="Cancel slot write" height="auto" minHeight="$4"
+                                onPress={() => {
+                                    focusOrigin.current = retryRef; setConfirmation({deviceId, kind: "retry"});
+                                }}>RETRY WRITE</Button>
+                            <Button ref={cancelRef} accessibilityLabel="Cancel slot write" height="auto" minHeight="$4"
                                 paddingVertical="$3" disabled={blocked}
-                                onPress={() => setConfirmation({deviceId, kind: "cancel"})}>CANCEL THIS WRITE</Button>
+                                onPress={() => {
+                                    focusOrigin.current = cancelRef; setConfirmation({deviceId, kind: "cancel"});
+                                }}>CANCEL THIS WRITE</Button>
                         </XStack>
                     )}
                 </ScrollView>
@@ -224,8 +340,9 @@ export default function EasyModeSlots({
             <XbrwSheet open={pickerOpen} onOpenChange={open => { if (!open) setPicker(null); }}
                 title={`SLOT ${pickerIndex === null ? "" : SLOT_NAMES[pickerIndex]}`} heightPercent={80}>
                 <YStack flex={1} gap="$3">
-                    {failure !== null && <Text selectable accessibilityRole="alert" color={palette.danger}>
-                        {writeError(failure)}
+                    {displayedFailure !== null && <Text selectable accessibilityRole="alert"
+                        color={displayedFailure.tone === "error" ? palette.danger : palette.warn}>
+                        {displayedFailure.message}
                     </Text>}
                     <Input accessibilityLabel="Search recipes" placeholder="Search recipes"
                         value={search} onChangeText={setSearch} color={palette.text}

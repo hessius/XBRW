@@ -1,6 +1,6 @@
 import React from "react";
 import {fireEvent, screen, waitFor, within} from "@testing-library/react-native";
-import {Dimensions, StyleSheet} from "react-native";
+import {AccessibilityInfo, Dimensions, StyleSheet} from "react-native";
 import {renderWithProviders, SHEET_PRESS_TIMEOUT} from "@/test-utils/render";
 import EasyModeSlots from "@/components/EasyModeSlots";
 import {emptySlotRecord, prepareSet, snapshotRecipe} from "@/library/slots/slotModel";
@@ -10,8 +10,10 @@ import Recipe, {CUP_TYPE} from "@/library/Recipe";
 import {createTestDatabase} from "@/test-utils/sqlite";
 import {SlotDatabase} from "@/library/slots/SlotDatabase";
 import {useEasyModeSlots} from "@/hooks/useEasyModeSlots";
+import {palette} from "@/constants/colors";
 
 const recipes = [coffee("Morning"), coffee("Evening")];
+const native = jest.requireActual<typeof import("react-native")>("react-native");
 const props = () => ({
     record: emptySlotRecord(), recipes, deviceId: "one", connected: true,
     available: false, running: false, error: null,
@@ -323,7 +325,7 @@ it("persists a picked snapshot immediately and restores it after reopening the s
     expect(screen.getByText("1 slot not written")).toBeOnTheScreen();
 });
 
-it("keeps the searchable picker and exposes the real storage failure inside it", async () => {
+it("keeps the searchable picker and explains the storage failure inside it", async () => {
     const sql = createTestDatabase();
     const store = new SlotDatabase(sql);
     sql.execSync("CREATE TRIGGER fail_slot BEFORE INSERT ON easy_mode_slots BEGIN SELECT RAISE(ABORT, 'disk full'); END;");
@@ -331,8 +333,177 @@ it("keeps the searchable picker and exposes the real storage failure inside it",
     await fireEvent.press(screen.getByRole("button", {name: "Change slot A recipe"}));
     await waitFor(async () => {
         await fireEvent.press(screen.getByRole("button", {name: "Choose Morning"}));
-        expect(screen.getByRole("alert")).toHaveTextContent(/disk full/);
+        expect(screen.getByRole("alert")).toHaveTextContent(/could not save.*phone.*storage/i);
     }, {timeout: SHEET_PRESS_TIMEOUT});
     expect(screen.getByRole("button", {name: "Choose Morning"})).toBeOnTheScreen();
     expect(new SlotDatabase(sql).read("one").drafts[0]).toBeNull();
+});
+
+function interruptedOptions() {
+    const options = props();
+    const saved = snapshotRecipe(recipes[0]);
+    options.record.journal = {
+        id: "attempt", serial: "serial", slots: [saved, saved, saved],
+        frames: prepareSet([saved, saved, saved]), acknowledged: 1, inFlight: 1, error: null
+    };
+    return options;
+}
+
+describe("accessibility focus restoration", () => {
+    let focus: jest.SpyInstance;
+    let handle: jest.SpyInstance;
+    beforeEach(() => {
+        focus = jest.spyOn(AccessibilityInfo, "setAccessibilityFocus").mockImplementation(() => {});
+        handle = jest.spyOn(native, "findNodeHandle").mockReturnValue(42);
+    });
+    afterEach(() => {
+        focus.mockRestore();
+        handle.mockRestore();
+    });
+
+    async function expectFocus(label: string) {
+        await waitFor(() => {
+            expect(screen.getByRole("button", {name: label})).toBeOnTheScreen();
+            expect(handle).toHaveBeenCalled();
+            expect(handle.mock.calls.at(-1)?.[0]?.props?.accessibilityLabel).toBe(label);
+            expect(focus).toHaveBeenLastCalledWith(42);
+        });
+    }
+
+    it.each([
+        ["Change slot B recipe", false],
+        ["About Easy Mode", false],
+        ["Retry slot write", true],
+        ["Cancel slot write", true]
+    ] as const)("restores the originating %s after CLOSE", async (label, recovery) => {
+        await renderWithProviders(<EasyModeSlots {...(recovery ? interruptedOptions() : props())} available/>);
+        await fireEvent.press(screen.getByRole("button", {name: label}));
+        expect(focus).not.toHaveBeenCalled();
+        await waitFor(async () => {
+            await fireEvent.press(screen.getByRole("button", {name: "Close"}));
+            expect(screen.getByRole("button", {name: label})).toBeOnTheScreen();
+        }, {timeout: SHEET_PRESS_TIMEOUT});
+        await expectFocus(label);
+    });
+
+    it("restores CHANGE after a successful picker assignment", async () => {
+        const options = props();
+        await renderWithProviders(<EasyModeSlots {...options}/>);
+        await fireEvent.press(screen.getByRole("button", {name: "Change slot C recipe"}));
+        await waitFor(async () => {
+            await fireEvent.press(screen.getByRole("button", {name: "Choose Evening"}));
+            expect(options.onAssign).toHaveBeenCalledWith(2, recipes[1]);
+        }, {timeout: SHEET_PRESS_TIMEOUT});
+        await expectFocus("Change slot C recipe");
+    });
+
+    it.each(["retry", "cancel"] as const)("restores %s after KEEP THIS WRITE", async (kind) => {
+        await renderWithProviders(<EasyModeSlots {...interruptedOptions()} available/>);
+        const label = kind === "retry" ? "Retry slot write" : "Cancel slot write";
+        await fireEvent.press(screen.getByRole("button", {name: label}));
+        await waitFor(async () => {
+            await fireEvent.press(screen.getByRole("button", {name: "KEEP THIS WRITE"}));
+            expect(screen.getByRole("button", {name: label})).toBeOnTheScreen();
+        }, {timeout: SHEET_PRESS_TIMEOUT});
+        await expectFocus(label);
+    });
+
+    it.each([false, true])("restores RETRY after retry choice restart=%s without an active attempt", async (restart) => {
+        const options = interruptedOptions();
+        await renderWithProviders(<EasyModeSlots {...options} available/>);
+        await fireEvent.press(screen.getByRole("button", {name: "Retry slot write"}));
+        await waitFor(async () => {
+            await fireEvent.press(screen.getByRole("button", {name: restart
+                ? "Confirm machine is back to normal and retry" : "Finish write while machine is still saving"}));
+            expect(options.onRecover).toHaveBeenCalledWith(restart);
+        }, {timeout: SHEET_PRESS_TIMEOUT});
+        await expectFocus("Retry slot write");
+    });
+
+    it("restores surviving WRITE after confirmed cancellation, not the removed CANCEL", async () => {
+        const options = interruptedOptions();
+        const view = await renderWithProviders(<EasyModeSlots {...options} available/>);
+        await fireEvent.press(screen.getByRole("button", {name: "Cancel slot write"}));
+        await waitFor(async () => {
+            await fireEvent.press(screen.getByRole("button", {name: "Confirm machine is back to normal and cancel"}));
+            expect(options.onCancel).toHaveBeenCalledTimes(1);
+        }, {timeout: SHEET_PRESS_TIMEOUT});
+        await view.rerender(<EasyModeSlots {...options} available running attempt={{
+            deviceId: "one", serial: "serial", operation: "cancel", status: "cancelling"
+        }}/>);
+        focus.mockClear();
+        handle.mockClear();
+        const completed = {...options.record, drafts: options.record.journal!.slots, journal: null};
+        await view.rerender(<EasyModeSlots {...options} record={completed} available attempt={{
+            deviceId: "one", serial: "serial", operation: "cancel", status: "cancelled"
+        }}/>);
+        await expectFocus("Write all three slots");
+    });
+
+    it.each(["write", "recover"] as const)("restores surviving WRITE after %s success is dismissed", async (operation) => {
+        const options = interruptedOptions();
+        const saved = options.record.journal!.slots;
+        const completed = {...options.record, drafts: saved, journal: null, written: {at: 1000, slots: saved}};
+        const onDismissSuccess = jest.fn();
+        const view = await renderWithProviders(<EasyModeSlots {...options} available running attempt={{
+            deviceId: "one", serial: "serial", operation, status: "writing"
+        }}/>);
+        await view.rerender(<EasyModeSlots {...options} available record={completed} onDismissSuccess={onDismissSuccess}
+            attempt={{deviceId: "one", serial: "serial", operation, status: "success"}}/>);
+        expect(focus).not.toHaveBeenCalled();
+        await waitFor(() => expect(onDismissSuccess).toHaveBeenCalledTimes(1), {timeout: SHEET_PRESS_TIMEOUT});
+        await view.rerender(<EasyModeSlots {...options} available record={completed} attempt={null}/>);
+        await expectFocus("Write all three slots");
+    });
+
+    it("restores surviving RETRY after a WRITE interruption", async () => {
+        const options = props();
+        const saved = snapshotRecipe(recipes[0]);
+        options.record.drafts = [saved, saved, saved];
+        const view = await renderWithProviders(<EasyModeSlots {...options} available/>);
+        await fireEvent.press(screen.getByRole("button", {name: "Write all three slots"}));
+        await view.rerender(<EasyModeSlots {...options} available running attempt={{
+            deviceId: "one", serial: "serial", operation: "write", status: "writing"
+        }}/>);
+        expect(focus).not.toHaveBeenCalled();
+        await view.rerender(<EasyModeSlots {...interruptedOptions()} available attempt={{
+            deviceId: "one", serial: "serial", operation: "write", status: "error"
+        }}/>);
+        await expectFocus("Retry slot write");
+    });
+});
+
+it.each([
+    "The Easy Mode frame does not match its durable dispatch boundary.",
+    "All three Easy Mode receipts are required before storage completion.",
+    "The Easy Mode recovery frames disagree with their snapshots.",
+    "The connected machine serial must match.",
+    "The recipe's brewer settings are invalid.",
+    "The Easy Mode dose must be 6-30 g.",
+    "Could not persist the incomplete Easy Mode write: disk full. Original failure: Receipt unknown",
+    "Unexpected native failure"
+])("shows an actual failure in red without exposing internal details: %s", async (error) => {
+    await renderWithProviders(<EasyModeSlots {...interruptedOptions()} available error={error}/>);
+    expect(screen.getByText("Writing stopped at B.")).toHaveStyle({color: palette.danger});
+    expect(screen.getByRole("alert")).not.toHaveTextContent(/durable|dispatch|receipt|journal|serial|invariant/i);
+    expect(screen.getByRole("alert")).not.toHaveTextContent(error);
+});
+
+it("keeps definite machine refusal red with actionable copy", async () => {
+    await renderWithProviders(<EasyModeSlots {...interruptedOptions()} available
+        error="The machine refused the Easy Mode write. Fill the tank if needed, then retry."/>);
+    expect(screen.getByText("Writing stopped at B.")).toHaveStyle({color: palette.danger});
+    expect(screen.getByRole("alert")).toHaveTextContent(/machine refused.*Fill the tank/);
+});
+
+it.each([
+    ["Easy Mode link lost. Receipt is unknown.", "The connection was lost before B was confirmed."],
+    ["The Easy Mode connection changed. Receipt is unknown.", "The connection was lost before B was confirmed."],
+    ["Easy Mode writing stopped because the app entered the background.",
+        "Writing stopped because the app moved to the background. Keep it open when retrying."]
+])("preserves the specific interruption reason in amber: %s", async (error, copy) => {
+    await renderWithProviders(<EasyModeSlots {...interruptedOptions()} available error={error}/>);
+    expect(screen.getByRole("alert")).toHaveTextContent(copy);
+    expect(screen.getByText("Writing stopped at B.")).toHaveStyle({color: palette.warn});
+    expect(screen.getByRole("alert")).not.toHaveTextContent(/receipt|journal/i);
 });
