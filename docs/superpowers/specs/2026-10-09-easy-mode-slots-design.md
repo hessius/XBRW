@@ -57,6 +57,33 @@ and the overall completion state. Leaving the screen cannot cancel already
 sent frames or destroy the journal. Do not offer a generic Cancel or Reset
 that makes a partial machine batch disappear from the app.
 
+### Departure implementation notes (2026-10-10)
+
+Easy Mode uses `usePreventRemove` from `expo-router/react-navigation`, not a
+standalone `beforeRemove` listener: the hook publishes the native-stack
+prevention context required for iOS swipe dismissal. Prevention is enabled
+during an active write/recovery/cancellation, or while focused with changed
+machine bytes without a pending journal. An active operation blocks without a
+reminder;
+otherwise the first held action is replayed exactly once on LEAVE FOR NOW.
+Replay retains the hook's original navigation action and visited-route marker.
+Stay, closing the reminder and WRITE discard that action. Machine identity
+changes, blur, active recovery, a pending journal or byte equality invalidate the
+reminder without effect-seeded state.
+
+The global LiveBrewBar is a navigator sibling, so its pushes need an explicit
+gate. Focus-scoped Easy Mode registrations send both record and live-view
+pushes through the same held-action policy. Active operations and slot
+presentations (including the departure reminder, picker, recovery confirmation,
+help and write/success overlay) block bar actions and hide the sibling from
+VoiceOver/TalkBack, with pointer input disabled. Blur/unmount releases the
+registrations; unrelated routes keep their existing bar behavior. This gate
+neither dismisses nor restarts the actual run, and live navigation remains
+`/brew?view=1`. The existing global rating-note coverage policy is unchanged.
+Scripted tests assert the prevention API's flag/callback as well as sibling
+pushes, coverage and cleanup on both platforms; native gesture/accessibility
+checks remain release gates, not claims established by a mocked navigator.
+
 ## Assignment and snapshot model
 
 Use a new slot domain under `library/slots/`, not fields on Recipe. A slot

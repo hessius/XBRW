@@ -11,6 +11,7 @@ import {
 } from "@/library/slots/slotModel";
 import {SLOT_INTEGRATION_BLOCK} from "@/library/slots/slotWriter";
 import type {SlotAttempt} from "@/hooks/useEasyModeSlots";
+import {useLiveBrewBarGuard} from "@/hooks/useLiveBrewBarGuard";
 import EasyModeSlotCard from "@/components/EasyModeSlotCard";
 import EasyModeWriteOverlay, {slotOverlayVisible} from "@/components/EasyModeWriteOverlay";
 import PourProfile from "@/components/PourProfile";
@@ -133,6 +134,7 @@ export type EasyModeSlotsProps = {
     serialMatches?: boolean;
     available: boolean;
     running: boolean;
+    guardLiveBrewBar?: boolean;
     error: string | null;
     attempt?: SlotAttempt | null;
     onDismissSuccess?: () => void;
@@ -203,6 +205,7 @@ function StoppedWrite({journal, failure}: {journal: SlotJournal; failure: string
 export default function EasyModeSlots({
     record, recipes, incoming, header, deviceId, serial, connected, available, running, error,
     attempt = null, onDismissSuccess, writeControlRef, busy = false, serialMatches = true,
+    guardLiveBrewBar = false,
     onAssign, onWrite, onRecover, onCancel
 }: EasyModeSlotsProps) {
     const [picker, setPicker] = useState<{deviceId: string; index: SlotIndex} | null>(null);
@@ -237,6 +240,7 @@ export default function EasyModeSlots({
     const confirmationOpen = confirmationKind !== null && !overlay && !active;
     const helpOpen = help && !overlay && !active;
     const covered = overlay || pickerOpen || confirmationOpen || helpOpen;
+    useLiveBrewBarGuard(guardLiveBrewBar, {covered});
     useEffect(() => {
         const dismissed = wasCovered.current && !covered;
         wasCovered.current = covered;
