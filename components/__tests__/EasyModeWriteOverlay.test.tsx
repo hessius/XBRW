@@ -110,17 +110,17 @@ it("cannot cross receipt thirds from a saving status alone", async () => {
 it("holds only receipt boundaries under reduced motion and creates no estimate clock", async () => {
     jest.useFakeTimers();
     const reduced = jest.spyOn(motion, "useReducedMotion").mockReturnValue(true);
-    const interval = jest.spyOn(global, "setInterval");
+    const timeout = jest.spyOn(global, "setTimeout");
     try {
         const view = await renderWithProviders(<EasyModeWriteOverlay record={record(1)} attempt={attempt}/>);
         expect(litDots()).toBe(8);
         await act(async () => jest.advanceTimersByTime(SLOT_WRITE_ESTIMATE_MS * 2));
         expect(litDots()).toBe(8);
-        expect(interval).not.toHaveBeenCalled();
+        expect(timeout.mock.calls.some(([, delay]) => delay === SLOT_WRITE_ESTIMATE_TICK_MS)).toBe(false);
         await view.unmount();
     } finally {
         reduced.mockRestore();
-        interval.mockRestore();
+        timeout.mockRestore();
         jest.useRealTimers();
     }
 });

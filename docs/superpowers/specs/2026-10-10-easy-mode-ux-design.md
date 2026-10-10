@@ -134,6 +134,11 @@ no percentage is shown or announced. Announce status changes, never ticks.
 Reduce Motion uses receipt boundaries without an estimate clock. Dismissal,
 identity/attempt changes and backgrounding clean up the clock; foregrounding
 alone does not restart it.
+The estimate uses one cancellable timeout at a time, not an interval. A queued
+tick checks its stopped flag before updating state or scheduling another tick,
+so a receipt/dismissal cannot revive the retired slice. Real shared-owner route
+tests exercise receipt and timer cleanup together, in addition to isolated
+ceremony tests.
 
 Keep this instruction visible:
 

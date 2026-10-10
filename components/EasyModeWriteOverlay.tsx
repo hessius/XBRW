@@ -57,16 +57,24 @@ export default function EasyModeWriteOverlay({record, attempt, onDismissSuccess}
     useEffect(() => {
         if (estimateKey === null || reduced || AppState.currentState !== "active") return;
         let elapsed = 0;
-        const timer = setInterval(() => {
+        let stopped = false;
+        let timer: ReturnType<typeof setTimeout>;
+        const tick = () => {
+            if (stopped) return;
             elapsed += SLOT_WRITE_ESTIMATE_TICK_MS;
             setEstimate({key: estimateKey, fraction: EASING.slotEstimate(Math.min(elapsed / SLOT_WRITE_ESTIMATE_MS, 1))});
-            if (elapsed >= SLOT_WRITE_ESTIMATE_MS) clearInterval(timer);
-        }, SLOT_WRITE_ESTIMATE_TICK_MS);
+            if (elapsed < SLOT_WRITE_ESTIMATE_MS) timer = setTimeout(tick, SLOT_WRITE_ESTIMATE_TICK_MS);
+        };
+        const stop = () => {
+            stopped = true;
+            clearTimeout(timer);
+        };
+        timer = setTimeout(tick, SLOT_WRITE_ESTIMATE_TICK_MS);
         const subscription = AppState.addEventListener("change", state => {
-            if (state !== "active") clearInterval(timer);
+            if (state !== "active") stop();
         });
         return () => {
-            clearInterval(timer);
+            stop();
             subscription.remove();
         };
     }, [estimateKey, reduced]);
