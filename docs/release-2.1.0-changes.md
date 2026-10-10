@@ -353,17 +353,22 @@ is refused before journal creation; reconnect explicitly rather than assuming
 the machine still accepts it.
 
 `release(false)` removes attempt observers/timers but leaves durable recovery
-exclusion. Recovery sends only remaining immutable frames from a known boundary;
-SAVING_SLOTS is the only non-terminal machine state allowed for that recovery.
-An in-flight slot or all receipts without final completion stays blocked.
+exclusion. The conservative default remains blocked when the in-flight slot is
+uncertain. An explicit recovery action while SAVING_SLOTS may replay only the
+immutable frame for the first unconfirmed slot; it does not advance the
+boundary or alter the frame. If all three receipts are already confirmed but
+fresh final completion is missing, recovery is observe-only: it waits for a
+fresh SLOTS_SAVED and sends no frames. SAVING_SLOTS is the only non-terminal
+machine state allowed for replay.
 An optional `SlotLease.assertCurrent` checks invalidation immediately before
 durable mutations, including atomic promotion. Safe release requires no journal.
 
 Real Machine + fake transport + real SQLite tests now exercise receipt parsing,
 early ACK/final buffering, hung native dispatch, exact timeout thresholds and
 pacing, duplicates/refusals, stale callbacks, identity, restart/reconnect,
-background invalidation, contention and persistence failures. They do **not**
-prove firmware ordering, replay semantics or physical storage.
+background invalidation, contention and persistence failures. These software
+tests do **not** establish that duplicate replay is safe; they do not prove
+firmware ordering, replay semantics or physical storage.
 
 **UNMEASURED software limits:** native dispatch (including its pacing gap),
 receipt after native resolution, and final completion each have a separate
@@ -381,8 +386,9 @@ registrations/known old peripheral scopes; the wire also carries no connection
 epoch to identify a same-peripheral old packet delivered as a new native event.
 Verify these ordering/lifecycle assumptions on actual iOS/Android BLE hardware.
 
-Full release testing should cover both iOS and Android. NFC regressions require
-physical devices and genuine cards; neither simulator proves card safety.
+Physical qualification of the recovery/replay behavior on real hardware remains
+**OPEN**. Full release testing should cover both iOS and Android. NFC regressions
+require physical devices and genuine cards; neither simulator proves card safety.
 
 ## Approved development order
 
