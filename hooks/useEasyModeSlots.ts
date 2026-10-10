@@ -8,7 +8,7 @@ import {
     emptySlotRecord, readSlotRecipe, snapshotRecipe, type SlotIndex, type SlotRecord
 } from "@/library/slots/slotModel";
 import {
-    recoverSlots, writeSlots, unavailableSlotPort, type SlotIdentity, type SlotPort
+    cancelSlots, recoverSlots, writeSlots, unavailableSlotPort, type SlotIdentity, type SlotPort
 } from "@/library/slots/slotWriter";
 
 const databases = new WeakMap<object, SlotDatabase>();
@@ -99,14 +99,16 @@ export function useEasyModeSlots(
         }
     }
 
-    async function run(recovery: boolean): Promise<void> {
+    async function run(operation: "write" | "recover" | "cancel", restart = false): Promise<void> {
         if (active.current) return;
         active.current = true;
         setRunning(true);
         setFailure(null);
         try {
             const store = supplied ?? sharedSlotDatabase();
-            await (recovery ? recoverSlots(store, identity, port) : writeSlots(store, identity, port));
+            if (operation === "cancel") await cancelSlots(store, identity, port);
+            else if (operation === "recover") await recoverSlots(store, identity, port, {restart});
+            else await writeSlots(store, identity, port);
         } catch (failure) {
             report(failure);
         }
@@ -117,6 +119,7 @@ export function useEasyModeSlots(
     return {
         record, error: failure?.deviceId === identity.deviceId ? failure.message : null,
         running, available: port.available, assign,
-        write: () => run(false), recover: () => run(true)
+        write: () => run("write"), recover: (restart = false) => run("recover", restart),
+        cancel: () => run("cancel")
     };
 }

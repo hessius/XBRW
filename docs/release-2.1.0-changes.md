@@ -3,6 +3,49 @@
 This is the source for the full release-testing checklist, not a claim that
 device testing is complete. Update it whenever release scope or behaviour changes.
 
+## Slot recovery feedback (2026-10-10)
+
+A real write was refused while the machine was asking for water. The machine
+returned to normal after refilling, but the persistent app journal left both
+slot writing and ordinary app brewing blocked. A definite refusal now leaves a
+retryable received boundary rather than an unknown in-flight slot.
+
+The slot screen offers RETRY WRITE and confirmed CANCEL WRITE. Retry can finish
+the known remaining slots while the machine is saving, or resend the frozen
+A/B/C set after the user confirms the machine is back to normal. Cancellation
+clears the durable app reservation without sending a machine command and keeps
+the recipes available as drafts. Unknown completion never counts as success.
+Known busy/saving states and unresolved native writes still block clearing or
+restarting the journal; reconnect if a stale reported state disagrees with the
+physical display.
+An expired handshake no longer blocks local cancellation. Explicit writes and
+retries renew it under exclusive ownership before slot dispatch, without an
+automatic reconnect or background replay.
+
+Recovery copy describes the saving screen and the available actions, not
+frames or "verified evidence". Home cards use dot-matrix A/B/C beside the star;
+incomplete-write messages stay on the slot screen.
+
+The ten-stage NFC-card ceiling no longer leaks into coffee Bluetooth brewing
+or slot snapshots. Bluetooth validation instead checks the segment body's
+one-byte length; both encoders reject overflow rather than wrapping. The slot
+port checks all three full frames against a known link budget before sending A,
+so an oversized C cannot leave A/B partially written. More than ten slot stages
+is enabled for hardware qualification, not described as firmware-proven.
+
+Tea is supported by the machine's official slot workflow according to the
+user's observation. XBRW++ still needs the slot-specific tea discriminator:
+NFC stores cup type in its card header, while the documented 11510 blob has no
+cup-type byte. Public implementations, including ones with ordinary tea
+brewing support, expose only the coffee slot path. The app now describes this
+as tea slot writing not yet available in XBRW++, not a machine limitation.
+
+Targeted software validation: 36 suites and 1,058 tests passed across iOS and
+Android, including the shared live-brew owner after cancellation. Typecheck
+passed; whole-repository lint had no errors and the existing 27 warnings.
+Actual slot contents, extended-stage execution and tea encoding still need
+hardware qualification.
+
 ## Final slot/overflow consolidation
 
 PR #209 was merged into `integration/2.1.0` as `3c6f0230` after its single

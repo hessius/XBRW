@@ -6,8 +6,10 @@ import type {SlotDatabase} from "@/library/slots/SlotDatabase";
 import type {SlotIndex} from "@/library/slots/slotModel";
 import {sameBytes} from "@/library/slots/slotModel";
 import type {SlotIdentity, SlotLease, SlotPort} from "@/library/slots/slotWriter";
+import {SlotCommandRefused} from "@/library/slots/slotWriter";
 
 class MachineSlotLease implements SlotLease {
+    readonly restartFromBeginning: boolean;
     private failure: Error | null = null;
     private outstanding: SlotIndex | null = null;
     private received = false;
@@ -21,7 +23,8 @@ class MachineSlotLease implements SlotLease {
         machine: Machine, private store: SlotDatabase, private identity: SlotIdentity,
         private session: SlotSession
     ) {
-        this.next = store.read(identity.deviceId).journal?.acknowledged ?? 0;
+        this.restartFromBeginning = session.restartFromBeginning;
+        this.next = this.restartFromBeginning ? 0 : store.read(identity.deviceId).journal?.acknowledged ?? 0;
         this.off.push(session.onInvalidated((error) => {
             this.failure = error;
             this.wake();
@@ -30,9 +33,11 @@ class MachineSlotLease implements SlotLease {
             if (this.failure !== null || this.released) return;
             if (parsed.kind === "receipt" && parsed.code === 11510) {
                 if (parsed.status !== 0xC2) {
-                    this.fail(new Error("The machine refused the Easy Mode slot command."));
+                    this.fail(this.outstanding !== null && !this.received
+                        ? new SlotCommandRefused()
+                        : new Error("The machine sent an unexpected reply. The write was not confirmed."));
                 } else if (this.outstanding === null || this.received) {
-                    this.fail(new Error("Unexpected or duplicate Easy Mode receipt. Receipt is unknown."));
+                    this.fail(new Error("The machine sent an unexpected reply. The write was not confirmed."));
                 } else {
                     this.received = true;
                     this.wake();
@@ -41,7 +46,7 @@ class MachineSlotLease implements SlotLease {
             if (parsed.kind === "status" && parsed.state === MACHINE_STATE.SLOTS_SAVED) {
                 if (this.saved || !(this.next === 3
                     || (this.outstanding === 2 && this.received))) {
-                    this.fail(new Error("Unexpected Easy Mode storage completion. Receipt is unknown."));
+                    this.fail(new Error("The machine did not confirm the write in order. Please check its display."));
                 } else {
                     this.saved = true;
                     this.wake();
@@ -66,6 +71,11 @@ class MachineSlotLease implements SlotLease {
     }
 
     assertCurrent(): void { this.check(); }
+
+    validateFrames(frames: readonly (readonly number[])[]): void {
+        this.check();
+        this.session.validateFrames(frames);
+    }
 
     private bounded(task: Promise<void> | (() => boolean), ms: number, message: string): Promise<void> {
         return new Promise<void>((resolve, reject) => {
@@ -111,10 +121,10 @@ class MachineSlotLease implements SlotLease {
         await this.bounded(this.session.send(frame.slice(), () => {
             this.check();
             this.outstanding = index;
-        }), SLOT_DISPATCH_MS, "Easy Mode native dispatch timed out. Receipt is unknown.");
+        }), SLOT_DISPATCH_MS, "The write stopped before the machine confirmed it. Check the machine before retrying.");
         this.check();
         await this.bounded(() => this.received, SLOT_RECEIPT_MS,
-            "Easy Mode receipt timed out. Do not resend the uncertain slot.");
+            "The machine did not confirm this slot. Check its display before retrying.");
         this.check();
         this.outstanding = null;
         this.next = index + 1;
@@ -126,7 +136,7 @@ class MachineSlotLease implements SlotLease {
             throw new Error("All three Easy Mode receipts are required before storage completion.");
         }
         await this.bounded(() => this.saved, SLOT_COMPLETION_MS,
-            "Easy Mode storage completion is unconfirmed. Do not start another write.");
+            "The machine did not confirm that the slots were saved. Check its display before retrying.");
         this.check();
     }
 
@@ -147,10 +157,10 @@ export function installMachineSlotPort(machine: Machine, store: SlotDatabase): S
     machine.installSlotDatabase(store);
     return {
         available: true,
-        acquire: async (identity) => {
+        acquire: async (identity, options) => {
             // Synchronous exclusion and identity checks: never wait for a brew.
             const bound = Object.freeze({...identity});
-            const session = machine.acquireSlotSession(bound);
+            const session = machine.acquireSlotSession(bound, options);
             return new MachineSlotLease(machine, store, bound, session);
         }
     };

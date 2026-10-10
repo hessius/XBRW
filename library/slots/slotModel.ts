@@ -38,7 +38,7 @@ export function snapshotRecipe(recipe: Recipe): SlotSnapshot {
     if (typeof recipe.grinder !== "boolean") {
         throw new Error("The recipe's grinder state is invalid.");
     }
-    if (recipe.isTea()) throw new Error("Tea recipes are not supported in Easy Mode.");
+    if (recipe.isTea()) throw new Error("Tea slot writing is not available in XBRW++ yet.");
     if (![CUP_TYPE.XPOD, CUP_TYPE.OMNI, CUP_TYPE.OTHER].includes(recipe.cupType)
         || typeof recipe.bypassEnabled !== "boolean") {
         throw new Error("The recipe's brewer settings are invalid.");
@@ -141,7 +141,12 @@ export function snapshotStatus(snapshot: SlotSnapshot, recipe: Recipe | undefine
     }
 }
 
-export function slotMarkers(record: SlotRecord, recipe: Recipe): string | undefined {
+export type SlotMarkerValue = {
+    slots: readonly (typeof SLOT_NAMES)[number][];
+    label: string;
+};
+
+export function slotMarkers(record: SlotRecord, recipe: Recipe): SlotMarkerValue | undefined {
     const letters = (slots: readonly (SlotSnapshot | null)[]) => slots
         .flatMap((slot, index) => slot?.sourceUuid === recipe.uuid ? [SLOT_NAMES[index]] : []);
     const draft = letters(record.drafts);
@@ -149,11 +154,11 @@ export function slotMarkers(record: SlotRecord, recipe: Recipe): string | undefi
     if (draft.length === 0 && written.length === 0) return undefined;
     const snapshots = [...record.drafts, ...(record.written?.slots ?? [])]
         .filter((slot) => slot?.sourceUuid === recipe.uuid);
-    return [
+    const label = [
         draft.length > 0 ? `Draft ${draft.join("/")}.` : "",
         written.length > 0 ? `Last written ${written.join("/")}.` : "",
         snapshots.some((slot) => slot !== null && snapshotStatus(slot, recipe) === "edited")
-            ? "Recipe edited." : "",
-        record.journal !== null ? "Write incomplete." : ""
+            ? "Recipe edited." : ""
     ].filter(Boolean).join(" ");
+    return {slots: SLOT_NAMES.filter((name) => draft.includes(name) || written.includes(name)), label};
 }

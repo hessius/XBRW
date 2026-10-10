@@ -184,6 +184,35 @@ export class SlotDatabase {
         this.updateJournal(deviceId, id, (journal) => { journal.error = error; });
     }
 
+    reject(deviceId: string, id: string, index: SlotIndex): void {
+        this.updateJournal(deviceId, id, (journal) => {
+            if (journal.inFlight !== index || journal.acknowledged !== index) {
+                throw new Error("The refused slot does not match this attempt.");
+            }
+            journal.inFlight = null;
+        });
+    }
+
+    restart(deviceId: string, id: string): void {
+        this.updateJournal(deviceId, id, (journal) => {
+            journal.acknowledged = 0;
+            journal.inFlight = null;
+            journal.error = null;
+        });
+    }
+
+    cancel(deviceId: string, id: string): void {
+        this.change(deviceId, (record) => {
+            const journal = record.journal;
+            if (journal === null || journal.id !== id) {
+                throw new Error("The Easy Mode write attempt no longer matches.");
+            }
+            record.drafts = journal.slots;
+            if (journal.acknowledged > 0 || journal.inFlight !== null) record.written = null;
+            record.journal = null;
+        });
+    }
+
     complete(deviceId: string, id: string, at: number): void {
         this.change(deviceId, (record) => {
             const journal = record.journal;

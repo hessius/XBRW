@@ -445,6 +445,18 @@ export const GRINDER_OFF_WIRE = 0xFE;
 /** The largest volume one segment can carry before it has to be chunked. */
 const MAX_SEGMENT_VOLUME = 127;
 
+export const MAX_BLOB_SEGMENT_BYTES = 255;
+
+export function encodedSegmentsLength(recipe: BlobRecipe): number {
+    return segmentsFor(recipe).length;
+}
+
+function checkSegmentLength(segments: readonly number[]): void {
+    if (segments.length > MAX_BLOB_SEGMENT_BYTES) {
+        throw new Error("The recipe is too large to send over Bluetooth. Reduce the number or volume of stages.");
+    }
+}
+
 /**
  * The tail byte: the ratio, times ten, **rounded up**.
  *
@@ -498,6 +510,7 @@ function segmentsFor(recipe: BlobRecipe): number[] {
  */
 export function encodeCoffeeBlob(recipe: BlobRecipe): Uint8Array {
     const segments = segmentsFor(recipe);
+    checkSegmentLength(segments);
     const total = recipe.pours.reduce((sum, pour) => sum + pour.volume, 0);
     return Uint8Array.from([
         segments.length,
@@ -549,6 +562,7 @@ export function encodeTeaBlob(recipe: BlobRecipe): Uint8Array {
         );
     });
 
+    checkSegmentLength(segments);
     const total = recipe.pours.reduce((sum, pour) => sum + pour.volume, 0);
     return Uint8Array.from([
         segments.length,

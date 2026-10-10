@@ -26,7 +26,7 @@ jest.mock("@/hooks/useEasyModeSlots", () => ({
     ...jest.requireActual("@/hooks/useEasyModeSlots"),
     useEasyModeSlots: () => ({
         record: mockRecord, error: null, running: false,
-        available: false, assign: jest.fn(), write: jest.fn(), recover: jest.fn()
+        available: false, assign: jest.fn(), write: jest.fn(), recover: jest.fn(), cancel: jest.fn()
     })
 }));
 jest.mock("@/hooks/useRecipeLibrary", () => ({

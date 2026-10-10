@@ -7,9 +7,11 @@ import {
 export type SlotIdentity = {readonly deviceId: string; readonly serial: string | null};
 export interface SlotPort {
     available: boolean;
-    acquire(identity: SlotIdentity): Promise<SlotLease>;
+    acquire(identity: SlotIdentity, options?: {restart: boolean}): Promise<SlotLease>;
 }
 export interface SlotLease {
+    readonly restartFromBeginning?: boolean;
+    validateFrames?(frames: readonly (readonly number[])[]): void;
     /** Production checks again at the synchronous durable mutation boundary. */
     assertCurrent?(): void;
     /** Resolves on an unambiguous machine receipt, never native write completion. */
@@ -20,6 +22,13 @@ export interface SlotLease {
     release(safeToRelease: boolean): void;
 }
 
+export class SlotCommandRefused extends Error {
+    constructor() {
+        super("The machine refused the Easy Mode write. Fill the tank if needed, then retry.");
+        this.name = "SlotCommandRefused";
+    }
+}
+
 export const SLOT_INTEGRATION_BLOCK =
     "Writing is unavailable until the shared machine transport and operation exclusion are integrated.";
 
@@ -28,7 +37,7 @@ export const unavailableSlotPort: SlotPort = {
     acquire: async () => { throw new Error(SLOT_INTEGRATION_BLOCK); }
 };
 
-type WriterOptions = {id?: () => string; now?: () => number};
+type WriterOptions = {id?: () => string; now?: () => number; restart?: boolean};
 
 function checkPort(identity: SlotIdentity, port: SlotPort): void {
     if (identity.deviceId.trim() === "") throw new Error("Choose a machine before writing slots.");
@@ -43,23 +52,34 @@ function matchingSerial(journal: SlotJournal, identity: SlotIdentity): void {
 
 async function transmit(
     store: SlotDatabase, identity: SlotIdentity, port: SlotPort,
-    journal: SlotJournal, isNew: boolean, now: () => number
+    journal: SlotJournal, isNew: boolean, now: () => number, restart = false
 ): Promise<void> {
     const target = Object.freeze({...identity});
-    const lease = await port.acquire(target);
+    const lease = await port.acquire(target, {restart});
     let begun = !isNew;
     let completed = false;
     try {
         lease.assertCurrent?.();
+        lease.validateFrames?.(journal.frames);
         if (isNew) {
             store.begin(target.deviceId, journal);
             begun = true;
+        } else if (lease.restartFromBeginning) {
+            store.restart(target.deviceId, journal.id);
+            journal = {...journal, acknowledged: 0, inFlight: null, error: null};
+        } else if (restart || journal.inFlight !== null || journal.acknowledged === 3) {
+            throw new Error("Confirm the machine is back to normal before retrying all three slots.");
         }
         for (const index of [0, 1, 2] as const) {
             if (index < journal.acknowledged) continue;
             lease.assertCurrent?.();
             store.dispatching(target.deviceId, journal.id, index);
-            await lease.sendAndConfirm(Uint8Array.from(journal.frames[index]), index);
+            try {
+                await lease.sendAndConfirm(Uint8Array.from(journal.frames[index]), index);
+            } catch (error) {
+                if (error instanceof SlotCommandRefused) store.reject(target.deviceId, journal.id, index);
+                throw error;
+            }
             lease.assertCurrent?.();
             store.acknowledge(target.deviceId, journal.id, index);
         }
@@ -110,14 +130,35 @@ export async function recoverSlots(
     const journal = store.read(identity.deviceId).journal;
     if (journal === null) throw new Error("There is no incomplete Easy Mode write.");
     matchingSerial(journal, identity);
-    if (journal.inFlight !== null) {
-        throw new Error(`Slot ${["A", "B", "C"][journal.inFlight]}'s receipt is unknown. ${
-            "Recovery requires verified machine evidence; it cannot be replayed safely yet."
-        }`);
+    if (!options.restart && journal.inFlight !== null) {
+        throw new Error("A slot's receipt is unknown. Confirm the machine is back to normal before retrying.");
     }
-    if (journal.acknowledged === 3) {
-        throw new Error("Storage completion is unconfirmed. Verified recovery evidence is required.");
+    if (!options.restart && journal.acknowledged === 3) {
+        throw new Error("Save completion is not confirmed. Confirm the machine is back to normal before retrying.");
     }
     checkPort(identity, port);
-    await transmit(store, identity, port, journal, false, options.now ?? Date.now);
+    await transmit(store, identity, port, journal, false, options.now ?? Date.now, options.restart);
+}
+
+/** Caller must first ask the user to confirm the machine is no longer saving. */
+export async function cancelSlots(
+    store: SlotDatabase, identity: SlotIdentity, port: SlotPort = unavailableSlotPort
+): Promise<void> {
+    checkPort(identity, port);
+    const target = Object.freeze({...identity});
+    const journal = store.read(target.deviceId).journal;
+    if (journal === null) throw new Error("There is no incomplete Easy Mode write.");
+    matchingSerial(journal, target);
+    const lease = await port.acquire(target, {restart: true});
+    let cancelled = false;
+    try {
+        lease.assertCurrent?.();
+        if (!lease.restartFromBeginning) {
+            throw new Error("Confirm the machine is back to normal before cancelling.");
+        }
+        store.cancel(target.deviceId, journal.id);
+        cancelled = true;
+    } finally {
+        lease.release(cancelled);
+    }
 }

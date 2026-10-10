@@ -616,6 +616,31 @@ All three slots (A, B, C) MUST be written in a single batch. Writing only one or
 ### Sync Flow with 11512 `corroborated`
 After the 3 slot writes, the app sends command 11512 (Recipe Order). APK decompile confirms this is a real command (`BleCodeFactory.easyModeRecipesOrder`). Its exact payload is documented but not always implemented.
 
+### Tea and stage capacity clarification (2026-10-10)
+
+The official app can write tea to Easy Mode slots, reported by the user. Our
+tea exclusion was an implementation-evidence gate, not a measured firmware
+refusal. NFC tea encoding does not settle this: the card carries a cup-type
+nibble, whereas the documented 11510 slot payload carries no cup type.
+Ordinary BLE tea uses separate commands 4513/4512 and different steep-time
+bytes; substituting that blob into a coffee slot frame has not been verified.
+
+Public source inspection found no tea discriminator in the slot builders:
+[brAzzi64's slot packet/flags](https://github.com/brAzzi64/xbloom-ble/blob/840a1974c1e28629083b954c74c506bd64b463db/python/xbloom.py#L399-L414),
+[HomoLand's slot builder](https://github.com/HomoLand/xbloom-studio-brew/blob/fd2cdc5eb3d035dd2d78700ad9065a14a45aeb6b/packages/core/xbloom_ble/protocol.py#L1001),
+and [saya6k's slot writer](https://github.com/saya6k/hacs-xbloom/blob/722fd94959683c10c0c9a7094781baf0ee52fdcd/custom_components/xbloom/brewing.py#L695-L757).
+The latter two separately implement ordinary tea brewing. The Java decompile
+cited by brAzzi64 is a local path, not published source; its existence does not
+give us access to the official slot builder.
+
+The measured ten-stage ceiling belongs to NFC cards only. Coffee BLE stage
+bodies have a one-byte byte-count prefix: at most 255 segment bytes, not ten
+stages. A stage takes eight bytes plus four bytes for each additional 127 ml
+volume chunk. Thus 31 small stages fit the representation, but this is not
+firmware proof of 31-stage slots. A full 11510 frame has 17 bytes outside the
+segment body; a 244-byte link budget is consequently tighter than the body's
+255-byte ceiling. Validate every frame in the set before sending A.
+
 ---
 
 ## F. Capabilities Beyond Basic Brew

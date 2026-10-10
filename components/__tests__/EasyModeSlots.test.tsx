@@ -11,7 +11,7 @@ const recipes = [coffee("Morning"), coffee("Evening")];
 const props = () => ({
     record: emptySlotRecord(), recipes, deviceId: "one", connected: true,
     available: false, running: false, error: null,
-    onAssign: jest.fn(), onWrite: jest.fn(), onRecover: jest.fn()
+    onAssign: jest.fn(), onWrite: jest.fn(), onRecover: jest.fn(), onCancel: jest.fn()
 });
 
 it("shows unknown first-use contents, both side effects and an honest integration block", async () => {
@@ -95,7 +95,7 @@ it("distinguishes removed recipes from edited drafts and permits only explicit u
     expect(options.onAssign).toHaveBeenCalledWith(0, changed);
 });
 
-it("locks uncertain recovery and reports native-send versus receipt distinctions", async () => {
+it("offers retry and confirmed cancellation without technical recovery jargon", async () => {
     const options = props();
     const saved = snapshotRecipe(recipes[0]);
     options.record.journal = {
@@ -104,11 +104,38 @@ it("locks uncertain recovery and reports native-send versus receipt distinctions
         inFlight: 1, error: "Receipt unknown"
     };
     await renderWithProviders(<EasyModeSlots {...options} available/>);
-    expect(screen.getByText("A: acknowledged")).toBeOnTheScreen();
-    expect(screen.getByText("B: receipt unknown")).toBeOnTheScreen();
+    expect(screen.getByText("A: received")).toBeOnTheScreen();
+    expect(screen.getByText("B: not confirmed")).toBeOnTheScreen();
     expect(screen.getByText("C: not sent")).toBeOnTheScreen();
-    expect(screen.getByRole("button", {name: "Recover incomplete write"})).toBeDisabled();
+    expect(screen.getByRole("button", {name: "Retry slot write"})).toBeEnabled();
+    expect(screen.getByRole("button", {name: "Cancel slot write"})).toBeEnabled();
+    expect(screen.queryByText(/verified recovery evidence|sending a frame/i)).toBeNull();
     expect(screen.queryByRole("button", {name: "Change slot A recipe"})).toBeNull();
+    await fireEvent.press(screen.getByRole("button", {name: "Retry slot write"}));
+    expect(options.onRecover).not.toHaveBeenCalled();
+    await waitFor(async () => {
+        await fireEvent.press(screen.getByRole("button", {name: "Confirm machine is back to normal and retry"}));
+        expect(options.onRecover).toHaveBeenCalledWith(true);
+    }, {timeout: SHEET_PRESS_TIMEOUT});
+});
+
+it("requires confirmation before cancelling and hides the underlying screen", async () => {
+    const options = props();
+    const saved = snapshotRecipe(recipes[0]);
+    options.record.journal = {
+        id: "attempt", serial: "serial", slots: [saved, saved, saved],
+        frames: prepareSet([saved, saved, saved]), acknowledged: 0,
+        inFlight: 0, error: null
+    };
+    await renderWithProviders(<EasyModeSlots {...options} available/>);
+    await fireEvent.press(screen.getByRole("button", {name: "Cancel slot write"}));
+    expect(options.onCancel).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", {name: "Retry slot write"})).toBeNull();
+    expect(await screen.findByText(/does not stop a write on the machine/i)).toBeOnTheScreen();
+    await waitFor(async () => {
+        await fireEvent.press(screen.getByRole("button", {name: "Confirm machine is back to normal and cancel"}));
+        expect(options.onCancel).toHaveBeenCalledTimes(1);
+    }, {timeout: SHEET_PRESS_TIMEOUT});
 });
 
 it("picks from all supplied library recipes and exposes unsupported recipe reasons", async () => {

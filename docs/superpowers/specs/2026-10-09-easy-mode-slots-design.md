@@ -191,6 +191,45 @@ boundaries. No change to the slot bytes, mode flags or recovery policy is made.
 
 ## Recovery and uncertainty
 
+### Hardware-feedback amendment (2026-10-10)
+
+The original recovery policy below left a refused write permanently locked,
+including after app restart, and blocked normal app brewing even when the
+machine had returned to its ordinary screen. These explicit actions supersede
+the original requirement for an unspecified future recovery mechanism:
+
+- A non-C2 reply to the outstanding command is a refusal, not a lost reply.
+  Persist that the slot was refused without advancing the received boundary.
+  A refusal after a receipt, or an unsolicited reply, remains uncertain.
+- RETRY WRITE asks which state the machine is actually in. When it is back to
+  normal, user confirmation authorises a new A/B/C transmission of the same
+  immutable set. Do not infer that the previous attempt succeeded.
+- When a known received boundary remains and the machine is still saving,
+  offer to finish the interrupted write with only the remaining slots.
+  Do not replay an uncertain slot while the machine is still saving.
+- CANCEL WRITE asks the user to confirm the machine is back to normal.
+  This clears the app's journal and shared-operation reservation, not anything
+  on the machine. Keep the recipes as editable drafts; clear last-written
+  information if the cancelled attempt might have changed machine contents.
+- Both full retry and cancellation acquire the same exclusive, identity-bound
+  owner. Reject known saving, active or fault states, background operation,
+  mismatched identity, and still-pending native writes. A reconnect may be needed
+  if the last reported state contradicts the machine's current display.
+  Clearing a journal is durable before the owner releases the reservation.
+- An expired handshake does not block cancellation, which sends nothing.
+  An explicit write/retry renews an expired handshake inside the same exclusive
+  lease, observes the normal pacing gap, and then sends the slots. Native
+  renewal is bounded and generation-guarded; it never reconnects or replays
+  automatically.
+
+No automatic retry, firmware abort command, or assumption that a restarted app
+reset the machine is introduced. Physical confirmation is an explicit manual
+recovery decision, not protocol evidence of storage success.
+
+Home cards show dot-matrix slot letters beside the star, not write progress or
+recovery warnings. Draft versus last-written assignments remain available in
+the card's spoken label. The slot screen owns recovery details and actions.
+
 Hardware proves that completing an interrupted set releases the machine; it
 does not prove that a lost ACK can safely be treated as a missing slot.
 

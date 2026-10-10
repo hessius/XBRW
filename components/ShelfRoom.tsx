@@ -7,6 +7,7 @@ import DotIcon from "@/components/DotIcon";
 import DotMatrixText from "@/components/DotMatrixText";
 import RecipeShelfTile from "@/components/RecipeShelfTile";
 import type {RecipeEvidence} from "@/library/libraryQuery";
+import type {SlotMarkerValue} from "@/library/slots/slotModel";
 import {onAccent, palette} from "@/constants/colors";
 import type Recipe from "@/library/Recipe";
 import {UNCLIPPED_LIST} from "@/constants/lists";
@@ -39,7 +40,7 @@ export type RoomRecipeActions = {
     /** Open this recipe's brew history, the sheet row no tray carries. */
     onHistory: () => void;
     onEasyMode?: () => void;
-    slotMarker?: string;
+    slotMarker?: SlotMarkerValue;
 };
 
 /**

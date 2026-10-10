@@ -37,6 +37,8 @@ import {
 import type {ConnectionScope, FoundMachine, MachineTransport} from "./Transport";
 
 export type SlotSession = {
+    restartFromBeginning: boolean;
+    validateFrames: (frames: readonly (readonly number[])[]) => void;
     send: (frame: Uint8Array, dispatching: () => void) => Promise<void>;
     check: () => void;
     invalidate: (error: Error) => void;
@@ -338,7 +340,7 @@ export default class Machine {
         }
     }
 
-    acquireSlotSession(identity: SlotIdentity): SlotSession {
+    acquireSlotSession(identity: SlotIdentity, options?: {restart: boolean}): SlotSession {
         if (this.slotStore === undefined) throw new Error("Install the shared Easy Mode database first.");
         if (this.backgrounded) throw new Error("Easy Mode writing is unavailable in the background.");
         const actual = this.slotIdentity;
@@ -350,8 +352,13 @@ export default class Machine {
         if (journal?.serial != null && journal.serial !== actual.serial) {
             throw new Error("The recovery journal serial belongs to a different machine.");
         }
-        if (journal !== null && (journal.inFlight !== null || journal.acknowledged === 3)) {
-            throw new Error("The Easy Mode recovery boundary is unknown; verified evidence is required.");
+        if (!options?.restart && journal !== null && (journal.inFlight !== null || journal.acknowledged === 3)) {
+            throw new Error("Confirm the machine is back to normal before retrying or cancelling.");
+        }
+        if (options?.restart && this.state !== null && !STARTABLE.has(this.state)) {
+            throw new Error(this.state === MACHINE_STATE.NO_WATER
+                ? "Fill the water tank and wait for the machine to return to normal, then retry."
+                : "The machine is still busy or saving. Wait until it is back to normal before restarting or cancelling. If it is already back to normal, reconnect first.");
         }
         if (this.slotSession !== null
             || this.unsettledCommand
@@ -360,9 +367,6 @@ export default class Machine {
             || (this.state !== null && !STARTABLE.has(this.state)
                 && !(journal !== null && this.state === MACHINE_STATE.SAVING_SLOTS))) {
             throw new Error("The machine is busy. Finish its operation before writing Easy Mode slots.");
-        }
-        if (!this.sessionIsFresh()) {
-            throw new Error("The machine session has expired. Reconnect before writing Easy Mode slots.");
         }
         const token = Symbol("slots");
         const generation = this.generation;
@@ -386,6 +390,14 @@ export default class Machine {
         };
         this.slotSession = {token, invalidate};
         return {
+            restartFromBeginning: journal !== null && options?.restart === true,
+            validateFrames: (frames) => {
+                check();
+                const budget = this.transport.frameBudget;
+                if (budget !== undefined && frames.some((frame) => frame.length > budget)) {
+                    throw new Error("A recipe is too large for this Bluetooth connection. Reduce its stages or volumes before writing.");
+                }
+            },
             check, invalidate,
             onInvalidated: (listener) => {
                 listeners.add(listener);
@@ -394,6 +406,17 @@ export default class Machine {
             },
             send: async (frame, dispatching) => {
                 check();
+                if (!sent && !this.sessionIsFresh()) {
+                    const finish = this.beginOrdinaryOperation();
+                    try {
+                        await this.writeFrame(buildType1(8100, [185, 1]), check);
+                        check();
+                        this.lastHandshakeAt = Date.now();
+                    } finally {
+                        finish();
+                    }
+                    sent = true;
+                }
                 if (sent && this.frameGapMs > 0) {
                     await new Promise<void>((resolve, reject) => {
                         const onFailure = (error: Error) => {
@@ -412,7 +435,12 @@ export default class Machine {
                 check();
                 sent = true;
                 dispatching();
-                await this.writeFrame(frame, check);
+                const finish = this.beginOrdinaryOperation();
+                try {
+                    await this.writeFrame(frame, check);
+                } finally {
+                    finish();
+                }
                 check();
             },
             release: (safe) => {

@@ -8,6 +8,7 @@ import DotIcon from "@/components/DotIcon";
 import DotMatrixText from "@/components/DotMatrixText";
 import RecipeCard from "@/components/RecipeCard";
 import type {RecipeEvidence} from "@/library/libraryQuery";
+import type {SlotMarkerValue} from "@/library/slots/slotModel";
 import type {DotIconName} from "@/constants/dotIcons";
 import {palette} from "@/constants/colors";
 import {canWriteToCard} from "@/library/cardLimits";
@@ -80,7 +81,7 @@ type Props = {
      * otherwise reach only through the long press.
      */
     onHistory?: () => void;
-    slotMarker?: string;
+    slotMarker?: SlotMarkerValue;
     onEasyMode?: () => void;
 };
 

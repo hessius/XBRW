@@ -44,7 +44,7 @@ export default function EasyModeScreen() {
                            serialMatches={serialMatches} available={slots.available}
                            running={slots.running} error={slots.error}
                            onAssign={slots.assign} onWrite={slots.write}
-                           onRecover={slots.recover}/>
+                           onRecover={slots.recover} onCancel={slots.cancel}/>
         </YStack>
     );
 }

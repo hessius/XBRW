@@ -8,7 +8,7 @@ import {sharedSlotDatabase, useEasyModeSlots} from "@/hooks/useEasyModeSlots";
 import {sharedSettings} from "@/hooks/useSetting";
 import {LiveBrewProvider, useLiveBrew} from "@/hooks/useLiveBrew";
 import BrewDatabase from "@/library/BrewDatabase";
-import {unavailableSlotPort, writeSlots, recoverSlots} from "@/library/slots/slotWriter";
+import {cancelSlots, unavailableSlotPort, writeSlots, recoverSlots} from "@/library/slots/slotWriter";
 import {prepareSet, snapshotRecipe} from "@/library/slots/slotModel";
 import {SlotDatabase} from "@/library/slots/SlotDatabase";
 import {appDatabase} from "@/library/appDatabase";
@@ -194,14 +194,21 @@ it.each([false, true])(
             sharedSettings().set("bypassTempEncoding", "plain");
         });
         await act(async () => {
-            const recovering = recoverSlots(store, machine.slotIdentity!, port);
+            const recovering = configured
+                ? cancelSlots(store, machine.slotIdentity!, port)
+                : recoverSlots(store, machine.slotIdentity!, port);
             await jest.advanceTimersByTimeAsync(4000);
             await recovering;
         });
         expect(store.read("one").journal).toBeNull();
-        expect(new SlotDatabase(appDatabase()).read("one").written?.slots)
-            .toEqual(store.read("one").drafts);
-        expect(mockRadio.slots.map(frame => frame[10])).toEqual([0, 1, 2]);
+        if (configured) {
+            expect(new SlotDatabase(appDatabase()).read("one").written).toBeNull();
+            expect(mockRadio.slots).toEqual([]);
+        } else {
+            expect(new SlotDatabase(appDatabase()).read("one").written?.slots)
+                .toEqual(store.read("one").drafts);
+            expect(mockRadio.slots.map(frame => frame[10])).toEqual([0, 1, 2]);
+        }
         expect(mockRadio.sent).not.toContain(8001);
         expect(mockRadio.sent).not.toContain(8002);
         expect(machine.bypassTempEncoding).toBe("scaled");
@@ -320,7 +327,8 @@ it("disables known-boundary recovery during a held brew, rather than waiting or 
     sharedMachine().phase = {name: "readyToStart"};
     await renderWithProviders(<EasyModeScreen/>);
     expect(screen.getByText(/busy.*brew/i)).toBeOnTheScreen();
-    expect(screen.getByRole("button", {name: "Recover incomplete write"})).toBeDisabled();
+    expect(screen.getByRole("button", {name: "Retry slot write"})).toBeDisabled();
+    expect(screen.getByRole("button", {name: "Cancel slot write"})).toBeDisabled();
     expect(mockRadio.slots).toEqual([]);
 });
 
@@ -330,8 +338,9 @@ it("blocks recovery in the route when the connected serial conflicts with its sa
     const machine = sharedMachine();
     machine.info = {...machine.info!, serial: "different"};
     await renderWithProviders(<EasyModeScreen/>);
-    expect(screen.getByText(/different machine serial/i)).toBeOnTheScreen();
-    expect(screen.getByRole("button", {name: "Recover incomplete write"})).toBeDisabled();
+    expect(screen.getByText(/different machine/i)).toBeOnTheScreen();
+    expect(screen.getByRole("button", {name: "Retry slot write"})).toBeDisabled();
+    expect(screen.getByRole("button", {name: "Cancel slot write"})).toBeDisabled();
     expect(store.read("one").journal?.serial).toBe("J15ABC123456");
     expect(mockRadio.slots).toEqual([]);
 });
@@ -352,7 +361,8 @@ it.each([undefined, null, 0])("rejects raw incoming dosage %p through the instal
 it("shows last-known assignments offline but cannot send to them or transplant a journal after scanning", async () => {
     const store = journal();
     await renderWithProviders(<EasyModeScreen/>);
-    expect(screen.getByRole("button", {name: "Recover incomplete write"})).toBeDisabled();
+    expect(screen.getByRole("button", {name: "Retry slot write"})).toBeDisabled();
+    expect(screen.getByRole("button", {name: "Cancel slot write"})).toBeDisabled();
     await act(async () => {
         const connecting = sharedMachine().connect("two");
         await jest.advanceTimersByTimeAsync(2000);

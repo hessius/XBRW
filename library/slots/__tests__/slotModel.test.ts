@@ -1,4 +1,5 @@
 import {CUP_TYPE} from "@/library/Recipe";
+import Pour from "@/library/Pour";
 import {
     snapshotRecipe, prepareSet, snapshotStatus, slotMarkers, emptySlotRecord
 } from "@/library/slots/slotModel";
@@ -92,7 +93,30 @@ it("markers distinguish repeated draft and last-written assignments", () => {
     const record = emptySlotRecord();
     record.drafts = [snapshot, null, snapshot];
     record.written = {at: 1, slots: [snapshot, snapshot, snapshot]};
-    expect(slotMarkers(record, recipe)).toBe("Draft A/C. Last written A/B/C.");
+    expect(slotMarkers(record, recipe)).toEqual({
+        slots: ["A", "B", "C"], label: "Draft A/C. Last written A/B/C."
+    });
     recipe.pours[0].temperature = 92;
-    expect(slotMarkers(record, recipe)).toContain("Recipe edited.");
+    expect(slotMarkers(record, recipe)?.label).toContain("Recipe edited.");
+});
+
+it("keeps interrupted-write warnings on the slot screen, not on home card markers", () => {
+    const recipe = coffee();
+    const snapshot = snapshotRecipe(recipe);
+    const record = emptySlotRecord();
+    record.drafts = [snapshot, null, snapshot];
+    record.journal = {
+        id: "attempt", serial: null, slots: [snapshot, snapshot, snapshot],
+        frames: prepareSet([snapshot, snapshot, snapshot]),
+        acknowledged: 0, inFlight: 0, error: "Receipt unknown"
+    };
+    expect(slotMarkers(record, recipe)).toEqual({slots: ["A", "C"], label: "Draft A/C."});
+});
+
+it("accepts a seventeen-stage slot snapshot without treating it as an NFC card", () => {
+    const recipe = coffee();
+    recipe.dosage = 17;
+    recipe.ratio = 5;
+    recipe.pours = Array.from({length: 17}, (_, index) => new Pour(index + 1, 5, 93, 30, 0, 0, 0));
+    expect(() => snapshotRecipe(recipe)).not.toThrow();
 });

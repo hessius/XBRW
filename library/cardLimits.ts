@@ -3,6 +3,7 @@ import {AGITATION, POUR_PATTERN} from "./Pour";
 import type Recipe from "./Recipe";
 import {displayRange, toDisplay, type TemperatureUnit} from "./units";
 import {grindTooFine} from "@/constants/copy";
+import {encodedSegmentsLength, MAX_BLOB_SEGMENT_BYTES} from "@/library/machine/protocol";
 
 /**
  * Whether a recipe can be written to a card, and why not.
@@ -94,6 +95,9 @@ function checkInteger(value: number, rangeMessage: string, problems: string[]): 
 const FRACTIONAL_RATIO = (ratio: number): string =>
     `The ratio is 1:${ratio}. It has to be a whole number.`;
 
+const STAGE_COUNT = (count: number, maximum: number): string =>
+    `The recipe has ${count} stages. The most is ${maximum}.`;
+
 /**
  * The one problem the editor draws its own banner for.
  *
@@ -149,7 +153,7 @@ export function cardWriteProblems(
     if (recipe.pours.length < 1) {
         problems.push("The recipe has no stages.");
     } else if (recipe.pours.length > maxPours) {
-        problems.push(`The recipe has ${recipe.pours.length} stages. The most is ${maxPours}.`);
+        problems.push(STAGE_COUNT(recipe.pours.length, maxPours));
     }
 
     const volumeRange = tea ? TEA_POUR_VOLUME : COFFEE_POUR_VOLUME;
@@ -245,7 +249,10 @@ export function canWriteToCard(recipe: Recipe): boolean {
  * What stops a Bluetooth brew, which is not quite what stops a card write.
  *
  * Nearly everything a card refuses, the machine refuses too, because the two
- * carry the same recipe. The exception is a fractional ratio.
+ * carry the same recipe. Coffee stage capacity and fractional ratios differ.
+ * The ten-stage ceiling is card-only; Bluetooth capacity is instead limited by
+ * the segment body's one-byte length. Tea retains its existing three-stage
+ * app constraint.
  * `encodeCoffeeBlob` never sends `recipe.ratio`: it derives a byte from the
  * pour volumes and the dose, at one decimal place and ceilinged rather than
  * rounded, so the number the machine receives for a 1:15.5 recipe is exactly
@@ -265,9 +272,14 @@ export function brewProblems(
     recipe: Recipe,
     temperatureUnit: TemperatureUnit = "C"
 ): string[] {
-    const cardOnly = FRACTIONAL_RATIO(recipe.ratio);
-    return cardWriteProblems(recipe, temperatureUnit)
-        .filter((problem) => problem !== cardOnly);
+    const cardOnlyRatio = FRACTIONAL_RATIO(recipe.ratio);
+    const cardOnlyStages = recipe.isTea() ? null : STAGE_COUNT(recipe.pours.length, MAX_POURS);
+    const problems = cardWriteProblems(recipe, temperatureUnit)
+        .filter((problem) => problem !== cardOnlyRatio && problem !== cardOnlyStages);
+    if (problems.length === 0 && encodedSegmentsLength(recipe) > MAX_BLOB_SEGMENT_BYTES) {
+        problems.push("The recipe is too large to send over Bluetooth. Reduce the number or volume of stages.");
+    }
+    return problems;
 }
 
 /**
