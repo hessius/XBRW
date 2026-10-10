@@ -34,8 +34,12 @@ jest.mock("@/hooks/useRecipeLibrary", () => ({
 jest.mock("expo-router", () => ({
     useLocalSearchParams: () => mockRouteParams,
     useNavigation: () => mockNavigation,
-    router: {back: jest.fn(), canGoBack: () => true},
-    useRouter: () => ({back: jest.fn()})
+    router: {back: () => mockRemove(), canGoBack: () => true},
+    useRouter: () => ({back: () => mockRemove()})
+}));
+jest.mock("expo-router/react-navigation", () => ({
+    useIsFocused: () => mockFocused,
+    usePreventRemove: (prevent: boolean, callback: PreventionCallback) => mockPreventRemove(prevent, callback)
 }));
 jest.mock("@/components/XbrwToast", () => ({notify: jest.fn()}));
 
@@ -67,7 +71,24 @@ class RootRadio extends FakeTransport {
 
 let mockRadio: RootRadio;
 let mockRouteParams: {recipeJSON?: string} = {};
-const mockNavigation = {addListener: () => () => {}, dispatch: jest.fn()};
+let mockFocused = true;
+type Action = {type: string; payload?: {count: number}};
+type PreventionCallback = (event: {data: {action: Action}}) => void;
+let mockGuard: {prevent: boolean; callback: PreventionCallback};
+const mockPreventRemove = jest.fn((prevent: boolean, callback: PreventionCallback) => {
+    mockGuard = {prevent, callback};
+});
+function mockRemove(action: Action = {type: "GO_BACK"}, replay = false) {
+    const event = {data: {action}, preventDefault: jest.fn()};
+    if (mockGuard.prevent && !replay) {
+        event.preventDefault();
+        mockGuard.callback({data: event.data});
+    }
+    return event;
+}
+// usePreventRemove's original action carries the visited-route marker on replay.
+const mockDispatch = jest.fn((action: Action) => mockRemove(action, true));
+const mockNavigation = {dispatch: mockDispatch};
 let changes: Set<(state: AppStateStatus) => void>;
 const initialState = AppState.currentState;
 const flush = async () => { for (let n = 0; n < 40; n++) await Promise.resolve(); };
@@ -77,6 +98,9 @@ beforeEach(() => {
     jest.useFakeTimers();
     mockRadio = new RootRadio();
     mockRouteParams = {};
+    mockFocused = true;
+    mockPreventRemove.mockClear();
+    mockDispatch.mockClear();
     changes = new Set();
     AppState.currentState = "active";
     jest.spyOn(AppState, "addEventListener").mockImplementation((_event, handler) => {
@@ -291,8 +315,15 @@ it("wires the real route to the installed shared port, actual identity and atomi
     expect(screen.getAllByText("REMOVED FROM LIBRARY")).toHaveLength(3);
     const write = screen.getByRole("button", {name: "Write all three slots"});
     expect(write).toBeEnabled();
+    expect(mockPreventRemove).toHaveBeenLastCalledWith(true, expect.any(Function));
     await act(async () => {
         const pressed = fireEvent.press(write);
+        await flush();
+        expect(store.read("one").journal).not.toBeNull();
+        expect(mockPreventRemove).toHaveBeenLastCalledWith(true, expect.any(Function));
+        expect(mockRemove().preventDefault).toHaveBeenCalledTimes(1);
+        expect(mockDispatch).not.toHaveBeenCalled();
+        expect(screen.queryByRole("button", {name: "LEAVE FOR NOW"})).toBeNull();
         await jest.advanceTimersByTimeAsync(4000);
         await pressed;
     });
@@ -307,6 +338,22 @@ it("wires the real route to the installed shared port, actual identity and atomi
     expect(store.read("unrelated").journal).toBeNull();
     expect(mockRadio.sent).not.toContain(11512);
     expect(mockRadio.sent).not.toContain(8010);
+    expect(mockPreventRemove).toHaveBeenLastCalledWith(false, expect.any(Function));
+    expect(mockRemove().preventDefault).not.toHaveBeenCalled();
+});
+
+it("guards the real owner's changed drafts only while the route is focused", async () => {
+    draft();
+    await connect();
+    const view = await renderWithProviders(<EasyModeScreen/>);
+    expect(mockPreventRemove).toHaveBeenLastCalledWith(true, expect.any(Function));
+    mockFocused = false;
+    await view.rerender(<EasyModeScreen/>);
+    expect(mockPreventRemove).toHaveBeenLastCalledWith(false, expect.any(Function));
+    expect(mockRemove().preventDefault).not.toHaveBeenCalled();
+    mockFocused = true;
+    await view.rerender(<EasyModeScreen/>);
+    expect(mockPreventRemove).toHaveBeenLastCalledWith(true, expect.any(Function));
 });
 
 it.each(["readyToStart", "grinding", "paused", "settling"] as const)(
