@@ -1,6 +1,7 @@
 import Recipe, {CUP_TYPE} from "@/library/Recipe";
 import {brewProblems, DOSE, GRIND_RPM} from "@/library/cardLimits";
 import {buildType2, encodeCoffeeBlob} from "@/library/machine/protocol";
+import {checkTeaProbeSnapshot} from "@/library/slots/teaSlotCandidate";
 
 export const SLOT_NAMES = ["A", "B", "C"] as const;
 export type SlotIndex = 0 | 1 | 2;
@@ -10,6 +11,41 @@ export type SlotSnapshot = {
     name: string;
     recipeJSON: string;
     blob: number[];
+    /** Set only on the fixed tea slot probe; see `teaSlotCandidate.ts`. */
+    probe?: string;
+};
+export type EvidenceKind = "prepared" | "dispatch" | "receipt" | "refused" | "error"
+    | "restart" | "final" | "cancelled" | "restore-prepared" | "restored";
+export type SlotEvidence = {
+    at: number;
+    kind: EvidenceKind;
+    journalId: string;
+    slot: SlotIndex | null;
+    detail: string | null;
+    /** Exact frames, only on the two prepared entries. */
+    frames: Triple<number[]> | null;
+};
+export type SlotObservation = {
+    at: number;
+    display: string;
+    heldSeconds: number | null;
+    drainedAsTea: boolean | null;
+    note: string;
+};
+/** Durable record of the one tea probe trial, bound to a machine and serial. */
+export type SlotExperiment = {
+    candidateId: string;
+    trialId: string;
+    deviceId: string;
+    serial: string;
+    machine: Record<string, string>;
+    original: {source: "written" | "draft"; writtenAt: number | null; slots: Triple<SlotSnapshot>};
+    originalDrafts: Triple<SlotSnapshot | null>;
+    candidate: Triple<SlotSnapshot>;
+    phase: "active" | "restored";
+    pending: {journalId: string; kind: "candidate" | "restore"} | null;
+    observation: SlotObservation | null;
+    evidence: SlotEvidence[];
 };
 export type SlotJournal = {
     id: string;
@@ -25,6 +61,7 @@ export type SlotRecord = {
     drafts: Triple<SlotSnapshot | null>;
     written: {at: number; slots: Triple<SlotSnapshot>} | null;
     journal: SlotJournal | null;
+    experiment?: SlotExperiment;
 };
 
 export function emptySlotRecord(): SlotRecord {
@@ -114,6 +151,13 @@ export function readSnapshot(value: unknown): SlotSnapshot {
         || !value.blob.every((byte: unknown) =>
             typeof byte === "number" && Number.isInteger(byte) && byte >= 0 && byte <= 255)) {
         throw new Error("The Easy Mode snapshot is invalid.");
+    }
+    if (value.probe !== undefined) {
+        // Exact fixed candidate only; every other tea still fails below.
+        return checkTeaProbeSnapshot({
+            sourceUuid: value.sourceUuid, name: value.name, recipeJSON: value.recipeJSON,
+            blob: value.blob as number[], probe: value.probe
+        });
     }
     const json: unknown = JSON.parse(value.recipeJSON);
     if (!objectValue(json) || json.uuid !== value.sourceUuid) {

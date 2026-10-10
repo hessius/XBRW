@@ -57,7 +57,8 @@ function matchingSerial(journal: SlotJournal, identity: SlotIdentity): void {
 
 async function transmit(
     store: SlotDatabase, identity: SlotIdentity, port: SlotPort,
-    journal: SlotJournal, isNew: boolean, now: () => number, restart = false, finishUncertain = false
+    journal: SlotJournal, isNew: boolean, now: () => number, restart = false, finishUncertain = false,
+    begin?: (journal: SlotJournal) => void
 ): Promise<void> {
     const target = Object.freeze({...identity});
     const lease = await port.acquire(target, {restart, ...(finishUncertain ? {finishUncertain: true} : {})});
@@ -67,7 +68,8 @@ async function transmit(
         lease.assertCurrent?.();
         lease.validateFrames?.(journal.frames);
         if (isNew) {
-            store.begin(target.deviceId, journal);
+            if (begin !== undefined) begin(journal);
+            else store.begin(target.deviceId, journal);
             begun = true;
         } else if (lease.restartFromBeginning) {
             store.restart(target.deviceId, journal.id);
@@ -131,6 +133,15 @@ export async function writeSlots(
         acknowledged: 0, inFlight: null, error: null
     };
     await transmit(store, identity, port, journal, true, options.now ?? Date.now);
+}
+
+/** A new journal that the caller has already prepared, begun by the caller's own atomic commit. */
+export async function writePreparedSlots(
+    store: SlotDatabase, identity: SlotIdentity, port: SlotPort, journal: SlotJournal,
+    begin: (journal: SlotJournal) => void, now: () => number = Date.now
+): Promise<void> {
+    checkPort(identity, port);
+    await transmit(store, identity, port, journal, true, now, false, false, begin);
 }
 
 export async function recoverSlots(
