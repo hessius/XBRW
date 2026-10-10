@@ -1,0 +1,87 @@
+# Bounded tea slot hardware probe
+
+Approved first trial: 2026-10-10. Work in `fix/easy-mode-recovery`.
+
+## Question and bound
+
+Does an existing tea blob inside `11510 [slot, 0x02, blob]` select tea behavior
+without another command or flag? This is a hypothesis, not known tea support.
+Test exactly one candidate. No flag sweep, mode commands, automatic brewing,
+background work or automatic retry.
+
+Alternative approaches were source recovery and candidate flag exploration.
+The user chose a bounded hardware probe. Begin with unchanged known slot flags
+and the existing tea timing encoder; if this fails, stop and reassess evidence
+rather than treating failure as permission for more candidates.
+
+## Trial
+
+Require a complete validated original A/B/C set, matching connected machine and
+serial, normal machine state and no pending write/brew/native operation.
+Prefer the app's last-written set; if absent, require a complete draft set.
+Clearly say this restores the app-recorded set, not unknowable changes made
+through the official app.
+
+Preserve that set durably before preparing or sending the candidate. A is a
+fixed one-steep probe: 60 ml, 70 degrees C, 60 seconds, grinder off, no agitation
+or bypass. The recipe's valid nominal dose is 5 g, but physical testing uses no
+leaves. B/C retain the original snapshots and exact encoded recipes. All slots
+use flags 0x02. Use `encodeTeaBlob`, not card bytes or coffee timing.
+
+The user has the Omni Tea Brewer. After confirmed storage, inspect A on the
+machine before any execution. Check grinder off and displayed values. Start A
+manually only, with the Tea Brewer, no leaves, empty receiving vessel, adequate
+water and the user present. Follow the device's physical safety instructions.
+Do not touch or move the hot brewer during the trial.
+
+Observe whether water is held for approximately sixty seconds and subsequently
+drained as tea, instead of executing an ordinary coffee pour. Record actual
+display and observed times; acceptance of three writes alone does not prove
+tea behavior. A nominally tea-looking display alone is also insufficient.
+
+Stop after refusal, incomplete/ambiguous saving or unexpected execution. Do not
+start a brew while the slot transaction is unresolved. Existing explicit
+recovery may finish the immutable candidate set; restoration cannot bypass it.
+After the observation, explicitly restore the full preserved original set
+through the same writer and confirm final saving. No automatic restoration.
+
+## Tooling and persistence
+
+Expose a development-only TEA SLOT PROBE entry from Easy Mode, with fixed
+parameters and visible WRITE PROBE and RESTORE ORIGINAL SET actions. Reuse the
+existing focused writing ceremony, exclusive transport, receipt journal and
+recovery rather than creating a raw-send console route.
+
+Normal tea picker assignment remains blocked. Do not broaden snapshot
+validation to arbitrary tea recipes. A probe snapshot must be explicitly
+identified and strictly validated against the exact fixed recipe and candidate
+bytes. Persisted probe snapshots/journals must remain readable after relaunch,
+including when the development entry is unavailable, so normal recovery and
+restoration never become stranded behind a build flag.
+
+Bind retained originals to device ID and reported serial. Keep them until
+explicit restoration succeeds; repeated probe presses never overwrite originals
+with the probe. Keep original drafts distinct from restored machine snapshots.
+Candidate/restore preparation must be atomic and errors explicit. No backup or
+Recipe serialization changes; experiment metadata lives in the slot domain.
+Do not invent success or clear the pending journal when persistence fails.
+
+Keep one candidate identifier in logs, with machine/firmware readings when
+available, exact prepared frames, dispatch/receipt/save evidence and separate
+user-entered observation. Existing notification diagnostics may supply radio
+evidence. Evidence survives relaunch and can be copied locally. Never infer a
+physical hold/drain observation from a send promise.
+
+## Acceptance and next decision
+
+Software tests use real SQLite and the existing scripted port to establish
+fixed bytes/flags, original preservation, no arbitrary tea assignment, identity
+binding, pending-operation exclusion, recovery after relaunch and restoration
+only after the journal is resolved. UI tests cover explicit actions, persistence
+errors and no automatic brew. Both Jest platforms, typecheck and lint apply.
+
+The deliverable is trial tooling, not enabled production tea support. A real
+successful single-steep trial establishes only this candidate on this machine
+and firmware. Multi-steep execution, mixed slots and reliable restoration need
+separate qualification before enabling general tea assignment. A failed trial
+ends this candidate's execution and prompts review of the recorded evidence.
