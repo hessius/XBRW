@@ -378,6 +378,7 @@ export default class Machine {
         let failure: Error | null = null;
         let released = false;
         let sent = false;
+        let slotDispatched = false;
         const listeners = new Set<(error: Error) => void>();
         const invalidate = (error: Error) => {
             if (failure !== null || released) return;
@@ -397,8 +398,9 @@ export default class Machine {
             }
             if (isActiveBrewPhase(this.phase) || (this.state !== null
                 && !STARTABLE.has(this.state)
-                && this.state !== MACHINE_STATE.SAVING_SLOTS
-                && this.state !== MACHINE_STATE.SLOTS_SAVED)) {
+                && ((options?.restart && !slotDispatched)
+                    || (this.state !== MACHINE_STATE.SAVING_SLOTS
+                        && this.state !== MACHINE_STATE.SLOTS_SAVED)))) {
                 throw new Error("The machine is busy. Easy Mode writing stopped.");
             }
         };
@@ -453,6 +455,8 @@ export default class Machine {
                 check();
                 sent = true;
                 dispatching();
+                // Cancelling never dispatches; a restart must stay normal until its first slot.
+                slotDispatched = true;
                 const finish = this.beginOrdinaryOperation();
                 try {
                     await this.writeFrame(frame, check);

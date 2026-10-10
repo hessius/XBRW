@@ -153,6 +153,40 @@ it.each([0x43, 0x10, 0x1F, 0x0C])(
     }
 );
 
+it.each(["cancel", "restart"] as const)(
+    "retains the journal when saving begins after %s lease acquisition but before its durable boundary", async (operation) => {
+        const {store, port, radio, machine} = await ready();
+        radio.behavior = "refused";
+        await expect(writeSlots(store, identity, port)).rejects.toThrow();
+        const id = store.read("one").journal!.id;
+        store.dispatching("one", id, 0);
+        store.acknowledge("one", id, 0);
+        store.dispatching("one", id, 1);
+        radio.emit(status(0x01));
+        const before = store.read("one");
+        const count = radio.written.length;
+        const guarded = {
+            ...port,
+            acquire: async (bound: typeof identity, options?: Parameters<typeof port.acquire>[1]) => {
+                const lease = await port.acquire(bound, options);
+                radio.emit(status(0x43));
+                return lease;
+            }
+        };
+        const attempt = operation === "cancel"
+            ? cancelSlots(store, identity, guarded)
+            : recoverSlots(store, identity, guarded, {restart: true});
+        await expect(attempt).rejects.toThrow(/busy|saving|normal/i);
+        expect(store.read("one").journal).toMatchObject({
+            ...before.journal, error: operation === "cancel" ? before.journal!.error : expect.any(String)
+        });
+        expect(store.read("one").drafts).toEqual(before.drafts);
+        expect(store.read("one").written).toBeNull();
+        expect(radio.written).toHaveLength(count);
+        await expect(machine.send(buildType1(3500))).rejects.toThrow(/Easy Mode/i);
+    }
+);
+
 it("keeps the recovery reservation when cancellation cannot be persisted", async () => {
     const {sql, store, port, radio, machine} = await ready();
     radio.behavior = "refused";
