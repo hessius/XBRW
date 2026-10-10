@@ -664,9 +664,35 @@ convincing, but API-to-wire mapping still needs a physical test.
 
 The next user-approved candidate changes **only A's flags to `0x04`** with the
 same 60 ml, 70 C, 60-second blob. B/C remain `0x02` with exact original bytes.
-Candidate `tea-slot-0x04-one-steep-v1` has not been physically tried. The prior
+Candidate `tea-slot-0x04-one-steep-v1` was subsequently tried as recorded below. The prior
 restored trial must be archived intact before preparation, and no third
 candidate is authorised. No additional mode or execution commands are added.
+
+**Second physical result (2026-10-10): saved, still not tea.** The user supplied
+the second trial's journal: A's flag is `0x04`, its unchanged blob is
+`[8, 60, 70, 0, 0, 0, 32, 120, 30, 254, 120]`, and three receipts precede final
+save. The user reported the same absence of a tea overview and drain cycle.
+This excludes neither all flag encodings nor a different official tea blob:
+both tested candidates shared a synthetic 60 ml blob, not an exact official
+recipe encoding.
+
+The user correctly challenged that experimental volume. Their official
+reference has a 90 ml programmed stage and `teaRecipePerVolumn: "120"`;
+they report a further 30 ml to initiate draining. The ordinary tea encoder
+encodes programmed stages only, with no explicit drain pour. HomoLand's
+`build_tea_recipe_code` likewise describes the approximately 120 ml finished
+volume and siphon as firmware behavior rather than an extra encoded stage.
+That supports keeping brew-stage volume distinct from finished volume, but
+does not prove a 60 ml test is valid for the slot firmware.
+
+There is also an unqualified suffix difference: the public builder retains
+the official `grinderSize` and `grandWater` fields; our ordinary tea encoder
+forces `0xFE` and derives ratio from stage volume/dose. For the supplied official
+reference these would be `50, 150` versus our derived `254, 44` (30 multiplied
+by ten and narrowed to a byte). The probe had `254, 120`. Neither the synthetic
+probe nor the existing ordinary tea encoder should be described as byte-exact
+official slot encoding. Audit the complete official recipe conversion before
+another candidate, including volume, suffix, mode selector and drain behavior.
 
 Candidate `tea-slot-0x02-one-steep-v1` is a hypothesis, not production tea slot
 support. Easy Mode -> TEA SLOT PROBE -> WRITE PROBE prepares exactly A = one
