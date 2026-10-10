@@ -8,7 +8,9 @@ import {
     formatTeaProbeEvidence, nextTeaProbeCandidate, restoreTeaSlotOriginal, teaProbeFlags,
     teaProbeStatus, writeTeaSlotProbe
 } from "@/library/slots/teaSlotProbe";
-import {teaProbeCandidateSet, teaProbeSnapshot, TEA_SLOT_PROBE_ID} from "@/library/slots/teaSlotCandidate";
+import {
+    teaProbeCandidateSet, teaProbeSnapshot, TEA_SLOT_MATRIX_ID, TEA_SLOT_PROBE_ID
+} from "@/library/slots/teaSlotCandidate";
 import {coffee} from "./fixtures";
 
 const identity = {deviceId: "one", serial: "serial"};
@@ -371,9 +373,13 @@ describe("restoration", () => {
             await writeTeaSlotProbe(store, identity, scripted(store, {sent: []}), {id: () => "t2"});
             expect(nextTeaProbeCandidate(store.read("one"))).toBeNull();
             await restoreTeaSlotOriginal(store, identity, scripted(store, {sent: []}), {id: () => "r2"});
+            expect(nextTeaProbeCandidate(store.read("one"))).toBe(TEA_SLOT_MATRIX_ID);
+            await writeTeaSlotProbe(store, identity, scripted(store, {sent: []}), {id: () => "t3"});
+            expect(nextTeaProbeCandidate(store.read("one"))).toBeNull();
+            await restoreTeaSlotOriginal(store, identity, scripted(store, {sent: []}), {id: () => "r3"});
             expect(nextTeaProbeCandidate(store.read("one"))).toBeNull();
             const script: Script = {sent: []};
-            await expect(writeTeaSlotProbe(store, identity, scripted(store, script), {id: () => "t3"}))
+            await expect(writeTeaSlotProbe(store, identity, scripted(store, script), {id: () => "t4"}))
                 .rejects.toThrow(/restored.*evidence.*available/i);
             expect(script.sent).toEqual([]);
         });
@@ -607,5 +613,210 @@ describe("restoration", () => {
         expect(teaProbeStatus(new SlotDatabase(sql).read("one"))).toBe("candidate-unconfirmed");
         await restoreTeaSlotOriginal(store, identity, scripted(store, {sent: []}));
         expect(teaProbeStatus(new SlotDatabase(sql).read("one"))).toBe("restored");
+    });
+});
+
+describe("the reference-derived A/B/C matrix", () => {
+    // Independent fixture: literal audited bytes and the frames they must produce.
+    const SEGMENT = [90, 92, 2, 0, 236, 0, 120, 35];
+    const BLOBS = [[8, ...SEGMENT, 254, 150], [8, ...SEGMENT, 254, 150], [8, ...SEGMENT, 50, 150]];
+    const FRAMES = [
+        [88, 1, 2, 246, 44, 25, 0, 0, 0, 1, 0, 2, 8, 90, 92, 2, 0, 236, 0, 120, 35, 254, 150, 7, 242],
+        [88, 1, 2, 246, 44, 25, 0, 0, 0, 1, 1, 4, 8, 90, 92, 2, 0, 236, 0, 120, 35, 254, 150, 103, 240],
+        [88, 1, 2, 246, 44, 25, 0, 0, 0, 1, 2, 4, 8, 90, 92, 2, 0, 236, 0, 120, 35, 50, 150, 154, 157]
+    ];
+
+    async function restoredV2() {
+        const seededSet = seeded(false);
+        const {store} = seededSet;
+        await written(store);
+        store.assign("one", 0, snapshotRecipe(coffee("Distinct draft", 13)));
+        await writeTeaSlotProbe(store, identity, scripted(store, {sent: []}), {id: () => "t1"});
+        store.observe("one", {at: 10, display: "Water", heldSeconds: 60, drainedAsTea: false, note: "v1 result"});
+        await restoreTeaSlotOriginal(store, identity, scripted(store, {sent: []}), {id: () => "r1"});
+        await writeTeaSlotProbe(store, identity, scripted(store, {sent: []}), {id: () => "t2"});
+        store.observe("one", {at: 20, display: "Water", heldSeconds: 60, drainedAsTea: false, note: "v2 result"});
+        await restoreTeaSlotOriginal(store, identity, scripted(store, {sent: []}), {id: () => "r2"});
+        return seededSet;
+    }
+
+    it("is offered only after the confirmed v2 restoration and sends the three audited frames", async () => {
+        const {sql, store} = await restoredV2();
+        const before = store.read("one");
+        const script: Script = {sent: []};
+        await writeTeaSlotProbe(store, identity, scripted(store, script), {id: () => "t3", now: () => 30});
+        expect(script.sent).toEqual(FRAMES);
+        expect(script.sent.map(frame => frame[11])).toEqual([0x02, 0x04, 0x04]);
+        const after = new SlotDatabase(sql).read("one");
+        expect(after.experiment?.candidateId).toBe(TEA_SLOT_MATRIX_ID);
+        expect(after.experiment?.candidate.map(slot => slot.blob)).toEqual(BLOBS);
+        expect(after.experiment?.candidate.map(slot => slot.probe)).toEqual(
+            [`${TEA_SLOT_MATRIX_ID}:A`, `${TEA_SLOT_MATRIX_ID}:B`, `${TEA_SLOT_MATRIX_ID}:C`]);
+        expect(after.experiment?.candidate.map(slot => slot.name)).toEqual(["TEA REF A", "TEA REF B", "TEA REF C"]);
+        expect(after.experiment?.slotObservations).toEqual([null, null, null]);
+        expect(after.experiment?.observation).toBeNull();
+        expect(after.experiment?.original.slots).toEqual(before.written!.slots);
+        expect(after.written?.slots).toEqual(after.experiment?.candidate);
+        expect(after.experiment?.evidence[0].frames).toEqual(FRAMES);
+        const recipe = JSON.parse(after.experiment!.candidate[0].recipeJSON);
+        expect(recipe).toMatchObject({cupType: CUP_TYPE.TEA, dosage: 3, ratio: 15, grinder: false});
+        expect(JSON.parse(recipe.pours[0])).toMatchObject({
+            volume: 90, temperature: 92, pauseTime: 20, pourPattern: 2, agitation: 0, flowRate: 35
+        });
+        expect(JSON.parse(after.experiment!.candidate[2].recipeJSON)).toMatchObject({grinder: true, grindSize: 50});
+    });
+
+    it("archives both prior trials intact and writes nothing before the matrix is prepared", async () => {
+        const {sql, store} = await restoredV2();
+        const v2 = store.read("one").experiment!;
+        const v1 = store.read("one").experimentHistory![0];
+        await writeTeaSlotProbe(store, identity, scripted(store, {sent: []}), {id: () => "t3"});
+        const after = new SlotDatabase(sql).read("one");
+        expect(after.experimentHistory).toEqual([v1, v2]);
+        const copy = JSON.parse(formatTeaProbeEvidence(after.experiment!, after.experimentHistory));
+        expect(copy.slotObservations).toEqual([null, null, null]);
+        expect(copy.evidence[0].frames).toEqual(FRAMES);
+        expect(copy.archivedTrials.map((trial: {candidateId: string}) => trial.candidateId))
+            .toEqual([TEA_SLOT_PROBE_ID, V2_ID]);
+        expect(copy.archivedTrials[1].observation.note).toBe("v2 result");
+    });
+
+    it("survives relaunch with a pending matrix, recovers it and restores the originals", async () => {
+        const {sql, store} = await restoredV2();
+        const v1 = store.read("one").experimentHistory![0];
+        const v2 = store.read("one").experiment!;
+        const originals = store.read("one").experiment!.original.slots;
+        await expect(writeTeaSlotProbe(store, identity, scripted(store, {sent: [], failAt: 1}),
+            {id: () => "t3"})).rejects.toThrow("Receipt unknown");
+        const relaunched = new SlotDatabase(sql);
+        expect(teaProbeStatus(relaunched.read("one"))).toBe("pending-candidate");
+        expect(relaunched.read("one").journal?.frames).toEqual(FRAMES);
+        expect(relaunched.read("one").experimentHistory).toEqual([v1, v2]);
+        expect(nextTeaProbeCandidate(relaunched.read("one"))).toBeNull();
+        await recoverSlots(relaunched, identity, scripted(relaunched, {sent: []}), {finishUncertain: true});
+        const sent: number[][] = [];
+        await restoreTeaSlotOriginal(relaunched, identity, scripted(relaunched, {sent}), {id: () => "r3"});
+        expect(sent).toEqual(prepareSet(originals));
+        const after = new SlotDatabase(sql).read("one");
+        expect(after.experiment?.phase).toBe("restored");
+        expect(after.written?.slots).toEqual(originals);
+        expect(after.experimentHistory).toEqual([v1, v2]);
+    });
+
+    it("rolls back completely when preparation fails and leaves both trials untouched", async () => {
+        const {sql, store} = await restoredV2();
+        const before = store.read("one");
+        const failing = {...sql, runSync: () => { throw new Error("disk full"); }};
+        const broken = new SlotDatabase(failing);
+        const script: Script = {sent: []};
+        await expect(writeTeaSlotProbe(broken, identity, scripted(broken, script), {id: () => "t3"}))
+            .rejects.toThrow("disk full");
+        expect(script.sent).toEqual([]);
+        expect(new SlotDatabase(sql).read("one")).toEqual(before);
+    });
+
+    it("rejects a changed flag, order, suffix, partial set or reused slot candidate", () => {
+        const [a, b, c] = [`${TEA_SLOT_MATRIX_ID}:A`, `${TEA_SLOT_MATRIX_ID}:B`, `${TEA_SLOT_MATRIX_ID}:C`]
+            .map(id => teaProbeSnapshot(id));
+        expect(prepareSet([a, b, c])).toEqual(FRAMES);
+        expect(() => prepareSet([b, a, c])).toThrow(/reference matrix/i);
+        expect(() => prepareSet([a, c, b])).toThrow(/reference matrix/i);
+        expect(() => prepareSet([a, b, b])).toThrow(/reference matrix/i);
+        expect(() => prepareSet([a, b, snapshotRecipe(coffee())])).toThrow(/reference matrix/i);
+        expect(() => prepareSet([snapshotRecipe(coffee()), b, c])).toThrow(/reference matrix/i);
+        expect(() => prepareSet([teaProbeSnapshot(), b, c])).toThrow(/reference matrix/i);
+        expect(() => readSnapshot({...c, blob: [...c.blob.slice(0, 9), 254, 150]})).toThrow();
+        expect(() => readSnapshot({...c, blob: [...c.blob.slice(0, 9), 50, 120]})).toThrow();
+        expect(() => readSnapshot({...a, blob: [...a.blob.slice(0, 9), 50, 150]})).toThrow();
+        expect(() => readSnapshot({...a, blob: [8, ...SEGMENT.slice(0, 7), 30, 254, 44]})).toThrow();
+        expect(() => readSnapshot({...b, probe: `${TEA_SLOT_MATRIX_ID}:A`})).toThrow();
+        expect(() => readSnapshot({...b, name: "TEA REF A"})).toThrow();
+        const json = JSON.parse(b.recipeJSON);
+        expect(() => readSnapshot({...b, recipeJSON: JSON.stringify({...json, ratio: 30})})).toThrow();
+        expect(() => readSnapshot({...b, recipeJSON: JSON.stringify({...json, grinder: true})})).toThrow();
+        expect(() => readSnapshot({...b, extra: true})).toThrow();
+        expect(() => teaProbeSnapshot(TEA_SLOT_MATRIX_ID)).toThrow();
+        expect(() => prepareSet([a, b, c].map(slot => ({...slot, probe: undefined})) as never)).toThrow();
+    });
+
+    it("allows no fourth trial and keeps evidence after the matrix is restored", async () => {
+        const {store} = await restoredV2();
+        await writeTeaSlotProbe(store, identity, scripted(store, {sent: []}), {id: () => "t3"});
+        await restoreTeaSlotOriginal(store, identity, scripted(store, {sent: []}), {id: () => "r3"});
+        const record = store.read("one");
+        expect(nextTeaProbeCandidate(record)).toBeNull();
+        expect(record.experimentHistory).toHaveLength(2);
+        const script: Script = {sent: []};
+        await expect(writeTeaSlotProbe(store, identity, scripted(store, script), {id: () => "t4"}))
+            .rejects.toThrow(/restored.*evidence.*available/i);
+        expect(script.sent).toEqual([]);
+        expect(store.read("one")).toBe(record);
+    });
+
+    it("refuses a serial mismatch, a pending ordinary write and general tea", async () => {
+        const {store} = await restoredV2();
+        const before = store.read("one");
+        const script: Script = {sent: []};
+        for (const serial of [null, "other"]) {
+            await expect(writeTeaSlotProbe(store, {...identity, serial}, scripted(store, script)))
+                .rejects.toThrow(/serial|different machine/i);
+        }
+        await expect(writeSlots(store, identity, scripted(store, {sent: [], failAt: 0}), {id: () => "n1"}))
+            .rejects.toThrow("Receipt unknown");
+        expect(nextTeaProbeCandidate(store.read("one"))).toBeNull();
+        await expect(writeTeaSlotProbe(store, identity, scripted(store, script), {id: () => "t3"}))
+            .rejects.toThrow(/incomplete write/i);
+        expect(script.sent).toEqual([]);
+        expect(before.experiment?.candidateId).toBe(V2_ID);
+        const tea = new Recipe();
+        tea.cupType = CUP_TYPE.TEA;
+        expect(() => snapshotRecipe(tea)).toThrow("Tea slot writing is not available");
+    });
+
+    it("keeps A, B and C reports separate and leaves the older single observations alone", async () => {
+        const {sql, store} = await restoredV2();
+        await writeTeaSlotProbe(store, identity, scripted(store, {sent: []}), {id: () => "t3"});
+        const report = (note: string, drainedAsTea: boolean | null) => ({
+            at: 40, display: "Steep 20", heldSeconds: 20, drainedAsTea, note
+        });
+        store.observeSlot("one", 1, report("B", true));
+        store.observeSlot("one", 2, {at: 41, display: "Grind", heldSeconds: null, drainedAsTea: null, note: "C not run"});
+        store.observeSlot("one", 0, report("A", false));
+        store.observeSlot("one", 1, report("B again", true));
+        const after = new SlotDatabase(sql).read("one");
+        expect(after.experiment?.slotObservations?.map(item => item?.note)).toEqual(["A", "B again", "C not run"]);
+        expect(after.experiment?.slotObservations?.[2]).toMatchObject({heldSeconds: null, drainedAsTea: null});
+        expect(after.experiment?.observation).toBeNull();
+        expect(after.experimentHistory?.map(trial => trial.observation?.note)).toEqual(["v1 result", "v2 result"]);
+        expect(() => store.observe("one", report("single", null))).toThrow(/separately/i);
+        expect(() => store.observeSlot("one", 0, {...report("x", null), heldSeconds: -1})).toThrow();
+        const copy = JSON.parse(formatTeaProbeEvidence(after.experiment!, after.experimentHistory));
+        expect(copy.slotObservations).toHaveLength(3);
+    });
+
+    it("rejects an observation on older trials and damaged matrix histories", async () => {
+        const {sql, store} = await restoredV2();
+        const report = {at: 1, display: "", heldSeconds: null, drainedAsTea: null, note: ""};
+        expect(() => store.observeSlot("one", 0, report)).toThrow();
+        await writeTeaSlotProbe(store, identity, scripted(store, {sent: []}), {id: () => "t3"});
+        const row = sql.getFirstSync("SELECT recordJSON FROM easy_mode_slots WHERE deviceId = ?", ["one"]) as
+            {recordJSON: string};
+        type MutableRecord = ReturnType<SlotDatabase["read"]>;
+        const damage = (edit: (record: MutableRecord) => void) => {
+            const record: MutableRecord = JSON.parse(row.recordJSON);
+            edit(record);
+            sql.runSync("UPDATE easy_mode_slots SET recordJSON = ? WHERE deviceId = ?",
+                [JSON.stringify(record), "one"]);
+            expect(() => new SlotDatabase(sql).read("one")).toThrow();
+        };
+        damage(record => { delete record.experiment!.slotObservations; });
+        damage(record => { record.experimentHistory![0].slotObservations = [null, null, null]; });
+        damage(record => { record.experimentHistory!.reverse(); });
+        damage(record => { record.experimentHistory!.pop(); });
+        damage(record => { record.experimentHistory!.push(record.experimentHistory![1]); });
+        damage(record => { record.experimentHistory![1].trialId = record.experimentHistory![0].trialId; });
+        damage(record => { record.experiment!.slotObservations![0] = {...report, heldSeconds: -2}; });
+        damage(record => { record.written!.slots.reverse(); });
+        damage(record => { record.experiment!.evidence[0].frames![1][11] = 0x02; });
     });
 });

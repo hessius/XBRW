@@ -13,7 +13,7 @@ import {useEasyModeSlots} from "@/hooks/useEasyModeSlots";
 import {onAccent, palette} from "@/constants/colors";
 import {resolveAccent} from "@/library/accent";
 import * as motion from "@/constants/motion";
-import {writeTeaSlotProbe} from "@/library/slots/teaSlotProbe";
+import {restoreTeaSlotOriginal, writeTeaSlotProbe} from "@/library/slots/teaSlotProbe";
 
 const recipes = [coffee("Morning"), coffee("Evening")];
 const native = jest.requireActual<typeof import("react-native")>("react-native");
@@ -596,4 +596,26 @@ it.each([
     expect(screen.getByRole("alert")).toHaveTextContent(copy);
     expect(screen.getByText("Writing stopped at B.")).toHaveStyle({color: palette.warn});
     expect(screen.getByRole("alert")).not.toHaveTextContent(/receipt|journal/i);
+});
+
+it("presents each reference matrix slot with its own name and figures, not the first probe's", async () => {
+    const store = new SlotDatabase(createTestDatabase());
+    for (const i of [0, 1, 2] as const) store.assign("one", i, snapshotRecipe(recipes[0]));
+    const identity = {deviceId: "one", serial: "serial"};
+    const port = {available: true, acquire: async () => ({
+        sendAndConfirm: async () => {}, confirmSaved: async () => {}, release: () => {}
+    })};
+    for (const id of ["t1", "t2"]) {
+        await writeTeaSlotProbe(store, identity, port, {id: () => id});
+        await restoreTeaSlotOriginal(store, identity, port, {id: () => `r-${id}`});
+    }
+    await writeTeaSlotProbe(store, identity, port, {id: () => "t3"});
+    await renderWithProviders(<EasyModeSlots {...props()} record={store.read("one")} available/>);
+    for (const [slot, name, grind] of [["A", "TEA REF A", "OFF"], ["B", "TEA REF B", "OFF"], ["C", "TEA REF C", "50"]]) {
+        const card = within(screen.getByTestId(`slot-${slot}`));
+        expect(card.getByText(name)).toBeOnTheScreen();
+        expect(card.getByText(`1 STEEP · 90ML · 92C · 20S · GRIND ${grind}`)).toBeOnTheScreen();
+        expect(card.queryByText(/1:15|1:30|REMOVED FROM LIBRARY|RECIPE UPDATED/)).toBeNull();
+        expect(card.queryByTestId(`slot-${slot}-profile`)).toBeNull();
+    }
 });

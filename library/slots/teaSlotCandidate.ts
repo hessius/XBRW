@@ -4,7 +4,7 @@ import {encodeTeaBlob} from "@/library/machine/protocol";
 import type {SlotRecord, SlotSnapshot, Triple} from "@/library/slots/slotModel";
 
 /**
- * The two approved tea candidates: pure constants and validation, with no storage.
+ * The three approved tea trials: pure constants and validation, with no storage.
  *
  * Kept apart from `teaSlotProbe.ts` because `slotModel.readSnapshot` must be
  * able to recognise it, and the probe's orchestration imports the writer, which
@@ -12,13 +12,39 @@ import type {SlotRecord, SlotSnapshot, Triple} from "@/library/slots/slotModel";
  */
 export const TEA_SLOT_PROBE_ID = "tea-slot-0x02-one-steep-v1";
 export const TEA_SLOT_PROBE_V2_ID = "tea-slot-0x04-one-steep-v1";
+/** The one reference-derived A/B/C comparison, written after v2 is restored. Not official-byte-proven. */
+export const TEA_SLOT_MATRIX_ID = "tea-slot-reference-abc-v1";
 export const TEA_SLOT_PROBE_UUID = "tea-slot-probe-0x02-one-steep-v1";
 export const TEA_SLOT_PROBE_NAME = "TEA SLOT PROBE";
+export const TEA_EXPERIMENT_IDS = [TEA_SLOT_PROBE_ID, TEA_SLOT_PROBE_V2_ID, TEA_SLOT_MATRIX_ID] as const;
+
+/**
+ * The official public reference's one stage, audited from the share page:
+ * 90 ml, 92 C, spiral (2), no agitation, 20 s steep (236, 0), 120 rpm, flow 3.5 (35).
+ * Explicit constants on purpose: the ordinary tea encoder derives different suffix bytes.
+ */
+const REFERENCE_SEGMENT = [90, 92, 2, 0, 236, 0, 120, 35];
+const MATRIX = [
+    {id: `${TEA_SLOT_MATRIX_ID}:A`, uuid: "tea-slot-reference-abc-v1-a", name: "TEA REF A",
+        slot: 0, flags: 0x02, grinder: false, blob: [8, ...REFERENCE_SEGMENT, 254, 150]},
+    {id: `${TEA_SLOT_MATRIX_ID}:B`, uuid: "tea-slot-reference-abc-v1-b", name: "TEA REF B",
+        slot: 1, flags: 0x04, grinder: false, blob: [8, ...REFERENCE_SEGMENT, 254, 150]},
+    {id: `${TEA_SLOT_MATRIX_ID}:C`, uuid: "tea-slot-reference-abc-v1-c", name: "TEA REF C",
+        slot: 2, flags: 0x04, grinder: true, blob: [8, ...REFERENCE_SEGMENT, 50, 150]}
+] as const;
 
 const CANDIDATES = [
-    {id: TEA_SLOT_PROBE_ID, uuid: TEA_SLOT_PROBE_UUID, flags: 0x02},
-    {id: TEA_SLOT_PROBE_V2_ID, uuid: "tea-slot-probe-0x04-one-steep-v1", flags: 0x04}
+    {id: TEA_SLOT_PROBE_ID, uuid: TEA_SLOT_PROBE_UUID, flags: 0x02, slot: null},
+    {id: TEA_SLOT_PROBE_V2_ID, uuid: "tea-slot-probe-0x04-one-steep-v1", flags: 0x04, slot: null},
+    ...MATRIX
 ] as const;
+
+export function checkTeaExperimentId(candidateId: unknown): string {
+    if (!TEA_EXPERIMENT_IDS.some(id => id === candidateId)) {
+        throw new Error("The tea slot probe candidate is not approved.");
+    }
+    return candidateId as string;
+}
 
 function candidate(candidateId: unknown) {
     const found = CANDIDATES.find(entry => entry.id === candidateId);
@@ -30,16 +56,37 @@ export function teaProbeFlags(candidateId: string): 0x02 | 0x04 {
     return candidate(candidateId).flags;
 }
 
-/** The only approved progression; a pending ordinary write also blocks a fresh probe. */
+/** Frame flags for each slot given its snapshots' probe ids; anything unapproved throws. */
+export function teaProbeSlotFlags(probes: readonly (string | undefined)[]): Triple<number> {
+    if (probes.every(probe => probe === undefined)) return [0x02, 0x02, 0x02];
+    const entries = probes.map(probe => probe === undefined ? undefined : candidate(probe));
+    if (entries.some(entry => entry !== undefined && entry.slot !== null)) {
+        if (!entries.every((entry, i) => entry?.slot === i)) {
+            throw new Error("The tea slot reference matrix needs exactly its A, B and C candidates.");
+        }
+        return [entries[0]!.flags, entries[1]!.flags, entries[2]!.flags];
+    }
+    if (entries[1] !== undefined || entries[2] !== undefined) {
+        throw new Error("The tea slot probe is allowed only in slot A.");
+    }
+    return [entries[0]!.flags, 0x02, 0x02];
+}
+
+/**
+ * The only approved progression: v1, then v2, then the reference matrix, each only
+ * after the previous trial's restoration is confirmed. Nothing follows the matrix.
+ * A pending ordinary write also blocks a fresh probe.
+ */
 export function nextTeaProbeCandidate(record: SlotRecord): string | null {
     if (record.journal !== null) return null;
     const history = record.experimentHistory ?? [];
     const experiment = record.experiment;
     if (experiment === undefined) return history.length === 0 ? TEA_SLOT_PROBE_ID : null;
-    return experiment.candidateId === TEA_SLOT_PROBE_ID && history.length === 0
-        && experiment.phase === "restored" && experiment.pending === null
-        && experiment.evidence.at(-1)?.kind === "restored"
-        ? TEA_SLOT_PROBE_V2_ID : null;
+    if (experiment.phase !== "restored" || experiment.pending !== null
+        || experiment.evidence.at(-1)?.kind !== "restored") return null;
+    if (experiment.candidateId === TEA_SLOT_PROBE_ID && history.length === 0) return TEA_SLOT_PROBE_V2_ID;
+    return experiment.candidateId === TEA_SLOT_PROBE_V2_ID && history.length === 1
+        && history[0].candidateId === TEA_SLOT_PROBE_ID ? TEA_SLOT_MATRIX_ID : null;
 }
 
 function probeRecipe(sourceUuid: string): Recipe {
@@ -57,9 +104,36 @@ function probeRecipe(sourceUuid: string): Recipe {
     return recipe;
 }
 
+/**
+ * Metadata only: the cloud's dose 3 g and ratio 15 are recorded as sent, and the
+ * blob is the explicit constant, so nothing here re-derives a ratio of 30.
+ */
+function referenceRecipe(entry: (typeof MATRIX)[number]): Recipe {
+    const recipe = new Recipe();
+    recipe.uuid = entry.uuid;
+    recipe.name = entry.name;
+    recipe.key = entry.uuid;
+    recipe.createdAt = 0;
+    recipe.cupType = CUP_TYPE.TEA;
+    recipe.dosage = 3;
+    recipe.ratio = 15;
+    recipe.grinder = entry.grinder;
+    if (entry.grinder) recipe.grindSize = 50;
+    recipe.bypassEnabled = false;
+    recipe.pours = [new Pour(1, 90, 92, 35, AGITATION.ALL_OFF, POUR_PATTERN.SPIRAL, 20)];
+    return recipe;
+}
+
 /** Defaults to v1 so persisted fixtures and callers retain their exact identity. */
 export function teaProbeSnapshot(candidateId: string = TEA_SLOT_PROBE_ID): SlotSnapshot {
     const approved = candidate(candidateId);
+    if (approved.slot !== null) {
+        const recipe = referenceRecipe(approved);
+        return {
+            sourceUuid: approved.uuid, name: approved.name, recipeJSON: JSON.stringify(recipe),
+            blob: [...approved.blob], probe: approved.id
+        };
+    }
     const recipe = probeRecipe(approved.uuid);
     return {
         sourceUuid: approved.uuid,
@@ -150,5 +224,8 @@ export function teaProbeOriginal(record: SlotRecord): {
 export function teaProbeCandidateSet(
     original: Triple<SlotSnapshot>, candidateId: string = TEA_SLOT_PROBE_ID
 ): Triple<SlotSnapshot> {
+    if (candidateId === TEA_SLOT_MATRIX_ID) {
+        return MATRIX.map(entry => teaProbeSnapshot(entry.id)) as Triple<SlotSnapshot>;
+    }
     return [teaProbeSnapshot(candidateId), original[1], original[2]];
 }

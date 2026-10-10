@@ -94,3 +94,20 @@ export const TEA_SLOT_PROBE_PARAMETERS = {
 - [ ] Commit with coauthor; final spec and code-quality review. Leave branch
   local. Hardware trial begins only after user inspects UI and explicitly starts
   the physical machine.
+
+## Task 3: Reference-derived A/B/C matrix
+
+**Modify:** `library/slots/{teaSlotCandidate,teaSlotProbe,slotModel,SlotDatabase}.ts`,
+`hooks/useEasyModeSlots.ts`, `components/{TeaSlotProbePanel,EasyModeSlotCard}.tsx`
+and their tests (library, hook, panel, EasyModeSlots, route, machineSlotOwner).
+
+- [x] Failing tests first: pinned frames for slots 0/1/2 with flags 2/4/4 and
+  independent constants/CRC; actual first/second write + restore then matrix;
+  both archived trials unchanged across relaunch incl. pending matrix; negative
+  cases (flags, order, C suffix); no fourth trial; DB failure rollback; identity,
+  serial, normal-state and pending-native guards; panel/route owner harness.
+- [x] Implement `tea-slot-reference-abc-v1` as the sole successor of a restored
+  v2; `observeSlot` per-slot reports; matrix-aware snapshots and card figures.
+- [x] Panel: ABC rows, reference-derived label, C no-start warning.
+- [ ] Validate: dual jest, typecheck, lint, doctor, Metro 8082 iOS bundle curl.
+  Commit with Copilot coauthor; do not stage `docs/machine-integration/ble-protocol.md`.

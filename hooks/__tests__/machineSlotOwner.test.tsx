@@ -18,7 +18,7 @@ import {buildType1, MACHINE_STATE} from "@/library/machine/protocol";
 import {coffee} from "@/library/slots/__tests__/fixtures";
 import EasyModeScreen from "@/app/easyMode";
 import {teaProbeSnapshot} from "@/library/slots/teaSlotCandidate";
-import {teaProbeStatus} from "@/library/slots/teaSlotProbe";
+import {restoreTeaSlotOriginal, teaProbeStatus, writeTeaSlotProbe} from "@/library/slots/teaSlotProbe";
 import {installMachineSlotPort} from "@/library/slots/machineSlotPort";
 
 jest.mock("react-native-ble-manager", () => ({__esModule: true, default: {}}));
@@ -396,6 +396,52 @@ it("writes and explicitly restores the fixed tea trial through the route's share
         .toEqual(originals.map(slot => slot!.blob));
     expect(store.read("one").drafts).toEqual(originals);
     expect(new SlotDatabase(appDatabase()).read("one").experiment?.phase).toBe("restored");
+    for (const code of [4513, 4512, 8001, 8002, 8004, 8019]) expect(mockRadio.sent).not.toContain(code);
+    expect(new BrewDatabase().all()).toEqual([]);
+});
+
+it("writes and explicitly restores the reference ABC matrix through the shared owner with the audited frames", async () => {
+    const store = draft();
+    const originals = store.read("one").drafts;
+    const quiet = {available: true, acquire: async () => ({
+        sendAndConfirm: async () => {}, confirmSaved: async () => {}, release: () => {}
+    })};
+    for (const id of ["t1", "t2"]) {
+        await writeTeaSlotProbe(store, {deviceId: "one", serial: "J15ABC123456"}, quiet, {id: () => id});
+        await restoreTeaSlotOriginal(store, {deviceId: "one", serial: "J15ABC123456"}, quiet, {id: () => `r-${id}`});
+    }
+    const archived = store.read("one").experimentHistory!.length + 1;
+    await connect();
+    mockRadio.emit(status(MACHINE_STATE.IDLE));
+    const route = await renderWithProviders(<EasyModeScreen/>);
+    await fireEvent.press(route.getByRole("button", {name: "TEA SLOT PROBE"}));
+    await act(async () => { await jest.advanceTimersByTimeAsync(1000); });
+    await act(async () => {
+        const pressed = fireEvent.press(route.getByRole("button", {name: "WRITE COMPARISON"}));
+        await flush();
+        expect(mockRemove().preventDefault).toHaveBeenCalledTimes(1);
+        await jest.advanceTimersByTimeAsync(4000);
+        await pressed;
+    });
+    const seg = [90, 92, 2, 0, 236, 0, 120, 35];
+    expect(mockRadio.slots.map(frame => Array.from(frame.slice(10, -2)))).toEqual([
+        [0, 0x02, 8, ...seg, 254, 150], [1, 0x04, 8, ...seg, 254, 150], [2, 0x04, 8, ...seg, 50, 150]
+    ]);
+    const record = store.read("one");
+    expect(record.experiment?.candidateId).toBe("tea-slot-reference-abc-v1");
+    expect(record.experimentHistory).toHaveLength(archived);
+    expect(teaProbeStatus(record)).toBe("candidate-written");
+    await act(async () => { await jest.advanceTimersByTimeAsync(4000); });
+    await fireEvent.press(route.getByRole("button", {name: "TEA SLOT PROBE"}));
+    await act(async () => { await jest.advanceTimersByTimeAsync(1000); });
+    await act(async () => {
+        const pressed = fireEvent.press(route.getByRole("button", {name: "RESTORE ORIGINAL SET"}));
+        await jest.advanceTimersByTimeAsync(4000);
+        await pressed;
+    });
+    expect(teaProbeStatus(store.read("one"))).toBe("restored");
+    expect(mockRadio.slots.slice(3).map(frame => Array.from(frame.slice(12, -2))))
+        .toEqual(originals.map(slot => slot!.blob));
     for (const code of [4513, 4512, 8001, 8002, 8004, 8019]) expect(mockRadio.sent).not.toContain(code);
     expect(new BrewDatabase().all()).toEqual([]);
 });

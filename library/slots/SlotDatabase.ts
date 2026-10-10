@@ -6,8 +6,8 @@ import {
     type SlotObservation, type SlotRecord, type SlotSnapshot, type Triple
 } from "@/library/slots/slotModel";
 import {
-    isTeaProbeSnapshot, nextTeaProbeCandidate, sameSnapshotSet, teaProbeCandidateSet, teaProbeFlags,
-    teaProbeOriginal, TEA_SLOT_PROBE_ID, TEA_SLOT_PROBE_V2_ID
+    checkTeaExperimentId, isTeaProbeSnapshot, nextTeaProbeCandidate, sameSnapshotSet,
+    teaProbeCandidateSet, teaProbeOriginal, TEA_SLOT_MATRIX_ID, TEA_SLOT_PROBE_ID, TEA_SLOT_PROBE_V2_ID
 } from "@/library/slots/teaSlotCandidate";
 
 type SlotSQL = {
@@ -111,7 +111,7 @@ function readExperiment(value: unknown, deviceId: string, journal: SlotJournal |
         || (value.original.source === "written") !== (value.original.writtenAt !== null)) {
         throw new Error("The tea slot probe record is invalid.");
     }
-    teaProbeFlags(value.candidateId);
+    checkTeaExperimentId(value.candidateId);
     const slots = triple(value.original.slots, readSnapshot);
     const originalDrafts = triple(value.originalDrafts, (slot) => slot === null ? null : readSnapshot(slot));
     const candidate = triple(value.candidate, readSnapshot);
@@ -160,12 +160,18 @@ function readExperiment(value: unknown, deviceId: string, journal: SlotJournal |
             }
         }
     }
+    let slotObservations: SlotExperiment["slotObservations"];
+    if ((value.slotObservations !== undefined) !== (value.candidateId === TEA_SLOT_MATRIX_ID)) {
+        throw new Error("Only the reference matrix keeps per-slot tea observations.");
+    }
+    if (value.slotObservations !== undefined) slotObservations = triple(value.slotObservations, readObservation);
     return {
         candidateId: value.candidateId, trialId: value.trialId, deviceId, serial: value.serial,
         machine: {...(value.machine as Record<string, string>)},
         original: {source: value.original.source, writtenAt: value.original.writtenAt, slots},
         originalDrafts, candidate, phase: value.phase, pending,
         observation: readObservation(value.observation),
+        ...(slotObservations === undefined ? {} : {slotObservations}),
         evidence
     };
 }
@@ -194,7 +200,7 @@ function readRecord(json: string, deviceId: string): SlotRecord {
             throw new Error("The tea slot probe has no experiment record.");
         }
         if (value.experimentHistory !== undefined) {
-            if (!Array.isArray(value.experimentHistory) || value.experimentHistory.length > 1) {
+            if (!Array.isArray(value.experimentHistory) || value.experimentHistory.length > 2) {
                 throw new Error("The tea slot probe history is invalid.");
             }
             record.experimentHistory = value.experimentHistory.map(item => {
@@ -215,6 +221,13 @@ function readRecord(json: string, deviceId: string): SlotRecord {
             if (history.length !== 1 || history[0].candidateId !== TEA_SLOT_PROBE_ID
                 || history[0].serial !== current.serial || history[0].trialId === current.trialId) {
                 throw new Error("The tea slot probe history is not the approved v1 to v2 sequence.");
+            }
+        } else if (current?.candidateId === TEA_SLOT_MATRIX_ID) {
+            if (history.length !== 2 || history[0].candidateId !== TEA_SLOT_PROBE_ID
+                || history[1].candidateId !== TEA_SLOT_PROBE_V2_ID
+                || history.some(item => item.serial !== current.serial)
+                || new Set([...history, current].map(item => item.trialId)).size !== 3) {
+                throw new Error("The tea slot probe history is not the approved v1, v2, matrix sequence.");
             }
         } else if (history.length !== 0) {
             throw new Error("The tea slot probe history requires the approved second candidate.");
@@ -365,14 +378,16 @@ export class SlotDatabase {
             const checked = readJournal(journal);
             if (checked === null) throw new Error("The tea slot probe journal is missing.");
             if (record.experiment !== undefined) {
-                record.experimentHistory = [record.experiment];
+                record.experimentHistory = [...(record.experimentHistory ?? []), record.experiment];
             }
             record.journal = checked;
             record.experiment = {
                 candidateId, trialId, deviceId, serial: journal.serial,
                 machine: {...machine}, original, originalDrafts: record.drafts, candidate,
                 phase: "active", pending: {journalId: journal.id, kind: "candidate"},
-                observation: null, evidence: []
+                observation: null,
+                ...(candidateId === TEA_SLOT_MATRIX_ID ? {slotObservations: [null, null, null]} : {}),
+                evidence: []
             };
             this.evidence(record, journal.id, "prepared", at, null, null, checked.frames);
         });
@@ -406,7 +421,21 @@ export class SlotDatabase {
     observe(deviceId: string, observation: SlotObservation): void {
         this.change(deviceId, (record) => {
             if (record.experiment === undefined) throw new Error("There is no tea slot probe to observe.");
+            if (record.experiment.slotObservations !== undefined) {
+                throw new Error("Report each matrix slot separately.");
+            }
             record.experiment.observation = readObservation(observation);
+        });
+    }
+
+    /** One slot's report on the reference matrix; the other slots' reports are untouched. */
+    observeSlot(deviceId: string, index: SlotIndex, observation: SlotObservation): void {
+        this.change(deviceId, (record) => {
+            const slots = record.experiment?.slotObservations;
+            if (record.experiment === undefined || slots === undefined) {
+                throw new Error("There is no reference matrix trial to observe.");
+            }
+            slots[index] = readObservation(observation);
         });
     }
 

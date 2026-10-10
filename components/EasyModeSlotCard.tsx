@@ -22,6 +22,12 @@ type Props = {
     onUpdate: () => void;
 };
 
+function teaProbeFigures(recipe: Recipe): string {
+    const pour = recipe.pours[0];
+    return `1 STEEP · ${pour.volume}ML · ${pour.temperature}C · ${pour.pauseTime}S · GRIND ${
+        recipe.grinder ? recipe.grindSize : "OFF"}`;
+}
+
 export default function EasyModeSlotCard({
     index, snapshot, needsWrite, status, recovery, locked, updateProblem, changeRef, onChange, onUpdate
 }: Props) {
@@ -51,7 +57,7 @@ export default function EasyModeSlotCard({
                 gap="$2" flexWrap="wrap">
                 {recipe !== null && <DotMatrixText fontSize={11} weight="bold" color={ink}
                     style={{flexShrink: 1}}>
-                    {probe ? "1 STEEP · 60ML · 70C · 60S · GRIND OFF"
+                    {probe ? teaProbeFigures(recipe)
                         : `${recipe.dosage}G · 1:${recipe.ratio} · GRIND ${recipe.grinder ? recipe.grindSize : "OFF"}`}
                 </DotMatrixText>}
                 {!locked && <Button ref={changeRef} height="auto" minHeight={44} paddingVertical="$2"

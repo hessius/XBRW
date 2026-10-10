@@ -4,10 +4,12 @@ import * as Clipboard from "expo-clipboard";
 import {Button, Input, Text, XStack, YStack, type ColorTokens} from "tamagui";
 import {notify} from "@/components/XbrwToast";
 import {palette} from "@/constants/colors";
-import {prepareSet, SLOT_NAMES, type SlotObservation, type SlotRecord} from "@/library/slots/slotModel";
+import {
+    prepareSet, SLOT_NAMES, type SlotIndex, type SlotObservation, type SlotRecord
+} from "@/library/slots/slotModel";
 import {teaProbeOriginal} from "@/library/slots/teaSlotCandidate";
 import {
-    formatTeaProbeEvidence, nextTeaProbeCandidate, teaProbeFlags, teaProbeStatus
+    formatTeaProbeEvidence, nextTeaProbeCandidate, teaProbeFlags, teaProbeStatus, TEA_SLOT_MATRIX_ID
 } from "@/library/slots/teaSlotProbe";
 
 export type TeaSlotProbePanelProps = {
@@ -21,7 +23,7 @@ export type TeaSlotProbePanelProps = {
     error: string | null;
     onWriteProbe: () => void;
     onRestore: () => void;
-    onObserve: (trialId: string, observation: SlotObservation) => boolean;
+    onObserve: (trialId: string, observation: SlotObservation, slot?: SlotIndex) => boolean;
 };
 
 const STATUS = {
@@ -33,6 +35,70 @@ const STATUS = {
     restored: "Original set restored. This trial is retained and copyable."
 };
 
+const hex = (flags: number) => `0x${flags.toString(16).padStart(2, "0")}`;
+const MATRIX_ROWS = SLOT_NAMES.map(name => ({
+    name,
+    flags: hex(teaProbeFlags(`${TEA_SLOT_MATRIX_ID}:${name}`)),
+    suffix: name === "C" ? "50 150 (grinder suffix 50)" : "FE 150 (grinder OFF)"
+}));
+
+function SlotObservationForm({slot, initial, disabled, onSave}: {
+    slot: SlotIndex;
+    initial: SlotObservation | null;
+    disabled: boolean;
+    onSave: (observation: SlotObservation) => boolean;
+}) {
+    const name = SLOT_NAMES[slot];
+    const [display, setDisplay] = useState(initial?.display ?? "");
+    const [held, setHeld] = useState(initial?.heldSeconds?.toString() ?? "");
+    const [drained, setDrained] = useState<boolean | null>(initial?.drainedAsTea ?? null);
+    const [note, setNote] = useState(initial?.note ?? "");
+    const [problem, setProblem] = useState<string | null>(null);
+    const [saved, setSaved] = useState(false);
+
+    function save(): void {
+        if (disabled) return;
+        const seconds = held.trim() === "" ? null : Number(held);
+        if (seconds !== null && (!Number.isFinite(seconds) || seconds < 0)) {
+            setProblem("Enter an actual held time in seconds, or leave it blank if unknown.");
+            return;
+        }
+        setProblem(null);
+        setSaved(onSave({at: Date.now(), display, heldSeconds: seconds, drainedAsTea: drained, note}));
+    }
+
+    return <YStack gap="$3" testID={`tea-matrix-report-${name}`}>
+        <Text color={palette.text} fontWeight="600">{`Slot ${name} report`}</Text>
+        <Input accessibilityLabel={`Slot ${name} actual machine display`} value={display}
+            onChangeText={value => { setDisplay(value); setSaved(false); }}
+            placeholder={`What ${name} displayed (steep counter, grind or other)`} color={palette.text}
+            backgroundColor={palette.raised} placeholderTextColor={palette.placeholder as ColorTokens}/>
+        <Input accessibilityLabel={`Slot ${name} observed held seconds`} value={held} keyboardType="decimal-pad"
+            onChangeText={value => { setHeld(value); setSaved(false); }}
+            placeholder="Seconds held; blank means unknown" color={palette.text}
+            backgroundColor={palette.raised} placeholderTextColor={palette.placeholder as ColorTokens}/>
+        <Text color={palette.text}>{`Slot ${name} drained as tea?`}</Text>
+        <XStack gap="$2" flexWrap="wrap">
+            {(["Unknown", "Yes", "No"] as const).map((label, index) => {
+                const value = index === 0 ? null : index === 1;
+                return <Button key={label} accessibilityLabel={`Slot ${name} drained as tea: ${label}`}
+                    accessibilityState={{selected: drained === value}}
+                    backgroundColor={drained === value ? palette.raised : palette.surface}
+                    onPress={() => { setDrained(value); setSaved(false); }}>{label}</Button>;
+            })}
+        </XStack>
+        <Input accessibilityLabel={`Slot ${name} observation note`} value={note} multiline
+            onChangeText={value => { setNote(value); setSaved(false); }}
+            color={palette.text} backgroundColor={palette.raised}/>
+        {problem !== null && <Text selectable accessibilityRole="alert" color={palette.danger}>{problem}</Text>}
+        <Button height="auto" minHeight={44} paddingVertical="$3" disabled={disabled}
+            accessibilityLabel={`Save slot ${name} observation`} onPress={save}>
+            {`SAVE ${name} OBSERVATION`}
+        </Button>
+        {saved && <Text color={palette.success}>{`Slot ${name} observation saved on this phone.`}</Text>}
+    </YStack>;
+}
+
 export default function TeaSlotProbePanel({
     record, deviceId, serial, connected, available, busy, running, error,
     onWriteProbe, onRestore, onObserve
@@ -41,8 +107,8 @@ export default function TeaSlotProbePanel({
     const status = teaProbeStatus(record);
     const nextCandidate = nextTeaProbeCandidate(record);
     const shownCandidate = nextCandidate ?? experiment?.candidateId;
-    const flags = shownCandidate === undefined ? null
-        : `0x${teaProbeFlags(shownCandidate).toString(16).padStart(2, "0")}`;
+    const matrix = shownCandidate === TEA_SLOT_MATRIX_ID;
+    const flags = shownCandidate === undefined || matrix ? null : hex(teaProbeFlags(shownCandidate));
     const [display, setDisplay] = useState(experiment?.observation?.display ?? "");
     const [held, setHeld] = useState(experiment?.observation?.heldSeconds?.toString() ?? "");
     const [drained, setDrained] = useState<boolean | null>(experiment?.observation?.drainedAsTea ?? null);
@@ -103,14 +169,30 @@ export default function TeaSlotProbePanel({
             {flags !== null && <Text selectable color={palette.text} fontWeight="600">
                 {`${nextCandidate === null ? "This trial" : "Next trial"}: A flag ${flags}`}
             </Text>}
+            {matrix && <YStack gap="$2" testID="tea-matrix-rows">
+                <Text selectable color={palette.text} fontWeight="600">
+                    {`${nextCandidate === null ? "This trial" : "Next trial"}: ABC comparisons`}
+                </Text>
+                {MATRIX_ROWS.map(row => <Text key={row.name} selectable color={palette.text}>
+                    {`${row.name}: flag ${row.flags} · 1 stage · 90 ml · 92 C · 20 s · suffix ${row.suffix}`}
+                </Text>)}
+                <Text color={palette.dim}>
+                    Reference-derived from the official public recipe; NOT official-byte-proven.
+                    No extra 30 ml stage is sent, and no mode or execution command is added.
+                </Text>
+                <Text color={palette.warn}>
+                    C carries grinder suffix 50 and could run the grinder. Start C only with the hopper
+                    empty, and do NOT start C if the display shows grind. A display-only report is enough.
+                </Text>
+            </YStack>}
             {status === "restored" && nextCandidate === null && <Text color={palette.dim}>
                 No further trial is approved. Current and archived evidence remain copyable.
             </Text>}
-            <Text selectable color={palette.text}>
+            {!matrix && <Text selectable color={palette.text}>
                 A: 1 steep, 60 ml, 70 C, 60 s. Grinder OFF. No agitation or bypass. No leaves.
                 B and C keep the exact original snapshots and flag 0x02.
                 The encoded nominal dose is 5 g; do not put leaves in the brewer.
-            </Text>
+            </Text>}
             {flags === "0x04" && <Text color={palette.dim}>
                 Only A&apos;s flag changes from 0x02 to 0x04. The tea blob is unchanged.
             </Text>}
@@ -135,8 +217,8 @@ export default function TeaSlotProbePanel({
                 <Text key={key} selectable color={palette.dim}>{`${key}: ${value}`}</Text>)}
             <Text color={palette.text}>
                 After confirmed storage, inspect A on the machine before starting. Check grinder OFF and
-                displayed values. Start A manually only, with the Omni Tea Brewer, an empty receiving vessel,
-                adequate water, no leaves and the user present. Follow the device&apos;s physical safety
+                displayed values. Start {matrix ? "one slot at a time, manually only" : "A manually only"}, with the Omni Tea Brewer, an empty receiving vessel,
+                adequate water, no leaves, an empty hopper and the user present. Follow the device&apos;s physical safety
                 instructions. Do not touch or move the hot brewer.
             </Text>
             <Text color={palette.warn}>
@@ -149,10 +231,23 @@ export default function TeaSlotProbePanel({
                 .map((value, index) => <Text key={index} selectable accessibilityRole="alert"
                     color={palette.danger}>{value}</Text>)}
             {nextCandidate !== null && __DEV__ && <Button height="auto" minHeight={44} paddingVertical="$3"
-                disabled={!canWrite} onPress={() => { if (canWrite) onWriteProbe(); }}>WRITE PROBE</Button>}
+                disabled={!canWrite} onPress={() => { if (canWrite) onWriteProbe(); }}>
+                {matrix ? "WRITE COMPARISON" : "WRITE PROBE"}</Button>}
             {experiment?.phase === "active" && <Button height="auto" minHeight={44} paddingVertical="$3"
                 disabled={!canRestore} onPress={() => { if (canRestore) onRestore(); }}>RESTORE ORIGINAL SET</Button>}
-            {experiment !== undefined && <YStack gap="$3">
+            {experiment !== undefined && experiment.slotObservations !== undefined && <YStack gap="$4">
+                <Text color={palette.text}>Manual observations per slot (separate from radio evidence)</Text>
+                {([0, 1, 2] as const).map(slot => <SlotObservationForm key={slot} slot={slot}
+                    initial={experiment.slotObservations![slot]} disabled={running || stale}
+                    onSave={observation => onObserve(experiment.trialId, observation, slot)}/>)}
+                <Button height="auto" minHeight={44} paddingVertical="$3" onPress={() => void copy()}>
+                    COPY PROBE EVIDENCE
+                </Button>
+                <Text color={palette.dim}>
+                    Copy includes current and archived trials with saved observations only. Save edits before copying.
+                </Text>
+            </YStack>}
+            {experiment !== undefined && experiment.slotObservations === undefined && <YStack gap="$3">
                 <Text color={palette.text}>Manual observation (separate from radio evidence)</Text>
                 <Input accessibilityLabel="Actual machine display" value={display}
                     onChangeText={value => { setDisplay(value); setObservationSaved(false); }}

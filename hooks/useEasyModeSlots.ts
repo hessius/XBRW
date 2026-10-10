@@ -137,7 +137,7 @@ export function useEasyModeSlots(
         active.current = false;
     }
 
-    function observeTeaProbe(trialId: string, observation: SlotObservation): boolean {
+    function observeTeaProbe(trialId: string, observation: SlotObservation, slot?: SlotIndex): boolean {
         if (active.current) {
             report("Wait for the current slot operation to finish.");
             return false;
@@ -149,7 +149,8 @@ export function useEasyModeSlots(
                 || (identity.serial !== null && identity.serial !== experiment.serial)) {
                 throw new Error("This observation belongs to a different machine or trial.");
             }
-            store.observe(identity.deviceId, observation);
+            if (slot === undefined) store.observe(identity.deviceId, observation);
+            else store.observeSlot(identity.deviceId, slot, observation);
             setFailure(null);
             return true;
         } catch (failure) {

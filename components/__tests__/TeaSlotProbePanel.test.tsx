@@ -125,18 +125,23 @@ it("retains restoration and copy in production, and only offers the approved nex
     expect(options.onWriteProbe).toHaveBeenCalledTimes(1);
     await writeTeaSlotProbe(store, identity, port);
     await restoreTeaSlotOriginal(store, identity, port);
+    await view.rerender(<TeaSlotProbePanel {...options} record={store.read("one")}/>);
+    expect(screen.getByText("Next trial: ABC comparisons")).toBeOnTheScreen();
+    await writeTeaSlotProbe(store, identity, port);
+    await restoreTeaSlotOriginal(store, identity, port);
     const retained = store.read("one");
     await view.rerender(<TeaSlotProbePanel {...options} record={retained}/>);
-    expect(screen.queryByRole("button", {name: "WRITE PROBE"})).toBeNull();
+    expect(screen.queryByRole("button", {name: /WRITE (PROBE|COMPARISON)/})).toBeNull();
     expect(screen.queryByText(/Next trial:/)).toBeNull();
     expect(screen.getByText(/No further trial is approved/)).toBeOnTheScreen();
     await fireEvent.press(screen.getByRole("button", {name: "COPY PROBE EVIDENCE"}));
     expect(Clipboard.setStringAsync).toHaveBeenLastCalledWith(
         formatTeaProbeEvidence(retained.experiment!, retained.experimentHistory));
     const copied = JSON.parse(jest.mocked(Clipboard.setStringAsync).mock.calls.at(-1)![0]);
-    expect(copied.archivedTrials).toHaveLength(1);
+    expect(copied.archivedTrials).toHaveLength(2);
     expect(copied.archivedTrials[0].candidateId).toBe("tea-slot-0x02-one-steep-v1");
-    expect(copied.candidateId).toBe("tea-slot-0x04-one-steep-v1");
+    expect(copied.archivedTrials[1].candidateId).toBe("tea-slot-0x04-one-steep-v1");
+    expect(copied.candidateId).toBe("tea-slot-reference-abc-v1");
 });
 
 it("labels the first candidate and the active second candidate without suggesting changed B/C flags", async () => {
@@ -251,5 +256,79 @@ it("reports clipboard failure rather than a success toast", async () => {
     await fireEvent.press(screen.getByRole("button", {name: "COPY PROBE EVIDENCE"}));
     expect(notify).toHaveBeenCalledWith({
         tone: "error", message: "Could not copy tea slot probe evidence: clipboard denied"
+    });
+});
+
+describe("the reference ABC comparison", () => {
+    async function afterV2() {
+        const store = seeded();
+        await writeTeaSlotProbe(store, identity, port);
+        await restoreTeaSlotOriginal(store, identity, port);
+        await writeTeaSlotProbe(store, identity, port);
+        await restoreTeaSlotOriginal(store, identity, port);
+        return store;
+    }
+
+    it("previews three exact rows, warns about C and writes only on an explicit press", async () => {
+        const store = await afterV2();
+        const options = props(store.read("one"));
+        await renderWithProviders(<TeaSlotProbePanel {...options}/>);
+        expect(screen.getByText("Next trial: ABC comparisons")).toBeOnTheScreen();
+        expect(screen.getByText("A: flag 0x02 · 1 stage · 90 ml · 92 C · 20 s · suffix FE 150 (grinder OFF)")).toBeOnTheScreen();
+        expect(screen.getByText("B: flag 0x04 · 1 stage · 90 ml · 92 C · 20 s · suffix FE 150 (grinder OFF)")).toBeOnTheScreen();
+        expect(screen.getByText("C: flag 0x04 · 1 stage · 90 ml · 92 C · 20 s · suffix 50 150 (grinder suffix 50)")).toBeOnTheScreen();
+        expect(screen.getByText(/NOT official-byte-proven/)).toBeOnTheScreen();
+        expect(screen.getByText(/do NOT start C if the display shows grind/)).toBeOnTheScreen();
+        expect(screen.getByText(/empty hopper/)).toBeOnTheScreen();
+        expect(screen.queryByText(/1 steep, 60 ml/)).toBeNull();
+        expect(screen.queryByRole("button", {name: "WRITE PROBE"})).toBeNull();
+        expect(options.onWriteProbe).not.toHaveBeenCalled();
+        await fireEvent.press(screen.getByRole("button", {name: "WRITE COMPARISON"}));
+        expect(options.onWriteProbe).toHaveBeenCalledTimes(1);
+    });
+
+    it("is not offered in production and blocked while stale or running", async () => {
+        const store = await afterV2();
+        const options = props(store.read("one"));
+        const view = await renderWithProviders(<TeaSlotProbePanel {...options}/>);
+        for (const change of [{serial: "other"}, {connected: false}, {busy: true}, {running: true}]) {
+            await view.rerender(<TeaSlotProbePanel {...options} {...change}/>);
+            await fireEvent.press(screen.getByRole("button", {name: "WRITE COMPARISON"}));
+            expect(options.onWriteProbe).not.toHaveBeenCalled();
+        }
+        Object.defineProperty(global, "__DEV__", {value: false});
+        await view.rerender(<TeaSlotProbePanel {...options}/>);
+        expect(screen.queryByRole("button", {name: "WRITE COMPARISON"})).toBeNull();
+    });
+
+    it("restores through the same ceremony and saves A, B and C reports separately", async () => {
+        const store = await afterV2();
+        await writeTeaSlotProbe(store, identity, port);
+        const options = props(store.read("one"));
+        await renderWithProviders(<TeaSlotProbePanel {...options}/>);
+        expect(screen.getByText("This trial: ABC comparisons")).toBeOnTheScreen();
+        expect(screen.getByRole("button", {name: "RESTORE ORIGINAL SET"})).toBeEnabled();
+        expect(screen.queryByRole("button", {name: "SAVE OBSERVATION"})).toBeNull();
+        const trialId = store.read("one").experiment!.trialId;
+        await fireEvent.changeText(screen.getByLabelText("Slot C actual machine display"), "Grind");
+        await fireEvent.press(screen.getByRole("button", {name: "Slot C drained as tea: Unknown"}));
+        await fireEvent.press(screen.getByRole("button", {name: "Save slot C observation"}));
+        expect(options.onObserve).toHaveBeenCalledTimes(1);
+        expect(options.onObserve).toHaveBeenCalledWith(trialId, expect.objectContaining({
+            display: "Grind", heldSeconds: null, drainedAsTea: null
+        }), 2);
+        await fireEvent.changeText(screen.getByLabelText("Slot A actual machine display"), "Steep 20");
+        await fireEvent.changeText(screen.getByLabelText("Slot A observed held seconds"), "20.5");
+        await fireEvent.press(screen.getByRole("button", {name: "Slot A drained as tea: Yes"}));
+        await fireEvent.press(screen.getByRole("button", {name: "Save slot A observation"}));
+        expect(options.onObserve).toHaveBeenLastCalledWith(trialId, expect.objectContaining({
+            display: "Steep 20", heldSeconds: 20.5, drainedAsTea: true
+        }), 0);
+        await fireEvent.changeText(screen.getByLabelText("Slot B observed held seconds"), "x");
+        await fireEvent.press(screen.getByRole("button", {name: "Save slot B observation"}));
+        expect(options.onObserve).toHaveBeenCalledTimes(2);
+        expect(screen.getByText(/Enter an actual held time/)).toBeOnTheScreen();
+        await fireEvent.press(screen.getByRole("button", {name: "RESTORE ORIGINAL SET"}));
+        expect(options.onRestore).toHaveBeenCalledTimes(1);
     });
 });

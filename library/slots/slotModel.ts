@@ -1,7 +1,7 @@
 import Recipe, {CUP_TYPE} from "@/library/Recipe";
 import {brewProblems, DOSE, GRIND_RPM} from "@/library/cardLimits";
 import {buildType2, encodeCoffeeBlob} from "@/library/machine/protocol";
-import {checkTeaProbeSnapshot, teaProbeFlags} from "@/library/slots/teaSlotCandidate";
+import {checkTeaProbeSnapshot, teaProbeSlotFlags} from "@/library/slots/teaSlotCandidate";
 
 export const SLOT_NAMES = ["A", "B", "C"] as const;
 export type SlotIndex = 0 | 1 | 2;
@@ -45,6 +45,8 @@ export type SlotExperiment = {
     phase: "active" | "restored";
     pending: {journalId: string; kind: "candidate" | "restore"} | null;
     observation: SlotObservation | null;
+    /** Only the reference A/B/C matrix keeps one report per slot; older trials keep `observation`. */
+    slotObservations?: Triple<SlotObservation | null>;
     evidence: SlotEvidence[];
 };
 export const TEA_PROBE_RESTORED_NOTICE =
@@ -191,14 +193,9 @@ export function prepareSet(drafts: Triple<SlotSnapshot | null>): Triple<number[]
         throw new Error("Choose all three recipes before writing.");
     }
     const slots = drafts.map(readSnapshot);
-    if (slots[1].probe !== undefined || slots[2].probe !== undefined) {
-        throw new Error("The tea slot probe is allowed only in slot A.");
-    }
+    const flags = teaProbeSlotFlags(slots.map(slot => slot.probe));
     const frame = (index: SlotIndex) => Array.from(buildType2(
-        11510, Uint8Array.from([
-            index, index === 0 && slots[0].probe !== undefined ? teaProbeFlags(slots[0].probe) : 0x02,
-            ...slots[index].blob
-        ])
+        11510, Uint8Array.from([index, flags[index], ...slots[index].blob])
     ));
     return [frame(0), frame(1), frame(2)];
 }

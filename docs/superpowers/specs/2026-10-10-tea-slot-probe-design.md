@@ -135,3 +135,45 @@ successful single-steep trial establishes only this candidate on this machine
 and firmware. Multi-steep execution, mixed slots and reliable restoration need
 separate qualification before enabling general tea assignment. A failed trial
 ends this candidate's execution and prompts review of the recorded evidence.
+
+## Amendment: reference-derived A/B/C matrix (`tea-slot-reference-abc-v1`)
+
+Approved after v2 originals were confirmed restored. This is the one further
+trial; there is no arbitrary candidate chooser and no fourth trial. It is
+offered only when the v2 trial is `restored` with history `[v1]`; both prior
+trials are archived intact in one transaction (history cap 2).
+
+**Audit.** Official public reference
+`https://share-h5.xbloom.com/?id=lRU%2FNUodjN5PzwxNQaOxeA%3D%3D` (via
+`RecipeDetail`): cupType 4 TEA, dose 3, grandWater 15, grinderSize 50,
+isSetGrinderSize 2, rpm 120, one stage of 90 ml / 92 C / pause 20 s / pattern 2
+(spiral) / flowRate 3.5 -> 35 / vibration off -> 0. `teaRecipePerVolumn` 120 is
+metadata only; the actual stage is 90 ml. Public HomoLand `build_tea_recipe_code`
+keeps grinderSize and `int(grandWater*10)&255` instead of the app's forced 0xFE.
+Segment: `[90,92,2,0,236,0,120,35]`.
+
+| Slot | Flag | Blob |
+|---|---|---|
+| A | 0x02 | `[8, segment, 254, 150]` |
+| B | 0x04 | `[8, segment, 254, 150]` |
+| C | 0x04 | `[8, segment, 50, 150]` |
+
+Suffix 150 is an explicit audited constant; the ordinary encoder is untouched
+and no `Recipe` constructor fix-ratio path derives it. Stored recipe metadata
+keeps ratio 15 as the cloud does. No extra 30 ml stage (firmware tea drain
+unproven), no new command, no automatic brew. Labelled **reference-derived, NOT
+official-byte-proven**. Validation is strict: full recipe, blob and slot flag.
+
+**Risk (user approved).** Suffix 50 in C may run the grinder if the machine
+treats it as coffee. Run with the hopper empty, no leaves, an empty OmniTeaBrewer
+and receiving vessel, user present. Do NOT start C if the display shows grind; a
+display-only report is sufficient. A and B keep the grinder off.
+
+**UI/persistence.** "ABC comparisons" panel with three exact rows, WRITE
+COMPARISON and RESTORE ORIGINAL SET through the same journal ceremony, dev-only
+write, retained restoration. Per-slot observations (display, steep counter,
+hold seconds, drained as tea, note) are stored separately from the older single
+observation, and the retained copy carries frames, history and per-slot reports.
+
+**Unproven.** Whether the flags or suffix 150 yield tea overview/drain on
+firmware; C's grinder behaviour; any official-byte equivalence.

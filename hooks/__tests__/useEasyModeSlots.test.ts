@@ -231,12 +231,23 @@ it("advances the dedicated hook action once after restore and keeps archived obs
     expect(editor.result.current.error).toMatch(/different machine or trial/);
     expect(new SlotDatabase(sql).read("one").experimentHistory).toEqual([archived]);
     await act(async () => { await editor.result.current.restoreTeaOriginal({id: () => "r2"}); });
-    const framesBefore = sent.length;
+    const v2 = editor.result.current.record.experiment!;
+    expect(nextTeaProbeCandidate(editor.result.current.record)).toBe("tea-slot-reference-abc-v1");
     await act(async () => { await editor.result.current.writeTeaProbe({id: () => "t3"}); });
+    expect(sent.slice(-3).map(frame => frame[11])).toEqual([0x02, 0x04, 0x04]);
+    expect(editor.result.current.record.experimentHistory).toEqual([archived, v2]);
+    const report = {at: 3, display: "Steep 20", heldSeconds: 20, drainedAsTea: true, note: "B"};
+    await act(async () => { expect(editor.result.current.observeTeaProbe("t3", report, 1)).toBe(true); });
+    expect(new SlotDatabase(sql).read("one").experiment?.slotObservations)
+        .toEqual([null, report, null]);
+    await act(async () => { expect(editor.result.current.observeTeaProbe("t3", report)).toBe(false); });
+    await act(async () => { await editor.result.current.restoreTeaOriginal({id: () => "r3"}); });
+    const framesBefore = sent.length;
+    await act(async () => { await editor.result.current.writeTeaProbe({id: () => "t4"}); });
     expect(editor.result.current.attempt).toMatchObject({operation: "probe", status: "error"});
     expect(editor.result.current.error).toMatch(/new trial is not allowed/);
     expect(sent).toHaveLength(framesBefore);
-    expect(editor.result.current.record.experimentHistory).toEqual([archived]);
+    expect(editor.result.current.record.experimentHistory).toEqual([archived, v2]);
 });
 
 it("saves observations through the durable store, allows offline evidence and rejects stale trials/serials", async () => {

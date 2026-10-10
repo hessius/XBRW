@@ -675,3 +675,51 @@ it.each(["help", "retry", "cancel"] as const)("covers the global sibling during 
         expect(globalOpen()).toBeOnTheScreen();
     }, {timeout: SHEET_PRESS_TIMEOUT});
 });
+
+describe("the reference ABC comparison on the route", () => {
+    const identity = {deviceId: "one", serial: "serial"};
+    const port = {available: true, acquire: async () => ({
+        sendAndConfirm: async () => {}, confirmSaved: async () => {}, release: () => {}
+    })};
+
+    async function afterV2() {
+        const store = new SlotDatabase(createTestDatabase());
+        for (const i of [0, 1, 2] as const) store.assign("one", i, snapshotRecipe(mockAllRecipes[0]));
+        for (const id of ["t1", "t2"]) {
+            await writeTeaSlotProbe(store, identity, port, {id: () => id});
+            await restoreTeaSlotOriginal(store, identity, port, {id: () => `r-${id}`});
+        }
+        return store;
+    }
+
+    it("offers WRITE COMPARISON through the dedicated hook action only, closing the sheet", async () => {
+        const store = await afterV2();
+        mockRecord = store.read("one"); mockAvailable = true;
+        await renderWithProviders(<EasyModeScreen/>);
+        await fireEvent.press(screen.getByRole("button", {name: "TEA SLOT PROBE"}));
+        expect(await screen.findByText("Next trial: ABC comparisons")).toBeOnTheScreen();
+        await waitFor(async () => {
+            await fireEvent.press(screen.getByRole("button", {name: "WRITE COMPARISON"}));
+            expect(mockProbe).toHaveBeenCalledTimes(1);
+        }, {timeout: SHEET_PRESS_TIMEOUT});
+        expect(mockWrite).not.toHaveBeenCalled();
+        expect(mockRestore).not.toHaveBeenCalled();
+        expect(screen.queryByRole("button", {name: "WRITE COMPARISON"})).toBeNull();
+    });
+
+    it("routes a slot report with its slot index and keeps ordinary writing blocked", async () => {
+        const store = await afterV2();
+        await writeTeaSlotProbe(store, identity, port, {id: () => "t3"});
+        mockRecord = store.read("one"); mockAvailable = true;
+        await renderWithProviders(<EasyModeScreen/>);
+        expect(screen.getByRole("button", {name: "Write all three slots"})).toBeDisabled();
+        await fireEvent.press(screen.getByRole("button", {name: "TEA SLOT PROBE"}));
+        await waitFor(async () => {
+            await fireEvent.changeText(screen.getByLabelText("Slot B actual machine display"), "Steep 20");
+            await fireEvent.press(screen.getByRole("button", {name: "Save slot B observation"}));
+            expect(mockObserve).toHaveBeenCalledTimes(1);
+        }, {timeout: SHEET_PRESS_TIMEOUT});
+        expect(mockObserve).toHaveBeenCalledWith("t3", expect.objectContaining({display: "Steep 20"}), 1);
+        expect(mockWrite).not.toHaveBeenCalled();
+    });
+});

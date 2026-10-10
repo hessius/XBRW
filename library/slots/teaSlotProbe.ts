@@ -2,7 +2,7 @@ import uuid from "react-native-uuid";
 import type {SlotDatabase} from "@/library/slots/SlotDatabase";
 import {
     lastTeaProbeOutcome, prepareSet, TEA_PROBE_RESTORED_NOTICE,
-    type SlotExperiment, type SlotJournal, type SlotObservation, type SlotRecord
+    type SlotExperiment, type SlotIndex, type SlotJournal, type SlotObservation, type SlotRecord
 } from "@/library/slots/slotModel";
 import {
     nextTeaProbeCandidate, teaProbeCandidateSet, teaProbeOriginal
@@ -12,7 +12,7 @@ import {
 } from "@/library/slots/slotWriter";
 
 export {
-    TEA_SLOT_PROBE_ID, TEA_SLOT_PROBE_V2_ID, nextTeaProbeCandidate, teaProbeFlags
+    TEA_SLOT_MATRIX_ID, TEA_SLOT_PROBE_ID, TEA_SLOT_PROBE_V2_ID, nextTeaProbeCandidate, teaProbeFlags
 } from "@/library/slots/teaSlotCandidate";
 
 export type TeaProbeOptions = {
@@ -101,6 +101,12 @@ export function recordTeaProbeObservation(
     store.observe(deviceId, observation);
 }
 
+export function recordTeaSlotObservation(
+    store: SlotDatabase, deviceId: string, index: SlotIndex, observation: SlotObservation
+): void {
+    store.observeSlot(deviceId, index, observation);
+}
+
 function evidenceCopy(experiment: SlotExperiment) {
     return {
         candidateId: experiment.candidateId,
@@ -111,6 +117,7 @@ function evidenceCopy(experiment: SlotExperiment) {
         phase: experiment.phase,
         original: {source: experiment.original.source, writtenAt: experiment.original.writtenAt},
         observation: experiment.observation,
+        ...(experiment.slotObservations === undefined ? {} : {slotObservations: experiment.slotObservations}),
         evidence: experiment.evidence
     };
 }
