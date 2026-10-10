@@ -3,6 +3,54 @@
 This is the source for the full release-testing checklist, not a claim that
 device testing is complete. Update it whenever release scope or behaviour changes.
 
+## Bounded tea slot trial panel (2026-10-10): candidate **UNTESTED**
+
+Task 2 adds Easy Mode -> TEA SLOT PROBE, available for a new trial only in a
+development build. Retained trials expose the same entry in production for
+recovery/restoration, observation and local evidence copy. This does not enable
+general tea assignment. After restoration, evidence remains retained and
+copyable; there is no reset/archive/second-trial action.
+
+WRITE PROBE calls the dedicated hook on the installed shared slot port:
+known-normal acquisition precedes fresh original/journal preparation. The
+fixed A is one 60 ml, 70 C, 60 s steep, grinder OFF, no agitation/bypass; B/C
+are exact preserved snapshots. The panel shows original names and written-vs-
+draft provenance, and explains that official-app changes cannot be read back.
+Candidate cards use steep/time/OFF copy rather than coffee ratio or a false
+removed-library label. Pending writes require the existing recovery ceremony;
+cancellation is unconfirmed, never candidate-written. Ordinary assignments
+and slot writes remain blocked until explicit restoration.
+
+The panel binds actual connected identity/serial and available model/firmware
+readings, saves observations through `SlotDatabase.observe`, and copies
+`formatTeaProbeEvidence` through Expo Clipboard with explicit failure reporting.
+The observation's display, held time, drain verdict and note are independent
+of transport evidence. No action calls brew, sends raw commands or restores
+automatically. The sheet covers the underlying screen and global brew bar,
+blocks native departure while open, and returns focus on dismissal.
+
+| Software validation | Actual result |
+|---------------------|---------------|
+| Focused panel, route, slot cards/ceremony, hook, shared owner, live-brew owner and all slot-domain suites | 24 suites, 734 tests passed across iOS and Android; no skipped tests or snapshots. Real SQLite persistence and scripted-radio tests include fixed bytes, identity/state gates, refusal/recovery, cancellation, explicit restoration, separate observations, production retention, modal/global-bar guards and focus restoration. |
+| `npm run typecheck` | Passed, no diagnostics. |
+| `npm run lint` | Passed, 0 errors and the existing 27 warnings. |
+| `npx expo-doctor` | Passed, 21/21 checks. |
+| Existing Metro 8082 iOS development bundle | HTTP 200; compiled bundle contains the probe panel and final UNTESTED status copy. Server left running, not restarted or stopped. |
+
+No dependencies, native configuration, card/backup serialization or trial
+candidate bytes changed. Actual native gestures, VoiceOver/TalkBack, large-text
+layout and hardware hold/drain/restoration still need physical-device checks.
+
+**Hardware gate remains open.** With the Omni Tea Brewer, no leaves, an empty
+receiving vessel, adequate water and the user present: WRITE PROBE, wait for
+confirmed storage, inspect A and grinder OFF, then start only on the machine.
+Stop after uncertain saving, refusal or unexpected behavior; never execute an
+unresolved set. Record actual hold/drain behavior, SAVE OBSERVATION, explicitly
+RESTORE ORIGINAL SET and confirm/inspect all originals, then COPY PROBE
+EVIDENCE. Follow device safety instructions and do not touch/move the hot
+brewer. See `ble-protocol.md` section E for the complete procedure. Neither
+software tests nor compilation establishes hardware tea support or restoration.
+
 ## Easy Mode UX integration qualification (2026-10-10)
 
 Task 3 on `fix/easy-mode-recovery` wires the route to the actual identity-bound

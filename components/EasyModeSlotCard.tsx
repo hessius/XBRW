@@ -6,6 +6,7 @@ import {SLOT_NAMES, type SlotIndex, type SlotSnapshot} from "@/library/slots/slo
 import DotMatrixText from "@/components/DotMatrixText";
 import PourProfile from "@/components/PourProfile";
 import {onAccent, palette} from "@/constants/colors";
+import {isTeaProbeSnapshot} from "@/library/slots/teaSlotCandidate";
 
 type Props = {
     index: SlotIndex;
@@ -25,6 +26,7 @@ export default function EasyModeSlotCard({
 }: Props) {
     const name = SLOT_NAMES[index];
     const recipe = snapshot === null ? null : new Recipe(undefined, snapshot.recipeJSON);
+    const probe = isTeaProbeSnapshot(snapshot);
     const ink = recipe === null ? palette.text : onAccent.text;
     return (
         <YStack testID={`slot-${name}`} gap="$3" padding="$4" borderRadius="$4"
@@ -36,15 +38,16 @@ export default function EasyModeSlotCard({
                         {snapshot.name}
                     </Text>}
                     {recipe !== null && <DotMatrixText fontSize={13} weight="bold" color={ink}>
-                        {`${recipe.dosage}G · 1:${recipe.ratio} · GRIND ${recipe.grinder ? recipe.grindSize : "OFF"}`}
+                        {probe ? "1 STEEP · 60ML · 70C · 60S · GRIND OFF"
+                            : `${recipe.dosage}G · 1:${recipe.ratio} · GRIND ${recipe.grinder ? recipe.grindSize : "OFF"}`}
                     </DotMatrixText>}
                 </YStack>
             </XStack>
-            {recipe !== null && <PourProfile testID={`slot-${name}-profile`}
+            {recipe !== null && !probe && <PourProfile testID={`slot-${name}-profile`}
                 pours={recipe.pours} width={220} height={48}/>}
             {snapshot !== null && !recovery && <DotMatrixText fontSize={11} weight="bold"
                 letterSpacing={1.2} color={ink}>{needsWrite ? "NOT WRITTEN" : "LAST WRITTEN"}</DotMatrixText>}
-            {status === "edited" && <YStack gap="$2">
+            {!probe && status === "edited" && <YStack gap="$2">
                 <DotMatrixText fontSize={11} weight="bold" color={ink}>RECIPE UPDATED</DotMatrixText>
                 {!locked && <Button height="auto" minHeight={44} paddingVertical="$3"
                     accessibilityLabel={`Update slot ${name} from library`}
@@ -52,7 +55,7 @@ export default function EasyModeSlotCard({
                     backgroundColor={palette.base} color={palette.text}>USE UPDATED RECIPE</Button>}
                 {updateProblem !== null && <Text color={ink}>{updateProblem}</Text>}
             </YStack>}
-            {status === "removed" && <DotMatrixText fontSize={11} weight="bold" color={ink}>
+            {!probe && status === "removed" && <DotMatrixText fontSize={11} weight="bold" color={ink}>
                 REMOVED FROM LIBRARY
             </DotMatrixText>}
             {!locked && <Button ref={changeRef} height="auto" minHeight={44} paddingVertical="$3"

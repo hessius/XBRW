@@ -633,6 +633,55 @@ The latter two separately implement ordinary tea brewing. The Java decompile
 cited by brAzzi64 is a local path, not published source; its existence does not
 give us access to the official slot builder.
 
+#### Bounded tea slot probe tooling (2026-10-10): **UNTESTED**
+
+Candidate `tea-slot-0x02-one-steep-v1` is a hypothesis, not production tea slot
+support. Easy Mode -> TEA SLOT PROBE -> WRITE PROBE prepares exactly A = one
+60 ml, 70 C, 60 s steep, grinder OFF, no agitation or bypass, using the existing
+tea encoder inside `11510 [slot, 0x02, blob]`. Nominal encoded dose is 5 g;
+physical testing uses **no leaves**. B/C preserve the exact validated originals.
+No extra mode/tea-execute command, flag sweep, automatic brew or retry is added.
+
+New trials are development-only. A retained experiment remains accessible
+from Easy Mode in production builds for recovery, RESTORE ORIGINAL SET,
+manual observations and COPY PROBE EVIDENCE. One trial is allowed per retained
+machine record; confirmed restoration keeps the evidence and never permits
+an implicit replacement trial. General tea picker assignment remains blocked.
+
+The shared writer acquires a matching device/serial in known normal state
+before any fresh-trial journal or original-set preparation. It then preserves
+the app's last-written A/B/C (or a complete draft set) atomically before dispatch.
+These are app-recorded originals, not a readback of official-app changes.
+Pending write/brew/native operations are excluded through the existing owner.
+An active trial blocks ordinary slot assignment/writing until restoration.
+Cancellation means **candidate-unconfirmed**, not a successful candidate save.
+
+Hardware procedure, not yet performed for this candidate:
+
+1. Connect the recorded machine, wait for normal state and a reported serial,
+   inspect the original names/provenance, then explicitly WRITE PROBE. Keep the
+   app foregrounded and wait for all receipts **and final save confirmation**.
+2. Stop after refusal or ambiguous/incomplete saving. Do not start A. Resolve
+   the immutable journal through the existing RETRY WRITE / CANCEL THIS WRITE
+   ceremony before restoration; restoration cannot bypass pending recovery.
+3. After confirmed storage, inspect A manually on the machine, including
+   grinder OFF and whatever values its display actually exposes. Only then
+   start A **manually**, with the Omni Tea Brewer, no leaves, an empty receiving
+   vessel, adequate water and the user present. Follow the device's physical
+   safety instructions; do not touch or move the hot brewer. Stop on unexpected
+   behavior rather than exploring another candidate.
+4. Record actual display, held seconds (blank = unknown), whether it drained
+   as tea (Unknown/Yes/No), and notes using SAVE OBSERVATION. A successful write
+   or tea-looking display is not proof of hold/drain behavior.
+5. Explicitly RESTORE ORIGINAL SET, confirm final saving and inspect A/B/C.
+   COPY PROBE EVIDENCE copies retained machine/firmware readings when available,
+   exact prepared frames, dispatch/receipt/save history and separately saved
+   observations. Phone drafts remain distinct from restored machine snapshots.
+
+No physical tea execution or restoration proof has been obtained by this UI
+implementation. A successful single-steep trial would qualify only this
+candidate on the tested machine/firmware, not multi-steep or general tea slots.
+
 The measured ten-stage ceiling belongs to NFC cards only. Coffee BLE stage
 bodies have a one-byte byte-count prefix: at most 255 segment bytes, not ten
 stages. A stage takes eight bytes plus four bytes for each additional 127 ml

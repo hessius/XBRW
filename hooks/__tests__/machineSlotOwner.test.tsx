@@ -17,6 +17,9 @@ import {event, float32, kermit, notification, status} from "@/library/machine/__
 import {buildType1, MACHINE_STATE} from "@/library/machine/protocol";
 import {coffee} from "@/library/slots/__tests__/fixtures";
 import EasyModeScreen from "@/app/easyMode";
+import {teaProbeSnapshot} from "@/library/slots/teaSlotCandidate";
+import {teaProbeStatus} from "@/library/slots/teaSlotProbe";
+import {installMachineSlotPort} from "@/library/slots/machineSlotPort";
 
 jest.mock("react-native-ble-manager", () => ({__esModule: true, default: {}}));
 jest.mock("@/library/machine/Transport", () => ({
@@ -340,6 +343,76 @@ it("wires the real route to the installed shared port, actual identity and atomi
     expect(mockRadio.sent).not.toContain(8010);
     expect(mockPreventRemove).toHaveBeenLastCalledWith(false, expect.any(Function));
     expect(mockRemove().preventDefault).not.toHaveBeenCalled();
+});
+
+it("writes and explicitly restores the fixed tea trial through the route's shared owner, never brewing", async () => {
+    const store = draft();
+    const originals = store.read("one").drafts;
+    await connect();
+    mockRadio.emit(status(MACHINE_STATE.IDLE));
+    const route = await renderWithProviders(<EasyModeScreen/>);
+    await fireEvent.press(route.getByRole("button", {name: "TEA SLOT PROBE"}));
+    await act(async () => { await jest.advanceTimersByTimeAsync(1000); });
+    const write = screen.getByRole("button", {name: "WRITE PROBE"});
+    expect(write).toBeEnabled();
+    await act(async () => {
+        const pressed = fireEvent.press(write);
+        await flush();
+        expect(mockRemove().preventDefault).toHaveBeenCalledTimes(1);
+        await jest.advanceTimersByTimeAsync(4000);
+        await pressed;
+    });
+    expect(teaProbeStatus(store.read("one"))).toBe("candidate-written");
+    expect(store.read("one").experiment?.serial).toBe("J15ABC123456");
+    expect(mockRadio.slots.map(frame => Array.from(frame.slice(12, -2))))
+        .toEqual([teaProbeSnapshot().blob, originals[1]!.blob, originals[2]!.blob]);
+    expect(store.read("one").experiment?.machine).toMatchObject({
+        model: sharedMachine().info!.model, firmware: sharedMachine().info!.firmware
+    });
+    expect(store.read("one").experiment?.observation).toBeNull();
+    expect(new SlotDatabase(appDatabase()).read("one").experiment).toEqual(store.read("one").experiment);
+    await act(async () => { await jest.advanceTimersByTimeAsync(4000); });
+    expect(screen.getByRole("button", {name: "Write all three slots"})).toBeDisabled();
+    const before = mockRadio.slots.length;
+    // The domain writer also refuses, not merely its UI button.
+    let failure: unknown;
+    await act(async () => {
+        const writing = writeSlots(store, sharedMachine().slotIdentity!,
+            installMachineSlotPort(sharedMachine(), store)).catch(error => { failure = error; });
+        await jest.advanceTimersByTimeAsync(2000);
+        await writing;
+    });
+    expect(failure).toEqual(expect.objectContaining({message: expect.stringMatching(/Restore the original set/)}));
+    expect(mockRadio.slots).toHaveLength(before);
+    await fireEvent.press(route.getByRole("button", {name: "TEA SLOT PROBE"}));
+    await act(async () => { await jest.advanceTimersByTimeAsync(1000); });
+    await act(async () => {
+        const pressed = fireEvent.press(route.getByRole("button", {name: "RESTORE ORIGINAL SET"}));
+        await jest.advanceTimersByTimeAsync(4000);
+        await pressed;
+    });
+    expect(teaProbeStatus(store.read("one"))).toBe("restored");
+    expect(mockRadio.slots.slice(3).map(frame => Array.from(frame.slice(12, -2))))
+        .toEqual(originals.map(slot => slot!.blob));
+    expect(store.read("one").drafts).toEqual(originals);
+    expect(new SlotDatabase(appDatabase()).read("one").experiment?.phase).toBe("restored");
+    for (const code of [4513, 4512, 8001, 8002, 8004, 8019]) expect(mockRadio.sent).not.toContain(code);
+    expect(new BrewDatabase().all()).toEqual([]);
+});
+
+it("the shared hook refuses a probe in an unknown state before preserving originals or dispatching", async () => {
+    const store = draft();
+    const before = store.read("one");
+    await connect();
+    sharedMachine().state = null;
+    const editor = await renderHook(() => {
+        const link = useMachine();
+        return useEasyModeSlots(link.machine.slotIdentity!, link.slotPort);
+    });
+    await act(async () => { await editor.result.current.writeTeaProbe(); });
+    expect(editor.result.current.error).toMatch(/known normal machine state/);
+    expect(store.read("one")).toBe(before);
+    expect(mockRadio.slots).toEqual([]);
 });
 
 it("guards the real owner's changed drafts only while the route is focused", async () => {

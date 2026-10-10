@@ -6,6 +6,7 @@ import {prepareSet, snapshotRecipe} from "@/library/slots/slotModel";
 import {incomingEasyModeRecipe, openEasyModeRecipe, prepareEasyModeEntry, sharedSlotDatabase, useEasyModeSlots, useSlotRecord} from "@/hooks/useEasyModeSlots";
 import {forgetLastMove, SETTLE_MS} from "@/hooks/steadyRouter";
 import type {SlotLease} from "@/library/slots/slotWriter";
+import {writeTeaSlotProbe} from "@/library/slots/teaSlotProbe";
 
 const mockPush = jest.fn();
 jest.mock("expo-router", () => ({
@@ -152,6 +153,7 @@ it("exposes a dedicated tea probe action through the normal hook lock and suppli
         void editor.result.current.writeTeaProbe();
         void editor.result.current.write();
     });
+
     expect(acquire).toHaveBeenCalledTimes(1);
     expect(acquire).toHaveBeenCalledWith(
         {deviceId: "one", serial: "serial"}, {restart: false, requireKnownNormal: true}
@@ -179,6 +181,71 @@ it("exposes a dedicated tea probe action through the normal hook lock and suppli
     ]);
     expect(editor.result.current.attempt).toMatchObject({operation: "restore", status: "success"});
     expect(editor.result.current.record.experiment?.phase).toBe("restored");
+});
+
+it("keeps active trials on the recovery route instead of assigning an incoming normal recipe", async () => {
+    const store = new SlotDatabase(createTestDatabase());
+    for (const i of [0, 1, 2] as const) store.assign("one", i, snapshotRecipe(coffee()));
+    await writeTeaSlotProbe(store, {deviceId: "one", serial: "serial"}, {
+        available: true, acquire: async () => ({
+            sendAndConfirm: async () => {}, confirmSaved: async () => {}, release: () => {}
+        })
+    });
+    const before = store.read("one");
+    expect(prepareEasyModeEntry(store, "one", coffee("Incoming"))).toEqual({pathname: "/easyMode"});
+    expect(store.read("one")).toBe(before);
+});
+
+it("saves observations through the durable store, allows offline evidence and rejects stale trials/serials", async () => {
+    const sql = createTestDatabase();
+    const store = new SlotDatabase(sql);
+    for (const i of [0, 1, 2] as const) store.assign("one", i, snapshotRecipe(coffee()));
+    await writeTeaSlotProbe(store, {deviceId: "one", serial: "serial"}, {
+        available: true, acquire: async () => ({
+            sendAndConfirm: async () => {}, confirmSaved: async () => {}, release: () => {}
+        })
+    }, {id: () => "trial"});
+    const observation = {at: 100, display: "A OFF", heldSeconds: null, drainedAsTea: null, note: "Not run"};
+    const editor = await renderHook<ReturnType<typeof useEasyModeSlots>, {serial: string | null}>(
+        ({serial}) => useEasyModeSlots({deviceId: "one", serial}, undefined, store),
+        {initialProps: {serial: null}}
+    );
+    await act(async () => {
+        expect(editor.result.current.observeTeaProbe("trial", observation)).toBe(true);
+    });
+    expect(new SlotDatabase(sql).read("one").experiment?.observation).toEqual(observation);
+    await act(async () => {
+        expect(editor.result.current.observeTeaProbe("old-trial", {...observation, note: "Wrong"})).toBe(false);
+    });
+    expect(editor.result.current.error).toMatch(/different machine or trial/);
+    await editor.rerender({serial: "other"});
+    await act(async () => {
+        expect(editor.result.current.observeTeaProbe("trial", observation)).toBe(false);
+    });
+    expect(editor.result.current.error).toMatch(/different machine or trial/);
+    await editor.rerender({serial: "serial"});
+    const observe = jest.spyOn(store, "observe").mockImplementationOnce(() => { throw new Error("disk full"); });
+    await act(async () => {
+        expect(editor.result.current.observeTeaProbe("trial", observation)).toBe(false);
+    });
+    expect(editor.result.current.error).toBe("disk full");
+    observe.mockRestore();
+});
+
+it("does not send after failed probe preparation and retains the explicit failure", async () => {
+    const store = new SlotDatabase(createTestDatabase());
+    const send = jest.fn(async () => {});
+    const editor = await renderHook(() => useEasyModeSlots({deviceId: "one", serial: "serial"}, {
+        available: true, acquire: async () => ({
+            sendAndConfirm: send, confirmSaved: async () => {}, release: () => {}
+        })
+    }, store));
+    await act(async () => { await editor.result.current.writeTeaProbe(); });
+    expect(editor.result.current.error).toMatch(/complete A\/B\/C/);
+    expect(editor.result.current.attempt).toMatchObject({operation: "probe", status: "error"});
+    expect(send).not.toHaveBeenCalled();
+    expect(store.read("one").journal).toBeNull();
+    expect(store.read("one").experiment).toBeUndefined();
 });
 
 it("tracks saving and durable success after the journal clears, resetting only on events", async () => {

@@ -16,6 +16,9 @@ import EasyModeSlotCard from "@/components/EasyModeSlotCard";
 import EasyModeWriteOverlay, {slotOverlayVisible} from "@/components/EasyModeWriteOverlay";
 import PourProfile from "@/components/PourProfile";
 import XbrwSheet from "@/components/XbrwSheet";
+import TeaSlotProbePanel, {type TeaSlotProbePanelProps} from "@/components/TeaSlotProbePanel";
+import {teaProbeStatus} from "@/library/slots/teaSlotProbe";
+import {isTeaProbeSnapshot} from "@/library/slots/teaSlotCandidate";
 import {onAccent, palette} from "@/constants/colors";
 
 const BREW_BUSY = "The machine is busy with a running or held brew. Finish the brew before writing or recovering.";
@@ -143,6 +146,9 @@ export type EasyModeSlotsProps = {
     onWrite: () => void;
     onRecover: (restart: boolean) => void;
     onCancel: () => void;
+    teaProbe?: Pick<TeaSlotProbePanelProps, "onWriteProbe" | "onRestore" | "onObserve">;
+    teaProbeOpen?: boolean;
+    onTeaProbeOpenChange?: (open: boolean) => void;
 };
 
 export function slotWriteAvailability({
@@ -154,6 +160,7 @@ export function slotWriteAvailability({
     if (!available) return SLOT_INTEGRATION_BLOCK;
     if (!connected) return "Connect to this machine before writing, retrying or cancelling.";
     if (record.journal === null) {
+        if (record.experiment?.phase === "active") return "Restore the original set before writing slots.";
         try {
             prepareSet(record.drafts);
         } catch (error) {
@@ -205,7 +212,7 @@ function StoppedWrite({journal, failure}: {journal: SlotJournal; failure: string
 export default function EasyModeSlots({
     record, recipes, incoming, header, deviceId, serial, connected, available, running, error,
     attempt = null, onDismissSuccess, writeControlRef, busy = false, serialMatches = true,
-    guardLiveBrewBar = false,
+    guardLiveBrewBar = false, teaProbe, teaProbeOpen = false, onTeaProbeOpenChange,
     onAssign, onWrite, onRecover, onCancel
 }: EasyModeSlotsProps) {
     const [picker, setPicker] = useState<{deviceId: string; index: SlotIndex} | null>(null);
@@ -218,6 +225,7 @@ export default function EasyModeSlots({
     const changeC = useRef<React.ComponentRef<typeof Button>>(null);
     const changeRefs = [changeA, changeB, changeC];
     const helpRef = useRef<React.ComponentRef<typeof Button>>(null);
+    const probeRef = useRef<React.ComponentRef<typeof Button>>(null);
     const retryRef = useRef<React.ComponentRef<typeof Button>>(null);
     const cancelRef = useRef<React.ComponentRef<typeof Button>>(null);
     const ownWriteRef = useRef<React.ComponentRef<typeof Button>>(null);
@@ -233,13 +241,16 @@ export default function EasyModeSlots({
     const active = running || (currentAttempt !== null
         && ["writing", "saving", "cancelling"].includes(currentAttempt.status));
     const journal = record.journal;
-    const locked = journal !== null || active || deviceId === "" || overlay;
+    const probeStatus = teaProbeStatus(record);
+    const showingWrittenProbe = probeStatus === "candidate-written";
+    const locked = journal !== null || active || deviceId === "" || overlay || record.experiment?.phase === "active";
     const pickerIndex = picker?.deviceId === deviceId ? picker.index : null;
     const confirmationKind = confirmation?.deviceId === deviceId ? confirmation.kind : null;
     const pickerOpen = pickerIndex !== null && !locked;
     const confirmationOpen = confirmationKind !== null && !overlay && !active;
     const helpOpen = help && !overlay && !active;
-    const covered = overlay || pickerOpen || confirmationOpen || helpOpen;
+    const probeOpen = teaProbeOpen && !overlay && !active && teaProbe !== undefined;
+    const covered = overlay || pickerOpen || confirmationOpen || helpOpen || probeOpen;
     useLiveBrewBarGuard(guardLiveBrewBar, {covered});
     useEffect(() => {
         const dismissed = wasCovered.current && !covered;
@@ -279,11 +290,21 @@ export default function EasyModeSlots({
                     contentContainerStyle={{padding: 16, gap: 16}}>
                     <XStack justifyContent="space-between" alignItems="center" gap="$3" flexWrap="wrap">
                         {journal === null && <Text color={palette.dim}>
-                            {`${dirty} ${dirty === 1 ? "slot" : "slots"} not written`}
+                            {record.experiment?.phase === "active"
+                                ? showingWrittenProbe ? "Tea candidate stored; behavior UNTESTED."
+                                    : "Tea trial unconfirmed; restore originals."
+                                : `${dirty} ${dirty === 1 ? "slot" : "slots"} not written`}
                         </Text>}
                         <Button ref={helpRef} accessibilityLabel="About Easy Mode"
                             onPress={() => { focusOrigin.current = helpRef; setHelp(true); }}
                             height="auto" minHeight={44}>HELP</Button>
+                        {teaProbe !== undefined && (__DEV__ || record.experiment !== undefined) &&
+                            <Button ref={probeRef} height="auto" minHeight={44} disabled={active || overlay}
+                                accessibilityLabel="TEA SLOT PROBE"
+                                onPress={() => {
+                                    focusOrigin.current = probeRef;
+                                    onTeaProbeOpenChange?.(true);
+                                }}>TEA SLOT PROBE</Button>}
                     </XStack>
                     {incoming !== undefined && usedIncoming !== incomingKey && (
                         <YStack gap="$2" padding="$3" backgroundColor={palette.raised} borderRadius="$4">
@@ -302,11 +323,14 @@ export default function EasyModeSlots({
                     )}
                     {SLOT_NAMES.map((name, index) => {
                         const slotIndex = index as SlotIndex;
-                        const snapshot = journal?.slots[index] ?? record.drafts[index];
+                        const snapshot = journal?.slots[index]
+                            ?? (showingWrittenProbe
+                                ? record.written?.slots[index] : undefined) ?? record.drafts[index];
                         const current = recipes.find(recipe => recipe.uuid === snapshot?.sourceUuid);
-                        const status = snapshot === null ? null : snapshotStatus(snapshot, current);
+                        const status = snapshot === null || isTeaProbeSnapshot(snapshot)
+                            ? null : snapshotStatus(snapshot, current);
                         return <EasyModeSlotCard key={name} index={slotIndex} snapshot={snapshot}
-                            needsWrite={slotNeedsWrite(record, slotIndex)} status={status}
+                            needsWrite={!showingWrittenProbe && slotNeedsWrite(record, slotIndex)} status={status}
                             recovery={journal !== null} locked={locked}
                             updateProblem={status === "edited" && current !== undefined ? recipeProblem(current) : null}
                             changeRef={changeRefs[index]}
@@ -417,6 +441,13 @@ export default function EasyModeSlots({
                     <Text color={palette.dim}>Stored slots do not run the app&apos;s automatic pause protection. Tea slot writing is not available in XBRW++ yet.</Text>
                 </ScrollView>
             </XbrwSheet>
+            {teaProbe !== undefined && <XbrwSheet open={probeOpen}
+                onOpenChange={open => onTeaProbeOpenChange?.(open)}
+                title="TEA SLOT PROBE" heightPercent={85}>
+                {probeOpen && <TeaSlotProbePanel key={record.experiment?.trialId ?? deviceId}
+                    {...teaProbe} record={record} deviceId={deviceId} serial={serial ?? null}
+                    connected={connected} available={available} busy={busy} running={active} error={error}/>}
+            </XbrwSheet>}
             </>}
             <EasyModeWriteOverlay record={record} attempt={currentAttempt} onDismissSuccess={onDismissSuccess}/>
         </YStack>

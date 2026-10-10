@@ -5,7 +5,7 @@ import {pushPrepared} from "@/hooks/steadyRouter";
 import {notify} from "@/components/XbrwToast";
 import {SlotDatabase} from "@/library/slots/SlotDatabase";
 import {
-    emptySlotRecord, readSlotRecipe, snapshotRecipe, type SlotIndex, type SlotRecord
+    emptySlotRecord, readSlotRecipe, snapshotRecipe, type SlotIndex, type SlotObservation, type SlotRecord
 } from "@/library/slots/slotModel";
 import {
     cancelSlots, recoverSlots, writeSlots, unavailableSlotPort, type SlotIdentity, type SlotPort
@@ -44,7 +44,7 @@ export function prepareEasyModeEntry(
     store: SlotDatabase, deviceId: string, recipe: Recipe
 ): {pathname: "/easyMode"; params?: {recipeJSON: string}} {
     const record = store.read(deviceId);
-    if (record.journal !== null) return {pathname: "/easyMode"};
+    if (record.journal !== null || record.experiment?.phase === "active") return {pathname: "/easyMode"};
     const snapshot = snapshotRecipe(recipe);
     const empty = record.drafts.findIndex((slot) => slot === null);
     if (deviceId !== "" && record.journal === null && (empty === 0 || empty === 1 || empty === 2)) {
@@ -137,6 +137,27 @@ export function useEasyModeSlots(
         active.current = false;
     }
 
+    function observeTeaProbe(trialId: string, observation: SlotObservation): boolean {
+        if (active.current) {
+            report("Wait for the current slot operation to finish.");
+            return false;
+        }
+        try {
+            const store = supplied ?? sharedSlotDatabase();
+            const experiment = store.read(identity.deviceId).experiment;
+            if (experiment === undefined || experiment.trialId !== trialId
+                || (identity.serial !== null && identity.serial !== experiment.serial)) {
+                throw new Error("This observation belongs to a different machine or trial.");
+            }
+            store.observe(identity.deviceId, observation);
+            setFailure(null);
+            return true;
+        } catch (failure) {
+            report(failure);
+            return false;
+        }
+    }
+
     const belongs = (value: SlotIdentity | null) => value !== null
         && value.deviceId === identity.deviceId && value.serial === identity.serial;
     const current = belongs(reading) ? reading : null;
@@ -150,7 +171,7 @@ export function useEasyModeSlots(
         operation: attempt?.operation ?? null, attempt,
         /** Event-only reset; never hide a running attempt or its lock. */
         resetAttempt: () => { if (!active.current) { setReading(null); setFailure(null); } },
-        running, available: port.available, assign,
+        running, available: port.available, assign, observeTeaProbe,
         write: () => run("write"), recover: (restart = false) => run("recover", restart),
         cancel: () => run("cancel"),
         writeTeaProbe: (options: TeaProbeOptions = {}) => run("probe", false, options),

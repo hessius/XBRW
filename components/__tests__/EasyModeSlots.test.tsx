@@ -12,6 +12,7 @@ import {SlotDatabase} from "@/library/slots/SlotDatabase";
 import {useEasyModeSlots} from "@/hooks/useEasyModeSlots";
 import {palette} from "@/constants/colors";
 import * as motion from "@/constants/motion";
+import {writeTeaSlotProbe} from "@/library/slots/teaSlotProbe";
 
 const recipes = [coffee("Morning"), coffee("Evening")];
 const native = jest.requireActual<typeof import("react-native")>("react-native");
@@ -124,6 +125,24 @@ it("distinguishes removed recipes from edited drafts and permits only explicit u
     expect(screen.getByText("Morning")).toBeOnTheScreen();
     await fireEvent.press(screen.getByRole("button", {name: "Update slot A from library"}));
     expect(options.onAssign).toHaveBeenCalledWith(0, changed);
+});
+
+it("presents an unresolved probe as a steep rather than coffee ratio or a removed library recipe", async () => {
+    const store = new SlotDatabase(createTestDatabase());
+    for (const i of [0, 1, 2] as const) store.assign("one", i, snapshotRecipe(recipes[0]));
+    await expect(writeTeaSlotProbe(store, {deviceId: "one", serial: "serial"}, {
+        available: true, acquire: async () => ({
+            sendAndConfirm: async () => { throw new Error("Receipt unknown"); },
+            confirmSaved: async () => {}, release: () => {}
+        })
+    })).rejects.toThrow();
+    await renderWithProviders(<EasyModeSlots {...props()} record={store.read("one")} available/>);
+    const probe = within(screen.getByTestId("slot-A"));
+    expect(probe.getByText("1 STEEP · 60ML · 70C · 60S · GRIND OFF")).toBeOnTheScreen();
+    expect(probe.queryByText(/1:12|REMOVED FROM LIBRARY|RECIPE UPDATED/)).toBeNull();
+    expect(probe.queryByTestId("slot-A-profile")).toBeNull();
+    expect(screen.getByRole("button", {name: "Retry slot write"})).toBeEnabled();
+    expect(screen.queryByRole("button", {name: "Write all three slots"})).toBeNull();
 });
 
 it("offers retry and confirmed cancellation without technical recovery jargon", async () => {
