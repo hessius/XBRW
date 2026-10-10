@@ -3,6 +3,56 @@
 This is the source for the full release-testing checklist, not a claim that
 device testing is complete. Update it whenever release scope or behaviour changes.
 
+## Easy Mode UX integration qualification (2026-10-10)
+
+Task 3 on `fix/easy-mode-recovery` wires the route to the actual identity-bound
+attempt, serial and success dismissal. Cancellation is not presented as a
+successful machine write. The picker continues to receive `allRecipes()`, not
+the home screen's current search or shelf result.
+
+Changed populated drafts now trigger the persistent-draft reminder through
+`beforeRemove`, covering header back, swipe, hardware back and other departure
+actions. LEAVE FOR NOW consumes and synchronously replays the original action
+once; Stay here clears it, and WRITE TO MACHINE clears it before starting the
+normal write. Empty drafts and byte-equal snapshots do not prompt. The ordinary
+bar and departure sheet share connection, identity, busy, integration and
+full-set validation checks. A machine/serial change invalidates a held
+departure. Active write/recovery/cancellation blocks removal; a stopped journal
+may leave without clearing either its recovery record or machine reservation.
+
+The departure sheet hides the entire underlying screen on both platforms.
+Its dismissed contents become inaccessible immediately, and focus returns to
+the surviving WRITE control using the existing next-frame restoration pattern.
+The external brew rating-note modal also hides this sheet; existing child
+picker, help, recovery and write-overlay isolation remains in place.
+`XbrwSheet` itself is unchanged.
+
+| Software validation | Actual result |
+|---------------------|---------------|
+| Combined plan's ten paths plus `RecipeCard`, `RecipeShelfTile` and `MachinePanel` tests | 26 suites, 798 tests passed across iOS and Android; no skipped tests or snapshots. Includes route navigation, real SQLite draft/journal preservation, ceremony, recovery, owner and byte-status coverage. |
+| `npm run typecheck` | Passed, no diagnostics. |
+| `npm run lint` | Passed; 0 errors, the existing 27 warnings. |
+| `npx expo-doctor` | Passed; 21/21 checks. |
+| Existing Metro 8082 `/index.bundle?platform=ios&dev=true&minify=false` | HTTP 200, JavaScript bundle compiled with the new departure copy. Server was not restarted or stopped. |
+
+The route regressions were run before implementation and failed, then passed
+in the combined qualification. Logs are session artifacts
+`task3-{route-red,combined-final,typecheck,lint,doctor}.log`.
+No dependencies, native configuration, card format or backup version changed.
+
+**Open release gates:** manual uncertain-slot replay is software-covered, not
+firmware-proven safe to ship. On a real machine, qualify interrupted B while
+still saving for both definite refusal and unknown delivery; repeated manual
+retry; all three receipts with missing final completion; native/link loss;
+and cancellation only after the normal screen returns. Inspect all three
+stored recipes and subsequent ordinary brewing. Code-only delayed receipts
+remain unable to distinguish an old ACK from the current slot's ACK.
+Extended-stage slot execution and tea encoding remain separate hardware gates.
+Actual iOS/Android navigation gestures, narrow/large-text layout, reduced
+motion, VoiceOver/TalkBack modal isolation and focus restoration still require
+native-device checks. Neither passing tests nor a compiled Metro bundle closes
+these gates.
+
 ## Slot recovery feedback (2026-10-10)
 
 A real write was refused while the machine was asking for water. The machine

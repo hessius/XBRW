@@ -6,7 +6,7 @@ import Recipe from "@/library/Recipe";
 import {resolveAccent} from "@/library/accent";
 import {overflowFor} from "@/library/brew/overflowConfig";
 import {
-    SLOT_NAMES, slotNeedsWrite, snapshotRecipe, snapshotStatus, unwrittenSlotCount,
+    SLOT_NAMES, prepareSet, slotNeedsWrite, snapshotRecipe, snapshotStatus, unwrittenSlotCount,
     type SlotIndex, type SlotJournal, type SlotRecord
 } from "@/library/slots/slotModel";
 import {SLOT_INTEGRATION_BLOCK} from "@/library/slots/slotWriter";
@@ -136,11 +136,30 @@ export type EasyModeSlotsProps = {
     error: string | null;
     attempt?: SlotAttempt | null;
     onDismissSuccess?: () => void;
+    writeControlRef?: React.RefObject<React.ComponentRef<typeof Button> | null>;
     onAssign: (index: SlotIndex, recipe: Recipe) => boolean | void;
     onWrite: () => void;
     onRecover: (restart: boolean) => void;
     onCancel: () => void;
 };
+
+export function slotWriteAvailability({
+    record, deviceId, connected, available, busy = false, serialMatches = true
+}: Pick<EasyModeSlotsProps, "record" | "deviceId" | "connected" | "available" | "busy" | "serialMatches">): string | null {
+    if (deviceId === "") return "Choose a machine in Settings before assigning slots.";
+    if (!serialMatches) return SERIAL_BLOCK;
+    if (busy) return BREW_BUSY;
+    if (!available) return SLOT_INTEGRATION_BLOCK;
+    if (!connected) return "Connect to this machine before writing, retrying or cancelling.";
+    if (record.journal === null) {
+        try {
+            prepareSet(record.drafts);
+        } catch (error) {
+            return error instanceof Error ? error.message : String(error);
+        }
+    }
+    return null;
+}
 
 function RecipeChoice({recipe, onPick}: {recipe: Recipe; onPick: () => void}) {
     const problem = recipeProblem(recipe);
@@ -183,7 +202,7 @@ function StoppedWrite({journal, failure}: {journal: SlotJournal; failure: string
 
 export default function EasyModeSlots({
     record, recipes, incoming, header, deviceId, serial, connected, available, running, error,
-    attempt = null, onDismissSuccess, busy = false, serialMatches = true,
+    attempt = null, onDismissSuccess, writeControlRef, busy = false, serialMatches = true,
     onAssign, onWrite, onRecover, onCancel
 }: EasyModeSlotsProps) {
     const [picker, setPicker] = useState<{deviceId: string; index: SlotIndex} | null>(null);
@@ -198,7 +217,8 @@ export default function EasyModeSlots({
     const helpRef = useRef<React.ComponentRef<typeof Button>>(null);
     const retryRef = useRef<React.ComponentRef<typeof Button>>(null);
     const cancelRef = useRef<React.ComponentRef<typeof Button>>(null);
-    const writeRef = useRef<React.ComponentRef<typeof Button>>(null);
+    const ownWriteRef = useRef<React.ComponentRef<typeof Button>>(null);
+    const writeRef = writeControlRef ?? ownWriteRef;
     const focusOrigin = useRef<React.RefObject<React.ComponentRef<typeof Button> | null> | null>(null);
     const wasCovered = useRef(false);
     const insets = useSafeAreaInsets();
@@ -232,15 +252,10 @@ export default function EasyModeSlots({
             if (handle !== null) AccessibilityInfo.setAccessibilityFocus(handle);
         });
         return () => cancelAnimationFrame(frame);
-    }, [covered]);
+    }, [covered, writeRef]);
     const failure = error ?? journal?.error ?? null;
     const displayedFailure = failure === null ? null : writeError(failure, journal);
-    const completeDraft = record.drafts.every(slot => slot !== null);
-    const availability = deviceId === "" ? "Choose a machine in Settings before assigning slots."
-        : !serialMatches ? SERIAL_BLOCK : busy ? BREW_BUSY
-            : !available ? SLOT_INTEGRATION_BLOCK : !connected
-                ? "Connect to this machine before writing, retrying or cancelling."
-                : journal === null && !completeDraft ? "Choose all three recipes before writing." : null;
+    const availability = slotWriteAvailability({record, deviceId, connected, available, busy, serialMatches});
     const blocked = active || overlay || availability !== null;
     const dirty = unwrittenSlotCount(record);
     const incomingProblem = incoming === undefined ? null : recipeProblem(incoming);

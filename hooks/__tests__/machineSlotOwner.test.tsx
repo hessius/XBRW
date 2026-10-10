@@ -33,6 +33,7 @@ jest.mock("@/hooks/useRecipeLibrary", () => ({
 }));
 jest.mock("expo-router", () => ({
     useLocalSearchParams: () => mockRouteParams,
+    useNavigation: () => mockNavigation,
     router: {back: jest.fn(), canGoBack: () => true},
     useRouter: () => ({back: jest.fn()})
 }));
@@ -66,6 +67,7 @@ class RootRadio extends FakeTransport {
 
 let mockRadio: RootRadio;
 let mockRouteParams: {recipeJSON?: string} = {};
+const mockNavigation = {addListener: () => () => {}, dispatch: jest.fn()};
 let changes: Set<(state: AppStateStatus) => void>;
 const initialState = AppState.currentState;
 const flush = async () => { for (let n = 0; n < 40; n++) await Promise.resolve(); };
@@ -286,7 +288,7 @@ it("wires the real route to the installed shared port, actual identity and atomi
     // The remembered setting is not authority for the already connected peripheral.
     sharedSettings().set("machineDeviceId", "unrelated");
     await renderWithProviders(<EasyModeScreen/>);
-    expect(screen.getAllByText("Recipe removed from library. Snapshot kept.")).toHaveLength(3);
+    expect(screen.getAllByText("REMOVED FROM LIBRARY")).toHaveLength(3);
     const write = screen.getByRole("button", {name: "Write all three slots"});
     expect(write).toBeEnabled();
     await act(async () => {
