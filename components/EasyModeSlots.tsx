@@ -14,6 +14,7 @@ import type {SlotAttempt} from "@/hooks/useEasyModeSlots";
 import {useLiveBrewBarGuard} from "@/hooks/useLiveBrewBarGuard";
 import EasyModeSlotCard from "@/components/EasyModeSlotCard";
 import EasyModeWriteOverlay, {slotOverlayVisible} from "@/components/EasyModeWriteOverlay";
+import DotMatrixText from "@/components/DotMatrixText";
 import PourProfile from "@/components/PourProfile";
 import XbrwSheet from "@/components/XbrwSheet";
 import TeaSlotProbePanel, {type TeaSlotProbePanelProps} from "@/components/TeaSlotProbePanel";
@@ -178,8 +179,15 @@ function RecipeChoice({recipe, onPick}: {recipe: Recipe; onPick: () => void}) {
             accessibilityState={{disabled: problem !== null}} disabled={problem !== null} onPress={onPick}>
             <YStack gap="$2" padding="$3" marginBottom="$2" borderRadius="$3"
                 backgroundColor={resolveAccent(recipe)}>
-                <Text color={onAccent.text} fontSize={18} fontWeight="600">{recipe.displayName()}</Text>
-                <PourProfile pours={recipe.pours} width={180} height={32}/>
+                <Text color={onAccent.text} fontSize={16} fontWeight="600">{recipe.displayName()}</Text>
+                <XStack gap="$2" alignItems="center" justifyContent="space-between" flexWrap="wrap">
+                    <DotMatrixText fontSize={11} color={onAccent.text}>
+                        {`${recipe.dosage}G · 1:${recipe.ratio} · GRIND ${recipe.grinder ? recipe.grindSize : "OFF"}`}
+                    </DotMatrixText>
+                    <View pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+                        <PourProfile pours={recipe.pours} width={80} height={24}/>
+                    </View>
+                </XStack>
                 {problem !== null && <Text color={onAccent.text} fontSize={13}>{problem}</Text>}
             </YStack>
         </Pressable>
@@ -196,15 +204,33 @@ function StoppedWrite({journal, failure}: {journal: SlotJournal; failure: string
         AccessibilityInfo.announceForAccessibility(`${heading} ${reason}`);
     }, [heading, reason]);
     return (
-        <YStack gap="$3">
-            <Text color={colour} fontSize={20} fontWeight="600">{heading}</Text>
+        <YStack gap="$4">
+            <DotMatrixText fontSize={40} weight="bold" color={colour}>!</DotMatrixText>
+            <Text color={colour} fontSize={23} fontWeight="600">{heading}</Text>
             <Text selectable accessibilityRole="alert" color={palette.text}>{reason}</Text>
-            <XStack gap="$3" flexWrap="wrap">
-                {SLOT_NAMES.map((name, index) => <Text key={name} color={palette.dim}>
-                    {`${name}: ${index < journal.acknowledged ? "received"
-                        : journal.inFlight === index ? "not confirmed" : "pending"}`}
-                </Text>)}
-            </XStack>
+            <YStack padding="$4" gap="$3" borderRadius={18} backgroundColor={palette.raised}>
+                <XStack gap="$3" justifyContent="space-around" flexWrap="wrap">
+                    {SLOT_NAMES.map((name, index) => <YStack key={name} alignItems="center" gap="$2">
+                        <DotMatrixText fontSize={28} weight="bold"
+                            color={index < journal.acknowledged ? resolveAccent(new Recipe(undefined, journal.slots[index].recipeJSON))
+                                : index === journal.acknowledged ? colour : palette.dim}>{name}</DotMatrixText>
+                        <Text color={palette.dim} fontSize={12}>
+                            {`${name}: ${index < journal.acknowledged ? "received"
+                                : journal.inFlight === index ? "not confirmed" : "pending"}`}
+                        </Text>
+                    </YStack>)}
+                </XStack>
+                {journal.slots.map((snapshot, index) => <YStack key={SLOT_NAMES[index]}
+                    testID={`slot-${SLOT_NAMES[index]}`} gap="$1">
+                    <Text color={palette.dim} fontSize={13}>{`${SLOT_NAMES[index]} · ${snapshot.name}`}</Text>
+                    {isTeaProbeSnapshot(snapshot) && <DotMatrixText fontSize={11} color={palette.dim}>
+                        1 STEEP · 60ML · 70C · 60S · GRIND OFF
+                    </DotMatrixText>}
+                </YStack>)}
+            </YStack>
+            <Text color={palette.dim} fontSize={14}>
+                Your recipes are kept. The machine may still show its saving animation.
+            </Text>
         </YStack>
     );
 }
@@ -287,24 +313,33 @@ export default function EasyModeSlots({
                 pointerEvents={covered ? "none" : "auto"}>
                 {header}
                 <ScrollView testID="easy-mode-cards" style={{flex: 1, minHeight: 0}}
-                    contentContainerStyle={{padding: 16, gap: 16}}>
-                    <XStack justifyContent="space-between" alignItems="center" gap="$3" flexWrap="wrap">
-                        {journal === null && <Text color={palette.dim}>
+                    contentContainerStyle={{paddingHorizontal: 14, paddingBottom: 14, gap: 10}}>
+                    <XStack justifyContent="space-between" alignItems="center" gap="$2" flexWrap="wrap">
+                        {journal === null && <Text color={palette.dim} fontSize={12} flex={1}>
                             {record.experiment?.phase === "active"
                                 ? showingWrittenProbe ? "Tea candidate stored; behavior UNTESTED."
                                     : "Tea trial unconfirmed; restore originals."
-                                : `${dirty} ${dirty === 1 ? "slot" : "slots"} not written`}
+                                : "Your machine shortcuts"}
                         </Text>}
-                        <Button ref={helpRef} accessibilityLabel="About Easy Mode"
-                            onPress={() => { focusOrigin.current = helpRef; setHelp(true); }}
-                            height="auto" minHeight={44}>HELP</Button>
+                        {journal === null && record.experiment?.phase !== "active" &&
+                            <DotMatrixText fontSize={11} color={palette.dim}>
+                                {`${dirty} ${dirty === 1 ? "CHANGE" : "CHANGES"}`}
+                            </DotMatrixText>}
                         {teaProbe !== undefined && (__DEV__ || record.experiment !== undefined) &&
-                            <Button ref={probeRef} height="auto" minHeight={44} disabled={active || overlay}
+                            <Button ref={probeRef} height="auto" minHeight={44}
+                                paddingVertical="$1" paddingHorizontal="$2" backgroundColor={palette.none}
+                                color={palette.dim} disabled={active || overlay}
                                 accessibilityLabel="TEA SLOT PROBE"
                                 onPress={() => {
                                     focusOrigin.current = probeRef;
                                     onTeaProbeOpenChange?.(true);
-                                }}>TEA SLOT PROBE</Button>}
+                                }}><DotMatrixText fontSize={11} color={palette.dim}>LAB</DotMatrixText></Button>}
+                        <Button ref={helpRef} accessibilityLabel="About Easy Mode"
+                            onPress={() => { focusOrigin.current = helpRef; setHelp(true); }}
+                            height="auto" minHeight={44} paddingHorizontal="$2" paddingVertical="$1"
+                            backgroundColor={palette.none} color={palette.dim}>
+                            <DotMatrixText fontSize={14} color={palette.dim}>?</DotMatrixText>
+                        </Button>
                     </XStack>
                     {incoming !== undefined && usedIncoming !== incomingKey && (
                         <YStack gap="$2" padding="$3" backgroundColor={palette.raised} borderRadius="$4">
@@ -321,17 +356,34 @@ export default function EasyModeSlots({
                             </XStack>
                         </YStack>
                     )}
-                    {SLOT_NAMES.map((name, index) => {
+                    {journal !== null && !active && <YStack testID="easy-mode-recovery"
+                        paddingHorizontal="$1" paddingTop="$2" gap="$4">
+                        <StoppedWrite journal={journal} failure={failure}/>
+                        {availability !== null && <Text color={palette.dim}>{availability}</Text>}
+                        <Button ref={retryRef} accessibilityLabel="Retry slot write" height="auto" minHeight={48}
+                            paddingVertical="$3" disabled={blocked} backgroundColor={palette.text} color={onAccent.text}
+                            disabledStyle={{backgroundColor: palette.text, opacity: 0.45}}
+                            onPress={() => {
+                                focusOrigin.current = retryRef; setConfirmation({deviceId, kind: "retry"});
+                            }}><DotMatrixText fontSize={12} weight="bold" color={onAccent.text}>RETRY WRITE</DotMatrixText></Button>
+                        <Button ref={cancelRef} accessibilityLabel="Cancel slot write" height="auto" minHeight={48}
+                            paddingVertical="$3" disabled={blocked} backgroundColor={palette.raised} color={palette.text}
+                            borderWidth={1} borderColor={palette.line}
+                            onPress={() => {
+                                focusOrigin.current = cancelRef; setConfirmation({deviceId, kind: "cancel"});
+                            }}><DotMatrixText fontSize={12} weight="bold">CANCEL THIS WRITE</DotMatrixText></Button>
+                        <Text color={palette.dim} fontSize={12}>Do not start a brew until this write is resolved.</Text>
+                    </YStack>}
+                    {journal === null && SLOT_NAMES.map((name, index) => {
                         const slotIndex = index as SlotIndex;
-                        const snapshot = journal?.slots[index]
-                            ?? (showingWrittenProbe
+                        const snapshot = (showingWrittenProbe
                                 ? record.written?.slots[index] : undefined) ?? record.drafts[index];
                         const current = recipes.find(recipe => recipe.uuid === snapshot?.sourceUuid);
                         const status = snapshot === null || isTeaProbeSnapshot(snapshot)
                             ? null : snapshotStatus(snapshot, current);
                         return <EasyModeSlotCard key={name} index={slotIndex} snapshot={snapshot}
                             needsWrite={!showingWrittenProbe && slotNeedsWrite(record, slotIndex)} status={status}
-                            recovery={journal !== null} locked={locked}
+                            recovery={false} locked={locked}
                             updateProblem={status === "edited" && current !== undefined ? recipeProblem(current) : null}
                             changeRef={changeRefs[index]}
                             onChange={() => {
@@ -341,11 +393,11 @@ export default function EasyModeSlots({
                             onUpdate={() => { if (current !== undefined) onAssign(slotIndex, current); }}/>;
                     })}
                 </ScrollView>
-                <ScrollView testID="easy-mode-actions" nestedScrollEnabled
-                    style={{flexGrow: 0, flexShrink: 1, maxHeight: "60%", backgroundColor: palette.surface}}
-                    contentContainerStyle={{padding: 16, gap: 12, paddingBottom: Math.max(insets.bottom, 16)}}>
-                    {journal !== null && !active && <StoppedWrite journal={journal} failure={failure}/>}
-                    {journal === null && displayedFailure !== null && <Text selectable accessibilityRole="alert"
+                {journal === null && <ScrollView testID="easy-mode-actions" nestedScrollEnabled
+                    style={{flexGrow: 0, flexShrink: 1, maxHeight: "60%", backgroundColor: palette.base,
+                        borderTopWidth: 1, borderTopColor: palette.line}}
+                    contentContainerStyle={{padding: 14, gap: 10, paddingBottom: Math.max(insets.bottom, 14)}}>
+                    {displayedFailure !== null && <Text selectable accessibilityRole="alert"
                         color={displayedFailure.tone === "error" ? palette.danger : palette.warn}>
                         {displayedFailure.message}
                     </Text>}
@@ -353,31 +405,17 @@ export default function EasyModeSlots({
                     {overflow && <Text color={palette.dim}>
                         Stored slots do not run the app&apos;s automatic pause protection.
                     </Text>}
-                    {journal === null ? (
-                        <>
-                            <Text color={palette.dim} fontSize={13}>Writes A, B and C. Switches to EASY.</Text>
-                            <Button ref={writeRef} accessibilityLabel="Write all three slots" height="auto" minHeight="$4"
-                                paddingVertical="$3" disabled={blocked}
-                                onPress={() => { focusOrigin.current = writeRef; onWrite(); }}>WRITE TO MACHINE</Button>
-                            {record.written !== null && <Text color={palette.dim} fontSize={12}>
-                                {`Last written by XBRW++ ${new Date(record.written.at).toLocaleString()}.`}
-                            </Text>}
-                        </>
-                    ) : !active && (
-                        <XStack gap="$2" flexWrap="wrap">
-                            <Button ref={retryRef} accessibilityLabel="Retry slot write" height="auto" minHeight="$4"
-                                paddingVertical="$3" disabled={blocked}
-                                onPress={() => {
-                                    focusOrigin.current = retryRef; setConfirmation({deviceId, kind: "retry"});
-                                }}>RETRY WRITE</Button>
-                            <Button ref={cancelRef} accessibilityLabel="Cancel slot write" height="auto" minHeight="$4"
-                                paddingVertical="$3" disabled={blocked}
-                                onPress={() => {
-                                    focusOrigin.current = cancelRef; setConfirmation({deviceId, kind: "cancel"});
-                                }}>CANCEL THIS WRITE</Button>
-                        </XStack>
-                    )}
-                </ScrollView>
+                    <Text color={palette.dim} fontSize={12} textAlign="center">Writes A, B and C. Switches to EASY.</Text>
+                    <Button ref={writeRef} accessibilityLabel="Write all three slots" height="auto" minHeight="$4"
+                        paddingVertical="$3" disabled={blocked} backgroundColor={palette.text} color={onAccent.text}
+                        disabledStyle={{backgroundColor: palette.text, opacity: 0.45}}
+                        onPress={() => { focusOrigin.current = writeRef; onWrite(); }}>
+                        <DotMatrixText fontSize={12} weight="bold" color={onAccent.text}>WRITE TO MACHINE</DotMatrixText>
+                    </Button>
+                    {record.written !== null && <Text color={palette.dim} fontSize={12} textAlign="center">
+                        {`Last written by XBRW++ ${new Date(record.written.at).toLocaleString()}.`}
+                    </Text>}
+                </ScrollView>}
             </View>
             {!overlay && <>
             <XbrwSheet open={pickerOpen} onOpenChange={open => { if (!open) setPicker(null); }}
@@ -401,12 +439,15 @@ export default function EasyModeSlots({
                 </YStack>
             </XbrwSheet>
             <XbrwSheet open={confirmationOpen} onOpenChange={open => { if (!open) setConfirmation(null); }}
-                title={confirmationKind === "retry" ? "RETRY WRITE" : "CANCEL THIS WRITE"} heightPercent={80}>
+                title={confirmationKind === "retry" ? "RETRY WRITE" : "CANCEL THIS WRITE"} heightPercent={70}>
                 <ScrollView contentContainerStyle={{gap: 16, paddingBottom: insets.bottom}}>
-                    <Text color={palette.text}>
+                    <Text color={palette.text} fontSize={23} fontWeight="600">
                         {confirmationKind === "retry" ? "Which screen is your machine showing?"
-                            : "Only cancel once the machine is back to its normal screen, with no saving animation."}
+                            : "Back to normal?"}
                     </Text>
+                    {confirmationKind === "cancel" && <Text color={palette.text} fontSize={14}>
+                        Only cancel once the machine is back to its normal screen, with no saving animation.
+                    </Text>}
                     <Text color={palette.dim}>
                         {confirmationKind === "retry"
                             ? journal?.acknowledged === 3
@@ -415,9 +456,13 @@ export default function EasyModeSlots({
                             : "Cancelling clears the unfinished write from XBRW++. It does not stop a write on the machine or clear its contents. Your assignments are kept."}
                     </Text>
                     {confirmationKind === "retry" && <Button height="auto" minHeight="$4" paddingVertical="$3"
+                        backgroundColor={palette.text} color={onAccent.text}
+                        disabledStyle={{backgroundColor: palette.text, opacity: 0.45}}
                         disabled={blocked} accessibilityLabel="Finish write while machine is still saving"
                         onPress={() => { setConfirmation(null); onRecover(false); }}>STILL SAVING, FINISH WRITE</Button>}
                     <Button height="auto" minHeight="$4" paddingVertical="$3" disabled={blocked}
+                        backgroundColor={confirmationKind === "retry" ? palette.raised : palette.text}
+                        color={confirmationKind === "retry" ? palette.text : onAccent.text}
                         accessibilityLabel={confirmationKind === "retry"
                             ? "Confirm machine is back to normal and retry" : "Confirm machine is back to normal and cancel"}
                         onPress={() => {
@@ -426,7 +471,8 @@ export default function EasyModeSlots({
                             if (action === "retry") onRecover(true);
                             else if (action === "cancel") onCancel();
                         }}>{confirmationKind === "retry" ? "BACK TO NORMAL, RETRY" : "BACK TO NORMAL, CANCEL"}</Button>
-                    <Button onPress={() => setConfirmation(null)}>KEEP THIS WRITE</Button>
+                    <Button backgroundColor={palette.none} color={palette.dim}
+                        height="auto" minHeight={44} onPress={() => setConfirmation(null)}>KEEP THIS WRITE</Button>
                 </ScrollView>
             </XbrwSheet>
             <XbrwSheet open={helpOpen} onOpenChange={setHelp} title="ABOUT EASY MODE" heightPercent={70}>

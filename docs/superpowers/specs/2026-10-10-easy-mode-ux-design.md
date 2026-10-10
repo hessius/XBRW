@@ -22,7 +22,10 @@ Tea is an unsupported app capability, not a claimed machine limitation.
 This spec supersedes the screen, warning placement and uncertain-recovery
 restrictions in `2026-10-09-easy-mode-slots-design.md`. Its identity, persistence,
 snapshot validation, exclusion and receipt requirements remain in force.
-The approved browser studies are visual references, not pixel or copy contracts.
+The approved browser study `slot-state-studies.html` ("One set, four clearly
+different states") is the required visual hierarchy. The user's 2026-10-10
+correction supersedes the earlier latitude about layout and estimated motion:
+the states must look like the study, not just contain its controls and copy.
 
 ## Chosen direction
 
@@ -37,9 +40,13 @@ central modules.
 
 ### Recipe slabs
 
-Each slab contains a dot-matrix A, B or C, the snapshot's recipe name, its
-recipe-coloured pour silhouette, compact dose/ratio/grind identity and a visible
-CHANGE control. Grinder off is shown as OFF, not the stale grind-size value.
+Each slab puts its dot-matrix A, B or C at the left of the top line and its
+write status at the right. The snapshot name sits below in moderate 16 pt type
+and wraps. Compact dose/ratio/grind identity and CHANGE share the bottom line;
+CHANGE is an accent-ink, dark-filled compact control, not a full-width row.
+The pour silhouette is a small, subtle, non-interactive watermark, never a
+separate full-width row. Preserve the recipe's existing accent, including in
+the received and active ceremony steps. Grinder off is shown as OFF, not the stale grind-size value.
 Avoid duplicated previous names, statistics, timestamps or warning paragraphs.
 
 An empty slot has a neutral surface, its letter and CHOOSE RECIPE. An empty
@@ -63,7 +70,10 @@ show LAST WRITTEN. This is an app record, not live machine read-back. During an
 incomplete transaction, recovery replaces this normal status presentation so
 old history cannot imply the partial replacement is complete.
 
-The screen shows a compact changed-slot count based on those same byte
+The screen shows a compact changed-slot count and `?` help affordance on one
+readout row, below the unchanged house ScreenHeader. The development tea entry
+is a small LAB affordance on that row, not a prominent extra button.
+The count is based on those same byte
 comparisons. Returning to the last-written bytes clears NOT WRITTEN. Changing
 the source recipe without changing its encoded bytes does not require a write.
 
@@ -82,7 +92,8 @@ and closes the picker.
 ### Action area and ordinary states
 
 Use a compact pinned action area, visually related to the editor action bar.
-The main action is WRITE TO MACHINE. The essential effect stays beside it:
+The main action is WRITE TO MACHINE, with white fill and dark ink when enabled.
+Disabled writing remains visibly unavailable. The essential effect stays beside it:
 
 > Writes A, B and C. Switches to EASY.
 
@@ -112,6 +123,18 @@ Show WRITING YOUR SLOTS, A/B/C steps and the active snapshot's name. Mark a slot
 received only after its receipt has been durably recorded. Pending slots are
 quiet; the current slot is active. Do not display a made-up percentage.
 
+DotBloom's visible fill also moves during a slot, as an explicitly labelled
+visual estimate, separately from its receipt status. Its finite clock eases
+towards 85% of the active third over 4.8 seconds, then stops advancing. It
+cannot enter the next third until the current receipt is durable. Receipt
+changes commit the next boundary immediately. Three receipts leave one dot
+unlit throughout SAVING; only the durably completed attempt fills the ring.
+The decorative bloom's internal percentage is hidden from accessibility, and
+no percentage is shown or announced. Announce status changes, never ticks.
+Reduce Motion uses receipt boundaries without an estimate clock. Dismissal,
+identity/attempt changes and backgrounding clean up the clock; foregrounding
+alone does not restart it.
+
 Keep this instruction visible:
 
 > Keep the app open and stay near your machine.
@@ -129,9 +152,12 @@ the screen returns. Foregrounding never automatically retries.
 
 ## Interrupted writes and deliberate recovery
 
-Replace warning-heavy footers with one focused interruption panel: a short
+Replace the editing slabs and warning-heavy footers with one focused, scrollable
+interruption stage: a short
 heading, one reason, A/B/C received/unconfirmed/pending summary, RETRY WRITE and
-CANCEL THIS WRITE. Use amber for interruption and restrained red for an actual
+CANCEL THIS WRITE. The frozen names remain as compact context in its summary,
+not three full-size editing cards. RETRY is the white primary action; CANCEL
+is a separate full-width, dark secondary action. Use amber for interruption and restrained red for an actual
 refusal or validation/storage failure. Do not render internal protocol jargon.
 Map copy and severity together: identity and internal consistency failures are
 also red, with a concise explanation rather than raw transport or database text.
@@ -204,6 +230,8 @@ LEAVE FOR NOW resumes the original navigation action once, without another
 prompt. WRITE cancels that navigation and starts the normal writing ceremony.
 There is no discard action or warning that persisted assignments will be lost.
 An empty untouched setup does not trigger a reminder.
+The sheet chrome says BEFORE YOU LEAVE; its readable heading and supporting
+copy sit above a white primary WRITE, dark secondary LEAVE and quiet Stay here.
 
 An unresolved journal instead remains visibly interrupted; leaving it after an
 attempt has stopped preserves recovery and the machine-operation reservation.
@@ -286,3 +314,19 @@ slot and tea investigation gates remain separate and open.
 
 Check the actual iOS and Android layout, large text, reduced motion and screen
 reader behavior. No screenshot mockup or passing unit test closes those gates.
+
+### Visual correction evidence, 2026-10-10
+
+The supplied phone screenshot was compared with the complete canonical browser
+study. The correction removes the separate profile/status/action rows and the
+large HELP/probe buttons, restores compact intrinsic slab sizing, gives recovery
+its own stage, and aligns picker, retry/cancel and departure action hierarchy.
+Focused component, route and global-bar coverage checks both Jest platforms,
+including visible bloom advancement before receipts, third-boundary gating,
+sub-full SAVING, durable success, reduced motion and clock cleanup.
+
+The existing Metro server on 8082 served an iOS bundle successfully. Two existing
+local iPhone simulators were checked, but neither had the XBRW++ native client
+installed. No native build was started and no actual updated runtime screenshot
+was obtained. Real phone layout, large-text scrolling, VoiceOver/TalkBack and
+machine receipt/recovery behavior remain manual qualification gates.

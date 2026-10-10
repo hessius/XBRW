@@ -1,5 +1,5 @@
 import React from "react";
-import {AccessibilityInfo} from "react-native";
+import {AccessibilityInfo, AppState, StyleSheet} from "react-native";
 import {act, fireEvent, screen} from "@testing-library/react-native";
 import {renderWithProviders} from "@/test-utils/render";
 import EasyModeWriteOverlay from "@/components/EasyModeWriteOverlay";
@@ -7,10 +7,22 @@ import EasyModeSlots from "@/components/EasyModeSlots";
 import type {SlotAttempt} from "@/hooks/useEasyModeSlots";
 import {emptySlotRecord, prepareSet, snapshotRecipe} from "@/library/slots/slotModel";
 import {coffee} from "@/library/slots/__tests__/fixtures";
-import {SLOT_WRITE_SUCCESS_HOLD_MS} from "@/constants/motion";
+import {SLOT_WRITE_SUCCESS_HOLD_MS, SLOT_WRITE_ESTIMATE_MS, SLOT_WRITE_ESTIMATE_TICK_MS} from "@/constants/motion";
 import * as motion from "@/constants/motion";
+import {palette} from "@/constants/colors";
 
 const attempt: SlotAttempt = {deviceId: "one", serial: "serial", operation: "write", status: "writing"};
+const appState = AppState.currentState;
+let appSubscription: jest.SpyInstance;
+beforeEach(() => {
+    AppState.currentState = "active";
+    appSubscription = jest.spyOn(AppState, "addEventListener")
+        .mockImplementation(() => ({remove: jest.fn()}));
+});
+afterEach(() => {
+    AppState.currentState = appState;
+    appSubscription.mockRestore();
+});
 function record(acknowledged = 0) {
     const saved = snapshotRecipe(coffee("Frozen morning"));
     return {
@@ -22,6 +34,119 @@ function record(acknowledged = 0) {
         }
     };
 }
+
+function litDots() {
+    return screen.getAllByTestId("dot-bloom-dot", {includeHiddenElements: true})
+        .filter(dot => StyleSheet.flatten(dot.props.style).backgroundColor === palette.success).length;
+}
+
+it("moves within each active third before its receipt, then waits below full until durable success", async () => {
+    jest.useFakeTimers();
+    const reduced = jest.spyOn(motion, "useReducedMotion").mockReturnValue(false);
+    const announce = jest.spyOn(AccessibilityInfo, "announceForAccessibility");
+    try {
+        const view = await renderWithProviders(<EasyModeWriteOverlay record={record()} attempt={attempt}/>);
+        for (const received of [0, 1, 2]) {
+            if (received > 0) await view.rerender(<EasyModeWriteOverlay record={record(received)} attempt={attempt}/>);
+            expect(litDots()).toBe(received * 8);
+            const announcements = announce.mock.calls.length;
+            await act(async () => jest.advanceTimersByTime(SLOT_WRITE_ESTIMATE_TICK_MS * 2));
+            expect(litDots()).toBeGreaterThan(received * 8);
+            expect(litDots()).toBeLessThan((received + 1) * 8);
+            expect(screen.getByText(`${["A", "B", "C"][received]}: writing`)).toBeOnTheScreen();
+            expect(announce).toHaveBeenCalledTimes(announcements);
+            await act(async () => jest.advanceTimersByTime(SLOT_WRITE_ESTIMATE_MS * 2));
+            expect(litDots()).toBeLessThan((received + 1) * 8);
+            const stopped = litDots();
+            await act(async () => jest.advanceTimersByTime(SLOT_WRITE_ESTIMATE_MS * 2));
+            expect(litDots()).toBe(stopped);
+        }
+        await view.rerender(<EasyModeWriteOverlay record={record(3)} attempt={{...attempt, status: "saving"}}/>);
+        expect(litDots()).toBe(23);
+        await act(async () => jest.advanceTimersByTime(SLOT_WRITE_ESTIMATE_MS * 2));
+        expect(litDots()).toBe(23);
+        expect(screen.queryByText("SLOTS WRITTEN")).toBeNull();
+        const saved = record(3).journal.slots;
+        await view.rerender(<EasyModeWriteOverlay record={{...record(3), journal: null, written: {at: 1000, slots: saved}}}
+            attempt={{...attempt, status: "success"}}/>);
+        expect(litDots()).toBe(24);
+        expect(screen.getByText("SLOTS WRITTEN")).toBeOnTheScreen();
+        await view.unmount();
+    } finally {
+        reduced.mockRestore();
+        announce.mockRestore();
+        jest.useRealTimers();
+    }
+});
+
+it("stops estimated ticks on interruption and does not carry the old estimate into recovery", async () => {
+    jest.useFakeTimers();
+    const reduced = jest.spyOn(motion, "useReducedMotion").mockReturnValue(false);
+    try {
+        const view = await renderWithProviders(<EasyModeWriteOverlay record={record(1)} attempt={attempt}/>);
+        await act(async () => jest.advanceTimersByTime(SLOT_WRITE_ESTIMATE_MS));
+        expect(litDots()).toBeGreaterThan(8);
+        await view.rerender(<EasyModeWriteOverlay record={record(1)} attempt={{...attempt, status: "error"}}/>);
+        await act(async () => jest.advanceTimersByTime(SLOT_WRITE_ESTIMATE_MS));
+        expect(screen.queryByTestId("easy-mode-write-overlay")).toBeNull();
+        await view.rerender(<EasyModeWriteOverlay record={record(1)} attempt={{...attempt, operation: "recover"}}/>);
+        expect(litDots()).toBe(8);
+        await view.unmount();
+    } finally {
+        reduced.mockRestore();
+        jest.useRealTimers();
+    }
+});
+
+it("cannot cross receipt thirds from a saving status alone", async () => {
+    await renderWithProviders(<EasyModeWriteOverlay record={record(1)}
+        attempt={{...attempt, status: "saving"}}/>);
+    expect(litDots()).toBe(8);
+    expect(screen.getByText("A: received")).toBeOnTheScreen();
+    expect(screen.getByText("C: pending")).toBeOnTheScreen();
+    expect(screen.queryByText("SAVING")).toBeNull();
+});
+
+it("holds only receipt boundaries under reduced motion and creates no estimate clock", async () => {
+    jest.useFakeTimers();
+    const reduced = jest.spyOn(motion, "useReducedMotion").mockReturnValue(true);
+    const interval = jest.spyOn(global, "setInterval");
+    try {
+        const view = await renderWithProviders(<EasyModeWriteOverlay record={record(1)} attempt={attempt}/>);
+        expect(litDots()).toBe(8);
+        await act(async () => jest.advanceTimersByTime(SLOT_WRITE_ESTIMATE_MS * 2));
+        expect(litDots()).toBe(8);
+        expect(interval).not.toHaveBeenCalled();
+        await view.unmount();
+    } finally {
+        reduced.mockRestore();
+        interval.mockRestore();
+        jest.useRealTimers();
+    }
+});
+
+it("stops its finite clock on backgrounding without restarting on foreground", async () => {
+    jest.useFakeTimers();
+    const reduced = jest.spyOn(motion, "useReducedMotion").mockReturnValue(false);
+    try {
+        const view = await renderWithProviders(<EasyModeWriteOverlay record={record(1)} attempt={attempt}/>);
+        await act(async () => jest.advanceTimersByTime(SLOT_WRITE_ESTIMATE_TICK_MS * 2));
+        const moved = litDots();
+        expect(moved).toBeGreaterThan(8);
+        const change = appSubscription.mock.calls.find(([event]) => event === "change")?.[1];
+        expect(change).toBeDefined();
+        await act(async () => change?.("background"));
+        await act(async () => jest.advanceTimersByTime(SLOT_WRITE_ESTIMATE_MS * 2));
+        expect(litDots()).toBe(moved);
+        await act(async () => change?.("active"));
+        await act(async () => jest.advanceTimersByTime(SLOT_WRITE_ESTIMATE_MS * 2));
+        expect(litDots()).toBe(moved);
+        await view.unmount();
+    } finally {
+        reduced.mockRestore();
+        jest.useRealTimers();
+    }
+});
 
 it("shows durable receipts, active snapshot, and saving rather than inferred success", async () => {
     const announce = jest.spyOn(AccessibilityInfo, "announceForAccessibility");

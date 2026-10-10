@@ -10,7 +10,8 @@ import Recipe, {CUP_TYPE} from "@/library/Recipe";
 import {createTestDatabase} from "@/test-utils/sqlite";
 import {SlotDatabase} from "@/library/slots/SlotDatabase";
 import {useEasyModeSlots} from "@/hooks/useEasyModeSlots";
-import {palette} from "@/constants/colors";
+import {onAccent, palette} from "@/constants/colors";
+import {resolveAccent} from "@/library/accent";
 import * as motion from "@/constants/motion";
 import {writeTeaSlotProbe} from "@/library/slots/teaSlotProbe";
 
@@ -28,6 +29,43 @@ function PersistentSlots({store}: {store: SlotDatabase}) {
         onAssign={slots.assign} onWrite={slots.write} onRecover={slots.recover} onCancel={slots.cancel}
         onDismissSuccess={slots.resetAttempt}/>;
 }
+
+it("uses compact accent slabs with a top status and inline stats/change, without a profile row", async () => {
+    const options = props();
+    const recipe = coffee("Hunkute - DROP COFFEE ROASTERS");
+    const saved = snapshotRecipe(recipe);
+    options.record.drafts = [saved, saved, saved];
+    await renderWithProviders(<EasyModeSlots {...options} recipes={[recipe]} available/>);
+    const card = screen.getByTestId("slot-A");
+    expect(card).toHaveStyle({backgroundColor: resolveAccent(recipe), paddingTop: 14, paddingLeft: 14});
+    const identity = within(card).getByText(saved.name);
+    expect(identity).toHaveStyle({fontSize: 16});
+    expect(identity.props.numberOfLines).toBeUndefined();
+    expect(identity.props.allowFontScaling).not.toBe(false);
+    expect(within(screen.getByTestId("slot-A-heading")).getByText("NOT WRITTEN")).toBeOnTheScreen();
+    const bottom = within(screen.getByTestId("slot-A-details"));
+    expect(bottom.getByText(/GRIND/)).toBeOnTheScreen();
+    expect(bottom.getByRole("button", {name: "Change slot A recipe"})).toHaveStyle({
+        height: "auto", minHeight: 44, backgroundColor: palette.base
+    });
+    expect(screen.getByTestId("slot-A-profile-watermark", {includeHiddenElements: true})).toHaveStyle({position: "absolute"});
+    expect(screen.getByTestId("slot-A-profile-watermark", {includeHiddenElements: true}).props.pointerEvents).toBe("none");
+    expect(screen.getByRole("button", {name: "About Easy Mode"})).toHaveStyle({backgroundColor: palette.none});
+    expect(screen.getByRole("button", {name: "Write all three slots"})).toHaveStyle({
+        backgroundColor: palette.text, color: onAccent.text
+    });
+});
+
+it("gives interruption its own scrollable recovery stage instead of stacking it below the editing slabs", async () => {
+    await renderWithProviders(<EasyModeSlots {...interruptedOptions()} available/>);
+    expect(screen.queryByTestId("slot-A-profile")).toBeNull();
+    const recovery = within(screen.getByTestId("easy-mode-recovery"));
+    expect(recovery.getByText("Writing stopped at B.")).toBeOnTheScreen();
+    expect(recovery.getByText("A: received")).toBeOnTheScreen();
+    expect(recovery.getByRole("button", {name: "Retry slot write"})).toHaveStyle({backgroundColor: palette.text});
+    expect(recovery.getByRole("button", {name: "Cancel slot write"})).toHaveStyle({backgroundColor: palette.raised});
+    expect(recovery.getByText(/Your recipes are kept.*saving animation/)).toBeOnTheScreen();
+});
 
 it("puts readback limitations in help and shows one availability reason", async () => {
     await renderWithProviders(<EasyModeSlots {...props()}/>);
@@ -180,15 +218,15 @@ it("compares bytes, keeps snapshot identity and clears dirty status when bytes r
     renamed.name = "Renamed";
     const view = await renderWithProviders(<EasyModeSlots {...options} recipes={[renamed]} available/>);
     expect(screen.getAllByText("LAST WRITTEN")).toHaveLength(3);
-    expect(screen.getByText("0 slots not written")).toBeOnTheScreen();
+    expect(screen.getByText("0 CHANGES")).toBeOnTheScreen();
     expect(screen.queryByText("RECIPE UPDATED")).toBeNull();
     expect(screen.queryByText("Renamed")).toBeNull();
     expect(screen.getAllByText(/GRIND OFF/)).toHaveLength(3);
-    expect(screen.getByTestId("slot-A-profile")).toBeOnTheScreen();
+    expect(screen.getByTestId("slot-A-profile", {includeHiddenElements: true})).toBeOnTheScreen();
     const changed = coffee("Different bytes");
     options.record.drafts[1] = snapshotRecipe(changed);
     await view.rerender(<EasyModeSlots {...options} available/>);
-    expect(screen.getByText("1 slot not written")).toBeOnTheScreen();
+    expect(screen.getByText("1 CHANGE")).toBeOnTheScreen();
     expect(screen.getAllByText("NOT WRITTEN")).toHaveLength(1);
     options.record.drafts[1] = saved;
     await view.rerender(<EasyModeSlots {...options} available/>);
@@ -288,7 +326,7 @@ it("shows the last-written time once and treats a new source with identical byte
     await renderWithProviders(<EasyModeSlots {...options} recipes={[...recipes, otherSource]} available/>);
     expect(screen.getAllByText(/Last written by XBRW\+\+/)).toHaveLength(1);
     expect(screen.getAllByText("LAST WRITTEN")).toHaveLength(3);
-    expect(screen.getByText("0 slots not written")).toBeOnTheScreen();
+    expect(screen.getByText("0 CHANGES")).toBeOnTheScreen();
     expect(screen.getByRole("button", {name: "Write all three slots"})).toBeEnabled();
 });
 
@@ -342,7 +380,7 @@ it("persists a picked snapshot immediately and restores it after reopening the s
     await view.unmount();
     await renderWithProviders(<PersistentSlots store={new SlotDatabase(sql)}/>);
     expect(within(screen.getByTestId("slot-C")).getByText("Evening")).toBeOnTheScreen();
-    expect(screen.getByText("1 slot not written")).toBeOnTheScreen();
+    expect(screen.getByText("1 CHANGE")).toBeOnTheScreen();
 });
 
 it("keeps the searchable picker and explains the storage failure inside it", async () => {

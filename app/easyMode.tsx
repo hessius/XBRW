@@ -13,7 +13,8 @@ import EasyModeSlots, {slotWriteAvailability} from "@/components/EasyModeSlots";
 import {slotOverlayVisible} from "@/components/EasyModeWriteOverlay";
 import XbrwSheet from "@/components/XbrwSheet";
 import ScreenHeader from "@/components/ScreenHeader";
-import {palette} from "@/constants/colors";
+import {onAccent, palette} from "@/constants/colors";
+import DotMatrixText from "@/components/DotMatrixText";
 import {isActiveBrewPhase} from "@/library/machine/Machine";
 import {unavailableSlotPort} from "@/library/slots/slotWriter";
 import {unwrittenSlotCount} from "@/library/slots/slotModel";
@@ -161,19 +162,27 @@ export default function EasyModeScreen() {
                            onRecover={slots.recover} onCancel={slots.cancel}/>
             </YStack>
             <XbrwSheet open={departureOpen} onOpenChange={open => { if (!open) stay(); }}
-                title="Not on the machine yet" heightPercent={70}>
+                title="BEFORE YOU LEAVE" heightPercent={60}>
                 <ScrollView contentContainerStyle={{gap: 16}}
                     accessibilityElementsHidden={!departureOpen}
                     importantForAccessibility={departureOpen ? "auto" : "no-hide-descendants"}
                     pointerEvents={departureOpen ? "auto" : "none"}>
-                    <Text color={palette.text}>
+                    <Text color={palette.text} fontSize={23} fontWeight="600">Not on the machine yet</Text>
+                    <Text color={palette.dim} fontSize={14}>
                         Your changes are kept here. Write them when you want to use them on your machine.
                     </Text>
                     {availability !== null && <Text color={palette.dim}>{availability}</Text>}
                     <Button height="auto" minHeight="$4" paddingVertical="$3"
-                        disabled={availability !== null} onPress={write}>WRITE TO MACHINE</Button>
-                    <Button height="auto" minHeight="$4" paddingVertical="$3" onPress={leave}>LEAVE FOR NOW</Button>
-                    <Button height="auto" minHeight="$4" paddingVertical="$3" onPress={stay}>Stay here</Button>
+                        backgroundColor={palette.text} color={onAccent.text}
+                        disabledStyle={{backgroundColor: palette.text, opacity: 0.45}}
+                        disabled={availability !== null} onPress={write}>
+                        <DotMatrixText fontSize={12} weight="bold" color={onAccent.text}>WRITE TO MACHINE</DotMatrixText>
+                    </Button>
+                    <Button height="auto" minHeight="$4" paddingVertical="$3"
+                        backgroundColor={palette.raised} color={palette.text} borderWidth={1} borderColor={palette.line}
+                        onPress={leave}><DotMatrixText fontSize={12} weight="bold">LEAVE FOR NOW</DotMatrixText></Button>
+                    <Button height="auto" minHeight={44} paddingVertical="$2"
+                        backgroundColor={palette.none} color={palette.dim} onPress={stay}>Stay here</Button>
                 </ScrollView>
             </XbrwSheet>
         </YStack>
