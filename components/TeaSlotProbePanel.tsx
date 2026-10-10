@@ -88,7 +88,7 @@ export default function TeaSlotProbePanel({
     async function copy(): Promise<void> {
         if (experiment === undefined) return;
         try {
-            await Clipboard.setStringAsync(formatTeaProbeEvidence(experiment, record.experimentHistory));
+            await Clipboard.setStringAsync(formatTeaProbeEvidence(experiment, record.experimentHistory ?? []));
             notify({tone: "success", message: "Tea slot probe evidence copied"});
         } catch (error) {
             notify({tone: "error", message: `Could not copy tea slot probe evidence: ${
