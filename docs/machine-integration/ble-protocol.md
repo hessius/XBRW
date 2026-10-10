@@ -694,6 +694,21 @@ probe nor the existing ordinary tea encoder should be described as byte-exact
 official slot encoding. Audit the complete official recipe conversion before
 another candidate, including volume, suffix, mode selector and drain behavior.
 
+**Reference-derived A/B/C overview result (2026-10-10).** The user reported
+that none of the three loaded slots displayed as tea. A and B displayed
+grinder off; C displayed a grind setting. The user did not execute any of
+them, so no timing, water volume or drain observation exists for this batch.
+The matrix used the reference-derived 90 ml, 92 C, 20-second stage:
+A flags `0x02` with suffix `254,150`; B flags `0x04` with `254,150`;
+C flags `0x04` with `50,150`.
+
+C's overview supports the earlier finding that `0x04` does not force the
+grinder off when the blob carries a grind setting, on this firmware. Neither
+tested flag nor the preserved official suffix selected a tea overview.
+This still does not establish the actual tea slot selector; no further
+candidate is authorised by this result. Restore the original set after the
+batch and retain display-only observations as such, never as executed trials.
+
 Candidate `tea-slot-0x02-one-steep-v1` is a hypothesis, not production tea slot
 support. Easy Mode -> TEA SLOT PROBE -> WRITE PROBE prepares exactly A = one
 60 ml, 70 C, 60 s steep, grinder OFF, no agitation or bypass, using the existing

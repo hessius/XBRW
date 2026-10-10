@@ -3,6 +3,7 @@ import {Text} from "react-native";
 import {fireEvent, screen} from "@testing-library/react-native";
 
 import Collapsible, {nextHeight, rowStyle} from "@/components/Collapsible";
+import MachinePanel from "@/components/MachinePanel";
 import {renderWithProviders} from "@/test-utils/render";
 
 const includeHidden = {includeHiddenElements: true};
@@ -29,7 +30,7 @@ describe("Collapsible", () => {
         expect(screen.getByText("TILES", includeHidden)).toBeTruthy();
     });
 
-    it("measures its content off to the side until it knows how tall it is", async () => {
+    it("keeps measured content outside the animated height", async () => {
         // The row itself is clipped, so the content cannot be measured inside
         // it. Taking it out of the row's flow for the one pass it takes to
         // learn the height is what lets a row that mounted closed still know
@@ -42,7 +43,30 @@ describe("Collapsible", () => {
         await measure(80);
         expect(
             screen.getByTestId("collapsible-content", includeHidden).props.style
-        ).toBeUndefined();
+        ).toMatchObject({position: "absolute", left: 0, right: 0});
+    });
+
+    it("keeps natural measurement after refresh, collapse and reopening", async () => {
+        const refresh = jest.fn(async () => true);
+        const props = {
+            status: "connected" as const, accent: "#C86A3B",
+            vitals: {waterEnough: true, waterFeed: "tank" as const,
+                mode: "PRO" as const, grindSize: 62, askedAt: 0},
+            now: 0, onRefreshWater: refresh, onConnect: jest.fn()
+        };
+        const rendered = await renderWithProviders(<MachinePanel {...props} open/>);
+        await measure(240);
+        await fireEvent.press(screen.getByLabelText("Refresh the machine readings"));
+        expect(refresh).toHaveBeenCalledTimes(1);
+        await rendered.rerender(<MachinePanel {...props} open={false}
+            vitals={{...props.vitals, askedAt: 1}}/>);
+        expect(screen.getByTestId("collapsible-content", includeHidden).props.style)
+            .toMatchObject({position: "absolute", left: 0, right: 0});
+        await measure(240);
+        await rendered.rerender(<MachinePanel {...props} open/>);
+        expect(screen.getByText("WATER")).toBeOnTheScreen();
+        expect(screen.getByTestId("collapsible-content").props.style)
+            .toMatchObject({position: "absolute", left: 0, right: 0});
     });
 
     it("measures its content", async () => {
