@@ -344,3 +344,7 @@ no new trial in production, and no further trial after the second restoration.
 Copy includes the current trial and the complete archived first-trial evidence.
 Connection, serial, busy/native-operation and original-set validation still gate
 every explicit write. This is experiment presentation, not tea capability proof.
+When another candidate is eligible, its originals preview and preparation use
+`teaProbeOriginal(record)`, matching the writer's prospective preserved set.
+Historical viewing and copied evidence continue to use the completed trial's
+own immutable originals; a later ordinary write must not rewrite that history.

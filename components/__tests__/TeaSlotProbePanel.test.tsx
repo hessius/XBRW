@@ -9,6 +9,7 @@ import {SlotDatabase} from "@/library/slots/SlotDatabase";
 import {coffee} from "@/library/slots/__tests__/fixtures";
 import {snapshotRecipe, type SlotRecord} from "@/library/slots/slotModel";
 import {formatTeaProbeEvidence, restoreTeaSlotOriginal, writeTeaSlotProbe} from "@/library/slots/teaSlotProbe";
+import {writeSlots} from "@/library/slots/slotWriter";
 
 jest.mock("expo-clipboard", () => ({setStringAsync: jest.fn().mockResolvedValue(true)}));
 jest.mock("@/components/XbrwToast", () => ({notify: jest.fn()}));
@@ -167,6 +168,31 @@ it("blocks the approved second trial for stale identity, offline, busy or runnin
         await fireEvent.press(screen.getByRole("button", {name: "WRITE PROBE"}));
         expect(options.onWriteProbe).not.toHaveBeenCalled();
     }
+});
+
+it("previews the current normal set preserved by the next trial, not the restored first trial's originals", async () => {
+    const store = seeded();
+    await writeTeaSlotProbe(store, identity, port);
+    await restoreTeaSlotOriginal(store, identity, port);
+    const restored = JSON.stringify(store.read("one").experiment);
+    for (const index of [0, 1, 2] as const) {
+        store.assign("one", index, snapshotRecipe(coffee(`New normal ${index}`, 12 + index)));
+    }
+    await writeSlots(store, identity, port);
+    const before = store.read("one");
+    expect(JSON.stringify(before.experiment)).toBe(restored);
+    await renderWithProviders(<TeaSlotProbePanel {...props(before)}/>);
+    for (const name of ["A", "B", "C"]) {
+        const index = ["A", "B", "C"].indexOf(name);
+        expect(screen.getByText(`Original ${name}: New normal ${index}`)).toBeOnTheScreen();
+        expect(screen.queryByText(`Original ${name}: Original ${index}`)).toBeNull();
+    }
+    expect(screen.getByRole("button", {name: "WRITE PROBE"})).toBeEnabled();
+    await fireEvent.press(screen.getByRole("button", {name: "COPY PROBE EVIDENCE"}));
+    expect(Clipboard.setStringAsync).toHaveBeenCalledWith(formatTeaProbeEvidence(before.experiment!));
+    await writeTeaSlotProbe(store, identity, port);
+    expect(store.read("one").experiment?.original.slots).toEqual(before.written?.slots);
+    expect(JSON.stringify(store.read("one").experimentHistory?.[0])).toBe(restored);
 });
 
 it("records actual display, fractional held time, drain and note separately without deriving physical success", async () => {

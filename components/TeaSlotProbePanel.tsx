@@ -49,7 +49,7 @@ export default function TeaSlotProbePanel({
     const [note, setNote] = useState(experiment?.observation?.note ?? "");
     const [localError, setLocalError] = useState<string | null>(null);
     const [observationSaved, setObservationSaved] = useState(false);
-    let original = experiment?.original;
+    let original = nextCandidate === null ? experiment?.original : undefined;
     let preparationError: string | null = null;
     if (original === undefined) {
         try {
