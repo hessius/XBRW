@@ -1,9 +1,34 @@
 import {CUP_TYPE} from "@/library/Recipe";
 import Pour from "@/library/Pour";
 import {
-    snapshotRecipe, prepareSet, snapshotStatus, slotMarkers, emptySlotRecord
+    snapshotRecipe, prepareSet, snapshotStatus, slotMarkers, emptySlotRecord,
+    slotNeedsWrite, unwrittenSlotCount
 } from "@/library/slots/slotModel";
 import {coffee} from "./fixtures";
+
+it("counts only populated drafts whose bytes differ from the last written set", () => {
+    const record = emptySlotRecord();
+    const recipe = coffee();
+    const snapshot = snapshotRecipe(recipe);
+    expect(unwrittenSlotCount(record)).toBe(0);
+    record.drafts = [snapshot, null, snapshot];
+    expect(slotNeedsWrite(record, 0)).toBe(true);
+    expect(slotNeedsWrite(record, 1)).toBe(false);
+    expect(unwrittenSlotCount(record)).toBe(2);
+    record.written = {at: 1, slots: [snapshot, snapshot, snapshot]};
+    recipe.name = "Renamed";
+    recipe.uuid = "another-source";
+    record.drafts[0] = snapshotRecipe(recipe);
+    expect(slotNeedsWrite(record, 0)).toBe(false);
+    expect(unwrittenSlotCount(record)).toBe(0);
+    recipe.pours[0].temperature = 92;
+    record.drafts[0] = snapshotRecipe(recipe);
+    expect(slotNeedsWrite(record, 0)).toBe(true);
+    expect(unwrittenSlotCount(record)).toBe(1);
+    recipe.pours[0].temperature = 93;
+    record.drafts[0] = snapshotRecipe(recipe);
+    expect(unwrittenSlotCount(record)).toBe(0);
+});
 
 it("encodes the documented coffee blob with hardware-proven grinder flags", () => {
     const recipe = coffee();

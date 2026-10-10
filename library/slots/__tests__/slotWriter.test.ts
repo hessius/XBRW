@@ -189,3 +189,48 @@ it("leaves receipt uncertainty durable when persisting acknowledgement fails", a
     expect(script.sent).toEqual([0]);
     expect(script.released).toEqual([false]);
 });
+
+it("explicitly replays unknown B from the immutable journal without clearing uncertainty", async () => {
+    const {store, sql} = ready();
+    await expect(writeSlots(store, identity, scripted(store, 1).port)).rejects.toThrow(/unknown/i);
+    const journal = store.read("one").journal!;
+    const script = scripted(store);
+    const acquire = script.port.acquire;
+    script.port.acquire = async (bound, options) => {
+        expect(options).toMatchObject({restart: false, finishUncertain: true});
+        expect(store.read("one").journal).toBe(journal);
+        return acquire(bound, options);
+    };
+    const boundaries: unknown[] = [];
+    const off = store.subscribe(() => boundaries.push(store.read("one").journal));
+    await recoverSlots(store, identity, script.port, {finishUncertain: true});
+    off();
+    expect(boundaries[0]).toMatchObject({
+        id: journal.id, acknowledged: 1, inFlight: 1, slots: journal.slots, frames: journal.frames
+    });
+    expect(script.sent).toEqual([1, 2]);
+    expect(new SlotDatabase(sql).read("one").written?.slots).toEqual(journal.slots);
+});
+
+it("persists the uncertain redispatch boundary before any replay and surfaces storage failure", async () => {
+    const {store, sql} = ready();
+    await expect(writeSlots(store, identity, scripted(store, 1).port)).rejects.toThrow();
+    const before = store.read("one").journal;
+    sql.execSync("CREATE TRIGGER fail_replay BEFORE INSERT ON easy_mode_slots BEGIN SELECT RAISE(ABORT, 'disk full'); END;");
+    const script = scripted(store);
+    await expect(recoverSlots(store, identity, script.port, {finishUncertain: true}))
+        .rejects.toThrow(/disk full/i);
+    expect(script.sent).toEqual([]);
+    expect(script.released).toEqual([false]);
+    expect(new SlotDatabase(sql).read("one").journal).toEqual(before);
+});
+
+it("explicitly observes a three-receipt journal without speculatively resending C", async () => {
+    const {store} = ready();
+    await expect(writeSlots(store, identity, scripted(store, "final").port)).rejects.toThrow();
+    const script = scripted(store);
+    await recoverSlots(store, identity, script.port, {finishUncertain: true});
+    expect(script.sent).toEqual([]);
+    expect(store.read("one").journal).toBeNull();
+    expect(store.read("one").written).not.toBeNull();
+});

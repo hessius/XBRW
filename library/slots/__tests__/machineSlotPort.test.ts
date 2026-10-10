@@ -183,6 +183,153 @@ it("finishes only the remaining slots when B was refused and the machine is stil
     expect(store.read("one").journal).toBeNull();
 });
 
+async function unknownB() {
+    const setup = await ready();
+    const original = setup.radio.write.bind(setup.radio);
+    setup.radio.write = async (frame) => {
+        if ((frame[3] | frame[4] << 8) === 11510 && frame[10] === 1) {
+            setup.radio.behavior = "missing";
+        }
+
+        await original(frame);
+    };
+    jest.useFakeTimers();
+    const writing = writeSlots(setup.store, identity, setup.port).catch((error: Error) => error);
+    await jest.advanceTimersByTimeAsync(SLOT_RECEIPT_MS);
+    expect(await writing).toBeInstanceOf(Error);
+    expect(setup.store.read("one").journal).toMatchObject({acknowledged: 1, inFlight: 1});
+    setup.radio.emit(status(0x43));
+    setup.radio.write = original;
+    setup.radio.behavior = "normal";
+    return setup;
+}
+
+it("cannot opt a new write into the existing-journal finish permission", async () => {
+            const {port, radio, store} = await ready();
+            await expect(port.acquire(identity, {finishUncertain: true})).rejects.toThrow(/existing|journal/i);
+            expect(store.read("one").journal).toBeNull();
+            expect(radio.slots).toEqual([]);
+        });
+
+        it("rechecks hardware activity after acquiring uncertain recovery and before replay", async () => {
+            const {store, port, radio} = await unknownB();
+            const guarded = {
+                ...port,
+                acquire: async (bound: typeof identity, options?: Parameters<typeof port.acquire>[1]) => {
+                    const lease = await port.acquire(bound, options);
+                    radio.emit(status(0x23));
+                    return lease;
+                }
+            };
+            await expect(recoverSlots(store, identity, guarded, {finishUncertain: true}))
+                .rejects.toThrow(/busy|brew/i);
+            expect(radio.slots).toEqual([0, 1]);
+            expect(store.read("one").journal?.inFlight).toBe(1);
+        });
+
+        it("does not promote observe-only recovery if its fresh saved event cannot be committed", async () => {
+            const {store, port, radio, sql, machine} = await ready();
+            radio.behavior = "noFinal";
+            jest.useFakeTimers();
+            const writing = writeSlots(store, identity, port).catch((error: Error) => error);
+            await jest.advanceTimersByTimeAsync(SLOT_COMPLETION_MS);
+            expect(await writing).toBeInstanceOf(Error);
+            radio.emit(status(0x43));
+            const frames = radio.written.length;
+            const observing = recoverSlots(store, identity, port, {finishUncertain: true})
+                .catch((error: Error) => error);
+            await flush();
+            sql.execSync("CREATE TRIGGER fail_observe BEFORE INSERT ON easy_mode_slots BEGIN SELECT RAISE(ABORT, 'disk full'); END;");
+            radio.emit(status(0x25));
+            expect(await observing).toEqual(expect.objectContaining({message: expect.stringMatching(/disk full/i)}));
+            expect(radio.written).toHaveLength(frames);
+            expect(new SlotDatabase(sql).read("one").journal?.acknowledged).toBe(3);
+            expect(store.read("one").written).toBeNull();
+            await expect(machine.send(buildType1(3500))).rejects.toThrow(/Easy Mode/i);
+        });
+it("requires explicit consent to replay unknown B while saving, then sends immutable B/C only", async () => {
+    const {store, port, radio} = await unknownB();
+    const journal = store.read("one").journal!;
+    await expect(recoverSlots(store, identity, port)).rejects.toThrow(/unknown/i);
+    await expect(port.acquire(identity)).rejects.toThrow(/normal/i);
+    const frames = radio.written.length;
+    await recoverSlots(store, identity, port, {finishUncertain: true});
+    expect(radio.slots).toEqual([0, 1, 1, 2]);
+    expect(radio.written.slice(frames).map(frame => Array.from(frame))).toEqual(journal.frames.slice(1));
+    expect(store.read("one").written?.slots).toEqual(journal.slots);
+});
+
+it.each([0x03, 0x1F, 0x23, 0x0C])(
+    "explicit uncertain finish does not authorise unsafe machine state %s", async (state) => {
+        const {store, port, radio} = await unknownB();
+        radio.emit(status(state));
+        await expect(recoverSlots(store, identity, port, {finishUncertain: true}))
+            .rejects.toThrow(/busy|machine/i);
+        expect(radio.slots).toEqual([0, 1]);
+        expect(store.read("one").journal?.inFlight).toBe(1);
+    }
+);
+
+it("requires a fresh saved event for observe-only recovery and sends no native frames", async () => {
+    const {store, port, radio} = await ready();
+    radio.behavior = "noFinal";
+    jest.useFakeTimers();
+    const write = writeSlots(store, identity, port).catch((error: Error) => error);
+    await jest.advanceTimersByTimeAsync(SLOT_COMPLETION_MS);
+    expect(await write).toBeInstanceOf(Error);
+    radio.emit(status(0x25));
+    radio.emit(status(0x43));
+    const frames = radio.written.length;
+    let completed = false;
+    const observing = recoverSlots(store, identity, port, {finishUncertain: true})
+        .then(() => { completed = true; });
+    await flush();
+    radio.emit(status(0x01));
+    await flush();
+    expect(completed).toBe(false);
+    expect(store.read("one").written).toBeNull();
+    radio.emit(status(0x25));
+    await observing;
+    expect(completed).toBe(true);
+    expect(radio.written).toHaveLength(frames);
+    expect(store.read("one").journal).toBeNull();
+});
+
+it("bounds observe-only waiting with no native sends, even when idle and handshake expired", async () => {
+    const {store, port, radio, machine} = await ready();
+    radio.behavior = "noFinal";
+    jest.useFakeTimers();
+    const write = writeSlots(store, identity, port).catch((error: Error) => error);
+    await jest.advanceTimersByTimeAsync(SLOT_COMPLETION_MS);
+    expect(await write).toBeInstanceOf(Error);
+    radio.emit(status(0x25));
+    radio.emit(status(0x01));
+    await jest.advanceTimersByTimeAsync(HANDSHAKE_FRESH_MS + 1);
+    const frames = radio.written.length;
+    const observing = recoverSlots(store, identity, port, {finishUncertain: true})
+        .catch((error: Error) => error);
+    await jest.advanceTimersByTimeAsync(SLOT_COMPLETION_MS);
+    expect(await observing).toEqual(expect.objectContaining({message: expect.stringMatching(/saved/i)}));
+    expect(radio.written).toHaveLength(frames);
+    expect(store.read("one").journal?.acknowledged).toBe(3);
+    expect(store.read("one").written).toBeNull();
+    await expect(machine.send(buildType1(3500))).rejects.toThrow(/Easy Mode/i);
+    expect(jest.getTimerCount()).toBe(0);
+});
+
+it("explicit finish cannot acquire over a timed-out pending native write", async () => {
+    const {store, port, radio} = await ready();
+    radio.behavior = "hang";
+    jest.useFakeTimers();
+    const writing = writeSlots(store, identity, port).catch((error: Error) => error);
+    await jest.advanceTimersByTimeAsync(SLOT_DISPATCH_MS);
+    expect(await writing).toBeInstanceOf(Error);
+    radio.emit(status(0x43));
+    await expect(recoverSlots(store, identity, port, {finishUncertain: true}))
+        .rejects.toThrow(/busy/i);
+    expect(radio.slots).toEqual([0]);
+});
+
 it("does not cancel or restart over a still-pending native dispatch after its timeout", async () => {
     const {store, port, radio} = await ready();
     jest.useFakeTimers();

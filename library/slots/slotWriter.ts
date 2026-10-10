@@ -5,9 +5,14 @@ import {
 } from "@/library/slots/slotModel";
 
 export type SlotIdentity = {readonly deviceId: string; readonly serial: string | null};
+export type SlotAcquireOptions = {
+    restart?: boolean;
+    /** Deliberate immutable replay for hardware qualification; code-only ACKs remain ambiguous. */
+    finishUncertain?: boolean;
+};
 export interface SlotPort {
     available: boolean;
-    acquire(identity: SlotIdentity, options?: {restart: boolean}): Promise<SlotLease>;
+    acquire(identity: SlotIdentity, options?: SlotAcquireOptions): Promise<SlotLease>;
 }
 export interface SlotLease {
     readonly restartFromBeginning?: boolean;
@@ -37,7 +42,7 @@ export const unavailableSlotPort: SlotPort = {
     acquire: async () => { throw new Error(SLOT_INTEGRATION_BLOCK); }
 };
 
-type WriterOptions = {id?: () => string; now?: () => number; restart?: boolean};
+type WriterOptions = SlotAcquireOptions & {id?: () => string; now?: () => number};
 
 function checkPort(identity: SlotIdentity, port: SlotPort): void {
     if (identity.deviceId.trim() === "") throw new Error("Choose a machine before writing slots.");
@@ -52,10 +57,10 @@ function matchingSerial(journal: SlotJournal, identity: SlotIdentity): void {
 
 async function transmit(
     store: SlotDatabase, identity: SlotIdentity, port: SlotPort,
-    journal: SlotJournal, isNew: boolean, now: () => number, restart = false
+    journal: SlotJournal, isNew: boolean, now: () => number, restart = false, finishUncertain = false
 ): Promise<void> {
     const target = Object.freeze({...identity});
-    const lease = await port.acquire(target, {restart});
+    const lease = await port.acquire(target, {restart, ...(finishUncertain ? {finishUncertain: true} : {})});
     let begun = !isNew;
     let completed = false;
     try {
@@ -67,13 +72,18 @@ async function transmit(
         } else if (lease.restartFromBeginning) {
             store.restart(target.deviceId, journal.id);
             journal = {...journal, acknowledged: 0, inFlight: null, error: null};
-        } else if (restart || journal.inFlight !== null || journal.acknowledged === 3) {
+        } else if (restart || (!finishUncertain && (journal.inFlight !== null || journal.acknowledged === 3))) {
             throw new Error("Confirm the machine is back to normal before retrying all three slots.");
         }
         for (const index of [0, 1, 2] as const) {
             if (index < journal.acknowledged) continue;
             lease.assertCurrent?.();
-            store.dispatching(target.deviceId, journal.id, index);
+            if (finishUncertain && journal.inFlight === index) {
+                // Recommit the exact dispatch boundary under the lease without erasing uncertainty.
+                store.fail(target.deviceId, journal.id, "Retrying the unconfirmed slot.");
+            } else {
+                store.dispatching(target.deviceId, journal.id, index);
+            }
             try {
                 await lease.sendAndConfirm(Uint8Array.from(journal.frames[index]), index);
             } catch (error) {
@@ -130,14 +140,15 @@ export async function recoverSlots(
     const journal = store.read(identity.deviceId).journal;
     if (journal === null) throw new Error("There is no incomplete Easy Mode write.");
     matchingSerial(journal, identity);
-    if (!options.restart && journal.inFlight !== null) {
+    if (!options.restart && !options.finishUncertain && journal.inFlight !== null) {
         throw new Error("A slot's receipt is unknown. Confirm the machine is back to normal before retrying.");
     }
-    if (!options.restart && journal.acknowledged === 3) {
+    if (!options.restart && !options.finishUncertain && journal.acknowledged === 3) {
         throw new Error("Save completion is not confirmed. Confirm the machine is back to normal before retrying.");
     }
     checkPort(identity, port);
-    await transmit(store, identity, port, journal, false, options.now ?? Date.now, options.restart);
+    await transmit(store, identity, port, journal, false, options.now ?? Date.now,
+        options.restart, options.finishUncertain);
 }
 
 /** Caller must first ask the user to confirm the machine is no longer saving. */

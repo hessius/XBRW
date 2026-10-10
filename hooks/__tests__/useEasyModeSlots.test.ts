@@ -124,6 +124,7 @@ it("holds the screen lock across a duplicate tap while lease acquisition is pend
         first = editor.result.current.write();
         void editor.result.current.write();
     });
+
     expect(acquire).toHaveBeenCalledTimes(1);
     expect(editor.result.current.running).toBe(true);
     await act(async () => {
@@ -136,3 +137,93 @@ it("holds the screen lock across a duplicate tap while lease acquisition is pend
     });
     expect(editor.result.current.running).toBe(false);
 });
+
+it("tracks saving and durable success after the journal clears, resetting only on events", async () => {
+        const store = new SlotDatabase(createTestDatabase());
+        for (const index of [0, 1, 2] as const) store.assign("one", index, snapshotRecipe(coffee()));
+        let saved!: () => void;
+        const port = {
+            available: true,
+            acquire: async () => ({
+                sendAndConfirm: async () => {},
+                confirmSaved: () => new Promise<void>(resolve => { saved = resolve; }),
+                release: () => {}
+            })
+        };
+        const editor = await renderHook(() => useEasyModeSlots(
+            {deviceId: "one", serial: "serial"}, port, store
+        ));
+        let writing!: Promise<void>;
+        await act(async () => { writing = editor.result.current.write(); });
+        expect(editor.result.current.operation).toBe("write");
+        expect(editor.result.current.attempt).toMatchObject({
+            deviceId: "one", serial: "serial", operation: "write", status: "saving"
+        });
+        await act(async () => { saved(); await writing; });
+        expect(editor.result.current.record.journal).toBeNull();
+        expect(editor.result.current.attempt?.status).toBe("success");
+        expect(editor.result.current.running).toBe(false);
+        await act(async () => { editor.result.current.resetAttempt(); });
+        expect(editor.result.current.attempt).toBeNull();
+        await act(async () => { editor.result.current.assign(0, coffee()); });
+        expect(editor.result.current.operation).toBeNull();
+    });
+
+    it("deliberately opts into uncertain finish and records cancellation as cancelled, never success", async () => {
+        const store = new SlotDatabase(createTestDatabase());
+        const slot = snapshotRecipe(coffee());
+        store.begin("one", {
+            id: "attempt", serial: null, slots: [slot, slot, slot], frames: prepareSet([slot, slot, slot]),
+            acknowledged: 0, inFlight: null, error: null
+        });
+        store.dispatching("one", "attempt", 0);
+        store.acknowledge("one", "attempt", 0);
+        store.dispatching("one", "attempt", 1);
+        const acquire = jest.fn(async () => ({
+            sendAndConfirm: async () => {}, confirmSaved: async () => {}, release: () => {}
+        }));
+        const editor = await renderHook(() => useEasyModeSlots(
+            {deviceId: "one", serial: null}, {available: true, acquire}, store
+        ));
+        await act(async () => { await editor.result.current.recover(false); });
+        expect(acquire).toHaveBeenCalledWith(
+            {deviceId: "one", serial: null}, {restart: false, finishUncertain: true}
+        );
+        expect(editor.result.current.attempt?.status).toBe("success");
+        await act(async () => {
+            store.begin("one", {
+                id: "cancel", serial: null, slots: [slot, slot, slot], frames: prepareSet([slot, slot, slot]),
+                acknowledged: 0, inFlight: null, error: null
+            });
+        });
+        acquire.mockImplementation(async () => ({
+            restartFromBeginning: true,
+            sendAndConfirm: async () => {}, confirmSaved: async () => {}, release: () => {}
+        }));
+        await act(async () => { await editor.result.current.cancel(); });
+        expect(editor.result.current.attempt).toMatchObject({operation: "cancel", status: "cancelled"});
+    });
+
+    it("binds operation status and asynchronous failures to device and serial, not the current render", async () => {
+        const store = new SlotDatabase(createTestDatabase());
+        for (const index of [0, 1, 2] as const) store.assign("one", index, snapshotRecipe(coffee()));
+        let reject!: (error: Error) => void;
+        const acquire = () => new Promise<SlotLease>((_resolve, fail) => { reject = fail; });
+        const editor = await renderHook<ReturnType<typeof useEasyModeSlots>, {deviceId: string; serial: string}>(({deviceId, serial}) => useEasyModeSlots(
+            {deviceId, serial}, {available: true, acquire}, store
+        ), {initialProps: {deviceId: "one", serial: "serial"}});
+        let writing!: Promise<void>;
+        await act(async () => { writing = editor.result.current.write(); });
+        expect(editor.result.current.attempt?.status).toBe("writing");
+        await editor.rerender({deviceId: "two", serial: "serial"});
+        expect(editor.result.current.attempt).toBeNull();
+        expect(editor.result.current.running).toBe(false);
+        await act(async () => { reject(new Error("Link lost")); await writing; });
+        expect(editor.result.current.error).toBeNull();
+        await editor.rerender({deviceId: "one", serial: "another"});
+        expect(editor.result.current.attempt).toBeNull();
+        expect(editor.result.current.error).toBeNull();
+        await editor.rerender({deviceId: "one", serial: "serial"});
+        expect(editor.result.current.attempt?.status).toBe("error");
+        expect(editor.result.current.error).toBe("Link lost");
+    });

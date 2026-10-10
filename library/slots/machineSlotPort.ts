@@ -24,7 +24,9 @@ class MachineSlotLease implements SlotLease {
         private session: SlotSession
     ) {
         this.restartFromBeginning = session.restartFromBeginning;
-        this.next = this.restartFromBeginning ? 0 : store.read(identity.deviceId).journal?.acknowledged ?? 0;
+        const journal = store.read(identity.deviceId).journal;
+        // Explicit finish starts at the durable receipt, including observe-only at three.
+        this.next = this.restartFromBeginning ? 0 : journal?.acknowledged ?? 0;
         this.off.push(session.onInvalidated((error) => {
             this.failure = error;
             this.wake();

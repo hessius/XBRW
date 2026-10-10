@@ -474,10 +474,36 @@ it("recovers only the stored known-boundary frames and stops a changed serial", 
         await jest.advanceTimersByTimeAsync(2000);
         await recovering;
     });
+
     expect(mockRadio.slots.map((frame) => Array.from(frame))).toEqual(stored.slice(1));
     expect(store.read("one").journal).toBeNull();
 });
 
+it("the installed hook manually finishes unknown B while saving and retains success after DB clear", async () => {
+        const store = journal();
+        store.dispatching("one", "prior", 0);
+        store.acknowledge("one", "prior", 0);
+        store.dispatching("one", "prior", 1);
+        const editor = await renderHook(() => {
+            const link = useMachine();
+            return useEasyModeSlots(link.machine.slotIdentity
+                ?? {deviceId: "one", serial: null}, link.slotPort);
+        });
+        await act(connect);
+        await act(async () => { mockRadio.emit(status(0x43)); });
+        const frames = store.read("one").journal!.frames;
+        await act(async () => {
+            const recovering = editor.result.current.recover(false);
+            await jest.advanceTimersByTimeAsync(4000);
+            await recovering;
+        });
+        expect(editor.result.current.error).toBeNull();
+        expect(mockRadio.slots.map(frame => Array.from(frame))).toEqual(frames.slice(1));
+        expect(new SlotDatabase(appDatabase()).read("one").journal).toBeNull();
+        expect(editor.result.current.attempt).toMatchObject({
+            deviceId: "one", serial: "J15ABC123456", operation: "recover", status: "success"
+        });
+    });
 it.each(["inactive", "drop"] as const)("retains uncertain writes after %s without foreground replay", async (event) => {
     const store = draft();
     const link = await renderHook(() => useMachine());

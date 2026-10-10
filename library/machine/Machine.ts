@@ -7,7 +7,8 @@ import {brewProblems} from "@/library/cardLimits";
 import {clampBypassTemp} from "@/library/bypassLimits";
 import type Recipe from "@/library/Recipe";
 import type {SlotDatabase} from "@/library/slots/SlotDatabase";
-import type {SlotIdentity} from "@/library/slots/slotWriter";
+import type {SlotAcquireOptions, SlotIdentity} from "@/library/slots/slotWriter";
+import {sameBytes} from "@/library/slots/slotModel";
 
 import {RadioUnavailableError, SlotOperationError} from "./errors";
 
@@ -340,7 +341,7 @@ export default class Machine {
         }
     }
 
-    acquireSlotSession(identity: SlotIdentity, options?: {restart: boolean}): SlotSession {
+    acquireSlotSession(identity: SlotIdentity, options?: SlotAcquireOptions): SlotSession {
         if (this.slotStore === undefined) throw new Error("Install the shared Easy Mode database first.");
         if (this.backgrounded) throw new Error("Easy Mode writing is unavailable in the background.");
         const actual = this.slotIdentity;
@@ -352,7 +353,11 @@ export default class Machine {
         if (journal?.serial != null && journal.serial !== actual.serial) {
             throw new Error("The recovery journal serial belongs to a different machine.");
         }
-        if (!options?.restart && journal !== null && (journal.inFlight !== null || journal.acknowledged === 3)) {
+        if (options?.finishUncertain && journal === null) {
+            throw new Error("Finishing requires an existing Easy Mode recovery journal.");
+        }
+        if (!options?.restart && !options?.finishUncertain && journal !== null
+            && (journal.inFlight !== null || journal.acknowledged === 3)) {
             throw new Error("Confirm the machine is back to normal before retrying or cancelling.");
         }
         if (options?.restart && this.state !== null && !STARTABLE.has(this.state)) {
@@ -387,12 +392,25 @@ export default class Machine {
                 || this.slotIdentity.serial !== actual.serial || this.backgrounded) {
                 throw new Error("The Easy Mode connection changed. Receipt is unknown.");
             }
+            if (journal !== null && this.slotStore?.read(actual.deviceId).journal?.id !== journal.id) {
+                throw new Error("The Easy Mode recovery journal changed.");
+            }
+            if (isActiveBrewPhase(this.phase) || (this.state !== null
+                && !STARTABLE.has(this.state)
+                && this.state !== MACHINE_STATE.SAVING_SLOTS
+                && this.state !== MACHINE_STATE.SLOTS_SAVED)) {
+                throw new Error("The machine is busy. Easy Mode writing stopped.");
+            }
         };
         this.slotSession = {token, invalidate};
         return {
             restartFromBeginning: journal !== null && options?.restart === true,
             validateFrames: (frames) => {
                 check();
+                if (journal !== null && (frames.length !== 3
+                    || !frames.every((frame, index) => sameBytes(frame, journal.frames[index])))) {
+                    throw new Error("The Easy Mode frames do not match the acquired recovery journal.");
+                }
                 const budget = this.transport.frameBudget;
                 if (budget !== undefined && frames.some((frame) => frame.length > budget)) {
                     throw new Error("A recipe is too large for this Bluetooth connection. Reduce its stages or volumes before writing.");

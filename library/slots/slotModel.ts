@@ -72,6 +72,16 @@ export function sameBytes(left: readonly number[], right: readonly number[]): bo
     return left.length === right.length && left.every((byte, index) => byte === right[index]);
 }
 
+export function slotNeedsWrite(record: SlotRecord, index: SlotIndex): boolean {
+    const draft = record.drafts[index];
+    return draft !== null && (record.written === null
+        || !sameBytes(draft.blob, record.written.slots[index].blob));
+}
+
+export function unwrittenSlotCount(record: SlotRecord): number {
+    return ([0, 1, 2] as const).filter(index => slotNeedsWrite(record, index)).length;
+}
+
 export function objectValue(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null && !Array.isArray(value);
 }
