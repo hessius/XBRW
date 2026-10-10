@@ -6,7 +6,8 @@ import {
     type SlotObservation, type SlotRecord, type SlotSnapshot, type Triple
 } from "@/library/slots/slotModel";
 import {
-    isTeaProbeSnapshot, sameSnapshotSet, teaProbeCandidateSet, teaProbeOriginal, TEA_SLOT_PROBE_ID
+    isTeaProbeSnapshot, nextTeaProbeCandidate, sameSnapshotSet, teaProbeCandidateSet, teaProbeFlags,
+    teaProbeOriginal, TEA_SLOT_PROBE_ID, TEA_SLOT_PROBE_V2_ID
 } from "@/library/slots/teaSlotCandidate";
 
 type SlotSQL = {
@@ -97,9 +98,9 @@ function readObservation(value: unknown): SlotObservation | null {
 }
 
 function readExperiment(value: unknown, deviceId: string, journal: SlotJournal | null): SlotExperiment {
-    if (!objectValue(value) || value.candidateId !== TEA_SLOT_PROBE_ID
+    if (!objectValue(value) || typeof value.candidateId !== "string"
         || typeof value.trialId !== "string" || value.trialId === ""
-        || value.deviceId !== deviceId || typeof value.serial !== "string" || value.serial === ""
+        || value.deviceId !== deviceId || typeof value.serial !== "string" || value.serial.trim() === ""
         || !objectValue(value.machine)
         || !Object.values(value.machine).every((item) => typeof item === "string")
         || (value.phase !== "active" && value.phase !== "restored")
@@ -110,13 +111,26 @@ function readExperiment(value: unknown, deviceId: string, journal: SlotJournal |
         || (value.original.source === "written") !== (value.original.writtenAt !== null)) {
         throw new Error("The tea slot probe record is invalid.");
     }
+    teaProbeFlags(value.candidateId);
     const slots = triple(value.original.slots, readSnapshot);
     const originalDrafts = triple(value.originalDrafts, (slot) => slot === null ? null : readSnapshot(slot));
     const candidate = triple(value.candidate, readSnapshot);
     const evidence = value.evidence.map(readEvidence);
     if (slots.some(isTeaProbeSnapshot) || originalDrafts.some(isTeaProbeSnapshot)
-        || !sameSnapshotSet(candidate, teaProbeCandidateSet(slots))) {
+        || !sameSnapshotSet(candidate, teaProbeCandidateSet(slots, value.candidateId))) {
         throw new Error("The tea slot probe sets are inconsistent.");
+    }
+    if (evidence[0]?.kind !== "prepared" || evidence[0].journalId !== value.trialId) {
+        throw new Error("The tea slot probe trial identity disagrees with its preparation.");
+    }
+    for (const entry of evidence) {
+        const expected = entry.kind === "prepared" ? candidate
+            : entry.kind === "restore-prepared" ? slots : null;
+        if (expected === null ? entry.frames !== null
+            : entry.frames === null || !prepareSet(expected).every((frame, i) =>
+                sameBytes(frame, entry.frames![i]))) {
+            throw new Error("The tea slot probe evidence frames disagree with their snapshots.");
+        }
     }
     let pending: SlotExperiment["pending"] = null;
     if (value.pending !== null) {
@@ -127,8 +141,10 @@ function readExperiment(value: unknown, deviceId: string, journal: SlotJournal |
         pending = {journalId: value.pending.journalId, kind: value.pending.kind};
     }
     if (value.phase === "restored") {
+        const restored = lastTeaProbeOutcome({evidence});
         if (pending !== null || journal?.slots.some(isTeaProbeSnapshot)
-            || lastTeaProbeOutcome({evidence})?.kind !== "restored") {
+            || restored?.kind !== "restored" || !evidence.some(entry =>
+                entry.kind === "restore-prepared" && entry.journalId === restored.journalId)) {
             throw new Error("A restored tea slot probe requires confirmed restoration and no pending probe write.");
         }
     } else {
@@ -145,7 +161,7 @@ function readExperiment(value: unknown, deviceId: string, journal: SlotJournal |
         }
     }
     return {
-        candidateId: TEA_SLOT_PROBE_ID, trialId: value.trialId, deviceId, serial: value.serial,
+        candidateId: value.candidateId, trialId: value.trialId, deviceId, serial: value.serial,
         machine: {...(value.machine as Record<string, string>)},
         original: {source: value.original.source, writtenAt: value.original.writtenAt, slots},
         originalDrafts, candidate, phase: value.phase, pending,
@@ -176,6 +192,32 @@ function readRecord(json: string, deviceId: string): SlotRecord {
             record.experiment = readExperiment(value.experiment, deviceId, journal);
         } else if (journal?.slots.some(isTeaProbeSnapshot) || written?.slots.some(isTeaProbeSnapshot)) {
             throw new Error("The tea slot probe has no experiment record.");
+        }
+        if (value.experimentHistory !== undefined) {
+            if (!Array.isArray(value.experimentHistory) || value.experimentHistory.length > 1) {
+                throw new Error("The tea slot probe history is invalid.");
+            }
+            record.experimentHistory = value.experimentHistory.map(item => {
+                const historical = readExperiment(item, deviceId, null);
+                if (historical.phase !== "restored" || historical.pending !== null) {
+                    throw new Error("Only a confirmed restored tea slot probe may be archived.");
+                }
+                return historical;
+            });
+        }
+        const history = record.experimentHistory ?? [];
+        const current = record.experiment;
+        if (written?.slots.some(isTeaProbeSnapshot)
+            && (current?.phase !== "active" || !sameSnapshotSet(written.slots, current.candidate))) {
+            throw new Error("The last-written tea slot probe does not match the active trial.");
+        }
+        if (current?.candidateId === TEA_SLOT_PROBE_V2_ID) {
+            if (history.length !== 1 || history[0].candidateId !== TEA_SLOT_PROBE_ID
+                || history[0].serial !== current.serial || history[0].trialId === current.trialId) {
+                throw new Error("The tea slot probe history is not the approved v1 to v2 sequence.");
+            }
+        } else if (history.length !== 0) {
+            throw new Error("The tea slot probe history requires the approved second candidate.");
         }
         return record;
     } catch (error) {
@@ -298,26 +340,36 @@ export class SlotDatabase {
     ): void {
         this.change(deviceId, (record) => {
             if (record.journal !== null) throw new Error("Finish the incomplete write first.");
-            if (record.experiment?.phase === "restored") throw new Error(TEA_PROBE_RESTORED_NOTICE);
-            if (this.activeExperiment(record)) {
+            const candidateId = nextTeaProbeCandidate(record);
+            if (candidateId === null) {
+                if (record.experiment?.phase === "restored") throw new Error(TEA_PROBE_RESTORED_NOTICE);
                 throw new Error("A tea slot probe is already in progress. Restore the original set first.");
             }
-            if (journal.serial === null || journal.serial === "") {
+            if (journal.serial === null || journal.serial.trim() === "") {
                 throw new Error("The tea slot probe needs the machine's serial.");
+            }
+            if (record.experiment !== undefined && record.experiment.serial !== journal.serial) {
+                throw new Error("The preserved set belongs to a different machine. Its serial must match.");
+            }
+            if (trialId === "" || trialId !== journal.id || record.experiment?.trialId === trialId) {
+                throw new Error("The tea slot probe needs a distinct trial matching its journal.");
             }
             if (journal.acknowledged !== 0 || journal.inFlight !== null) {
                 throw new Error("A new write must begin before any receipt.");
             }
             const original = teaProbeOriginal(record);
-            const candidate = teaProbeCandidateSet(original.slots);
+            const candidate = teaProbeCandidateSet(original.slots, candidateId);
             if (!sameSnapshotSet(journal.slots, candidate)) {
                 throw new Error("The tea slot probe is not built on the preserved original set.");
             }
             const checked = readJournal(journal);
             if (checked === null) throw new Error("The tea slot probe journal is missing.");
+            if (record.experiment !== undefined) {
+                record.experimentHistory = [record.experiment];
+            }
             record.journal = checked;
             record.experiment = {
-                candidateId: TEA_SLOT_PROBE_ID, trialId, deviceId, serial: journal.serial,
+                candidateId, trialId, deviceId, serial: journal.serial,
                 machine: {...machine}, original, originalDrafts: record.drafts, candidate,
                 phase: "active", pending: {journalId: journal.id, kind: "candidate"},
                 observation: null, evidence: []

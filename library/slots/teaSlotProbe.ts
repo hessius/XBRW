@@ -4,12 +4,16 @@ import {
     lastTeaProbeOutcome, prepareSet, TEA_PROBE_RESTORED_NOTICE,
     type SlotExperiment, type SlotJournal, type SlotObservation, type SlotRecord
 } from "@/library/slots/slotModel";
-import {teaProbeCandidateSet, teaProbeOriginal} from "@/library/slots/teaSlotCandidate";
+import {
+    nextTeaProbeCandidate, teaProbeCandidateSet, teaProbeOriginal
+} from "@/library/slots/teaSlotCandidate";
 import {
     writePreparedSlots, type SlotIdentity, type SlotPort
 } from "@/library/slots/slotWriter";
 
-export {TEA_SLOT_PROBE_ID} from "@/library/slots/teaSlotCandidate";
+export {
+    TEA_SLOT_PROBE_ID, TEA_SLOT_PROBE_V2_ID, nextTeaProbeCandidate, teaProbeFlags
+} from "@/library/slots/teaSlotCandidate";
 
 export type TeaProbeOptions = {
     id?: () => string;
@@ -56,11 +60,15 @@ export async function writeTeaSlotProbe(
     const prepare = () => {
         const record = store.read(deviceId);
         if (record.journal !== null) throw new Error("Finish the incomplete write first.");
-        if (record.experiment?.phase === "restored") throw new Error(TEA_PROBE_RESTORED_NOTICE);
-        if (record.experiment !== undefined) {
+        const candidateId = nextTeaProbeCandidate(record);
+        if (candidateId === null) {
+            if (record.experiment?.phase === "restored") throw new Error(TEA_PROBE_RESTORED_NOTICE);
             throw new Error("A tea slot probe is already in progress. Restore the original set first.");
         }
-        return journalFor(id, serial, teaProbeCandidateSet(teaProbeOriginal(record).slots));
+        if (record.experiment !== undefined && record.experiment.serial !== serial) {
+            throw new Error("The preserved set belongs to a different machine. Its serial must match.");
+        }
+        return journalFor(id, serial, teaProbeCandidateSet(teaProbeOriginal(record).slots, candidateId));
     };
     await writePreparedSlots(store, {deviceId, serial}, port, prepare,
         (next) => store.beginProbe(deviceId, next, id, options.machine ?? {}, now()), now,
@@ -93,9 +101,8 @@ export function recordTeaProbeObservation(
     store.observe(deviceId, observation);
 }
 
-/** Plain text for copying locally; the evidence itself stays in the database. */
-export function formatTeaProbeEvidence(experiment: SlotExperiment): string {
-    return JSON.stringify({
+function evidenceCopy(experiment: SlotExperiment) {
+    return {
         candidateId: experiment.candidateId,
         trialId: experiment.trialId,
         deviceId: experiment.deviceId,
@@ -105,5 +112,15 @@ export function formatTeaProbeEvidence(experiment: SlotExperiment): string {
         original: {source: experiment.original.source, writtenAt: experiment.original.writtenAt},
         observation: experiment.observation,
         evidence: experiment.evidence
+    };
+}
+
+/** Plain text for copying locally; full current and archived trials stay in the database. */
+export function formatTeaProbeEvidence(
+    experiment: SlotExperiment, history: readonly SlotExperiment[] = []
+): string {
+    return JSON.stringify({
+        ...evidenceCopy(experiment),
+        ...(history.length > 0 ? {archivedTrials: history.map(evidenceCopy)} : {})
     }, null, 2);
 }

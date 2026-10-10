@@ -1,7 +1,7 @@
 import Recipe, {CUP_TYPE} from "@/library/Recipe";
 import {brewProblems, DOSE, GRIND_RPM} from "@/library/cardLimits";
 import {buildType2, encodeCoffeeBlob} from "@/library/machine/protocol";
-import {checkTeaProbeSnapshot} from "@/library/slots/teaSlotCandidate";
+import {checkTeaProbeSnapshot, teaProbeFlags} from "@/library/slots/teaSlotCandidate";
 
 export const SLOT_NAMES = ["A", "B", "C"] as const;
 export type SlotIndex = 0 | 1 | 2;
@@ -11,7 +11,7 @@ export type SlotSnapshot = {
     name: string;
     recipeJSON: string;
     blob: number[];
-    /** Set only on the fixed tea slot probe; see `teaSlotCandidate.ts`. */
+    /** Set only on an approved fixed tea slot probe; see `teaSlotCandidate.ts`. */
     probe?: string;
 };
 export type EvidenceKind = "prepared" | "dispatch" | "receipt" | "refused" | "error"
@@ -32,7 +32,7 @@ export type SlotObservation = {
     drainedAsTea: boolean | null;
     note: string;
 };
-/** Durable record of the one tea probe trial, bound to a machine and serial. */
+/** Durable record of a tea probe trial, bound to a machine and serial. */
 export type SlotExperiment = {
     candidateId: string;
     trialId: string;
@@ -70,6 +70,7 @@ export type SlotRecord = {
     written: {at: number; slots: Triple<SlotSnapshot>} | null;
     journal: SlotJournal | null;
     experiment?: SlotExperiment;
+    experimentHistory?: SlotExperiment[];
 };
 
 export function emptySlotRecord(): SlotRecord {
@@ -161,7 +162,11 @@ export function readSnapshot(value: unknown): SlotSnapshot {
         throw new Error("The Easy Mode snapshot is invalid.");
     }
     if (value.probe !== undefined) {
-        // Exact fixed candidate only; every other tea still fails below.
+        if (Object.keys(value).some(key =>
+            !["sourceUuid", "name", "recipeJSON", "blob", "probe"].includes(key))) {
+            throw new Error("The tea slot probe snapshot has unapproved attributes.");
+        }
+        // Exact registered candidate only; every other tea still fails below.
         return checkTeaProbeSnapshot({
             sourceUuid: value.sourceUuid, name: value.name, recipeJSON: value.recipeJSON,
             blob: value.blob as number[], probe: value.probe
@@ -186,8 +191,14 @@ export function prepareSet(drafts: Triple<SlotSnapshot | null>): Triple<number[]
         throw new Error("Choose all three recipes before writing.");
     }
     const slots = drafts.map(readSnapshot);
+    if (slots[1].probe !== undefined || slots[2].probe !== undefined) {
+        throw new Error("The tea slot probe is allowed only in slot A.");
+    }
     const frame = (index: SlotIndex) => Array.from(buildType2(
-        11510, Uint8Array.from([index, 0x02, ...slots[index].blob])
+        11510, Uint8Array.from([
+            index, index === 0 && slots[0].probe !== undefined ? teaProbeFlags(slots[0].probe) : 0x02,
+            ...slots[index].blob
+        ])
     ));
     return [frame(0), frame(1), frame(2)];
 }

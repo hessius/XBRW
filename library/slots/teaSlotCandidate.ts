@@ -4,21 +4,49 @@ import {encodeTeaBlob} from "@/library/machine/protocol";
 import type {SlotRecord, SlotSnapshot, Triple} from "@/library/slots/slotModel";
 
 /**
- * The one tea candidate: pure constants and validation, with no storage.
+ * The two approved tea candidates: pure constants and validation, with no storage.
  *
  * Kept apart from `teaSlotProbe.ts` because `slotModel.readSnapshot` must be
  * able to recognise it, and the probe's orchestration imports the writer, which
  * imports `slotModel`. This module imports `slotModel` for types only.
  */
 export const TEA_SLOT_PROBE_ID = "tea-slot-0x02-one-steep-v1";
+export const TEA_SLOT_PROBE_V2_ID = "tea-slot-0x04-one-steep-v1";
 export const TEA_SLOT_PROBE_UUID = "tea-slot-probe-0x02-one-steep-v1";
 export const TEA_SLOT_PROBE_NAME = "TEA SLOT PROBE";
 
-function probeRecipe(): Recipe {
+const CANDIDATES = [
+    {id: TEA_SLOT_PROBE_ID, uuid: TEA_SLOT_PROBE_UUID, flags: 0x02},
+    {id: TEA_SLOT_PROBE_V2_ID, uuid: "tea-slot-probe-0x04-one-steep-v1", flags: 0x04}
+] as const;
+
+function candidate(candidateId: unknown) {
+    const found = CANDIDATES.find(entry => entry.id === candidateId);
+    if (found === undefined) throw new Error("The tea slot probe candidate is not approved.");
+    return found;
+}
+
+export function teaProbeFlags(candidateId: string): 0x02 | 0x04 {
+    return candidate(candidateId).flags;
+}
+
+/** The only approved progression; a pending ordinary write also blocks a fresh probe. */
+export function nextTeaProbeCandidate(record: SlotRecord): string | null {
+    if (record.journal !== null) return null;
+    const history = record.experimentHistory ?? [];
+    const experiment = record.experiment;
+    if (experiment === undefined) return history.length === 0 ? TEA_SLOT_PROBE_ID : null;
+    return experiment.candidateId === TEA_SLOT_PROBE_ID && history.length === 0
+        && experiment.phase === "restored" && experiment.pending === null
+        && experiment.evidence.at(-1)?.kind === "restored"
+        ? TEA_SLOT_PROBE_V2_ID : null;
+}
+
+function probeRecipe(sourceUuid: string): Recipe {
     const recipe = new Recipe();
-    recipe.uuid = TEA_SLOT_PROBE_UUID;
+    recipe.uuid = sourceUuid;
     recipe.name = TEA_SLOT_PROBE_NAME;
-    recipe.key = TEA_SLOT_PROBE_UUID;
+    recipe.key = sourceUuid;
     recipe.createdAt = 0;
     recipe.cupType = CUP_TYPE.TEA;
     recipe.dosage = 5;
@@ -29,15 +57,16 @@ function probeRecipe(): Recipe {
     return recipe;
 }
 
-/** The only snapshot allowed to carry the `probe` discriminant. */
-export function teaProbeSnapshot(): SlotSnapshot {
-    const recipe = probeRecipe();
+/** Defaults to v1 so persisted fixtures and callers retain their exact identity. */
+export function teaProbeSnapshot(candidateId: string = TEA_SLOT_PROBE_ID): SlotSnapshot {
+    const approved = candidate(candidateId);
+    const recipe = probeRecipe(approved.uuid);
     return {
-        sourceUuid: TEA_SLOT_PROBE_UUID,
+        sourceUuid: approved.uuid,
         name: TEA_SLOT_PROBE_NAME,
         recipeJSON: JSON.stringify(recipe),
         blob: Array.from(encodeTeaBlob(recipe)),
-        probe: TEA_SLOT_PROBE_ID
+        probe: approved.id
     };
 }
 
@@ -58,14 +87,14 @@ function deepEqual(left: unknown, right: unknown): boolean {
 }
 
 /**
- * Throws unless `value` is exactly the fixed probe: identity, name, whole
+ * Throws unless `value` is exactly its registered probe: identity, name, whole
  * recipe and the bytes recomputed from that recipe. Never accepts another tea.
  */
 export function checkTeaProbeSnapshot(value: {
     sourceUuid: unknown; name: unknown; recipeJSON: unknown; blob: readonly number[]; probe: unknown;
 }): SlotSnapshot {
-    const exact = teaProbeSnapshot();
-    if (value.probe !== TEA_SLOT_PROBE_ID || value.sourceUuid !== exact.sourceUuid
+    const exact = teaProbeSnapshot(candidate(value.probe).id);
+    if (value.sourceUuid !== exact.sourceUuid
         || value.name !== exact.name || typeof value.recipeJSON !== "string") {
         throw new Error("The tea slot probe snapshot is not the fixed candidate.");
     }
@@ -118,6 +147,8 @@ export function teaProbeOriginal(record: SlotRecord): {
     };
 }
 
-export function teaProbeCandidateSet(original: Triple<SlotSnapshot>): Triple<SlotSnapshot> {
-    return [teaProbeSnapshot(), original[1], original[2]];
+export function teaProbeCandidateSet(
+    original: Triple<SlotSnapshot>, candidateId: string = TEA_SLOT_PROBE_ID
+): Triple<SlotSnapshot> {
+    return [teaProbeSnapshot(candidateId), original[1], original[2]];
 }

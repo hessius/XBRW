@@ -6,7 +6,7 @@ import {prepareSet, snapshotRecipe} from "@/library/slots/slotModel";
 import {incomingEasyModeRecipe, openEasyModeRecipe, prepareEasyModeEntry, sharedSlotDatabase, useEasyModeSlots, useSlotRecord} from "@/hooks/useEasyModeSlots";
 import {forgetLastMove, SETTLE_MS} from "@/hooks/steadyRouter";
 import type {SlotLease} from "@/library/slots/slotWriter";
-import {writeTeaSlotProbe} from "@/library/slots/teaSlotProbe";
+import {nextTeaProbeCandidate, writeTeaSlotProbe} from "@/library/slots/teaSlotProbe";
 
 const mockPush = jest.fn();
 jest.mock("expo-router", () => ({
@@ -194,6 +194,49 @@ it("keeps active trials on the recovery route instead of assigning an incoming n
     const before = store.read("one");
     expect(prepareEasyModeEntry(store, "one", coffee("Incoming"))).toEqual({pathname: "/easyMode"});
     expect(store.read("one")).toBe(before);
+});
+
+it("advances the dedicated hook action once after restore and keeps archived observations immutable", async () => {
+    const sql = createTestDatabase();
+    const store = new SlotDatabase(sql);
+    for (const index of [0, 1, 2] as const) store.assign("one", index, snapshotRecipe(coffee()));
+    const sent: number[][] = [];
+    const acquire = jest.fn(async () => ({
+        sendAndConfirm: async (frame: Uint8Array) => { sent.push(Array.from(frame)); },
+        confirmSaved: async () => {}, release: () => {}
+    }));
+    const editor = await renderHook(() => useEasyModeSlots(
+        {deviceId: "one", serial: "serial"}, {available: true, acquire}, store
+    ));
+    await act(async () => { await editor.result.current.writeTeaProbe({id: () => "t1"}); });
+    await act(async () => {
+        editor.result.current.observeTeaProbe("t1", {
+            at: 1, display: "Water", heldSeconds: 60, drainedAsTea: false, note: "No tea drain"
+        });
+        await editor.result.current.restoreTeaOriginal({id: () => "r1"});
+    });
+    const archived = editor.result.current.record.experiment!;
+    expect(nextTeaProbeCandidate(editor.result.current.record)).toBe("tea-slot-0x04-one-steep-v1");
+    await act(async () => { await editor.result.current.writeTeaProbe({id: () => "t2"}); });
+    expect(acquire).toHaveBeenNthCalledWith(3,
+        {deviceId: "one", serial: "serial"}, {restart: false, requireKnownNormal: true});
+    expect(sent[6][11]).toBe(0x04);
+    expect(editor.result.current.record.experimentHistory).toEqual([archived]);
+    expect(editor.result.current.attempt).toMatchObject({operation: "probe", status: "success"});
+    await act(async () => {
+        expect(editor.result.current.observeTeaProbe("t1", {
+            at: 2, display: "Wrong", heldSeconds: null, drainedAsTea: null, note: ""
+        })).toBe(false);
+    });
+    expect(editor.result.current.error).toMatch(/different machine or trial/);
+    expect(new SlotDatabase(sql).read("one").experimentHistory).toEqual([archived]);
+    await act(async () => { await editor.result.current.restoreTeaOriginal({id: () => "r2"}); });
+    const framesBefore = sent.length;
+    await act(async () => { await editor.result.current.writeTeaProbe({id: () => "t3"}); });
+    expect(editor.result.current.attempt).toMatchObject({operation: "probe", status: "error"});
+    expect(editor.result.current.error).toMatch(/new trial is not allowed/);
+    expect(sent).toHaveLength(framesBefore);
+    expect(editor.result.current.record.experimentHistory).toEqual([archived]);
 });
 
 it("saves observations through the durable store, allows offline evidence and rejects stale trials/serials", async () => {
