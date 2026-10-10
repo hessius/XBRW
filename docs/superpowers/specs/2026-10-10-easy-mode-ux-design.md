@@ -225,6 +225,16 @@ state and explicit actions. `Machine` and its installed slot port own identity,
 serial, foreground, pacing, native-operation exclusion and completion evidence.
 Presentational components consume that state rather than reimplement transport.
 
+`EasyModeSlots` accepts the hook's optional `attempt` and an
+`onDismissSuccess` callback (wire it to `resetAttempt`), plus the current
+`deviceId` and optional `serial` for identity-bound presentation. Its `recipes`
+prop is the full supplied library. Legacy callers may omit `attempt`: `running`
+still presents activity, but can never manufacture success. Retry confirmation
+calls `onRecover(false)` for **Still saving**, including the three-receipt
+observe-only case, and `onRecover(true)` for **Back to normal**. Cancellation
+calls `onCancel` only after the physical normal-screen confirmation.
+The route continues to own departure handling and navigation exclusion.
+
 Extract focused slab/ceremony/recovery presentation only where it keeps
 EasyModeSlots understandable. Components are declared at module scope. Reuse
 existing typography, profiles, sheets and animation primitives, not a parallel

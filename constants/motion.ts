@@ -37,6 +37,9 @@ export const DURATION = {
  */
 export const TYPING_DEBOUNCE_MS = 600;
 
+/** Rest after a durably completed Easy Mode write, before revealing its slabs. */
+export const SLOT_WRITE_SUCCESS_HOLD_MS = 1600;
+
 /**
  * How long the drawer hint waits before opening a tray, and before closing it
  * again.

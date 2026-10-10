@@ -402,17 +402,16 @@ export default function RecipeCard({
                     <XStack testID="recipe-card-badges" alignItems="center" gap="$1.5">
                         {/* The card's badge corner: the star joins the marker
                             rather than the stats row, so the numbers keep their
-                            full width for the library view to build on. It leads
-                            the cluster, pushing the marker left.
+                            full width for the library view to build on.
 
                             Hidden from accessibility on purpose: the word is
                             already in the card's own label above, and announcing
                             it twice is worse than not at all. */}
+                        <SlotMarker marker={slotMarker}/>
                         {recipe.favourite && (
                             <DotIcon testID="recipe-card-favourite" name="favourite"
                                      size={12} color={onAccent.marker}/>
                         )}
-                        <SlotMarker marker={slotMarker}/>
                         {showMarker && (
                             <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.4}
                                            color={onAccent.marker}>

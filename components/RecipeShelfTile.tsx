@@ -274,11 +274,11 @@ export default function RecipeShelfTile({
                                      size={12} color={onAccent.marker}/>
                         </Pressable>
                     )}
+                    <SlotMarker marker={slotMarker}/>
                     {recipe.favourite && (
                         <DotIcon testID="recipe-tile-favourite" name="favourite"
                                  size={12} color={onAccent.marker}/>
                     )}
-                    <SlotMarker marker={slotMarker}/>
                     {showMarker && (
                         <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.4}
                                        color={onAccent.marker}>
