@@ -138,6 +138,49 @@ it("holds the screen lock across a duplicate tap while lease acquisition is pend
     expect(editor.result.current.running).toBe(false);
 });
 
+it("exposes a dedicated tea probe action through the normal hook lock and supplied port", async () => {
+    const store = new SlotDatabase(createTestDatabase());
+    for (const index of [0, 1, 2] as const) store.assign("one", index, snapshotRecipe(coffee()));
+    let resolveLease!: (lease: SlotLease) => void;
+    const acquire = jest.fn(() => new Promise<SlotLease>(resolve => { resolveLease = resolve; }));
+    const editor = await renderHook(() => useEasyModeSlots(
+        {deviceId: "one", serial: "serial"}, {available: true, acquire}, store
+    ));
+    let writing!: Promise<void>;
+    await act(async () => {
+        writing = editor.result.current.writeTeaProbe();
+        void editor.result.current.writeTeaProbe();
+        void editor.result.current.write();
+    });
+    expect(acquire).toHaveBeenCalledTimes(1);
+    expect(acquire).toHaveBeenCalledWith(
+        {deviceId: "one", serial: "serial"}, {restart: false, requireKnownNormal: true}
+    );
+    expect(store.read("one").experiment).toBeUndefined();
+    expect(editor.result.current.running).toBe(true);
+    await act(async () => {
+        resolveLease({
+            sendAndConfirm: async () => {}, confirmSaved: async () => {}, release: () => {}
+        });
+        await writing;
+    });
+    expect(editor.result.current.attempt).toMatchObject({operation: "probe", status: "success"});
+    expect(editor.result.current.record.experiment?.evidence.at(-1)?.kind).toBe("final");
+    let restoring!: Promise<void>;
+    await act(async () => { restoring = editor.result.current.restoreTeaOriginal(); });
+    await act(async () => {
+        resolveLease({
+            sendAndConfirm: async () => {}, confirmSaved: async () => {}, release: () => {}
+        });
+        await restoring;
+    });
+    expect(acquire.mock.calls[1]).toEqual([
+        {deviceId: "one", serial: "serial"}, {restart: false}
+    ]);
+    expect(editor.result.current.attempt).toMatchObject({operation: "restore", status: "success"});
+    expect(editor.result.current.record.experiment?.phase).toBe("restored");
+});
+
 it("tracks saving and durable success after the journal clears, resetting only on events", async () => {
         const store = new SlotDatabase(createTestDatabase());
         for (const index of [0, 1, 2] as const) store.assign("one", index, snapshotRecipe(coffee()));

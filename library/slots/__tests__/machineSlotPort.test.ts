@@ -9,6 +9,7 @@ import {SlotDatabase} from "@/library/slots/SlotDatabase";
 import {installMachineSlotPort} from "@/library/slots/machineSlotPort";
 import {prepareSet, readSnapshot, snapshotRecipe} from "@/library/slots/slotModel";
 import {cancelSlots, recoverSlots, writeSlots} from "@/library/slots/slotWriter";
+import {writeTeaSlotProbe} from "@/library/slots/teaSlotProbe";
 import {createTestDatabase} from "@/test-utils/sqlite";
 import {coffee} from "./fixtures";
 import Pour from "@/library/Pour";
@@ -78,6 +79,51 @@ it("uses real Machine receipts and buffers early ACK and final completion until 
     expect(store.read("one").journal).toBeNull();
     expect(store.read("one").written).not.toBeNull();
     await machine.send(buildType1(3500));
+});
+
+it.each([null, 0x43, 0x1F, 0x0C])(
+    "rejects a fresh tea probe in state %s before original preparation, database mutation or radio writes", async (state) => {
+        const {store, port, radio, machine} = await ready();
+        machine.state = state;
+        const before = store.read("one");
+        const count = radio.written.length;
+        const prepare = jest.spyOn(store, "beginProbe");
+        const read = jest.spyOn(store, "read");
+        await expect(writeTeaSlotProbe(store, identity, port)).rejects.toThrow(/known.*normal/i);
+        expect(prepare).not.toHaveBeenCalled();
+        expect(read).not.toHaveBeenCalled();
+        expect(store.read("one")).toBe(before);
+        expect(radio.written).toHaveLength(count);
+    }
+);
+
+it.each([0x01, 0x24, 0x41])("accepts a fresh tea probe in known startable state %s", async (state) => {
+    const {store, port, radio} = await ready();
+    radio.emit(status(state));
+    const acquire = jest.spyOn(port, "acquire");
+    await writeTeaSlotProbe(store, identity, port);
+    expect(acquire).toHaveBeenCalledTimes(1);
+    expect(acquire).toHaveBeenCalledWith(identity, {restart: false, requireKnownNormal: true});
+    expect(radio.slots).toEqual([0, 1, 2]);
+    expect(store.read("one").experiment?.evidence.at(-1)?.kind).toBe("final");
+});
+
+it("rechecks known normal state under the same lease before preparing a fresh probe", async () => {
+    const {store, port, radio} = await ready();
+    radio.emit(status(0x01));
+    const before = store.read("one");
+    const count = radio.written.length;
+    const guarded = {
+        ...port,
+        acquire: async (target: typeof identity, options?: Parameters<typeof port.acquire>[1]) => {
+            const lease = await port.acquire(target, options);
+            radio.emit(status(0x43));
+            return lease;
+        }
+    };
+    await expect(writeTeaSlotProbe(store, identity, guarded)).rejects.toThrow(/normal|busy/i);
+    expect(store.read("one")).toBe(before);
+    expect(radio.written).toHaveLength(count);
 });
 
 it("makes a refused first slot retryable once the tank is filled and the machine is idle", async () => {

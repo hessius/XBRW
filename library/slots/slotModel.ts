@@ -47,6 +47,14 @@ export type SlotExperiment = {
     observation: SlotObservation | null;
     evidence: SlotEvidence[];
 };
+export const TEA_PROBE_RESTORED_NOTICE =
+    "The tea slot probe was restored. Its evidence remains available to copy; a new trial is not allowed.";
+
+export function lastTeaProbeOutcome(experiment: Pick<SlotExperiment, "evidence">): SlotEvidence | undefined {
+    return experiment.evidence.filter(entry =>
+        ["final", "restore-prepared", "restored", "cancelled"].includes(entry.kind)
+    ).at(-1);
+}
 export type SlotJournal = {
     id: string;
     serial: string | null;

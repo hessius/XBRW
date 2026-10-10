@@ -2,12 +2,12 @@ import {createTestDatabase} from "@/test-utils/sqlite";
 import {buildType2} from "@/library/machine/protocol";
 import Recipe, {CUP_TYPE} from "@/library/Recipe";
 import {SlotDatabase} from "@/library/slots/SlotDatabase";
-import {readSnapshot, snapshotRecipe, type SlotIndex, type SlotSnapshot} from "@/library/slots/slotModel";
+import {prepareSet, readSnapshot, snapshotRecipe, type SlotIndex, type SlotSnapshot} from "@/library/slots/slotModel";
 import {recoverSlots, cancelSlots, writeSlots, type SlotLease, type SlotPort} from "@/library/slots/slotWriter";
 import {
     formatTeaProbeEvidence, restoreTeaSlotOriginal, teaProbeStatus, writeTeaSlotProbe
 } from "@/library/slots/teaSlotProbe";
-import {teaProbeSnapshot, TEA_SLOT_PROBE_ID} from "@/library/slots/teaSlotCandidate";
+import {teaProbeCandidateSet, teaProbeSnapshot, TEA_SLOT_PROBE_ID} from "@/library/slots/teaSlotCandidate";
 import {coffee} from "./fixtures";
 
 const identity = {deviceId: "one", serial: "serial"};
@@ -244,6 +244,7 @@ describe("durability", () => {
         damage((record) => { record.experiment.deviceId = "other"; });
         damage((record) => { record.experiment.serial = ""; });
         damage((record) => { record.experiment.evidence[0].kind = "invented"; });
+        damage((record) => { record.experiment.phase = "restored"; });
         damage((record) => { record.written.slots[0].name = "Tea"; });
         damage((record) => { delete record.experiment; });
         damage((record) => { record.drafts[0] = record.written.slots[0]; });
@@ -316,7 +317,7 @@ describe("restoration", () => {
     });
 
     it("sends exactly the original frames and keeps evidence after restoring", async () => {
-        const {store, set} = seeded(false);
+        const {sql, store, set} = seeded(false);
         await writeTeaSlotProbe(store, identity, scripted(store, {sent: []}));
         const script: Script = {sent: []};
         await restoreTeaSlotOriginal(store, identity, scripted(store, script));
@@ -326,9 +327,20 @@ describe("restoration", () => {
         expect(record.experiment?.evidence.some((entry) => entry.kind === "final")).toBe(true);
         await expect(restoreTeaSlotOriginal(store, identity, scripted(store, {sent: []})))
             .rejects.toThrow("no tea slot probe");
-        // A new trial can start again and never captures the probe.
-        await writeTeaSlotProbe(store, identity, scripted(store, {sent: []}), {id: () => "t2"});
-        expect(store.read("one").experiment?.original.slots).toEqual(set);
+        const evidence = formatTeaProbeEvidence(record.experiment!);
+        const next: Script = {sent: []};
+        await expect(writeTeaSlotProbe(store, identity, scripted(store, next), {id: () => "t2"}))
+            .rejects.toThrow(/restored.*evidence.*available/i);
+        expect(next.sent).toEqual([]);
+        expect(store.read("one")).toBe(record);
+        expect(formatTeaProbeEvidence(new SlotDatabase(sql).read("one").experiment!))
+            .toBe(evidence);
+        const slots = teaProbeCandidateSet([set[0], set[1], set[2]]);
+        expect(() => store.beginProbe("one", {
+            id: "t2", serial: "serial", slots, frames: prepareSet(slots),
+            acknowledged: 0, inFlight: null, error: null
+        }, "t2", {}, 5)).toThrow(/restored.*evidence.*available/i);
+        expect(store.read("one")).toBe(record);
     });
 
     it("keeps originals and drafts when a cancelled candidate never resolved", async () => {
@@ -347,6 +359,55 @@ describe("restoration", () => {
         expect(record.drafts).toEqual(set);
         expect(record.journal).toBeNull();
         expect(record.experiment?.evidence.at(-1)?.kind).toBe("cancelled");
-        expect(teaProbeStatus(record)).toBe("candidate-written");
+        expect(teaProbeStatus(record)).toBe("candidate-unconfirmed");
+    });
+
+    it.each(["prepared", 0, 1, "final"] as const)(
+        "never reports candidate success after cancelling at %s", async (boundary) => {
+            const {sql, store, set} = seeded(false);
+            if (boundary === "prepared") {
+                const slots = teaProbeCandidateSet([set[0], set[1], set[2]]);
+                store.beginProbe("one", {
+                    id: "t1", serial: "serial", slots, frames: prepareSet(slots),
+                    acknowledged: 0, inFlight: null, error: null
+                }, "t1", {}, 5);
+            } else {
+                await expect(writeTeaSlotProbe(store, identity,
+                    scripted(store, {sent: [], failAt: boundary}), {id: () => "t1"})).rejects.toThrow();
+            }
+            const before = store.read("one");
+            expect(teaProbeStatus(before)).toBe("pending-candidate");
+            await cancelSlots(store, identity, {
+                available: true,
+                acquire: async () => ({
+                    restartFromBeginning: true, sendAndConfirm: async () => {},
+                    confirmSaved: async () => {}, release: () => {}
+                })
+            });
+            const record = new SlotDatabase(sql).read("one");
+            expect(teaProbeStatus(record)).toBe("candidate-unconfirmed");
+            expect(record.experiment?.original.slots).toEqual(set);
+            expect(record.experiment?.evidence.slice(0, -1)).toEqual(before.experiment?.evidence);
+            expect(record.experiment?.evidence.at(-1)?.kind).toBe("cancelled");
+            expect(record.experiment?.evidence.some(entry => entry.kind === "final")).toBe(false);
+        }
+    );
+
+    it("does not claim candidate storage or restoration after cancelling an unconfirmed restore", async () => {
+        const {sql, store} = seeded(false);
+        await writeTeaSlotProbe(store, identity, scripted(store, {sent: []}));
+        await expect(restoreTeaSlotOriginal(store, identity, scripted(store, {sent: [], failAt: "final"})))
+            .rejects.toThrow("Completion unconfirmed");
+        expect(teaProbeStatus(store.read("one"))).toBe("pending-restore");
+        await cancelSlots(store, identity, {
+            available: true,
+            acquire: async () => ({
+                restartFromBeginning: true, sendAndConfirm: async () => {},
+                confirmSaved: async () => {}, release: () => {}
+            })
+        });
+        expect(teaProbeStatus(new SlotDatabase(sql).read("one"))).toBe("candidate-unconfirmed");
+        await restoreTeaSlotOriginal(store, identity, scripted(store, {sent: []}));
+        expect(teaProbeStatus(new SlotDatabase(sql).read("one"))).toBe("restored");
     });
 });

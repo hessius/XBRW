@@ -1,7 +1,8 @@
 import uuid from "react-native-uuid";
 import type {SlotDatabase} from "@/library/slots/SlotDatabase";
 import {
-    prepareSet, type SlotExperiment, type SlotJournal, type SlotObservation, type SlotRecord
+    lastTeaProbeOutcome, prepareSet, TEA_PROBE_RESTORED_NOTICE,
+    type SlotExperiment, type SlotJournal, type SlotObservation, type SlotRecord
 } from "@/library/slots/slotModel";
 import {teaProbeCandidateSet, teaProbeOriginal} from "@/library/slots/teaSlotCandidate";
 import {
@@ -18,16 +19,17 @@ export type TeaProbeOptions = {
 };
 
 export type TeaProbeStatus = "none" | "pending-candidate" | "candidate-written"
-    | "pending-restore" | "restored";
+    | "candidate-unconfirmed" | "pending-restore" | "restored";
 
 export function teaProbeStatus(record: SlotRecord): TeaProbeStatus {
     const experiment = record.experiment;
     if (experiment === undefined) return "none";
-    if (experiment.phase === "restored") return "restored";
     if (experiment.pending !== null) {
         return experiment.pending.kind === "candidate" ? "pending-candidate" : "pending-restore";
     }
-    return "candidate-written";
+    const terminal = lastTeaProbeOutcome(experiment);
+    if (experiment.phase === "restored" && terminal?.kind === "restored") return "restored";
+    return terminal?.kind === "final" ? "candidate-written" : "candidate-unconfirmed";
 }
 
 function bound(identity: SlotIdentity): {deviceId: string; serial: string} {
@@ -49,16 +51,20 @@ export async function writeTeaSlotProbe(
     store: SlotDatabase, identity: SlotIdentity, port: SlotPort, options: TeaProbeOptions = {}
 ): Promise<void> {
     const {deviceId, serial} = bound(identity);
-    const record = store.read(deviceId);
-    if (record.journal !== null) throw new Error("Finish the incomplete write first.");
-    if (record.experiment?.phase === "active") {
-        throw new Error("A tea slot probe is already in progress. Restore the original set first.");
-    }
     const id = options.id?.() ?? String(uuid.v4());
     const now = options.now ?? Date.now;
-    const journal = journalFor(id, serial, teaProbeCandidateSet(teaProbeOriginal(record).slots));
-    await writePreparedSlots(store, {deviceId, serial}, port, journal,
-        (next) => store.beginProbe(deviceId, next, id, options.machine ?? {}, now()), now);
+    const prepare = () => {
+        const record = store.read(deviceId);
+        if (record.journal !== null) throw new Error("Finish the incomplete write first.");
+        if (record.experiment?.phase === "restored") throw new Error(TEA_PROBE_RESTORED_NOTICE);
+        if (record.experiment !== undefined) {
+            throw new Error("A tea slot probe is already in progress. Restore the original set first.");
+        }
+        return journalFor(id, serial, teaProbeCandidateSet(teaProbeOriginal(record).slots));
+    };
+    await writePreparedSlots(store, {deviceId, serial}, port, prepare,
+        (next) => store.beginProbe(deviceId, next, id, options.machine ?? {}, now()), now,
+        {requireKnownNormal: true});
 }
 
 /** Writes the preserved original A/B/C back through the same writer; refused while anything is pending. */

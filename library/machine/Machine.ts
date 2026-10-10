@@ -349,6 +349,9 @@ export default class Machine {
             throw new Error("The selected machine is not the connected peripheral.");
         }
         if (actual.serial !== identity.serial) throw new Error("The connected machine serial must match.");
+        if (options?.requireKnownNormal && (this.state === null || !STARTABLE.has(this.state))) {
+            throw new Error("The tea slot probe needs a known normal machine state. Wait until it is back to normal, then reconnect if needed.");
+        }
         const journal = this.slotStore.read(actual.deviceId).journal;
         if (journal?.serial != null && journal.serial !== actual.serial) {
             throw new Error("The recovery journal serial belongs to a different machine.");
@@ -395,6 +398,10 @@ export default class Machine {
             }
             if (journal !== null && this.slotStore?.read(actual.deviceId).journal?.id !== journal.id) {
                 throw new Error("The Easy Mode recovery journal changed.");
+            }
+            if (options?.requireKnownNormal && !slotDispatched
+                && (this.state === null || !STARTABLE.has(this.state))) {
+                throw new Error("The tea slot probe needs a known normal machine state before writing.");
             }
             if (isActiveBrewPhase(this.phase) || (this.state !== null
                 && !STARTABLE.has(this.state)

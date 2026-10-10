@@ -48,6 +48,9 @@ export const TEA_SLOT_PROBE_PARAMETERS = {
   Persist write/restore attempts with exact frames and boundary/error/save
   evidence using shared database mutation points, not guessed success. Preserve
   observation independently. Do not replace originals on another click.
+  One retained trial only: reject new candidates after restoration and leave
+  prior evidence available to copy. Cancellation without final save confirmation
+  is `candidate-unconfirmed`, not candidate success or restored.
 - [ ] Expose typed prepare/restore/read/observation functions, with restoration
   prepared only after no journal; after actual restoration completion restore
   original phone drafts and retain history evidence. Serial mismatch and DB
@@ -72,7 +75,9 @@ export const TEA_SLOT_PROBE_PARAMETERS = {
 - [ ] Run panel/route tests to verify failures.
 - [ ] Implement small Tamagui panel in existing XbrwSheet. New probe action is
   development-gated, restoration remains reachable when retained state exists.
-  Explicit prepare then normal shared hook write; exact candidate can use
+  Call the dedicated shared hook `writeTeaProbe` / `restoreTeaOriginal` actions;
+  fresh probe preparation occurs under one lease with `requireKnownNormal: true`.
+  Do not prepare then call ordinary draft `write`. The exact candidate uses the
   normal ceremony and recovery. No Machine.send path or alternative owner.
   Show original-set provenance, immutable original names, parameters,
   no-leaves/manual-start instructions and stop conditions from the approved spec.

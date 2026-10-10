@@ -10,11 +10,14 @@ import {
 import {
     cancelSlots, recoverSlots, writeSlots, unavailableSlotPort, type SlotIdentity, type SlotPort
 } from "@/library/slots/slotWriter";
+import {
+    restoreTeaSlotOriginal, writeTeaSlotProbe, type TeaProbeOptions
+} from "@/library/slots/teaSlotProbe";
 
 const databases = new WeakMap<object, SlotDatabase>();
 const unpaired = emptySlotRecord();
 
-export type SlotOperation = "write" | "recover" | "cancel";
+export type SlotOperation = "write" | "recover" | "cancel" | "probe" | "restore";
 export type SlotAttempt = SlotIdentity & {
     operation: SlotOperation;
     status: "writing" | "saving" | "cancelling" | "success" | "cancelled" | "error";
@@ -107,7 +110,9 @@ export function useEasyModeSlots(
         }
     }
 
-    async function run(operation: SlotOperation, restart = false): Promise<void> {
+    async function run(
+        operation: SlotOperation, restart = false, probeOptions: TeaProbeOptions = {}
+    ): Promise<void> {
         if (active.current) return;
         active.current = true;
         const target = Object.freeze({...identity});
@@ -119,6 +124,8 @@ export function useEasyModeSlots(
         try {
             const store = supplied ?? sharedSlotDatabase();
             if (operation === "cancel") await cancelSlots(store, target, port);
+            else if (operation === "probe") await writeTeaSlotProbe(store, target, port, probeOptions);
+            else if (operation === "restore") await restoreTeaSlotOriginal(store, target, port, probeOptions);
             else if (operation === "recover") {
                 await recoverSlots(store, target, port, {restart, finishUncertain: !restart});
             } else await writeSlots(store, target, port);
@@ -145,6 +152,8 @@ export function useEasyModeSlots(
         resetAttempt: () => { if (!active.current) { setReading(null); setFailure(null); } },
         running, available: port.available, assign,
         write: () => run("write"), recover: (restart = false) => run("recover", restart),
-        cancel: () => run("cancel")
+        cancel: () => run("cancel"),
+        writeTeaProbe: (options: TeaProbeOptions = {}) => run("probe", false, options),
+        restoreTeaOriginal: (options: TeaProbeOptions = {}) => run("restore", false, options)
     };
 }

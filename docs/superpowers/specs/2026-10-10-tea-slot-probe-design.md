@@ -61,7 +61,11 @@ restoration never become stranded behind a build flag.
 
 Bind retained originals to device ID and reported serial. Keep them until
 explicit restoration succeeds; repeated probe presses never overwrite originals
-with the probe. Keep original drafts distinct from restored machine snapshots.
+with the probe. This is one trial per retained machine record: after restoration,
+no second candidate may be prepared. Show that the original set was restored and
+the trial evidence remains available to copy. A future new trial requires a
+separately approved reset policy, not an archive or implicit replacement.
+Keep original drafts distinct from restored machine snapshots.
 Candidate/restore preparation must be atomic and errors explicit. No backup or
 Recipe serialization changes; experiment metadata lives in the slot domain.
 Do not invent success or clear the pending journal when persistence fails.
@@ -71,6 +75,30 @@ available, exact prepared frames, dispatch/receipt/save evidence and separate
 user-entered observation. Existing notification diagnostics may supply radio
 evidence. Evidence survives relaunch and can be copied locally. Never infer a
 physical hold/drain observation from a send promise.
+
+### Task 1 API guarantees
+
+`teaProbeStatus(record)` derives completion from durable outcome evidence.
+`pending-candidate` and `pending-restore` identify the journal still to resolve;
+`candidate-written` requires confirmed candidate save completion. Cancellation
+before dispatch, after partial receipts, or after all receipts without final
+save confirmation yields `candidate-unconfirmed`, never success. A cancelled
+restore is also unconfirmed, not restored or still candidate-written.
+`restored` requires confirmed restoration. All prior evidence is retained.
+
+`writeTeaSlotProbe` requests `SlotAcquireOptions.requireKnownNormal: true` on
+the same shared port/session used by ordinary writes. `Machine` requires a
+non-null `STARTABLE` state (IDLE, READY or COMPLETE), checking before original/
+journal preparation and again under the lease before first dispatch. A lazy
+preparation callback to `writePreparedSlots` keeps that ordering without a
+second acquisition. Ordinary writes, recovery and restoration do not opt into
+this fresh-probe gate and retain their existing behavior.
+
+The future trial panel calls `useEasyModeSlots().writeTeaProbe(options)` and
+`.restoreTeaOriginal(options)`, which use the hook's existing operation lock,
+identity binding, progress and explicit error reporting. It must not prepare a
+probe and then call the ordinary draft `.write()`, or bypass the shared port.
+`formatTeaProbeEvidence` remains the local copy API after restoration.
 
 ## Acceptance and next decision
 

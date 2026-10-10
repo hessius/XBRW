@@ -7,6 +7,8 @@ import {
 export type SlotIdentity = {readonly deviceId: string; readonly serial: string | null};
 export type SlotAcquireOptions = {
     restart?: boolean;
+    /** Fresh hardware probes require a reported normal state, never an unknown one. */
+    requireKnownNormal?: boolean;
     /** Deliberate immutable replay for hardware qualification; code-only ACKs remain ambiguous. */
     finishUncertain?: boolean;
 };
@@ -57,15 +59,21 @@ function matchingSerial(journal: SlotJournal, identity: SlotIdentity): void {
 
 async function transmit(
     store: SlotDatabase, identity: SlotIdentity, port: SlotPort,
-    journal: SlotJournal, isNew: boolean, now: () => number, restart = false, finishUncertain = false,
-    begin?: (journal: SlotJournal) => void
+    prepared: SlotJournal | (() => SlotJournal), isNew: boolean, now: () => number,
+    restart = false, finishUncertain = false,
+    begin?: (journal: SlotJournal) => void, requireKnownNormal = false
 ): Promise<void> {
     const target = Object.freeze({...identity});
-    const lease = await port.acquire(target, {restart, ...(finishUncertain ? {finishUncertain: true} : {})});
+    const lease = await port.acquire(target, {
+        restart, ...(finishUncertain ? {finishUncertain: true} : {}),
+        ...(requireKnownNormal ? {requireKnownNormal: true} : {})
+    });
+    let journal = typeof prepared === "function" ? undefined : prepared;
     let begun = !isNew;
     let completed = false;
     try {
         lease.assertCurrent?.();
+        journal = typeof prepared === "function" ? prepared() : prepared;
         lease.validateFrames?.(journal.frames);
         if (isNew) {
             if (begin !== undefined) begin(journal);
@@ -100,7 +108,7 @@ async function transmit(
         store.complete(target.deviceId, journal.id, now());
         completed = true;
     } catch (error) {
-        if (begun) {
+        if (begun && journal !== undefined) {
             const message = error instanceof Error ? error.message : String(error);
             try {
                 store.fail(target.deviceId, journal.id, message);
@@ -135,13 +143,15 @@ export async function writeSlots(
     await transmit(store, identity, port, journal, true, options.now ?? Date.now);
 }
 
-/** A new journal that the caller has already prepared, begun by the caller's own atomic commit. */
+/** Prepares under the shared lease, then begins with the caller's atomic commit. */
 export async function writePreparedSlots(
-    store: SlotDatabase, identity: SlotIdentity, port: SlotPort, journal: SlotJournal,
-    begin: (journal: SlotJournal) => void, now: () => number = Date.now
+    store: SlotDatabase, identity: SlotIdentity, port: SlotPort,
+    journal: SlotJournal | (() => SlotJournal),
+    begin: (journal: SlotJournal) => void, now: () => number = Date.now,
+    options: Pick<SlotAcquireOptions, "requireKnownNormal"> = {}
 ): Promise<void> {
     checkPort(identity, port);
-    await transmit(store, identity, port, journal, true, now, false, false, begin);
+    await transmit(store, identity, port, journal, true, now, false, false, begin, options.requireKnownNormal);
 }
 
 export async function recoverSlots(

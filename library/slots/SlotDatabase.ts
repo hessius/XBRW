@@ -1,6 +1,7 @@
 import {appDatabase} from "@/library/appDatabase";
 import {
-    emptySlotRecord, objectValue, prepareSet, readSnapshot, sameBytes,
+    emptySlotRecord, lastTeaProbeOutcome, objectValue, prepareSet, readSnapshot, sameBytes,
+    TEA_PROBE_RESTORED_NOTICE,
     type EvidenceKind, type SlotEvidence, type SlotExperiment, type SlotIndex, type SlotJournal,
     type SlotObservation, type SlotRecord, type SlotSnapshot, type Triple
 } from "@/library/slots/slotModel";
@@ -112,6 +113,7 @@ function readExperiment(value: unknown, deviceId: string, journal: SlotJournal |
     const slots = triple(value.original.slots, readSnapshot);
     const originalDrafts = triple(value.originalDrafts, (slot) => slot === null ? null : readSnapshot(slot));
     const candidate = triple(value.candidate, readSnapshot);
+    const evidence = value.evidence.map(readEvidence);
     if (slots.some(isTeaProbeSnapshot) || originalDrafts.some(isTeaProbeSnapshot)
         || !sameSnapshotSet(candidate, teaProbeCandidateSet(slots))) {
         throw new Error("The tea slot probe sets are inconsistent.");
@@ -125,8 +127,9 @@ function readExperiment(value: unknown, deviceId: string, journal: SlotJournal |
         pending = {journalId: value.pending.journalId, kind: value.pending.kind};
     }
     if (value.phase === "restored") {
-        if (pending !== null || journal?.slots.some(isTeaProbeSnapshot)) {
-            throw new Error("A restored tea slot probe cannot have a pending probe write.");
+        if (pending !== null || journal?.slots.some(isTeaProbeSnapshot)
+            || lastTeaProbeOutcome({evidence})?.kind !== "restored") {
+            throw new Error("A restored tea slot probe requires confirmed restoration and no pending probe write.");
         }
     } else {
         // A pending marker and the journal are one fact; neither may exist alone.
@@ -147,7 +150,7 @@ function readExperiment(value: unknown, deviceId: string, journal: SlotJournal |
         original: {source: value.original.source, writtenAt: value.original.writtenAt, slots},
         originalDrafts, candidate, phase: value.phase, pending,
         observation: readObservation(value.observation),
-        evidence: value.evidence.map(readEvidence)
+        evidence
     };
 }
 
@@ -295,6 +298,7 @@ export class SlotDatabase {
     ): void {
         this.change(deviceId, (record) => {
             if (record.journal !== null) throw new Error("Finish the incomplete write first.");
+            if (record.experiment?.phase === "restored") throw new Error(TEA_PROBE_RESTORED_NOTICE);
             if (this.activeExperiment(record)) {
                 throw new Error("A tea slot probe is already in progress. Restore the original set first.");
             }
