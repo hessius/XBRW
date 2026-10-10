@@ -2,6 +2,28 @@
 
 Approved first trial: 2026-10-10. Work in `fix/easy-mode-recovery`.
 
+## Physical-result amendment and next candidate
+
+The first candidate saved, but the user observed no tea steep-counter overview
+and no tea drain cycle: water was dispensed, a minute elapsed and the machine
+finished. The user confirmed restoring the original set. This rejects
+`0x02` plus the tea blob as sufficient to select tea on the tested firmware.
+
+The user explicitly approved one next candidate on 2026-10-10: change only
+A's flag from `0x02` to `0x04`, with identical tea blob, parameters and B/C.
+The ID is `tea-slot-0x04-one-steep-v1`. The first candidate's ID and exact
+validation remain readable. A public official recipe reports API `cupType: 4`
+for TEA separately from its grinder-off flag, but that is not proof that the
+slot byte has the same meaning. The trial still tests that mapping.
+
+Allow this next trial only after confirmed restoration of the first. Archive
+the complete first experiment, originals, evidence and observation atomically
+before preparing the second, rather than resetting or overwriting it. Retained
+history remains copyable and validated on relaunch. No third candidate,
+arbitrary flag choice or automatic execution is authorised. This amendment
+supersedes the original one-trial-only restriction solely for this named
+second candidate; all other acquisition and recovery boundaries still apply.
+
 ## Question and bound
 
 Does an existing tea blob inside `11510 [slot, 0x02, blob]` select tea behavior

@@ -633,7 +633,40 @@ The latter two separately implement ordinary tea brewing. The Java decompile
 cited by brAzzi64 is a local path, not published source; its existence does not
 give us access to the official slot builder.
 
-#### Bounded tea slot probe tooling (2026-10-10): **UNTESTED**
+#### Bounded tea slot probe (2026-10-10): **SAVED, NOT TEA**
+
+The first physical trial on V12.0D.500 saved all three slots: the retained
+journal records three receipts followed by final-save confirmation. Its
+one-steep A payload was `[0, 0x02, 8, 60, 70, 0, 0, 0, 32, 120, 30, 254, 120]`
+(slot, flags, blob). The user then invoked and manually ran A with the Omni
+Tea Brewer. Unlike tea slots from the official app, its loaded overview showed
+no steep counter. It delivered water, waited approximately one minute, beeped
+and finished, **without a tea siphon/drain cycle**.
+
+This rejects the hypothesis that the tea timing blob under slot flags `0x02`
+alone selects tea on this firmware. Storage acceptance and timing execution
+do not establish tea mode. These are user-reported physical observations;
+the supplied evidence is a durable write journal, not captured execution
+notifications, and its observation field had not yet been populated.
+
+No additional flag or mode command was tested. The tea selector remains
+unknown. The user subsequently confirmed successful RESTORE ORIGINAL SET.
+Preserve this trial's evidence before another separately identified candidate.
+
+The user supplied a public official single-steep share recipe,
+`https://share-h5.xbloom.com/?id=lRU%2FNUodjN5PzwxNQaOxeA%3D%3D`.
+Its detail response identifies `cupType: 4`, `cupTypeName: "TEA"`,
+`isSetGrinderSize: 2`, `subSetType: 2` and one 90 ml, 92 C, 20-second stage.
+This supplies an official API tea discriminator independent of the grinder
+setting; it does **not** establish that the slot flags byte carries cup type.
+It makes interpreting the lower nibble as necessarily grinder-only less
+convincing, but API-to-wire mapping still needs a physical test.
+
+The next user-approved candidate changes **only A's flags to `0x04`** with the
+same 60 ml, 70 C, 60-second blob. B/C remain `0x02` with exact original bytes.
+Candidate `tea-slot-0x04-one-steep-v1` has not been physically tried. The prior
+restored trial must be archived intact before preparation, and no third
+candidate is authorised. No additional mode or execution commands are added.
 
 Candidate `tea-slot-0x02-one-steep-v1` is a hypothesis, not production tea slot
 support. Easy Mode -> TEA SLOT PROBE -> WRITE PROBE prepares exactly A = one
@@ -656,7 +689,7 @@ Pending write/brew/native operations are excluded through the existing owner.
 An active trial blocks ordinary slot assignment/writing until restoration.
 Cancellation means **candidate-unconfirmed**, not a successful candidate save.
 
-Hardware procedure, not yet performed for this candidate:
+Hardware procedure used for this candidate:
 
 1. Connect the recorded machine, wait for normal state and a reported serial,
    inspect the original names/provenance, then explicitly WRITE PROBE. Keep the
@@ -678,9 +711,10 @@ Hardware procedure, not yet performed for this candidate:
    exact prepared frames, dispatch/receipt/save history and separately saved
    observations. Phone drafts remain distinct from restored machine snapshots.
 
-No physical tea execution or restoration proof has been obtained by this UI
-implementation. A successful single-steep trial would qualify only this
-candidate on the tested machine/firmware, not multi-steep or general tea slots.
+Physical execution failed to demonstrate tea behavior as recorded above.
+The user confirmed restoration after this trial. A successful future single-steep trial
+would qualify only that candidate on the tested machine/firmware, not
+multi-steep or general tea slots.
 
 The measured ten-stage ceiling belongs to NFC cards only. Coffee BLE stage
 bodies have a one-byte byte-count prefix: at most 255 segment bytes, not ten
