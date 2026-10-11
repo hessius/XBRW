@@ -5,9 +5,8 @@ import {
 } from "@/library/bypassLimits";
 import {adaptedModelFor, type MachineModel} from "@/library/machine/machineModel";
 import {podCoffeeFromPodsVo, podImageUrl} from "@/library/podCoffee";
-import {clampCelsius} from "@/library/units";
+import {clampCelsius, normaliseCelsius} from "@/library/units";
 import type {ImportSource} from "./importInput";
-import {normaliseCelsius} from "@/library/units";
 
 /**
  * Attach the pod's coffee to the recipe it brewed, if it named one.
