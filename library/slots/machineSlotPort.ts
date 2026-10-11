@@ -201,6 +201,9 @@ class MachineSlotLease implements SlotLease {
         const stateBefore = this.machine.state;
         await this.bounded(this.session.send(buildType1(40526), () => {
             this.check();
+            if (this.machine.state !== MACHINE_STATE.SAVING_SLOTS) {
+                throw new Error("Wait for a known saving or normal machine state before recovery.");
+            }
             this.recovering = true;
         }), SLOT_DISPATCH_MS, "Command 40526 did not finish sending. Reconnect before another operation.");
         this.check();

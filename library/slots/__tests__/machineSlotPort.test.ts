@@ -105,6 +105,26 @@ it("clears a timed-out write in known normal state without sending recovery", as
     expect(store.read("one").journal).toBeNull();
 });
 
+it("does not dispatch recovery if saving ends during handshake pacing, and clears on retry", async () => {
+    const {store, port, radio} = await ready(FRAME_GAP_MS);
+    const snapshot = snapshotRecipe(coffee());
+    store.begin("one", {id: "race", serial: identity.serial, slots: [snapshot, snapshot, snapshot],
+        frames: prepareSet([snapshot, snapshot, snapshot]), acknowledged: 0, inFlight: null, error: null});
+    radio.emit(status(0x43));
+    jest.useFakeTimers();
+    await jest.advanceTimersByTimeAsync(HANDSHAKE_FRESH_MS + 1);
+    const pending = dismissSlots(store, identity, port);
+    const rejected = expect(pending).rejects.toThrow(/saving|normal/i);
+    await flush();
+    radio.emit(status(0x01));
+    await jest.advanceTimersByTimeAsync(FRAME_GAP_MS + 1);
+    await rejected;
+    expect(radio.sent).not.toContain(40526);
+    expect(store.read("one").journal?.id).toBe("race");
+    await dismissSlots(store, identity, port);
+    expect(store.read("one").journal).toBeNull();
+});
+
 it("rejects recovery in unknown state without sending or forgetting the journal", async () => {
     const {store, port, radio, machine} = await ready();
     const snapshot = snapshotRecipe(coffee());

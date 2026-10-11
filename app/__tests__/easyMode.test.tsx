@@ -317,6 +317,21 @@ it("keeps retained trial restoration accessible in production and ordinary writi
     expect(screen.queryByRole("button", {name: "WRITE PROBE"})).toBeNull();
 });
 
+it("disables retained restoration when the connected serial differs without a pending journal", async () => {
+    const store = new SlotDatabase(createTestDatabase());
+    for (const i of [0, 1, 2] as const) store.assign("one", i, snapshotRecipe(mockAllRecipes[0]));
+    const port = {available: true, acquire: async () => ({
+        sendAndConfirm: async () => {}, confirmSaved: async () => {}, release: () => {}
+    })};
+    await writeTeaSlotProbe(store, {deviceId: "one", serial: "original"}, port);
+    mockRecord = store.read("one");
+    mockAvailable = true;
+    mockSerial = "different";
+    await renderWithProviders(<EasyModeScreen/>);
+    expect(screen.getByRole("button", {name: "Restore original slot set"})).toBeDisabled();
+    expect(mockRestore).not.toHaveBeenCalled();
+});
+
 it("does not expose trials in either build mode or after identity changes", async () => {
     Object.defineProperty(global, "__DEV__", {value: false});
     const view = await renderWithProviders(<EasyModeScreen/>);

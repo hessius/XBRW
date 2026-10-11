@@ -32,8 +32,9 @@ export default function EasyModeScreen() {
     const slots = useEasyModeSlots(
         {deviceId, serial}, slotPort ?? unavailableSlotPort
     );
-    const serialMatches = slots.record.journal?.serial == null || actual === null
-        || slots.record.journal.serial === actual.serial;
+    const retainedSerial = slots.record.journal?.serial
+        ?? (slots.record.experiment?.phase === "active" ? slots.record.experiment.serial : null);
+    const serialMatches = retainedSerial == null || actual === null || retainedSerial === actual.serial;
     const [incoming] = useState(() => incomingEasyModeRecipe(recipeJSON));
     const [leavePrompt, setLeavePrompt] = useState<{
         deviceId: string; serial: string | null; exit: () => void
