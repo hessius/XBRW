@@ -1,4 +1,5 @@
 import {execFileSync, spawnSync} from "node:child_process";
+import {existsSync} from "node:fs";
 import {dirname, resolve} from "node:path";
 import {pathToFileURL} from "node:url";
 
@@ -14,10 +15,15 @@ export function auditWorktrees(cwd) {
     if (field.startsWith("worktree ")) worktrees.push({path: field.slice(9)});
     else if (field.startsWith("HEAD ")) worktrees.at(-1).head = field.slice(5);
     else if (field.startsWith("branch ")) worktrees.at(-1).branch = field.slice(7).replace(/^refs\/heads\//, "");
+    else if (field === "locked" || field.startsWith("locked ")) worktrees.at(-1).locked = true;
+    else if (field === "prunable" || field.startsWith("prunable ")) worktrees.at(-1).prunable = true;
   }
   return worktrees.map(row => {
     if (row.path === primary || ["main", "develop"].includes(row.branch))
       return {...row, status: "protected", integratedInto: []};
+    if (row.locked) return {...row, status: "locked-keep", integratedInto: []};
+    if (row.prunable || !existsSync(row.path))
+      return {...row, status: "unavailable-keep", integratedInto: []};
     if (!row.branch) return {...row, status: "detached-keep", integratedInto: []};
     const integratedInto = targets.filter(target => {
       const result = spawnSync("git", ["merge-base", "--is-ancestor", row.head, target],
@@ -29,12 +35,12 @@ export function auditWorktrees(cwd) {
     });
     const dirty = execFileSync("git", ["status", "--porcelain=v1", "--untracked-files=all"],
       {cwd: row.path, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"]}).length > 0;
-    const ignored = execFileSync("git", ["ls-files", "--others", "--ignored", "--exclude-standard", "-z"],
+    const ignored = execFileSync("git", ["ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "-z"],
       {cwd: row.path, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"]})
       .split("\0").filter(Boolean).length;
     const status = dirty ? "dirty" : !integratedInto.length ? "unmerged" :
       ignored ? "merged-preserve-ignored" : "merged-clean";
-    return {...row, status, ignoredFiles: ignored, integratedInto};
+    return {...row, status, ignoredEntries: ignored, integratedInto};
   });
 }
 

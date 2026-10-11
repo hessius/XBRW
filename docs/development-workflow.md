@@ -205,7 +205,10 @@ npm run worktrees:check
 The command is read-only and emits exact paths/head SHAs. It detects merge
 ancestry even when a human merged the PR and GitHub deleted its head branch.
 `protected` includes the primary checkout and main/develop checkouts.
-`dirty`, `unmerged` and `detached-keep` must remain until explicitly resolved.
+`dirty`, `unmerged`, `detached-keep`, `locked-keep` and `unavailable-keep` must
+remain until explicitly resolved. Missing/external-volume registrations are
+reported conservatively, not pruned by the command. Ignored directory entries
+are collapsed rather than buffering entire dependency/build trees.
 `merged-preserve-ignored` requires inspection/snapshot of ignored files, not
 an assumption that they are disposable. `merged-clean` still requires
 owner-idle confirmation, backup and exact-path/head approval before removal.
