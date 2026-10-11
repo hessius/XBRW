@@ -8,9 +8,10 @@ Read root `AGENTS.md` before changing files; it is the tool-neutral workflow
 contract. `docs/development-workflow.md` has the branch, release and recovery
 runbook. These rules apply to delegated agents and documentation tasks too.
 
-The develop migration is **not active yet**. Start isolated task worktrees from
-a freshly fetched, pinned `origin/integration/2.1.0` commit until this release
-cycle closes and the migration is approved; then use `origin/develop`.
+Start isolated task worktrees from a freshly fetched, pinned `origin/develop`
+commit. Develop also carries the 2.1.0 beta candidate; beta fixes use the same
+task/PR workflow, not a separate permanent version branch. Its application code
+has not been promoted to main by the workflow migration.
 Never choose the base from the current checkout, write tasks directly on shared
 integration/main branches, or switch another session's checkout. Check status,
 upstream and worktree ownership first; stop on conflicting or unexpected work.
@@ -52,7 +53,7 @@ npx expo-doctor        # dependency/config health
 ```
 
 CI (`.github/workflows/ci.yml`) runs typecheck, lint, tests and expo-doctor on every push to
-main and every pull request. All four must be green; expo-doctor is a hard failure.
+main or develop and every pull request. All four must be green; expo-doctor is a hard failure.
 
 `library/__tests__/` holds characterisation tests for the card byte format, volume math, and legacy JSON migrations. `cardFixtures.ts` is a deliberately **independent** reimplementation of the byte layout, so a round-trip test is not tautological — if you change the format, change both sides consciously. A changed expectation is a regression until proven otherwise: a malformed write to a genuine card is not trivially recoverable.
 

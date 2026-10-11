@@ -9,17 +9,20 @@ This runbook explains the branch lifecycle and recovery procedures.
 | Branch | Role |
 | --- | --- |
 | `main` | Approved release line. No ordinary task development. |
-| `integration/2.1.0` | Current integration base until this cycle closes. |
-| `develop` | Permanent integrated development line after explicit activation. |
+| `develop` | Permanent integrated development line, including the 2.1.0 beta candidate. |
 | `feat/`, `fix/`, `chore/`, `docs/`, `recover/` task branches | One bounded task, isolated worktree, explicit base. |
 | `release/<version>` | Optional, explicitly approved short-lived freeze candidate; fixes only. |
 
-**The develop migration is not active yet.** Finish the 2.1.0 integration cycle,
-carry main-only changes into the candidate, satisfy its release acceptance
-gates, and promote with permission. Create `develop` from authoritative
-post-promotion main history, then update this section and agent instructions.
-Do not seed it from a stale local integration branch or rewind main: main
-already carries unreleased work from the previous workflow.
+On 2026-10-11, develop was seeded from the authoritative former
+`integration/2.1.0` candidate at
+`3a02987030dd378daea5ae0bd1135dce63e4ee66`. Its application code was not
+promoted to main. The candidate now lives in develop so beta corrections exercise
+the ordinary task/PR process; do not recreate the old integration branch.
+Main receives the workflow/CI documentation separately.
+Do not rewind main: it already carries unreleased work from the previous workflow.
+Physical/native/external release gates in `docs/release-2.1.0-changes.md` remain
+required before application release promotion. Repository migration is not
+evidence that those gates have passed.
 
 Keep the GitHub default branch `main`. Users requesting a PR must name its base;
 GitHub's default PR target is not the ordinary development target.
@@ -43,10 +46,9 @@ git status --short --branch
 git worktree list --porcelain
 git branch -vv
 git fetch origin --no-prune
-git rev-parse origin/integration/2.1.0
+git rev-parse origin/develop
 ```
 
-Once develop is active, replace the last ref with `origin/develop`.
 Record the resolved full SHA and create a uniquely named worktree/branch from
 that exact SHA. Use the existing external worktree location, or an explicitly
 chosen ignored `.worktrees/` directory. Confirm ownership and clean status
@@ -73,8 +75,9 @@ Handoffs must identify branch/worktree, base and head SHA, local/remote state,
 uncommitted work, remaining tasks, relevant validation and unverified hardware
 claims. A session note is a pointer, not a substitute for preserved source.
 
-PR creation and merging require explicit permission. During transition, target
-`integration/2.1.0`; after activation, ordinary tasks target `develop`.
+PR creation and merging require explicit permission. Ordinary tasks and beta
+fixes target `develop`; hotfix/release and workflow-only main changes are
+explicitly identified exceptions.
 Check that the PR delta contains only the intended task and no inherited
 unrelated features. Run existing targeted checks first; do not add tooling for
 this process. Existing CI requires typecheck, repository lint, both Jest
@@ -87,7 +90,7 @@ integrated state. No one session should silently merge another task.
 
 ## Releases, hotfixes and deployments
 
-The usual path after activation is:
+The usual path is:
 
 ```text
 task from develop -> focused checks -> authorized PR -> CI
@@ -118,21 +121,20 @@ to add paid services or production automation.
 
 ## Remote enforcement
 
-At develop activation, add pushes to `[main, develop]` to the existing CI
-workflow while retaining PR checks. Protect both branches with PR-only
-integration, the actual emitted CI status context, deletion protection and
-non-fast-forward protection. Keep required linear history disabled because
-merge commits are intentional.
+CI checks pushes to both main and develop and all PRs. Both branches require
+PR-only integration and the `Typecheck, lint and test` GitHub Actions status
+(app ID 15368), with strict up-to-date checks, deletion protection and
+non-fast-forward protection. Required linear history is disabled because
+merge commits are intentional. The workflow gate has no bypass actors and
+does not require a second human reviewer.
 
 Do not require approval from a second maintainer who does not exist. Minimize
 routine bypasses where supported, but report actual permission/platform limits.
 Keep default-branch/Copilot behavior unchanged unless separately authorized.
 Leave automatic branch deletion off until the historical audit is complete.
 
-**Current enforcement:** CI checks pushes to main and PRs. The existing main
-ruleset prevents deletion/non-fast-forward updates and enables code quality
-and Copilot review, but it does not require this CI job or PR-only integration.
-Develop protection is planned, not currently established. Documentation alone
+The existing main ruleset additionally enables code quality and Copilot review.
+No second automatic review target is added for develop. Documentation alone
 cannot guarantee an agent or administrator never bypasses the process.
 
 ## Preserve before cleaning

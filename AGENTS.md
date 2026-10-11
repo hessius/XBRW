@@ -8,10 +8,11 @@ the branch, ownership or destructive-action gates here.
 
 ## Current integration base
 
-The permanent `develop` migration is **not active yet**. Until the current 2.1.0
-integration cycle closes and the migration is explicitly approved, task branches
-start from a freshly fetched, pinned `origin/integration/2.1.0` commit.
-After activation, the ordinary base is `origin/develop`.
+The active development and 2.1.0 beta-testing line is `develop`. Task branches
+start from a freshly fetched, pinned `origin/develop` commit.
+The former `integration/2.1.0` candidate was carried into develop without
+promoting its application code to main. Beta fixes use the ordinary task/PR
+workflow; do not recreate the old version integration branch.
 Never pick a base merely because it is the current checkout.
 
 `main` is the approved release line. It already contains unreleased changes from
@@ -56,8 +57,8 @@ session note alone is not a durable remote backup.
 - A merge requires relevant checks and the existing CI gates. Release promotion
   also requires the release ledger's physical-device and external-app gates.
   Simulators/scripted transports do not prove NFC or BLE hardware safety.
-- Hotfixes start from approved `main` and are merged back into the active
-  integration line. Undo releases with fix/revert commits, never rewritten tags.
+- Hotfixes start from approved `main` and are merged back into `develop`.
+  Undo releases with fix/revert commits, never rewritten tags.
 - Keep ordinary task branches short-lived. A temporary release freeze branch
   is an explicitly approved exception, not a permanent version branch.
 - Git branch names do not select EAS channels. Do not add deployment automation
