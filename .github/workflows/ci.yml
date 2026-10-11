@@ -30,6 +30,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Worktree audit tests
+        run: npm run test:worktrees
+
       # The JSON report is written alongside the usual output, because a test
       # has failed twice under load (#91) and has never been identified: both
       # times the log that named it was thrown away, and it has not reproduced

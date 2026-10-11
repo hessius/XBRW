@@ -133,7 +133,9 @@ does not require a second human reviewer.
 Do not require approval from a second maintainer who does not exist. Minimize
 routine bypasses where supported, but report actual permission/platform limits.
 Keep default-branch/Copilot behavior unchanged unless separately authorized.
-Leave automatic branch deletion off until the historical audit is complete.
+Automatic remote branch deletion is enabled after the completed historical
+audit. It also handles PRs merged by the user. Enforced merge commits keep
+integrated source reachable; local follow-up work still requires preservation.
 
 The existing main ruleset additionally enables code quality and Copilot review.
 No second automatic review target is added for develop. Documentation alone
@@ -189,8 +191,33 @@ with blanket force. Prune stale origin tracking refs only after preservation
 and approval. Do not prune tags or the unrelated upstream remote.
 
 Re-list kept refs/worktrees and verify their tips after each batch. Keep the
-backup and audit after cleanup. Prefer weekly small reviews of completed task
-branches over large age-based deletion sweeps.
+backup and audit after cleanup.
+
+### Local cleanup after any merge
+
+At every agent startup and final handoff:
+
+```bash
+git fetch origin --no-prune
+npm run worktrees:check
+```
+
+The command is read-only and emits exact paths/head SHAs. It detects merge
+ancestry even when a human merged the PR and GitHub deleted its head branch.
+`protected` includes the primary checkout and main/develop checkouts.
+`dirty`, `unmerged` and `detached-keep` must remain until explicitly resolved.
+`merged-preserve-ignored` requires inspection/snapshot of ignored files, not
+an assumption that they are disposable. `merged-clean` still requires
+owner-idle confirmation, backup and exact-path/head approval before removal.
+Stale local-only integration refs are evidence to inspect, not proof of a
+remote merge; refresh origin and check the reported integration refs.
+
+Before ending a finished task, agents must execute the approved exact-path
+`git worktree remove` and branch cleanup, or record a specific owner/pending
+work/recovery pointer for retention. Do not leave completed worktrees
+unexplained. This also applies to human-merged PRs detected at the next session.
+No unattended process force-deletes local directories: remote merge status
+cannot establish that local edits or another session are disposable.
 
 ## Restore work
 
