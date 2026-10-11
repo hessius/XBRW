@@ -1,5 +1,5 @@
 import React, {useEffect, useRef, useState} from "react";
-import {Keyboard} from "react-native";
+import {Keyboard, View} from "react-native";
 import {usePathname} from "expo-router";
 
 import BrewMiniBar from "@/components/BrewMiniBar";
@@ -8,6 +8,9 @@ import BrewRatingBar from "@/components/BrewRatingBar";
 import {EXIT_GRACE} from "@/components/XbrwSheet";
 import {useSteadyRouter} from "@/hooks/steadyRouter";
 import {useLiveBrew} from "@/hooks/useLiveBrew";
+import {
+    performLiveBrewBarAction, requestLiveBrewBarNavigation, useLiveBrewBarCovered
+} from "@/hooks/useLiveBrewBarGuard";
 import {useRatingPrompt} from "@/hooks/useRatingPrompt";
 import {resolveAccent} from "@/library/accent";
 import {poursFromPlan} from "@/library/brew/BrewRecord";
@@ -39,6 +42,7 @@ export default function LiveBrewBar() {
     const prompt = useRatingPrompt();
     const router = useSteadyRouter();
     const pathname = usePathname();
+    const covered = useLiveBrewBarCovered();
     const wasSilent = useRef(SILENT.has(pathname));
     // The brew the note sheet is about, held here rather than read from the
     // prompt. Rating is what opens the sheet, and a rated brew is no longer a
@@ -117,23 +121,27 @@ export default function LiveBrewBar() {
 
     if (run !== null) {
         return (
-            <BrewMiniBar
-                recipeName={run.recipe.displayName()}
-                dose={run.recipe.dosage}
-                pours={run.recipe.pours}
-                samples={run.samples}
-                pauseIntervals={run.pauseIntervals}
-                bypass={run.bypass}
-                accent={resolveAccent(run.recipe)}
-                phase={run.phase}
-                elapsed={run.elapsed}
-                holding={run.holding}
-                heldSeconds={run.heldSeconds}
-                // `view=1`, not the recipe: this opens the run that is already
-                // going rather than asking for a new one.
-                onOpen={() => router.push("/brew?view=1")}
-                onDismiss={dismiss}
-            />
+            <View testID="live-brew-bar-host" accessibilityElementsHidden={covered}
+                importantForAccessibility={covered ? "no-hide-descendants" : "auto"}
+                pointerEvents={covered ? "none" : "auto"}>
+                <BrewMiniBar
+                    recipeName={run.recipe.displayName()}
+                    dose={run.recipe.dosage}
+                    pours={run.recipe.pours}
+                    samples={run.samples}
+                    pauseIntervals={run.pauseIntervals}
+                    bypass={run.bypass}
+                    accent={resolveAccent(run.recipe)}
+                    phase={run.phase}
+                    elapsed={run.elapsed}
+                    holding={run.holding}
+                    heldSeconds={run.heldSeconds}
+                    // `view=1`, not the recipe: this opens the run that is already
+                    // going rather than asking for a new one.
+                    onOpen={() => requestLiveBrewBarNavigation(() => router.push("/brew?view=1"))}
+                    onDismiss={() => performLiveBrewBarAction(dismiss)}
+                />
+            </View>
         );
     }
 
@@ -141,20 +149,22 @@ export default function LiveBrewBar() {
     if (asking === null && noting === null) return null;
 
     return (
-        <>
+        <View testID="live-brew-bar-host" accessibilityElementsHidden={covered}
+            importantForAccessibility={covered ? "no-hide-descendants" : "auto"}
+            pointerEvents={covered ? "none" : "auto"}>
             {asking !== null && (
                 <BrewRatingBar
                     recipeName={asking.recipeName}
                     figures={brewFigures(asking)}
                     pours={poursFromPlan(asking.plan)}
                     accent={asking.accent}
-                    onOpen={() => router.push(`/brewRecord?id=${asking.id}`)}
-                    onRate={(rating) => {
+                    onOpen={() => requestLiveBrewBarNavigation(() => router.push(`/brewRecord?id=${asking.id}`))}
+                    onRate={(rating) => performLiveBrewBarAction(() => {
                         // Written first, so dismissing the sheet loses nothing.
                         if (!prompt.rate(asking.id, rating)) return;
                         openNoteSheet(asking, rating);
-                    }}
-                    onDismiss={() => prompt.dismiss(asking.id)}
+                    })}
+                    onDismiss={() => performLiveBrewBarAction(() => prompt.dismiss(asking.id))}
                 />
             )}
             {noting !== null && (
@@ -185,6 +195,6 @@ export default function LiveBrewBar() {
                     onNoteDraft={setNoteDraft}
                 />
             )}
-        </>
+        </View>
     );
 }

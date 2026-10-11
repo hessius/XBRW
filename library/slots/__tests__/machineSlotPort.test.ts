@@ -1,6 +1,6 @@
 import Machine from "@/library/machine/Machine";
 import {readingOf} from "@/library/machine/frameLog";
-import {FRAME_GAP_MS, SLOT_DISPATCH_MS, SLOT_RECEIPT_MS, SLOT_COMPLETION_MS} from "@/constants/machine";
+import {FRAME_GAP_MS, HANDSHAKE_FRESH_MS, SLOT_DISPATCH_MS, SLOT_RECEIPT_MS, SLOT_COMPLETION_MS} from "@/constants/machine";
 import {buildType1, parseNotification} from "@/library/machine/protocol";
 import {FakeTransport} from "@/library/machine/__tests__/FakeTransport";
 import type {ConnectionScope} from "@/library/machine/Transport";
@@ -8,12 +8,15 @@ import {kermit, notification, status} from "@/library/machine/__tests__/protocol
 import {SlotDatabase} from "@/library/slots/SlotDatabase";
 import {installMachineSlotPort} from "@/library/slots/machineSlotPort";
 import {prepareSet, readSnapshot, snapshotRecipe} from "@/library/slots/slotModel";
-import {recoverSlots, writeSlots} from "@/library/slots/slotWriter";
+import {cancelSlots, recoverSlots, writeSlots, dismissSlots} from "@/library/slots/slotWriter";
+import {writeTeaSlotProbe, sendSlotRecoveryProbe} from "@/library/slots/teaSlotProbe";
 import {createTestDatabase} from "@/test-utils/sqlite";
 import {coffee} from "./fixtures";
+import Pour from "@/library/Pour";
+import {CUP_TYPE} from "@/library/Recipe";
 
-function receipt(marker = 0xC2) {
-    const bytes = notification(0xF6, 0x2C, []);
+function receipt(marker = 0xC2, code = 11510) {
+    const bytes = notification(code & 255, code >> 8, []);
     bytes[9] = marker;
     const crc = kermit(bytes.slice(0, -2));
     bytes[bytes.length - 2] = crc & 255;
@@ -25,8 +28,15 @@ class Radio extends FakeTransport {
     get connectedDeviceId() { return this.connectedTo; }
     behavior: "normal" | "missing" | "hang" | "duplicate" | "refused" | "noFinal" = "normal";
     slots: number[] = [];
+    recovery: "ack" | "refused" | "missing" | "hang" | "ackOnly" = "ack";
     override async write(frame: Uint8Array) {
         await super.write(frame);
+        if ((frame[3] | frame[4] << 8) === 40526) {
+            if (this.recovery !== "missing") this.emit(receipt(this.recovery === "refused" ? 0xC1 : 0xC2, 40526));
+            if (this.recovery === "ack") this.emit(status(0x01));
+            if (this.recovery === "hang") await new Promise<void>(() => {});
+            return;
+        }
         if ((frame[3] | frame[4] << 8) !== 11510) return;
         this.slots.push(frame[10]);
         if (this.behavior === "missing") return;
@@ -65,6 +75,171 @@ it("parses command receipts without inventing a slot identifier", () => {
     });
 });
 
+it("dismisses an ordinary interrupted write with 40526 and fresh normal state, without claiming it saved", async () => {
+    const {sql, store, port, radio, machine} = await ready();
+    radio.behavior = "missing";
+    jest.useFakeTimers();
+    const writing = writeSlots(store, identity, port);
+    const stopped = expect(writing).rejects.toThrow(/confirm/i);
+    await jest.advanceTimersByTimeAsync(SLOT_RECEIPT_MS + 1);
+    await stopped;
+    radio.emit(status(0x43));
+    const drafts = store.read("one").drafts;
+    await dismissSlots(store, identity, port);
+    expect(new SlotDatabase(sql).read("one")).toMatchObject({journal: null, written: null, drafts});
+    expect(radio.slots).toEqual([0]);
+    expect(radio.written.filter(frame => (frame[3] | frame[4] << 8) === 40526)).toEqual([buildType1(40526)]);
+    await machine.send(buildType1(3500));
+});
+
+it("clears a timed-out write in known normal state without sending recovery", async () => {
+    const {store, port, radio} = await ready();
+    const snapshot = snapshotRecipe(coffee());
+    store.begin("one", {id: "timed-out", serial: identity.serial, slots: [snapshot, snapshot, snapshot],
+        frames: prepareSet([snapshot, snapshot, snapshot]), acknowledged: 0, inFlight: null, error: null});
+    store.dispatching("one", "timed-out", 0);
+    radio.emit(status(0x01));
+    const before = radio.written.length;
+    await dismissSlots(store, identity, port);
+    expect(radio.written).toHaveLength(before);
+    expect(store.read("one").journal).toBeNull();
+});
+
+it("does not dispatch recovery if saving ends during handshake pacing, and clears on retry", async () => {
+    const {store, port, radio} = await ready(FRAME_GAP_MS);
+    const snapshot = snapshotRecipe(coffee());
+    store.begin("one", {id: "race", serial: identity.serial, slots: [snapshot, snapshot, snapshot],
+        frames: prepareSet([snapshot, snapshot, snapshot]), acknowledged: 0, inFlight: null, error: null});
+    radio.emit(status(0x43));
+    jest.useFakeTimers();
+    await jest.advanceTimersByTimeAsync(HANDSHAKE_FRESH_MS + 1);
+    const pending = dismissSlots(store, identity, port);
+    const rejected = expect(pending).rejects.toThrow(/saving|normal/i);
+    await flush();
+    radio.emit(status(0x01));
+    await jest.advanceTimersByTimeAsync(FRAME_GAP_MS + 1);
+    await rejected;
+    expect(radio.sent).not.toContain(40526);
+    expect(store.read("one").journal?.id).toBe("race");
+    await dismissSlots(store, identity, port);
+    expect(store.read("one").journal).toBeNull();
+});
+
+it("rejects recovery in unknown state without sending or forgetting the journal", async () => {
+    const {store, port, radio, machine} = await ready();
+    const snapshot = snapshotRecipe(coffee());
+    store.begin("one", {id: "unknown", serial: identity.serial, slots: [snapshot, snapshot, snapshot],
+        frames: prepareSet([snapshot, snapshot, snapshot]), acknowledged: 0, inFlight: null, error: null});
+    machine.state = null;
+    const before = radio.written.length;
+    await expect(dismissSlots(store, identity, port)).rejects.toThrow(/saving|normal/i);
+    expect(radio.written).toHaveLength(before);
+    expect(store.read("one").journal?.id).toBe("unknown");
+});
+
+it.each(["V12.0D.399", "", "unknown"])("rejects long tea steeps on unqualified firmware %s before sending", async firmware => {
+    const {store, port, radio, machine} = await ready();
+    const recipe = coffee("Tea");
+    recipe.cupType = CUP_TYPE.TEA;
+    recipe.grinder = false;
+    recipe.dosage = 6;
+    recipe.ratio = 15;
+    recipe.pours = [new Pour(1, 90, 92, 35, 0, 2, 121)];
+    store.assign("one", 1, snapshotRecipe(recipe));
+    machine.info!.firmware = firmware;
+    const before = radio.written.length;
+    await expect(writeSlots(store, identity, port)).rejects.toThrow(/120.*firmware/i);
+    expect(radio.written).toHaveLength(before);
+    expect(store.read("one").journal).toBeNull();
+});
+
+it("writes tea steeps longer than two minutes on qualified firmware", async () => {
+    const {store, port, radio} = await ready();
+    const recipe = coffee("Tea");
+    recipe.cupType = CUP_TYPE.TEA;
+    recipe.grinder = false;
+    recipe.dosage = 6;
+    recipe.ratio = 15;
+    recipe.pours = [new Pour(1, 90, 92, 35, 0, 2, 360)];
+    store.assign("one", 1, snapshotRecipe(recipe));
+    await writeSlots(store, identity, port);
+    expect(radio.slots).toEqual([0, 1, 2]);
+    expect(store.read("one").written?.slots[1].blob.slice(5, 7)).toEqual([0, 192]);
+});
+
+it.each(["refused", "missing", "ackOnly"] as const)("retains ordinary write after %s recovery", async recovery => {
+    const {store, port, radio, machine} = await ready();
+    const snapshot = snapshotRecipe(coffee());
+    store.begin("one", {id: "interrupted", serial: identity.serial, slots: [snapshot, snapshot, snapshot],
+        frames: prepareSet([snapshot, snapshot, snapshot]), acknowledged: 0, inFlight: null, error: null});
+    store.dispatching("one", "interrupted", 0);
+    radio.emit(status(0x43));
+    radio.recovery = recovery;
+    jest.useFakeTimers();
+    const pending = dismissSlots(store, identity, port);
+    const refused = expect(pending).rejects.toThrow(/refused|reply|normal/i);
+    await jest.advanceTimersByTimeAsync(SLOT_RECEIPT_MS + SLOT_COMPLETION_MS + 1);
+    await refused;
+    expect(store.read("one").journal?.id).toBe("interrupted");
+    await expect(machine.send(buildType1(3500))).rejects.toThrow(/incomplete/i);
+});
+
+it("parses the recovery command receipt without claiming machine operability", () => {
+    expect(parseNotification(Uint8Array.from(receipt(0xC2, 40526)))).toEqual({
+        kind: "receipt", code: 40526, status: 0xC2
+    });
+});
+
+it("sends only A, then 40526 under ownership, retaining the journal until explicit normal-state cancellation", async () => {
+    const {store, port, radio, machine} = await ready();
+    radio.emit(status(0x01));
+    await writeTeaSlotProbe(store, identity, port, {candidateId: "slot-apk-recovery-40526-v1"});
+    radio.emit(status(0x43));
+    await expect(machine.send(buildType1(3500))).rejects.toThrow(/incomplete/i);
+    await sendSlotRecoveryProbe(store, identity, port);
+    expect(radio.slots).toEqual([0]);
+    expect(radio.written.filter(frame => (frame[3] | frame[4] << 8) === 40526))
+        .toEqual([buildType1(40526)]);
+    expect(store.read("one").journal?.acknowledged).toBe(1);
+    await expect(machine.send(buildType1(3500))).rejects.toThrow(/incomplete/i);
+    await cancelSlots(store, identity, port);
+    await machine.send(buildType1(3500));
+});
+
+it("a refused recovery command retains the partial write and cannot claim a normal machine", async () => {
+    const {store, port, radio, machine} = await ready();
+    radio.emit(status(0x01));
+    await writeTeaSlotProbe(store, identity, port, {candidateId: "slot-apk-recovery-40526-v1"});
+    radio.emit(status(0x43));
+    radio.recovery = "refused";
+    await expect(sendSlotRecoveryProbe(store, identity, port)).rejects.toThrow(/refused/i);
+    expect(store.read("one").experiment?.evidence.at(-1)?.kind).toBe("recovery-error");
+    await expect(cancelSlots(store, identity, port)).rejects.toThrow(/busy|saving/i);
+    await expect(machine.send(buildType1(3500))).rejects.toThrow(/incomplete/i);
+});
+
+it.each(["missing", "hang"] as const)("retains the lab journal after a %s recovery reply or native dispatch", async recovery => {
+    const {store, port, radio, machine} = await ready();
+    radio.emit(status(0x01));
+    await writeTeaSlotProbe(store, identity, port, {candidateId: "slot-apk-recovery-40526-v1"});
+    radio.emit(status(0x43));
+    radio.recovery = recovery;
+    jest.useFakeTimers();
+    const pending = sendSlotRecoveryProbe(store, identity, port);
+    const rejected = expect(pending).rejects.toThrow(/No reply|finish sending/i);
+    await flush();
+    // A different command's ACK cannot confirm 40526.
+    radio.emit(receipt(0xC2, 40525));
+    await jest.advanceTimersByTimeAsync(SLOT_DISPATCH_MS + SLOT_RECEIPT_MS + 1);
+    await rejected;
+    expect(store.read("one").journal).toMatchObject({acknowledged: 1, inFlight: null});
+    expect(store.read("one").experiment?.evidence.at(-1)?.kind).toBe("recovery-error");
+    await expect(machine.send(buildType1(3500))).rejects.toThrow(/incomplete/i);
+    if (recovery === "hang") {
+        await expect(sendSlotRecoveryProbe(store, identity, port)).rejects.toThrow(/busy/i);
+    }
+});
+
 it("retains receipt status in the existing diagnostic log", () => {
     expect(readingOf(parseNotification(Uint8Array.from(receipt()))))
         .toBe("receipt 11510 status 0xc2");
@@ -77,6 +252,388 @@ it("uses real Machine receipts and buffers early ACK and final completion until 
     expect(store.read("one").journal).toBeNull();
     expect(store.read("one").written).not.toBeNull();
     await machine.send(buildType1(3500));
+});
+
+it.each([null, 0x43, 0x1F, 0x0C])(
+    "rejects a fresh tea probe in state %s before original preparation, database mutation or radio writes", async (state) => {
+        const {store, port, radio, machine} = await ready();
+        machine.state = state;
+        const before = store.read("one");
+        const count = radio.written.length;
+        const prepare = jest.spyOn(store, "beginProbe");
+        const read = jest.spyOn(store, "read");
+        await expect(writeTeaSlotProbe(store, identity, port)).rejects.toThrow(/known.*normal/i);
+        expect(prepare).not.toHaveBeenCalled();
+        expect(read).not.toHaveBeenCalled();
+        expect(store.read("one")).toBe(before);
+        expect(radio.written).toHaveLength(count);
+    }
+);
+
+it.each([0x01, 0x24, 0x41])("accepts a fresh tea probe in known startable state %s", async (state) => {
+    const {store, port, radio} = await ready();
+    radio.emit(status(state));
+    const acquire = jest.spyOn(port, "acquire");
+    await writeTeaSlotProbe(store, identity, port);
+    expect(acquire).toHaveBeenCalledTimes(1);
+    expect(acquire).toHaveBeenCalledWith(identity, {restart: false, requireKnownNormal: true});
+    expect(radio.slots).toEqual([0, 1, 2]);
+    expect(store.read("one").experiment?.evidence.at(-1)?.kind).toBe("final");
+});
+
+it("rechecks known normal state under the same lease before preparing a fresh probe", async () => {
+    const {store, port, radio} = await ready();
+    radio.emit(status(0x01));
+    const before = store.read("one");
+    const count = radio.written.length;
+    const guarded = {
+        ...port,
+        acquire: async (target: typeof identity, options?: Parameters<typeof port.acquire>[1]) => {
+            const lease = await port.acquire(target, options);
+            radio.emit(status(0x43));
+            return lease;
+        }
+    };
+    await expect(writeTeaSlotProbe(store, identity, guarded)).rejects.toThrow(/normal|busy/i);
+    expect(store.read("one")).toBe(before);
+    expect(radio.written).toHaveLength(count);
+});
+
+it("makes a refused first slot retryable once the tank is filled and the machine is idle", async () => {
+    const {store, port, radio} = await ready();
+    radio.behavior = "refused";
+    await expect(writeSlots(store, identity, port)).rejects.toThrow(/refused/i);
+    expect(store.read("one").journal).toMatchObject({acknowledged: 0, inFlight: null});
+    radio.emit(status(0x01));
+    radio.behavior = "normal";
+    await recoverSlots(store, identity, port, {restart: true});
+    expect(radio.slots).toEqual([0, 0, 1, 2]);
+    expect(store.read("one").journal).toBeNull();
+});
+
+it("restarts all three immutable slots when an interrupted machine has returned to idle", async () => {
+    const {store, port, radio} = await ready();
+    radio.behavior = "refused";
+    await expect(writeSlots(store, identity, port)).rejects.toThrow();
+    store.dispatching("one", store.read("one").journal!.id, 0);
+    store.acknowledge("one", store.read("one").journal!.id, 0);
+    radio.emit(status(0x01));
+    radio.behavior = "normal";
+    await recoverSlots(store, identity, port, {restart: true});
+    expect(radio.slots).toEqual([0, 0, 1, 2]);
+    expect(store.read("one").written?.slots[1].name).toBe("1");
+});
+
+it("allows an explicitly confirmed idle restart of a legacy uncertain journal after app recreation", async () => {
+    const {sql, store, machine} = await ready();
+    const slots = store.read("one").drafts.map(readSnapshot);
+    store.begin("one", {
+        id: "legacy", serial: identity.serial, slots: [slots[0], slots[1], slots[2]],
+        frames: prepareSet(store.read("one").drafts), acknowledged: 0, inFlight: null, error: null
+    });
+    store.dispatching("one", "legacy", 0);
+    await machine.disconnect();
+    const reopened = new SlotDatabase(sql);
+    const radio = new Radio();
+    const owner = new Machine(radio, {frameGapMs: 0});
+    const port = installMachineSlotPort(owner, reopened);
+    await owner.connect("one");
+    await recoverSlots(reopened, identity, port, {restart: true});
+    expect(radio.slots).toEqual([0, 1, 2]);
+    expect(reopened.read("one").journal).toBeNull();
+});
+
+it("cancels a confirmed normal-machine journal without sending anything or discarding recipes", async () => {
+    const {store, port, radio, machine} = await ready();
+    radio.behavior = "refused";
+    await expect(writeSlots(store, identity, port)).rejects.toThrow();
+    const drafts = store.read("one").drafts;
+    radio.emit(status(0x01));
+    const count = radio.written.length;
+    await cancelSlots(store, identity, port);
+    expect(radio.written).toHaveLength(count);
+    expect(store.read("one").journal).toBeNull();
+    expect(store.read("one").drafts).toEqual(drafts);
+    expect(store.read("one").written).toBeNull();
+    await machine.send(buildType1(3500));
+});
+
+it.each([0x43, 0x10, 0x1F, 0x0C])(
+    "refuses cancellation or a confirmed full restart while the machine reports state %s", async (state) => {
+        const {store, port, radio} = await ready();
+        radio.behavior = "refused";
+        await expect(writeSlots(store, identity, port)).rejects.toThrow();
+        radio.emit(status(state));
+        const before = store.read("one");
+        await expect(cancelSlots(store, identity, port)).rejects.toThrow(/machine|water/i);
+        await expect(recoverSlots(store, identity, port, {restart: true})).rejects.toThrow(/machine|water/i);
+        expect(store.read("one")).toBe(before);
+        expect(radio.slots).toEqual([0]);
+    }
+);
+
+it.each(["cancel", "restart"] as const)(
+    "retains the journal when saving begins after %s lease acquisition but before its durable boundary", async (operation) => {
+        const {store, port, radio, machine} = await ready();
+        radio.behavior = "refused";
+        await expect(writeSlots(store, identity, port)).rejects.toThrow();
+        const id = store.read("one").journal!.id;
+        store.dispatching("one", id, 0);
+        store.acknowledge("one", id, 0);
+        store.dispatching("one", id, 1);
+        radio.emit(status(0x01));
+        const before = store.read("one");
+        const count = radio.written.length;
+        const guarded = {
+            ...port,
+            acquire: async (bound: typeof identity, options?: Parameters<typeof port.acquire>[1]) => {
+                const lease = await port.acquire(bound, options);
+                radio.emit(status(0x43));
+                return lease;
+            }
+        };
+        const attempt = operation === "cancel"
+            ? cancelSlots(store, identity, guarded)
+            : recoverSlots(store, identity, guarded, {restart: true});
+        await expect(attempt).rejects.toThrow(/busy|saving|normal/i);
+        expect(store.read("one").journal).toMatchObject({
+            ...before.journal, error: operation === "cancel" ? before.journal!.error : expect.any(String)
+        });
+        expect(store.read("one").drafts).toEqual(before.drafts);
+        expect(store.read("one").written).toBeNull();
+        expect(radio.written).toHaveLength(count);
+        await expect(machine.send(buildType1(3500))).rejects.toThrow(/Easy Mode/i);
+    }
+);
+
+it("keeps the recovery reservation when cancellation cannot be persisted", async () => {
+    const {sql, store, port, radio, machine} = await ready();
+    radio.behavior = "refused";
+    await expect(writeSlots(store, identity, port)).rejects.toThrow();
+    radio.emit(status(0x01));
+    sql.execSync("CREATE TRIGGER fail_cancel BEFORE INSERT ON easy_mode_slots BEGIN SELECT RAISE(ABORT, 'disk full'); END;");
+    await expect(cancelSlots(store, identity, port)).rejects.toThrow(/disk full/i);
+    expect(store.read("one").journal).not.toBeNull();
+    await expect(machine.send(buildType1(3500))).rejects.toThrow(/Easy Mode/i);
+});
+
+it("finishes only the remaining slots when B was refused and the machine is still saving", async () => {
+    const {store, port, radio} = await ready();
+    const write = radio.write.bind(radio);
+    radio.write = async (frame) => {
+        if ((frame[3] | frame[4] << 8) === 11510 && frame[10] === 1) {
+            radio.written.push(frame.slice());
+            radio.slots.push(1);
+            radio.emit(receipt(0xC1));
+        } else await write(frame);
+    };
+    await expect(writeSlots(store, identity, port)).rejects.toThrow(/refused/i);
+    expect(store.read("one").journal).toMatchObject({acknowledged: 1, inFlight: null});
+    radio.emit(status(0x43));
+    radio.write = write;
+    await recoverSlots(store, identity, port);
+    expect(radio.slots).toEqual([0, 1, 1, 2]);
+    expect(store.read("one").journal).toBeNull();
+});
+
+async function unknownB() {
+    const setup = await ready();
+    const original = setup.radio.write.bind(setup.radio);
+    setup.radio.write = async (frame) => {
+        if ((frame[3] | frame[4] << 8) === 11510 && frame[10] === 1) {
+            setup.radio.behavior = "missing";
+        }
+
+        await original(frame);
+    };
+    jest.useFakeTimers();
+    const writing = writeSlots(setup.store, identity, setup.port).catch((error: Error) => error);
+    await jest.advanceTimersByTimeAsync(SLOT_RECEIPT_MS);
+    expect(await writing).toBeInstanceOf(Error);
+    expect(setup.store.read("one").journal).toMatchObject({acknowledged: 1, inFlight: 1});
+    setup.radio.emit(status(0x43));
+    setup.radio.write = original;
+    setup.radio.behavior = "normal";
+    return setup;
+}
+
+it("cannot opt a new write into the existing-journal finish permission", async () => {
+            const {port, radio, store} = await ready();
+            await expect(port.acquire(identity, {finishUncertain: true})).rejects.toThrow(/existing|journal/i);
+            expect(store.read("one").journal).toBeNull();
+            expect(radio.slots).toEqual([]);
+        });
+
+        it("rechecks hardware activity after acquiring uncertain recovery and before replay", async () => {
+            const {store, port, radio} = await unknownB();
+            const guarded = {
+                ...port,
+                acquire: async (bound: typeof identity, options?: Parameters<typeof port.acquire>[1]) => {
+                    const lease = await port.acquire(bound, options);
+                    radio.emit(status(0x23));
+                    return lease;
+                }
+            };
+            await expect(recoverSlots(store, identity, guarded, {finishUncertain: true}))
+                .rejects.toThrow(/busy|brew/i);
+            expect(radio.slots).toEqual([0, 1]);
+            expect(store.read("one").journal?.inFlight).toBe(1);
+        });
+
+        it("does not promote observe-only recovery if its fresh saved event cannot be committed", async () => {
+            const {store, port, radio, sql, machine} = await ready();
+            radio.behavior = "noFinal";
+            jest.useFakeTimers();
+            const writing = writeSlots(store, identity, port).catch((error: Error) => error);
+            await jest.advanceTimersByTimeAsync(SLOT_COMPLETION_MS);
+            expect(await writing).toBeInstanceOf(Error);
+            radio.emit(status(0x43));
+            const frames = radio.written.length;
+            const observing = recoverSlots(store, identity, port, {finishUncertain: true})
+                .catch((error: Error) => error);
+            await flush();
+            sql.execSync("CREATE TRIGGER fail_observe BEFORE INSERT ON easy_mode_slots BEGIN SELECT RAISE(ABORT, 'disk full'); END;");
+            radio.emit(status(0x25));
+            expect(await observing).toEqual(expect.objectContaining({message: expect.stringMatching(/disk full/i)}));
+            expect(radio.written).toHaveLength(frames);
+            expect(new SlotDatabase(sql).read("one").journal?.acknowledged).toBe(3);
+            expect(store.read("one").written).toBeNull();
+            await expect(machine.send(buildType1(3500))).rejects.toThrow(/Easy Mode/i);
+        });
+it("requires explicit consent to replay unknown B while saving, then sends immutable B/C only", async () => {
+    const {store, port, radio} = await unknownB();
+    const journal = store.read("one").journal!;
+    await expect(recoverSlots(store, identity, port)).rejects.toThrow(/unknown/i);
+    await expect(port.acquire(identity)).rejects.toThrow(/normal/i);
+    const frames = radio.written.length;
+    await recoverSlots(store, identity, port, {finishUncertain: true});
+    expect(radio.slots).toEqual([0, 1, 1, 2]);
+    expect(radio.written.slice(frames).map(frame => Array.from(frame))).toEqual(journal.frames.slice(1));
+    expect(store.read("one").written?.slots).toEqual(journal.slots);
+});
+
+it.each([0x03, 0x1F, 0x23, 0x0C])(
+    "explicit uncertain finish does not authorise unsafe machine state %s", async (state) => {
+        const {store, port, radio} = await unknownB();
+        radio.emit(status(state));
+        await expect(recoverSlots(store, identity, port, {finishUncertain: true}))
+            .rejects.toThrow(/busy|machine/i);
+        expect(radio.slots).toEqual([0, 1]);
+        expect(store.read("one").journal?.inFlight).toBe(1);
+    }
+);
+
+it("requires a fresh saved event for observe-only recovery and sends no native frames", async () => {
+    const {store, port, radio} = await ready();
+    radio.behavior = "noFinal";
+    jest.useFakeTimers();
+    const write = writeSlots(store, identity, port).catch((error: Error) => error);
+    await jest.advanceTimersByTimeAsync(SLOT_COMPLETION_MS);
+    expect(await write).toBeInstanceOf(Error);
+    radio.emit(status(0x25));
+    radio.emit(status(0x43));
+    const frames = radio.written.length;
+    let completed = false;
+    const observing = recoverSlots(store, identity, port, {finishUncertain: true})
+        .then(() => { completed = true; });
+    await flush();
+    radio.emit(status(0x01));
+    await flush();
+    expect(completed).toBe(false);
+    expect(store.read("one").written).toBeNull();
+    radio.emit(status(0x25));
+    await observing;
+    expect(completed).toBe(true);
+    expect(radio.written).toHaveLength(frames);
+    expect(store.read("one").journal).toBeNull();
+});
+
+it("bounds observe-only waiting with no native sends, even when idle and handshake expired", async () => {
+    const {store, port, radio, machine} = await ready();
+    radio.behavior = "noFinal";
+    jest.useFakeTimers();
+    const write = writeSlots(store, identity, port).catch((error: Error) => error);
+    await jest.advanceTimersByTimeAsync(SLOT_COMPLETION_MS);
+    expect(await write).toBeInstanceOf(Error);
+    radio.emit(status(0x25));
+    radio.emit(status(0x01));
+    await jest.advanceTimersByTimeAsync(HANDSHAKE_FRESH_MS + 1);
+    const frames = radio.written.length;
+    const observing = recoverSlots(store, identity, port, {finishUncertain: true})
+        .catch((error: Error) => error);
+    await jest.advanceTimersByTimeAsync(SLOT_COMPLETION_MS);
+    expect(await observing).toEqual(expect.objectContaining({message: expect.stringMatching(/saved/i)}));
+    expect(radio.written).toHaveLength(frames);
+    expect(store.read("one").journal?.acknowledged).toBe(3);
+    expect(store.read("one").written).toBeNull();
+    await expect(machine.send(buildType1(3500))).rejects.toThrow(/Easy Mode/i);
+    expect(jest.getTimerCount()).toBe(0);
+});
+
+it("explicit finish cannot acquire over a timed-out pending native write", async () => {
+    const {store, port, radio} = await ready();
+    radio.behavior = "hang";
+    jest.useFakeTimers();
+    const writing = writeSlots(store, identity, port).catch((error: Error) => error);
+    await jest.advanceTimersByTimeAsync(SLOT_DISPATCH_MS);
+    expect(await writing).toBeInstanceOf(Error);
+    radio.emit(status(0x43));
+    await expect(recoverSlots(store, identity, port, {finishUncertain: true}))
+        .rejects.toThrow(/busy/i);
+    expect(radio.slots).toEqual([0]);
+});
+
+it("does not cancel or restart over a still-pending native dispatch after its timeout", async () => {
+    const {store, port, radio} = await ready();
+    jest.useFakeTimers();
+    radio.behavior = "hang";
+    const result = writeSlots(store, identity, port).catch((error: Error) => error);
+    await jest.advanceTimersByTimeAsync(SLOT_DISPATCH_MS);
+    expect(await result).toBeInstanceOf(Error);
+    radio.emit(status(0x01));
+    await expect(cancelSlots(store, identity, port)).rejects.toThrow(/busy/i);
+    await expect(recoverSlots(store, identity, port, {restart: true})).rejects.toThrow(/busy/i);
+    expect(store.read("one").journal).not.toBeNull();
+});
+
+it("checks the whole set against the link's frame budget before writing A", async () => {
+    const {store, port, radio} = await ready();
+    const large = coffee();
+    large.dosage = 10;
+    large.ratio = 5;
+    large.pours = Array.from({length: 10}, (_, index) => new Pour(index + 1, 5, 93, 30, 0, 0, 0));
+    store.assign("one", 2, snapshotRecipe(large));
+    radio.frameBudget = 80;
+    await expect(writeSlots(store, identity, port)).rejects.toThrow(/fit|Bluetooth|link/i);
+    expect(radio.slots).toEqual([]);
+    expect(store.read("one").journal).toBeNull();
+});
+
+it("can cancel after the handshake expires without sending anything to the machine", async () => {
+    const {store, port, radio} = await ready();
+    radio.behavior = "refused";
+    await expect(writeSlots(store, identity, port)).rejects.toThrow();
+    jest.useFakeTimers();
+    await jest.advanceTimersByTimeAsync(HANDSHAKE_FRESH_MS + 1);
+    radio.emit(status(0x01));
+    const before = radio.written.length;
+    await cancelSlots(store, identity, port);
+    expect(radio.written).toHaveLength(before);
+    expect(store.read("one").journal).toBeNull();
+});
+
+it("renews an expired handshake under the exclusive owner when retrying", async () => {
+    const {store, port, radio} = await ready();
+    radio.behavior = "refused";
+    await expect(writeSlots(store, identity, port)).rejects.toThrow();
+    jest.useFakeTimers();
+    await jest.advanceTimersByTimeAsync(HANDSHAKE_FRESH_MS + 1);
+    radio.emit(status(0x01));
+    radio.behavior = "normal";
+    await recoverSlots(store, identity, port, {restart: true});
+    expect(radio.sent.filter((code) => code === 8100)).toHaveLength(2);
+    expect(radio.slots).toEqual([0, 0, 1, 2]);
+    expect(store.read("one").journal).toBeNull();
 });
 
 it.each(["missing", "hang", "duplicate", "refused", "noFinal"] as const)(
@@ -344,12 +901,15 @@ it("does not let a late old write mutate pause provenance or claim a send on a n
         && (entry.frame[3] | entry.frame[4] << 8) === 40518)).toBe(false);
 });
 
-it("refuses a stale session before creating a new journal rather than guessing that it is still authorised", async () => {
-    const {store, port} = await ready();
+it("renews a stale session before dispatching the first slot", async () => {
+    const {store, port, radio} = await ready();
     jest.useFakeTimers();
     await jest.advanceTimersByTimeAsync(20_001);
-    await expect(writeSlots(store, identity, port)).rejects.toThrow(/session|reconnect/i);
+    await writeSlots(store, identity, port);
+    expect(radio.sent.filter((code) => code === 8100)).toHaveLength(2);
+    expect(radio.slots).toEqual([0, 1, 2]);
     expect(store.read("one").journal).toBeNull();
+    expect(store.read("one").written).not.toBeNull();
 });
 
 it("will not clear a background invalidation until the app is active", async () => {
@@ -443,7 +1003,7 @@ it("rejects an observable duplicate between slots and leaves the known boundary 
         if (store.read("one").journal?.acknowledged === 1
             && store.read("one").journal?.inFlight === null) radio.emit(receipt());
     });
-    await expect(writeSlots(store, identity, port)).rejects.toThrow(/duplicate/i);
+    await expect(writeSlots(store, identity, port)).rejects.toThrow(/unexpected reply/i);
     off();
     expect(radio.slots).toEqual([0]);
     expect(store.read("one").journal).toMatchObject({acknowledged: 1, inFlight: null});
@@ -470,7 +1030,7 @@ it("does not confuse native command acceptance with a finished standalone grind/
 });
 
 it("does not renew the current session with a late old handshake completion", async () => {
-    const {machine, port, radio} = await ready();
+    const {store, machine, port, radio} = await ready();
     jest.useFakeTimers();
     await jest.advanceTimersByTimeAsync(20_001);
     const original = radio.write.bind(radio);
@@ -490,7 +1050,9 @@ it("does not renew the current session with a late old handshake completion", as
     await jest.advanceTimersByTimeAsync(20_001);
     release();
     expect(await oldQuery).toBeInstanceOf(Error);
-    await expect(port.acquire(identity)).rejects.toThrow(/session|reconnect/i);
+    const handshakes = radio.sent.filter((code) => code === 8100).length;
+    await writeSlots(store, identity, port);
+    expect(radio.sent.filter((code) => code === 8100)).toHaveLength(handshakes + 1);
 });
 
 it("cannot use a saved status heard before the current attempt as final completion", async () => {
@@ -563,12 +1125,13 @@ it("stops subsequent frames when durable acknowledgement fails", async () => {
     await expect(machine.send(buildType1(3500))).rejects.toThrow(/Easy Mode/i);
 });
 
-it.each(["native", "budget"] as const)("retains uncertainty after a %s error", async (failure) => {
+it.each(["native", "budget"] as const)("persists only actual dispatch uncertainty after a %s error", async (failure) => {
     const {store, port, radio} = await ready();
     if (failure === "native") radio.failWriteOf = {code: 11510, reason: "native refused"};
     else radio.frameBudget = 20;
-    await expect(writeSlots(store, identity, port)).rejects.toThrow(/native refused|too narrow/i);
-    expect(store.read("one").journal?.inFlight).toBe(0);
+    await expect(writeSlots(store, identity, port)).rejects.toThrow(/native refused|too large/i);
+    if (failure === "native") expect(store.read("one").journal?.inFlight).toBe(0);
+    else expect(store.read("one").journal).toBeNull();
     expect(radio.slots).toEqual([]);
 });
 

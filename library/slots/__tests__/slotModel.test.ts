@@ -1,8 +1,34 @@
 import {CUP_TYPE} from "@/library/Recipe";
+import Pour from "@/library/Pour";
 import {
-    snapshotRecipe, prepareSet, snapshotStatus, slotMarkers, emptySlotRecord
+    snapshotRecipe, prepareSet, snapshotStatus, slotMarkers, emptySlotRecord,
+    slotNeedsWrite, unwrittenSlotCount, readSnapshot
 } from "@/library/slots/slotModel";
 import {coffee} from "./fixtures";
+
+it("counts only populated drafts whose bytes differ from the last written set", () => {
+    const record = emptySlotRecord();
+    const recipe = coffee();
+    const snapshot = snapshotRecipe(recipe);
+    expect(unwrittenSlotCount(record)).toBe(0);
+    record.drafts = [snapshot, null, snapshot];
+    expect(slotNeedsWrite(record, 0)).toBe(true);
+    expect(slotNeedsWrite(record, 1)).toBe(false);
+    expect(unwrittenSlotCount(record)).toBe(2);
+    record.written = {at: 1, slots: [snapshot, snapshot, snapshot]};
+    recipe.name = "Renamed";
+    recipe.uuid = "another-source";
+    record.drafts[0] = snapshotRecipe(recipe);
+    expect(slotNeedsWrite(record, 0)).toBe(false);
+    expect(unwrittenSlotCount(record)).toBe(0);
+    recipe.pours[0].temperature = 92;
+    record.drafts[0] = snapshotRecipe(recipe);
+    expect(slotNeedsWrite(record, 0)).toBe(true);
+    expect(unwrittenSlotCount(record)).toBe(1);
+    recipe.pours[0].temperature = 93;
+    record.drafts[0] = snapshotRecipe(recipe);
+    expect(unwrittenSlotCount(record)).toBe(0);
+});
 
 it("encodes the documented coffee blob with hardware-proven grinder flags", () => {
     const recipe = coffee();
@@ -29,13 +55,70 @@ it("rejects a ratio outside the shared brew bounds", () => {
     expect(() => snapshotRecipe(recipe)).toThrow(/ratio/i);
 });
 
-it("rejects unsupported tea and bypass rather than silently changing the recipe", () => {
+it("rejects invalid tea and bypass rather than silently changing the recipe", () => {
     const recipe = coffee();
     recipe.cupType = CUP_TYPE.TEA;
-    expect(() => snapshotRecipe(recipe)).toThrow(/tea/i);
+    expect(() => snapshotRecipe(recipe)).toThrow(/90 ml|90|dose/i);
     recipe.cupType = CUP_TYPE.OMNI;
     recipe.bypassEnabled = true;
     expect(() => snapshotRecipe(recipe)).toThrow(/bypass/i);
+});
+
+it.each([1, 2, 3])("writes ordinary %i-steep tea with the official slot selector and timing", count => {
+    const recipe = coffee("Tea");
+    recipe.cupType = CUP_TYPE.TEA;
+    recipe.grinder = false;
+    recipe.grindRPM = 120;
+    recipe.dosage = 6;
+    recipe.ratio = 15 * count;
+    recipe.pours = Array.from({length: count}, (_, i) => new Pour(i + 1, 90, 92, 35, 0, 2, 20));
+    const snapshot = snapshotRecipe(recipe);
+    expect(snapshot.blob).toEqual([8 * count,
+        ...Array.from({length: count}, (_, i) => [90, 92, 2, 0, 236, 0, i === 0 ? 120 : 0, 35]).flat(),
+        254, (150 * count) % 256]);
+    expect(snapshot.probe).toBeUndefined();
+    const coffeeSlot = snapshotRecipe(coffee());
+    expect(prepareSet([coffeeSlot, snapshot, coffeeSlot]).map(frame => frame[11]))
+        .toEqual([2, 12 + (count - 1) * 32, 2]);
+    expect(readSnapshot(snapshot)).toEqual(snapshot);
+});
+
+it("marks a coffee-to-tea selector change as unwritten even when blob bytes match", () => {
+    const recipe = coffee("Mode");
+    recipe.grinder = false;
+    recipe.dosage = 6;
+    recipe.ratio = 15;
+    recipe.pours = [new Pour(1, 90, 92, 35, 0, 2, 20)];
+    const original = snapshotRecipe(recipe);
+    const record = emptySlotRecord();
+    record.written = {at: 1, slots: [original, original, original]};
+    recipe.cupType = CUP_TYPE.TEA;
+    const tea = snapshotRecipe(recipe);
+    expect(tea.blob).toEqual(original.blob);
+    record.drafts = [tea, original, original];
+    expect(slotNeedsWrite(record, 0)).toBe(true);
+    expect(snapshotStatus(original, recipe)).toBe("edited");
+});
+
+it.each([0, 59, 60, 120, 121, 359, 360])("encodes a %i-second tea steep without truncating minutes", seconds => {
+    const recipe = coffee();
+    recipe.cupType = CUP_TYPE.TEA;
+    recipe.grinder = false;
+    recipe.dosage = 6;
+    recipe.ratio = 15;
+    recipe.pours = [new Pour(1, 90, 92, 35, 0, 2, seconds)];
+    expect(snapshotRecipe(recipe).blob.slice(5, 7))
+        .toEqual([(-(seconds % 60)) & 255, Math.floor(seconds / 60) * 32]);
+});
+
+it("keeps tea grinding off on the wire despite the model's stale coffee toggle", () => {
+    const recipe = coffee();
+    recipe.cupType = CUP_TYPE.TEA;
+    recipe.dosage = 6;
+    recipe.ratio = 15;
+    recipe.pours = [new Pour(1, 90, 92, 35, 0, 2, 20)];
+    expect(snapshotRecipe(recipe).blob.at(-2)).toBe(254);
+    expect(recipe.grinder).toBe(true);
 });
 
 it("rejects invalid encoded fields even when the grinder is off", () => {
@@ -92,7 +175,30 @@ it("markers distinguish repeated draft and last-written assignments", () => {
     const record = emptySlotRecord();
     record.drafts = [snapshot, null, snapshot];
     record.written = {at: 1, slots: [snapshot, snapshot, snapshot]};
-    expect(slotMarkers(record, recipe)).toBe("Draft A/C. Last written A/B/C.");
+    expect(slotMarkers(record, recipe)).toEqual({
+        slots: ["A", "B", "C"], label: "Draft A/C. Last written A/B/C."
+    });
     recipe.pours[0].temperature = 92;
-    expect(slotMarkers(record, recipe)).toContain("Recipe edited.");
+    expect(slotMarkers(record, recipe)?.label).toContain("Recipe edited.");
+});
+
+it("keeps interrupted-write warnings on the slot screen, not on home card markers", () => {
+    const recipe = coffee();
+    const snapshot = snapshotRecipe(recipe);
+    const record = emptySlotRecord();
+    record.drafts = [snapshot, null, snapshot];
+    record.journal = {
+        id: "attempt", serial: null, slots: [snapshot, snapshot, snapshot],
+        frames: prepareSet([snapshot, snapshot, snapshot]),
+        acknowledged: 0, inFlight: 0, error: "Receipt unknown"
+    };
+    expect(slotMarkers(record, recipe)).toEqual({slots: ["A", "C"], label: "Draft A/C."});
+});
+
+it("accepts a seventeen-stage slot snapshot without treating it as an NFC card", () => {
+    const recipe = coffee();
+    recipe.dosage = 17;
+    recipe.ratio = 5;
+    recipe.pours = Array.from({length: 17}, (_, index) => new Pour(index + 1, 5, 93, 30, 0, 0, 0));
+    expect(() => snapshotRecipe(recipe)).not.toThrow();
 });

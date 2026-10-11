@@ -121,7 +121,7 @@
 | 4512 | 0x11A0 | **Tea Recipe Make (Execute)** | T1 | (none) | Execute previously uploaded tea recipe. | `spec` |
 | 4513 | 0x11A1 | **Tea Recipe Code (Upload)** | T1 | tea blob | Upload tea recipe blob (same chunked format, different pause encoding). | `spec` |
 | 8111 | 0x1FAF | **Easy Mode Begin** | T1 | (none) | Initiate Auto Mode recipe display. | `spec` |
-| 40526 | 0x9E4E | **CurrentGrinder / Back to Normal** | T1 | (none) | Return from grinder to normal state. | `spec` |
+| 40526 | 0x9E4E | **Back to Normal / Slot Recovery** | T1 | (none) | Dismisses incomplete slot saving. APK constant named CurrentGrinder; no slot rollback demonstrated. | `hardware 2026-10-11` |
 
 ---
 
@@ -556,9 +556,19 @@ Command 11510, Type 2 packet:
 ```
 **Flags byte:**
 - Bit 4 (0x10): Scale ON
-- Bits 0–3: claimed to be the grinder — `0x02`=ON, `0x04`=OFF. **It is not.** See below.
+- Bits 1–3: cup/mode selector, **not grinder control**, recovered from the
+  developer-distributed Android APK on 2026-10-10. XPod `0x00`, xDripper
+  `0x02`, Other `0x04`, Tea `0x0C`.
+- Bit 0 (0x01): bypass enabled.
+- For tea, add `(steep_count - 1) * 0x20`. One steep is `0x0C`, two
+  `0x2C`, three `0x4C`, before scale/bypass additions. These three
+  scale-off selectors were successfully tested on hardware on 2026-10-11.
+  Scale-on and arbitrary steep counts are not covered by that trial.
 
-Janczykkkko's implementation uses `SLOT_FLAG_SCALE_ON = 0x12`, `SLOT_FLAG_SCALE_OFF = 0x02` — note these both have grinder-ON in the lower nibble (0x02). `inferred` — appeared to conflict with brAzzi64's `SLOT_GRINDER_OFF = 0x04`.
+The earlier public `SLOT_GRINDER_OFF = 0x04` interpretation was incorrect.
+The APK selects `0x04` for the Other cup type and handles grinder-off
+separately by replacing the blob's penultimate byte with `0xFE`.
+See the artifact provenance and complete tea conversion below.
 
 > **Observed on hardware 2026-10-08 (V12.0D.500): `0x02` defers to the blob.**
 > Slot C went up grinder-**off** under `0x02` and displays the grinder off;
@@ -566,21 +576,25 @@ Janczykkkko's implementation uses `SLOT_FLAG_SCALE_ON = 0x12`, `SLOT_FLAG_SCALE_
 > a grind size. So under `0x02` the `0xFE` grind byte inside the blob decides,
 > which is the field C5 already settled, and Janczykkkko's constants are safe.
 >
-> **`0x04` is not settled.** It was tried once, with a grinder-off blob, and
-> the slot showed the grinder off — which is equally consistent with `0x04`
-> forcing it off and with `0x04` deferring like `0x02` does. brAzzi64's
-> `SLOT_GRINDER_OFF = 0x04` therefore survives. Settling it needs one more
-> trial: a grinder-**on** blob under `0x04`. If the slot then shows a grind
-> size the nibble is inert outright; if it shows off, `0x04` is a real
-> override and the two constants genuinely disagree.
+> **Observed on hardware 2026-10-10: `0x04` also preserves grinder-on.**
+> Reference-matrix C carried grind size 50 under `0x04` and displayed
+> a grind setting. This rejects a grinder-off override; it does not mean
+> the lower nibble is inert. The APK identifies its separate cup/mode role.
 >
 > **The working rule until then: send `0x02` (or `0x12` with the scale) and
 > let the blob carry the grinder.** That is the one combination proven in both
-> directions, and it is what a slot write built from the brew encoder produces
-> anyway, which is the argument for building it that way.
+> directions. This remains the current app's qualified coffee behavior,
+> not a claim that `0x02` represents every cup type. Changing cup/overflow
+> semantics requires a separate implementation and hardware qualification.
 
 ### Batch-Write Requirement `corroborated`
-All three slots (A, B, C) MUST be written in a single batch. Writing only one or two leaves the machine hung at state `0x43` (saving_slots) and it displays RETRY. There is no "commit" frame — the machine saves atomically once all three 11510 frames have been received. Sequence:
+Send all three slots (A, B, C) to complete a confirmed set. Writing only one or
+two leaves the machine temporarily at state `0x43` (saving_slots). On the tested
+machine this clears after approximately one minute, or immediately with 40526.
+Neither exit establishes which slot contents survived. There is no separate
+"commit" frame in the tested three-slot sequence; completion is observed after
+all three 11510 frames have been received. Partial-write atomicity is not proven.
+Sequence:
 1. ~~Switch to PRO mode (11511, `"00000000"`) — slot writes are only accepted in PRO mode. In AUTO mode the machine sits at state `0x41` and rejects saves.~~ **Not required.** On hardware 2026-10-08, V12.0D.500, the batch behaved identically with and without the mode switch. The switch is still acknowledged; it just is not a precondition. Sending it is harmless, and an implementation that skips it has one fewer way to leave a machine in a mode its owner did not ask for.
 2. Send 11510 × 3 (slots A, B, C in order).
 3. Machine ACKs each with a 11510 notification (status C2).
@@ -589,10 +603,11 @@ All three slots (A, B, C) MUST be written in a single batch. Writing only one or
 > **Observed on hardware 2026-10-08 (V12.0D.500): the hang is recoverable, and
 > finishing the batch is the recovery.** Slot A alone put the machine into an
 > unresponsive state with a looping animation on its display. Slot B changed
-> nothing visible, which is what an atomic batch should look like from outside.
+> nothing visible; this did not establish atomicity of the stored contents.
 > Slot C released it, and the slot it had written was correct. So a write
 > interrupted after one or two frames is not a brick and does not need a power
-> cycle: it needs the remaining frames.
+> cycle. Sending the remaining frames completes the set. The later timeout and
+> 40526 tests below also release the saving display without completing the set.
 >
 > That is worth knowing before building this, because the obvious failure mode
 > is a BLE drop halfway through three frames. The repair is to send the rest,
@@ -613,8 +628,375 @@ All three slots (A, B, C) MUST be written in a single batch. Writing only one or
 > none of them. A future check of what actually landed in a slot wants three
 > **different ratios**, and even then it can only confirm two fields.
 
-### Sync Flow with 11512 `corroborated`
-After the 3 slot writes, the app sends command 11512 (Recipe Order). APK decompile confirms this is a real command (`BleCodeFactory.easyModeRecipesOrder`). Its exact payload is documented but not always implemented.
+### Recipe Order 11512 `APK-derived`
+The inspected APK defines `BleCodeFactory.easyModeRecipesOrder` and a
+`sendRecipeOrderToBLE` helper with payload `03 00 01 02`. However, the
+inspected `EasyModeViewModel.syncRecipes` path does **not** call that helper:
+it sends three 11510 frames, then updates local/cloud metadata. A defined
+helper is not evidence of a required post-write call. Our hardware batch
+already completed without 11512; do not add it as a speculative tea fix.
+
+### Tea and stage capacity clarification (2026-10-10)
+
+The official app can write tea to Easy Mode slots, reported by the user. Our
+tea exclusion was an implementation-evidence gate, not a measured firmware
+refusal. NFC tea encoding does not settle this: the card carries a cup-type
+nibble, whereas the documented 11510 slot payload carries no cup type.
+Ordinary BLE tea uses separate commands 4513/4512 and different steep-time
+bytes; substituting that blob into a coffee slot frame has not been verified.
+
+Public source inspection found no tea discriminator in the slot builders:
+[brAzzi64's slot packet/flags](https://github.com/brAzzi64/xbloom-ble/blob/840a1974c1e28629083b954c74c506bd64b463db/python/xbloom.py#L399-L414),
+[HomoLand's slot builder](https://github.com/HomoLand/xbloom-studio-brew/blob/fd2cdc5eb3d035dd2d78700ad9065a14a45aeb6b/packages/core/xbloom_ble/protocol.py#L1001),
+and [saya6k's slot writer](https://github.com/saya6k/hacs-xbloom/blob/722fd94959683c10c0c9a7094781baf0ee52fdcd/custom_components/xbloom/brewing.py#L695-L757).
+The latter two separately implement ordinary tea brewing. The Java decompile
+cited by brAzzi64 is a local path, not published source; its existence does not
+give us access to the official slot builder.
+
+#### Official Android tea slot writer recovered (2026-10-10)
+
+**Current status (2026-10-11):** the APK-derived one-, two- and three-steep
+scale-off candidates worked on hardware, reported by the tester.
+The failed trials below remain historical hardware evidence, not the current
+state of protocol knowledge. Ordinary tea assignment is now enabled through
+the same validated snapshot, database and three-slot writer as coffee.
+See the production integration below for the supported bounds.
+
+**Artifact provenance**
+
+- Developer help article:
+  <https://tbdxsupport.zendesk.com/hc/en-us/articles/14021922246939>.
+  Its public article body links directly to the binary below.
+- Download:
+  <https://tbdprodproducts.s3.amazonaws.com/downloads/xbloom_coffee_release.apk>.
+- Package `com.xbloom.tbdx`, version **2.2.2**, version code **2002033**,
+  size **99,750,594 bytes**. This is the developer-hosted build, not a
+  claim that it is the latest Google Play build.
+- APK SHA-256:
+  `29624db558917e6a975cd58a3123c240950d200a3adc4efe8ffef222e1b14c6e`.
+- Signing certificate SHA-256:
+  `564b7a6176102a00849b0413f58e8fadba256e9e6d790a4cb40ca8edc1909624`.
+  Google's `apksig` 8.13.0 verified the APK's v2 signature with no errors
+  or warnings. This checks artifact integrity, not a comparison against
+  a separately obtained Play signing identity.
+- Inspected locally using JADX 1.5.6, Androguard DEX decoding and
+  Capstone AArch64 disassembly. JADX reported 163 errors across the
+  full app; the selector was independently checked against its DEX
+  instructions, not inferred from a broken decompilation.
+
+**Actual call path**
+
+`EasyModeViewModel.getRecipeHex` supplies cup type, grind size, `grandWater`,
+RPM and pour data to `EasyModeRecipeCodeTransfer`. For tea that transfer
+chooses the local `GetRecipeCodeService.executeClient` builder even when
+online. No cloud response or privileged account is needed to build tea.
+It then calls `JNITools.teaRecipeCreate` with the baseline blob and a
+concatenation of three-digit decimal steep times.
+
+The JNI implementation in `lib/arm64-v8a/libnative-lib.so` rewrites the
+pause/dose byte pair to retain minute-scale steep duration. Native symbol
+`TeaRecipe::TeaRecipeCreate` starts at ELF virtual address `0x1E0FC`.
+The arithmetic at `0x1E414–0x1E468` divides by 60, negates the remaining
+seconds and adds minutes times 32 to the following byte. It rejects a
+duration of 361 seconds or more at `0x1E400`; this is a builder boundary,
+not a firmware capacity measurement. The Java baseline clips tea waits
+above 120 seconds before the native rewrite. The app gates longer tea
+waits on a Studio version string at least `V12.0D.400`.
+
+After that rewrite, `getRecipeHex` applies grinder-off and optional bypass,
+computes the selector described above, adds the scale bit, and prefixes
+slot index. `BleCodeFactory.easyModeRecipe` dispatches it through command
+11510 using the ordinary Type 2 wrapper. Marker `0x01` stays unchanged.
+There is no separate tea command in this inspected slot-writing path.
+
+Independent DEX check: `classes4.dex`,
+`EasyModeViewModel$getRecipeHex$1.invoke(EasyModeRecipeCodeResponse)`,
+code-item offset `0x47BAE4`. Bytecode offsets `0x029E–0x02BC` load
+pour-list size, subtract one, multiply by 32 and add 12. Scale addition
+and slot/flags formatting follow at `0x02BE–0x0306`. These offsets are
+specific to this APK, not stable identifiers for later versions.
+
+**The supplied official one-steep reference**
+
+The Java builder retains the 90 ml programmed stage. It encodes no
+additional 30 ml drain stage; `teaRecipePerVolumn` is not an input to
+this slot builder. Its suffix uses `grandWater * 10`, narrowed to a byte,
+not the app's ratio recomputed from programmed volume and dose. For the
+supplied reference, `grandWater = 15` gives `150`, while
+`isSetGrinderSize = 2` overrides stored grind size 50 to `254`.
+
+The independently reconstructed one-steep, scale-off payload is:
+
+```text
+slot A: 00 0C 08 5A 5C 02 00 EC 00 78 23 FE 96
+```
+
+That is slot 0, tea selector `0x0C`, an eight-byte stage, 90 ml, 92 C,
+spiral, no vibration, 20 seconds, zero minute/dose byte, RPM 120,
+3.5 ml/s, grinder off and suffix 150. With scale on the selector is
+`0x1C`. It differs from the failed reference-matrix B in the selector,
+not volume, timing or suffix. This was independently reconstructed, not
+captured from the official app. The corresponding one-steep LAB candidate
+subsequently worked on hardware on 2026-10-11.
+
+Steep-count packing does not establish a hardware maximum. Do not infer
+arbitrary stage capacity or silently wrap an overflowing selector.
+
+**Separate recovery lead**
+
+The official `syncRecipesFailed` path calls
+`BleCodeFactory.backToNormalState`, which sends **40526** with no payload
+through a Type 1 wrapper. Its constant happens to be named
+`RD_CurrentGrinder`; the caller uses it to leave a failed slot write.
+The tester successfully used it from the raw console on 2026-10-11 to release
+incomplete slot saving. This does not prove rollback, an atomic cancel or safe
+use while a native write is pending. No automatic recovery command was added.
+
+All binary/decompiled artifacts and local inspection scripts are retained
+outside the repository. These notes are an independently written description
+of protocol behavior; no APK, proprietary implementation, account data or
+credentials are distributed. A public protocol should label static findings,
+fixture checks and hardware confirmation separately.
+
+#### Source-backed LAB controls (2026-10-10)
+
+Easy Mode's LAB now offers two separately identified, development-only trials.
+They can be selected directly after any active trial has been resolved and its
+originals restored; the historical flag probes do not need to be repeated.
+Each new lab runs once per retained machine record. Restored trials are
+archived with their exact evidence and observations before the other begins.
+
+- `tea-slot-apk-steeps-abc-v1`: writes A/B/C with respectively one, two
+  and three 90 ml, 92 C, 20-second steeps, spiral, no vibration, flow
+  3.5 ml/s, RPM 120 only in stage one, grinder off and suffix 150.
+  Scale is off. Selectors are `0x0C`, `0x2C`, `0x4C`. Record each slot's
+  overview, actual steep timing and drain behavior separately. No brew
+  is started by the app. Allow for firmware drain water, particularly
+  the approximately 360 ml finished volume of C.
+- `slot-apk-recovery-40526-v1`: preserves a complete original coffee set,
+  resends **only original A**, waits for its 11510 receipt, then deliberately
+  leaves the journal at `acknowledged: 1`. B/C remain unsent but their exact
+  frames are durable. There is no final-save claim. A second explicit
+  confirmation sends Type 1 command 40526 with no payload, while the machine
+  may still show its saving animation. A command receipt records only the
+  reply and the observed state before/after, not operability or rollback.
+
+The recovery command is refused if A's receipt is unknown, a native operation
+is still pending, the peripheral/serial changes, or an ordinary brew owns the
+transport. It is bounded by the existing dispatch and receipt timeouts. Its
+receipt never clears the journal. Check the machine's physical controls and
+record its responsiveness in the observation note. MACHINE IS USABLE requires
+explicit confirmation and a matching shared lease in a **known** normal state
+before clearing the phone-side pending write. Slot contents then remain
+unconfirmed until RESTORE ORIGINAL SET finishes all three receipts and final save.
+
+If 40526 is refused, times out or does not release the saving display, close
+LAB and use RETRY WRITE to finish the retained B/C frames. Then restore the
+original set through LAB. An uncertain native send still requires settlement
+or reconnect before either path. An app restart retains the trial and journal;
+production builds retain recovery/restore access but offer no fresh labs.
+All observations and both new trials are included in COPY PROBE EVIDENCE.
+
+#### Hardware qualification update (2026-10-11)
+
+The tester reported that the A/B/C steep tests worked, confirming tea
+functionality for the exact one-, two- and three-steep scale-off candidates.
+This report does not add stopwatch measurements or qualify scale-on,
+long steeps, bypass or additional steep counts.
+
+The tester also wrote one slot from the machine console and observed the
+incomplete saving display return to normal after approximately one minute.
+The complete raw Type 1 recovery frame was then tested successfully while
+incomplete saving was active:
+
+```text
+58 01 01 4E 9E 0C 00 00 00 01 6C 7F
+```
+
+The recovery result is a hardware observation, not a captured reply log;
+no rollback or slot-content readback was reported. The firmware timeout was
+estimated, not measured, and must not be used as an automatic journal-clearing
+timer. A return to normal establishes operability, not that the set was saved.
+
+The LAB single-slot and recovery actions were difficult to trigger in the app;
+the successful raw-console route qualifies the command, **not** the end-to-end
+LAB controls. That UI issue remains open. Normal app brewing still respects
+the durable pending-write guard until the write is completed or explicitly
+cancelled against a known-normal machine. Incomplete-write copy is now neutral
+and explains the temporary saving display instead of implying a permanent lock.
+
+#### Production integration (2026-10-11)
+
+Ordinary tea recipes now use their complete local stages with the official tea
+selector, scale off and no bypass. The existing tea limits apply: one to three
+steeps, 1–90 ml each, 39–99 C and 0–360 seconds, with integer encoded fields.
+The grinder is always off, as in ordinary BLE tea brewing; the model's
+hidden coffee-grinder toggle is not a request to grind tea. Stages retain their
+pattern, agitation, temperature and flow, with RPM only in the first stage.
+No synthetic 30 ml drain stage is added.
+
+Timing uses the shared `teaSteepBytes`. The suffix intentionally differs from
+ordinary BLE tea: the official slot builder's `grandWater * 10`, narrowed to
+u8, is represented by `Math.trunc(recipe.ratio * 10) % 256`. This is explicit
+wire arithmetic, not a saturation or an overflow accident. `recipe.ratio` is
+the app's current local value, not preserved remote metadata. The tested
+fixed LAB suffix was 150; other local values follow the recovered builder,
+but have not all been individually run on hardware.
+
+The transport checks firmware before dispatching any set with steeps longer
+than 120 seconds: it requires reported V12.0D.400 or newer. Unknown firmware
+is not treated as compatible. Short-steep tea and coffee remain available.
+Coffee's existing `0x02` selector and blob are unchanged. Snapshot equality
+now includes the selector as well as blob bytes, so switching identical
+coffee bytes to tea still produces NOT WRITTEN and RECIPE UPDATED.
+
+STOP THIS WRITE is the normal, explicitly confirmed recovery action. It
+acquires the existing journal through the shared machine owner, which still
+rejects active brews, mismatched identity and pending native operations. If
+the machine is known-normal already, it clears the journal without a send.
+Otherwise it requires a known saving state, sends 40526, waits for its reply
+and a post-dispatch normal-state notification, then clears the journal.
+Failure at any step retains the unfinished write. Slot contents remain
+unconfirmed; drafts are preserved and no saved-set success is shown.
+RETRY WRITE remains available to finish or restart the full set.
+
+The route no longer provides the LAB entry or new-test actions, in development
+or production. Historical trials and their exact validation remain readable;
+any active trial exposes RESTORE ORIGINAL SET directly on the normal screen
+after its pending write is completed or stopped. Disabling LAB does not discard
+its originals or silently promote a candidate to a saved personal assignment.
+
+#### Historical bounded tea slot probe (2026-10-10): **SAVED, NOT TEA**
+
+The first physical trial on V12.0D.500 saved all three slots: the retained
+journal records three receipts followed by final-save confirmation. Its
+one-steep A payload was `[0, 0x02, 8, 60, 70, 0, 0, 0, 32, 120, 30, 254, 120]`
+(slot, flags, blob). The user then invoked and manually ran A with the Omni
+Tea Brewer. Unlike tea slots from the official app, its loaded overview showed
+no steep counter. It delivered water, waited approximately one minute, beeped
+and finished, **without a tea siphon/drain cycle**.
+
+This rejects the hypothesis that the tea timing blob under slot flags `0x02`
+alone selects tea on this firmware. Storage acceptance and timing execution
+do not establish tea mode. These are user-reported physical observations;
+the supplied evidence is a durable write journal, not captured execution
+notifications, and its observation field had not yet been populated.
+
+No additional flag or mode command was tested. The tea selector remains
+unknown. The user subsequently confirmed successful RESTORE ORIGINAL SET.
+Preserve this trial's evidence before another separately identified candidate.
+
+The user supplied a public official single-steep share recipe,
+`https://share-h5.xbloom.com/?id=lRU%2FNUodjN5PzwxNQaOxeA%3D%3D`.
+Its detail response identifies `cupType: 4`, `cupTypeName: "TEA"`,
+`isSetGrinderSize: 2`, `subSetType: 2` and one 90 ml, 92 C, 20-second stage.
+This supplies an official API tea discriminator independent of the grinder
+setting; it does **not** establish that the slot flags byte carries cup type.
+It makes interpreting the lower nibble as necessarily grinder-only less
+convincing, but API-to-wire mapping still needs a physical test.
+
+The next user-approved candidate changes **only A's flags to `0x04`** with the
+same 60 ml, 70 C, 60-second blob. B/C remain `0x02` with exact original bytes.
+Candidate `tea-slot-0x04-one-steep-v1` was subsequently tried as recorded below. The prior
+restored trial must be archived intact before preparation, and no third
+candidate is authorised. No additional mode or execution commands are added.
+
+**Second physical result (2026-10-10): saved, still not tea.** The user supplied
+the second trial's journal: A's flag is `0x04`, its unchanged blob is
+`[8, 60, 70, 0, 0, 0, 32, 120, 30, 254, 120]`, and three receipts precede final
+save. The user reported the same absence of a tea overview and drain cycle.
+This excludes neither all flag encodings nor a different official tea blob:
+both tested candidates shared a synthetic 60 ml blob, not an exact official
+recipe encoding.
+
+The user correctly challenged that experimental volume. Their official
+reference has a 90 ml programmed stage and `teaRecipePerVolumn: "120"`;
+they report a further 30 ml to initiate draining. The ordinary tea encoder
+encodes programmed stages only, with no explicit drain pour. HomoLand's
+`build_tea_recipe_code` likewise describes the approximately 120 ml finished
+volume and siphon as firmware behavior rather than an extra encoded stage.
+That supports keeping brew-stage volume distinct from finished volume, but
+does not prove a 60 ml test is valid for the slot firmware.
+
+There is also an unqualified suffix difference: the public builder retains
+the official `grinderSize` and `grandWater` fields; our ordinary tea encoder
+forces `0xFE` and derives ratio from stage volume/dose. For the supplied official
+reference these would be `50, 150` versus our derived `254, 44` (30 multiplied
+by ten and narrowed to a byte). The probe had `254, 120`. Neither the synthetic
+probe nor the existing ordinary tea encoder should be described as byte-exact
+official slot encoding. Audit the complete official recipe conversion before
+another candidate, including volume, suffix, mode selector and drain behavior.
+
+**Reference-derived A/B/C overview result (2026-10-10).** The user reported
+that none of the three loaded slots displayed as tea. A and B displayed
+grinder off; C displayed a grind setting. The user did not execute any of
+them, so no timing, water volume or drain observation exists for this batch.
+The matrix used the reference-derived 90 ml, 92 C, 20-second stage:
+A flags `0x02` with suffix `254,150`; B flags `0x04` with `254,150`;
+C flags `0x04` with `50,150`.
+
+C's overview supports the earlier finding that `0x04` does not force the
+grinder off when the blob carries a grind setting, on this firmware. Neither
+tested flag nor the preserved official suffix selected a tea overview.
+This still does not establish the actual tea slot selector; no further
+candidate is authorised by this result. Restore the original set after the
+batch and retain display-only observations as such, never as executed trials.
+
+Candidate `tea-slot-0x02-one-steep-v1` is a hypothesis, not production tea slot
+support. Easy Mode -> TEA SLOT PROBE -> WRITE PROBE prepares exactly A = one
+60 ml, 70 C, 60 s steep, grinder OFF, no agitation or bypass, using the existing
+tea encoder inside `11510 [slot, 0x02, blob]`. Nominal encoded dose is 5 g;
+physical testing uses **no leaves**. B/C preserve the exact validated originals.
+No extra mode/tea-execute command, flag sweep, automatic brew or retry is added.
+
+New trials are development-only. A retained experiment remains accessible
+from Easy Mode in production builds for recovery, RESTORE ORIGINAL SET,
+manual observations and COPY PROBE EVIDENCE. One trial is allowed per retained
+machine record; confirmed restoration keeps the evidence and never permits
+an implicit replacement trial. General tea picker assignment remains blocked.
+
+The shared writer acquires a matching device/serial in known normal state
+before any fresh-trial journal or original-set preparation. It then preserves
+the app's last-written A/B/C (or a complete draft set) atomically before dispatch.
+These are app-recorded originals, not a readback of official-app changes.
+Pending write/brew/native operations are excluded through the existing owner.
+An active trial blocks ordinary slot assignment/writing until restoration.
+Cancellation means **candidate-unconfirmed**, not a successful candidate save.
+
+Hardware procedure used for this candidate:
+
+1. Connect the recorded machine, wait for normal state and a reported serial,
+   inspect the original names/provenance, then explicitly WRITE PROBE. Keep the
+   app foregrounded and wait for all receipts **and final save confirmation**.
+2. Stop after refusal or ambiguous/incomplete saving. Do not start A. Resolve
+   the immutable journal through the existing RETRY WRITE / CANCEL THIS WRITE
+   ceremony before restoration; restoration cannot bypass pending recovery.
+3. After confirmed storage, inspect A manually on the machine, including
+   grinder OFF and whatever values its display actually exposes. Only then
+   start A **manually**, with the Omni Tea Brewer, no leaves, an empty receiving
+   vessel, adequate water and the user present. Follow the device's physical
+   safety instructions; do not touch or move the hot brewer. Stop on unexpected
+   behavior rather than exploring another candidate.
+4. Record actual display, held seconds (blank = unknown), whether it drained
+   as tea (Unknown/Yes/No), and notes using SAVE OBSERVATION. A successful write
+   or tea-looking display is not proof of hold/drain behavior.
+5. Explicitly RESTORE ORIGINAL SET, confirm final saving and inspect A/B/C.
+   COPY PROBE EVIDENCE copies retained machine/firmware readings when available,
+   exact prepared frames, dispatch/receipt/save history and separately saved
+   observations. Phone drafts remain distinct from restored machine snapshots.
+
+Physical execution failed to demonstrate tea behavior as recorded above.
+The user confirmed restoration after this trial. A successful future single-steep trial
+would qualify only that candidate on the tested machine/firmware, not
+multi-steep or general tea slots.
+
+The measured ten-stage ceiling belongs to NFC cards only. Coffee BLE stage
+bodies have a one-byte byte-count prefix: at most 255 segment bytes, not ten
+stages. A stage takes eight bytes plus four bytes for each additional 127 ml
+volume chunk. Thus 31 small stages fit the representation, but this is not
+firmware proof of 31-stage slots. A full 11510 frame has 17 bytes outside the
+segment body; a 244-byte link budget is consequently tighter than the body's
+255-byte ceiling. Validate every frame in the set before sending A.
 
 ---
 

@@ -57,6 +57,33 @@ and the overall completion state. Leaving the screen cannot cancel already
 sent frames or destroy the journal. Do not offer a generic Cancel or Reset
 that makes a partial machine batch disappear from the app.
 
+### Departure implementation notes (2026-10-10)
+
+Easy Mode uses `usePreventRemove` from `expo-router/react-navigation`, not a
+standalone `beforeRemove` listener: the hook publishes the native-stack
+prevention context required for iOS swipe dismissal. Prevention is enabled
+during an active write/recovery/cancellation, or while focused with changed
+machine bytes without a pending journal. An active operation blocks without a
+reminder;
+otherwise the first held action is replayed exactly once on LEAVE FOR NOW.
+Replay retains the hook's original navigation action and visited-route marker.
+Stay, closing the reminder and WRITE discard that action. Machine identity
+changes, blur, active recovery, a pending journal or byte equality invalidate the
+reminder without effect-seeded state.
+
+The global LiveBrewBar is a navigator sibling, so its pushes need an explicit
+gate. Focus-scoped Easy Mode registrations send both record and live-view
+pushes through the same held-action policy. Active operations and slot
+presentations (including the departure reminder, picker, recovery confirmation,
+help and write/success overlay) block bar actions and hide the sibling from
+VoiceOver/TalkBack, with pointer input disabled. Blur/unmount releases the
+registrations; unrelated routes keep their existing bar behavior. This gate
+neither dismisses nor restarts the actual run, and live navigation remains
+`/brew?view=1`. The existing global rating-note coverage policy is unchanged.
+Scripted tests assert the prevention API's flag/callback as well as sibling
+pushes, coverage and cleanup on both platforms; native gesture/accessibility
+checks remain release gates, not claims established by a mocked navigator.
+
 ## Assignment and snapshot model
 
 Use a new slot domain under `library/slots/`, not fields on Recipe. A slot
@@ -190,6 +217,45 @@ native dispatch resolves. Invalidation is checked again at durable mutation
 boundaries. No change to the slot bytes, mode flags or recovery policy is made.
 
 ## Recovery and uncertainty
+
+### Hardware-feedback amendment (2026-10-10)
+
+The original recovery policy below left a refused write permanently locked,
+including after app restart, and blocked normal app brewing even when the
+machine had returned to its ordinary screen. These explicit actions supersede
+the original requirement for an unspecified future recovery mechanism:
+
+- A non-C2 reply to the outstanding command is a refusal, not a lost reply.
+  Persist that the slot was refused without advancing the received boundary.
+  A refusal after a receipt, or an unsolicited reply, remains uncertain.
+- RETRY WRITE asks which state the machine is actually in. When it is back to
+  normal, user confirmation authorises a new A/B/C transmission of the same
+  immutable set. Do not infer that the previous attempt succeeded.
+- When a known received boundary remains and the machine is still saving,
+  offer to finish the interrupted write with only the remaining slots.
+  Do not replay an uncertain slot while the machine is still saving.
+- CANCEL WRITE asks the user to confirm the machine is back to normal.
+  This clears the app's journal and shared-operation reservation, not anything
+  on the machine. Keep the recipes as editable drafts; clear last-written
+  information if the cancelled attempt might have changed machine contents.
+- Both full retry and cancellation acquire the same exclusive, identity-bound
+  owner. Reject known saving, active or fault states, background operation,
+  mismatched identity, and still-pending native writes. A reconnect may be needed
+  if the last reported state contradicts the machine's current display.
+  Clearing a journal is durable before the owner releases the reservation.
+- An expired handshake does not block cancellation, which sends nothing.
+  An explicit write/retry renews an expired handshake inside the same exclusive
+  lease, observes the normal pacing gap, and then sends the slots. Native
+  renewal is bounded and generation-guarded; it never reconnects or replays
+  automatically.
+
+No automatic retry, firmware abort command, or assumption that a restarted app
+reset the machine is introduced. Physical confirmation is an explicit manual
+recovery decision, not protocol evidence of storage success.
+
+Home cards show dot-matrix slot letters beside the star, not write progress or
+recovery warnings. Draft versus last-written assignments remain available in
+the card's spoken label. The slot screen owns recovery details and actions.
 
 Hardware proves that completing an interrupted set releases the machine; it
 does not prove that a lost ACK can safely be treated as a missing slot.

@@ -3,6 +3,184 @@
 This is the source for the full release-testing checklist, not a claim that
 device testing is complete. Update it whenever release scope or behaviour changes.
 
+## Tea slots and normal recovery (2026-10-11)
+
+This supersedes the historical tea exclusion and LAB workflow below.
+Hardware testing confirmed the one-, two- and three-steep tea candidates and
+raw command 40526 for leaving incomplete saving. The machine also returned to
+normal after approximately one minute without completing the set.
+
+Normal Easy Mode assignment now accepts tea alongside coffee, with up to three
+steeps, no bypass and the grinder always off. Tea uses the recovered selector,
+minute/remainder timing and slot-specific suffix. Steeps over 120 seconds
+require reported firmware V12.0D.400 or newer before any frame is sent.
+Coffee bytes are unchanged. Dirty/status comparisons include the selector,
+and tea cards show steeps and water rather than coffee ratio figures.
+
+STOP THIS WRITE is a confirmed normal-screen action, not a console command.
+It sends 40526 only in a known saving state and requires both its reply and a
+post-dispatch normal-state report before clearing the journal. An already
+known-normal machine needs no recovery frame. Failures retain the pending
+write; stopping never claims a saved set or rollback. RETRY WRITE remains.
+
+LAB is no longer exposed in either build mode. Retained active trials keep
+RESTORE ORIGINAL SET directly on the normal screen; their originals and
+historical byte validation are preserved. The expand/refresh/collapse panel
+measurement fix is also included.
+
+Release device checks: assign personal tea recipes, including mixed coffee/tea
+sets; check steep count, timing and drain. Verify the integrated STOP THIS WRITE
+flow, automatic-timeout cancellation, reconnect and restoration of a retained
+trial. The raw command and fixed tea tests qualify the protocol, not every
+personal recipe or the new end-to-end UI.
+
+## Bounded tea slot trial panel (2026-10-10): candidate **UNTESTED**
+
+Task 2 adds Easy Mode -> TEA SLOT PROBE, available for a new trial only in a
+development build. Retained trials expose the same entry in production for
+recovery/restoration, observation and local evidence copy. This does not enable
+general tea assignment. After restoration, evidence remains retained and
+copyable; there is no reset/archive/second-trial action.
+
+WRITE PROBE calls the dedicated hook on the installed shared slot port:
+known-normal acquisition precedes fresh original/journal preparation. The
+fixed A is one 60 ml, 70 C, 60 s steep, grinder OFF, no agitation/bypass; B/C
+are exact preserved snapshots. The panel shows original names and written-vs-
+draft provenance, and explains that official-app changes cannot be read back.
+Candidate cards use steep/time/OFF copy rather than coffee ratio or a false
+removed-library label. Pending writes require the existing recovery ceremony;
+cancellation is unconfirmed, never candidate-written. Ordinary assignments
+and slot writes remain blocked until explicit restoration.
+
+The panel binds actual connected identity/serial and available model/firmware
+readings, saves observations through `SlotDatabase.observe`, and copies
+`formatTeaProbeEvidence` through Expo Clipboard with explicit failure reporting.
+The observation's display, held time, drain verdict and note are independent
+of transport evidence. No action calls brew, sends raw commands or restores
+automatically. The sheet covers the underlying screen and global brew bar,
+blocks native departure while open, and returns focus on dismissal.
+
+| Software validation | Actual result |
+|---------------------|---------------|
+| Focused panel, route, slot cards/ceremony, hook, shared owner, live-brew owner and all slot-domain suites | 24 suites, 734 tests passed across iOS and Android; no skipped tests or snapshots. Real SQLite persistence and scripted-radio tests include fixed bytes, identity/state gates, refusal/recovery, cancellation, explicit restoration, separate observations, production retention, modal/global-bar guards and focus restoration. |
+| `npm run typecheck` | Passed, no diagnostics. |
+| `npm run lint` | Passed, 0 errors and the existing 27 warnings. |
+| `npx expo-doctor` | Passed, 21/21 checks. |
+| Existing Metro 8082 iOS development bundle | HTTP 200; compiled bundle contains the probe panel and final UNTESTED status copy. Server left running, not restarted or stopped. |
+
+No dependencies, native configuration, card/backup serialization or trial
+candidate bytes changed. Actual native gestures, VoiceOver/TalkBack, large-text
+layout and hardware hold/drain/restoration still need physical-device checks.
+
+**Hardware gate remains open.** With the Omni Tea Brewer, no leaves, an empty
+receiving vessel, adequate water and the user present: WRITE PROBE, wait for
+confirmed storage, inspect A and grinder OFF, then start only on the machine.
+Stop after uncertain saving, refusal or unexpected behavior; never execute an
+unresolved set. Record actual hold/drain behavior, SAVE OBSERVATION, explicitly
+RESTORE ORIGINAL SET and confirm/inspect all originals, then COPY PROBE
+EVIDENCE. Follow device safety instructions and do not touch/move the hot
+brewer. See `ble-protocol.md` section E for the complete procedure. Neither
+software tests nor compilation establishes hardware tea support or restoration.
+
+## Easy Mode UX integration qualification (2026-10-10)
+
+Task 3 on `fix/easy-mode-recovery` wires the route to the actual identity-bound
+attempt, serial and success dismissal. Cancellation is not presented as a
+successful machine write. The picker continues to receive `allRecipes()`, not
+the home screen's current search or shelf result.
+
+Changed populated drafts now trigger the persistent-draft reminder through
+`beforeRemove`, covering header back, swipe, hardware back and other departure
+actions. LEAVE FOR NOW consumes and synchronously replays the original action
+once; Stay here clears it, and WRITE TO MACHINE clears it before starting the
+normal write. Empty drafts and byte-equal snapshots do not prompt. The ordinary
+bar and departure sheet share connection, identity, busy, integration and
+full-set validation checks. A machine/serial change invalidates a held
+departure. Active write/recovery/cancellation blocks removal; a stopped journal
+may leave without clearing either its recovery record or machine reservation.
+
+The departure sheet hides the entire underlying screen on both platforms.
+Its dismissed contents become inaccessible immediately, and focus returns to
+the surviving WRITE control using the existing next-frame restoration pattern.
+The external brew rating-note modal also hides this sheet; existing child
+picker, help, recovery and write-overlay isolation remains in place.
+`XbrwSheet` itself is unchanged.
+
+| Software validation | Actual result |
+|---------------------|---------------|
+| Combined plan's ten paths plus `RecipeCard`, `RecipeShelfTile` and `MachinePanel` tests | 26 suites, 798 tests passed across iOS and Android; no skipped tests or snapshots. Includes route navigation, real SQLite draft/journal preservation, ceremony, recovery, owner and byte-status coverage. |
+| `npm run typecheck` | Passed, no diagnostics. |
+| `npm run lint` | Passed; 0 errors, the existing 27 warnings. |
+| `npx expo-doctor` | Passed; 21/21 checks. |
+| Existing Metro 8082 `/index.bundle?platform=ios&dev=true&minify=false` | HTTP 200, JavaScript bundle compiled with the new departure copy. Server was not restarted or stopped. |
+
+The route regressions were run before implementation and failed, then passed
+in the combined qualification. Logs are session artifacts
+`task3-{route-red,combined-final,typecheck,lint,doctor}.log`.
+No dependencies, native configuration, card format or backup version changed.
+
+**Open release gates:** manual uncertain-slot replay is software-covered, not
+firmware-proven safe to ship. On a real machine, qualify interrupted B while
+still saving for both definite refusal and unknown delivery; repeated manual
+retry; all three receipts with missing final completion; native/link loss;
+and cancellation only after the normal screen returns. Inspect all three
+stored recipes and subsequent ordinary brewing. Code-only delayed receipts
+remain unable to distinguish an old ACK from the current slot's ACK.
+Extended-stage slot execution and tea encoding remain separate hardware gates.
+Actual iOS/Android navigation gestures, narrow/large-text layout, reduced
+motion, VoiceOver/TalkBack modal isolation and focus restoration still require
+native-device checks. Neither passing tests nor a compiled Metro bundle closes
+these gates.
+
+## Slot recovery feedback (2026-10-10)
+
+A real write was refused while the machine was asking for water. The machine
+returned to normal after refilling, but the persistent app journal left both
+slot writing and ordinary app brewing blocked. A definite refusal now leaves a
+retryable received boundary rather than an unknown in-flight slot.
+
+The slot screen offers RETRY WRITE and confirmed CANCEL WRITE. Retry can finish
+the known remaining slots while the machine is saving, or resend the frozen
+A/B/C set after the user confirms the machine is back to normal. Cancellation
+clears the durable app reservation without sending a machine command and keeps
+the recipes available as drafts. Unknown completion never counts as success.
+Known busy/saving states and unresolved native writes still block clearing or
+restarting the journal; reconnect if a stale reported state disagrees with the
+physical display.
+An expired handshake no longer blocks local cancellation. Explicit writes and
+retries renew it under exclusive ownership before slot dispatch, without an
+automatic reconnect or background replay.
+
+Recovery copy describes the saving screen and the available actions, not
+frames or "verified evidence". Home cards use dot-matrix A/B/C beside the star;
+incomplete-write messages stay on the slot screen.
+
+The write overlay is removed synchronously on dismissal, without an exit
+animation retaining its modal accessibility flags while the host restores
+focus on the next frame. Its entrance and reduced-motion behaviour are
+unchanged. Sheets retain their existing dismissal contract: their modal flag
+clears immediately even while the closing visual remains mounted.
+
+The ten-stage NFC-card ceiling no longer leaks into coffee Bluetooth brewing
+or slot snapshots. Bluetooth validation instead checks the segment body's
+one-byte length; both encoders reject overflow rather than wrapping. The slot
+port checks all three full frames against a known link budget before sending A,
+so an oversized C cannot leave A/B partially written. More than ten slot stages
+is enabled for hardware qualification, not described as firmware-proven.
+
+Tea is supported by the machine's official slot workflow according to the
+user's observation. XBRW++ still needs the slot-specific tea discriminator:
+NFC stores cup type in its card header, while the documented 11510 blob has no
+cup-type byte. Public implementations, including ones with ordinary tea
+brewing support, expose only the coffee slot path. The app now describes this
+as tea slot writing not yet available in XBRW++, not a machine limitation.
+
+Targeted software validation: 36 suites and 1,058 tests passed across iOS and
+Android, including the shared live-brew owner after cancellation. Typecheck
+passed; whole-repository lint had no errors and the existing 27 warnings.
+Actual slot contents, extended-stage execution and tea encoding still need
+hardware qualification.
+
 ## Final slot/overflow consolidation
 
 PR #209 was merged into `integration/2.1.0` as `3c6f0230` after its single
@@ -310,17 +488,22 @@ is refused before journal creation; reconnect explicitly rather than assuming
 the machine still accepts it.
 
 `release(false)` removes attempt observers/timers but leaves durable recovery
-exclusion. Recovery sends only remaining immutable frames from a known boundary;
-SAVING_SLOTS is the only non-terminal machine state allowed for that recovery.
-An in-flight slot or all receipts without final completion stays blocked.
+exclusion. The conservative default remains blocked when the in-flight slot is
+uncertain. An explicit recovery action while SAVING_SLOTS may replay only the
+immutable frame for the first unconfirmed slot; it does not advance the
+boundary or alter the frame. If all three receipts are already confirmed but
+fresh final completion is missing, recovery is observe-only: it waits for a
+fresh SLOTS_SAVED and sends no frames. SAVING_SLOTS is the only non-terminal
+machine state allowed for replay.
 An optional `SlotLease.assertCurrent` checks invalidation immediately before
 durable mutations, including atomic promotion. Safe release requires no journal.
 
 Real Machine + fake transport + real SQLite tests now exercise receipt parsing,
 early ACK/final buffering, hung native dispatch, exact timeout thresholds and
 pacing, duplicates/refusals, stale callbacks, identity, restart/reconnect,
-background invalidation, contention and persistence failures. They do **not**
-prove firmware ordering, replay semantics or physical storage.
+background invalidation, contention and persistence failures. These software
+tests do **not** establish that duplicate replay is safe; they do not prove
+firmware ordering, replay semantics or physical storage.
 
 **UNMEASURED software limits:** native dispatch (including its pacing gap),
 receipt after native resolution, and final completion each have a separate
@@ -338,8 +521,9 @@ registrations/known old peripheral scopes; the wire also carries no connection
 epoch to identify a same-peripheral old packet delivered as a new native event.
 Verify these ordering/lifecycle assumptions on actual iOS/Android BLE hardware.
 
-Full release testing should cover both iOS and Android. NFC regressions require
-physical devices and genuine cards; neither simulator proves card safety.
+Physical qualification of the recovery/replay behavior on real hardware remains
+**OPEN**. Full release testing should cover both iOS and Android. NFC regressions
+require physical devices and genuine cards; neither simulator proves card safety.
 
 ## Approved development order
 

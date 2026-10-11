@@ -3,6 +3,7 @@ import {Pressable} from "react-native";
 import {XStack, YStack} from "tamagui";
 
 import DotMatrixText from "@/components/DotMatrixText";
+import DotIcon from "@/components/DotIcon";
 import Collapsible from "@/components/Collapsible";
 import {palette} from "@/constants/colors";
 import {useRefreshRequest} from "@/hooks/useRefreshRequest";
@@ -243,12 +244,22 @@ export default function MachinePanel({
                 {onEasyMode !== undefined && (
                     <Pressable accessibilityRole="button" accessibilityLabel="Easy Mode slots"
                                onPress={onEasyMode}>
-                        <YStack minHeight={44} justifyContent="center" marginTop="$2">
+                        <XStack testID="easy-mode-entry" minHeight={44} alignItems="center"
+                                gap="$3" marginTop="$2" padding="$3" borderRadius="$3"
+                                borderWidth={1} borderColor={palette.line}
+                                backgroundColor={palette.raised}>
+                            <DotMatrixText fontSize={16} weight="bold" color={palette.text}>
+                                A B C
+                            </DotMatrixText>
+                            <YStack flex={1}>
                             <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.6}
                                            color={palette.text}>
-                                EASY MODE SLOTS
+                                EASY MODE
                             </DotMatrixText>
-                        </YStack>
+                            </YStack>
+                            <DotIcon name="chevron-right" size={14} color={palette.dim}
+                                     testID="easy-mode-entry-chevron"/>
+                        </XStack>
                     </Pressable>
                 )}
             </YStack>

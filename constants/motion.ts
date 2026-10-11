@@ -37,6 +37,13 @@ export const DURATION = {
  */
 export const TYPING_DEBOUNCE_MS = 600;
 
+/** Rest after a durably completed Easy Mode write, before revealing its slabs. */
+export const SLOT_WRITE_SUCCESS_HOLD_MS = 1600;
+
+/** A finite visual estimate within one slot, never a receipt or save clock. */
+export const SLOT_WRITE_ESTIMATE_MS = 4800;
+export const SLOT_WRITE_ESTIMATE_TICK_MS = 400;
+
 /**
  * How long the drawer hint waits before opening a tray, and before closing it
  * again.
@@ -82,6 +89,8 @@ export const LOW_WATER_FLASH_MS = 30_000;
     in:    Easing.bezier(0.7, 0, 0.85, 0.15),
     /** Continuous or looping motion. */
     inOut: Easing.bezier(0.45, 0, 0.25, 1),
+    /** Finite JS-clock estimate; unlike bezier factories this accepts a fraction directly. */
+    slotEstimate: (fraction: number) => 1 - (1 - fraction) ** 3,
     /**
      * Constant speed, for motion with no beginning or end.
      *

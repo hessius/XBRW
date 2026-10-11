@@ -6,6 +6,7 @@ import DotIcon from "@/components/DotIcon";
 import RecipeCard from "@/components/RecipeCard";
 import {onAccent, palette} from "@/constants/colors";
 import type Recipe from "@/library/Recipe";
+import type {SlotMarkerValue} from "@/library/slots/slotModel";
 
 /** The tick's diameter. A touch under the card's own corner radius. */
 const TICK_SIZE = 26;
@@ -45,12 +46,12 @@ export default function SelectableRecipeRow({
     onToggle: () => void;
     showCoffeeMarker?: boolean;
     dottedProfile?: boolean;
-    slotMarker?: string;
+    slotMarker?: SlotMarkerValue;
 }) {
     return (
         <Pressable accessibilityRole="checkbox"
                    accessibilityState={{checked: selected}}
-                   accessibilityLabel={[recipe.displayName(), slotMarker].filter(Boolean).join(", ")}
+                   accessibilityLabel={[recipe.displayName(), slotMarker?.label].filter(Boolean).join(", ")}
                    testID={`select-${recipe.uuid}`}
                    onPress={onToggle}>
             <XStack alignItems="center" maxWidth={600}

@@ -1,5 +1,5 @@
 import React from "react";
-import {fireEvent, screen, waitFor} from "@testing-library/react-native";
+import {fireEvent, screen, waitFor, within} from "@testing-library/react-native";
 import {renderWithProviders, SHEET_PRESS_TIMEOUT} from "@/test-utils/render";
 import RecipeCard from "@/components/RecipeCard";
 import RecipeShelfTile from "@/components/RecipeShelfTile";
@@ -12,10 +12,18 @@ import {coffee} from "@/library/slots/__tests__/fixtures";
 
 it("draws slot assignment markers and exposes the recipe action on list cards", async () => {
     const onEasyMode = jest.fn();
-    await renderWithProviders(<RecipeCard recipe={coffee()} onPress={jest.fn()}
-        onEasyMode={onEasyMode} slotMarker="Draft A. Last written B."/>);
+    const recipe = coffee();
+    recipe.favourite = true;
+    await renderWithProviders(<RecipeCard recipe={recipe} onPress={jest.fn()}
+        onEasyMode={onEasyMode} slotMarker={{slots: ["A", "B"], label: "Draft A. Last written B."}}/>);
     expect(screen.getByTestId("slot-marker", {includeHiddenElements: true}))
-        .toHaveTextContent("Draft A. Last written B.");
+        .toHaveTextContent("A B");
+    const badges = within(screen.getByTestId("recipe-card-badges", {includeHiddenElements: true}));
+    expect(badges.getByTestId("slot-marker", {includeHiddenElements: true})).toHaveStyle({fontFamily: "Doto-ExtraBold"});
+    expect(badges.getByTestId("recipe-card-favourite", {includeHiddenElements: true})).toBeOnTheScreen();
+    expect(badges.getAllByTestId(/^(slot-marker|recipe-card-favourite)$/, {includeHiddenElements: true})
+        .map(node => node.props.testID)).toEqual(["slot-marker", "recipe-card-favourite"]);
+    expect(screen.queryByText(/Draft A\. Last written B\./, {includeHiddenElements: true})).toBeNull();
     expect(screen.getByRole("button", {name: /Draft A\. Last written B\./})).toBeOnTheScreen();
     await fireEvent(screen.getByTestId("recipe-card"), "accessibilityAction",
         {nativeEvent: {actionName: "easyMode"}});
@@ -24,12 +32,17 @@ it("draws slot assignment markers and exposes the recipe action on list cards", 
 
 it("draws the same marker and action on shelf tiles", async () => {
     const recipe = coffee();
+    recipe.favourite = true;
     const onEasyMode = jest.fn();
     await renderWithProviders(<RecipeShelfTile recipe={recipe} onPress={jest.fn()}
         onLongPress={jest.fn()} onShare={jest.fn()} onDuplicate={jest.fn()} onDelete={jest.fn()}
-        onEasyMode={onEasyMode} slotMarker="Draft C."/>);
-    expect(screen.getByTestId("slot-marker", {includeHiddenElements: true})).toHaveTextContent("Draft C.");
+        onEasyMode={onEasyMode} slotMarker={{slots: ["C"], label: "Draft C."}}/>);
+    expect(within(screen.getByTestId("recipe-tile-badges", {includeHiddenElements: true}))
+        .getByTestId("slot-marker", {includeHiddenElements: true})).toHaveTextContent("C");
     expect(screen.getByTestId("recipe-tile")).toHaveStyle({height: TILE_HEIGHT});
+    expect(within(screen.getByTestId("recipe-tile-badges", {includeHiddenElements: true}))
+        .getAllByTestId(/^(slot-marker|recipe-tile-favourite)$/, {includeHiddenElements: true})
+        .map(node => node.props.testID)).toEqual(["slot-marker", "recipe-tile-favourite"]);
     await fireEvent(screen.getByTestId(`recipe-tile-${recipe.uuid}`), "accessibilityAction",
         {nativeEvent: {actionName: "easyMode"}});
     expect(onEasyMode).toHaveBeenCalledTimes(1);
@@ -37,10 +50,10 @@ it("draws the same marker and action on shelf tiles", async () => {
 
 it("preserves assignment markers while the library selects recipes", async () => {
     await renderWithProviders(<SelectableRecipeRow recipe={coffee()} selected={false}
-        onToggle={jest.fn()} slotMarker="Draft B."/>);
+        onToggle={jest.fn()} slotMarker={{slots: ["B"], label: "Draft B."}}/>);
     expect(screen.getByRole("checkbox", {name: /Draft B\./})).toBeOnTheScreen();
     expect(screen.getByTestId("slot-marker", {includeHiddenElements: true}))
-        .toHaveTextContent("Draft B.");
+        .toHaveTextContent("B");
 });
 
 it("opens the canonical screen through the existing recipe actions sheet", async () => {
@@ -61,4 +74,12 @@ it("offers the canonical screen from the machine panel even while disconnected",
         onEasyMode={onEasyMode}/>);
     await fireEvent.press(screen.getByRole("button", {name: "Easy Mode slots"}));
     expect(onEasyMode).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("A B C")).toBeOnTheScreen();
+    expect(screen.getByText("EASY MODE")).toBeOnTheScreen();
+    expect(screen.getByTestId("easy-mode-entry")).toHaveStyle({
+        borderTopWidth: 1, borderBottomWidth: 1, borderLeftWidth: 1, borderRightWidth: 1,
+        borderTopColor: palette.line, borderBottomColor: palette.line,
+        borderLeftColor: palette.line, borderRightColor: palette.line
+    });
+    expect(screen.getByTestId("easy-mode-entry-chevron", {includeHiddenElements: true})).toBeOnTheScreen();
 });

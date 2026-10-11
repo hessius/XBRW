@@ -11,6 +11,7 @@ import Recipe from "@/library/Recipe";
 import {accentGroupFor, resolveAccent} from "@/library/accent";
 import {canWriteToCard} from "@/library/cardLimits";
 import type {RecipeEvidence} from "@/library/libraryQuery";
+import type {SlotMarkerValue} from "@/library/slots/slotModel";
 import {evidenceLine, isSet, spokenEvidence} from "@/library/recipeEvidence";
 import {onAccent} from "@/constants/colors";
 
@@ -106,7 +107,7 @@ type Props = {
      * that can be seen.
      */
     editing?: boolean;
-    slotMarker?: string;
+    slotMarker?: SlotMarkerValue;
     onEasyMode?: () => void;
 };
 
@@ -143,7 +144,7 @@ export default function RecipeShelfTile({
         recipe.displayName(),
         marker.toLowerCase(),
         recipe.favourite ? "starred" : undefined,
-        slotMarker,
+        slotMarker?.label,
         // Spoken in words rather than as the drawn line: "12G · 1:16 · 22" is a
         // glance's shorthand and reads as noise when it is read aloud.
         isSet(recipe.dosage) ? `${recipe.dosage} grams` : undefined,
@@ -232,7 +233,7 @@ export default function RecipeShelfTile({
                                  width={140} height={PROFILE_HEIGHT} dotted={dottedProfile}/>
                 </View>
 
-                <XStack alignItems="center" gap="$1.5">
+                <XStack testID="recipe-tile-badges" alignItems="center" gap="$1.5">
                     {/* How it has gone leads the row, the way it takes the
                         leading end of the card's own figures row. */}
                     {shownEvidence !== null && (
@@ -273,6 +274,7 @@ export default function RecipeShelfTile({
                                      size={12} color={onAccent.marker}/>
                         </Pressable>
                     )}
+                    <SlotMarker marker={slotMarker}/>
                     {recipe.favourite && (
                         <DotIcon testID="recipe-tile-favourite" name="favourite"
                                  size={12} color={onAccent.marker}/>
@@ -286,7 +288,6 @@ export default function RecipeShelfTile({
                 </XStack>
 
                 <YStack gap="$1">
-                    <SlotMarker label={slotMarker} compact/>
                     {/* One line rather than two once there are figures under
                         it. Every tile keeps the grid's fixed height:
                         a name that reflowed on its contents would break the

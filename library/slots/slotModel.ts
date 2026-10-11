@@ -1,6 +1,7 @@
 import Recipe, {CUP_TYPE} from "@/library/Recipe";
 import {brewProblems, DOSE, GRIND_RPM} from "@/library/cardLimits";
-import {buildType2, encodeCoffeeBlob} from "@/library/machine/protocol";
+import {buildType2, encodeCoffeeBlob, encodeTeaBlob} from "@/library/machine/protocol";
+import {checkTeaProbeSnapshot, teaProbeSlotFlags, teaProbeFlags} from "@/library/slots/teaSlotCandidate";
 
 export const SLOT_NAMES = ["A", "B", "C"] as const;
 export type SlotIndex = 0 | 1 | 2;
@@ -10,7 +11,53 @@ export type SlotSnapshot = {
     name: string;
     recipeJSON: string;
     blob: number[];
+    /** Set only on an approved fixed tea slot probe; see `teaSlotCandidate.ts`. */
+    probe?: string;
 };
+export type EvidenceKind = "prepared" | "dispatch" | "receipt" | "refused" | "error"
+    | "restart" | "final" | "cancelled" | "restore-prepared" | "restored"
+    | "partial" | "recovery-dispatch" | "recovery-receipt" | "recovery-error";
+export type SlotEvidence = {
+    at: number;
+    kind: EvidenceKind;
+    journalId: string;
+    slot: SlotIndex | null;
+    detail: string | null;
+    /** Exact frames, only on the two prepared entries. */
+    frames: Triple<number[]> | null;
+};
+export type SlotObservation = {
+    at: number;
+    display: string;
+    heldSeconds: number | null;
+    drainedAsTea: boolean | null;
+    note: string;
+};
+/** Durable record of a tea probe trial, bound to a machine and serial. */
+export type SlotExperiment = {
+    candidateId: string;
+    trialId: string;
+    deviceId: string;
+    serial: string;
+    machine: Record<string, string>;
+    original: {source: "written" | "draft"; writtenAt: number | null; slots: Triple<SlotSnapshot>};
+    originalDrafts: Triple<SlotSnapshot | null>;
+    candidate: Triple<SlotSnapshot>;
+    phase: "active" | "restored";
+    pending: {journalId: string; kind: "candidate" | "restore"} | null;
+    observation: SlotObservation | null;
+    /** Only the reference A/B/C matrix keeps one report per slot; older trials keep `observation`. */
+    slotObservations?: Triple<SlotObservation | null>;
+    evidence: SlotEvidence[];
+};
+export const TEA_PROBE_RESTORED_NOTICE =
+    "The tea slot probe was restored. Its evidence remains available to copy; a new trial is not allowed.";
+
+export function lastTeaProbeOutcome(experiment: Pick<SlotExperiment, "evidence">): SlotEvidence | undefined {
+    return experiment.evidence.filter(entry =>
+        ["final", "restore-prepared", "restored", "cancelled"].includes(entry.kind)
+    ).at(-1);
+}
 export type SlotJournal = {
     id: string;
     serial: string | null;
@@ -25,6 +72,8 @@ export type SlotRecord = {
     drafts: Triple<SlotSnapshot | null>;
     written: {at: number; slots: Triple<SlotSnapshot>} | null;
     journal: SlotJournal | null;
+    experiment?: SlotExperiment;
+    experimentHistory?: SlotExperiment[];
 };
 
 export function emptySlotRecord(): SlotRecord {
@@ -38,8 +87,7 @@ export function snapshotRecipe(recipe: Recipe): SlotSnapshot {
     if (typeof recipe.grinder !== "boolean") {
         throw new Error("The recipe's grinder state is invalid.");
     }
-    if (recipe.isTea()) throw new Error("Tea recipes are not supported in Easy Mode.");
-    if (![CUP_TYPE.XPOD, CUP_TYPE.OMNI, CUP_TYPE.OTHER].includes(recipe.cupType)
+    if (![CUP_TYPE.XPOD, CUP_TYPE.OMNI, CUP_TYPE.OTHER, CUP_TYPE.TEA].includes(recipe.cupType)
         || typeof recipe.bypassEnabled !== "boolean") {
         throw new Error("The recipe's brewer settings are invalid.");
     }
@@ -60,16 +108,42 @@ export function snapshotRecipe(recipe: Recipe): SlotSnapshot {
             throw new Error("Choose a valid pour pattern before assigning this recipe.");
         }
     }
+    const blob = recipe.isTea() ? Array.from(encodeTeaBlob(recipe)) : Array.from(encodeCoffeeBlob(recipe));
+    if (recipe.isTea()) {
+        // The official slot builder narrows grandWater * 10 to u8, not the BLE
+        // brew encoder's saturated volume/dose ratio. Tea drain is firmware-owned.
+        blob[blob.length - 1] = Math.trunc(recipe.ratio * 10) % 256;
+    }
     return {
         sourceUuid: recipe.uuid,
         name: recipe.displayName(),
         recipeJSON: JSON.stringify(recipe),
-        blob: Array.from(encodeCoffeeBlob(recipe))
+        blob
     };
 }
 
 export function sameBytes(left: readonly number[], right: readonly number[]): boolean {
     return left.length === right.length && left.every((byte, index) => byte === right[index]);
+}
+
+export function slotNeedsWrite(record: SlotRecord, index: SlotIndex): boolean {
+    const draft = record.drafts[index];
+    return draft !== null && (record.written === null
+        || !sameSlotContent(draft, record.written.slots[index]));
+}
+
+export function slotFlags(snapshot: SlotSnapshot): number {
+    if (snapshot.probe !== undefined) return teaProbeFlags(snapshot.probe);
+    const recipe = new Recipe(undefined, snapshot.recipeJSON);
+    return recipe.isTea() ? 0x0C + (recipe.pours.length - 1) * 0x20 : 0x02;
+}
+
+function sameSlotContent(left: SlotSnapshot, right: SlotSnapshot): boolean {
+    return sameBytes(left.blob, right.blob) && slotFlags(left) === slotFlags(right);
+}
+
+export function unwrittenSlotCount(record: SlotRecord): number {
+    return ([0, 1, 2] as const).filter(index => slotNeedsWrite(record, index)).length;
 }
 
 export function objectValue(value: unknown): value is Record<string, unknown> {
@@ -105,6 +179,17 @@ export function readSnapshot(value: unknown): SlotSnapshot {
             typeof byte === "number" && Number.isInteger(byte) && byte >= 0 && byte <= 255)) {
         throw new Error("The Easy Mode snapshot is invalid.");
     }
+    if (value.probe !== undefined) {
+        if (Object.keys(value).some(key =>
+            !["sourceUuid", "name", "recipeJSON", "blob", "probe"].includes(key))) {
+            throw new Error("The tea slot probe snapshot has unapproved attributes.");
+        }
+        // Historical probe payloads remain exact registered candidates.
+        return checkTeaProbeSnapshot({
+            sourceUuid: value.sourceUuid, name: value.name, recipeJSON: value.recipeJSON,
+            blob: value.blob as number[], probe: value.probe
+        });
+    }
     const json: unknown = JSON.parse(value.recipeJSON);
     if (!objectValue(json) || json.uuid !== value.sourceUuid) {
         throw new Error("The Easy Mode snapshot identity is invalid.");
@@ -124,8 +209,11 @@ export function prepareSet(drafts: Triple<SlotSnapshot | null>): Triple<number[]
         throw new Error("Choose all three recipes before writing.");
     }
     const slots = drafts.map(readSnapshot);
+    const probeFlags = slots.some(slot => slot.probe !== undefined)
+        ? teaProbeSlotFlags(slots.map(slot => slot.probe)) : null;
+    const flags = slots.map((slot, index) => slot.probe === undefined ? slotFlags(slot) : probeFlags![index]);
     const frame = (index: SlotIndex) => Array.from(buildType2(
-        11510, Uint8Array.from([index, 0x02, ...slots[index].blob])
+        11510, Uint8Array.from([index, flags[index], ...slots[index].blob])
     ));
     return [frame(0), frame(1), frame(2)];
 }
@@ -134,14 +222,19 @@ export function snapshotStatus(snapshot: SlotSnapshot, recipe: Recipe | undefine
     "unchanged" | "edited" | "removed" {
     if (recipe === undefined) return "removed";
     try {
-        return sameBytes(snapshot.blob, snapshotRecipe(recipe).blob) ? "unchanged" : "edited";
+        return sameSlotContent(snapshot, snapshotRecipe(recipe)) ? "unchanged" : "edited";
     } catch {
         // Invalid edits must not be hidden by Uint8Array's byte coercion.
         return "edited";
     }
 }
 
-export function slotMarkers(record: SlotRecord, recipe: Recipe): string | undefined {
+export type SlotMarkerValue = {
+    slots: readonly (typeof SLOT_NAMES)[number][];
+    label: string;
+};
+
+export function slotMarkers(record: SlotRecord, recipe: Recipe): SlotMarkerValue | undefined {
     const letters = (slots: readonly (SlotSnapshot | null)[]) => slots
         .flatMap((slot, index) => slot?.sourceUuid === recipe.uuid ? [SLOT_NAMES[index]] : []);
     const draft = letters(record.drafts);
@@ -149,11 +242,11 @@ export function slotMarkers(record: SlotRecord, recipe: Recipe): string | undefi
     if (draft.length === 0 && written.length === 0) return undefined;
     const snapshots = [...record.drafts, ...(record.written?.slots ?? [])]
         .filter((slot) => slot?.sourceUuid === recipe.uuid);
-    return [
+    const label = [
         draft.length > 0 ? `Draft ${draft.join("/")}.` : "",
         written.length > 0 ? `Last written ${written.join("/")}.` : "",
         snapshots.some((slot) => slot !== null && snapshotStatus(slot, recipe) === "edited")
-            ? "Recipe edited." : "",
-        record.journal !== null ? "Write incomplete." : ""
+            ? "Recipe edited." : ""
     ].filter(Boolean).join(" ");
+    return {slots: SLOT_NAMES.filter((name) => draft.includes(name) || written.includes(name)), label};
 }

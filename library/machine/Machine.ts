@@ -7,7 +7,8 @@ import {brewProblems} from "@/library/cardLimits";
 import {clampBypassTemp} from "@/library/bypassLimits";
 import type Recipe from "@/library/Recipe";
 import type {SlotDatabase} from "@/library/slots/SlotDatabase";
-import type {SlotIdentity} from "@/library/slots/slotWriter";
+import type {SlotAcquireOptions, SlotIdentity} from "@/library/slots/slotWriter";
+import {sameBytes} from "@/library/slots/slotModel";
 
 import {RadioUnavailableError, SlotOperationError} from "./errors";
 
@@ -37,6 +38,8 @@ import {
 import type {ConnectionScope, FoundMachine, MachineTransport} from "./Transport";
 
 export type SlotSession = {
+    restartFromBeginning: boolean;
+    validateFrames: (frames: readonly (readonly number[])[]) => void;
     send: (frame: Uint8Array, dispatching: () => void) => Promise<void>;
     check: () => void;
     invalidate: (error: Error) => void;
@@ -302,6 +305,10 @@ export default class Machine {
         this.slotStore = store;
     }
 
+    get slotStateIsNormal(): boolean {
+        return this.state !== null && STARTABLE.has(this.state);
+    }
+
     get slotIdentity(): SlotIdentity | null {
         const deviceId = this.transport.connectedDeviceId;
         if (!this.isConnected() || deviceId == null || deviceId !== this.connectedId) return null;
@@ -338,7 +345,7 @@ export default class Machine {
         }
     }
 
-    acquireSlotSession(identity: SlotIdentity): SlotSession {
+    acquireSlotSession(identity: SlotIdentity, options?: SlotAcquireOptions): SlotSession {
         if (this.slotStore === undefined) throw new Error("Install the shared Easy Mode database first.");
         if (this.backgrounded) throw new Error("Easy Mode writing is unavailable in the background.");
         const actual = this.slotIdentity;
@@ -346,12 +353,24 @@ export default class Machine {
             throw new Error("The selected machine is not the connected peripheral.");
         }
         if (actual.serial !== identity.serial) throw new Error("The connected machine serial must match.");
+        if (options?.requireKnownNormal && (this.state === null || !STARTABLE.has(this.state))) {
+            throw new Error("The tea slot probe needs a known normal machine state. Wait until it is back to normal, then reconnect if needed.");
+        }
         const journal = this.slotStore.read(actual.deviceId).journal;
         if (journal?.serial != null && journal.serial !== actual.serial) {
             throw new Error("The recovery journal serial belongs to a different machine.");
         }
-        if (journal !== null && (journal.inFlight !== null || journal.acknowledged === 3)) {
-            throw new Error("The Easy Mode recovery boundary is unknown; verified evidence is required.");
+        if (options?.finishUncertain && journal === null) {
+            throw new Error("Finishing requires an existing Easy Mode recovery journal.");
+        }
+        if (!options?.restart && !options?.finishUncertain && journal !== null
+            && (journal.inFlight !== null || journal.acknowledged === 3)) {
+            throw new Error("Confirm the machine is back to normal before retrying or cancelling.");
+        }
+        if (options?.restart && this.state !== null && !STARTABLE.has(this.state)) {
+            throw new Error(this.state === MACHINE_STATE.NO_WATER
+                ? "Fill the water tank and wait for the machine to return to normal, then retry."
+                : "The machine is still busy or saving. Wait until it is back to normal before restarting or cancelling. If it is already back to normal, reconnect first.");
         }
         if (this.slotSession !== null
             || this.unsettledCommand
@@ -361,14 +380,12 @@ export default class Machine {
                 && !(journal !== null && this.state === MACHINE_STATE.SAVING_SLOTS))) {
             throw new Error("The machine is busy. Finish its operation before writing Easy Mode slots.");
         }
-        if (!this.sessionIsFresh()) {
-            throw new Error("The machine session has expired. Reconnect before writing Easy Mode slots.");
-        }
         const token = Symbol("slots");
         const generation = this.generation;
         let failure: Error | null = null;
         let released = false;
         let sent = false;
+        let slotDispatched = false;
         const listeners = new Set<(error: Error) => void>();
         const invalidate = (error: Error) => {
             if (failure !== null || released) return;
@@ -383,9 +400,35 @@ export default class Machine {
                 || this.slotIdentity.serial !== actual.serial || this.backgrounded) {
                 throw new Error("The Easy Mode connection changed. Receipt is unknown.");
             }
+            if (journal !== null && this.slotStore?.read(actual.deviceId).journal?.id !== journal.id) {
+                throw new Error("The Easy Mode recovery journal changed.");
+            }
+            if (options?.requireKnownNormal && !slotDispatched
+                && (this.state === null || !STARTABLE.has(this.state))) {
+                throw new Error("The tea slot probe needs a known normal machine state before writing.");
+            }
+            if (isActiveBrewPhase(this.phase) || (this.state !== null
+                && !STARTABLE.has(this.state)
+                && ((options?.restart && !slotDispatched)
+                    || (this.state !== MACHINE_STATE.SAVING_SLOTS
+                        && this.state !== MACHINE_STATE.SLOTS_SAVED)))) {
+                throw new Error("The machine is busy. Easy Mode writing stopped.");
+            }
         };
         this.slotSession = {token, invalidate};
         return {
+            restartFromBeginning: journal !== null && options?.restart === true,
+            validateFrames: (frames) => {
+                check();
+                if (journal !== null && (frames.length !== 3
+                    || !frames.every((frame, index) => sameBytes(frame, journal.frames[index])))) {
+                    throw new Error("The Easy Mode frames do not match the acquired recovery journal.");
+                }
+                const budget = this.transport.frameBudget;
+                if (budget !== undefined && frames.some((frame) => frame.length > budget)) {
+                    throw new Error("A recipe is too large for this Bluetooth connection. Reduce its stages or volumes before writing.");
+                }
+            },
             check, invalidate,
             onInvalidated: (listener) => {
                 listeners.add(listener);
@@ -394,6 +437,17 @@ export default class Machine {
             },
             send: async (frame, dispatching) => {
                 check();
+                if (!sent && !this.sessionIsFresh()) {
+                    const finish = this.beginOrdinaryOperation();
+                    try {
+                        await this.writeFrame(buildType1(8100, [185, 1]), check);
+                        check();
+                        this.lastHandshakeAt = Date.now();
+                    } finally {
+                        finish();
+                    }
+                    sent = true;
+                }
                 if (sent && this.frameGapMs > 0) {
                     await new Promise<void>((resolve, reject) => {
                         const onFailure = (error: Error) => {
@@ -412,7 +466,14 @@ export default class Machine {
                 check();
                 sent = true;
                 dispatching();
-                await this.writeFrame(frame, check);
+                // Cancelling never dispatches; a restart must stay normal until its first slot.
+                slotDispatched = true;
+                const finish = this.beginOrdinaryOperation();
+                try {
+                    await this.writeFrame(frame, check);
+                } finally {
+                    finish();
+                }
                 check();
             },
             release: (safe) => {

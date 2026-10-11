@@ -29,6 +29,38 @@ describe("a recipe the machine would accept", () => {
     });
 });
 
+describe("Bluetooth stages are not NFC card capacity", () => {
+    function stages(count: number, volume = 5, dose = count, ratio = 5): Recipe {
+        const recipe = validRecipe();
+        recipe.dosage = dose;
+        recipe.ratio = ratio;
+        recipe.pours = Array.from({length: count}, (_, index) =>
+            new Pour(index + 1, volume, 93, 30, 0, POUR_PATTERN.CIRCULAR, 0));
+        return recipe;
+    }
+
+    it("permits seventeen Bluetooth stages but still refuses the NFC card", () => {
+        const recipe = stages(17);
+        expect(brewProblems(recipe)).toEqual([]);
+        expect(cardWriteProblems(recipe)).toContain("The recipe has 17 stages. The most is 10.");
+    });
+
+    it("permits the largest unchunked Bluetooth segment body", () => {
+        expect(brewProblems(stages(31))).toEqual([]);
+    });
+
+    it("refuses a segment body that would wrap its one-byte length", () => {
+        expect(brewProblems(stages(32, 5, 16, 10)))
+            .toContain("The recipe is too large to send over Bluetooth. Reduce the number or volume of stages.");
+    });
+
+    it("counts extra volume chunks, not just stages, against Bluetooth size", () => {
+        expect(brewProblems(stages(21, 130, 30, 91))).toEqual([]);
+        expect(brewProblems(stages(22, 135, 30, 99)))
+            .toContain("The recipe is too large to send over Bluetooth. Reduce the number or volume of stages.");
+    });
+});
+
 describe("a recipe outside the machine's bounds", () => {
     it("rejects a stage volume above 240 ml, even when the sum balances", () => {
         // The reviewer's example: dose 31 at ratio 100 balances at 3100 ml, so

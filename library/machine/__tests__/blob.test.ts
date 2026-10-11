@@ -18,6 +18,22 @@ function recipeOf(volumes: number[], overrides: Partial<Recipe> = {}): Recipe {
     return recipe;
 }
 
+it.each([
+    ["coffee", encodeCoffeeBlob],
+    ["tea", encodeTeaBlob]
+] as const)("refuses to wrap an oversized %s segment length", (_kind, encode) => {
+    expect(() => encode(recipeOf(Array(32).fill(5)))).toThrow(/too large|255/i);
+});
+
+it.each([
+    ["coffee", encodeCoffeeBlob],
+    ["tea", encodeTeaBlob]
+] as const)("preserves the last representable unchunked %s length", (_kind, encode) => {
+    const blob = encode(recipeOf(Array(31).fill(5)));
+    expect(blob[0]).toBe(248);
+    expect(blob.length).toBe(251);
+});
+
 describe("the ratio byte", () => {
     it("rounds up, because rounding down silently skips the grind", () => {
         // saya6k on hardware: 18 g / 250 ml truncates to 138, and the machine

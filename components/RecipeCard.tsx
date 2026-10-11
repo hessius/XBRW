@@ -10,6 +10,7 @@ import SlotMarker from "@/components/SlotMarker";
 import Recipe from "@/library/Recipe";
 import {evidenceLine, isSet, spokenEvidence} from "@/library/recipeEvidence";
 import type {RecipeEvidence} from "@/library/libraryQuery";
+import type {SlotMarkerValue} from "@/library/slots/slotModel";
 import {accentGroupFor, resolveAccent} from "@/library/accent";
 import {canWriteToCard} from "@/library/cardLimits";
 import {onAccent, palette} from "@/constants/colors";
@@ -173,7 +174,7 @@ type Props = {
      * either.
      */
     evidence?: RecipeEvidence;
-    slotMarker?: string;
+    slotMarker?: SlotMarkerValue;
     onEasyMode?: () => void;
 };
 
@@ -221,7 +222,7 @@ export default function RecipeCard({
         hasNote ? recipe.description : undefined,
         marker.toLowerCase(),
         recipe.favourite ? "starred" : undefined,
-        slotMarker,
+        slotMarker?.label,
         isSet(recipe.dosage) ? `${recipe.dosage} grams` : undefined,
         isSet(recipe.ratio) ? `ratio 1 to ${recipe.ratio}` : undefined,
         !isTea && !recipe.grinder ? "grinder off" : undefined,
@@ -363,7 +364,6 @@ export default function RecipeCard({
                                  width={200} height={PROFILE_HEIGHT} dotted={dottedProfile}/>
                 </View>
 
-                <SlotMarker label={slotMarker}/>
                 <XStack testID="recipe-card-title-row"
                         justifyContent="space-between" alignItems="flex-start" gap="$2"
                         paddingRight={0}>
@@ -399,21 +399,15 @@ export default function RecipeCard({
                             </Text>
                         )}
                     </YStack>
-                    <XStack alignItems="center" gap="$1.5">
+                    <XStack testID="recipe-card-badges" alignItems="center" gap="$1.5">
                         {/* The card's badge corner: the star joins the marker
                             rather than the stats row, so the numbers keep their
-                            full width for the library view to build on. It leads
-                            the cluster, pushing the marker left.
-
-                            It is the only badge here now. A small X used to
-                            trail the marker on a recipe no card can hold, and
-                            it read as a dismiss button; that refusal has moved
-                            onto the WRITE tile in the swipe tray, which is the
-                            control it actually refuses.
+                            full width for the library view to build on.
 
                             Hidden from accessibility on purpose: the word is
                             already in the card's own label above, and announcing
                             it twice is worse than not at all. */}
+                        <SlotMarker marker={slotMarker}/>
                         {recipe.favourite && (
                             <DotIcon testID="recipe-card-favourite" name="favourite"
                                      size={12} color={onAccent.marker}/>
