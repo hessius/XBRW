@@ -40,6 +40,33 @@ function litDots() {
         .filter(dot => StyleSheet.flatten(dot.props.style).backgroundColor === palette.success).length;
 }
 
+it("labels recovery and single-slot labs without announcing that all three slots were written", async () => {
+    const view = await renderWithProviders(<EasyModeWriteOverlay record={record(1)}
+        attempt={{...attempt, operation: "lab-recovery"}}/>);
+    expect(screen.getByText("TRYING RECOVERY")).toBeOnTheScreen();
+    expect(screen.queryByText("B: writing")).toBeNull();
+    expect(screen.queryByText("SLOTS WRITTEN")).toBeNull();
+    await view.rerender(<EasyModeWriteOverlay record={record()}
+        attempt={{...attempt, operation: "lab-partial"}}/>);
+    expect(screen.getByText("WRITING ONLY A")).toBeOnTheScreen();
+    await view.rerender(<EasyModeWriteOverlay record={record(1)}
+        attempt={{...attempt, operation: "lab-partial", status: "success"}}/>);
+    expect(screen.queryByTestId("easy-mode-write-overlay")).toBeNull();
+});
+
+it("shows normal recovery without drawing slot progress or reporting a saved set", async () => {
+    const view = await renderWithProviders(<EasyModeWriteOverlay record={record(3)}
+        attempt={{...attempt, operation: "dismiss", status: "cancelling"}}/>);
+    expect(screen.getByText("STOPPING THIS WRITE")).toBeOnTheScreen();
+    expect(screen.queryByText("SAVING")).toBeNull();
+    expect(screen.queryByText("A: received")).toBeNull();
+    expect(litDots()).toBe(0);
+    await view.rerender(<EasyModeWriteOverlay record={{...record(3), journal: null}}
+        attempt={{...attempt, operation: "dismiss", status: "cancelled"}}/>);
+    expect(screen.queryByTestId("easy-mode-write-overlay")).toBeNull();
+    expect(screen.queryByText("SLOTS WRITTEN")).toBeNull();
+});
+
 it("moves within each active third before its receipt, then waits below full until durable success", async () => {
     jest.useFakeTimers();
     const reduced = jest.spyOn(motion, "useReducedMotion").mockReturnValue(false);

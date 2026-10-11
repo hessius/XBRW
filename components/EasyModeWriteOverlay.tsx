@@ -23,7 +23,7 @@ export type EasyModeWriteOverlayProps = {
 export function slotOverlayVisible(record: SlotRecord, attempt: SlotAttempt | null): boolean {
     return attempt !== null && (
         ["writing", "saving", "cancelling"].includes(attempt.status)
-        || (attempt.status === "success" && attempt.operation !== "cancel"
+        || (attempt.status === "success" &&         !["cancel", "dismiss", "lab-partial", "lab-recovery", "lab-clear"].includes(attempt.operation)
             && record.journal === null && record.written !== null)
     );
 }
@@ -32,26 +32,34 @@ export default function EasyModeWriteOverlay({record, attempt, onDismissSuccess}
     const reduced = useReducedMotion();
     const visible = slotOverlayVisible(record, attempt);
     const success = visible && attempt?.status === "success";
-    const cancelling = attempt?.operation === "cancel";
+    const cancelling = attempt?.operation === "cancel" || attempt?.operation === "lab-clear";
+    const recovery = attempt?.operation === "lab-recovery" || attempt?.operation === "dismiss";
+    const partial = attempt?.operation === "lab-partial";
     const received = success ? 3 : record.journal?.acknowledged ?? 0;
-    const saving = !cancelling && !success && received === 3;
+    const saving = !cancelling && !recovery && !success && received === 3;
     const active = record.journal?.slots[received];
     const colour = active === undefined ? palette.text
         : resolveAccent(new Recipe(undefined, active.recipeJSON));
-    const title = success ? "SLOTS WRITTEN" : cancelling ? "CANCELLING THIS WRITE"
+    const title = attempt?.operation === "dismiss" ? "STOPPING THIS WRITE"
+        : recovery ? "TRYING RECOVERY" : partial ? "WRITING ONLY A"
+        : success ? "SLOTS WRITTEN" : cancelling ? "CANCELLING THIS WRITE"
         : saving ? "SAVING" : "WRITING YOUR SLOTS";
-    const announcement = !visible ? null : success ? "Slots written. A, B and C received."
+    const announcement = !visible ? null : attempt?.operation === "dismiss"
+        ? "Returning the machine to normal. Slot contents remain unconfirmed."
+        : recovery ? "Sending recovery command. The incomplete write is retained."
+        : partial ? "Writing only A for the recovery test."
+            : success ? "Slots written. A, B and C received."
         : cancelling ? "Clearing the pending write from XBRW++."
             : saving ? "Saving. A, B and C received. Waiting for the machine to finish."
                 : `Writing ${SLOT_NAMES[received] ?? "A"}. ${active?.name ?? "Preparing your slots"}.`;
-    const estimateKey = visible && !success && !saving && !cancelling
+    const estimateKey = visible && !success && !saving && !cancelling && !recovery
         ? JSON.stringify([attempt?.deviceId, attempt?.serial, attempt?.operation, record.journal?.id, received])
         : null;
     const [estimate, setEstimate] = useState<{key: string; fraction: number} | null>(null);
     // Retire the old slice during render, not from an effect. Retry never inherits its clock.
     if (estimate !== null && estimate.key !== estimateKey) setEstimate(null);
     const fraction = !reduced && estimate?.key === estimateKey ? estimate?.fraction ?? 0 : 0;
-    const progress = success ? 1 : saving && received === 3 ? 23 / 24 : cancelling ? 0
+    const progress = success ? 1 : saving && received === 3 ? 23 / 24 : cancelling || recovery ? 0
         : (received + fraction * 0.85) / 3;
 
     useEffect(() => {
@@ -105,7 +113,7 @@ export default function EasyModeWriteOverlay({record, attempt, onDismissSuccess}
                     <DotMatrixText fontSize={18} weight="bold" color={success ? palette.success : colour}>
                         {title}
                     </DotMatrixText>
-                    {!cancelling && <XStack gap="$4" flexWrap="wrap" justifyContent="center">
+                    {!cancelling && !recovery && <XStack gap="$4" flexWrap="wrap" justifyContent="center">
                         {SLOT_NAMES.map((name, index) => {
                             const state = index < received ? "received"
                                 : index === received && !saving ? "writing" : "pending";
@@ -123,10 +131,12 @@ export default function EasyModeWriteOverlay({record, attempt, onDismissSuccess}
                         && <Text color={palette.text} fontSize={16} fontWeight="600" textAlign="center">{active.name}</Text>}
                     <Text color={palette.dim} fontSize={14} textAlign="center">
                         {cancelling ? "This clears the phone's record, not the machine's contents."
-                            : success ? "A, B and C written. Machine switched to EASY."
+                            : recovery ? "Keep the app open. Check the machine after its reply."
+                                : partial ? "B and C will not be sent. The machine may stay on its saving display."
+                                    : success ? "A, B and C written. Machine switched to EASY."
                                 : "Keep the app open and stay near your machine."}
                     </Text>
-                    {!success && !cancelling && <Text color={palette.dim} fontSize={12} textAlign="center">
+                    {!success && !cancelling && !recovery && <Text color={palette.dim} fontSize={12} textAlign="center">
                         {saving ? "All three received. Waiting for save confirmation."
                             : "Bloom motion is estimated. Letters change only when received."}
                     </Text>}

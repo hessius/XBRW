@@ -7,7 +7,8 @@ import {
 } from "@/library/slots/slotModel";
 import {
     checkTeaExperimentId, isTeaProbeSnapshot, nextTeaProbeCandidate, sameSnapshotSet,
-    teaProbeCandidateSet, teaProbeOriginal, TEA_SLOT_MATRIX_ID, TEA_SLOT_PROBE_ID, TEA_SLOT_PROBE_V2_ID
+    teaProbeCandidateSet, teaProbeOriginal, TEA_SLOT_MATRIX_ID, TEA_SLOT_PROBE_ID, TEA_SLOT_PROBE_V2_ID,
+    checkSlotLabAvailable, hasSlotObservations, SLOT_LAB_IDS, SLOT_RECOVERY_PROBE_ID
 } from "@/library/slots/teaSlotCandidate";
 
 type SlotSQL = {
@@ -59,7 +60,8 @@ function readJournal(value: unknown): SlotJournal | null {
 
 const EVIDENCE_KINDS: readonly string[] = [
     "prepared", "dispatch", "receipt", "refused", "error", "restart", "final",
-    "cancelled", "restore-prepared", "restored"
+    "cancelled", "restore-prepared", "restored", "partial",
+    "recovery-dispatch", "recovery-receipt", "recovery-error"
 ];
 
 function readEvidence(value: unknown): SlotEvidence {
@@ -161,7 +163,7 @@ function readExperiment(value: unknown, deviceId: string, journal: SlotJournal |
         }
     }
     let slotObservations: SlotExperiment["slotObservations"];
-    if ((value.slotObservations !== undefined) !== (value.candidateId === TEA_SLOT_MATRIX_ID)) {
+    if ((value.slotObservations !== undefined) !== hasSlotObservations(value.candidateId)) {
         throw new Error("Only the reference matrix keeps per-slot tea observations.");
     }
     if (value.slotObservations !== undefined) slotObservations = triple(value.slotObservations, readObservation);
@@ -200,7 +202,7 @@ function readRecord(json: string, deviceId: string): SlotRecord {
             throw new Error("The tea slot probe has no experiment record.");
         }
         if (value.experimentHistory !== undefined) {
-            if (!Array.isArray(value.experimentHistory) || value.experimentHistory.length > 2) {
+            if (!Array.isArray(value.experimentHistory) || value.experimentHistory.length > 4) {
                 throw new Error("The tea slot probe history is invalid.");
             }
             record.experimentHistory = value.experimentHistory.map(item => {
@@ -217,7 +219,19 @@ function readRecord(json: string, deviceId: string): SlotRecord {
             && (current?.phase !== "active" || !sameSnapshotSet(written.slots, current.candidate))) {
             throw new Error("The last-written tea slot probe does not match the active trial.");
         }
-        if (current?.candidateId === TEA_SLOT_PROBE_V2_ID) {
+        if (current !== undefined && SLOT_LAB_IDS.some(id => id === current.candidateId)) {
+            const trials = [...history, current];
+            if (trials.some(item => item.serial !== current.serial)
+                || new Set(trials.map(item => item.trialId)).size !== trials.length
+                || new Set(trials.map(item => item.candidateId)).size !== trials.length) {
+                throw new Error("The slot lab history has duplicate identities or a different machine serial.");
+            }
+            const legacy = trials.filter(item => !SLOT_LAB_IDS.some(id => id === item.candidateId));
+            if (!legacy.every((item, index) =>
+                item.candidateId === [TEA_SLOT_PROBE_ID, TEA_SLOT_PROBE_V2_ID, TEA_SLOT_MATRIX_ID][index])) {
+                throw new Error("The historical tea probes are out of order.");
+            }
+        } else if (current?.candidateId === TEA_SLOT_PROBE_V2_ID) {
             if (history.length !== 1 || history[0].candidateId !== TEA_SLOT_PROBE_ID
                 || history[0].serial !== current.serial || history[0].trialId === current.trialId) {
                 throw new Error("The tea slot probe history is not the approved v1 to v2 sequence.");
@@ -349,11 +363,13 @@ export class SlotDatabase {
      * in one transaction, so neither can exist without the other.
      */
     beginProbe(
-        deviceId: string, journal: SlotJournal, trialId: string, machine: Record<string, string>, at: number
+        deviceId: string, journal: SlotJournal, trialId: string, machine: Record<string, string>, at: number,
+        selectedLab?: string
     ): void {
         this.change(deviceId, (record) => {
             if (record.journal !== null) throw new Error("Finish the incomplete write first.");
-            const candidateId = nextTeaProbeCandidate(record);
+            const candidateId = selectedLab === undefined ? nextTeaProbeCandidate(record)
+                : checkSlotLabAvailable(record, selectedLab);
             if (candidateId === null) {
                 if (record.experiment?.phase === "restored") throw new Error(TEA_PROBE_RESTORED_NOTICE);
                 throw new Error("A tea slot probe is already in progress. Restore the original set first.");
@@ -364,7 +380,9 @@ export class SlotDatabase {
             if (record.experiment !== undefined && record.experiment.serial !== journal.serial) {
                 throw new Error("The preserved set belongs to a different machine. Its serial must match.");
             }
-            if (trialId === "" || trialId !== journal.id || record.experiment?.trialId === trialId) {
+            if (trialId === "" || trialId !== journal.id
+                || [...(record.experimentHistory ?? []), ...(record.experiment ? [record.experiment] : [])]
+                    .some(trial => trial.trialId === trialId)) {
                 throw new Error("The tea slot probe needs a distinct trial matching its journal.");
             }
             if (journal.acknowledged !== 0 || journal.inFlight !== null) {
@@ -386,10 +404,26 @@ export class SlotDatabase {
                 machine: {...machine}, original, originalDrafts: record.drafts, candidate,
                 phase: "active", pending: {journalId: journal.id, kind: "candidate"},
                 observation: null,
-                ...(candidateId === TEA_SLOT_MATRIX_ID ? {slotObservations: [null, null, null]} : {}),
+                ...(hasSlotObservations(candidateId) ? {slotObservations: [null, null, null]} : {}),
                 evidence: []
             };
             this.evidence(record, journal.id, "prepared", at, null, null, checked.frames);
+        });
+    }
+
+    recoveryEvidence(
+        deviceId: string, id: string,
+        kind: "partial" | "recovery-dispatch" | "recovery-receipt" | "recovery-error",
+        detail: string | null = null
+    ): void {
+        this.change(deviceId, record => {
+            const journal = record.journal;
+            if (record.experiment?.candidateId !== SLOT_RECOVERY_PROBE_ID
+                || record.experiment.pending?.kind !== "candidate" || journal?.id !== id
+                || journal.acknowledged !== 1 || journal.inFlight !== null) {
+                throw new Error("Recovery testing requires the confirmed single-slot lab write.");
+            }
+            this.evidence(record, id, kind, this.now(), null, detail);
         });
     }
 

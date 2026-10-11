@@ -3,6 +3,7 @@ import {SlotDatabase} from "@/library/slots/SlotDatabase";
 import {
     prepareSet, readSnapshot, type SlotIndex, type SlotJournal
 } from "@/library/slots/slotModel";
+import {SLOT_RECOVERY_PROBE_ID} from "@/library/slots/teaSlotCandidate";
 
 export type SlotIdentity = {readonly deviceId: string; readonly serial: string | null};
 export type SlotAcquireOptions = {
@@ -25,6 +26,11 @@ export interface SlotLease {
     sendAndConfirm(frame: Uint8Array, index: SlotIndex): Promise<void>;
     /** Subscribe before A; require a fresh SLOTS_SAVED from this attempt. */
     confirmSaved(): Promise<void>;
+    /** Command receipt alone never clears the durable journal. */
+    sendRecoveryCommand?(): Promise<void | {stateBefore: number | null; stateAfter: number | null}>;
+    isKnownNormal?(): boolean;
+    /** Requires a normal-state observation after recovery dispatch, not just its receipt. */
+    confirmRecovered?(): Promise<void>;
     /** False retains the machine owner's recovery reservation. */
     release(safeToRelease: boolean): void;
 }
@@ -61,7 +67,7 @@ async function transmit(
     store: SlotDatabase, identity: SlotIdentity, port: SlotPort,
     prepared: SlotJournal | (() => SlotJournal), isNew: boolean, now: () => number,
     restart = false, finishUncertain = false,
-    begin?: (journal: SlotJournal) => void, requireKnownNormal = false
+    begin?: (journal: SlotJournal) => void, requireKnownNormal = false, partialLab = false
 ): Promise<void> {
     const target = Object.freeze({...identity});
     const lease = await port.acquire(target, {
@@ -85,6 +91,10 @@ async function transmit(
         } else if (restart || (!finishUncertain && (journal.inFlight !== null || journal.acknowledged === 3))) {
             throw new Error("Confirm the machine is back to normal before retrying all three slots.");
         }
+        if (partialLab && (!isNew || journal.acknowledged !== 0
+            || store.read(target.deviceId).experiment?.candidateId !== SLOT_RECOVERY_PROBE_ID)) {
+            throw new Error("A single-slot write is allowed only for the fixed recovery lab.");
+        }
         for (const index of [0, 1, 2] as const) {
             if (index < journal.acknowledged) continue;
             lease.assertCurrent?.();
@@ -102,6 +112,10 @@ async function transmit(
             }
             lease.assertCurrent?.();
             store.acknowledge(target.deviceId, journal.id, index);
+            if (partialLab) {
+                store.recoveryEvidence(target.deviceId, journal.id, "partial");
+                return;
+            }
         }
         await lease.confirmSaved();
         lease.assertCurrent?.();
@@ -148,10 +162,11 @@ export async function writePreparedSlots(
     store: SlotDatabase, identity: SlotIdentity, port: SlotPort,
     journal: SlotJournal | (() => SlotJournal),
     begin: (journal: SlotJournal) => void, now: () => number = Date.now,
-    options: Pick<SlotAcquireOptions, "requireKnownNormal"> = {}
+    options: Pick<SlotAcquireOptions, "requireKnownNormal"> & {partialLab?: boolean} = {}
 ): Promise<void> {
     checkPort(identity, port);
-    await transmit(store, identity, port, journal, true, now, false, false, begin, options.requireKnownNormal);
+    await transmit(store, identity, port, journal, true, now, false, false, begin,
+        options.requireKnownNormal, options.partialLab);
 }
 
 export async function recoverSlots(
@@ -188,9 +203,44 @@ export async function cancelSlots(
         if (!lease.restartFromBeginning) {
             throw new Error("Confirm the machine is back to normal before cancelling.");
         }
+
         store.cancel(target.deviceId, journal.id);
         cancelled = true;
     } finally {
         lease.release(cancelled);
+    }
+}
+
+/** Stops incomplete saving without claiming the set was stored or rolled back. */
+export async function dismissSlots(
+    store: SlotDatabase, identity: SlotIdentity, port: SlotPort = unavailableSlotPort
+): Promise<void> {
+    checkPort(identity, port);
+    const target = Object.freeze({...identity});
+    const journal = store.read(target.deviceId).journal;
+    if (journal === null) throw new Error("There is no incomplete Easy Mode write.");
+    matchingSerial(journal, target);
+    const lease = await port.acquire(target, {finishUncertain: true});
+    let dismissed = false;
+    try {
+        lease.assertCurrent?.();
+        lease.validateFrames?.(journal.frames);
+        if (lease.isKnownNormal === undefined) throw new Error("Slot recovery is unavailable on this transport.");
+        if (!lease.isKnownNormal()) {
+            if (lease.sendRecoveryCommand === undefined || lease.confirmRecovered === undefined) {
+                throw new Error("Slot recovery is unavailable on this transport.");
+            }
+            await lease.sendRecoveryCommand();
+            await lease.confirmRecovered();
+        }
+        lease.assertCurrent?.();
+        if (!lease.isKnownNormal()) throw new Error("The machine has not returned to normal. Retry or wait for its saving screen to clear.");
+        store.cancel(target.deviceId, journal.id);
+        dismissed = true;
+    } catch (error) {
+        store.fail(target.deviceId, journal.id, error instanceof Error ? error.message : String(error));
+        throw error;
+    } finally {
+        lease.release(dismissed);
     }
 }

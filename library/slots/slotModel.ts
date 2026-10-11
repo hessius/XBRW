@@ -1,7 +1,7 @@
 import Recipe, {CUP_TYPE} from "@/library/Recipe";
 import {brewProblems, DOSE, GRIND_RPM} from "@/library/cardLimits";
-import {buildType2, encodeCoffeeBlob} from "@/library/machine/protocol";
-import {checkTeaProbeSnapshot, teaProbeSlotFlags} from "@/library/slots/teaSlotCandidate";
+import {buildType2, encodeCoffeeBlob, encodeTeaBlob} from "@/library/machine/protocol";
+import {checkTeaProbeSnapshot, teaProbeSlotFlags, teaProbeFlags} from "@/library/slots/teaSlotCandidate";
 
 export const SLOT_NAMES = ["A", "B", "C"] as const;
 export type SlotIndex = 0 | 1 | 2;
@@ -15,7 +15,8 @@ export type SlotSnapshot = {
     probe?: string;
 };
 export type EvidenceKind = "prepared" | "dispatch" | "receipt" | "refused" | "error"
-    | "restart" | "final" | "cancelled" | "restore-prepared" | "restored";
+    | "restart" | "final" | "cancelled" | "restore-prepared" | "restored"
+    | "partial" | "recovery-dispatch" | "recovery-receipt" | "recovery-error";
 export type SlotEvidence = {
     at: number;
     kind: EvidenceKind;
@@ -86,8 +87,7 @@ export function snapshotRecipe(recipe: Recipe): SlotSnapshot {
     if (typeof recipe.grinder !== "boolean") {
         throw new Error("The recipe's grinder state is invalid.");
     }
-    if (recipe.isTea()) throw new Error("Tea slot writing is not available in XBRW++ yet.");
-    if (![CUP_TYPE.XPOD, CUP_TYPE.OMNI, CUP_TYPE.OTHER].includes(recipe.cupType)
+    if (![CUP_TYPE.XPOD, CUP_TYPE.OMNI, CUP_TYPE.OTHER, CUP_TYPE.TEA].includes(recipe.cupType)
         || typeof recipe.bypassEnabled !== "boolean") {
         throw new Error("The recipe's brewer settings are invalid.");
     }
@@ -108,11 +108,17 @@ export function snapshotRecipe(recipe: Recipe): SlotSnapshot {
             throw new Error("Choose a valid pour pattern before assigning this recipe.");
         }
     }
+    const blob = recipe.isTea() ? Array.from(encodeTeaBlob(recipe)) : Array.from(encodeCoffeeBlob(recipe));
+    if (recipe.isTea()) {
+        // The official slot builder narrows grandWater * 10 to u8, not the BLE
+        // brew encoder's saturated volume/dose ratio. Tea drain is firmware-owned.
+        blob[blob.length - 1] = Math.trunc(recipe.ratio * 10) % 256;
+    }
     return {
         sourceUuid: recipe.uuid,
         name: recipe.displayName(),
         recipeJSON: JSON.stringify(recipe),
-        blob: Array.from(encodeCoffeeBlob(recipe))
+        blob
     };
 }
 
@@ -123,7 +129,17 @@ export function sameBytes(left: readonly number[], right: readonly number[]): bo
 export function slotNeedsWrite(record: SlotRecord, index: SlotIndex): boolean {
     const draft = record.drafts[index];
     return draft !== null && (record.written === null
-        || !sameBytes(draft.blob, record.written.slots[index].blob));
+        || !sameSlotContent(draft, record.written.slots[index]));
+}
+
+export function slotFlags(snapshot: SlotSnapshot): number {
+    if (snapshot.probe !== undefined) return teaProbeFlags(snapshot.probe);
+    const recipe = new Recipe(undefined, snapshot.recipeJSON);
+    return recipe.isTea() ? 0x0C + (recipe.pours.length - 1) * 0x20 : 0x02;
+}
+
+function sameSlotContent(left: SlotSnapshot, right: SlotSnapshot): boolean {
+    return sameBytes(left.blob, right.blob) && slotFlags(left) === slotFlags(right);
 }
 
 export function unwrittenSlotCount(record: SlotRecord): number {
@@ -168,7 +184,7 @@ export function readSnapshot(value: unknown): SlotSnapshot {
             !["sourceUuid", "name", "recipeJSON", "blob", "probe"].includes(key))) {
             throw new Error("The tea slot probe snapshot has unapproved attributes.");
         }
-        // Exact registered candidate only; every other tea still fails below.
+        // Historical probe payloads remain exact registered candidates.
         return checkTeaProbeSnapshot({
             sourceUuid: value.sourceUuid, name: value.name, recipeJSON: value.recipeJSON,
             blob: value.blob as number[], probe: value.probe
@@ -193,7 +209,9 @@ export function prepareSet(drafts: Triple<SlotSnapshot | null>): Triple<number[]
         throw new Error("Choose all three recipes before writing.");
     }
     const slots = drafts.map(readSnapshot);
-    const flags = teaProbeSlotFlags(slots.map(slot => slot.probe));
+    const probeFlags = slots.some(slot => slot.probe !== undefined)
+        ? teaProbeSlotFlags(slots.map(slot => slot.probe)) : null;
+    const flags = slots.map((slot, index) => slot.probe === undefined ? slotFlags(slot) : probeFlags![index]);
     const frame = (index: SlotIndex) => Array.from(buildType2(
         11510, Uint8Array.from([index, flags[index], ...slots[index].blob])
     ));
@@ -204,7 +222,7 @@ export function snapshotStatus(snapshot: SlotSnapshot, recipe: Recipe | undefine
     "unchanged" | "edited" | "removed" {
     if (recipe === undefined) return "removed";
     try {
-        return sameBytes(snapshot.blob, snapshotRecipe(recipe).blob) ? "unchanged" : "edited";
+        return sameSlotContent(snapshot, snapshotRecipe(recipe)) ? "unchanged" : "edited";
     } catch {
         // Invalid edits must not be hidden by Uint8Array's byte coercion.
         return "edited";

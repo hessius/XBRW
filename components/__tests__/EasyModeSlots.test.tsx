@@ -7,6 +7,7 @@ import {emptySlotRecord, prepareSet, snapshotRecipe} from "@/library/slots/slotM
 import {coffee} from "@/library/slots/__tests__/fixtures";
 import {SLOT_INTEGRATION_BLOCK, unavailableSlotPort} from "@/library/slots/slotWriter";
 import Recipe, {CUP_TYPE} from "@/library/Recipe";
+import Pour from "@/library/Pour";
 import {createTestDatabase} from "@/test-utils/sqlite";
 import {SlotDatabase} from "@/library/slots/SlotDatabase";
 import {useEasyModeSlots} from "@/hooks/useEasyModeSlots";
@@ -21,6 +22,50 @@ const props = () => ({
     record: emptySlotRecord(), recipes, deviceId: "one", connected: true,
     available: false, running: false, error: null,
     onAssign: jest.fn(), onWrite: jest.fn(), onRecover: jest.fn(), onCancel: jest.fn()
+});
+
+it("hides LAB while keeping retained original restoration on the normal screen", async () => {
+    const store = new SlotDatabase(createTestDatabase());
+    for (const i of [0, 1, 2] as const) store.assign("one", i, snapshotRecipe(recipes[0]));
+    const port = {available: true, acquire: async () => ({
+        sendAndConfirm: async () => {}, confirmSaved: async () => {}, release: () => {}
+    })};
+    await writeTeaSlotProbe(store, {deviceId: "one", serial: "serial"}, port);
+    const onRestoreOriginal = jest.fn();
+    await renderWithProviders(<EasyModeSlots {...props()} available record={store.read("one")}
+        onRestoreOriginal={onRestoreOriginal}/>);
+    expect(screen.queryByText("LAB")).toBeNull();
+    expect(screen.getByRole("button", {name: "Restore original slot set"})).toBeEnabled();
+    await fireEvent.press(screen.getByRole("button", {name: "Restore original slot set"}));
+    expect(onRestoreOriginal).toHaveBeenCalledTimes(1);
+});
+
+it("confirms normal recovery without requiring the user to wait for a stuck saving screen", async () => {
+    const onDismissWrite = jest.fn();
+    await renderWithProviders(<EasyModeSlots {...interruptedOptions()} available onDismissWrite={onDismissWrite}/>);
+    await fireEvent.press(screen.getByRole("button", {name: "Stop slot write"}));
+    expect(onDismissWrite).not.toHaveBeenCalled();
+    expect(await screen.findByText(/returns the machine to normal.*slot contents remain unconfirmed/i)).toBeOnTheScreen();
+    await waitFor(async () => {
+        await fireEvent.press(screen.getByRole("button", {name: "Confirm stop slot write"}));
+        expect(onDismissWrite).toHaveBeenCalledTimes(1);
+    }, {timeout: SHEET_PRESS_TIMEOUT});
+});
+
+it("shows a normal tea slot as steeps and water rather than coffee ratio and grind settings", async () => {
+    const recipe = coffee("Two steeps");
+    recipe.cupType = CUP_TYPE.TEA;
+    recipe.grinder = false;
+    recipe.dosage = 6;
+    recipe.ratio = 30;
+    recipe.pours = Array.from({length: 2}, (_, i) => new Pour(i + 1, 90, 92, 35, 0, 2, 20));
+    const options = props();
+    options.record.drafts[0] = snapshotRecipe(recipe);
+    await renderWithProviders(<EasyModeSlots {...options} available/>);
+    const card = within(screen.getByTestId("slot-A"));
+    expect(card.getByText("2 STEEPS · 180ML · GRIND OFF")).toBeOnTheScreen();
+    expect(card.queryByText(/1:30/)).toBeNull();
+    expect(screen.getByRole("button", {name: "Change slot A recipe"})).toBeEnabled();
 });
 
 function PersistentSlots({store}: {store: SlotDatabase}) {
@@ -64,7 +109,7 @@ it("gives interruption its own scrollable recovery stage instead of stacking it 
     expect(recovery.getByText("A: received")).toBeOnTheScreen();
     expect(recovery.getByRole("button", {name: "Retry slot write"})).toHaveStyle({backgroundColor: palette.text});
     expect(recovery.getByRole("button", {name: "Cancel slot write"})).toHaveStyle({backgroundColor: palette.raised});
-    expect(recovery.getByText(/Your recipes are kept.*saving animation/)).toBeOnTheScreen();
+    expect(recovery.getByText(/Your recipes are kept.*saving animation usually clears/)).toBeOnTheScreen();
 });
 
 it("puts readback limitations in help and shows one availability reason", async () => {
@@ -261,7 +306,7 @@ it.each([null, 1] as const)("offers deliberate still-saving recovery for B bound
     expect(screen.getByText("Writing stopped at B.")).toBeOnTheScreen();
     expect(screen.queryByText("LAST WRITTEN")).toBeNull();
     await fireEvent.press(screen.getByRole("button", {name: "Retry slot write"}));
-    expect(await screen.findByText(/may already have arrived.*same set/)).toBeOnTheScreen();
+    expect(await screen.findByText(/still saving.*finish the same set.*back to normal.*all three again/)).toBeOnTheScreen();
     await waitFor(async () => {
         await fireEvent.press(screen.getByRole("button", {name: "Finish write while machine is still saving"}));
         expect(options.onRecover).toHaveBeenCalledWith(false);
@@ -278,7 +323,7 @@ it("offers observe-only recovery after three receipts without inventing a fourth
     await renderWithProviders(<EasyModeSlots {...options} available/>);
     expect(screen.getByText("Saving was not confirmed.")).toBeOnTheScreen();
     await fireEvent.press(screen.getByRole("button", {name: "Retry slot write"}));
-    expect(await screen.findByText(/waits for a fresh save confirmation.*does not resend/)).toBeOnTheScreen();
+    expect(await screen.findByText(/check for save confirmation without sending the recipes again/)).toBeOnTheScreen();
     await waitFor(async () => {
         await fireEvent.press(screen.getByRole("button", {name: "Finish write while machine is still saving"}));
         expect(options.onRecover).toHaveBeenCalledWith(false);
@@ -342,7 +387,7 @@ it("requires confirmation before cancelling and hides the underlying screen", as
     await fireEvent.press(screen.getByRole("button", {name: "Cancel slot write"}));
     expect(options.onCancel).not.toHaveBeenCalled();
     expect(screen.queryByRole("button", {name: "Retry slot write"})).toBeNull();
-    expect(await screen.findByText(/does not stop a write on the machine/i)).toBeOnTheScreen();
+    expect(await screen.findByText(/assignments are kept.*slot contents remain unconfirmed/i)).toBeOnTheScreen();
     await waitFor(async () => {
         await fireEvent.press(screen.getByRole("button", {name: "Confirm machine is back to normal and cancel"}));
         expect(options.onCancel).toHaveBeenCalledTimes(1);
@@ -591,11 +636,24 @@ it.each([
     ["The Easy Mode connection changed. Receipt is unknown.", "The connection was lost before B was confirmed."],
     ["Easy Mode writing stopped because the app entered the background.",
         "Writing stopped because the app moved to the background. Keep it open when retrying."]
-])("preserves the specific interruption reason in amber: %s", async (error, copy) => {
+])("preserves the specific interruption reason without alarm styling: %s", async (error, copy) => {
     await renderWithProviders(<EasyModeSlots {...interruptedOptions()} available error={error}/>);
     expect(screen.getByRole("alert")).toHaveTextContent(copy);
-    expect(screen.getByText("Writing stopped at B.")).toHaveStyle({color: palette.warn});
+    expect(screen.getByText("Writing stopped at B.")).toHaveStyle({color: palette.text});
+    expect(screen.queryByText("!")).toBeNull();
     expect(screen.getByRole("alert")).not.toHaveTextContent(/receipt|journal/i);
+});
+
+it("explains temporary saving without claiming the interrupted set was saved", async () => {
+    const options = interruptedOptions();
+    await renderWithProviders(<EasyModeSlots {...options} available error={null}/>);
+    expect(screen.getByText(/usually clears after about a minute/)).toBeOnTheScreen();
+    expect(screen.getByText(/This set has not been confirmed saved/)).toBeOnTheScreen();
+    expect(screen.getByText("Finish or cancel this write to brew from the app.")).toBeOnTheScreen();
+    expect(screen.queryByText("Do not start a brew until this write is resolved.")).toBeNull();
+    expect(screen.queryByText("!")).toBeNull();
+    expect(options.onCancel).not.toHaveBeenCalled();
+    expect(options.onRecover).not.toHaveBeenCalled();
 });
 
 it("presents each reference matrix slot with its own name and figures, not the first probe's", async () => {

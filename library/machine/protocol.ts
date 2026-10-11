@@ -386,8 +386,9 @@ export function parseNotification(bytes: Uint8Array): Notification {
     const payload = bytes.subarray(PAYLOAD_START, bytes.length - 2);
 
     // Slot ACKs carry no index. Preserve the command status, including refusals.
-    if ((type | (sub << 8)) === 11510) {
-        return {kind: "receipt", code: 11510, status: bytes[9]};
+    const command = type | (sub << 8);
+    if (command === 11510 || command === 40526) {
+        return {kind: "receipt", code: command, status: bytes[9]};
     }
 
     if (type === 0x57) {

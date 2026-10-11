@@ -8,16 +8,18 @@ import {
     emptySlotRecord, readSlotRecipe, snapshotRecipe, type SlotIndex, type SlotObservation, type SlotRecord
 } from "@/library/slots/slotModel";
 import {
-    cancelSlots, recoverSlots, writeSlots, unavailableSlotPort, type SlotIdentity, type SlotPort
+    cancelSlots, dismissSlots, recoverSlots, writeSlots, unavailableSlotPort, type SlotIdentity, type SlotPort
 } from "@/library/slots/slotWriter";
 import {
-    restoreTeaSlotOriginal, writeTeaSlotProbe, type TeaProbeOptions
+    restoreTeaSlotOriginal, writeTeaSlotProbe, sendSlotRecoveryProbe, clearSlotRecoveryProbe, type TeaProbeOptions
 } from "@/library/slots/teaSlotProbe";
+import {SLOT_RECOVERY_PROBE_ID} from "@/library/slots/teaSlotCandidate";
 
 const databases = new WeakMap<object, SlotDatabase>();
 const unpaired = emptySlotRecord();
 
-export type SlotOperation = "write" | "recover" | "cancel" | "probe" | "restore";
+export type SlotOperation = "write" | "recover" | "cancel" | "dismiss" | "probe" | "restore"
+    | "lab-partial" | "lab-recovery" | "lab-clear";
 export type SlotAttempt = SlotIdentity & {
     operation: SlotOperation;
     status: "writing" | "saving" | "cancelling" | "success" | "cancelled" | "error";
@@ -117,19 +119,23 @@ export function useEasyModeSlots(
         active.current = true;
         const target = Object.freeze({...identity});
         const attempting: SlotAttempt = {
-            ...target, operation, status: operation === "cancel" ? "cancelling" : "writing"
+            ...target, operation, status: operation === "cancel" || operation === "dismiss" ? "cancelling" : "writing"
         };
         setReading(attempting);
         setFailure(null);
         try {
             const store = supplied ?? sharedSlotDatabase();
             if (operation === "cancel") await cancelSlots(store, target, port);
+            else if (operation === "dismiss") await dismissSlots(store, target, port);
+            else if (operation === "lab-clear") await clearSlotRecoveryProbe(store, target, port);
+            else if (operation === "lab-recovery") await sendSlotRecoveryProbe(store, target, port);
+            else if (operation === "lab-partial") await writeTeaSlotProbe(store, target, port, probeOptions);
             else if (operation === "probe") await writeTeaSlotProbe(store, target, port, probeOptions);
             else if (operation === "restore") await restoreTeaSlotOriginal(store, target, port, probeOptions);
             else if (operation === "recover") {
                 await recoverSlots(store, target, port, {restart, finishUncertain: !restart});
             } else await writeSlots(store, target, port);
-            setReading({...attempting, status: operation === "cancel" ? "cancelled" : "success"});
+            setReading({...attempting, status: operation === "cancel" || operation === "dismiss" ? "cancelled" : "success"});
         } catch (failure) {
             setFailure({...target, message: failure instanceof Error ? failure.message : String(failure)});
             setReading({...attempting, status: "error"});
@@ -175,7 +181,13 @@ export function useEasyModeSlots(
         running, available: port.available, assign, observeTeaProbe,
         write: () => run("write"), recover: (restart = false) => run("recover", restart),
         cancel: () => run("cancel"),
+        dismissWrite: () => run("dismiss"),
         writeTeaProbe: (options: TeaProbeOptions = {}) => run("probe", false, options),
+        writeSlotLab: (candidateId: string, options: TeaProbeOptions = {}) =>
+            run(candidateId === SLOT_RECOVERY_PROBE_ID ? "lab-partial" : "probe",
+                false, {...options, candidateId}),
+        sendRecoveryProbe: () => run("lab-recovery"),
+        clearRecoveryProbe: () => run("lab-clear"),
         restoreTeaOriginal: (options: TeaProbeOptions = {}) => run("restore", false, options)
     };
 }

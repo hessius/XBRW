@@ -38,7 +38,11 @@ const mockPrompt = {
 const mockWrite = jest.fn();
 const mockReset = jest.fn();
 const mockProbe = jest.fn();
+const mockLab = jest.fn();
+const mockRecoveryProbe = jest.fn();
+const mockClearRecovery = jest.fn();
 const mockRestore = jest.fn();
+const mockStopWrite = jest.fn();
 const mockObserve = jest.fn();
 const dev = __DEV__;
 type Action = {type: string; payload?: {count: number}};
@@ -93,8 +97,9 @@ jest.mock("@/hooks/useEasyModeSlots", () => ({
         record: mockRecord, error: null,
         available: mockAvailable, running: mockRunning, attempt: mockAttempt,
         resetAttempt: mockReset,
-        assign: jest.fn(), write: mockWrite, recover: jest.fn(), cancel: jest.fn(),
-        writeTeaProbe: mockProbe, restoreTeaOriginal: mockRestore, observeTeaProbe: mockObserve
+        assign: jest.fn(), write: mockWrite, recover: jest.fn(), cancel: jest.fn(), dismissWrite: mockStopWrite,
+        writeTeaProbe: mockProbe, restoreTeaOriginal: mockRestore, observeTeaProbe: mockObserve,
+        writeSlotLab: mockLab, sendRecoveryProbe: mockRecoveryProbe, clearRecoveryProbe: mockClearRecovery
     })
 }));
 jest.mock("@/hooks/useRecipeLibrary", () => ({
@@ -110,6 +115,8 @@ beforeEach(() => {
     mockPreventRemove.mockClear(); mockPush.mockClear(); mockDismiss.mockClear();
     mockPrompt.rate.mockClear(); mockPrompt.dismiss.mockClear();
     mockProbe.mockClear(); mockRestore.mockClear(); mockObserve.mockClear();
+    mockLab.mockClear(); mockRecoveryProbe.mockClear(); mockClearRecovery.mockClear();
+    mockStopWrite.mockClear();
     Object.defineProperty(global, "__DEV__", {value: dev});
     forgetLastMove();
 });
@@ -260,39 +267,25 @@ it.each(["write", "recover", "cancel", "probe", "restore"] as const)("blocks dep
     expect(mockDispatch).not.toHaveBeenCalled();
 });
 
-it("guards native departure and hides the route and global bar while the probe sheet is open", async () => {
+it("does not expose LAB or new experiments alongside the global bar", async () => {
     offerRating();
     await renderWithProviders(<><EasyModeScreen/><LiveBrewBar/></>);
-    await fireEvent.press(screen.getByRole("button", {name: "TEA SLOT PROBE"}));
-    expect(await screen.findByText(/1 steep, 60 ml, 70 C, 60 s/)).toBeOnTheScreen();
-    expect(screen.queryByRole("header", {name: /Easy Mode/i})).toBeNull();
-    expect(screen.queryByRole("button", {name: "Write all three slots"})).toBeNull();
-    expectGlobalCovered();
-    await fireEvent.press(globalOpen(true));
-    expect(mockPush).not.toHaveBeenCalled();
-    expect(mockPreventRemove).toHaveBeenLastCalledWith(true, expect.any(Function));
-    expect((await departure()).preventDefault).toHaveBeenCalledTimes(1);
-    expect(mockDispatch).not.toHaveBeenCalled();
-    await fireEvent.press(screen.getByRole("button", {name: "Close"}));
+    expect(screen.queryByRole("button", {name: "TEA SLOT PROBE"})).toBeNull();
     expect(screen.getByRole("header", {name: /Easy Mode/i})).toBeOnTheScreen();
-    expect(screen.queryByText(/1 steep, 60 ml, 70 C, 60 s/)).toBeNull();
+    expect(screen.getByRole("button", {name: "Write all three slots"})).toBeOnTheScreen();
     expect(mockPreventRemove).toHaveBeenLastCalledWith(false, expect.any(Function));
+    expect(mockLab).not.toHaveBeenCalled();
 });
 
-it("writes only via the dedicated hook with actual machine metadata and closes the probe sheet", async () => {
+it("new lab dispatch remains inaccessible even with changed drafts in development", async () => {
     changedDrafts();
     await renderWithProviders(<EasyModeScreen/>);
-    await fireEvent.press(screen.getByRole("button", {name: "TEA SLOT PROBE"}));
-    await waitFor(async () => {
-        await fireEvent.press(screen.getByRole("button", {name: "WRITE PROBE"}));
-        expect(mockProbe).toHaveBeenCalledTimes(1);
-    }, {timeout: SHEET_PRESS_TIMEOUT});
-    expect(mockProbe).toHaveBeenCalledWith({machine: {
-        model: "X15", firmware: "V12.0D.500", modelNumber: "X15", name: "XBLOOM"
-    }});
+    expect(screen.queryByText("LAB")).toBeNull();
+    expect(screen.queryByRole("button", {name: "WRITE STEEP TEST"})).toBeNull();
+    expect(mockLab).not.toHaveBeenCalled();
     expect(mockWrite).not.toHaveBeenCalled();
     expect(mockRestore).not.toHaveBeenCalled();
-    expect(screen.queryByRole("button", {name: "WRITE PROBE"})).toBeNull();
+    expect(screen.queryByRole("button", {name: "WRITE STEEP TEST"})).toBeNull();
 });
 
 it("keeps retained trial restoration accessible in production and ordinary writing blocked", async () => {
@@ -312,58 +305,56 @@ it("keeps retained trial restoration accessible in production and ordinary writi
     expect(within(screen.getByTestId("slot-A")).getByText("LAST WRITTEN")).toBeOnTheScreen();
     expect(within(screen.getByTestId("slot-A")).queryByText("NOT WRITTEN")).toBeNull();
     expect(screen.queryByText("REMOVED FROM LIBRARY")).toBeNull();
-    await fireEvent.press(screen.getByRole("button", {name: "TEA SLOT PROBE"}));
-    await waitFor(async () => {
-        await fireEvent.press(screen.getByRole("button", {name: "RESTORE ORIGINAL SET"}));
-        expect(mockRestore).toHaveBeenCalledTimes(1);
-    }, {timeout: SHEET_PRESS_TIMEOUT});
+    expect(screen.queryByText("LAB")).toBeNull();
+    await fireEvent.press(screen.getByRole("button", {name: "Restore original slot set"}));
+    expect(mockRestore).toHaveBeenCalledTimes(1);
     expect(mockWrite).not.toHaveBeenCalled();
     await restoreTeaSlotOriginal(store, {deviceId: "one", serial: "serial"}, port);
     mockRecord = store.read("one");
     await view.rerender(<EasyModeScreen/>);
-    await fireEvent.press(screen.getByRole("button", {name: "TEA SLOT PROBE"}));
-    expect(await screen.findByText(/Original set restored/)).toBeOnTheScreen();
-    expect(screen.getByRole("button", {name: "COPY PROBE EVIDENCE"})).toBeOnTheScreen();
+    expect(screen.queryByRole("button", {name: "Restore original slot set"})).toBeNull();
+    expect(screen.getByRole("button", {name: "Write all three slots"})).toBeEnabled();
     expect(screen.queryByRole("button", {name: "WRITE PROBE"})).toBeNull();
 });
 
-it("does not expose a new trial in production and closes an open panel on identity change", async () => {
+it("does not expose trials in either build mode or after identity changes", async () => {
     Object.defineProperty(global, "__DEV__", {value: false});
     const view = await renderWithProviders(<EasyModeScreen/>);
     expect(screen.queryByRole("button", {name: "TEA SLOT PROBE"})).toBeNull();
     Object.defineProperty(global, "__DEV__", {value: true});
     await view.rerender(<EasyModeScreen/>);
-    await fireEvent.press(screen.getByRole("button", {name: "TEA SLOT PROBE"}));
+    expect(screen.queryByRole("button", {name: "TEA SLOT PROBE"})).toBeNull();
     mockSerial = "changed";
     await view.rerender(<EasyModeScreen/>);
     expect(screen.queryByText(/1 steep, 60 ml, 70 C, 60 s/)).toBeNull();
     expect(mockProbe).not.toHaveBeenCalled();
 });
 
-it("hides the probe panel too while the external rating note is modal", async () => {
+it("keeps all slot controls hidden while the external rating note is modal", async () => {
     const view = await renderWithProviders(<EasyModeScreen/>);
-    await fireEvent.press(screen.getByRole("button", {name: "TEA SLOT PROBE"}));
-    expect(await screen.findByText(/1 steep, 60 ml, 70 C, 60 s/)).toBeOnTheScreen();
     mockRatingNoteOpen = true;
     await view.rerender(<EasyModeScreen/>);
     expect(screen.queryByRole("button", {name: "WRITE PROBE"})).toBeNull();
-    expect(screen.queryByText(/1 steep, 60 ml, 70 C, 60 s/)).toBeNull();
+    expect(screen.queryByText(/A: 1 steep.*B: 2 steeps.*C: 3 steeps/)).toBeNull();
+    expect(screen.queryByRole("button", {name: "Write all three slots"})).toBeNull();
 });
 
-it("restores focus to the probe entry after closing its covering sheet", async () => {
+it("restores focus to help after closing its covering sheet", async () => {
     const native = jest.requireActual<typeof import("react-native")>("react-native");
     const focus = jest.spyOn(AccessibilityInfo, "setAccessibilityFocus").mockImplementation(() => {});
     const handle = jest.spyOn(native, "findNodeHandle").mockReturnValue(42);
     try {
         await renderWithProviders(<EasyModeScreen/>);
-        await fireEvent.press(screen.getByRole("button", {name: "TEA SLOT PROBE"}));
+        await fireEvent.press(screen.getByRole("button", {name: "About Easy Mode"}));
+        expect(await screen.findByText("Assign all three recipes. Your choices are kept on this phone immediately.")).toBeOnTheScreen();
         await waitFor(async () => {
-            await fireEvent.press(screen.getByRole("button", {name: "Close"}));
-            expect(screen.queryByText(/1 steep, 60 ml, 70 C, 60 s/)).toBeNull();
+            const close = screen.queryByRole("button", {name: "Close"});
+            if (close !== null) await fireEvent.press(close);
+            expect(screen.getByRole("button", {name: "About Easy Mode"})).toBeOnTheScreen();
         }, {timeout: SHEET_PRESS_TIMEOUT});
         await waitFor(() => {
             expect(handle).toHaveBeenLastCalledWith(expect.objectContaining({
-                props: expect.objectContaining({accessibilityLabel: "TEA SLOT PROBE"})
+                props: expect.objectContaining({accessibilityLabel: "About Easy Mode"})
             }));
             expect(focus).toHaveBeenLastCalledWith(42);
         });
@@ -665,7 +656,7 @@ it.each(["help", "retry", "cancel"] as const)("covers the global sibling during 
         expect(mockPreventRemove).toHaveBeenLastCalledWith(false, expect.any(Function));
     }
     await fireEvent.press(screen.getByRole("button", {
-        name: kind === "help" ? "About Easy Mode" : kind === "retry" ? "Retry slot write" : "Cancel slot write"
+        name: kind === "help" ? "About Easy Mode" : kind === "retry" ? "Retry slot write" : "Stop slot write"
     }));
     expectGlobalCovered();
     await fireEvent.press(globalOpen(true));
@@ -692,34 +683,27 @@ describe("the reference ABC comparison on the route", () => {
         return store;
     }
 
-    it("offers WRITE COMPARISON through the dedicated hook action only, closing the sheet", async () => {
+    it("does not offer fresh labs after historical probes", async () => {
         const store = await afterV2();
         mockRecord = store.read("one"); mockAvailable = true;
         await renderWithProviders(<EasyModeScreen/>);
-        await fireEvent.press(screen.getByRole("button", {name: "TEA SLOT PROBE"}));
-        expect(await screen.findByText("Next trial: ABC comparisons")).toBeOnTheScreen();
-        await waitFor(async () => {
-            await fireEvent.press(screen.getByRole("button", {name: "WRITE COMPARISON"}));
-            expect(mockProbe).toHaveBeenCalledTimes(1);
-        }, {timeout: SHEET_PRESS_TIMEOUT});
+        expect(screen.queryByText("LAB")).toBeNull();
+        expect(mockLab).not.toHaveBeenCalled();
         expect(mockWrite).not.toHaveBeenCalled();
         expect(mockRestore).not.toHaveBeenCalled();
-        expect(screen.queryByRole("button", {name: "WRITE COMPARISON"})).toBeNull();
+        expect(screen.queryByRole("button", {name: "WRITE STEEP TEST"})).toBeNull();
     });
 
-    it("routes a slot report with its slot index and keeps ordinary writing blocked", async () => {
+    it("keeps retained matrix restoration accessible without exposing observation controls", async () => {
         const store = await afterV2();
         await writeTeaSlotProbe(store, identity, port, {id: () => "t3"});
         mockRecord = store.read("one"); mockAvailable = true;
         await renderWithProviders(<EasyModeScreen/>);
         expect(screen.getByRole("button", {name: "Write all three slots"})).toBeDisabled();
-        await fireEvent.press(screen.getByRole("button", {name: "TEA SLOT PROBE"}));
-        await waitFor(async () => {
-            await fireEvent.changeText(screen.getByLabelText("Slot B actual machine display"), "Steep 20");
-            await fireEvent.press(screen.getByRole("button", {name: "Save slot B observation"}));
-            expect(mockObserve).toHaveBeenCalledTimes(1);
-        }, {timeout: SHEET_PRESS_TIMEOUT});
-        expect(mockObserve).toHaveBeenCalledWith("t3", expect.objectContaining({display: "Steep 20"}), 1);
+        expect(screen.queryByText("LAB")).toBeNull();
+        await fireEvent.press(screen.getByRole("button", {name: "Restore original slot set"}));
+        expect(mockRestore).toHaveBeenCalledTimes(1);
+        expect(mockObserve).not.toHaveBeenCalled();
         expect(mockWrite).not.toHaveBeenCalled();
     });
 });

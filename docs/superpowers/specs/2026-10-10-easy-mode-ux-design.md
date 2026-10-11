@@ -3,6 +3,23 @@
 Approved design direction: 2026-10-10.
 Base: `fix/easy-mode-recovery` at `cf9f7aef`.
 
+## Production amendment (2026-10-11)
+
+Hardware confirmed one-, two- and three-steep tea selectors and command 40526
+for dismissing incomplete saving, which also times out after roughly a minute.
+Tea is now supported in normal assignment; its cards use steep/water figures
+rather than coffee ratio figures. All encoded tea limits still apply, with a
+firmware check for steeps longer than two minutes.
+
+The LAB entry is disabled. Active retained experiments keep RESTORE ORIGINAL
+SET on the normal screen so their originals remain reachable. STOP THIS WRITE
+uses guarded 40526 recovery, or clears directly if the machine is already
+known-normal. A command reply alone is not enough to clear the journal.
+Interrupted-write styling is neutral, and returning to normal is never shown
+as proof that all three slots were saved. Selector changes count as changed
+content even when the blob is identical. This supersedes the tea exclusion,
+LAB affordance and manual-normal-only cancellation described below.
+
 ## Purpose and scope
 
 Make Easy Mode feel like the recipe editor, not the machine console. Someone

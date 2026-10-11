@@ -3,6 +3,37 @@
 This is the source for the full release-testing checklist, not a claim that
 device testing is complete. Update it whenever release scope or behaviour changes.
 
+## Tea slots and normal recovery (2026-10-11)
+
+This supersedes the historical tea exclusion and LAB workflow below.
+Hardware testing confirmed the one-, two- and three-steep tea candidates and
+raw command 40526 for leaving incomplete saving. The machine also returned to
+normal after approximately one minute without completing the set.
+
+Normal Easy Mode assignment now accepts tea alongside coffee, with up to three
+steeps, no bypass and the grinder always off. Tea uses the recovered selector,
+minute/remainder timing and slot-specific suffix. Steeps over 120 seconds
+require reported firmware V12.0D.400 or newer before any frame is sent.
+Coffee bytes are unchanged. Dirty/status comparisons include the selector,
+and tea cards show steeps and water rather than coffee ratio figures.
+
+STOP THIS WRITE is a confirmed normal-screen action, not a console command.
+It sends 40526 only in a known saving state and requires both its reply and a
+post-dispatch normal-state report before clearing the journal. An already
+known-normal machine needs no recovery frame. Failures retain the pending
+write; stopping never claims a saved set or rollback. RETRY WRITE remains.
+
+LAB is no longer exposed in either build mode. Retained active trials keep
+RESTORE ORIGINAL SET directly on the normal screen; their originals and
+historical byte validation are preserved. The expand/refresh/collapse panel
+measurement fix is also included.
+
+Release device checks: assign personal tea recipes, including mixed coffee/tea
+sets; check steep count, timing and drain. Verify the integrated STOP THIS WRITE
+flow, automatic-timeout cancellation, reconnect and restoration of a retained
+trial. The raw command and fixed tea tests qualify the protocol, not every
+personal recipe or the new end-to-end UI.
+
 ## Bounded tea slot trial panel (2026-10-10): candidate **UNTESTED**
 
 Task 2 adds Easy Mode -> TEA SLOT PROBE, available for a new trial only in a

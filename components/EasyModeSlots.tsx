@@ -12,7 +12,7 @@ import {
 import {SLOT_INTEGRATION_BLOCK} from "@/library/slots/slotWriter";
 import type {SlotAttempt} from "@/hooks/useEasyModeSlots";
 import {useLiveBrewBarGuard} from "@/hooks/useLiveBrewBarGuard";
-import EasyModeSlotCard from "@/components/EasyModeSlotCard";
+import EasyModeSlotCard, {teaSlotFigures} from "@/components/EasyModeSlotCard";
 import EasyModeWriteOverlay, {slotOverlayVisible} from "@/components/EasyModeWriteOverlay";
 import DotMatrixText from "@/components/DotMatrixText";
 import PourProfile from "@/components/PourProfile";
@@ -55,6 +55,21 @@ const WRITE_FAILURES: Readonly<Record<string, WriteFailure>> = {
     "The machine did not confirm the write in order. Please check its display.": UNCONFIRMED,
     "Easy Mode writing stopped because the app entered the background.": BACKGROUND,
     "Easy Mode writing is unavailable in the background.": BACKGROUND,
+    "Tea steeps longer than 120 seconds need machine firmware V12.0D.400 or newer.": {
+        message: "Update your machine firmware to use tea steeps longer than two minutes.", tone: "error"
+    },
+    "The machine refused command 40526. The incomplete write is still retained.": {
+        message: "The machine did not stop saving. Retry the write or wait for the saving screen to clear.", tone: "interruption"
+    },
+    "No reply to command 40526. The incomplete write is still retained.": {
+        message: "Stopping was not confirmed. Retry the write or wait for the saving screen to clear.", tone: "interruption"
+    },
+    "The machine has not returned to normal. Retry or wait for its saving screen to clear.": {
+        message: "The machine is still saving. Retry the write or wait for its saving screen to clear.", tone: "interruption"
+    },
+    "Wait for a known saving or normal machine state before recovery.": {
+        message: "Reconnect to check the machine's state before stopping this write.", tone: "interruption"
+    },
     "The machine refused the Easy Mode write. Fill the tank if needed, then retry.": {
         message: "The machine refused the Easy Mode write. Fill the tank if needed, then retry.", tone: "error"
     },
@@ -147,7 +162,10 @@ export type EasyModeSlotsProps = {
     onWrite: () => void;
     onRecover: (restart: boolean) => void;
     onCancel: () => void;
-    teaProbe?: Pick<TeaSlotProbePanelProps, "onWriteProbe" | "onRestore" | "onObserve">;
+    onDismissWrite?: () => void;
+    onRestoreOriginal?: () => void;
+    teaProbe?: Pick<TeaSlotProbePanelProps, "onWriteProbe" | "onRestore" | "onObserve"
+        | "onWriteLab" | "onRecoveryCommand" | "onClearRecovery">;
     teaProbeOpen?: boolean;
     onTeaProbeOpenChange?: (open: boolean) => void;
 };
@@ -182,7 +200,8 @@ function RecipeChoice({recipe, onPick}: {recipe: Recipe; onPick: () => void}) {
                 <Text color={onAccent.text} fontSize={16} fontWeight="600">{recipe.displayName()}</Text>
                 <XStack gap="$2" alignItems="center" justifyContent="space-between" flexWrap="wrap">
                     <DotMatrixText fontSize={11} color={onAccent.text}>
-                        {`${recipe.dosage}G · 1:${recipe.ratio} · GRIND ${recipe.grinder ? recipe.grindSize : "OFF"}`}
+                        {recipe.isTea() ? teaSlotFigures(recipe)
+                            : `${recipe.dosage}G · 1:${recipe.ratio} · GRIND ${recipe.grinder ? recipe.grindSize : "OFF"}`}
                     </DotMatrixText>
                     <View pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
                         <PourProfile pours={recipe.pours} width={80} height={24}/>
@@ -199,13 +218,14 @@ function StoppedWrite({journal, failure}: {journal: SlotJournal; failure: string
         : `Writing stopped at ${SLOT_NAMES[journal.acknowledged]}.`;
     const mapped = failure === null ? null : writeError(failure, journal);
     const reason = mapped?.message ?? "The write stopped before it was confirmed. Your recipes are kept.";
-    const colour = mapped?.tone === "error" ? palette.danger : palette.warn;
+    const colour = mapped?.tone === "error" ? palette.danger : palette.text;
     useEffect(() => {
         AccessibilityInfo.announceForAccessibility(`${heading} ${reason}`);
     }, [heading, reason]);
     return (
         <YStack gap="$4">
-            <DotMatrixText fontSize={40} weight="bold" color={colour}>!</DotMatrixText>
+            {mapped?.tone === "error" &&
+                <DotMatrixText fontSize={40} weight="bold" color={colour}>!</DotMatrixText>}
             <Text color={colour} fontSize={23} fontWeight="600">{heading}</Text>
             <Text selectable accessibilityRole="alert" color={palette.text}>{reason}</Text>
             <YStack padding="$4" gap="$3" borderRadius={18} backgroundColor={palette.raised}>
@@ -223,13 +243,14 @@ function StoppedWrite({journal, failure}: {journal: SlotJournal; failure: string
                 {journal.slots.map((snapshot, index) => <YStack key={SLOT_NAMES[index]}
                     testID={`slot-${SLOT_NAMES[index]}`} gap="$1">
                     <Text color={palette.dim} fontSize={13}>{`${SLOT_NAMES[index]} · ${snapshot.name}`}</Text>
-                    {isTeaProbeSnapshot(snapshot) && <DotMatrixText fontSize={11} color={palette.dim}>
-                        1 STEEP · 60ML · 70C · 60S · GRIND OFF
+                    {new Recipe(undefined, snapshot.recipeJSON).isTea() && <DotMatrixText fontSize={11} color={palette.dim}>
+                        {teaSlotFigures(new Recipe(undefined, snapshot.recipeJSON), isTeaProbeSnapshot(snapshot))}
                     </DotMatrixText>}
                 </YStack>)}
             </YStack>
             <Text color={palette.dim} fontSize={14}>
-                Your recipes are kept. The machine may still show its saving animation.
+                Your recipes are kept. The saving animation usually clears after about a minute.
+                This set has not been confirmed saved.
             </Text>
         </YStack>
     );
@@ -239,7 +260,7 @@ export default function EasyModeSlots({
     record, recipes, incoming, header, deviceId, serial, connected, available, running, error,
     attempt = null, onDismissSuccess, writeControlRef, busy = false, serialMatches = true,
     guardLiveBrewBar = false, teaProbe, teaProbeOpen = false, onTeaProbeOpenChange,
-    onAssign, onWrite, onRecover, onCancel
+    onAssign, onWrite, onRecover, onCancel, onDismissWrite, onRestoreOriginal
 }: EasyModeSlotsProps) {
     const [picker, setPicker] = useState<{deviceId: string; index: SlotIndex} | null>(null);
     const [search, setSearch] = useState("");
@@ -366,13 +387,13 @@ export default function EasyModeSlots({
                             onPress={() => {
                                 focusOrigin.current = retryRef; setConfirmation({deviceId, kind: "retry"});
                             }}><DotMatrixText fontSize={12} weight="bold" color={onAccent.text}>RETRY WRITE</DotMatrixText></Button>
-                        <Button ref={cancelRef} accessibilityLabel="Cancel slot write" height="auto" minHeight={48}
+                        <Button ref={cancelRef} accessibilityLabel={onDismissWrite ? "Stop slot write" : "Cancel slot write"} height="auto" minHeight={48}
                             paddingVertical="$3" disabled={blocked} backgroundColor={palette.raised} color={palette.text}
                             borderWidth={1} borderColor={palette.line}
                             onPress={() => {
                                 focusOrigin.current = cancelRef; setConfirmation({deviceId, kind: "cancel"});
-                            }}><DotMatrixText fontSize={12} weight="bold">CANCEL THIS WRITE</DotMatrixText></Button>
-                        <Text color={palette.dim} fontSize={12}>Do not start a brew until this write is resolved.</Text>
+                            }}><DotMatrixText fontSize={12} weight="bold">{onDismissWrite ? "STOP THIS WRITE" : "CANCEL THIS WRITE"}</DotMatrixText></Button>
+                        <Text color={palette.dim} fontSize={12}>Finish or cancel this write to brew from the app.</Text>
                     </YStack>}
                     {journal === null && SLOT_NAMES.map((name, index) => {
                         const slotIndex = index as SlotIndex;
@@ -398,10 +419,15 @@ export default function EasyModeSlots({
                         borderTopWidth: 1, borderTopColor: palette.line}}
                     contentContainerStyle={{padding: 14, gap: 10, paddingBottom: Math.max(insets.bottom, 14)}}>
                     {displayedFailure !== null && <Text selectable accessibilityRole="alert"
-                        color={displayedFailure.tone === "error" ? palette.danger : palette.warn}>
+                        color={displayedFailure.tone === "error" ? palette.danger : palette.text}>
                         {displayedFailure.message}
                     </Text>}
                     {availability !== null && <Text color={palette.dim}>{availability}</Text>}
+                    {record.experiment?.phase === "active" && onRestoreOriginal !== undefined &&
+                        <Button accessibilityLabel="Restore original slot set" height="auto" minHeight={48}
+                            paddingVertical="$3" backgroundColor={palette.text} color={onAccent.text}
+                            disabled={active || overlay || !connected || !serialMatches || busy || !available}
+                            onPress={onRestoreOriginal}>RESTORE ORIGINAL SET</Button>}
                     {overflow && <Text color={palette.dim}>
                         Stored slots do not run the app&apos;s automatic pause protection.
                     </Text>}
@@ -422,7 +448,7 @@ export default function EasyModeSlots({
                 title={`SLOT ${pickerIndex === null ? "" : SLOT_NAMES[pickerIndex]}`} heightPercent={80}>
                 <YStack flex={1} gap="$3">
                     {displayedFailure !== null && <Text selectable accessibilityRole="alert"
-                        color={displayedFailure.tone === "error" ? palette.danger : palette.warn}>
+                        color={displayedFailure.tone === "error" ? palette.danger : palette.text}>
                         {displayedFailure.message}
                     </Text>}
                     <Input accessibilityLabel="Search recipes" placeholder="Search recipes"
@@ -439,21 +465,24 @@ export default function EasyModeSlots({
                 </YStack>
             </XbrwSheet>
             <XbrwSheet open={confirmationOpen} onOpenChange={open => { if (!open) setConfirmation(null); }}
-                title={confirmationKind === "retry" ? "RETRY WRITE" : "CANCEL THIS WRITE"} heightPercent={70}>
+                title={confirmationKind === "retry" ? "RETRY WRITE" : onDismissWrite ? "STOP THIS WRITE" : "CANCEL THIS WRITE"} heightPercent={70}>
                 <ScrollView contentContainerStyle={{gap: 16, paddingBottom: insets.bottom}}>
                     <Text color={palette.text} fontSize={23} fontWeight="600">
                         {confirmationKind === "retry" ? "Which screen is your machine showing?"
-                            : "Back to normal?"}
+                            : onDismissWrite ? "Stop this write?" : "Back to normal?"}
                     </Text>
-                    {confirmationKind === "cancel" && <Text color={palette.text} fontSize={14}>
-                        Only cancel once the machine is back to its normal screen, with no saving animation.
+                    {confirmationKind === "cancel" && onDismissWrite === undefined && <Text color={palette.text} fontSize={14}>
+                        Wait for the saving animation to stop before cancelling.
+                        It usually clears after about a minute.
                     </Text>}
                     <Text color={palette.dim}>
                         {confirmationKind === "retry"
                             ? journal?.acknowledged === 3
-                                ? "Still saving waits for a fresh save confirmation. It does not resend any slot."
-                                : "An unconfirmed slot may already have arrived. Still saving attempts to finish the same set from the first slot without a recorded receipt."
-                            : "Cancelling clears the unfinished write from XBRW++. It does not stop a write on the machine or clear its contents. Your assignments are kept."}
+                                ? "If it is still saving, we will check for save confirmation without sending the recipes again."
+                                : "If it is still saving, we will finish the same set. If it is back to normal, we will write all three again."
+                            : onDismissWrite
+                                ? "This returns the machine to normal and clears the unfinished write. Your assignments are kept. The machine's slot contents remain unconfirmed until you write the full set."
+                                : "Cancelling clears this unfinished write from the app. Your assignments are kept, but the machine's slot contents remain unconfirmed."}
                     </Text>
                     {confirmationKind === "retry" && <Button height="auto" minHeight="$4" paddingVertical="$3"
                         backgroundColor={palette.text} color={onAccent.text}
@@ -464,13 +493,14 @@ export default function EasyModeSlots({
                         backgroundColor={confirmationKind === "retry" ? palette.raised : palette.text}
                         color={confirmationKind === "retry" ? palette.text : onAccent.text}
                         accessibilityLabel={confirmationKind === "retry"
-                            ? "Confirm machine is back to normal and retry" : "Confirm machine is back to normal and cancel"}
+                            ? "Confirm machine is back to normal and retry"
+                            : onDismissWrite ? "Confirm stop slot write" : "Confirm machine is back to normal and cancel"}
                         onPress={() => {
                             const action = confirmationKind;
                             setConfirmation(null);
                             if (action === "retry") onRecover(true);
-                            else if (action === "cancel") onCancel();
-                        }}>{confirmationKind === "retry" ? "BACK TO NORMAL, RETRY" : "BACK TO NORMAL, CANCEL"}</Button>
+                            else if (action === "cancel") (onDismissWrite ?? onCancel)();
+                        }}>{confirmationKind === "retry" ? "BACK TO NORMAL, RETRY" : onDismissWrite ? "STOP THIS WRITE" : "BACK TO NORMAL, CANCEL"}</Button>
                     <Button backgroundColor={palette.none} color={palette.dim}
                         height="auto" minHeight={44} onPress={() => setConfirmation(null)}>KEEP THIS WRITE</Button>
                 </ScrollView>
@@ -484,12 +514,12 @@ export default function EasyModeSlots({
                     </Text>
                     <Text color={palette.dim}>The machine cannot tell us what is already in its slots. An empty phone draft does not mean an empty machine slot.</Text>
                     <Text color={palette.dim}>Library edits do not change a slot until you choose USE UPDATED RECIPE. Removed recipes keep their snapshot.</Text>
-                    <Text color={palette.dim}>Stored slots do not run the app&apos;s automatic pause protection. Tea slot writing is not available in XBRW++ yet.</Text>
+                    <Text color={palette.dim}>Stored slots do not run the app&apos;s automatic pause protection. Tea slots support up to three steeps with the grinder off.</Text>
                 </ScrollView>
             </XbrwSheet>
             {teaProbe !== undefined && <XbrwSheet open={probeOpen}
                 onOpenChange={open => onTeaProbeOpenChange?.(open)}
-                title="TEA SLOT PROBE" heightPercent={85}>
+                title="SLOT LABS" heightPercent={85}>
                 {probeOpen && <TeaSlotProbePanel key={record.experiment?.trialId ?? deviceId}
                     {...teaProbe} record={record} deviceId={deviceId} serial={serial ?? null}
                     connected={connected} available={available} busy={busy} running={active} error={error}/>}

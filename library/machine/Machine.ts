@@ -305,6 +305,10 @@ export default class Machine {
         this.slotStore = store;
     }
 
+    get slotStateIsNormal(): boolean {
+        return this.state !== null && STARTABLE.has(this.state);
+    }
+
     get slotIdentity(): SlotIdentity | null {
         const deviceId = this.transport.connectedDeviceId;
         if (!this.isConnected() || deviceId == null || deviceId !== this.connectedId) return null;

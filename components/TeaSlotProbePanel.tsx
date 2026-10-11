@@ -4,10 +4,11 @@ import * as Clipboard from "expo-clipboard";
 import {Button, Input, Text, XStack, YStack, type ColorTokens} from "tamagui";
 import {notify} from "@/components/XbrwToast";
 import {palette} from "@/constants/colors";
+import SlotLabControls, {type SlotLabActions} from "@/components/SlotLabControls";
 import {
     prepareSet, SLOT_NAMES, type SlotIndex, type SlotObservation, type SlotRecord
 } from "@/library/slots/slotModel";
-import {teaProbeOriginal} from "@/library/slots/teaSlotCandidate";
+import {teaProbeOriginal, SLOT_RECOVERY_PROBE_ID, TEA_SLOT_STEEPS_ID} from "@/library/slots/teaSlotCandidate";
 import {
     formatTeaProbeEvidence, nextTeaProbeCandidate, teaProbeFlags, teaProbeStatus, TEA_SLOT_MATRIX_ID
 } from "@/library/slots/teaSlotProbe";
@@ -24,7 +25,7 @@ export type TeaSlotProbePanelProps = {
     onWriteProbe: () => void;
     onRestore: () => void;
     onObserve: (trialId: string, observation: SlotObservation, slot?: SlotIndex) => boolean;
-};
+} & Partial<SlotLabActions>;
 
 const STATUS = {
     none: "UNTESTED candidate. One trial per approved candidate.",
@@ -101,21 +102,28 @@ function SlotObservationForm({slot, initial, disabled, onSave}: {
 
 export default function TeaSlotProbePanel({
     record, deviceId, serial, connected, available, busy, running, error,
-    onWriteProbe, onRestore, onObserve
+    onWriteProbe, onRestore, onObserve, onWriteLab, onRecoveryCommand, onClearRecovery
 }: TeaSlotProbePanelProps) {
     const experiment = record.experiment;
     const status = teaProbeStatus(record);
-    const nextCandidate = nextTeaProbeCandidate(record);
+    const nextCandidate = onWriteLab === undefined ? nextTeaProbeCandidate(record) : null;
     const shownCandidate = nextCandidate ?? experiment?.candidateId;
-    const matrix = shownCandidate === TEA_SLOT_MATRIX_ID;
-    const flags = shownCandidate === undefined || matrix ? null : hex(teaProbeFlags(shownCandidate));
+    const steeps = shownCandidate === TEA_SLOT_STEEPS_ID;
+    const recovery = shownCandidate === SLOT_RECOVERY_PROBE_ID;
+    const matrix = shownCandidate === TEA_SLOT_MATRIX_ID || steeps;
+    const flags = shownCandidate === undefined || matrix || recovery ? null : hex(teaProbeFlags(shownCandidate));
+    const rows = steeps ? SLOT_NAMES.map((name, index) => ({
+        name, flags: hex(teaProbeFlags(`${TEA_SLOT_STEEPS_ID}:${name}`)), suffix: "FE 150 (grinder OFF)",
+        stages: index + 1
+    })) : MATRIX_ROWS.map(row => ({...row, stages: 1}));
     const [display, setDisplay] = useState(experiment?.observation?.display ?? "");
     const [held, setHeld] = useState(experiment?.observation?.heldSeconds?.toString() ?? "");
     const [drained, setDrained] = useState<boolean | null>(experiment?.observation?.drainedAsTea ?? null);
     const [note, setNote] = useState(experiment?.observation?.note ?? "");
     const [localError, setLocalError] = useState<string | null>(null);
     const [observationSaved, setObservationSaved] = useState(false);
-    let original = nextCandidate === null ? experiment?.original : undefined;
+    let original = experiment?.phase === "active" || (onWriteLab === undefined && nextCandidate === null)
+        ? experiment?.original : undefined;
     let preparationError: string | null = null;
     if (original === undefined) {
         try {
@@ -127,14 +135,15 @@ export default function TeaSlotProbePanel({
     }
     const stale = experiment !== undefined && (experiment.deviceId !== deviceId
         || (serial !== null && experiment.serial !== serial));
-    const block = deviceId === "" ? "Choose a machine first."
+    const connectionBlock = deviceId === "" ? "Choose a machine first."
         : stale ? "Reconnect to the machine and serial that own this trial."
             : running ? "Wait for the current slot operation to finish."
-                : record.journal !== null ? "Resolve the incomplete write before probing or restoring."
                     : !connected ? "Connect to this machine before writing or restoring."
                         : serial === null || serial.trim() === "" ? "Wait for the machine's reported serial."
                             : busy ? "Finish the running or held brew first."
                                 : !available ? "The shared machine transport is unavailable." : null;
+    const block = connectionBlock ?? (record.journal !== null
+        ? "Resolve the incomplete write before probing or restoring." : null);
     const canWrite = __DEV__ && nextCandidate !== null && block === null && preparationError === null;
     const canRestore = experiment?.phase === "active" && block === null;
 
@@ -165,7 +174,12 @@ export default function TeaSlotProbePanel({
     return (
         <ScrollView testID="tea-slot-probe-panel" keyboardShouldPersistTaps="handled"
             contentContainerStyle={{gap: 16, paddingBottom: 24}} contentInsetAdjustmentBehavior="automatic">
-            <Text selectable color={palette.warn}>{STATUS[status]}</Text>
+            {onWriteLab !== undefined && onRecoveryCommand !== undefined && onClearRecovery !== undefined &&
+                <SlotLabControls record={record} blocked={connectionBlock !== null || preparationError !== null}
+                    onWriteLab={onWriteLab} onRecoveryCommand={onRecoveryCommand} onClearRecovery={onClearRecovery}/>}
+            <Text selectable color={palette.warn}>{recovery && record.journal !== null
+                ? "Recovery test is incomplete by design. Keep its record until the machine is usable or finish the set."
+                : STATUS[status]}</Text>
             {flags !== null && <Text selectable color={palette.text} fontWeight="600">
                 {`${nextCandidate === null ? "This trial" : "Next trial"}: A flag ${flags}`}
             </Text>}
@@ -173,22 +187,23 @@ export default function TeaSlotProbePanel({
                 <Text selectable color={palette.text} fontWeight="600">
                     {`${nextCandidate === null ? "This trial" : "Next trial"}: ABC comparisons`}
                 </Text>
-                {MATRIX_ROWS.map(row => <Text key={row.name} selectable color={palette.text}>
-                    {`${row.name}: flag ${row.flags} · 1 stage · 90 ml · 92 C · 20 s · suffix ${row.suffix}`}
+                {rows.map(row => <Text key={row.name} selectable color={palette.text}>
+                    {`${row.name}: flag ${row.flags} · ${row.stages} stage${row.stages === 1 ? "" : "s"} · 90 ml${steeps ? " each" : ""} · 92 C · 20 s · suffix ${row.suffix}`}
                 </Text>)}
                 <Text color={palette.dim}>
-                    Reference-derived from the official public recipe; NOT official-byte-proven.
+                    {steeps ? "One, two and three steeps worked in our hardware test."
+                        : "Reference-derived from the official public recipe; NOT official-byte-proven."}
                     No extra 30 ml stage is sent, and no mode or execution command is added.
                 </Text>
-                <Text color={palette.warn}>
+                {!steeps && <Text color={palette.warn}>
                     C carries grinder suffix 50 and could run the grinder. Start C only with the hopper
                     empty, and do NOT start C if the display shows grind. A display-only report is enough.
-                </Text>
+                </Text>}
             </YStack>}
-            {status === "restored" && nextCandidate === null && <Text color={palette.dim}>
+            {status === "restored" && nextCandidate === null && onWriteLab === undefined && <Text color={palette.dim}>
                 No further trial is approved. Current and archived evidence remain copyable.
             </Text>}
-            {!matrix && <Text selectable color={palette.text}>
+            {!matrix && !recovery && (onWriteLab === undefined || experiment !== undefined) && <Text selectable color={palette.text}>
                 A: 1 steep, 60 ml, 70 C, 60 s. Grinder OFF. No agitation or bypass. No leaves.
                 B and C keep the exact original snapshots and flag 0x02.
                 The encoded nominal dose is 5 g; do not put leaves in the brewer.
@@ -230,7 +245,7 @@ export default function TeaSlotProbePanel({
             {[error, localError, block, preparationError].filter((value): value is string => value !== null)
                 .map((value, index) => <Text key={index} selectable accessibilityRole="alert"
                     color={palette.danger}>{value}</Text>)}
-            {nextCandidate !== null && __DEV__ && <Button height="auto" minHeight={44} paddingVertical="$3"
+            {nextCandidate !== null && __DEV__ && onWriteLab === undefined && <Button height="auto" minHeight={44} paddingVertical="$3"
                 disabled={!canWrite} onPress={() => { if (canWrite) onWriteProbe(); }}>
                 {matrix ? "WRITE COMPARISON" : "WRITE PROBE"}</Button>}
             {experiment?.phase === "active" && <Button height="auto" minHeight={44} paddingVertical="$3"

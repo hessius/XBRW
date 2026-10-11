@@ -35,9 +35,6 @@ export default function EasyModeScreen() {
     const serialMatches = slots.record.journal?.serial == null || actual === null
         || slots.record.journal.serial === actual.serial;
     const [incoming] = useState(() => incomingEasyModeRecipe(recipeJSON));
-    const [probePanel, setProbePanel] = useState<{deviceId: string; serial: string | null} | null>(null);
-    const probeOpen = focused && probePanel?.deviceId === deviceId && probePanel.serial === serial;
-    if (probePanel !== null && !probeOpen) setProbePanel(null);
     const [leavePrompt, setLeavePrompt] = useState<{
         deviceId: string; serial: string | null; exit: () => void
     } | null>(null);
@@ -58,7 +55,7 @@ export default function EasyModeScreen() {
     const journal = slots.record.journal;
 
     function requestDeparture(navigate: () => void): void {
-        if (active || probeOpen) return;
+        if (active) return;
         if (journal !== null || !changed) {
             navigate();
             return;
@@ -75,13 +72,13 @@ export default function EasyModeScreen() {
 
     // The hook publishes native-stack's prevention context, including iOS swipes.
     // Replaying its original action retains the navigator's visited-route marker.
-    usePreventRemove(active || probeOpen || (focused && journal === null && changed), ({data}) => {
+    usePreventRemove(active || (focused && journal === null && changed), ({data}) => {
         requestDeparture(() => navigation.dispatch(data.action));
     });
 
     const overlay = slotOverlayVisible(slots.record, slots.attempt ?? null);
     useLiveBrewBarGuard(focused, {
-        covered: active || overlay || departureOpen || probeOpen,
+        covered: active || overlay || departureOpen,
         requestNavigation: requestDeparture
     });
     useEffect(() => {
@@ -141,23 +138,8 @@ export default function EasyModeScreen() {
                            guardLiveBrewBar={focused}
                            attempt={slots.attempt} onDismissSuccess={slots.resetAttempt}
                            writeControlRef={writeRef}
-                           teaProbeOpen={probeOpen}
-                           onTeaProbeOpenChange={open => setProbePanel(open ? {deviceId, serial} : null)}
-                           teaProbe={{
-                               onWriteProbe: () => {
-                                   setProbePanel(null);
-                                   const metadata: Record<string, string> = {};
-                                   for (const [key, value] of Object.entries({
-                                       model: machine.info?.model, firmware: machine.info?.firmware,
-                                       modelNumber: machine.modelNumber, name: machine.advertisedName
-                                   })) {
-                                       if (typeof value === "string" && value.trim() !== "") metadata[key] = value;
-                                   }
-                                   void slots.writeTeaProbe({machine: metadata});
-                               },
-                               onRestore: () => { setProbePanel(null); void slots.restoreTeaOriginal(); },
-                               onObserve: slots.observeTeaProbe
-                           }}
+                           onRestoreOriginal={() => void slots.restoreTeaOriginal()}
+                           onDismissWrite={() => void slots.dismissWrite()}
                            onAssign={slots.assign} onWrite={slots.write}
                            onRecover={slots.recover} onCancel={slots.cancel}/>
             </YStack>

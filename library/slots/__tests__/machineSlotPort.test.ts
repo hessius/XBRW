@@ -8,14 +8,15 @@ import {kermit, notification, status} from "@/library/machine/__tests__/protocol
 import {SlotDatabase} from "@/library/slots/SlotDatabase";
 import {installMachineSlotPort} from "@/library/slots/machineSlotPort";
 import {prepareSet, readSnapshot, snapshotRecipe} from "@/library/slots/slotModel";
-import {cancelSlots, recoverSlots, writeSlots} from "@/library/slots/slotWriter";
-import {writeTeaSlotProbe} from "@/library/slots/teaSlotProbe";
+import {cancelSlots, recoverSlots, writeSlots, dismissSlots} from "@/library/slots/slotWriter";
+import {writeTeaSlotProbe, sendSlotRecoveryProbe} from "@/library/slots/teaSlotProbe";
 import {createTestDatabase} from "@/test-utils/sqlite";
 import {coffee} from "./fixtures";
 import Pour from "@/library/Pour";
+import {CUP_TYPE} from "@/library/Recipe";
 
-function receipt(marker = 0xC2) {
-    const bytes = notification(0xF6, 0x2C, []);
+function receipt(marker = 0xC2, code = 11510) {
+    const bytes = notification(code & 255, code >> 8, []);
     bytes[9] = marker;
     const crc = kermit(bytes.slice(0, -2));
     bytes[bytes.length - 2] = crc & 255;
@@ -27,8 +28,15 @@ class Radio extends FakeTransport {
     get connectedDeviceId() { return this.connectedTo; }
     behavior: "normal" | "missing" | "hang" | "duplicate" | "refused" | "noFinal" = "normal";
     slots: number[] = [];
+    recovery: "ack" | "refused" | "missing" | "hang" | "ackOnly" = "ack";
     override async write(frame: Uint8Array) {
         await super.write(frame);
+        if ((frame[3] | frame[4] << 8) === 40526) {
+            if (this.recovery !== "missing") this.emit(receipt(this.recovery === "refused" ? 0xC1 : 0xC2, 40526));
+            if (this.recovery === "ack") this.emit(status(0x01));
+            if (this.recovery === "hang") await new Promise<void>(() => {});
+            return;
+        }
         if ((frame[3] | frame[4] << 8) !== 11510) return;
         this.slots.push(frame[10]);
         if (this.behavior === "missing") return;
@@ -65,6 +73,151 @@ it("parses command receipts without inventing a slot identifier", () => {
     expect(parseNotification(Uint8Array.from(receipt()))).toEqual({
         kind: "receipt", code: 11510, status: 0xC2
     });
+});
+
+it("dismisses an ordinary interrupted write with 40526 and fresh normal state, without claiming it saved", async () => {
+    const {sql, store, port, radio, machine} = await ready();
+    radio.behavior = "missing";
+    jest.useFakeTimers();
+    const writing = writeSlots(store, identity, port);
+    const stopped = expect(writing).rejects.toThrow(/confirm/i);
+    await jest.advanceTimersByTimeAsync(SLOT_RECEIPT_MS + 1);
+    await stopped;
+    radio.emit(status(0x43));
+    const drafts = store.read("one").drafts;
+    await dismissSlots(store, identity, port);
+    expect(new SlotDatabase(sql).read("one")).toMatchObject({journal: null, written: null, drafts});
+    expect(radio.slots).toEqual([0]);
+    expect(radio.written.filter(frame => (frame[3] | frame[4] << 8) === 40526)).toEqual([buildType1(40526)]);
+    await machine.send(buildType1(3500));
+});
+
+it("clears a timed-out write in known normal state without sending recovery", async () => {
+    const {store, port, radio} = await ready();
+    const snapshot = snapshotRecipe(coffee());
+    store.begin("one", {id: "timed-out", serial: identity.serial, slots: [snapshot, snapshot, snapshot],
+        frames: prepareSet([snapshot, snapshot, snapshot]), acknowledged: 0, inFlight: null, error: null});
+    store.dispatching("one", "timed-out", 0);
+    radio.emit(status(0x01));
+    const before = radio.written.length;
+    await dismissSlots(store, identity, port);
+    expect(radio.written).toHaveLength(before);
+    expect(store.read("one").journal).toBeNull();
+});
+
+it("rejects recovery in unknown state without sending or forgetting the journal", async () => {
+    const {store, port, radio, machine} = await ready();
+    const snapshot = snapshotRecipe(coffee());
+    store.begin("one", {id: "unknown", serial: identity.serial, slots: [snapshot, snapshot, snapshot],
+        frames: prepareSet([snapshot, snapshot, snapshot]), acknowledged: 0, inFlight: null, error: null});
+    machine.state = null;
+    const before = radio.written.length;
+    await expect(dismissSlots(store, identity, port)).rejects.toThrow(/saving|normal/i);
+    expect(radio.written).toHaveLength(before);
+    expect(store.read("one").journal?.id).toBe("unknown");
+});
+
+it.each(["V12.0D.399", "", "unknown"])("rejects long tea steeps on unqualified firmware %s before sending", async firmware => {
+    const {store, port, radio, machine} = await ready();
+    const recipe = coffee("Tea");
+    recipe.cupType = CUP_TYPE.TEA;
+    recipe.grinder = false;
+    recipe.dosage = 6;
+    recipe.ratio = 15;
+    recipe.pours = [new Pour(1, 90, 92, 35, 0, 2, 121)];
+    store.assign("one", 1, snapshotRecipe(recipe));
+    machine.info!.firmware = firmware;
+    const before = radio.written.length;
+    await expect(writeSlots(store, identity, port)).rejects.toThrow(/120.*firmware/i);
+    expect(radio.written).toHaveLength(before);
+    expect(store.read("one").journal).toBeNull();
+});
+
+it("writes tea steeps longer than two minutes on qualified firmware", async () => {
+    const {store, port, radio} = await ready();
+    const recipe = coffee("Tea");
+    recipe.cupType = CUP_TYPE.TEA;
+    recipe.grinder = false;
+    recipe.dosage = 6;
+    recipe.ratio = 15;
+    recipe.pours = [new Pour(1, 90, 92, 35, 0, 2, 360)];
+    store.assign("one", 1, snapshotRecipe(recipe));
+    await writeSlots(store, identity, port);
+    expect(radio.slots).toEqual([0, 1, 2]);
+    expect(store.read("one").written?.slots[1].blob.slice(5, 7)).toEqual([0, 192]);
+});
+
+it.each(["refused", "missing", "ackOnly"] as const)("retains ordinary write after %s recovery", async recovery => {
+    const {store, port, radio, machine} = await ready();
+    const snapshot = snapshotRecipe(coffee());
+    store.begin("one", {id: "interrupted", serial: identity.serial, slots: [snapshot, snapshot, snapshot],
+        frames: prepareSet([snapshot, snapshot, snapshot]), acknowledged: 0, inFlight: null, error: null});
+    store.dispatching("one", "interrupted", 0);
+    radio.emit(status(0x43));
+    radio.recovery = recovery;
+    jest.useFakeTimers();
+    const pending = dismissSlots(store, identity, port);
+    const refused = expect(pending).rejects.toThrow(/refused|reply|normal/i);
+    await jest.advanceTimersByTimeAsync(SLOT_RECEIPT_MS + SLOT_COMPLETION_MS + 1);
+    await refused;
+    expect(store.read("one").journal?.id).toBe("interrupted");
+    await expect(machine.send(buildType1(3500))).rejects.toThrow(/incomplete/i);
+});
+
+it("parses the recovery command receipt without claiming machine operability", () => {
+    expect(parseNotification(Uint8Array.from(receipt(0xC2, 40526)))).toEqual({
+        kind: "receipt", code: 40526, status: 0xC2
+    });
+});
+
+it("sends only A, then 40526 under ownership, retaining the journal until explicit normal-state cancellation", async () => {
+    const {store, port, radio, machine} = await ready();
+    radio.emit(status(0x01));
+    await writeTeaSlotProbe(store, identity, port, {candidateId: "slot-apk-recovery-40526-v1"});
+    radio.emit(status(0x43));
+    await expect(machine.send(buildType1(3500))).rejects.toThrow(/incomplete/i);
+    await sendSlotRecoveryProbe(store, identity, port);
+    expect(radio.slots).toEqual([0]);
+    expect(radio.written.filter(frame => (frame[3] | frame[4] << 8) === 40526))
+        .toEqual([buildType1(40526)]);
+    expect(store.read("one").journal?.acknowledged).toBe(1);
+    await expect(machine.send(buildType1(3500))).rejects.toThrow(/incomplete/i);
+    await cancelSlots(store, identity, port);
+    await machine.send(buildType1(3500));
+});
+
+it("a refused recovery command retains the partial write and cannot claim a normal machine", async () => {
+    const {store, port, radio, machine} = await ready();
+    radio.emit(status(0x01));
+    await writeTeaSlotProbe(store, identity, port, {candidateId: "slot-apk-recovery-40526-v1"});
+    radio.emit(status(0x43));
+    radio.recovery = "refused";
+    await expect(sendSlotRecoveryProbe(store, identity, port)).rejects.toThrow(/refused/i);
+    expect(store.read("one").experiment?.evidence.at(-1)?.kind).toBe("recovery-error");
+    await expect(cancelSlots(store, identity, port)).rejects.toThrow(/busy|saving/i);
+    await expect(machine.send(buildType1(3500))).rejects.toThrow(/incomplete/i);
+});
+
+it.each(["missing", "hang"] as const)("retains the lab journal after a %s recovery reply or native dispatch", async recovery => {
+    const {store, port, radio, machine} = await ready();
+    radio.emit(status(0x01));
+    await writeTeaSlotProbe(store, identity, port, {candidateId: "slot-apk-recovery-40526-v1"});
+    radio.emit(status(0x43));
+    radio.recovery = recovery;
+    jest.useFakeTimers();
+    const pending = sendSlotRecoveryProbe(store, identity, port);
+    const rejected = expect(pending).rejects.toThrow(/No reply|finish sending/i);
+    await flush();
+    // A different command's ACK cannot confirm 40526.
+    radio.emit(receipt(0xC2, 40525));
+    await jest.advanceTimersByTimeAsync(SLOT_DISPATCH_MS + SLOT_RECEIPT_MS + 1);
+    await rejected;
+    expect(store.read("one").journal).toMatchObject({acknowledged: 1, inFlight: null});
+    expect(store.read("one").experiment?.evidence.at(-1)?.kind).toBe("recovery-error");
+    await expect(machine.send(buildType1(3500))).rejects.toThrow(/incomplete/i);
+    if (recovery === "hang") {
+        await expect(sendSlotRecoveryProbe(store, identity, port)).rejects.toThrow(/busy/i);
+    }
 });
 
 it("retains receipt status in the existing diagnostic log", () => {

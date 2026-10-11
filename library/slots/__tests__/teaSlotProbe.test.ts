@@ -87,10 +87,10 @@ describe("the fixed candidate", () => {
         expect(JSON.parse(recipe.pours[0])).toMatchObject({volume: 60, temperature: 70, pauseTime: 60, agitation: 0});
     });
 
-    it("does not unblock general tea or accept a tampered probe", () => {
+    it("does not accept invalid tea or a tampered historical probe", () => {
         const tea = new Recipe();
         tea.cupType = CUP_TYPE.TEA;
-        expect(() => snapshotRecipe(tea)).toThrow("Tea slot writing is not available");
+        expect(() => snapshotRecipe(tea)).toThrow();
         const exact = teaProbeSnapshot();
         expect(readSnapshot(exact)).toEqual(exact);
         const json = JSON.parse(exact.recipeJSON);
@@ -753,7 +753,7 @@ describe("the reference-derived A/B/C matrix", () => {
         expect(store.read("one")).toBe(record);
     });
 
-    it("refuses a serial mismatch, a pending ordinary write and general tea", async () => {
+    it("refuses a serial mismatch, a pending ordinary write and invalid tea", async () => {
         const {store} = await restoredV2();
         const before = store.read("one");
         const script: Script = {sent: []};
@@ -770,7 +770,7 @@ describe("the reference-derived A/B/C matrix", () => {
         expect(before.experiment?.candidateId).toBe(V2_ID);
         const tea = new Recipe();
         tea.cupType = CUP_TYPE.TEA;
-        expect(() => snapshotRecipe(tea)).toThrow("Tea slot writing is not available");
+        expect(() => snapshotRecipe(tea)).toThrow();
     });
 
     it("keeps A, B and C reports separate and leaves the older single observations alone", async () => {

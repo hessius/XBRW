@@ -2,6 +2,13 @@
 
 Approved first trial: 2026-10-10. Work in `fix/easy-mode-recovery`.
 
+**Historical spec:** the source-backed one-, two- and three-steep candidates
+worked on hardware on 2026-10-11, and raw command 40526 released incomplete
+saving. Normal tea assignment and guarded STOP THIS WRITE now replace the
+LAB workflow. New labs are disabled; retained trials preserve their originals
+and can be restored from the normal screen. See
+`docs/machine-integration/ble-protocol.md` for the current production behavior.
+
 ## Physical-result amendment and next candidate
 
 The first candidate saved, but the user observed no tea steep-counter overview

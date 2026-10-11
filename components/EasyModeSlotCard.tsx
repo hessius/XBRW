@@ -22,10 +22,13 @@ type Props = {
     onUpdate: () => void;
 };
 
-function teaProbeFigures(recipe: Recipe): string {
+export function teaSlotFigures(recipe: Recipe, historicalProbe = false): string {
+    if (recipe.pours.length > 1) {
+        return `${recipe.pours.length} STEEPS · ${recipe.getPourTotalVolume()}ML · GRIND OFF`;
+    }
     const pour = recipe.pours[0];
     return `1 STEEP · ${pour.volume}ML · ${pour.temperature}C · ${pour.pauseTime}S · GRIND ${
-        recipe.grinder ? recipe.grindSize : "OFF"}`;
+        historicalProbe && recipe.grinder ? recipe.grindSize : "OFF"}`;
 }
 
 export default function EasyModeSlotCard({
@@ -39,7 +42,7 @@ export default function EasyModeSlotCard({
     return (
         <YStack testID={`slot-${name}`} gap={6} padding={14} borderRadius={18}
                 backgroundColor={recipe === null ? palette.raised : accent}>
-            {recipe !== null && !probe && <View testID={`slot-${name}-profile-watermark`}
+            {recipe !== null && !probe && !recipe.isTea() && <View testID={`slot-${name}-profile-watermark`}
                 pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants"
                 style={{position: "absolute", right: 14, top: 42, opacity: 0.22}}>
                 <PourProfile testID={`slot-${name}-profile`} pours={recipe.pours} width={100} height={30}/>
@@ -57,7 +60,7 @@ export default function EasyModeSlotCard({
                 gap="$2" flexWrap="wrap">
                 {recipe !== null && <DotMatrixText fontSize={11} weight="bold" color={ink}
                     style={{flexShrink: 1}}>
-                    {probe ? teaProbeFigures(recipe)
+                    {recipe.isTea() ? teaSlotFigures(recipe, probe)
                         : `${recipe.dosage}G · 1:${recipe.ratio} · GRIND ${recipe.grinder ? recipe.grindSize : "OFF"}`}
                 </DotMatrixText>}
                 {!locked && <Button ref={changeRef} height="auto" minHeight={44} paddingVertical="$2"
