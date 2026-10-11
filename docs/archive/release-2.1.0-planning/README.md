@@ -18,9 +18,12 @@ slots; the later delivery design supersedes that decision.
 | `2026-10-08-package-5-drawer-reveal.md` | `docs/superpowers/plans/2026-10-08-package-5-drawer-reveal.md` |
 | `2026-10-08-package-6-quick-edits.md` | `docs/superpowers/plans/2026-10-08-package-6-quick-edits.md` |
 
-Use root `AGENTS.md` for workflow rules and
-`docs/superpowers/specs/2026-10-09-release-2-1-0-delivery-design.md` with
-`docs/release-2.1.0-changes.md` for current release coordination.
+Use root `AGENTS.md` for workflow rules and the
+[delivery design on develop](https://github.com/hessius/XBRecipeWriterPlus/blob/develop/docs/superpowers/specs/2026-10-09-release-2-1-0-delivery-design.md)
+with the
+[change ledger on develop](https://github.com/hessius/XBRecipeWriterPlus/blob/develop/docs/release-2.1.0-changes.md)
+for current release coordination. These active documents live on develop, not
+on main before application release promotion.
 Consult the current code before applying an old plan.
 
 The private preservation bundle also retains the original refs and history.
