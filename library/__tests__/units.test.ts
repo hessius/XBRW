@@ -4,6 +4,7 @@ import {
     displayRange,
     displayValues,
     fromDisplay,
+    normaliseCelsius,
     snapToStorable,
     toDisplay,
     unitSuffix,
@@ -23,6 +24,20 @@ describe("CELSIUS_RANGE", () => {
         expect(CELSIUS_RANGE.min).toBe(TEMPERATURE.min);
         expect(CELSIUS_RANGE.max).toBe(TEMPERATURE.max);
     });
+});
+
+describe("normaliseCelsius", () => {
+    it.each([[93.88, 94], [92.77, 93], [92.5, 93], [39, 39], [99, 99]])(
+        "rounds %s to %s within the kettle's range", (input, expected) => {
+            expect(normaliseCelsius(input)).toBe(expected);
+        }
+    );
+
+    it.each([-1, 38.9, 99.4, Number.NaN, Number.POSITIVE_INFINITY])(
+        "preserves invalid %s for validation rather than making it brewable", input => {
+            expect(normaliseCelsius(input)).toBe(input);
+        }
+    );
 });
 
 describe("toDisplay", () => {

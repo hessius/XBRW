@@ -7,6 +7,7 @@ import {adaptedModelFor, type MachineModel} from "@/library/machine/machineModel
 import {podCoffeeFromPodsVo, podImageUrl} from "@/library/podCoffee";
 import {clampCelsius} from "@/library/units";
 import type {ImportSource} from "./importInput";
+import {normaliseCelsius} from "@/library/units";
 
 /**
  * Attach the pod's coffee to the recipe it brewed, if it named one.
@@ -169,7 +170,7 @@ export class XBloomRecipe {
             // longer costs the user their bypass. That asymmetry is deliberate.
             if (bypassVolumeValid) {
                 recipe.bypassVolume = rawBypassVolume;
-                recipe.bypassTemp   = bypassTempValid ? rawBypassTemp : BYPASS_DEFAULT_TEMPERATURE;
+                recipe.bypassTemp   = bypassTempValid ? normaliseCelsius(rawBypassTemp) : BYPASS_DEFAULT_TEMPERATURE;
                 // isEnableBypassWater: 1 = ON, 2 = OFF — xBloom's inverted scheme.
                 // A non-zero volume is also required; flag-on with zero water
                 // means the machine dispenses nothing, so treat it as off.
