@@ -2,6 +2,39 @@
 
 Expo (SDK 57) / React Native app that reads and writes xBloom coffee recipe NFC cards (ISO 15693 / NfcV), stores recipes locally in SQLite, and imports recipes from xBloom share links.
 
+## Development workflow
+
+Read root `AGENTS.md` before changing files; it is the tool-neutral workflow
+contract. `docs/development-workflow.md` has the branch, release and recovery
+runbook. These rules apply to delegated agents and documentation tasks too.
+
+The develop migration is **not active yet**. Start isolated task worktrees from
+a freshly fetched, pinned `origin/integration/2.1.0` commit until this release
+cycle closes and the migration is approved; then use `origin/develop`.
+Never choose the base from the current checkout, write tasks directly on shared
+integration/main branches, or switch another session's checkout. Check status,
+upstream and worktree ownership first; stop on conflicting or unexpected work.
+
+Commit coherent checkpoints and push authorized branches when possible. At
+handoff record exact branch/worktree/base/head, dirty state, push state,
+pending work and hardware gaps. Report failed or unauthorized pushes as local
+only. Integrate serially with merge commits; never squash develop into main
+or rewrite shared integration/release history. Main is the approved release
+line, but already carries unreleased changes from the old workflow: do not
+rewind it to a guessed baseline.
+
+PR creation, PR merging, release promotion, production builds/submissions,
+deployments, force pushes and destructive local/remote cleanup require explicit
+user permission. Allow at most one automated Copilot review round per PR,
+including automatic ruleset reviews. Keep physical-device release gates and
+manual deployment boundaries; branch names do not select EAS channels.
+
+Cleanup needs a verified restorable backup including valuable loose/ignored
+work, content/PR evidence, and approval of exact names/full tip SHAs/worktree
+paths. Recheck immediately before deletion; moved tips or new work invalidate
+that row. Age, a gone upstream or a merged PR alone never authorizes deletion.
+Preserve ambiguous work; never force removal merely because Git refused it.
+
 ## Commands
 
 ```bash
