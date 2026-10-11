@@ -20,9 +20,11 @@ promoted to main. The candidate now lives in develop so beta corrections exercis
 the ordinary task/PR process; do not recreate the old integration branch.
 Main receives the workflow/CI documentation separately.
 Do not rewind main: it already carries unreleased work from the previous workflow.
-Physical/native/external release gates in `docs/release-2.1.0-changes.md` remain
-required before application release promotion. Repository migration is not
-evidence that those gates have passed.
+Physical/native/external release gates in the
+[2.1.0 ledger on develop](https://github.com/hessius/XBRecipeWriterPlus/blob/develop/docs/release-2.1.0-changes.md)
+remain required before application release promotion. That ledger is intentionally
+not copied into main before the release. Repository migration is not evidence
+that those gates have passed.
 
 Keep the GitHub default branch `main`. Users requesting a PR must name its base;
 GitHub's default PR target is not the ordinary development target.
