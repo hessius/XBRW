@@ -344,8 +344,7 @@ describe("BrewSummary", () => {
         });
 
         expect(screen.getByText("0:32")).toBeTruthy();
-        expect(screen.getByText("2.1")).toBeTruthy();
-        expect(screen.getByText("G/S")).toBeTruthy();
+        expect(screen.getByText("2.1 G/S")).toBeTruthy();
         expect(screen.getByText("+5")).toBeTruthy();
         expect(screen.getByText("53")).toBeTruthy();
         expect(screen.getByText("RECIPE 60")).toBeTruthy();

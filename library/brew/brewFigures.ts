@@ -1,4 +1,16 @@
 import {formatBrewClock} from "@/library/brew/brewFormat";
+import type {BrewRecord} from "@/library/brew/BrewRecord";
+
+export type BrewFigureAdjustments = {
+    temperature?: {offset: number; temperatures: number[]};
+};
+
+export function brewFigureAdjustments(record: BrewRecord): BrewFigureAdjustments | undefined {
+    const offset = record.adjustedTempOffset;
+    const temperatures = record.plan?.map((stage) => stage.temperature) ?? [];
+    return offset !== undefined && temperatures.length > 0
+        ? {temperature: {offset, temperatures}} : undefined;
+}
 
 /**
  * How long it took and what landed in the cup, as one line.

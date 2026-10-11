@@ -166,7 +166,14 @@ export function useBrewRun(
                 // be lost for the sake of the one thing that may be.
                 const store = database.current;
                 if (store?.recordDialAfter === undefined) return;
-                const save = store.recordDialAfter.bind(store);
+                const writeDial = store.recordDialAfter.bind(store);
+                const save = (recordId: string, dial: number) => {
+                    writeDial(recordId, dial);
+                    setRecorded((previous) =>
+                        previous?.runId === id && previous.record.id === recordId
+                            ? {...previous, record: {...previous.record, dialAfter: dial}}
+                            : previous);
+                };
                 void readDialAfterBrew(from, record, save).catch(() => {
                     // A machine that will not answer is not an error. The
                     // record simply has no post-brew reading, which is what

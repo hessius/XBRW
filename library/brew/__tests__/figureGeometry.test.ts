@@ -1,8 +1,5 @@
 import {
     BREW_FIGURE_COLUMN_GAP,
-    BREW_FIGURE_DELAY_FLEX,
-    BREW_FIGURE_DRAWDOWN_FLEX,
-    BREW_FIGURE_GRIND_FLEX,
     BREW_RECIPE_AFTER_GAP,
     BREW_RECIPE_LABEL_GAP,
     BREW_RECIPE_ROW_GAP,
@@ -17,7 +14,6 @@ import {
     brewFigureBadgeWidth,
     brewFigureColumnWidths,
     brewFigureTextGeometry,
-    brewFigureUsesFourColumns,
     brewRecipeContextLayout,
     brewRecipeUnits,
     STORY_FIT_MARGIN
@@ -51,18 +47,6 @@ function expectFit(width: number, limit: number): void {
 
 function contentWidth(screenWidth: number): number {
     return screenWidth - CAPTURE_PADDING * 2;
-}
-
-function recipeBadgeFits(screenWidth: number, fontScale: number): boolean {
-    const flex = [
-        BREW_FIGURE_GRIND_FLEX,
-        BREW_FIGURE_DELAY_FLEX,
-        BREW_FIGURE_DRAWDOWN_FLEX,
-        1
-    ];
-    const free = contentWidth(screenWidth) - BREW_FIGURE_COLUMN_GAP * (flex.length - 1);
-    const grind = free * BREW_FIGURE_GRIND_FLEX / flex.reduce((sum, share) => sum + share, 0);
-    return brewFigureBadgeWidth("RECIPE 58", fontScale) + STORY_FIT_MARGIN <= grind;
 }
 
 describe("brew recipe units", () => {
@@ -252,50 +236,35 @@ describe("brew recipe context layout", () => {
 });
 
 describe("detail row columns", () => {
-    it("gives four columns at the default text size on common capture widths", () => {
+    it("keeps three equal columns at common capture widths and text sizes", () => {
         for (const width of [375, 393, 402, 430]) {
-            expect(brewFigureUsesFourColumns(1, contentWidth(width))).toBe(true);
-            expect(brewFigureColumnWidths(contentWidth(width), 1)).toHaveLength(4);
+            for (const fontScale of [1, 1.2, DOTO_MAX_FONT_SCALE]) {
+                const column = (contentWidth(width) - BREW_FIGURE_COLUMN_GAP * 2) / 3;
+                expect(brewFigureColumnWidths(contentWidth(width), fontScale))
+                    .toEqual([column, column, column]);
+            }
         }
     });
 
-    it("measures the recipe badge before allowing four columns at larger text", () => {
-        expect(brewFigureUsesFourColumns(1.2, contentWidth(375))).toBe(false);
-        expect(brewFigureUsesFourColumns(1.2, contentWidth(393))).toBe(false);
-        expect(brewFigureUsesFourColumns(1.2, contentWidth(402))).toBe(true);
-        expect(brewFigureUsesFourColumns(1.2, contentWidth(430))).toBe(true);
-    });
-
-    it("pins the real badge fit behind the four-column decision", () => {
-        expect(recipeBadgeFits(375, 1.2)).toBe(false);
-        expect(recipeBadgeFits(393, 1.2)).toBe(false);
-        expect(recipeBadgeFits(402, 1.2)).toBe(true);
-        expect(recipeBadgeFits(430, 1.2)).toBe(true);
-    });
-
-    it("fits every label in four columns at the default size", () => {
-        const [grind, delay, drawdown, rate] = brewFigureColumnWidths(contentWidth(393), 1);
+    it("fits every label at the default size", () => {
+        const [grind, delay, drawdown] = brewFigureColumnWidths(contentWidth(393), 1);
         expectFit(labelWidth("GRIND", 1), grind);
         expectFit(labelWidth("DELAY", 1), delay);
         expectFit(labelWidth("DRAWDOWN", 1), drawdown);
-        expectFit(labelWidth("RATE", 1), rate);
     });
 
-    it("fits DRAWDOWN at the largest four-column common capture width", () => {
+    it("fits DRAWDOWN at larger text", () => {
         const [, , drawdown] = brewFigureColumnWidths(contentWidth(430), 1.2);
         expectFit(labelWidth("DRAWDOWN", 1.2), drawdown);
     });
 
-    it("is the recipe badge that forces the fallback", () => {
+    it("fits the recipe badge at the font cap", () => {
         const scale = DOTO_MAX_FONT_SCALE;
-        const fourWide = brewFigureColumnWidths(contentWidth(430), 1)[0];
-        expect(brewFigureBadgeWidth("RECIPE 58", scale)).toBeGreaterThan(fourWide);
-
         const [grind] = brewFigureColumnWidths(contentWidth(430), scale);
         expectFit(brewFigureBadgeWidth("RECIPE 58", scale), grind);
     });
 
-    it("fits every label in the three column fallback at the cap", () => {
+    it("fits every label in the three columns at the cap", () => {
         const scale = DOTO_MAX_FONT_SCALE;
         const [grind, delay, drawdown] = brewFigureColumnWidths(contentWidth(375), scale);
         expectFit(labelWidth("GRIND", scale), grind);
@@ -303,9 +272,8 @@ describe("detail row columns", () => {
         expectFit(labelWidth("DRAWDOWN", scale), drawdown);
     });
 
-    it("assumes four columns before the first layout pass", () => {
-        expect(brewFigureUsesFourColumns(1, 0)).toBe(true);
-        expect(brewFigureColumnWidths(0, 1)).toEqual([0, 0, 0, 0]);
+    it("retains three zero-width columns before the first layout pass", () => {
+        expect(brewFigureColumnWidths(0, 1)).toEqual([0, 0, 0]);
     });
 
     it("fits four quick-edit figures at common capture widths and the font cap", () => {

@@ -44,6 +44,8 @@ import {overflowFor} from "@/library/brew/overflowConfig";
 import type {OverflowSnapshot} from "@/library/brew/OverflowController";
 import {allocateBands} from "@/library/brew/bands";
 import {finalOutcome} from "@/library/brew/BrewRecord";
+import {brewFigureAdjustments} from "@/library/brew/brewFigures";
+import {dialNote} from "@/library/brew/dialAfterBrew";
 import type {BrewRecipeInputs} from "@/library/brew/figureGeometry";
 import {
     drawdownFigures,
@@ -564,6 +566,9 @@ export default function Brew({historyStore}: {historyStore?: ExportStore} = {}) 
                         drawdown={doneDrawdown}
                         drawdownRate={doneDrawdownRate}
                         delay={doneDelay}
+                        grind={run?.record === undefined ? null : dialNote(run.record)}
+                        adjustments={run?.record === undefined
+                            ? undefined : brewFigureAdjustments(run.record)}
                         rateSeries={doneRateSeries}
                         note={finalOutcome("done", brewWater, plannedWater)
                             === "endedOnMachine" ? ENDED_ON_MACHINE_NOTE : undefined}

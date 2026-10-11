@@ -9,7 +9,8 @@ import FlowSparkline, {
 } from "@/components/FlowSparkline";
 import {palette} from "@/constants/colors";
 import {formatBrewClock} from "@/library/brew/brewFormat";
-import type {GrindFigure} from "@/library/brew/dialAfterBrew";
+import {grindRecipeBadges, type GrindFigure} from "@/library/brew/dialAfterBrew";
+import type {BrewFigureAdjustments} from "@/library/brew/brewFigures";
 import {
     BREW_FIGURE_DETAIL_VALUE_SIZE,
     BREW_FIGURE_INTERNAL_GAP,
@@ -17,8 +18,6 @@ import {
     BREW_FIGURE_ROW_GAP,
     brewFigureAdjustmentLayout,
     brewFigureBadgeGeometry,
-    brewFigureColumnFlex,
-    brewFigureUsesFourColumns,
     brewFigureTextGeometry,
     type BrewFigureAdjustmentMeasure
 } from "@/library/brew/figureGeometry";
@@ -26,6 +25,8 @@ import {formatFlowRate} from "@/library/brew/flowRate";
 import {DOTO_MIN_FONT_SIZE} from "@/library/dotoMetrics";
 import {describeTemperatureList} from "@/library/quickEdit";
 import {GRINDER_OFF_VALUE} from "@/library/Recipe";
+
+export type {BrewFigureAdjustments} from "@/library/brew/brewFigures";
 
 const DOTO_LINE_HEIGHT = 1.35;
 const FLOW_ROW_VERTICAL_ROOM = 4;
@@ -110,8 +111,7 @@ type Props = {
     /**
      * What the machine's grind dial read, and the recipe grind if it differed.
      *
-     * Null on the live screen, where the reading is taken after the brew has
-     * ended.
+     * Absent while brewing; the finished run gains the reading after it ends.
      */
     grind?: GrindFigure | null;
     /**
@@ -124,11 +124,6 @@ type Props = {
     textScale?: number;
     /** One-brew quick edits, where `from` is the saved recipe value. */
     adjustments?: BrewFigureAdjustments;
-};
-
-export type BrewFigureAdjustments = {
-    grind?: {value: number; from: number; confirmed?: boolean};
-    temperature?: {offset: number; temperatures: number[]};
 };
 
 function FigureBadge({children, testID, textScale = 1}: {
@@ -144,7 +139,7 @@ function FigureBadge({children, testID, textScale = 1}: {
                 borderRadius={badge.borderRadius}
                 borderWidth={badge.borderWidth} borderStyle="dashed"
                 borderColor={palette.line}
-                flexShrink={0}>
+                alignSelf="flex-start" flexShrink={0}>
             <DotMatrixText fontSize={badge.fontSize} weight="bold" color={palette.dim}
                            letterSpacing={badge.tracking}
                            minFontSize={DOTO_MIN_FONT_SIZE * textScale}>
@@ -169,7 +164,7 @@ function Figure({
     valueTracking?: number;
     testID?: string;
     accessibilityLabel?: string;
-    /** The column's share of the row. DRAWDOWN takes more; see `figureGeometry`. */
+    /** The column's share of the row. */
     flex?: number;
     /** Fixed column width for wrapped rows. */
     width?: number;
@@ -243,10 +238,6 @@ function signed(value: number): string {
     return value > 0 ? `+${value}` : String(value);
 }
 
-function grindText(value: number): string {
-    return value === GRINDER_OFF_VALUE ? "OFF" : String(value);
-}
-
 function adjustmentFigures(
     adjustments: BrewFigureAdjustments | undefined
 ): AdjustmentFigure[] {
@@ -266,19 +257,6 @@ function adjustmentFigures(
             });
         }
     }
-    if (adjustments.grind !== undefined) {
-        figures.push({
-            key:                "grind",
-            label:              "GRIND",
-            value:              grindText(adjustments.grind.value),
-            badge:              `RECIPE ${grindText(adjustments.grind.from)}`,
-            accessibilityLabel: `Grind, ${grindText(adjustments.grind.value)}, recipe ${
-                grindText(adjustments.grind.from)
-            }${adjustments.grind.confirmed === false ? ", not confirmed by the machine" : ""}`,
-            outlined:           adjustments.grind.confirmed === false
-        });
-    }
-
     return figures;
 }
 
@@ -342,39 +320,25 @@ export default function BrewFigures(
                 ? ""
                 : `, average ${drawdownRateText} grams per second`
         }`;
-    const rateAccessibility = drawdownRateText === null
-        ? undefined
-        : `Average rate, ${drawdownRateText} grams per second`;
     const delayAccessibility = delay === null ? undefined : `Delay, ${delay} seconds`;
+    const recipeBadges = grindRecipeBadges(grind);
     const grindAccessibility = grind === null
         ? undefined
-        : grind.kind === "off"
+        : (grind.kind === "off"
             ? "Grind, the grinder was off"
             : grind.kind === "recipe"
                 ? `Grind, recipe ${grind.recipe}`
                 : `Grind, dial ${grind.dial}${
                     grind.recipe === null ? "" : `, recipe ${grind.recipe}`
-                }`;
-    // `fontScale` is the user's OS text size; `textScale` is only the story
-    // card's width shrink. The detail row needs both and must not conflate
-    // them, because story cards can be shrunken while OS text is enlarged.
-    const fourColumns = brewFigureUsesFourColumns(fontScale, contentWidth);
-    const columnFlex = brewFigureColumnFlex(fontScale, contentWidth);
+                }`) + (grind.savedRecipe === undefined
+                    ? "" : `, saved recipe ${
+                        grind.savedRecipe === GRINDER_OFF_VALUE ? "OFF" : grind.savedRecipe
+                    }`);
     const grindValue = grind === null
         ? ""
         : grind.kind === "off"
             ? "OFF"
             : String(grind.kind === "recipe" ? grind.recipe : grind.dial);
-    const recipeBadgeText = grind === null || grind.kind !== "dial"
-            || grind.recipe === null
-        ? null
-        : `RECIPE ${grind.recipe}`;
-    // The quiet line is all or nothing. It exists to carry the recipe badge;
-    // with no badge to carry there is nothing worth a third line, so the rate's
-    // unit goes up into its own label instead and the row stays two lines tall.
-    const hasQuietLine = fourColumns && recipeBadgeText !== null;
-    const rateColumn = fourColumns ? drawdownRateText : null;
-    const rateInDrawdown = fourColumns ? null : drawdownRateText;
     const adjusted = adjustmentFigures(adjustments);
     const adjustmentLayout = brewFigureAdjustmentLayout(
         contentWidth,
@@ -454,12 +418,10 @@ export default function BrewFigures(
                             {/* TIME is the right figure above, and DRAWDOWN is
                                 also a duration, so the right column rhymes. */}
                             {grind === null ? (
-                                <FigurePlaceholder testID="figures-grind-placeholder"
-                                                   flex={columnFlex[0]} />
+                                <FigurePlaceholder testID="figures-grind-placeholder" />
                             ) : (
                                 <Figure
                                     testID="figures-grind"
-                                    flex={columnFlex[0]}
                                     label="GRIND"
                                     value={grindValue}
                                     outlined={grind.kind === "recipe"}
@@ -470,22 +432,27 @@ export default function BrewFigures(
                                     labelSize={figureText.labelSize}
                                     labelTracking={figureText.labelTracking}
                                     valueTracking={figureText.valueTracking}
-                                    quiet={recipeBadgeText === null ? undefined : (
-                                        <FigureBadge testID="figures-grind-recipe"
-                                                     textScale={textScale}>
-                                            {recipeBadgeText}
-                                        </FigureBadge>
+                                    quiet={recipeBadges.length === 0 ? undefined : (
+                                        <YStack gap={BREW_FIGURE_INTERNAL_GAP}>
+                                            {recipeBadges.map((text, index) => (
+                                                <FigureBadge key={text}
+                                                             testID={index === 0
+                                                                 ? "figures-grind-recipe"
+                                                                 : "figures-grind-saved-recipe"}
+                                                             textScale={textScale}>
+                                                    {text}
+                                                </FigureBadge>
+                                            ))}
+                                        </YStack>
                                     )}
                                     accessibilityLabel={grindAccessibility}
                                 />
                             )}
                             {delay === null ? (
-                                <FigurePlaceholder testID="figures-delay-placeholder"
-                                                   flex={columnFlex[1]} />
+                                <FigurePlaceholder testID="figures-delay-placeholder" />
                             ) : (
                                 <Figure
                                     testID="figures-delay"
-                                    flex={columnFlex[1]}
                                     label="DELAY"
                                     value={`+${delay}`}
                                     color={palette.warn}
@@ -499,12 +466,10 @@ export default function BrewFigures(
                                 />
                             )}
                             {drawdownText === null ? (
-                                <FigurePlaceholder testID="figures-drawdown-placeholder"
-                                                   flex={columnFlex[2]} />
+                                <FigurePlaceholder testID="figures-drawdown-placeholder" />
                             ) : (
                                 <Figure
                                     testID="figures-drawdown"
-                                    flex={columnFlex[2]}
                                     label="DRAWDOWN"
                                     value={drawdownText}
                                     color={palette.text}
@@ -514,43 +479,18 @@ export default function BrewFigures(
                                     labelSize={figureText.labelSize}
                                     labelTracking={figureText.labelTracking}
                                     valueTracking={figureText.valueTracking}
-                                    quiet={rateInDrawdown === null ? undefined : (
+                                    quiet={drawdownRateText === null ? undefined : (
                                         <DotMatrixText
                                             testID="figures-drawdown-rate"
                                             fontSize={badgeGeometry.fontSize}
                                             weight="bold" color={palette.dim}
                                             letterSpacing={badgeGeometry.tracking}
+                                            minFontSize={DOTO_MIN_FONT_SIZE * textScale}
                                             numberOfLines={1}>
-                                            {`${rateInDrawdown} G/S`}
+                                            {`${drawdownRateText} G/S`}
                                         </DotMatrixText>
                                     )}
                                     accessibilityLabel={drawdownAccessibility}
-                                />
-                            )}
-                            {rateColumn !== null && (
-                                <Figure
-                                    testID="figures-rate"
-                                    flex={columnFlex[3]}
-                                    label={hasQuietLine ? "RATE" : "RATE G/S"}
-                                    value={rateColumn}
-                                    color={palette.text}
-                                    fontSize={figureText.detailValueSize}
-                                    badgeGap={badgeGeometry.gap}
-                                    textScale={textScale}
-                                    labelSize={figureText.labelSize}
-                                    labelTracking={figureText.labelTracking}
-                                    valueTracking={figureText.valueTracking}
-                                    quiet={hasQuietLine ? (
-                                        <DotMatrixText
-                                            testID="figures-drawdown-rate"
-                                            fontSize={badgeGeometry.fontSize}
-                                            weight="bold" color={palette.dim}
-                                            letterSpacing={badgeGeometry.tracking}
-                                            numberOfLines={1}>
-                                            G/S
-                                        </DotMatrixText>
-                                    ) : undefined}
-                                    accessibilityLabel={rateAccessibility}
                                 />
                             )}
                         </XStack>

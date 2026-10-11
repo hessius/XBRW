@@ -3,6 +3,24 @@
 This is the source for the full release-testing checklist, not a claim that
 device testing is complete. Update it whenever release scope or behaviour changes.
 
+## Finished-brew grind and drawdown figures (2026-10-11)
+
+The post-brew dial reading now updates the retained live run as well as SQLite,
+so finishing a brew or reopening it from the mini bar displays the same grind
+as history. A missing confirmed reading uses the requested grind in a dashed
+outline; grinder-off and absent legacy facts remain distinct.
+
+Adjusted grind occupies that same figure, not a second GRIND row. Its saved
+baseline is a content-sized recipe badge. When the physical dial differs from
+the one-brew setting too, RECIPE names the sent setting and SAVED names the
+baseline. Temperature adjustments remain separate. No brew or card bytes change.
+
+All summary surfaces use three detail columns: GRIND, DELAY and DRAWDOWN,
+with the average rate and its unit below the drawdown clock. Story Card fitting
+uses the same text geometry and counts both grind badges when needed.
+Native large-text, finished-run reopening and exported-image checks remain part
+of the release regression pass.
+
 ## Tea slots and normal recovery (2026-10-11)
 
 This supersedes the historical tea exclusion and LAB workflow below.
