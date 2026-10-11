@@ -13,6 +13,8 @@
     "test:watch": "jest --watchAll",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
+    "worktrees:check": "node scripts/worktree-audit.mjs",
+    "test:worktrees": "node --test scripts/__tests__/worktree-audit.test.mjs",
     "generate-licences": "./scripts/generate-licences.sh"
   },
   "dependencies": {

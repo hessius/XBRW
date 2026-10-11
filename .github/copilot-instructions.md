@@ -35,6 +35,11 @@ work, content/PR evidence, and approval of exact names/full tip SHAs/worktree
 paths. Recheck immediately before deletion; moved tips or new work invalidate
 that row. Age, a gone upstream or a merged PR alone never authorizes deletion.
 Preserve ambiguous work; never force removal merely because Git refused it.
+At startup and final handoff, fetch `origin --no-prune` and run
+`npm run worktrees:check`, including PRs merged by the user. Complete approved,
+backed-up cleanup of finished task worktrees before handoff; retained worktrees
+need an owner, pending-work explanation and recovery pointer. GitHub auto-deletes
+merged remote PR heads, not local worktrees or uncommitted follow-ups.
 
 ## Commands
 

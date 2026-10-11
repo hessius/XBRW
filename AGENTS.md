@@ -46,6 +46,13 @@ state, push state, pending work, verification evidence and hardware gaps.
 Preserve uncommitted work before leaving or removing its worktree. A stash or
 session note alone is not a durable remote backup.
 
+At session startup and final handoff, fetch `origin --no-prune` and run
+`npm run worktrees:check`. Human-merged PRs must be accounted for too.
+For finished integrated task worktrees, obtain exact-path/head cleanup approval,
+verify preservation and owner-idle status, and remove them before final handoff.
+If a worktree must remain, state its owner, pending work and preservation pointer.
+Do not leave completed worktrees as an unexplained backlog.
+
 ## Integration and releases
 
 - Require explicit user permission to create a PR, merge a PR, promote a release,
@@ -76,6 +83,11 @@ exact refs, full tip SHAs and worktree paths. Immediately recheck ownership,
 worktree contents, live tips and PR state. Changed tips or new work invalidate
 approval for that row. Never delete by age, a gone upstream or merged-PR status
 alone; squash/rebase merges can hide ancestry.
+
+GitHub automatically deletes merged PR head branches, including PRs merged by
+the user. Merge commits preserve their integrated history. Automatic remote
+deletion does not remove local worktrees or preserve uncommitted follow-ups:
+the session's mandatory local audit and approved cleanup still apply.
 
 Use exact-path `git worktree remove` without force and `git branch -d` where
 ancestry permits. A refusal does not authorize force. Any exceptional local
