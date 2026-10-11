@@ -3,6 +3,15 @@
 This is the source for the full release-testing checklist, not a claim that
 device testing is complete. Update it whenever release scope or behaviour changes.
 
+## Development workflow migration (2026-10-11)
+
+The former `integration/2.1.0` candidate now lives in `develop`. Beta fixes
+follow the ordinary isolated-task/PR/merge-commit workflow in root `AGENTS.md`.
+The old integration branch is retired after preservation; earlier references
+below record where historical checks ran, not the current task base.
+Main receives only workflow/CI changes during migration. No application release
+promotion or new hardware acceptance is implied by moving the candidate.
+
 ## Finished-brew grind and drawdown figures (2026-10-11)
 
 The post-brew dial reading now updates the retained live run as well as SQLite,

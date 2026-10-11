@@ -6,7 +6,11 @@ code-level implementation plan; this document does not invent those APIs.
 
 ## Scope and baseline
 
-Use `integration/2.1.0` as the integration base, not a concurrent main checkout.
+Use `develop` as the integration base, not a concurrent main checkout.
+The 2026-10-11 workflow migration carried the former `integration/2.1.0`
+candidate into develop for beta testing. New fixes use isolated task branches
+and PRs into develop under root `AGENTS.md`; historical branch names in earlier
+plans/logs are provenance, not instructions to recreate that integration line.
 The release change ledger is `docs/release-2.1.0-changes.md`.
 
 | Package | Remaining work |
