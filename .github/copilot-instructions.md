@@ -2,6 +2,40 @@
 
 Expo (SDK 57) / React Native app that reads and writes xBloom coffee recipe NFC cards (ISO 15693 / NfcV), stores recipes locally in SQLite, and imports recipes from xBloom share links.
 
+## Development workflow
+
+Read root `AGENTS.md` before changing files; it is the tool-neutral workflow
+contract. `docs/development-workflow.md` has the branch, release and recovery
+runbook. These rules apply to delegated agents and documentation tasks too.
+
+Start isolated task worktrees from a freshly fetched, pinned `origin/develop`
+commit. Develop also carries the 2.1.0 beta candidate; beta fixes use the same
+task/PR workflow, not a separate permanent version branch. Its application code
+has not been promoted to main by the workflow migration.
+Never choose the base from the current checkout, write tasks directly on shared
+integration/main branches, or switch another session's checkout. Check status,
+upstream and worktree ownership first; stop on conflicting or unexpected work.
+
+Commit coherent checkpoints and push authorized branches when possible. At
+handoff record exact branch/worktree/base/head, dirty state, push state,
+pending work and hardware gaps. Report failed or unauthorized pushes as local
+only. Integrate serially with merge commits; never squash develop into main
+or rewrite shared integration/release history. Main is the approved release
+line, but already carries unreleased changes from the old workflow: do not
+rewind it to a guessed baseline.
+
+PR creation, PR merging, release promotion, production builds/submissions,
+deployments, force pushes and destructive local/remote cleanup require explicit
+user permission. Allow at most one automated Copilot review round per PR,
+including automatic ruleset reviews. Keep physical-device release gates and
+manual deployment boundaries; branch names do not select EAS channels.
+
+Cleanup needs a verified restorable backup including valuable loose/ignored
+work, content/PR evidence, and approval of exact names/full tip SHAs/worktree
+paths. Recheck immediately before deletion; moved tips or new work invalidate
+that row. Age, a gone upstream or a merged PR alone never authorizes deletion.
+Preserve ambiguous work; never force removal merely because Git refused it.
+
 ## Commands
 
 ```bash
@@ -19,7 +53,7 @@ npx expo-doctor        # dependency/config health
 ```
 
 CI (`.github/workflows/ci.yml`) runs typecheck, lint, tests and expo-doctor on every push to
-main and every pull request. All four must be green; expo-doctor is a hard failure.
+main or develop and every pull request. All four must be green; expo-doctor is a hard failure.
 
 `library/__tests__/` holds characterisation tests for the card byte format, volume math, and legacy JSON migrations. `cardFixtures.ts` is a deliberately **independent** reimplementation of the byte layout, so a round-trip test is not tautological — if you change the format, change both sides consciously. A changed expectation is a regression until proven otherwise: a malformed write to a genuine card is not trivially recoverable.
 
