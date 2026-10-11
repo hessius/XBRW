@@ -6,6 +6,7 @@ import Pour, {AGITATION, POUR_PATTERN} from "./Pour";
 import {BYPASS_DEFAULT_TEMPERATURE, isUsableBypassTemp} from "./bypassLimits";
 import {tagKey} from "./tagKey";
 import {isOverflowProtection, type OverflowProtection} from "./brew/overflowConfig";
+import {normaliseCelsius} from "@/library/units";
 import uuid from 'react-native-uuid';
 
 /**
@@ -343,7 +344,7 @@ class Recipe {
                 let p = new Pour(
                     (pour.pourNumber),
                     pour.volume,
-                    pour.temperature,
+                    normaliseCelsius(pour.temperature),
                     pour.flowRate,
                     pour.agitation,
                     pour.pourPattern,
@@ -425,7 +426,7 @@ class Recipe {
             // sentinel that survived here would still be drawn in the bypass
             // box, shared in a link, and handed to every other reader.
             this.bypassTemp    = isUsableBypassTemp(jsonRecipe.bypassTemp)
-                ? jsonRecipe.bypassTemp!
+                ? normaliseCelsius(jsonRecipe.bypassTemp!)
                 : BYPASS_DEFAULT_TEMPERATURE;
         }
 

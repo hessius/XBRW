@@ -30,6 +30,18 @@ export function asTemperatureUnit(value: unknown): TemperatureUnit {
 export const CELSIUS_RANGE = {min: 39, max: 99} as const;
 
 /**
+ * xBloom can return fractional Celsius converted from whole Fahrenheit.
+ * Round valid setpoints on import and hydration; leave invalid values intact
+ * so validation still refuses them instead of silently changing the recipe.
+ */
+export function normaliseCelsius(celsius: number): number {
+    return Number.isFinite(celsius)
+        && celsius >= CELSIUS_RANGE.min && celsius <= CELSIUS_RANGE.max
+        ? Math.round(celsius)
+        : celsius;
+}
+
+/**
  * Exported so an importer can clamp a temperature the card cannot hold (an
  * official-app "BP" preset, for instance, has landed here as 99.4 C rather
  * than a clean 100) without duplicating the band it is clamped to.
