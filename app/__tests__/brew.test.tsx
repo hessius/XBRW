@@ -286,6 +286,21 @@ async function drawDone() {
 }
 
 describe("brew route", () => {
+    it.each([false, true])("shows the finished grind with mini-player reopening %s", async (reopened) => {
+        mockView = reopened ? "1" : undefined;
+        if (reopened) mockRecipeJSON = undefined;
+        mockRecord = {...record, grinderUsed: true, grindSize: 53, dialAfter: 53,
+                      adjustedFromGrind: 48};
+        await drawDone();
+
+        const capture = within(screen.getByTestId("brew-capture"));
+        expect(capture.getAllByText("GRIND")).toHaveLength(1);
+        expect(capture.getByText("53")).toBeOnTheScreen();
+        expect(capture.getByText("RECIPE 48")).toBeOnTheScreen();
+        expect(capture.queryByTestId("figures-grind-outline")).toBeNull();
+        if (reopened) expect(mockStart).not.toHaveBeenCalled();
+    });
+
     it("shows the active owner's recipe and saved inputs when reopened without route data", async () => {
         mockView = "1";
         mockRecipeJSON = undefined;

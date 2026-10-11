@@ -465,6 +465,21 @@ describe("brew record", () => {
         expect(pours[1].volume).toBe(160);
     });
 
+    it("shows adjusted grind only once with its saved baseline", async () => {
+        mockOpened = {
+            record: {...record, grinderUsed: true, grindSize: 53, dialAfter: 53,
+                     adjustedFromGrind: 48},
+            samples: []
+        };
+        await renderWithProviders(<BrewRecord recipeLookup={mockLookup} />);
+        const capture = within(screen.getByTestId("brew-capture"));
+        expect(capture.getAllByText("GRIND")).toHaveLength(1);
+        expect(capture.getAllByText("53")).toHaveLength(1);
+        expect(capture.getByText("RECIPE 48")).toBeOnTheScreen();
+        expect(capture.getByTestId("figures-grind-recipe"))
+            .toHaveStyle({alignSelf: "flex-start"});
+    });
+
     it("hands quick-edit adjustments to the captured summary", async () => {
         mockOpened = {
             record: {
@@ -472,6 +487,8 @@ describe("brew record", () => {
                 dose: 20,
                 ratio: 18,
                 grindSize: 61,
+                grinderUsed: true,
+                dialAfter: 61,
                 adjustedFromDose: 18,
                 adjustedFromRatio: 16,
                 adjustedFromGrind: 50,
@@ -493,8 +510,8 @@ describe("brew record", () => {
         expect(context.getByText("1:18")).toBeTruthy();
         expect(context.getByText("RECIPE 18")).toBeTruthy();
         expect(context.getByText("RECIPE 1:16")).toBeTruthy();
-        expect(capture.getByTestId("figures-adjusted-grind")).toBeTruthy();
-        expect(capture.getByLabelText("Grind, 61, recipe 50")).toBeTruthy();
+        expect(capture.getByTestId("figures-grind")).toBeTruthy();
+        expect(capture.getByLabelText("Grind, dial 61, saved recipe 50")).toBeTruthy();
         expect(capture.getByTestId("figures-adjusted-temperature")).toBeTruthy();
         expect(capture.getByLabelText(
             "Temperature, 90, 92 degrees, offset +2 degrees"
@@ -531,7 +548,7 @@ describe("brew record", () => {
         expect(screen.queryByText("RECIPE 94")).toBeNull();
     });
 
-    it("uses the adjusted grind row alone when the dial reading was not confirmed", async () => {
+    it("uses one outlined grind figure when the adjusted dial was not confirmed", async () => {
         mockOpened = {
             record: {
                 ...record,
@@ -547,12 +564,10 @@ describe("brew record", () => {
 
         await renderWithProviders(<BrewRecord recipeLookup={mockLookup} />);
 
-        expect(summaryProps.grind).toBeNull();
-        expect(summaryProps.adjustments).toEqual({
-            grind: {value: 61, from: 50, confirmed: false}
-        });
-        expect(screen.getByTestId("figures-adjusted-grind-outline")).toBeTruthy();
-        expect(screen.queryByTestId("figures-grind")).toBeNull();
+        expect(summaryProps.grind).toEqual({kind: "recipe", recipe: 61, savedRecipe: 50});
+        expect(summaryProps.adjustments).toBeUndefined();
+        expect(screen.getByTestId("figures-grind-outline")).toBeTruthy();
+        expect(screen.getAllByText("GRIND")).toHaveLength(1);
     });
 
     it("says the trace has expired rather than drawing an empty chart", async () => {
@@ -1295,10 +1310,10 @@ describe("the drawdown on the record screen", () => {
         await renderWithProviders(<BrewRecord recipeLookup={mockLookup} />);
 
         expect(await screen.findByTestId("rate-chart")).toBeTruthy();
-        expect(screen.getByTestId("figures-rate")).toBeTruthy();
+        expect(screen.getByTestId("figures-drawdown-rate")).toBeTruthy();
         expect(screen.getByLabelText(/Drawdown, .* average .* grams per second/))
             .toBeTruthy();
-        expect(screen.getByLabelText(/Average rate, .* grams per second/))
+        expect(screen.getByLabelText(/Drawdown, .* average .* grams per second/))
             .toBeTruthy();
     });
 
@@ -1311,10 +1326,10 @@ describe("the drawdown on the record screen", () => {
         await renderWithProviders(<BrewRecord recipeLookup={mockLookup} />);
 
         expect(screen.queryByTestId("rate-chart")).toBeNull();
-        expect(screen.getByTestId("figures-rate")).toBeTruthy();
+        expect(screen.getByTestId("figures-drawdown-rate")).toBeTruthy();
         expect(screen.getByLabelText(/Drawdown, .* average .* grams per second/))
             .toBeTruthy();
-        expect(screen.getByLabelText(/Average rate, .* grams per second/))
+        expect(screen.getByLabelText(/Drawdown, .* average .* grams per second/))
             .toBeTruthy();
     });
 
@@ -1634,7 +1649,7 @@ describe("brew record's story card", () => {
         mockOpened = {
             record: makeBrewRecordFixture({
                 dose: 16, ratio: 17, adjustedFromDose: 15, adjustedFromRatio: 16,
-                grindSize: 60, adjustedFromGrind: 50, hasStream: false
+                grindSize: 60, adjustedFromGrind: 50, grinderUsed: true, hasStream: false
             }),
             samples: []
         };
@@ -1866,7 +1881,6 @@ describe("brew record's story card", () => {
         await openCard(375);
 
         expect(summaryProps.adjustments).toEqual({
-            grind:       {value: 81, from: 81},
             temperature: {offset: 60, temperatures: [39, 60, 80, 99]}
         });
         const card = within(screen.getByTestId("brew-story-card"));

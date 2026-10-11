@@ -5,7 +5,7 @@ import {PixelRatio, Pressable, ScrollView, useWindowDimensions} from "react-nati
 import {Text, XStack, YStack} from "tamagui";
 
 import BrewJudgement from "@/components/BrewJudgement";
-import {brewFigureAdjustmentMeasures, type BrewFigureAdjustments} from "@/components/BrewFigures";
+import {brewFigureAdjustmentMeasures} from "@/components/BrewFigures";
 import BrewStoryCard from "@/components/BrewStoryCard";
 import BrewStorySheet from "@/components/BrewStorySheet";
 import BrewSummary from "@/components/BrewSummary";
@@ -27,9 +27,9 @@ import {sharedBrewDatabase, useBrewHistory, useBrewJudgement, type JudgementStor
 import {useSetting} from "@/hooks/useSetting";
 import {bypassViewFromRecord} from "@/library/brew/bypassState";
 import {formatBrewDate, formatBrewTime} from "@/library/brew/brewFormat";
-import {brewFigures} from "@/library/brew/brewFigures";
+import {brewFigures, brewFigureAdjustments} from "@/library/brew/brewFigures";
 import {poursFromPlan} from "@/library/brew/BrewRecord";
-import {dialNote, type GrindFigure} from "@/library/brew/dialAfterBrew";
+import {dialNote, grindRecipeBadges, type GrindFigure} from "@/library/brew/dialAfterBrew";
 import {drawdownFigures, retrospectiveFlowSeries} from "@/library/brew/flowRate";
 import {hasDrawableRateRun} from "@/library/brew/rateChartGeometry";
 import {canHandOff, HANDOFF_TARGETS} from "@/library/brew/handoff/targets";
@@ -62,30 +62,6 @@ let sharedLookup: RecipeLookup | undefined;
 
 const JUDGEMENT_ACTION_GAP = "$4";
 
-function quickEditFigures(
-    record: StoredBrew,
-    grind: GrindFigure | null
-): BrewFigureAdjustments | undefined {
-    const adjustments: BrewFigureAdjustments = {};
-
-    if (record.adjustedFromGrind !== undefined && record.grindSize !== undefined) {
-        adjustments.grind = {
-            value:     record.grindSize,
-            from:      record.adjustedFromGrind,
-            confirmed: grind?.kind === "recipe" ? false : undefined
-        };
-    }
-    const tempOffset = record.adjustedTempOffset;
-    if (tempOffset !== undefined) {
-        const temperatures = record.plan?.map((stage) => stage.temperature) ?? [];
-        if (temperatures.length > 0) {
-            adjustments.temperature = {offset: tempOffset, temperatures};
-        }
-    }
-
-    return Object.keys(adjustments).length === 0 ? undefined : adjustments;
-}
-
 type RecordAction = {
     key: "handoff" | "export" | "compare" | "story";
     label: string;
@@ -111,8 +87,10 @@ function storyGrindForBudget(
     grind: GrindFigure | null,
     showRecipeBadge: boolean
 ): GrindFigure | null {
-    if (showRecipeBadge || grind === null || grind.kind !== "dial") return grind;
-    return {...grind, recipe: null};
+    if (showRecipeBadge || grind === null) return grind;
+    return grind.kind === "dial"
+        ? {kind: "dial", dial: grind.dial, recipe: null}
+        : grind.kind === "recipe" ? {kind: "recipe", recipe: grind.recipe} : {kind: "off"};
 }
 
 function RecordActionRows(
@@ -336,8 +314,7 @@ export default function BrewRecord({recipeLookup}: Props) {
     const figures = brewFigures(record);
     const drawdown = drawdownFigures(record);
     const grind = dialNote(record);
-    const adjustments = quickEditFigures(record, grind);
-    const summaryGrind = adjustments?.grind?.confirmed === false ? null : grind;
+    const adjustments = brewFigureAdjustments(record);
 
     function openComparisonPicker(): void {
         const candidates = sharedBrewDatabase()
@@ -414,7 +391,7 @@ export default function BrewRecord({recipeLookup}: Props) {
             pausedBeforeDrawdownSeconds(
                 record.pauseIntervals, record.drawdownAt, record.pausedSeconds)
         ),
-        grind:             summaryGrind,
+        grind,
         adjustments
     };
     const pauseReasons = pauseReasonsNote(record.pauseIntervals);
@@ -694,8 +671,8 @@ export default function BrewRecord({recipeLookup}: Props) {
                                     tags: storyTags,
                                     hasBypass: summary.bypass !== undefined,
                                     hasGrindRecipeBadge: storyHasDetails
-                                        && summary.grind?.kind === "dial"
-                                        && summary.grind.recipe !== null,
+                                        && grindRecipeBadges(summary.grind).length > 0,
+                                    grindRecipeBadgeTexts: grindRecipeBadges(summary.grind),
                                     drawdownRate: storyHasDetails ? summary.drawdownRate : null,
                                     hasSummaryNote: storyHasNote,
                                     recipeInputs: storyRecipeInputs,

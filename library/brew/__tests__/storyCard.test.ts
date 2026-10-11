@@ -32,7 +32,6 @@ import {
     brewFigureBadgeGeometry,
     brewFigureBadgeWidth,
     brewFigureTextGeometry,
-    brewFigureUsesFourColumns,
     brewRecipeUnits,
     type BrewRecipeInputs
 } from "../figureGeometry";
@@ -113,21 +112,14 @@ function trueDrawnHeight(input: SweepInput, budget: ReturnType<typeof storySumma
     const baseFigures = dotoRowHeight(BREW_FIGURE_LABEL_SIZE * textScale, fontScale)
         + BREW_FIGURE_INTERNAL_GAP
         + dotoRowHeight(BREW_FIGURE_VALUE_SIZE * textScale, fontScale);
-    const detailsUseFourColumns = brewFigureUsesFourColumns(
-        fontScale,
-        input.width - STORY_CAPTURE_PADDING * 2
-    );
-    const hasQuietLine = budget.showGrindRecipeBadge
-        || (
-            budget.showDrawdownRateBadge
-            && (!detailsUseFourColumns || budget.showGrindRecipeBadge)
-        );
+    const hasQuietLine = budget.showGrindRecipeBadge || budget.showDrawdownRateBadge;
     const quietLineHeight = hasQuietLine
-        ? BREW_FIGURE_INTERNAL_GAP + Math.max(
+        ? (budget.showGrindRecipeBadge ? Math.max(1, input.grindRecipeBadgeTexts?.length ?? 1) : 1)
+            * (BREW_FIGURE_INTERNAL_GAP + Math.max(
             dotoRowHeight(11 * textScale, fontScale, 11 * textScale)
                 + (1 * textScale + 1 * textScale) * 2,
             dotoRowHeight(11 * textScale, fontScale)
-        )
+        ))
         : 0;
     const detailFigures = budget.showFigureDetails !== false
         ? Math.max(0, input.figureExtraRows ?? 0) * (
@@ -237,6 +229,33 @@ function expectAllMasksFit(widths: number[]) {
 }
 
 describe("the frame", () => {
+    it("budgets both requested and saved grind badges without a second grind value", () => {
+        const input = {
+            width: 375, stages: 3, hasRateChart: false, hasCoffee: false, hasRating: false,
+            figureExtraRows: 1, hasGrindRecipeBadge: true,
+            grindRecipeBadgeTexts: ["RECIPE 53", "SAVED 48"],
+            drawdownRate: 1.3
+        };
+        const budget = storySummaryBudget(input);
+        expect(budget.showFigureDetails).toBe(true);
+        expect(budget.showGrindRecipeBadge).toBe(true);
+        expect(budget.margin).toBeGreaterThanOrEqual(0);
+        expect(trueDrawnHeight(input, budget)).toBeLessThanOrEqual(
+            budget.contentHeight + STORY_FIT_MARGIN
+        );
+    });
+
+    it("declines a grind badge whose actual text cannot fit its column", () => {
+        const input = {
+            width: 375, stages: 3, hasRateChart: false, hasCoffee: false, hasRating: false,
+            figureExtraRows: 1, hasGrindRecipeBadge: true,
+            grindRecipeBadgeTexts: ["RECIPE " + "8".repeat(20)],
+            drawdownRate: 1.3
+        };
+        const budget = storySummaryBudget(input);
+        expect(budget.showGrindRecipeBadge).toBe(false);
+        expect(storyHorizontalFit(input, budget).fits).toBe(true);
+    });
     it("is nine by sixteen", () => {
         const frame = storyFrame(1080);
         expect(frame.width).toBe(1080);
@@ -465,7 +484,7 @@ describe("the frame", () => {
         expect(STORY_FIT_MARGIN).toBeGreaterThan(0);
     });
 
-    it("keeps the drawdown rate when the new rate column fits", () => {
+    it("keeps the drawdown rate below its clock when it fits", () => {
         const budget = storySummaryBudget({
             width: 430,
             stages: 3,
@@ -495,7 +514,7 @@ describe("the frame", () => {
             hasCoffee: false,
             hasRating: false,
             figureExtraRows: 1,
-            drawdownRate: 999999999.9,
+            drawdownRate: 999999999999999.9,
             fontScale: 1
         });
 
@@ -582,7 +601,7 @@ describe("the frame", () => {
         expect(fit.width).toBeLessThanOrEqual(fit.limit);
     });
 
-    it("counts the drawdown rate in its own detail column", () => {
+    it("counts the drawdown rate below its clock", () => {
         const input = {
             width: 430,
             stages: 2,
@@ -669,13 +688,13 @@ describe("the frame", () => {
         expect(sweep.visited).toBe(565_760);
         expect(sweep.cell).toMatchObject({
             width: 430,
-            stages: 8,
-            fontScale: 1.2,
+            stages: 1,
+            fontScale: 0.85,
             hasCoffee: false,
             hasRating: false,
             tags: [],
             hasSummaryNote: false,
-            figureExtraRows: 1,
+            figureExtraRows: 0,
             hasRateChart: false,
             hasBypass: false
         });

@@ -260,7 +260,7 @@ describe("BrewFigures", () => {
         expect(screen.queryByTestId("figures-drawdown")).toBeNull();
     });
 
-    it("puts the average rate in its own figure", async () => {
+    it("puts the average rate below drawdown in the three-column row", async () => {
         await renderWithProviders(
             <BrewFigures contentWidth={DEFAULT_CONTENT_WIDTH}
                 water={240} cup={200} seconds={140} accent={TEST_ACCENT}
@@ -268,14 +268,11 @@ describe("BrewFigures", () => {
             />
         );
         expect(screen.getByText("0:40")).toBeTruthy();
-        expect(screen.getByTestId("figures-rate")).toBeTruthy();
-        expect(screen.getByText("RATE G/S")).toBeTruthy();
-        expect(screen.getByText("2.0")).toBeTruthy();
+        expect(screen.queryByTestId("figures-rate")).toBeNull();
+        expect(screen.getByTestId("figures-detail-row").children).toHaveLength(3);
+        expect(screen.getByText("2.0 G/S")).toBeTruthy();
         expect(screen.getByLabelText(
             "Drawdown, 40 seconds, average 2.0 grams per second"
-        )).toBeTruthy();
-        expect(screen.getByLabelText(
-            "Average rate, 2.0 grams per second"
         )).toBeTruthy();
     });
 
@@ -341,14 +338,14 @@ describe("BrewFigures", () => {
         await renderWithProviders(
             <BrewFigures contentWidth={DEFAULT_CONTENT_WIDTH}
                          water={240} cup={200} seconds={140} accent={TEST_ACCENT}
+                         grind={{kind: "dial", dial: 61, recipe: null, savedRecipe: 50}}
                          adjustments={{
-                             grind:       {value: 61, from: 50},
                              temperature: {offset: 2, temperatures: [90, 92]}
                          }} />
         );
 
         expect(screen.getByTestId("figures-adjustments-row")).toBeTruthy();
-        expect(screen.getByTestId("figures-adjusted-grind-recipe"))
+        expect(screen.getByTestId("figures-grind-recipe"))
             .toHaveStyle({borderStyle: "dashed"});
         expect(screen.queryByTestId("figures-adjusted-dose")).toBeNull();
         expect(screen.queryByTestId("figures-adjusted-ratio")).toBeNull();
@@ -361,7 +358,7 @@ describe("BrewFigures", () => {
         expect(screen.getByLabelText(
             "Temperature, 90, 92 degrees, offset +2 degrees"
         )).toBeTruthy();
-        expect(screen.getByLabelText("Grind, 61, recipe 50")).toBeTruthy();
+        expect(screen.getByLabelText("Grind, dial 61, saved recipe 50")).toBeTruthy();
     });
 
     it("shows a saturating temperature edit as used temperatures, not a reconstructed recipe", async () => {
@@ -388,7 +385,6 @@ describe("BrewFigures", () => {
         mockWindowFontScale(DOTO_MAX_FONT_SCALE);
         const contentWidth = 375 - 56;
         const adjustments = {
-            grind:       {value: 61, from: 50},
             temperature: {offset: -2, temperatures: [88, 86, 84]}
         };
         const expectedWidth = brewFigureAdjustmentColumnWidth(
@@ -403,25 +399,21 @@ describe("BrewFigures", () => {
                          adjustments={adjustments} />
         );
 
-        expect(screen.getByTestId("figures-adjusted-grind"))
-            .toHaveStyle({width: expectedWidth});
         expect(screen.getByTestId("figures-adjusted-temperature"))
             .toHaveStyle({width: expectedWidth});
     });
 
-    it("carries unconfirmed grind styling into the adjusted grind figure", async () => {
+    it("keeps unconfirmed adjusted grind in the single outlined grind figure", async () => {
         await renderWithProviders(
             <BrewFigures contentWidth={DEFAULT_CONTENT_WIDTH}
                          water={240} cup={200} seconds={140} accent={TEST_ACCENT}
-                         adjustments={{
-                             grind: {value: 61, from: 50, confirmed: false}
-                         }} />
+                         grind={{kind: "recipe", recipe: 61, savedRecipe: 50}} />
         );
 
-        expect(screen.getByTestId("figures-adjusted-grind-outline")).toBeTruthy();
+        expect(screen.getByTestId("figures-grind-outline")).toBeTruthy();
         expect(screen.getByText("RECIPE 50")).toBeTruthy();
         expect(screen.getByLabelText(
-            "Grind, 61, recipe 50, not confirmed by the machine"
+            "Grind, recipe 61, saved recipe 50"
         )).toBeTruthy();
     });
 
@@ -433,21 +425,21 @@ describe("BrewFigures", () => {
                              accent={TEST_ACCENT} drawdown={30} {...props} />
             );
 
-        it("gives the rate its own column at the default text size", async () => {
+        it("keeps the rate under drawdown at the default text size", async () => {
             await detail({
                 drawdownRate: 1.04, grind: {kind: "dial", dial: 62, recipe: 58}
             });
-            expect(screen.getByTestId("figures-rate")).toBeTruthy();
-            expect(screen.getByText("RATE")).toBeTruthy();
+            expect(screen.queryByTestId("figures-rate")).toBeNull();
+            expect(screen.getByText("1.0 G/S")).toBeTruthy();
             expect(screen.getByTestId("figures-grind-recipe")).toBeTruthy();
         });
 
-        it("drops the quiet line and moves the unit into the label with no badge",
+        it("keeps the rate's unit with its value even with no grind badge",
             async () => {
                 await detail({
                     drawdownRate: 1.04, grind: {kind: "dial", dial: 62, recipe: null}
                 });
-                expect(screen.getByText("RATE G/S")).toBeTruthy();
+                expect(screen.getByText("1.0 G/S")).toBeTruthy();
                 expect(screen.queryByText("RATE")).toBeNull();
                 expect(screen.queryByTestId("figures-grind-recipe")).toBeNull();
             });
@@ -465,7 +457,7 @@ describe("BrewFigures", () => {
             expect(screen.getByTestId("figures-drawdown-rate")).toBeTruthy();
         });
 
-        it("keeps four columns for a shrunken story card at default OS font scale",
+        it("keeps three columns for a shrunken story card at default OS font scale",
             async () => {
                 mockWindowFontScale(1);
 
@@ -473,8 +465,9 @@ describe("BrewFigures", () => {
                     drawdownRate: 1.04, textScale: 0.5,
                     grind: {kind: "dial", dial: 62, recipe: 58}
                 });
-                expect(screen.getByTestId("figures-rate")).toBeTruthy();
-                expect(screen.getByText("RATE")).toBeTruthy();
+                expect(screen.queryByTestId("figures-rate")).toBeNull();
+                expect(screen.getByTestId("figures-detail-row").children).toHaveLength(3);
+                expect(screen.getByText("1.0 G/S")).toBeTruthy();
             });
 
         it("still says nothing about a rate nobody could measure", async () => {
@@ -505,6 +498,20 @@ describe("BrewFigures", () => {
 });
 
 describe("the grind dial", () => {
+    it("shows the measured dial once while distinguishing the sent recipe and saved baseline", async () => {
+        await renderWithProviders(
+            <BrewFigures contentWidth={DEFAULT_CONTENT_WIDTH} water={182} cup={174} seconds={126}
+                         accent={TEST_ACCENT}
+                         grind={{kind: "dial", dial: 47, recipe: 53, savedRecipe: 48}} />
+        );
+        expect(screen.getAllByText("GRIND")).toHaveLength(1);
+        expect(screen.getByText("47")).toBeOnTheScreen();
+        expect(screen.getByText("RECIPE 53")).toBeOnTheScreen();
+        expect(screen.getByText("SAVED 48")).toBeOnTheScreen();
+        expect(screen.getByLabelText("Grind, dial 47, recipe 53, saved recipe 48"))
+            .toBeOnTheScreen();
+    });
+
     it("shows the confirmed dial as the grind figure", async () => {
         await renderWithProviders(
             <BrewFigures contentWidth={DEFAULT_CONTENT_WIDTH} water={182} cup={174} seconds={126} accent={TEST_ACCENT}

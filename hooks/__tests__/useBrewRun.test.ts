@@ -511,13 +511,14 @@ describe("useBrewRun", () => {
         // that answers the question is the one taken after the grind. The
         // record is written first and this lands as an update to that row.
         const h = harness();
-        await renderHook(() => useBrewRun(recipe(), h.store));
+        const {result} = await renderHook(() => useBrewRun(recipe(), h.store));
         await h.setPhase({name: "sending"});
         await h.setPhase({name: "pouring", pour: 1, pours: 2});
         await h.water(40);
         await h.setPhase({name: "done"});
         await act(async () => {});
         expect(h.dials).toEqual([[h.written[0].record.id, 52]]);
+        expect(result.current.record?.dialAfter).toBe(52);
     });
 
     it("keeps no reading when the machine did not answer after the brew", async () => {
@@ -532,6 +533,33 @@ describe("useBrewRun", () => {
         await act(async () => {});
         expect(h.written).toHaveLength(1);
         expect(h.dials).toEqual([]);
+    });
+
+    it("does not put a late previous dial reading onto the next finished run", async () => {
+        const h = harness();
+        let answer: (value: boolean) => void = () => { throw new Error("No pending reading"); };
+        global.__brewer.machine.askHowItIsDoing = () => new Promise<boolean>((resolve) => {
+            answer = resolve;
+        });
+        const r = recipe();
+        const {result, rerender} = await renderHook<ReturnType<typeof useBrewRun>, {runId: number}>(
+            ({runId}) => useBrewRun(r, h.store, runId), {initialProps: {runId: 1}}
+        );
+        await h.setPhase({name: "pouring", pour: 1, pours: 2});
+        await h.water(40);
+        await h.setPhase({name: "done"});
+        const oldAnswer = answer;
+        const oldId = result.current.record?.id;
+        await act(async () => { rerender({runId: 2}); });
+        await h.setPhase({name: "pouring", pour: 1, pours: 2});
+        await h.water(40);
+        await h.setPhase({name: "done"});
+        const newId = result.current.record?.id;
+        expect(newId).not.toBe(oldId);
+        await act(async () => { oldAnswer(true); });
+        expect(result.current.record?.id).toBe(newId);
+        expect(result.current.record?.dialAfter).toBeUndefined();
+        expect(h.dials).toEqual([[oldId, 52]]);
     });
 
     it("does not beep a brew that never got past the grind", async () => {
