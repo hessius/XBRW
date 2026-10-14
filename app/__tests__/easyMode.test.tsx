@@ -313,7 +313,7 @@ it("keeps retained trial restoration accessible in production and ordinary writi
     expect(screen.getByText("Restore the original set before writing slots.")).toBeOnTheScreen();
     expect(screen.getByText("1 STEEP · 60ML · 70C · 60S · GRIND OFF")).toBeOnTheScreen();
     expect(screen.getByText("Tea candidate stored; behavior UNTESTED.")).toBeOnTheScreen();
-    expect(within(screen.getByTestId("slot-A")).getByText("LAST WRITTEN")).toBeOnTheScreen();
+    expect(within(screen.getByTestId("slot-A")).queryByText("LAST WRITTEN")).toBeNull();
     expect(within(screen.getByTestId("slot-A")).queryByText("NOT WRITTEN")).toBeNull();
     expect(screen.queryByText("REMOVED FROM LIBRARY")).toBeNull();
     expect(screen.queryByText("LAB")).toBeNull();
