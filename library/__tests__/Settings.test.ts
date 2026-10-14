@@ -12,6 +12,17 @@ function fakeStorage(seed: Record<string, string> = {}): SettingsStorage {
 }
 
 describe("Settings", () => {
+    it("defaults history to newest date and persists both ordering preferences", () => {
+        const storage = fakeStorage();
+        const settings = new Settings(storage);
+        expect(settings.get("brewHistorySort")).toBe("date");
+        expect(settings.get("brewHistorySortDirection")).toBe("desc");
+        settings.set("brewHistorySort", "ratio");
+        settings.set("brewHistorySortDirection", "asc");
+        expect(new Settings(storage).get("brewHistorySort")).toBe("ratio");
+        expect(new Settings(storage).get("brewHistorySortDirection")).toBe("asc");
+    });
+
     it("returns the default for a setting that was never written", () => {
         expect(new Settings(fakeStorage()).get("showCoffeeMarker"))
             .toBe(DEFAULTS.showCoffeeMarker);
