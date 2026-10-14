@@ -539,6 +539,13 @@ Not required. All sources connect without bonding. `corroborated`
 ### Timeout/Reconnection
 No explicit timeout documented. The machine will disconnect after an extended idle period (duration not measured). No reconnection protocol documented; reconnect by repeating the full connect + handshake sequence.
 
+XBRW++ propagates `RadioUnavailableError` immediately when the phone's Bluetooth
+adapter is off, turning off, unauthorized or unsupported: these radio failures
+bypass both the remembered-device scan fallback and connection retry delays.
+A starting radio (`unknown`, `resetting` or `turning_on`) is still waited for by
+the transport. Ordinary connection failures retain the stale-device scan
+fallback and retries.
+
 ---
 
 ## E. Easy Mode Slots
