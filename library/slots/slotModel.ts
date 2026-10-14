@@ -11,6 +11,8 @@ export type SlotSnapshot = {
     name: string;
     recipeJSON: string;
     blob: number[];
+    /** Slot-only setting; historical snapshots without it keep the scale off. */
+    scaleEnabled?: boolean;
     /** Set only on an approved fixed tea slot probe; see `teaSlotCandidate.ts`. */
     probe?: string;
 };
@@ -135,7 +137,8 @@ export function slotNeedsWrite(record: SlotRecord, index: SlotIndex): boolean {
 export function slotFlags(snapshot: SlotSnapshot): number {
     if (snapshot.probe !== undefined) return teaProbeFlags(snapshot.probe);
     const recipe = new Recipe(undefined, snapshot.recipeJSON);
-    return recipe.isTea() ? 0x0C + (recipe.pours.length - 1) * 0x20 : 0x02;
+    const selector = recipe.isTea() ? 0x0C + (recipe.pours.length - 1) * 0x20 : 0x02;
+    return selector | (snapshot.scaleEnabled === true ? 0x10 : 0);
 }
 
 function sameSlotContent(left: SlotSnapshot, right: SlotSnapshot): boolean {
@@ -190,6 +193,9 @@ export function readSnapshot(value: unknown): SlotSnapshot {
             blob: value.blob as number[], probe: value.probe
         });
     }
+    if (value.scaleEnabled !== undefined && typeof value.scaleEnabled !== "boolean") {
+        throw new Error("The Easy Mode snapshot's scale setting is invalid.");
+    }
     const json: unknown = JSON.parse(value.recipeJSON);
     if (!objectValue(json) || json.uuid !== value.sourceUuid) {
         throw new Error("The Easy Mode snapshot identity is invalid.");
@@ -200,7 +206,8 @@ export function readSnapshot(value: unknown): SlotSnapshot {
     }
     return {
         sourceUuid: value.sourceUuid, name: value.name,
-        recipeJSON: value.recipeJSON, blob: checked.blob
+        recipeJSON: value.recipeJSON, blob: checked.blob,
+        ...(value.scaleEnabled === undefined ? {} : {scaleEnabled: value.scaleEnabled})
     };
 }
 
@@ -222,7 +229,8 @@ export function snapshotStatus(snapshot: SlotSnapshot, recipe: Recipe | undefine
     "unchanged" | "edited" | "removed" {
     if (recipe === undefined) return "removed";
     try {
-        return sameSlotContent(snapshot, snapshotRecipe(recipe)) ? "unchanged" : "edited";
+        return sameSlotContent(snapshot, {...snapshotRecipe(recipe), scaleEnabled: snapshot.scaleEnabled})
+            ? "unchanged" : "edited";
     } catch {
         // Invalid edits must not be hidden by Uint8Array's byte coercion.
         return "edited";

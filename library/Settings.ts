@@ -3,6 +3,7 @@ import {appDatabase} from '@/library/appDatabase';
 import type {SortAxis, SortDirection} from './librarySort';
 import type {LibraryView} from './libraryView';
 import type {MachineModel} from './machine/machineModel';
+import type {HistorySort, HistorySortDirection} from './brew/historyQuery';
 
 /**
  * Every setting, with its default.
@@ -189,6 +190,9 @@ export const DEFAULTS = {
      * expires. Zero is a real choice and means zero.
      */
     brewTraceRetention: 50,
+    /** History filters are transient; only its ordering is a preference. */
+    brewHistorySort: "date" as HistorySort,
+    brewHistorySortDirection: "desc" as HistorySortDirection,
     /**
      * Story-card sections the user usually leaves out before sharing.
      *

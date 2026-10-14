@@ -735,13 +735,34 @@ empty library with nothing to explain it.
 
 ## Brew history
 
-`app/brewHistory.tsx` and `components/BrewHistoryRow.tsx`.
+`app/brewHistory.tsx`, `components/BrewHistoryControls.tsx` and `components/BrewHistoryRow.tsx`.
+
+History starts with every record, newest first. Hide unsuccessful keeps completed
+and machine-ended cups, including hand-logged cups. Rated only keeps rated cups,
+not a stray positive rating on a failed brew. The switches compose with one
+another and with a recipe-scoped visit; Clear filters never leaves that recipe.
+Filters reset on reopening, while date/rating/dose/ratio/grind and direction are
+remembered and included in settings backups.
+
+`library/brew/historyQuery.ts` orders stored brew-time values without recipes or
+sample streams. Missing values, unrated ratings and grinder-off/unknown grinds
+stay last in either direction; equal values use newest then record id. The header
+counts the visible answer (the shared title omits a zero superscript). Changing
+either filter or ordering cancels selection, handoff preparation and pending
+batch deletion. Controls remain available when no rows match, and the sort sheet
+is outside the screen-covered accessibility subtree.
 
 | ID | Source | Context — when the user sees this | Current text |
 |----|--------|-----------------------------------|--------------|
 | `brewHistory.title` | `app/brewHistory.tsx:116` | Screen header title. | `Brew history` |
 | `brewHistory.empty.title` | `app/brewHistory.tsx:154` | Doto empty-state heading. | `NO BREWS YET` |
 | `brewHistory.empty.body` | `app/brewHistory.tsx:157` | Empty-state sub-line. | `Brew a recipe and it will appear here.` |
+| `brewHistory.filters.unsuccessful` | `components/BrewHistoryControls.tsx` | Independent filter chip; announces checked state. | `HIDE UNSUCCESSFUL` (a11y: `Hide unsuccessful`) |
+| `brewHistory.filters.rated` | `components/BrewHistoryControls.tsx` | Independent rated-cup filter chip. | `RATED ONLY` (a11y: `Rated only`) |
+| `brewHistory.sort` | `components/BrewHistoryControls.tsx` | Opener names the current axis and direction; sheet has five radio rows and a direction pair. | `${axis} / ${direction}` (a11y: `Sort brew history`) |
+| `brewHistory.filteredEmpty.title` | `app/brewHistory.tsx` | Scoped history exists but the active filters match nothing. | `NO MATCHING BREWS` |
+| `brewHistory.filteredEmpty.body` | `app/brewHistory.tsx` | Filtered empty-state sub-line. | `No brews match these filters.` |
+| `brewHistory.filters.clear` | `app/brewHistory.tsx` | Empty-result recovery; leaves sort and recipe scope intact. | `Clear filters` |
 | `brewHistory.selection.select.a11y` | `app/brewHistory.tsx` (a11y) | (a11y) Enters selection mode, for deleting several brews or handing them to Beanconqueror. | `Select brews` |
 | `brewHistory.selection.select` | `app/brewHistory.tsx` | Doto action-row label. Always shown: selecting several brews to delete them does not depend on the handoff. | `SELECT` |
 | `brewHistory.selection.count.none` | `app/brewHistory.tsx` | Selection-mode count with nothing selected. | `0 brews selected` |

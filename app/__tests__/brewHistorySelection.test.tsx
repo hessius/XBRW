@@ -1,8 +1,8 @@
 import React from "react";
-import {act, fireEvent, screen} from "@testing-library/react-native";
+import {act, fireEvent, screen, waitFor} from "@testing-library/react-native";
 
 import BrewHistory from "@/app/brewHistory";
-import {renderWithProviders} from "@/test-utils/render";
+import {renderWithProviders, SHEET_PRESS_TIMEOUT} from "@/test-utils/render";
 import type {StoredBrew} from "@/library/BrewDatabase";
 import {sharedSettings} from "@/hooks/useSetting";
 
@@ -20,6 +20,8 @@ jest.mock("@/hooks/useSetting", () =>
 
 beforeEach(() => {
     sharedSettings().set("beanconquerorHandoff", true);
+    sharedSettings().set("brewHistorySort", "date");
+    sharedSettings().set("brewHistorySortDirection", "desc");
 });
 
 jest.mock("@/hooks/useBrewBatchHandoff", () => ({
@@ -132,6 +134,76 @@ describe("brew history batch selection", () => {
         expect(screen.getByText("0 brews selected")).toBeTruthy();
         expect(screen.getByLabelText("Send selected brews to Beanconqueror")).toBeDisabled();
         expect(screen.getAllByTestId("history-row-unselected")).toHaveLength(2);
+    });
+
+    it.each(["Hide unsuccessful", "Rated only"])(
+        "clears selection and handoff state when changing %s, with no hidden send or delete", async (label) => {
+            mockBrews[0].outcome = "failed";
+            await renderWithProviders(<BrewHistory />);
+            await fireEvent.press(screen.getByLabelText("Select brews"));
+            await fireEvent.press(screen.getByLabelText(/^Ethiopia Guji,/));
+            const resets = mockReset.mock.calls.length;
+            await fireEvent.press(screen.getByLabelText(label));
+            expect(mockReset).toHaveBeenCalledTimes(resets + 1);
+            expect(screen.queryByText("1 brew selected")).toBeNull();
+            expect(screen.queryByTestId("history-row-selected")).toBeNull();
+            expect(screen.queryByLabelText("Send selected brews to Beanconqueror")).toBeNull();
+            expect(mockSend).not.toHaveBeenCalled();
+            expect(mockRemove).not.toHaveBeenCalled();
+        }
+    );
+
+    it.each(["Rating", "OLDEST"])(
+        "clears selection and handoff state when changing sort through %s", async (label) => {
+            await renderWithProviders(<BrewHistory />);
+            await fireEvent.press(screen.getByLabelText("Select brews"));
+            await fireEvent.press(screen.getByLabelText(/^Ethiopia Guji,/));
+            const resets = mockReset.mock.calls.length;
+            await fireEvent.press(screen.getByLabelText("Sort brew history"));
+            await waitFor(async () => {
+                await fireEvent.press(screen.getByRole("radio", {name: label}));
+                expect(mockReset).toHaveBeenCalledTimes(resets + 1);
+            }, {timeout: SHEET_PRESS_TIMEOUT});
+            await waitFor(async () => {
+                const close = screen.queryByLabelText("Close");
+                if (close) await fireEvent.press(close);
+                expect(screen.queryByRole("radio", {name: label})).toBeNull();
+            }, {timeout: SHEET_PRESS_TIMEOUT});
+            expect(screen.getByLabelText("Select brews")).toBeTruthy();
+            expect(screen.queryByTestId("history-row-selected")).toBeNull();
+        }
+    );
+
+    it("cancels a pending batch deletion when a queued filter change arrives", async () => {
+        await renderWithProviders(<BrewHistory />);
+        const filter = screen.getByLabelText("Rated only");
+        await fireEvent.press(screen.getByLabelText("Select brews"));
+        await fireEvent.press(screen.getByLabelText(/^Ethiopia Guji,/));
+        await fireEvent.press(screen.getByLabelText("Delete selected brews"));
+        expect(screen.getByText("Delete 1 brew? This cannot be undone.")).toBeTruthy();
+        // A queued control event must also dismiss the destructive confirmation.
+        await fireEvent.press(filter);
+        expect(screen.getByTestId("brew-history-content").props.accessibilityElementsHidden).toBe(false);
+        await waitFor(() => expect(screen.queryByLabelText("Delete the selected brews")).toBeNull(),
+            {timeout: SHEET_PRESS_TIMEOUT});
+        expect(screen.getByText("NO MATCHING BREWS")).toBeTruthy();
+        await fireEvent.press(screen.getByLabelText("Clear filters"));
+        await fireEvent.press(screen.getByLabelText("Select brews"));
+        expect(screen.getByText("0 brews selected")).toBeTruthy();
+        expect(screen.getByLabelText("Send selected brews to Beanconqueror")).toBeDisabled();
+        expect(screen.getByLabelText("Delete selected brews")).toBeDisabled();
+        expect(mockRemove).not.toHaveBeenCalled();
+    });
+
+    it("sends only visible rated cups after filtering and starting a fresh selection", async () => {
+        mockBrews[0].rating = 4;
+        await renderWithProviders(<BrewHistory />);
+        await fireEvent.press(screen.getByLabelText("Rated only"));
+        await fireEvent.press(screen.getByLabelText("Select brews"));
+        await fireEvent.press(screen.getByLabelText(/^Ethiopia Guji,/));
+        expect(screen.queryByLabelText(/^Kenya Nyeri,/)).toBeNull();
+        await fireEvent.press(screen.getByLabelText("Send selected brews to Beanconqueror"));
+        expect(mockSend).toHaveBeenCalledWith(["a"]);
     });
 
     it("toggles rows instead of opening the record screen", async () => {

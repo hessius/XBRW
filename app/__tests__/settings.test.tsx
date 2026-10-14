@@ -8,7 +8,7 @@ import {SUPPORT_TITLE} from "@/components/SupportTile";
 import {palette} from "@/constants/colors";
 import Recipe from "@/library/Recipe";
 import {DEFAULTS, NOT_IN_BACKUP, Settings, type SettingKey, type SettingsStorage} from "@/library/Settings";
-import {renderWithProviders} from "@/test-utils/render";
+import {renderWithProviders, SHEET_PRESS_TIMEOUT} from "@/test-utils/render";
 
 /**
  * The rendered text of a `toJSON()` tree, in document order.
@@ -508,6 +508,46 @@ describe("SettingsScreen", () => {
         expect(mockNotify).toHaveBeenCalledWith(
             expect.objectContaining({tone: "success", message: "2 recipes restored"})
         );
+    });
+
+    it.each([
+        {brewHistorySort: "grind", brewHistorySortDirection: "asc"},
+        {brewHistorySort: "supernova", brewHistorySortDirection: "sideways"},
+        {brewHistorySort: "rating", brewHistorySortDirection: "sideways"},
+        {brewHistorySort: "supernova", brewHistorySortDirection: "asc"},
+        {}
+    ])("restores only valid history preferences from %j", async (incoming) => {
+        const storage = memoryStorage();
+        const settings = new Settings(storage);
+        settings.set("brewHistorySort", "dose");
+        settings.set("brewHistorySortDirection", "desc");
+        mockPickBackup.mockResolvedValue(backupOf([recipeNamed("A", "u1")], incoming));
+        mockApplyRestore.mockReturnValue({status: "restored", added: 1});
+        await renderWithProviders(<SettingsScreen settings={settings}/>);
+        await fireEvent.press(screen.getByRole("button",
+            {name: "Restore from a backup, Adds anything your library does not already have."}));
+        await waitFor(async () => {
+            await fireEvent(screen.getByLabelText(/settings from this backup/i), "checkedChange", true);
+            await fireEvent.press(screen.getByRole("button", {name: /add to my library/i}));
+            expect(mockApplyRestore).toHaveBeenCalled();
+        }, {timeout: SHEET_PRESS_TIMEOUT});
+        const restored = new Settings(storage);
+        expect(restored.get("brewHistorySort")).toBe(
+            incoming.brewHistorySort === "grind" || incoming.brewHistorySort === "rating"
+                ? incoming.brewHistorySort : "dose");
+        expect(restored.get("brewHistorySortDirection")).toBe(incoming.brewHistorySortDirection === "asc" ? "asc" : "desc");
+    });
+
+    it("includes history preferences in the typed settings snapshot", async () => {
+        const settings = new Settings(memoryStorage());
+        settings.set("brewHistorySort", "rating");
+        settings.set("brewHistorySortDirection", "asc");
+        mockExportBackup.mockResolvedValue({ok: true});
+        await renderWithProviders(<SettingsScreen settings={settings}/>);
+        await fireEvent.press(screen.getByRole("button", {name: /back up my recipes/i}));
+        expect(mockExportBackup).toHaveBeenCalledWith(expect.anything(),
+            expect.objectContaining({brewHistorySort: "rating", brewHistorySortDirection: "asc"}),
+            expect.any(String), expect.any(Array));
     });
 
     it("restores a library sorted by rating", async () => {

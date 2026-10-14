@@ -8,6 +8,24 @@ import {coffee} from "./fixtures";
 
 const identity = {deviceId: "one", serial: "serial"};
 
+it("recovers exact scale-enabled journal frames after relaunch without rebuilding from drafts", async () => {
+    const {store, sql} = ready();
+    store.setScaleEnabled("one", 0, true);
+    store.setScaleEnabled("one", 1, true);
+    await expect(writeSlots(store, identity, scripted(store, 1).port)).rejects.toThrow(/unknown/i);
+    const journal = store.read("one").journal!;
+    expect(journal.frames.map(frame => frame[11])).toEqual([0x12, 0x12, 0x02]);
+    const reopened = new SlotDatabase(sql);
+    expect(reopened.read("one").journal).toEqual(journal);
+    const frames: number[][] = [];
+    await recoverSlots(reopened, identity, {available: true, acquire: async () => ({
+        sendAndConfirm: async frame => { frames.push(Array.from(frame)); },
+        confirmSaved: async () => {}, release: () => {}
+    })}, {finishUncertain: true});
+    expect(frames).toEqual(journal.frames.slice(1));
+    expect(reopened.read("one").written?.slots).toEqual(journal.slots);
+});
+
 function ready() {
     const sql = createTestDatabase();
     const store = new SlotDatabase(sql);
