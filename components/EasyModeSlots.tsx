@@ -159,6 +159,7 @@ export type EasyModeSlotsProps = {
     onDismissSuccess?: () => void;
     writeControlRef?: React.RefObject<React.ComponentRef<typeof Button> | null>;
     onAssign: (index: SlotIndex, recipe: Recipe) => boolean | void;
+    onSetScaleEnabled?: (index: SlotIndex, enabled: boolean) => boolean | void;
     onWrite: () => void;
     onRecover: (restart: boolean) => void;
     onCancel: () => void;
@@ -260,7 +261,7 @@ export default function EasyModeSlots({
     record, recipes, incoming, header, deviceId, serial, connected, available, running, error,
     attempt = null, onDismissSuccess, writeControlRef, busy = false, serialMatches = true,
     guardLiveBrewBar = false, teaProbe, teaProbeOpen = false, onTeaProbeOpenChange,
-    onAssign, onWrite, onRecover, onCancel, onDismissWrite, onRestoreOriginal
+    onAssign, onSetScaleEnabled, onWrite, onRecover, onCancel, onDismissWrite, onRestoreOriginal
 }: EasyModeSlotsProps) {
     const [picker, setPicker] = useState<{deviceId: string; index: SlotIndex} | null>(null);
     const [search, setSearch] = useState("");
@@ -407,6 +408,8 @@ export default function EasyModeSlots({
                             recovery={false} locked={locked}
                             updateProblem={status === "edited" && current !== undefined ? recipeProblem(current) : null}
                             changeRef={changeRefs[index]}
+                            onSetScaleEnabled={onSetScaleEnabled === undefined ? undefined
+                                : enabled => onSetScaleEnabled(slotIndex, enabled)}
                             onChange={() => {
                                 focusOrigin.current = changeRefs[index];
                                 setSearch(""); setPicker({deviceId, index: slotIndex});
@@ -509,6 +512,8 @@ export default function EasyModeSlots({
                 <ScrollView contentContainerStyle={{gap: 16, paddingBottom: insets.bottom}}>
                     <Text color={palette.text}>Assign all three recipes. Your choices are kept on this phone immediately.</Text>
                     <Text color={palette.text}>Writing replaces A, B and C and switches the machine to EASY.</Text>
+                    <Text color={palette.text}>Scale ON automatically tares the scale when that slot is started.</Text>
+                    <Text color={palette.dim}>Scale changes are kept here until you choose WRITE TO MACHINE.</Text>
                     <Text color={palette.dim}>
                         This is the last set written by XBRW++. Changes made elsewhere cannot be read.
                     </Text>

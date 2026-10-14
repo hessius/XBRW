@@ -68,12 +68,83 @@ it("shows a normal tea slot as steeps and water rather than coffee ratio and gri
     expect(screen.getByRole("button", {name: "Change slot A recipe"})).toBeEnabled();
 });
 
-function PersistentSlots({store}: {store: SlotDatabase}) {
+function PersistentSlots({store, libraryRecipes = recipes}: {store: SlotDatabase; libraryRecipes?: Recipe[]}) {
     const slots = useEasyModeSlots({deviceId: "one", serial: "serial"}, unavailableSlotPort, store);
-    return <EasyModeSlots {...slots} recipes={recipes} deviceId="one" connected
+    return <EasyModeSlots {...slots} recipes={libraryRecipes} deviceId="one" connected
         onAssign={slots.assign} onWrite={slots.write} onRecover={slots.recover} onCancel={slots.cancel}
+        onSetScaleEnabled={slots.setScaleEnabled}
         onDismissSuccess={slots.resetAttempt}/>;
 }
+
+it("toggles each assigned slot independently and persists until WRITE", async () => {
+    const sql = createTestDatabase();
+    const store = new SlotDatabase(sql);
+    const saved = snapshotRecipe(recipes[0]);
+    for (const index of [0, 1, 2] as const) store.assign("one", index, saved);
+    await renderWithProviders(<PersistentSlots store={store}/>);
+    const scale = (name: string) => screen.getByRole("switch", {name: `Scale for slot ${name}`});
+    expect(scale("A")).not.toBeChecked();
+    expect(scale("B")).not.toBeChecked();
+    await fireEvent(scale("A"), "onCheckedChange", true);
+    expect(scale("A")).toBeChecked();
+    expect(scale("B")).not.toBeChecked();
+    expect(within(screen.getByTestId("slot-A")).getByText("SCALE ON")).toBeOnTheScreen();
+    expect(within(screen.getByTestId("slot-B")).getByText("SCALE OFF")).toBeOnTheScreen();
+    expect(screen.queryByText("RECIPE UPDATED")).toBeNull();
+    expect(new SlotDatabase(sql).read("one").drafts[0]?.scaleEnabled).toBe(true);
+    expect(store.read("one").written).toBeNull();
+    await fireEvent(scale("B"), "onCheckedChange", true);
+    await fireEvent(scale("A"), "onCheckedChange", false);
+    expect(scale("A")).not.toBeChecked();
+    expect(scale("B")).toBeChecked();
+    await fireEvent.press(screen.getByRole("button", {name: "About Easy Mode"}));
+    expect(await screen.findByText(/automatically tares.*slot.*started/i)).toBeOnTheScreen();
+    expect(screen.getByText(/scale changes.*WRITE TO MACHINE/i)).toBeOnTheScreen();
+});
+
+it("retains the slot's selected scale when accepting updated library content", async () => {
+    const store = new SlotDatabase(createTestDatabase());
+    const recipe = recipes[0];
+    store.assign("one", 0, snapshotRecipe(recipe));
+    store.setScaleEnabled("one", 0, true);
+    const updated = new Recipe(undefined, JSON.stringify(recipe));
+    updated.pours[0].temperature = 92;
+    await renderWithProviders(<PersistentSlots store={store} libraryRecipes={[updated]}/>);
+    expect(screen.getByRole("switch", {name: "Scale for slot A"})).toBeChecked();
+    await fireEvent.press(screen.getByRole("button", {name: "Update slot A from library"}));
+    expect(screen.getByRole("switch", {name: "Scale for slot A"})).toBeChecked();
+    expect(screen.queryByText("RECIPE UPDATED")).toBeNull();
+    expect(store.read("one").drafts[0]?.blob).toEqual(snapshotRecipe(updated).blob);
+});
+
+it("shows no scale control for an empty slot and disables it without an optional handler", async () => {
+    const options = props();
+    options.record.drafts[0] = snapshotRecipe(recipes[0]);
+    await renderWithProviders(<EasyModeSlots {...options}/>);
+    expect(screen.getByRole("switch", {name: "Scale for slot A"})).toBeDisabled();
+    expect(screen.queryByRole("switch", {name: "Scale for slot B"})).toBeNull();
+});
+
+it("locks scale during operations and active fixed trials, and omits it from recovery probes", async () => {
+    const store = new SlotDatabase(createTestDatabase());
+    for (const index of [0, 1, 2] as const) store.assign("one", index, snapshotRecipe(recipes[0]));
+    const onSetScaleEnabled = jest.fn();
+    const view = await renderWithProviders(<EasyModeSlots {...props()} record={store.read("one")}
+        running onSetScaleEnabled={onSetScaleEnabled}/>);
+    expect(screen.getByRole("switch", {name: "Scale for slot A", includeHiddenElements: true})).toBeDisabled();
+    await writeTeaSlotProbe(store, {deviceId: "one", serial: "serial"}, {
+        available: true, acquire: async () => ({
+            sendAndConfirm: async () => {}, confirmSaved: async () => {}, release: () => {}
+        })
+    });
+    await view.rerender(<EasyModeSlots {...props()} record={store.read("one")}
+        onSetScaleEnabled={onSetScaleEnabled}/>);
+    expect(screen.queryByRole("switch", {name: "Scale for slot A"})).toBeNull();
+    expect(screen.getByRole("switch", {name: "Scale for slot B"})).toBeDisabled();
+    expect(onSetScaleEnabled).not.toHaveBeenCalled();
+    await view.rerender(<EasyModeSlots {...interruptedOptions()} onSetScaleEnabled={onSetScaleEnabled}/>);
+    expect(screen.queryByRole("switch")).toBeNull();
+});
 
 it("uses compact accent slabs with a top status and inline stats/change, without a profile row", async () => {
     const options = props();

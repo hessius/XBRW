@@ -1,6 +1,6 @@
 import React from "react";
 import {View} from "react-native";
-import {Button, Text, XStack, YStack} from "tamagui";
+import {Button, Switch, Text, XStack, YStack} from "tamagui";
 import Recipe from "@/library/Recipe";
 import {resolveAccent} from "@/library/accent";
 import {SLOT_NAMES, type SlotIndex, type SlotSnapshot} from "@/library/slots/slotModel";
@@ -20,6 +20,7 @@ type Props = {
     changeRef?: React.Ref<React.ComponentRef<typeof Button>>;
     onChange: () => void;
     onUpdate: () => void;
+    onSetScaleEnabled?: (enabled: boolean) => boolean | void;
 };
 
 export function teaSlotFigures(recipe: Recipe, historicalProbe = false): string {
@@ -32,13 +33,16 @@ export function teaSlotFigures(recipe: Recipe, historicalProbe = false): string 
 }
 
 export default function EasyModeSlotCard({
-    index, snapshot, needsWrite, status, recovery, locked, updateProblem, changeRef, onChange, onUpdate
+    index, snapshot, needsWrite, status, recovery, locked, updateProblem, changeRef, onChange, onUpdate,
+    onSetScaleEnabled
 }: Props) {
     const name = SLOT_NAMES[index];
     const recipe = snapshot === null ? null : new Recipe(undefined, snapshot.recipeJSON);
     const probe = isTeaProbeSnapshot(snapshot);
     const ink = recipe === null ? palette.text : onAccent.text;
     const accent = recipe === null ? palette.text : resolveAccent(recipe);
+    const scaleEnabled = snapshot?.scaleEnabled === true;
+    const scaleLocked = locked || onSetScaleEnabled === undefined;
     return (
         <YStack testID={`slot-${name}`} gap={6} padding={14} borderRadius={18}
                 backgroundColor={recipe === null ? palette.raised : accent}>
@@ -72,6 +76,20 @@ export default function EasyModeSlotCard({
                     </DotMatrixText>
                 </Button>}
             </XStack>
+            {snapshot !== null && !probe && <XStack alignItems="center" justifyContent="space-between"
+                gap="$3" minHeight={44}>
+                <DotMatrixText fontSize={11} weight="bold" color={ink}>
+                    {scaleEnabled ? "SCALE ON" : "SCALE OFF"}
+                </DotMatrixText>
+                <Switch accessibilityRole="switch" accessibilityLabel={`Scale for slot ${name}`}
+                    accessibilityHint="Automatically tares when this slot is started. Write to machine to apply."
+                    accessibilityState={{checked: scaleEnabled, disabled: scaleLocked}}
+                    checked={scaleEnabled} disabled={scaleLocked} size="$3"
+                    backgroundColor={scaleEnabled ? palette.base : palette.control}
+                    onCheckedChange={enabled => { if (!scaleLocked) onSetScaleEnabled?.(enabled); }}>
+                    <Switch.Thumb backgroundColor={palette.text}/>
+                </Switch>
+            </XStack>}
             {!probe && status === "edited" && <YStack gap="$2">
                 <DotMatrixText fontSize={11} weight="bold" color={ink}>RECIPE UPDATED</DotMatrixText>
                 {!locked && <Button height="auto" minHeight={44} paddingVertical="$3"

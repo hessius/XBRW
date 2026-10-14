@@ -36,6 +36,7 @@ const mockPrompt = {
     rate: jest.fn(), annotate: jest.fn(), dismiss: jest.fn(), refresh: jest.fn()
 };
 const mockWrite = jest.fn();
+const mockSetScaleEnabled = jest.fn();
 const mockReset = jest.fn();
 const mockProbe = jest.fn();
 const mockLab = jest.fn();
@@ -97,6 +98,7 @@ jest.mock("@/hooks/useEasyModeSlots", () => ({
         record: mockRecord, error: null,
         available: mockAvailable, running: mockRunning, attempt: mockAttempt,
         resetAttempt: mockReset,
+        setScaleEnabled: mockSetScaleEnabled,
         assign: jest.fn(), write: mockWrite, recover: jest.fn(), cancel: jest.fn(), dismissWrite: mockStopWrite,
         writeTeaProbe: mockProbe, restoreTeaOriginal: mockRestore, observeTeaProbe: mockObserve,
         writeSlotLab: mockLab, sendRecoveryProbe: mockRecoveryProbe, clearRecoveryProbe: mockClearRecovery
@@ -117,6 +119,7 @@ beforeEach(() => {
     mockProbe.mockClear(); mockRestore.mockClear(); mockObserve.mockClear();
     mockLab.mockClear(); mockRecoveryProbe.mockClear(); mockClearRecovery.mockClear();
     mockStopWrite.mockClear();
+    mockSetScaleEnabled.mockClear();
     Object.defineProperty(global, "__DEV__", {value: dev});
     forgetLastMove();
 });
@@ -127,6 +130,14 @@ function changedDrafts() {
     mockRecord.drafts = [saved, saved, saved];
     mockAvailable = true;
 }
+
+it("wires per-slot scale changes to the live hook handler", async () => {
+    changedDrafts();
+    await renderWithProviders(<EasyModeScreen/>);
+    await fireEvent(screen.getByRole("switch", {name: "Scale for slot B"}), "onCheckedChange", true);
+    expect(mockSetScaleEnabled).toHaveBeenCalledWith(1, true);
+    expect(mockWrite).not.toHaveBeenCalled();
+});
 
 async function departure(action?: Action) {
     let event!: ReturnType<typeof mockRemove>;

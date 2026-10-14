@@ -84,6 +84,26 @@ it("notifies both screen and library subscribers after a durable assignment", as
     expect(editor.result.current.error).toBeNull();
 });
 
+it("exposes durable scale changes, success booleans and visible failures", async () => {
+    const sql = createTestDatabase();
+    const store = new SlotDatabase(sql);
+    store.assign("one", 0, snapshotRecipe(coffee()));
+    const editor = await renderHook(() => useEasyModeSlots(
+        {deviceId: "one", serial: null}, undefined, store
+    ));
+    const library = await renderHook(() => useSlotRecord("one", store));
+    await act(async () => { expect(editor.result.current.setScaleEnabled(1, true)).toBe(false); });
+    expect(editor.result.current.error).toMatch(/choose.*recipe/i);
+    await act(async () => { expect(editor.result.current.setScaleEnabled(0, true)).toBe(true); });
+    expect(editor.result.current.error).toBeNull();
+    expect(library.result.current.drafts[0]?.scaleEnabled).toBe(true);
+    expect(new SlotDatabase(sql).read("one").drafts[0]?.scaleEnabled).toBe(true);
+    sql.execSync("CREATE TRIGGER fail_scale BEFORE INSERT ON easy_mode_slots BEGIN SELECT RAISE(ABORT, 'disk full'); END;");
+    await act(async () => { expect(editor.result.current.setScaleEnabled(0, false)).toBe(false); });
+    expect(editor.result.current.error).toMatch(/disk full/i);
+    expect(editor.result.current.record.drafts[0]?.scaleEnabled).toBe(true);
+});
+
 it("context entry during recovery opens the frozen batch without proposing a replacement", () => {
     const store = new SlotDatabase(createTestDatabase());
     const recipe = coffee();
@@ -128,6 +148,9 @@ it("holds the screen lock across a duplicate tap while lease acquisition is pend
 
     expect(acquire).toHaveBeenCalledTimes(1);
     expect(editor.result.current.running).toBe(true);
+    await act(async () => { expect(editor.result.current.setScaleEnabled(0, true)).toBe(false); });
+    expect(editor.result.current.error).toMatch(/wait.*operation/i);
+    expect(store.read("one").drafts[0]?.scaleEnabled).toBeUndefined();
     await act(async () => {
         resolveLease({
             sendAndConfirm: async () => {},
@@ -168,6 +191,8 @@ it("exposes a dedicated tea probe action through the normal hook lock and suppli
     });
     expect(editor.result.current.attempt).toMatchObject({operation: "probe", status: "success"});
     expect(editor.result.current.record.experiment?.evidence.at(-1)?.kind).toBe("final");
+    await act(async () => { expect(editor.result.current.setScaleEnabled(0, true)).toBe(false); });
+    expect(editor.result.current.error).toMatch(/restore/i);
     let restoring!: Promise<void>;
     await act(async () => { restoring = editor.result.current.restoreTeaOriginal(); });
     await act(async () => {

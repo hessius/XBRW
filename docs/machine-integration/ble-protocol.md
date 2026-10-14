@@ -562,7 +562,10 @@ Command 11510, Type 2 packet:
 [slot_index (0–2)] [flags (1 byte)] [recipe_blob]
 ```
 **Flags byte:**
-- Bit 4 (0x10): Scale ON
+- Bit 4 (0x10): Scale ON. User-selectable per ordinary slot in XBRW++,
+  off by default (including historical snapshots without a scale setting).
+  The intended hardware behavior is automatic tare when that slot is started;
+  this new control still needs physical qualification, including tea.
 - Bits 1–3: cup/mode selector, **not grinder control**, recovered from the
   developer-distributed Android APK on 2026-10-10. XPod `0x00`, xDripper
   `0x02`, Other `0x04`, Tea `0x0C`.
@@ -835,7 +838,17 @@ and explains the temporary saving display instead of implying a permanent lock.
 #### Production integration (2026-10-11)
 
 Ordinary tea recipes now use their complete local stages with the official tea
-selector, scale off and no bypass. The existing tea limits apply: one to three
+selector and no bypass. Scale is off by default and can now be enabled per
+ordinary slot: coffee `0x02` becomes `0x12`; tea `0x0C`/`0x2C`/`0x4C`
+becomes `0x1C`/`0x3C`/`0x5C`. This changes only flag bit `0x10`, not the recipe
+blob, cup selector or grinder bytes. Scale choices are local drafts until
+WRITE TO MACHINE commits the three-slot set, survive recipe replacement and
+library updates, and are included in exact recovery frames. Fixed historical
+probes remain unchanged and do not offer the control. Scale ON/OFF and automatic
+tare on hardware, including tea, still need qualification; the earlier
+scale-off tea trial does not establish that behavior.
+
+The existing tea limits apply: one to three
 steeps, 1–90 ml each, 39–99 C and 0–360 seconds, with integer encoded fields.
 The grinder is always off, as in ordinary BLE tea brewing; the model's
 hidden coffee-grinder toggle is not a request to grind tea. Stages retain their
