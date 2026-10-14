@@ -252,3 +252,26 @@ remains owned by this session for its open PR, CI and physical qualification,
 remotely preserved at the dependency SHA above. No cleanup is approved.
 Final fetch/audit found no integrated task worktrees requiring cleanup;
 the only dirty tracked file was this execution record, committed at handoff.
+
+### Authorized patch alignment and stacked integration
+
+The user approved the card design in the development build, opening #220
+against #219's branch, one Copilot round, and merging #220 into that branch
+only. The single review completed with zero findings; native accessibility
+and hit-testing limitations remain. No second round is authorized.
+
+After Expo Doctor blocked CI, the user authorized SDK patch alignment.
+Current SDK metadata had advanced to nine mismatches: expo 57.0.29,
+expo-constants 57.0.22, expo-crypto 57.0.4, expo-dev-client 57.0.20,
+expo-linking 57.0.13, expo-router 57.0.27, expo-sharing 57.0.23,
+expo-splash-screen 57.0.10 and jest-expo 57.0.6.
+The manifests and lockfile follow these SDK 57 patch versions.
+Expo CLI encountered npm's EALLOWSCRIPTS restriction, so the documented
+manual manifest fallback and ordinary npm install were used.
+
+The user explicitly selected keeping app version 2.1.0 rather than a bump.
+Native binaries still need rebuilding for qualification. Because the
+appVersion runtime identifier is unchanged, do not publish these native
+dependency changes as an OTA to an older 2.1.0 binary.
+No build or deployment is authorized. #219 must remain open against develop;
+merging it into develop is expressly prohibited for this task.
