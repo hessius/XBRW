@@ -9,9 +9,12 @@ card's existing dot-matrix typography assignments.
 
 This is a presentation-only follow-up to beta-feedback PR #219. Do not add
 these changes to that already-reviewed PR or request another review round.
-Implementation starts from freshly fetched, pinned `origin/develop` after the
-required Scale ON changes are integrated. This document does not authorize
-integration, hardware writes, native builds or deployment.
+The task started from freshly fetched, pinned `origin/develop`. On 2026-10-14
+the user approved a local dependency merge of PR #219's exact head,
+`ba8c2ec7671677c4fc56de595a07616e78ee75bd`, into this separate layout branch.
+This lets implementation proceed before #219 is integrated without changing
+that PR. It does not authorize merging either task into develop, hardware
+writes, native builds or deployment.
 
 The design worktree is owned by this session:
 
