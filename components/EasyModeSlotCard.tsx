@@ -74,7 +74,8 @@ export default function EasyModeSlotCard({
             </View>}
             <XStack testID={`slot-${name}-footer`} alignItems="center" justifyContent="space-between"
                 gap="$3" flexWrap="wrap">
-                {snapshot !== null && !probe && <XStack alignItems="center" gap="$3" minHeight={44} flexWrap="wrap">
+                {snapshot !== null && !probe && <XStack testID={`slot-${name}-scale`} alignItems="center"
+                    gap="$3" minHeight={44} paddingVertical={10.5} flexWrap="wrap">
                     <DotMatrixText fontSize={11} weight="bold" color={ink}>
                         {scaleEnabled ? "SCALE ON" : "SCALE OFF"}
                     </DotMatrixText>
@@ -82,6 +83,8 @@ export default function EasyModeSlotCard({
                         accessibilityHint="Automatically tares when this slot is started. Write to machine to apply."
                         accessibilityState={{checked: scaleEnabled, disabled: scaleLocked}}
                         checked={scaleEnabled} disabled={scaleLocked} size="$3"
+                        // The 46 x 23pt switch needs only vertical slop; parent padding prevents clipping.
+                        hitSlop={{top: 10.5, bottom: 10.5, left: 0, right: 0}}
                         backgroundColor={scaleEnabled ? palette.base : palette.control}
                         onCheckedChange={enabled => { if (!scaleLocked) onSetScaleEnabled?.(enabled); }}>
                         <Switch.Thumb backgroundColor={palette.text}/>

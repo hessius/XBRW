@@ -3,6 +3,7 @@ import {act, fireEvent, screen, waitFor, within} from "@testing-library/react-na
 import {AccessibilityInfo, Dimensions, StyleSheet} from "react-native";
 import {renderWithProviders, SHEET_PRESS_TIMEOUT} from "@/test-utils/render";
 import EasyModeSlots from "@/components/EasyModeSlots";
+import EasyModeSlotCard from "@/components/EasyModeSlotCard";
 import {emptySlotRecord, prepareSet, snapshotRecipe} from "@/library/slots/slotModel";
 import {coffee} from "@/library/slots/__tests__/fixtures";
 import {SLOT_INTEGRATION_BLOCK, unavailableSlotPort} from "@/library/slots/slotWriter";
@@ -24,6 +25,68 @@ const props = () => ({
     record: emptySlotRecord(), recipes, deviceId: "one", connected: true,
     available: false, running: false, error: null,
     onAssign: jest.fn(), onWrite: jest.fn(), onRecover: jest.fn(), onCancel: jest.fn()
+});
+
+it.each([1, 3])("keeps the Scale hit target at least 44pt without changing its visual size at font scale %p",
+    async (fontScale) => {
+        const dimensions = jest.spyOn(Dimensions, "get").mockReturnValue({
+            width: 320, height: 568, scale: 2, fontScale
+        });
+        try {
+            const options = props();
+            options.record.drafts[0] = snapshotRecipe(recipes[0]);
+            await renderWithProviders(<EasyModeSlots {...options} onSetScaleEnabled={jest.fn()}/>);
+            const scale = screen.getByRole("switch", {name: "Scale for slot A"});
+            expect(scale).toHaveStyle({width: 46, height: 23, minHeight: 23});
+            expect(scale.props.hitSlop).toEqual({top: 10.5, bottom: 10.5, left: 0, right: 0});
+            const {width, height} = StyleSheet.flatten(scale.props.style);
+            const {top, bottom, left, right} = scale.props.hitSlop;
+            expect(width + left + right).toBeGreaterThanOrEqual(44);
+            expect(height + top + bottom).toBeGreaterThanOrEqual(44);
+            // RN clips hitSlop at the parent: padding keeps it inside even when the label wraps.
+            const group = screen.getByTestId("slot-A-scale");
+            expect(group).toHaveStyle({minHeight: 44, paddingTop: top, paddingBottom: bottom});
+            expect(group.props.onPress).toBeUndefined();
+            expect(group.props.onStartShouldSetResponder).toBeUndefined();
+            const footer = screen.getByTestId("slot-A-footer");
+            expect(footer).toHaveStyle({gap: 13, flexWrap: "wrap"});
+            expect(footer.props.onPress).toBeUndefined();
+            expect(within(footer).getByRole("button", {name: "Change slot A recipe"}).props.hitSlop)
+                .toBeUndefined();
+        } finally {
+            dimensions.mockRestore();
+        }
+    });
+
+it("presses Scale exactly once independently of CHANGE and retains checked and disabled behavior", async () => {
+    const snapshot = snapshotRecipe(recipes[0]);
+    const onSetScaleEnabled = jest.fn();
+    const onChange = jest.fn();
+    const cardProps = {
+        index: 0 as const, snapshot, needsWrite: true, status: null, recovery: false,
+        locked: false, updateProblem: null, onChange, onUpdate: jest.fn(), onSetScaleEnabled
+    };
+    const view = await renderWithProviders(<EasyModeSlotCard {...cardProps}/>);
+    const scale = () => screen.getByRole("switch", {name: "Scale for slot A"});
+    expect(scale()).not.toBeChecked();
+    await fireEvent.press(scale());
+    expect(onSetScaleEnabled).toHaveBeenCalledTimes(1);
+    expect(onSetScaleEnabled).toHaveBeenLastCalledWith(true);
+    expect(onChange).not.toHaveBeenCalled();
+    await fireEvent.press(screen.getByRole("button", {name: "Change slot A recipe"}));
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onSetScaleEnabled).toHaveBeenCalledTimes(1);
+    await view.rerender(<EasyModeSlotCard {...cardProps} snapshot={{...snapshot, scaleEnabled: true}}/>);
+    expect(scale()).toBeChecked();
+    expect(screen.getByText("SCALE ON")).toBeOnTheScreen();
+    await fireEvent.press(scale());
+    expect(onSetScaleEnabled).toHaveBeenCalledTimes(2);
+    expect(onSetScaleEnabled).toHaveBeenLastCalledWith(false);
+    await view.rerender(<EasyModeSlotCard {...cardProps} locked/>);
+    expect(scale()).toBeDisabled();
+    await fireEvent.press(scale());
+    expect(onSetScaleEnabled).toHaveBeenCalledTimes(2);
+    expect(onChange).toHaveBeenCalledTimes(1);
 });
 
 it("hides LAB while keeping retained original restoration on the normal screen", async () => {
