@@ -210,3 +210,33 @@ cause, documenting private crash-log collection.
 - [ ] Fetch `origin --no-prune` and run `npm run worktrees:check`. Retain this
   owned unmerged worktree for pending review and physical qualification; do
   not remove it without exact approval and preservation.
+
+## Execution record
+
+The approved implementation and investigation are complete in this task
+worktree. The checklist above preserves the original execution instructions.
+
+| Checkpoint | Commit | Outcome |
+| --- | --- | --- |
+| Bluetooth refusals | `0b802d1177ddacdd0ad63e730850b64ea5f4c34b` | Adapter refusals bypass both scan fallback and retry delays. |
+| Scale ON | `7019dffd527fbe04dd1b9ca2e8e29a713bbf9361` | Independent persisted slot setting, flags, controls and recovery preservation. |
+| History | `873c347d11c5448dce6c4ec8d9124fa4e9d20b4a` | Filters, five sort axes, persisted ordering, backup wiring and selection safety. |
+| Duplication investigation | `5949c0c5f68252c870fcc6585f4c65a33809ab2d` | No demonstrated crash cause; no speculative runtime change. Private reporting instructions in `docs/android-crash-report.md`. |
+
+Specification and quality reviews passed for the changes, followed by a
+read-only cross-feature integration review with no high-confidence introduced
+defects. Fresh combined verification passed 1,320 tests in 34 iOS/Android
+project suites, typecheck, repository lint (zero errors, 29 warnings), and
+whitespace checks. The full unrelated test suite and Expo Doctor were not run
+for this task.
+
+Android native duplication closure remains unresolved. Tester reproduction
+details and timestamped crash evidence are needed. Physical Bluetooth-off
+responsiveness, coffee/tea Scale ON/OFF automatic tare, native large-text and
+screen-reader behavior remain release qualification gaps.
+
+The task branch remains local-only, without an upstream or PR. Keep the clean
+unmerged worktree under this session's ownership for pending maintainer review,
+crash evidence and physical qualification. Its implementation recovery pointer
+is the last checkpoint above; the subsequent documentation commit records this
+handoff. No worktree or branch cleanup is authorized.
