@@ -129,7 +129,7 @@ describe("brew history batch selection", () => {
     it("enters selection mode from the action row", async () => {
         await renderWithProviders(<BrewHistory />);
 
-        await fireEvent.press(screen.getByLabelText("Select brews"));
+        await fireEvent.press(screen.getByLabelText("Edit brews"));
 
         expect(screen.getByText("0 brews selected")).toBeTruthy();
         expect(screen.getByLabelText("Send selected brews to Beanconqueror")).toBeDisabled();
@@ -140,9 +140,10 @@ describe("brew history batch selection", () => {
         "clears selection and handoff state when changing %s, with no hidden send or delete", async (label) => {
             mockBrews[0].outcome = "failed";
             await renderWithProviders(<BrewHistory />);
-            await fireEvent.press(screen.getByLabelText("Select brews"));
+            await fireEvent.press(screen.getByLabelText("Edit brews"));
             await fireEvent.press(screen.getByLabelText(/^Ethiopia Guji,/));
             const resets = mockReset.mock.calls.length;
+            await fireEvent.press(screen.getByTestId("history-filter-toggle"));
             await fireEvent.press(screen.getByLabelText(label));
             expect(mockReset).toHaveBeenCalledTimes(resets + 1);
             expect(screen.queryByText("1 brew selected")).toBeNull();
@@ -156,10 +157,10 @@ describe("brew history batch selection", () => {
     it.each(["Rating", "OLDEST"])(
         "clears selection and handoff state when changing sort through %s", async (label) => {
             await renderWithProviders(<BrewHistory />);
-            await fireEvent.press(screen.getByLabelText("Select brews"));
+            await fireEvent.press(screen.getByLabelText("Edit brews"));
             await fireEvent.press(screen.getByLabelText(/^Ethiopia Guji,/));
             const resets = mockReset.mock.calls.length;
-            await fireEvent.press(screen.getByLabelText("Sort brew history"));
+            await fireEvent.press(screen.getByLabelText(/^Sort brew history/));
             await waitFor(async () => {
                 await fireEvent.press(screen.getByRole("radio", {name: label}));
                 expect(mockReset).toHaveBeenCalledTimes(resets + 1);
@@ -169,15 +170,16 @@ describe("brew history batch selection", () => {
                 if (close) await fireEvent.press(close);
                 expect(screen.queryByRole("radio", {name: label})).toBeNull();
             }, {timeout: SHEET_PRESS_TIMEOUT});
-            expect(screen.getByLabelText("Select brews")).toBeTruthy();
+            expect(screen.getByLabelText("Edit brews")).toBeTruthy();
             expect(screen.queryByTestId("history-row-selected")).toBeNull();
         }
     );
 
     it("cancels a pending batch deletion when a queued filter change arrives", async () => {
         await renderWithProviders(<BrewHistory />);
+        await fireEvent.press(screen.getByTestId("history-filter-toggle"));
         const filter = screen.getByLabelText("Rated only");
-        await fireEvent.press(screen.getByLabelText("Select brews"));
+        await fireEvent.press(screen.getByLabelText("Edit brews"));
         await fireEvent.press(screen.getByLabelText(/^Ethiopia Guji,/));
         await fireEvent.press(screen.getByLabelText("Delete selected brews"));
         expect(screen.getByText("Delete 1 brew? This cannot be undone.")).toBeTruthy();
@@ -188,7 +190,7 @@ describe("brew history batch selection", () => {
             {timeout: SHEET_PRESS_TIMEOUT});
         expect(screen.getByText("NO MATCHING BREWS")).toBeTruthy();
         await fireEvent.press(screen.getByLabelText("Clear filters"));
-        await fireEvent.press(screen.getByLabelText("Select brews"));
+        await fireEvent.press(screen.getByLabelText("Edit brews"));
         expect(screen.getByText("0 brews selected")).toBeTruthy();
         expect(screen.getByLabelText("Send selected brews to Beanconqueror")).toBeDisabled();
         expect(screen.getByLabelText("Delete selected brews")).toBeDisabled();
@@ -198,8 +200,9 @@ describe("brew history batch selection", () => {
     it("sends only visible rated cups after filtering and starting a fresh selection", async () => {
         mockBrews[0].rating = 4;
         await renderWithProviders(<BrewHistory />);
+        await fireEvent.press(screen.getByTestId("history-filter-toggle"));
         await fireEvent.press(screen.getByLabelText("Rated only"));
-        await fireEvent.press(screen.getByLabelText("Select brews"));
+        await fireEvent.press(screen.getByLabelText("Edit brews"));
         await fireEvent.press(screen.getByLabelText(/^Ethiopia Guji,/));
         expect(screen.queryByLabelText(/^Kenya Nyeri,/)).toBeNull();
         await fireEvent.press(screen.getByLabelText("Send selected brews to Beanconqueror"));
@@ -209,7 +212,7 @@ describe("brew history batch selection", () => {
     it("toggles rows instead of opening the record screen", async () => {
         await renderWithProviders(<BrewHistory />);
 
-        await fireEvent.press(screen.getByLabelText("Select brews"));
+        await fireEvent.press(screen.getByLabelText("Edit brews"));
         await fireEvent.press(screen.getByLabelText(/^Ethiopia Guji,/));
 
         expect(mockPush).not.toHaveBeenCalled();
@@ -227,7 +230,7 @@ describe("brew history batch selection", () => {
 
         expect(content().props.accessibilityElementsHidden).toBe(false);
 
-        await fireEvent.press(screen.getByLabelText("Select brews"));
+        await fireEvent.press(screen.getByLabelText("Edit brews"));
         await fireEvent.press(screen.getByLabelText(/^Ethiopia Guji,/));
         await fireEvent.press(screen.getByLabelText("Delete selected brews"));
 
@@ -238,7 +241,7 @@ describe("brew history batch selection", () => {
     it("keeps send disabled with an empty selection", async () => {
         await renderWithProviders(<BrewHistory />);
 
-        await fireEvent.press(screen.getByLabelText("Select brews"));
+        await fireEvent.press(screen.getByLabelText("Edit brews"));
 
         expect(screen.getByLabelText("Send selected brews to Beanconqueror")).toBeDisabled();
         expect(mockFits).not.toHaveBeenCalled();
@@ -248,7 +251,7 @@ describe("brew history batch selection", () => {
         mockFits.mockReturnValue(false);
         await renderWithProviders(<BrewHistory />);
 
-        await fireEvent.press(screen.getByLabelText("Select brews"));
+        await fireEvent.press(screen.getByLabelText("Edit brews"));
         await fireEvent.press(screen.getByLabelText(/^Ethiopia Guji,/));
 
         expect(screen.getByText("Select fewer brews to send them together.")).toBeTruthy();
@@ -258,10 +261,10 @@ describe("brew history batch selection", () => {
     it("cancel clears the selection", async () => {
         await renderWithProviders(<BrewHistory />);
 
-        await fireEvent.press(screen.getByLabelText("Select brews"));
+        await fireEvent.press(screen.getByLabelText("Edit brews"));
         await fireEvent.press(screen.getByLabelText(/^Ethiopia Guji,/));
         await fireEvent.press(screen.getByLabelText("Cancel selection"));
-        await fireEvent.press(screen.getByLabelText("Select brews"));
+        await fireEvent.press(screen.getByLabelText("Edit brews"));
 
         expect(screen.getByText("0 brews selected")).toBeTruthy();
         expect(screen.getAllByTestId("history-row-unselected")).toHaveLength(2);
@@ -271,7 +274,7 @@ describe("brew history batch selection", () => {
         await renderWithProviders(<BrewHistory />);
 
         expect(screen.getAllByLabelText("Delete brew")).toHaveLength(2);
-        await fireEvent.press(screen.getByLabelText("Select brews"));
+        await fireEvent.press(screen.getByLabelText("Edit brews"));
 
         expect(screen.queryByLabelText("Delete brew")).toBeNull();
     });
@@ -281,7 +284,7 @@ describe("brew history batch selection", () => {
         mockBrews[1] = {...mockBrews[1], outcome: "cancelled"};
         await renderWithProviders(<BrewHistory />);
 
-        await fireEvent.press(screen.getByLabelText("Select brews"));
+        await fireEvent.press(screen.getByLabelText("Edit brews"));
         await fireEvent.press(screen.getByLabelText(/^Kenya Nyeri,/));
 
         expect(screen.getByTestId("selection-blocked")).toBeTruthy();
@@ -293,7 +296,7 @@ describe("brew history batch selection", () => {
         mockBrews[1] = {...mockBrews[1], outcome: "failed"};
         await renderWithProviders(<BrewHistory />);
 
-        await fireEvent.press(screen.getByLabelText("Select brews"));
+        await fireEvent.press(screen.getByLabelText("Edit brews"));
         await fireEvent.press(screen.getByLabelText(/^Kenya Nyeri,/));
 
         expect(screen.getByTestId("history-row-selected")).toBeTruthy();
@@ -305,7 +308,7 @@ describe("brew history batch selection", () => {
         mockBrews[0] = {...mockBrews[0], outcome: "endedOnMachine"};
         await renderWithProviders(<BrewHistory />);
 
-        await fireEvent.press(screen.getByLabelText("Select brews"));
+        await fireEvent.press(screen.getByLabelText("Edit brews"));
         await fireEvent.press(screen.getByLabelText(/^Ethiopia Guji,/));
 
         expect(screen.queryByTestId("selection-blocked")).toBeNull();
@@ -315,7 +318,7 @@ describe("brew history batch selection", () => {
     it("deletes every selected brew once the confirmation is accepted", async () => {
         await renderWithProviders(<BrewHistory />);
 
-        await fireEvent.press(screen.getByLabelText("Select brews"));
+        await fireEvent.press(screen.getByLabelText("Edit brews"));
         await fireEvent.press(screen.getByLabelText(/^Ethiopia Guji,/));
         await fireEvent.press(screen.getByLabelText(/^Kenya Nyeri,/));
         await fireEvent.press(screen.getByLabelText("Delete selected brews"));
@@ -326,13 +329,13 @@ describe("brew history batch selection", () => {
 
         expect(mockRemove).toHaveBeenCalledWith("a");
         expect(mockRemove).toHaveBeenCalledWith("b");
-        expect(screen.getByLabelText("Select brews")).toBeTruthy();
+        expect(screen.getByLabelText("Edit brews")).toBeTruthy();
     });
 
     it("deletes nothing when the confirmation is dismissed", async () => {
         await renderWithProviders(<BrewHistory />);
 
-        await fireEvent.press(screen.getByLabelText("Select brews"));
+        await fireEvent.press(screen.getByLabelText("Edit brews"));
         await fireEvent.press(screen.getByLabelText(/^Ethiopia Guji,/));
         await fireEvent.press(screen.getByLabelText("Delete selected brews"));
         await settleSheet();
@@ -345,7 +348,7 @@ describe("brew history batch selection", () => {
     it("keeps delete out of reach until something is selected", async () => {
         await renderWithProviders(<BrewHistory />);
 
-        await fireEvent.press(screen.getByLabelText("Select brews"));
+        await fireEvent.press(screen.getByLabelText("Edit brews"));
 
         expect(screen.getByLabelText("Delete selected brews")).toBeDisabled();
     });
@@ -354,7 +357,7 @@ describe("brew history batch selection", () => {
         sharedSettings().set("beanconquerorHandoff", false);
         await renderWithProviders(<BrewHistory />);
 
-        await fireEvent.press(screen.getByLabelText("Select brews"));
+        await fireEvent.press(screen.getByLabelText("Edit brews"));
 
         expect(screen.queryByLabelText("Send selected brews to Beanconqueror")).toBeNull();
         expect(screen.getByLabelText("Delete selected brews")).toBeTruthy();
@@ -364,7 +367,7 @@ describe("brew history batch selection", () => {
         mockBrews = sameRecipe();
         await renderWithProviders(<BrewHistory />);
 
-        await fireEvent.press(screen.getByLabelText("Select brews"));
+        await fireEvent.press(screen.getByLabelText("Edit brews"));
         expect(screen.getByLabelText("Compare the selected brews")).toBeDisabled();
 
         await fireEvent.press(screen.getAllByLabelText(/^Ethiopia Guji,/)[0]);
@@ -375,7 +378,7 @@ describe("brew history batch selection", () => {
         mockBrews = sameRecipe();
         await renderWithProviders(<BrewHistory />);
 
-        await fireEvent.press(screen.getByLabelText("Select brews"));
+        await fireEvent.press(screen.getByLabelText("Edit brews"));
         const rows = screen.getAllByLabelText(/^Ethiopia Guji,/);
         await fireEvent.press(rows[0]);
         await fireEvent.press(rows[1]);
@@ -387,7 +390,7 @@ describe("brew history batch selection", () => {
     it("says why two brews of different recipes cannot be compared", async () => {
         await renderWithProviders(<BrewHistory />);
 
-        await fireEvent.press(screen.getByLabelText("Select brews"));
+        await fireEvent.press(screen.getByLabelText("Edit brews"));
         await fireEvent.press(screen.getByLabelText(/^Ethiopia Guji,/));
         await fireEvent.press(screen.getByLabelText(/^Kenya Nyeri,/));
 
@@ -399,7 +402,7 @@ describe("brew history batch selection", () => {
         mockBrews = sameRecipe();
         await renderWithProviders(<BrewHistory />);
 
-        await fireEvent.press(screen.getByLabelText("Select brews"));
+        await fireEvent.press(screen.getByLabelText("Edit brews"));
         const rows = screen.getAllByLabelText(/^Ethiopia Guji,/);
         // Ticked oldest first, against a push that must come out newest
         // first, so this pins the sort rather than the order of ticking.
@@ -417,12 +420,12 @@ describe("brew history batch selection", () => {
         mockBrews = sameRecipe();
         await renderWithProviders(<BrewHistory />);
 
-        await fireEvent.press(screen.getByLabelText("Select brews"));
+        await fireEvent.press(screen.getByLabelText("Edit brews"));
         const rows = screen.getAllByLabelText(/^Ethiopia Guji,/);
         await fireEvent.press(rows[0]);
         await fireEvent.press(rows[1]);
         await fireEvent.press(screen.getByLabelText("Compare the selected brews"));
 
-        expect(screen.getByLabelText("Select brews")).toBeTruthy();
+        expect(screen.getByLabelText("Edit brews")).toBeTruthy();
     });
 });

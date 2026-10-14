@@ -20,7 +20,7 @@ found, tuned or were sent can be put on a card and brewed.
 
 ### Brew history
 
-History opens with all records, newest first. **Hide unsuccessful** keeps
+History uses the same sort, filter and edit chips as the library. History opens with all records, newest first; the filter chip opens a row with **Hide unsuccessful** keeps
 completed and machine-ended cups, including hand-logged cups; **Rated only**
 keeps cups with a rating. The filters work independently or together, within
 the recipe if you opened its history. If nothing matches, **Clear filters**

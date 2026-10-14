@@ -119,7 +119,6 @@ function SelectionActionRow({
     busy,
     canSend,
     comparable,
-    onSelect,
     onSend,
     onCompare,
     onDelete,
@@ -133,30 +132,12 @@ function SelectionActionRow({
     busy: boolean;
     canSend: boolean;
     comparable: boolean;
-    onSelect: () => void;
     onSend: () => void;
     onCompare: () => void;
     onDelete: () => void;
     onCancel: () => void;
 }) {
-    if (!selecting) {
-        return (
-            <XStack paddingHorizontal="$4" paddingVertical="$2" justifyContent="flex-end"
-                    borderBottomWidth={1} borderColor={palette.line}>
-                <Button
-                    accessibilityRole="button"
-                    accessibilityLabel="Select brews"
-                    chromeless
-                    size="$2"
-                    onPress={onSelect}>
-                    <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.2}
-                                   color={palette.dim}>
-                        SELECT
-                    </DotMatrixText>
-                </Button>
-            </XStack>
-        );
-    }
+    if (!selecting) return null;
 
     const tooLarge = count > 0 && !fits;
 
@@ -474,9 +455,12 @@ export default function BrewHistory() {
                 <BrewHistoryControls query={historyQuery.query}
                     onToggleHideUnsuccessful={() => handleQueryChange(historyQuery.toggleHideUnsuccessful)}
                     onToggleRatedOnly={() => handleQueryChange(historyQuery.toggleRatedOnly)}
+                    editing={selecting}
+                    onToggleEdit={filtered.length > 0 || selecting
+                        ? (selecting ? handleSelectCancel : handleSelectStart) : undefined}
                     onOpenSort={() => setSortOpen(true)}/>
                 {/* Selection does not depend on the handoff gate, which hides Send alone. */}
-                {filtered.length > 0 && <SelectionActionRow
+                {selecting && <SelectionActionRow
                     selecting={selecting}
                     count={visibleSelectedIds.length}
                     blocked={blockedCount}
@@ -484,7 +468,6 @@ export default function BrewHistory() {
                     busy={handoff.busy}
                     canSend={handoffEnabled}
                     comparable={comparable}
-                    onSelect={handleSelectStart}
                     onSend={() => void handleSelectionSend()}
                     onCompare={handleSelectionCompare}
                     onDelete={() => setConfirmingBatchDelete(true)}

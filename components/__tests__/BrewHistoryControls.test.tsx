@@ -10,22 +10,41 @@ const query: HistoryQuery = {
 };
 
 describe("BrewHistoryControls", () => {
-    it("renders two independent checked chips and a named sort opener", async () => {
+    it("shows the applied count, and its filter row holds two independent checked chips", async () => {
         const hide = jest.fn();
         const rated = jest.fn();
-        const sort = jest.fn();
-        await renderWithProviders(<BrewHistoryControls query={{...query, ratedOnly: true}}
-            onToggleHideUnsuccessful={hide} onToggleRatedOnly={rated} onOpenSort={sort}/>);
+        await renderWithProviders(<BrewHistoryControls query={{...query, ratedOnly: true}} editing={false}
+            onToggleHideUnsuccessful={hide} onToggleRatedOnly={rated} onOpenSort={jest.fn()}/>);
+        expect(screen.queryByTestId("history-filter-row")).toBeNull();
+        expect(screen.getByLabelText("1 filter applied. Tap to show the filter row.")).toBeTruthy();
+        await fireEvent.press(screen.getByTestId("history-filter-toggle"));
         expect(screen.getByRole("checkbox", {name: "Hide unsuccessful"})).not.toBeChecked();
         expect(screen.getByRole("checkbox", {name: "Rated only"})).toBeChecked();
         await fireEvent.press(screen.getByLabelText("Hide unsuccessful"));
         expect(hide).toHaveBeenCalledTimes(1);
         expect(rated).not.toHaveBeenCalled();
-        await fireEvent.press(screen.getByLabelText("Rated only"));
-        await fireEvent.press(screen.getByLabelText("Sort brew history"));
-        expect(rated).toHaveBeenCalledTimes(1);
+    });
+
+    it("names the sort once it leaves the default and opens the sheet", async () => {
+        const sort = jest.fn();
+        await renderWithProviders(<BrewHistoryControls query={{...query, sort: "dose", direction: "asc"}}
+            editing={false} onToggleHideUnsuccessful={jest.fn()} onToggleRatedOnly={jest.fn()}
+            onOpenSort={sort}/>);
+        await fireEvent.press(screen.getByLabelText("Sort brew history. Dose, lowest first."));
         expect(sort).toHaveBeenCalledTimes(1);
-        expect(screen.getByText(/DATE/)).toBeTruthy();
+        expect(screen.getByText(/DOSE/)).toBeTruthy();
+    });
+
+    it("offers the edit chip only when there is something to edit", async () => {
+        const edit = jest.fn();
+        const {rerender} = await renderWithProviders(<BrewHistoryControls query={query} editing={false}
+            onToggleEdit={edit} onToggleHideUnsuccessful={jest.fn()} onToggleRatedOnly={jest.fn()}
+            onOpenSort={jest.fn()}/>);
+        await fireEvent.press(screen.getByLabelText("Edit brews"));
+        expect(edit).toHaveBeenCalledTimes(1);
+        await rerender(<BrewHistoryControls query={query} editing={false}
+            onToggleHideUnsuccessful={jest.fn()} onToggleRatedOnly={jest.fn()} onOpenSort={jest.fn()}/>);
+        expect(screen.queryByLabelText("Edit brews")).toBeNull();
     });
 
     it("offers exactly five axes, both directions, and scrollable sheet content", async () => {

@@ -757,14 +757,13 @@ is outside the screen-covered accessibility subtree.
 | `brewHistory.title` | `app/brewHistory.tsx:116` | Screen header title. | `Brew history` |
 | `brewHistory.empty.title` | `app/brewHistory.tsx:154` | Doto empty-state heading. | `NO BREWS YET` |
 | `brewHistory.empty.body` | `app/brewHistory.tsx:157` | Empty-state sub-line. | `Brew a recipe and it will appear here.` |
-| `brewHistory.filters.unsuccessful` | `components/BrewHistoryControls.tsx` | Independent filter chip; announces checked state. | `HIDE UNSUCCESSFUL` (a11y: `Hide unsuccessful`) |
+| `brewHistory.filters.unsuccessful` | `components/BrewHistoryControls.tsx` | Chip in the filter row (opened by the filter chip, which always shows the applied count); announces checked state. | `HIDE UNSUCCESSFUL` (a11y: `Hide unsuccessful`) |
 | `brewHistory.filters.rated` | `components/BrewHistoryControls.tsx` | Independent rated-cup filter chip. | `RATED ONLY` (a11y: `Rated only`) |
-| `brewHistory.sort` | `components/BrewHistoryControls.tsx` | Opener names the current axis and direction; sheet has five radio rows and a direction pair. | `${axis} / ${direction}` (a11y: `Sort brew history`) |
+| `brewHistory.sort` | `components/BrewHistoryControls.tsx` | Icon chip, labelled with the axis only once off the default (date, newest); sheet has five radio rows and a direction pair. | `${axis}` (a11y: `Sort brew history. ${axis}, ${direction} first.`) |
 | `brewHistory.filteredEmpty.title` | `app/brewHistory.tsx` | Scoped history exists but the active filters match nothing. | `NO MATCHING BREWS` |
 | `brewHistory.filteredEmpty.body` | `app/brewHistory.tsx` | Filtered empty-state sub-line. | `No brews match these filters.` |
 | `brewHistory.filters.clear` | `app/brewHistory.tsx` | Empty-result recovery; leaves sort and recipe scope intact. | `Clear filters` |
-| `brewHistory.selection.select.a11y` | `app/brewHistory.tsx` (a11y) | (a11y) Enters selection mode, for deleting several brews or handing them to Beanconqueror. | `Select brews` |
-| `brewHistory.selection.select` | `app/brewHistory.tsx` | Doto action-row label. Always shown: selecting several brews to delete them does not depend on the handoff. | `SELECT` |
+| `brewHistory.selection.select.a11y` | `app/brewHistory.tsx` (a11y) | (a11y) Icon-only edit chip on the trailing edge, as on Home. Enters selection mode, for deleting several brews or handing them to Beanconqueror, and reads `Done editing` while selecting. | `Edit brews` |
 | `brewHistory.selection.count.none` | `app/brewHistory.tsx` | Selection-mode count with nothing selected. | `0 brews selected` |
 | `brewHistory.selection.count.one` | `app/brewHistory.tsx` | Selection-mode count with one selected brew. | `1 brew selected` |
 | `brewHistory.selection.count.many` | `app/brewHistory.tsx` | Selection-mode count. `${count}` is the number of selected brews. | `${count} brews selected` |

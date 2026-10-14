@@ -123,13 +123,14 @@ describe("brew history", () => {
     it("keeps the scoped heading, controls and visible count when filters match nothing", async () => {
         mockFilter = "uuid-2";
         await renderWithProviders(<BrewHistory />);
+        await fireEvent.press(screen.getByTestId("history-filter-toggle"));
         await fireEvent.press(screen.getByLabelText("Rated only"));
         expect(screen.getByText("NO MATCHING BREWS")).toBeTruthy();
         expect(screen.getByTestId("history-header-recipe")).toHaveTextContent("Kenya Nyeri");
         // The shared title omits its superscript for zero.
         expect(screen.queryByTestId("screen-title-count")).toBeNull();
         expect(screen.getByLabelText("Rated only")).toBeChecked();
-        await fireEvent.press(screen.getByLabelText("Sort brew history"));
+        await fireEvent.press(screen.getByLabelText(/^Sort brew history/));
         expect(screen.getByRole("radio", {name: "Grind"})).toBeTruthy();
         await pressOnSheet("Close", () =>
             screen.queryByRole("radio", {name: "Grind"}) === null);
@@ -146,6 +147,7 @@ describe("brew history", () => {
             {...makeBrews()[1], outcome: "endedOnMachine"}
         ];
         await renderWithProviders(<BrewHistory />);
+        await fireEvent.press(screen.getByTestId("history-filter-toggle"));
         await fireEvent.press(screen.getByLabelText("Hide unsuccessful"));
         expect(screen.queryByLabelText(/^Failed,/)).toBeNull();
         expect(screen.getByLabelText(/^Kenya Nyeri,/)).toBeTruthy();
@@ -162,11 +164,11 @@ describe("brew history", () => {
         const names = () => screen.getAllByLabelText(/^(Ethiopia Guji|Kenya Nyeri),/)
             .map((node) => node.props.accessibilityLabel.split(",")[0]);
         expect(names()).toEqual(["Ethiopia Guji", "Kenya Nyeri"]);
-        await fireEvent.press(screen.getByLabelText("Sort brew history"));
+        await fireEvent.press(screen.getByLabelText(/^Sort brew history/));
         await pressOnSheet("Dose", () => sharedSettings().get("brewHistorySort") === "dose");
         await pressOnSheet("Close", () => screen.queryByRole("radio", {name: "Dose"}) === null);
         expect(names()).toEqual(["Kenya Nyeri", "Ethiopia Guji"]);
-        await fireEvent.press(screen.getByLabelText("Sort brew history"));
+        await fireEvent.press(screen.getByLabelText(/^Sort brew history/));
         await pressOnSheet("HIGHEST", () =>
             sharedSettings().get("brewHistorySortDirection") === "desc");
         await pressOnSheet("Close", () => screen.queryByRole("radio", {name: "Dose"}) === null);
@@ -177,7 +179,7 @@ describe("brew history", () => {
         mockBrews = [];
         await renderWithProviders(<BrewHistory />);
         expect(screen.getByText("NO BREWS YET")).toBeTruthy();
-        await fireEvent.press(screen.getByLabelText("Sort brew history"));
+        await fireEvent.press(screen.getByLabelText(/^Sort brew history/));
         const content = screen.getByTestId("brew-history-content", {includeHiddenElements: true});
         expect(content.props.accessibilityElementsHidden).toBe(true);
         expect(content.props.importantForAccessibility).toBe("no-hide-descendants");
@@ -267,8 +269,8 @@ describe("brew history", () => {
         // Selecting several brews to delete them stands on its own, so the
         // Labs gate hides the Send button rather than the whole row.
         const {queryByLabelText, getByLabelText} = await renderWithProviders(<BrewHistory />);
-        expect(getByLabelText("Select brews")).toBeTruthy();
-        await fireEvent.press(getByLabelText("Select brews"));
+        expect(getByLabelText("Edit brews")).toBeTruthy();
+        await fireEvent.press(getByLabelText("Edit brews"));
         expect(queryByLabelText("Send selected brews to Beanconqueror")).toBeNull();
     });
 
