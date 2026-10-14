@@ -36,7 +36,7 @@ a presentation-only task.
 **Files:** Modify `components/__tests__/EasyModeSlots.test.tsx` and
 `app/__tests__/easyMode.test.tsx`.
 
-- [ ] **Step 1: Replace the compact-watermark test with rendered band/footer assertions.**
+- [x] **Step 1: Replace the compact-watermark test with rendered band/footer assertions.**
 
 Use the existing assigned-three-slots setup and `renderWithProviders`:
 
@@ -91,7 +91,7 @@ expect(screen.queryByText("NOT WRITTEN")).toBeNull();
 expect(screen.getByText("0 CHANGES")).toBeOnTheScreen();
 ```
 
-- [ ] **Step 2: Run red tests.**
+- [x] **Step 2: Run red tests.**
 
 Run `npx jest --runTestsByPath components/__tests__/EasyModeSlots.test.tsx app/__tests__/easyMode.test.tsx --maxWorkers=2 --silent`.
 Expected failure: old matching badge and missing profile-band/footer IDs.
@@ -100,7 +100,7 @@ Expected failure: old matching badge and missing profile-band/footer IDs.
 
 **Files:** Modify `components/EasyModeSlotCard.tsx`.
 
-- [ ] **Step 1: Add event-driven profile sizing.**
+- [x] **Step 1: Add event-driven profile sizing.**
 
 Import `useState` and `PROFILE_BLEED`. Inside the component:
 
@@ -125,14 +125,14 @@ Delete the absolute watermark. After the name and figures, render:
 The geometry fills the band. The outer SVG extends beyond the clipped band
 by the half-stroke on each side, with outer width `profileWidth + 2 * PROFILE_BLEED`.
 
-- [ ] **Step 2: Replace unconditional matching status with the existing pending predicate.**
+- [x] **Step 2: Replace unconditional matching status with the existing pending predicate.**
 
 ```tsx
 {snapshot !== null && !recovery && needsWrite && <DotMatrixText fontSize={11} weight="bold"
     color={ink}>NOT WRITTEN</DotMatrixText>}
 ```
 
-- [ ] **Step 3: Put figures alone above the profile and combine controls below it.**
+- [x] **Step 3: Put figures alone above the profile and combine controls below it.**
 
 Retain the current figures renderer verbatim inside `slot-${name}-details`.
 Move the existing CHANGE/CHOOSE RECIPE button verbatim into:
@@ -169,12 +169,12 @@ Preserve 24/11/16 pt renderer assignments, all control
 labels/hints, lock handling, changeRef and edited/removed sections.
 No total height or root clipping: only the decorative band is clipped.
 
-- [ ] **Step 4: Run targeted green tests and typecheck.**
+- [x] **Step 4: Run targeted green tests and typecheck.**
 
 Run the Task 1 command, then `npm run typecheck`.
 Expected: both Jest projects pass and tsc exits zero.
 
-- [ ] **Step 5: Commit the coherent presentation change.**
+- [x] **Step 5: Commit the coherent presentation change.**
 
 ```bash
 git add components/EasyModeSlotCard.tsx components/__tests__/EasyModeSlots.test.tsx app/__tests__/easyMode.test.tsx
@@ -183,7 +183,7 @@ git commit -m "feat: refine Easy Mode slot card composition" -m "Co-authored-by:
 
 ### Task 3: Verify unchanged behavior and preserve handoff
 
-- [ ] **Step 1: Run focused control, persistence and recovery regression coverage.**
+- [x] **Step 1: Run focused control, persistence and recovery regression coverage.**
 
 ```bash
 npx jest --runTestsByPath components/__tests__/EasyModeSlots.test.tsx app/__tests__/easyMode.test.tsx hooks/__tests__/useEasyModeSlots.test.ts library/slots/__tests__/slotModel.test.ts library/slots/__tests__/SlotDatabase.test.ts library/slots/__tests__/slotWriter.test.ts library/slots/__tests__/teaSlotProbe.test.ts --maxWorkers=2 --silent
@@ -195,7 +195,7 @@ git diff --check
 Expected: both-platform tests and typecheck pass; lint has no errors.
 Do not change wire expectations to accommodate layout.
 
-- [ ] **Step 2: Record native gaps honestly.**
+- [x] **Step 2: Record native gaps honestly.**
 
 Jest verifies measurable band widths, intrinsic/wrapping styles and control
 reachability contracts, not actual native fit. Native checks still cover
@@ -203,10 +203,52 @@ reachability contracts, not actual native fit. Native checks still cover
 edited/removed notices and VoiceOver/TalkBack. Do not claim automatic tare
 or Bluetooth qualification from UI tests. No new native build is authorized.
 
-- [ ] **Step 3: Fetch/audit and preserve exact state.**
+- [x] **Step 3: Fetch/audit and preserve exact state.**
 
 Run `git fetch origin --no-prune && npm run worktrees:check`.
 Record base/head, clean/dirty state and dependency SHA in this plan.
 Retain this session-owned worktree for the future layout PR and native review;
 do not delete it without exact-path approval and verified backup.
 Until branch pushing is authorized, report local-only preservation honestly.
+
+## Execution and handoff record
+
+Implemented at `37ddeb21f7fa1a3e1d33ae8004b77f7dba656567`.
+Specification review found one concrete accessibility gap: the passive
+44 pt Scale row did not expand the actual switch hit area. Corrected at
+`3873e3141d642058ba21e5deaf59297518008b60` with vertical hitSlop and
+matching containing padding. The visual switch remains 46 by 23 pt; its
+effective target is 46 by 44 pt, without horizontal expansion into CHANGE.
+The narrow specification recheck and final quality review both passed.
+
+TDD baseline: 254 tests passed. Red: 12 failed for the new composition/status
+requirements. Initial green: 256 passed. The additional target regression
+failed on both platforms before the correction and passed afterwards.
+Controller verification: 542 tests passed in 14 suites across both platforms;
+typecheck passed; repository lint had zero errors and 29 existing warnings;
+whitespace checks passed.
+
+Native visual fit, scaled-text wrapping, VoiceOver/TalkBack and actual
+native hit-testing remain unverified. No native build or hardware command
+was performed. Automatic tare and Bluetooth physical qualification remain
+PR #219's separate gates.
+
+PR #219 stayed open and unchanged at
+`ba8c2ec7671677c4fc56de595a07616e78ee75bd`; its single Copilot round
+reported zero findings. Its completed CI failed only at Expo Doctor:
+the current SDK metadata expects newer patch versions of expo, expo-crypto,
+expo-dev-client, expo-router, expo-sharing, expo-splash-screen and jest-expo.
+This existing dependency-refresh issue is not changed in the layout task.
+It remains a merge blocker, not evidence of a layout regression.
+
+Preservation: this session owns the retained layout worktree at
+`/Users/jesperhessius/Dev/XBRW-easy-mode-layout-20261014`, branch
+`docs/easy-mode-card-layout-20261014`, integration base
+`2cd68f58b0389ac0be98899fc952c8877fcf0747`. Code recovery pointer:
+`3873e3141d642058ba21e5deaf59297518008b60`. Work remains local-only
+with no upstream or layout PR; retained for native review and an authorized
+future layout PR after #219's integration. The separate beta-feedback worktree
+remains owned by this session for its open PR, CI and physical qualification,
+remotely preserved at the dependency SHA above. No cleanup is approved.
+Final fetch/audit found no integrated task worktrees requiring cleanup;
+the only dirty tracked file was this execution record, committed at handoff.
