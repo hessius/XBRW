@@ -1,5 +1,6 @@
 import BrewDatabase, {ensureBrewTables} from "@/library/BrewDatabase";
 import type {BrewRecord, BrewSample} from "@/library/brew/BrewRecord";
+import {encodeSamples, encodeText} from "@/library/brew/traceCodec";
 import {createTestDatabase, type FakeSQLiteDatabase} from "@/test-utils/sqlite";
 
 function database() {
@@ -93,5 +94,185 @@ describe("BrewDatabase trace storage", () => {
         expect(raw.getAllSync("SELECT * FROM brew_samples;")).toEqual([]);
         expect(raw.getAllSync("SELECT * FROM brew_frames;")).toEqual([]);
         expect(store.get(record.id)?.hasStream).toBe(false);
+    });
+});
+
+const sampleBytes = encodeSamples(samples).length;
+const frameBytes = encodeText(frames).length;
+const traceBytes = sampleBytes + frameBytes;
+
+function storedBytes(raw: FakeSQLiteDatabase): number {
+    return (raw.getFirstSync(`
+        SELECT (SELECT COALESCE(SUM(length(stream)), 0) FROM brew_samples)
+             + (SELECT COALESCE(SUM(length(frames)), 0) FROM brew_frames) AS bytes;
+    `) as {bytes: number}).bytes;
+}
+
+function seedTrace(store: BrewDatabase, id: string, extra: Partial<BrewRecord> = {}) {
+    store.insert({...record, id, ...extra}, samples, frames);
+}
+
+describe("BrewDatabase budgeted trace sweep", () => {
+    it("keeps everything under budget and at the exact byte boundary", () => {
+        const {raw, store} = database();
+        seedTrace(store, "one");
+        seedTrace(store, "two");
+        store.sweepBytes(traceBytes * 2 + 1);
+        store.sweepBytes(traceBytes * 2);
+        expect(storedBytes(raw)).toBe(traceBytes * 2);
+        expect(store.all().every((brew) => brew.hasStream)).toBe(true);
+    });
+
+    it("counts frames as well as samples and stops as soon as the total fits", () => {
+        const {raw, store} = database();
+        seedTrace(store, "old", {startedAt: 1});
+        seedTrace(store, "middle", {startedAt: 2});
+        seedTrace(store, "new", {startedAt: 3});
+        store.sweepBytes(traceBytes * 3 - 1);
+        expect(storedBytes(raw)).toBe(traceBytes * 2);
+        expect(store.get("old")?.hasStream).toBe(false);
+        expect(store.samples("old")).toEqual([]);
+        expect(store.frames("old")).toBe("");
+        expect(raw.getAllSync("SELECT brewId FROM brew_samples ORDER BY brewId;")).toEqual([
+            {brewId: "middle"}, {brewId: "new"}
+        ]);
+        expect(raw.getAllSync("SELECT brewId FROM brew_frames ORDER BY brewId;")).toEqual([
+            {brewId: "middle"}, {brewId: "new"}
+        ]);
+        expect(store.samples("middle")).toEqual(samples);
+        expect(store.samples("new")).toEqual(samples);
+        expect(store.all()).toHaveLength(3);
+    });
+
+    it("drops tier 3, then tier 2, then rated or noted traces, oldest first in each", () => {
+        const {raw, store} = database();
+        seedTrace(store, "rated", {startedAt: 1, rating: 5});
+        seedTrace(store, "noted", {startedAt: 2, note: "Worth repeating"});
+        seedTrace(store, "old-pinned", {startedAt: 3, pinned: true, note: "   "});
+        seedTrace(store, "old", {startedAt: 4});
+        seedTrace(store, "recent", {startedAt: 5});
+        seedTrace(store, "newest", {startedAt: 6});
+        const before = store.all();
+        const order = ["old-pinned", "old", "recent", "newest", "rated", "noted"];
+        order.forEach((id, index) => {
+            const remaining = order.length - index - 1;
+            store.sweepBytes(remaining === 0 ? 1 : traceBytes * remaining);
+            expect(store.get(id)?.hasStream).toBe(false);
+            expect(store.all().filter((brew) => brew.hasStream).map((brew) => brew.id).sort())
+                .toEqual(order.slice(index + 1).sort());
+            expect(storedBytes(raw)).toBe(traceBytes * remaining);
+        });
+        expect(store.all()).toEqual(before.map((brew) => ({...brew, hasStream: false})));
+    });
+
+    it("protects a single-brew recipe ahead of the old traces of a 20-brew recipe", () => {
+        const {store} = database();
+        // Identical names must not collapse distinct recipe UUIDs into one tier.
+        seedTrace(store, "single", {recipeUuid: "single", startedAt: 1});
+        for (let i = 1; i <= 20; i += 1) {
+            seedTrace(store, `many-${i}`, {recipeUuid: "many", startedAt: i + 1});
+        }
+        store.sweepBytes(traceBytes * 3);
+        expect(store.all().filter((brew) => brew.hasStream).map((brew) => brew.id))
+            .toEqual(["many-20", "many-19", "single"]);
+        expect(store.all()).toHaveLength(21);
+    });
+
+    it("ranks recipe recency by summaries even when the newer traces are gone", () => {
+        const {store} = database();
+        seedTrace(store, "single", {recipeUuid: "single", startedAt: 1});
+        seedTrace(store, "old", {recipeUuid: "many", startedAt: 2});
+        store.insert({...record, id: "summary-1", recipeUuid: "many", startedAt: 3}, []);
+        store.insert({...record, id: "summary-2", recipeUuid: "many", startedAt: 4}, []);
+        store.sweepBytes(traceBytes);
+        expect(store.get("single")?.hasStream).toBe(true);
+        expect(store.get("old")?.hasStream).toBe(false);
+        expect(store.all()).toHaveLength(4);
+    });
+
+    it("converts MB to bytes for the public sweep", () => {
+        const {store} = database();
+        seedTrace(store, "old", {startedAt: 1});
+        seedTrace(store, "new", {startedAt: 2});
+        store.sweep(traceBytes / (1024 * 1024));
+        expect(store.get("old")?.hasStream).toBe(false);
+        expect(store.get("new")?.hasStream).toBe(true);
+    });
+
+    it("treats zero as Unlimited, including in the byte helper", () => {
+        const {raw, store} = database();
+        seedTrace(store, "one");
+        store.sweep(0);
+        store.sweepBytes(0);
+        expect(store.get("one")?.hasStream).toBe(true);
+        expect(storedBytes(raw)).toBe(traceBytes);
+    });
+
+    it.each([Number.NaN, -1, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
+        "does not delete traces for an invalid budget %p", (budget) => {
+            const {raw, store} = database();
+            seedTrace(store, "one");
+            store.sweep(budget);
+            store.sweepBytes(budget);
+            expect(store.get("one")?.hasStream).toBe(true);
+            expect(storedBytes(raw)).toBe(traceBytes);
+        }
+    );
+
+    it("compresses legacy samples and frames before measuring the budget", () => {
+        const {raw, store} = database();
+        const legacySamples = Array.from({length: 1000}, (_, i) => ({
+            at: i * 237, water: i * 0.123456789, cup: i * 0.0987654321, pour: 1
+        }));
+        const legacyFrames = Array.from({length: 256}, (_, i) => `${i} RX 40515`).join("\n");
+        seedTrace(store, "legacy");
+        raw.runSync("UPDATE brew_samples SET stream = ? WHERE brewId = ?;",
+            [JSON.stringify(legacySamples), "legacy"]);
+        raw.runSync("UPDATE brew_frames SET frames = ? WHERE brewId = ?;",
+            [legacyFrames, "legacy"]);
+        const budget = encodeSamples(legacySamples).length + encodeText(legacyFrames).length;
+        expect(storedBytes(raw)).toBeGreaterThan(budget);
+        store.sweepBytes(budget);
+        expect(storedBytes(raw)).toBe(budget);
+        expect(store.get("legacy")?.hasStream).toBe(true);
+        expect(store.samples("legacy")).toEqual(legacySamples);
+        expect(store.frames("legacy")).toBe(legacyFrames);
+        expect(raw.getFirstSync("SELECT stream FROM brew_samples WHERE brewId = 'legacy';"))
+            .toEqual({stream: expect.stringMatching(/^z1:/)});
+        expect(raw.getFirstSync("SELECT frames FROM brew_frames WHERE brewId = 'legacy';"))
+            .toEqual({frames: expect.stringMatching(/^z1:/)});
+    });
+
+    it("compresses more than two batches of each legacy table even with Unlimited", () => {
+        const {raw, store} = database();
+        seedTrace(store, "compressed");
+        for (let i = 0; i < 101; i += 1) {
+            const id = `legacy-${i}`;
+            seedTrace(store, id);
+            raw.runSync("UPDATE brew_samples SET stream = ? WHERE brewId = ?;",
+                [JSON.stringify(samples), id]);
+            raw.runSync("UPDATE brew_frames SET frames = ? WHERE brewId = ?;", [frames, id]);
+        }
+        const transactions = jest.spyOn(raw, "withTransactionSync");
+        store.sweep(0);
+        expect(transactions.mock.calls.length).toBeGreaterThanOrEqual(6);
+        expect(raw.getAllSync("SELECT brewId FROM brew_samples WHERE stream NOT LIKE 'z1:%';"))
+            .toEqual([]);
+        expect(raw.getAllSync("SELECT brewId FROM brew_frames WHERE frames NOT LIKE 'z1:%';"))
+            .toEqual([]);
+        expect(store.samples("legacy-100")).toEqual(samples);
+        expect(store.frames("legacy-100")).toBe(frames);
+        expect(store.samples("compressed")).toEqual(samples);
+        expect(store.all().filter((brew) => brew.hasStream)).toHaveLength(102);
+        const writes = jest.spyOn(raw, "runSync");
+        store.sweep(0);
+        expect(writes).not.toHaveBeenCalled();
+    });
+
+    it("handles an empty history", () => {
+        const {raw, store} = database();
+        store.sweepBytes(1);
+        expect(storedBytes(raw)).toBe(0);
+        expect(store.all()).toEqual([]);
     });
 });

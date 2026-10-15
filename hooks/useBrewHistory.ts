@@ -13,7 +13,7 @@ export type HistoryStore = {
     remove: (id: string) => void;
     clear: () => void;
     insert: (record: BrewRecord, samples: BrewSample[], frames?: string) => void;
-    sweep: (keep: number) => void;
+    sweep: (budgetMB: number) => void;
 };
 
 let shared: BrewDatabase | undefined;

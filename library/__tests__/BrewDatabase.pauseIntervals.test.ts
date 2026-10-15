@@ -1,6 +1,7 @@
 import {openDatabaseSync} from "expo-sqlite";
 import BrewDatabase, {ensureBrewTables} from "@/library/BrewDatabase";
 import type {BrewRecord, BrewSample} from "@/library/brew/BrewRecord";
+import {encodeSamples} from "@/library/brew/traceCodec";
 import type {PauseInterval} from "@/library/brew/pauseIntervals";
 import {createTestDatabase, type FakeSQLiteDatabase} from "@/test-utils/sqlite";
 
@@ -114,12 +115,12 @@ describe("persistent pause intervals", () => {
         });
     });
 
-    it("retains intervals after a sample sweep while judgement pins the other stream", () => {
+    it("retains intervals after a sample sweep while judgement protects the other stream", () => {
         const database = new BrewDatabase();
         database.insert(record(), samples);
         database.insert(record({id: "pinned", startedAt: 900}), samples);
         database.judge("pinned", {rating: 4, note: "Keep"});
-        database.sweep(0);
+        database.sweepBytes(encodeSamples(samples).length);
         expect(database.get("b1")).toMatchObject({pauseIntervals: intervals, hasStream: false});
         expect(database.samples("b1")).toEqual([]);
         expect(database.get("pinned")).toMatchObject({

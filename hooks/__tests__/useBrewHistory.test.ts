@@ -24,7 +24,7 @@ function fakeStore(seed: StoredBrew[] = []) {
         remove: (id: string) => { rows = rows.filter((r) => r.id !== id); },
         clear: () => { rows = []; },
         insert: (_r: BrewRecord, _s: BrewSample[]) => {},
-        sweep: (keep: number) => { swept.push(keep); }
+        sweep: (budgetMB: number) => { swept.push(budgetMB); }
     };
 }
 
@@ -55,13 +55,13 @@ describe("useBrewHistory", () => {
         expect(result.current.brews.map((b) => b.id)).toEqual(["b"]);
     });
 
-    it("sweeps to the retention the user chose", () => {
+    it("passes the chosen storage budget to the sweep", () => {
         const store = fakeStore([]);
         sweepOnLaunch(store, 10);
         expect(store.swept).toEqual([10]);
     });
 
-    it("sweeps everything when retention is zero", () => {
+    it("passes zero through for Unlimited storage", () => {
         // Zero is a real choice and must not fall through to a default.
         const store = fakeStore([]);
         sweepOnLaunch(store, 0);

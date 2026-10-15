@@ -486,8 +486,8 @@ const UNTAGGED_SQL = `(b.origin = '' AND b.roast = '' AND b.process = ''
  * Brew history, in two tables because they have two lifetimes.
  *
  * `brews` is one short row per brew and is kept until the user deletes it.
- * `brew_samples` is roughly 2 400 rows per brew and is swept by the retention
- * setting, which is why `hasStream` exists: a record whose stream has gone
+ * `brew_samples` holds one compressed stream per brew, swept by a storage
+ * budget, which is why `hasStream` exists: a record whose stream has gone
  * still shows its figures, it just has no trace to draw.
  *
  * The values are copied, not joined to the recipe. A brew is a thing that
@@ -1096,34 +1096,73 @@ class BrewDatabase {
         });
     }
 
-    /**
-     * Drop the streams of every brew older than the `keep` most recent, and
-     * mark those records as having no trace. The records themselves stay:
-     * history is complete, only the detail behind it expires.
-     *
-     * Written as a read then a loop rather than one nested DELETE because the
-     * row counts are dozens and this version can be checked by reading it.
-     */
-    public sweep(keep: number): void {
-        // A nonsense keep count would slice from zero and quietly expire every
-        // trace the user has. Refuse rather than delete on a bad number.
-        if (!Number.isFinite(keep) || keep < 0) return;
-        // A pinned brew is outside the sweep entirely, and is not counted
-        // against `keep` either: holding one back must not push an unpinned
-        // brew over the edge, or pinning a favourite would quietly cost the
-        // most recent ordinary brew its trace.
-        const expiring = this.all()
-            .filter((b) => !b.pinned)
-            .slice(keep)
-            .filter((b) => b.hasStream);
-        if (expiring.length === 0) return;
+    /** Drop trace detail by storage budget in MiB; 0 means Unlimited. Summaries stay. */
+    public sweep(budgetMB: number): void {
+        this.sweepBytes(budgetMB * 1024 * 1024);
+    }
+
+    /** Byte-sized entry point so retention boundaries can be tested without large fixtures. */
+    public sweepBytes(limitBytes: number): void {
+        if (!Number.isFinite(limitBytes) || limitBytes < 0) return;
+        this.compressLegacyTraces();
+        if (limitBytes === 0) return;
+
         this.db.withTransactionSync(() => {
-            expiring.forEach((brew) => {
+            let total = this.traceBytes();
+            if (total <= limitBytes) return;
+            const candidates = this.db.getAllSync<{id: string; tier: number}>(`
+                SELECT b.id,
+                  CASE
+                    WHEN b.rating > 0 OR TRIM(b.note) <> '' THEN 1
+                    WHEN (SELECT COUNT(*) FROM brews n
+                          WHERE n.recipeUuid = b.recipeUuid AND n.startedAt > b.startedAt) < 2 THEN 2
+                    ELSE 3
+                  END AS tier
+                FROM brews b WHERE b.hasStream = 1
+                ORDER BY tier DESC, b.startedAt ASC;
+            `);
+            for (const brew of candidates) {
+                if (total <= limitBytes) break;
                 this.db.runSync("DELETE FROM brew_frames WHERE brewId = ?;", [brew.id]);
                 this.db.runSync("DELETE FROM brew_samples WHERE brewId = ?;", [brew.id]);
                 this.db.runSync("UPDATE brews SET hasStream = 0 WHERE id = ?;", [brew.id]);
-            });
+                total = this.traceBytes();
+            }
         });
+    }
+
+    private traceBytes(): number {
+        return this.db.getFirstSync<{bytes: number}>(`
+            SELECT (SELECT COALESCE(SUM(length(stream)), 0) FROM brew_samples)
+                 + (SELECT COALESCE(SUM(length(frames)), 0) FROM brew_frames) AS bytes;
+        `)!.bytes;
+    }
+
+    private compressLegacyTraces(): void {
+        for (;;) {
+            const rows = this.db.getAllSync<{brewId: string; stream: string}>(
+                "SELECT brewId, stream FROM brew_samples WHERE stream NOT LIKE 'z1:%' LIMIT 50;"
+            );
+            if (rows.length === 0) break;
+            this.db.withTransactionSync(() => {
+                for (const row of rows) {
+                    this.db.runSync("UPDATE brew_samples SET stream = ? WHERE brewId = ?;",
+                        [encodeSamples(decodeSamples(row.stream)), row.brewId]);
+                }
+            });
+        }
+        for (;;) {
+            const rows = this.db.getAllSync<{brewId: string; frames: string}>(
+                "SELECT brewId, frames FROM brew_frames WHERE frames NOT LIKE 'z1:%' LIMIT 50;"
+            );
+            if (rows.length === 0) break;
+            this.db.withTransactionSync(() => {
+                for (const row of rows) {
+                    this.db.runSync("UPDATE brew_frames SET frames = ? WHERE brewId = ?;",
+                        [encodeText(row.frames), row.brewId]);
+                }
+            });
+        }
     }
 
     /**
