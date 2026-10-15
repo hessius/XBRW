@@ -111,22 +111,22 @@ describe("persistent pause intervals", () => {
         database.judge("b1", {rating: 5, note: "New verdict"});
         expect(database.restore([record({pauseIntervals: [], rating: 1})])).toBe(0);
         expect(database.get("b1")).toMatchObject({
-            pauseIntervals: intervals, rating: 5, note: "New verdict", pinned: true
+            pauseIntervals: intervals, rating: 5, note: "New verdict", pinned: false
         });
     });
 
     it("retains intervals after a sample sweep while judgement protects the other stream", () => {
         const database = new BrewDatabase();
         database.insert(record(), samples);
-        database.insert(record({id: "pinned", startedAt: 900}), samples);
-        database.judge("pinned", {rating: 4, note: "Keep"});
+        database.insert(record({id: "rated", startedAt: 900}), samples);
+        database.judge("rated", {rating: 4, note: "Keep"});
         database.sweepBytes(encodeSamples(samples).length);
         expect(database.get("b1")).toMatchObject({pauseIntervals: intervals, hasStream: false});
         expect(database.samples("b1")).toEqual([]);
-        expect(database.get("pinned")).toMatchObject({
-            pauseIntervals: intervals, hasStream: true, rating: 4, pinned: true
+        expect(database.get("rated")).toMatchObject({
+            pauseIntervals: intervals, hasStream: true, rating: 4, pinned: false
         });
-        expect(database.samples("pinned")).toEqual(samples);
+        expect(database.samples("rated")).toEqual(samples);
     });
 
     it.each([

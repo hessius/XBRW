@@ -1,6 +1,6 @@
 import {act, renderHook} from "@testing-library/react-native";
 
-import {sweepOnLaunch, useBrewHistory, useRecipeRating} from "@/hooks/useBrewHistory";
+import {sweepOnLaunch, useBrewHistory, useBrewJudgement, useRecipeRating} from "@/hooks/useBrewHistory";
 import type {BrewRecord, BrewSample} from "@/library/brew/BrewRecord";
 import {countsAsBrewed, isRated} from "@/library/brew/brewPopulation";
 import type {StoredBrew} from "@/library/BrewDatabase";
@@ -228,5 +228,40 @@ describe("useRecipeRating", () => {
         await act(async () => { result.current.rate(9); });
 
         expect(store.rows).toHaveLength(0);
+    });
+});
+
+describe("useBrewJudgement", () => {
+    it("writes ratings and notes without a pin API or pin state", async () => {
+        const store = {judge: jest.fn()};
+        const {result} = await renderHook(() => useBrewJudgement(
+            () => "a", {rating: 0, note: ""}, store
+        ));
+
+        await act(async () => result.current.rate(4));
+        expect(store.judge).toHaveBeenLastCalledWith("a", {rating: 4});
+        expect(result.current.rating).toBe(4);
+        await act(async () => result.current.annotate("Sweet."));
+        expect(store.judge).toHaveBeenLastCalledWith("a", {note: "Sweet."});
+        expect(result.current.note).toBe("Sweet.");
+        expect(result.current).not.toHaveProperty("pinned");
+        expect(result.current).not.toHaveProperty("setPinned");
+
+        await act(async () => result.current.annotate("Sweet."));
+        expect(store.judge).toHaveBeenCalledTimes(2);
+        await act(async () => result.current.rate(0));
+        expect(store.judge).toHaveBeenLastCalledWith("a", {rating: 0});
+        expect(result.current).toMatchObject({rating: 0, note: "Sweet."});
+    });
+
+    it("does not write or change the verdict before the record exists", async () => {
+        const store = {judge: jest.fn()};
+        const {result} = await renderHook(() => useBrewJudgement(
+            () => null, {rating: 2, note: "Original."}, store
+        ));
+        await act(async () => result.current.rate(5));
+        await act(async () => result.current.annotate("New."));
+        expect(store.judge).not.toHaveBeenCalled();
+        expect(result.current).toMatchObject({rating: 2, note: "Original."});
     });
 });

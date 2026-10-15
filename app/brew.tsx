@@ -441,18 +441,16 @@ export default function Brew({historyStore}: {historyStore?: ExportStore} = {}) 
     // SQLite while drawing would open it in every test that renders this
     // screen, which is the rule `latestExport` above already follows.
     //
-    // The two writes are optional on an injected store so a test that only
+    // The write is optional on an injected store so a test that only
     // cares about the trace does not have to grow a judgement fake. The real
-    // database has both; a fake that does not simply records nothing.
+    // database writes the verdict; a fake that does not simply records nothing.
     const judgementStore: JudgementStore = {
         judge:     (id, verdict) =>
-            (historyStore ?? sharedBrewDatabase()).judge?.(id, verdict),
-        setPinned: (id, pinned) =>
-            (historyStore ?? sharedBrewDatabase()).setPinned?.(id, pinned)
+            (historyStore ?? sharedBrewDatabase()).judge?.(id, verdict)
     };
     const judgement = useBrewJudgement(
         () => (historyStore ?? sharedBrewDatabase()).all()[0]?.id ?? null,
-        {rating: 0, note: "", pinned: false},
+        {rating: 0, note: ""},
         judgementStore
     );
     const liveIndex = activeIndex !== null && activeIndex < recipe.pours.length

@@ -1061,6 +1061,17 @@ describe("brew history through a backup", () => {
         expect(result.payload.skippedBrews).toBe(1);
     });
 
+    it.each([undefined, false, true])("round trips an optional legacy pin (%p)", (pinned) => {
+        const record = brewNamed("legacy-pin", pinned === undefined ? {} : {pinned});
+        const result = parseBackup(buildBackup([recipeNamed("A", "u1")], {}, "2.6.0", [record]));
+
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.payload.skippedBrews).toBe(0);
+        expect(result.payload.brews).toHaveLength(1);
+        expect(result.payload.brews[0]).toMatchObject({id: "legacy-pin", pinned: pinned ?? false});
+    });
+
     it("fills in the judgement a record never got", () => {
         const brew = reviveBrew(JSON.parse(JSON.stringify(brewNamed("b1"))));
 

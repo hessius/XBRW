@@ -117,10 +117,11 @@ describe("BrewHistoryRow", () => {
     });
 
     it("says a stream has expired rather than hiding it", async () => {
-        const {getByText} = await renderWithProviders(
-            <BrewHistoryRow brew={brew({hasStream: false})} onPress={jest.fn()} />
+        const {getByText, getByLabelText} = await renderWithProviders(
+            <BrewHistoryRow brew={brew({hasStream: false, pinned: true})} onPress={jest.fn()} />
         );
         expect(getByText("NO TRACE KEPT")).toBeTruthy();
+        expect(getByLabelText(/no trace kept/)).toBeTruthy();
     });
 
     it("does not call a brew the machine ended a failure", async () => {
@@ -189,11 +190,14 @@ describe("BrewHistoryRow", () => {
         expect(label).toContain("2.0 grams per second");
     });
 
-    it("says why an old brew still has a trace", async () => {
-        const {getByTestId} = await renderWithProviders(
+    it("does not mark a legacy pinned trace as kept", async () => {
+        const {queryByTestId, queryByText, getByRole} = await renderWithProviders(
             <BrewHistoryRow brew={brew({pinned: true})} onPress={jest.fn()} />
         );
-        expect(getByTestId("history-row-pin")).toBeTruthy();
+        expect(queryByTestId("history-row-pin")).toBeNull();
+        expect(queryByText("KEPT")).toBeNull();
+        expect(getByRole("button").props.accessibilityLabel)
+            .not.toContain("kept through the sweep");
     });
 
     it("says nothing about the sweep on a brew that is subject to it", async () => {

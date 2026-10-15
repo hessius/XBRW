@@ -799,7 +799,6 @@ is outside the screen-covered accessibility subtree.
 | `brewHistory.row.notWatched` | `components/BrewHistoryRow.tsx:143` | Doto flag for a brew the app did not watch. | `NOT WATCHED` |
 | `brewHistory.row.endedEarly` | `components/BrewHistoryRow.tsx:149` | Doto flag, warn colour, on a brew the machine ended short. Deliberately not the danger colour: this is an observation, not a failure. | `ENDED EARLY` |
 | `brewHistory.row.stopped` | `components/BrewHistoryRow.tsx:155` | Doto flag on a cancelled, failed or link-lost brew. | `STOPPED` |
-| `brewHistory.row.kept` | `components/BrewHistoryRow.tsx:168` | Doto flag on a pinned brew whose stream is kept through retention. | `KEPT` |
 | `brewHistory.row.noTrace` | `components/BrewHistoryRow.tsx:174` | Doto flag when no trace was kept. | `NO TRACE KEPT` |
 
 ---
@@ -821,8 +820,6 @@ is outside the screen-covered accessibility subtree.
 | `brewRecord.export.data` | `components/ExportButton.tsx` (`label`, passed from `app/brewRecord.tsx:357`) | Button to export the underlying data as JSON. | `Export the data` |
 | `brewRecord.story.open` | `components/ExportButton.tsx` (`label`, passed from `app/brewRecord.tsx:372`) | Button that opens the story-card preview sheet. | `Share story` |
 | `brewRecord.story.open.a11y` | `components/ExportButton.tsx` (`accessibilityLabel`, passed from `app/brewRecord.tsx:374`) | (a11y) Story-card preview button. | `Share this brew as a story card` |
-| `brewRecord.pin.state` | `app/brewRecord.tsx:475` (`record-pinned`) | Doto state shown after judging pins a brew so its trace survives retention. | `TRACE KEPT` |
-| `brewRecord.pin.release` | `app/brewRecord.tsx:484` (`record-release`) | Doto action beside the pinned state. | `LET IT EXPIRE` |
 | `brewRecord.export.busy` | `components/ExportButton.tsx:34` | Replaces either label while the capture and share sheet are in flight, so a press is visibly acknowledged. | `WORKING…` |
 | `brewRecord.handoff.beanconqueror.label` | `library/brew/handoff/targets.ts` (`HANDOFF_TARGETS[0].buttonLabel`, passed from `app/brewRecord.tsx`) | Button to hand a brew that produced a drink to Beanconqueror. Hidden behind the `beanconquerorHandoff` Labs setting, and on a brew that was cancelled, failed, or lost contact. | `Send to Beanconqueror` |
 | `brewRecord.handoff.bean.title` | `components/BeanNameSheet.tsx` | Sheet heading asked before a brew from beans is handed over, since the machine only knows the coffee for a pod. | `What was the coffee?` |

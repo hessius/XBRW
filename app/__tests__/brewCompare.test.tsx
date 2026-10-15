@@ -472,34 +472,19 @@ describe("the comparison screen", () => {
         expect(getByText("WATER, BOTH")).toBeTruthy();
     });
 
-    it("can pin the surviving trace when the other one has been swept", async () => {
-        const setPinned = jest.fn();
+    it("does not offer to keep the surviving trace when the other was swept", async () => {
         const a = makeBrewRecordFixture({id: "a"});
         const b = makeBrewRecordFixture({id: "b", hasStream: false});
-        setJudgementStore({setPinned});
         setRecords({
             a: {record: a, samples: makeBrewRecordSamples(comparisonSamples)},
             b: {record: b, samples: []}
         });
         setParams({a: "a", b: "b"});
-        const {getByLabelText} = await renderWithProviders(<BrewCompareScreen />);
-        await fireEvent.press(getByLabelText("Keep this trace"));
-        expect(setPinned).toHaveBeenCalledWith("a", true);
-    });
-
-    it("keeps a trace without requiring the injected store to pin", async () => {
-        const a = makeBrewRecordFixture({id: "a"});
-        const b = makeBrewRecordFixture({id: "b", hasStream: false});
-        setJudgementStore({});
-        setRecords({
-            a: {record: a, samples: makeBrewRecordSamples(comparisonSamples)},
-            b: {record: b, samples: []}
-        });
-        setParams({a: "a", b: "b"});
-        const {getByLabelText, queryByLabelText} =
+        const {getByText, queryByLabelText, queryByText} =
             await renderWithProviders(<BrewCompareScreen />);
-        await fireEvent.press(getByLabelText("Keep this trace"));
+        expect(getByText(COMPARE_DEGRADED.one)).toBeTruthy();
         expect(queryByLabelText("Keep this trace")).toBeNull();
+        expect(queryByText("KEEP TRACE")).toBeNull();
     });
 
     it("does not offer to keep a trace that is already pinned", async () => {

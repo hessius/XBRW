@@ -25,11 +25,8 @@ describe("unobservedBrew", () => {
         expect(unobservedBrew(input).rating).toBe(4);
     });
 
-    it("is pinned, because a judgement is all it is", () => {
-        // There is nothing here for the retention sweep to take -- no samples
-        // -- but the record itself is only the rating, so it is kept on the
-        // same rule that keeps a judged brew.
-        expect(unobservedBrew(input).pinned).toBe(true);
+    it("does not set the legacy pin", () => {
+        expect(unobservedBrew(input)).not.toHaveProperty("pinned");
     });
 
     it("measures nothing, because nothing was measured", () => {

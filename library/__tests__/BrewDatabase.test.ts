@@ -649,7 +649,7 @@ describe("BrewDatabase", () => {
         expect(brew?.pinned).toBe(false);
     });
 
-    it("writes a rating and a note, and pins on either", () => {
+    it("writes a rating and a note without changing the legacy pin", () => {
         const db = new BrewDatabase();
         db.insert(record({id: "a"}), stream);
         db.insert(record({id: "b"}), stream);
@@ -658,14 +658,14 @@ describe("BrewDatabase", () => {
         db.judge("b", {note: "Too sour, grind finer."});
 
         expect(db.get("a")?.rating).toBe(4);
-        expect(db.get("a")?.pinned).toBe(true);
+        expect(db.get("a")?.pinned).toBe(false);
         expect(db.get("b")?.note).toBe("Too sour, grind finer.");
-        expect(db.get("b")?.pinned).toBe(true);
+        expect(db.get("b")?.pinned).toBe(false);
     });
 
     it("refuses a rating off the scale rather than clamping it", () => {
         // A 9 reaching here is a caller that is wrong. Clamping would write a
-        // verdict nobody gave, and pin the brew on the strength of it.
+        // verdict nobody gave.
         const db = new BrewDatabase();
         db.insert(record({id: "a"}), stream);
 
@@ -676,14 +676,12 @@ describe("BrewDatabase", () => {
         expect(db.get("a")?.pinned).toBe(false);
     });
 
-    it("releases a pin without touching the judgement", () => {
+    it("preserves an inert legacy pin when updating the judgement", () => {
         const db = new BrewDatabase();
-        db.insert(record({id: "a"}), stream);
+        db.insert(record({id: "a", pinned: true}), stream);
         db.judge("a", {rating: 3, note: "Fine."});
 
-        db.setPinned("a", false);
-
-        expect(db.get("a")?.pinned).toBe(false);
+        expect(db.get("a")?.pinned).toBe(true);
         expect(db.get("a")?.rating).toBe(3);
         expect(db.get("a")?.note).toBe("Fine.");
     });
@@ -1433,7 +1431,7 @@ describe("a brew the app never watched", () => {
             .toMatchObject({times: 1, lastAt: 7_000});
     });
 
-    it("keeps its verdict and its pin", () => {
+    it("keeps its verdict without setting a pin", () => {
         const db = new BrewDatabase();
         db.insert(unobservedBrew({
             recipeUuid: "uuid-1", recipeName: "Ethiopia", accent: "#f00",
@@ -1442,7 +1440,7 @@ describe("a brew the app never watched", () => {
 
         const brew = db.get("hand-1");
         expect(brew?.rating).toBe(5);
-        expect(brew?.pinned).toBe(true);
+        expect(brew?.pinned).toBe(false);
     });
 
     it("survives a restore still unwatched", () => {

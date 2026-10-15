@@ -132,13 +132,12 @@ export function useBeanProfile(
     return {profile: current.profile, refresh};
 }
 
-/** The two writes a judgement makes. Injected by tests. */
+/** The judgement write. Injected by tests. */
 export type JudgementStore = {
     judge: (id: string, judgement: {rating?: number; note?: string}) => void;
-    setPinned: (id: string, pinned: boolean) => void;
 };
 
-export type Judgement = {rating: number; note: string; pinned: boolean};
+export type Judgement = {rating: number; note: string};
 
 /**
  * A verdict on a brew, held locally and written through.
@@ -151,7 +150,7 @@ export type Judgement = {rating: number; note: string; pinned: boolean};
  *
  * A note that has not changed is not written. A text field commits on blur
  * whether or not it was edited, so without this a user who tapped into the
- * field and out again would pin a brew they never judged.
+ * field and out again would write a verdict they never changed.
  */
 export function useBrewJudgement(
     resolveId: () => string | null,
@@ -166,7 +165,7 @@ export function useBrewJudgement(
     function rate(rating: number): void {
         const id = resolveId();
         if (id === null) return;
-        setJudgement((was) => ({...was, rating, pinned: true}));
+        setJudgement((was) => ({...was, rating}));
         database().judge(id, {rating});
     }
 
@@ -174,18 +173,11 @@ export function useBrewJudgement(
         if (note === judgement.note) return;
         const id = resolveId();
         if (id === null) return;
-        setJudgement((was) => ({...was, note, pinned: true}));
+        setJudgement((was) => ({...was, note}));
         database().judge(id, {note});
     }
 
-    function setPinned(pinned: boolean): void {
-        const id = resolveId();
-        if (id === null) return;
-        setJudgement((was) => ({...was, pinned}));
-        database().setPinned(id, pinned);
-    }
-
-    return {...judgement, rate, annotate, setPinned};
+    return {...judgement, rate, annotate};
 }
 
 /**

@@ -903,13 +903,8 @@ class BrewDatabase {
     }
 
     /**
-     * The user's verdict on a brew, and the pin that comes with it.
-     *
-     * One statement, so the pin cannot lag the judgement it is there to
-     * protect: a rating whose trace the next sweep took is a rating the user
-     * cannot act on. A rating outside the scale is refused rather than clamped,
-     * because a 9 arriving here means a caller is wrong, and clamping it to 5
-     * would write a verdict nobody gave.
+     * The user's verdict on a brew. A rating outside the scale is refused
+     * rather than clamped, because clamping would write a verdict nobody gave.
      */
     public judge(id: string, judgement: {rating?: number; note?: string}): void {
         const {rating, note} = judgement;
@@ -925,25 +920,8 @@ class BrewDatabase {
             params.push(note);
         }
         if (sets.length === 0) return;
-        // Clearing a rating back to 0 still pins: the user has been here and
-        // said something about this brew, and taking the trace away underneath
-        // them for changing their mind is the same loss by another route.
-        sets.push("pinned = 1");
         this.db.runSync(
             `UPDATE brews SET ${sets.join(", ")} WHERE id = ?;`, [...params, id]
-        );
-    }
-
-    /**
-     * Let a brew back into the sweep, or hold it out of one by hand.
-     *
-     * Releasing does not bring back a stream that has already gone, and nothing
-     * here pretends it might: `hasStream` already tells a record whether its
-     * trace survived.
-     */
-    public setPinned(id: string, pinned: boolean): void {
-        this.db.runSync(
-            "UPDATE brews SET pinned = ? WHERE id = ?;", [pinned ? 1 : 0, id]
         );
     }
 

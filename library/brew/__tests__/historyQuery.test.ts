@@ -144,7 +144,7 @@ describe("queryBrewHistory", () => {
         database.insert(snapshot, [{at: 0, water: 100, cup: 95, pour: 1}]);
         database.insert(brew("old", {startedAt: 5}), []);
         database.insert(brew("off", {startedAt: 4, grindSize: 60, grinderUsed: false}), []);
-        database.sweep(0);
+        database.sweepBytes(1);
         const rows = database.all();
         const saved = rows.find((row) => row.id === "saved");
         const old = rows.find((row) => row.id === "old");

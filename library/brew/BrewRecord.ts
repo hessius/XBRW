@@ -233,13 +233,7 @@ export type BrewRecord = {
     rating?: number;
     /** What the user said about the cup. Empty is no note; there is no flag. */
     note?: string;
-    /**
-     * Kept back from the retention sweep.
-     *
-     * Set by judging rather than by a control of its own: a user who has just
-     * said a brew was good has already said it is worth keeping, and a
-     * judgement whose trace has been swept is one that cannot be acted on.
-     */
+    /** Legacy, inert trace pin retained for database and backup compatibility. */
     pinned?: boolean;
     /** When this brew was last handed to another app. Absent until it was. */
     sentAt?: number;
@@ -638,7 +632,6 @@ export function unobservedBrew(input: {
         cupTotal: 0,
         heldSeconds: 0,
         rating: input.rating,
-        pinned: true,
         watched: false,
         ...(input.quickEdit ?? {})
     };
