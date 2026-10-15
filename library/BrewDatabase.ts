@@ -1,5 +1,6 @@
 import * as SQLite from "expo-sqlite";
 import {appDatabase} from "@/library/appDatabase";
+import {decodeSamples, decodeText, encodeSamples, encodeText} from "@/library/brew/traceCodec";
 
 import {
     COUNTED_SQL,
@@ -587,18 +588,18 @@ class BrewDatabase {
         this.db.withTransactionSync(() => {
             this.writeBrewRow(record, samples.length > 0);
             if (samples.length > 0) {
-                // One JSON row rather than 2 400 rows per brew. Nothing ever
-                // queries inside a stream — it is read whole to draw a line, and
+                // One compressed row rather than 2 400 rows per brew. Nothing ever
+                // queries inside a stream: it is read whole to draw a line, and
                 // deleted whole by the retention sweep.
                 this.db.runSync(
                     "INSERT INTO brew_samples (brewId, stream) VALUES (?, ?);",
-                    [record.id, JSON.stringify(samples)]
+                    [record.id, encodeSamples(samples)]
                 );
             }
             if (frames.length > 0) {
                 this.db.runSync(
                     "INSERT INTO brew_frames (brewId, frames) VALUES (?, ?);",
-                    [record.id, frames]
+                    [record.id, encodeText(frames)]
                 );
             }
             this.writeTags(record.id, record.tags ?? []);
@@ -1044,11 +1045,7 @@ class BrewDatabase {
         if (rows.length === 0) return [];
         // A stream that will not parse is a stream that is gone. Losing a trace
         // is a shrug; throwing here would take the history screen down with it.
-        try {
-            return JSON.parse(rows[0].stream) as BrewSample[];
-        } catch {
-            return [];
-        }
+        return decodeSamples(rows[0].stream);
     }
 
     /** The frame log covering a brew, or empty if none was kept or it expired. */
@@ -1056,7 +1053,11 @@ class BrewDatabase {
         const rows = this.db.getAllSync<{frames: string}>(
             "SELECT frames FROM brew_frames WHERE brewId = ?;", [id]
         );
-        return rows.length > 0 ? rows[0].frames : "";
+        try {
+            return rows.length > 0 ? decodeText(rows[0].frames) : "";
+        } catch {
+            return "";
+        }
     }
 
     /**
