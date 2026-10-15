@@ -140,20 +140,24 @@ Replace `sweep(keep: number)` with `sweep(budgetMB: number)`; `0` means Unlimite
 - [ ] **Step 2: Run, expect failure.**
 - [ ] **Step 3: Implement.**
   - `traceBytes()`: `SELECT COALESCE(SUM(length(stream)),0) FROM brew_samples` plus the same over `brew_frames.frames`.
-  - Compress legacy rows first: select `brewId, stream FROM brew_samples WHERE stream NOT LIKE 'z1:%' LIMIT 50`, re-encode, update; loop until none. Same for frames. Run inside the sweep before measuring.
+  - Compress legacy rows first in 50-row batches ordered and paginated by `brewId`. Validate raw sample arrays contain objects with finite numeric `at`, `water`, `cup`, and `pour`; isolate each conversion in try/catch and leave failures untouched. Advance past skipped rows. Same per-row isolation and pagination for frames. Run inside the sweep before measuring.
   - If over the limit, select candidate brews ordered by tier then `startedAt ASC`:
     ```sql
     SELECT b.id,
+      COALESCE(length(s.stream), 0) + COALESCE(length(f.frames), 0) AS bytes,
       CASE
         WHEN b.rating > 0 OR TRIM(b.note) <> '' THEN 1
         WHEN (SELECT COUNT(*) FROM brews n
               WHERE n.recipeUuid = b.recipeUuid AND n.startedAt > b.startedAt) < 2 THEN 2
         ELSE 3
       END AS tier
-    FROM brews b WHERE b.hasStream = 1
+    FROM brews b
+    LEFT JOIN brew_samples s ON s.brewId = b.id
+    LEFT JOIN brew_frames f ON f.brewId = b.id
+    WHERE s.brewId IS NOT NULL OR f.brewId IS NOT NULL
     ORDER BY tier DESC, b.startedAt ASC
     ```
-    Delete trace rows for each in turn, re-measuring (or subtracting each row's length) until under the limit. Confirm the `rating` and `note` column names against `BrewRow` (lines 100-165) before writing.
+    Measure the total once and select candidates once. Delete trace rows in a transaction, subtracting each candidate's combined SQL length until under the limit; include frame-only logs regardless of `hasStream`. Confirm the `rating` and `note` column names against `BrewRow` (lines 100-165) before writing.
   - Remove the `pinned` filter from the old sweep.
 - [ ] **Step 4: Run tests, expect pass.**
 - [ ] **Step 5: Commit** `feat(brew): budgeted tiered trace sweep`.

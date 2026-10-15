@@ -1110,15 +1110,19 @@ class BrewDatabase {
         this.db.withTransactionSync(() => {
             let total = this.traceBytes();
             if (total <= limitBytes) return;
-            const candidates = this.db.getAllSync<{id: string; tier: number}>(`
+            const candidates = this.db.getAllSync<{id: string; tier: number; bytes: number}>(`
                 SELECT b.id,
+                  COALESCE(length(s.stream), 0) + COALESCE(length(f.frames), 0) AS bytes,
                   CASE
                     WHEN b.rating > 0 OR TRIM(b.note) <> '' THEN 1
                     WHEN (SELECT COUNT(*) FROM brews n
                           WHERE n.recipeUuid = b.recipeUuid AND n.startedAt > b.startedAt) < 2 THEN 2
                     ELSE 3
                   END AS tier
-                FROM brews b WHERE b.hasStream = 1
+                FROM brews b
+                LEFT JOIN brew_samples s ON s.brewId = b.id
+                LEFT JOIN brew_frames f ON f.brewId = b.id
+                WHERE s.brewId IS NOT NULL OR f.brewId IS NOT NULL
                 ORDER BY tier DESC, b.startedAt ASC;
             `);
             for (const brew of candidates) {
@@ -1126,7 +1130,7 @@ class BrewDatabase {
                 this.db.runSync("DELETE FROM brew_frames WHERE brewId = ?;", [brew.id]);
                 this.db.runSync("DELETE FROM brew_samples WHERE brewId = ?;", [brew.id]);
                 this.db.runSync("UPDATE brews SET hasStream = 0 WHERE id = ?;", [brew.id]);
-                total = this.traceBytes();
+                total -= brew.bytes;
             }
         });
     }
@@ -1139,27 +1143,48 @@ class BrewDatabase {
     }
 
     private compressLegacyTraces(): void {
+        let after: string | null = null;
         for (;;) {
-            const rows = this.db.getAllSync<{brewId: string; stream: string}>(
-                "SELECT brewId, stream FROM brew_samples WHERE stream NOT LIKE 'z1:%' LIMIT 50;"
-            );
+            const rows: {brewId: string; stream: string}[] = this.db.getAllSync(`
+                SELECT brewId, stream FROM brew_samples
+                WHERE stream NOT LIKE 'z1:%' AND (? IS NULL OR brewId > ?)
+                ORDER BY brewId LIMIT 50;
+            `, [after, after]);
             if (rows.length === 0) break;
+            after = rows[rows.length - 1].brewId;
             this.db.withTransactionSync(() => {
                 for (const row of rows) {
-                    this.db.runSync("UPDATE brew_samples SET stream = ? WHERE brewId = ?;",
-                        [encodeSamples(decodeSamples(row.stream)), row.brewId]);
+                    try {
+                        const samples: unknown = JSON.parse(row.stream);
+                        if (!Array.isArray(samples) || !samples.every((sample) =>
+                            sample !== null && typeof sample === "object"
+                            && ["at", "water", "cup", "pour"].every((field) =>
+                                Number.isFinite(sample[field])))) continue;
+                        this.db.runSync("UPDATE brew_samples SET stream = ? WHERE brewId = ?;",
+                            [encodeSamples(samples), row.brewId]);
+                    } catch {
+                        // Preserve unreadable legacy data; the next page still advances past it.
+                    }
                 }
             });
         }
+        after = null;
         for (;;) {
-            const rows = this.db.getAllSync<{brewId: string; frames: string}>(
-                "SELECT brewId, frames FROM brew_frames WHERE frames NOT LIKE 'z1:%' LIMIT 50;"
-            );
+            const rows: {brewId: string; frames: string}[] = this.db.getAllSync(`
+                SELECT brewId, frames FROM brew_frames
+                WHERE frames NOT LIKE 'z1:%' AND (? IS NULL OR brewId > ?)
+                ORDER BY brewId LIMIT 50;
+            `, [after, after]);
             if (rows.length === 0) break;
+            after = rows[rows.length - 1].brewId;
             this.db.withTransactionSync(() => {
                 for (const row of rows) {
-                    this.db.runSync("UPDATE brew_frames SET frames = ? WHERE brewId = ?;",
-                        [encodeText(row.frames), row.brewId]);
+                    try {
+                        this.db.runSync("UPDATE brew_frames SET frames = ? WHERE brewId = ?;",
+                            [encodeText(row.frames), row.brewId]);
+                    } catch {
+                        // A failed conversion must not prevent the rest of the launch sweep.
+                    }
                 }
             });
         }

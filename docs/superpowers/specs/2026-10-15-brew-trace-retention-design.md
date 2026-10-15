@@ -53,7 +53,10 @@ New module `library/brew/traceCodec.ts`, pure TypeScript:
 
 `BrewDatabase.insert` writes the compressed form. Reads accept both, so there is
 no blocking migration. Legacy rows are rewritten compressed the first time the
-sweep runs, in one transaction per batch.
+sweep runs, in one transaction per batch. Batches advance by brew ID, including
+past skipped rows. Each conversion is isolated: malformed sample arrays (including
+non-object samples or non-finite numeric fields) and failed frame conversions
+remain untouched rather than blocking launch or being retried within that sweep.
 
 ### 2. The budget
 
@@ -63,7 +66,9 @@ sweep runs, in one transaction per batch.
   `settingsSnapshot()`, so it is backed up. Restore ignores the old count key in
   older backups.
 - Size is `SUM(length(stream)) + SUM(length(frames))` over the two tables, read
-  in SQL. Stored text is ASCII after base64, so characters equal bytes.
+  in SQL. Stored text is ASCII after base64, so characters equal bytes. Measure
+  the total once, select ordered candidates with their combined SQL `length()`
+  once, and subtract those lengths as rows are deleted in a transaction.
 
 ### 3. What goes first
 
@@ -85,7 +90,8 @@ recipe UUID on the brew row; a brew whose recipe was deleted counts under its
 snapshotted recipe name.
 
 Dropping a trace deletes its `brew_samples` and `brew_frames` rows and sets
-`hasStream = 0`, as the current sweep does.
+`hasStream = 0`, as the current sweep does. A row in either trace table makes
+a brew eligible, including frame-only logs whose `hasStream` is already zero.
 
 ### 4. UI
 

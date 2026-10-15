@@ -269,6 +269,121 @@ describe("BrewDatabase budgeted trace sweep", () => {
         expect(writes).not.toHaveBeenCalled();
     });
 
+    describe.each([0, 1])("corrupt legacy samples with budget %p MiB", (budgetMB) => {
+        it.each([
+            "[null]",
+            "not JSON",
+            '[{"at":0,"water":0,"cup":0}]',
+            '[{"at":0,"water":"0","cup":0,"pour":1}]',
+            '[{"at":1e999,"water":0,"cup":0,"pour":1}]'
+        ])("leaves unreadable samples untouched: %s", (stream) => {
+            const {raw, store} = database();
+            seedTrace(store, "corrupt", {rating: 5});
+            raw.runSync("UPDATE brew_samples SET stream = ? WHERE brewId = 'corrupt';", [stream]);
+            // Cross two pages with skipped rows before the valid legacy row.
+            for (let i = 0; i < 101; i += 1) {
+                raw.runSync("INSERT INTO brew_samples (brewId, stream) VALUES (?, ?);",
+                    [`bad-${i}`, stream]);
+            }
+            seedTrace(store, "valid", {startedAt: 2});
+            raw.runSync("UPDATE brew_samples SET stream = ? WHERE brewId = 'valid';",
+                [JSON.stringify(samples)]);
+            if (budgetMB > 0) {
+                seedTrace(store, "victim", {startedAt: 1});
+                raw.runSync("UPDATE brew_frames SET frames = ? WHERE brewId = 'victim';",
+                    [encodeText("large frame log") + "x".repeat(1024 * 1024)]);
+                expect(storedBytes(raw)).toBeGreaterThan(budgetMB * 1024 * 1024);
+            }
+
+            expect(() => store.sweep(budgetMB)).not.toThrow();
+
+            expect(raw.getFirstSync("SELECT stream FROM brew_samples WHERE brewId = 'corrupt';"))
+                .toEqual({stream});
+            expect(raw.getFirstSync("SELECT stream FROM brew_samples WHERE brewId = 'valid';"))
+                .toEqual({stream: encodeSamples(samples)});
+            if (budgetMB > 0) {
+                expect(store.get("victim")?.hasStream).toBe(false);
+                expect(storedBytes(raw)).toBeLessThanOrEqual(budgetMB * 1024 * 1024);
+            }
+        });
+    });
+
+    it("continues past a failed legacy frame conversion without retrying it forever", () => {
+        const {raw, store} = database();
+        for (const id of ["bad", "good"]) {
+            seedTrace(store, id);
+            raw.runSync("UPDATE brew_frames SET frames = ? WHERE brewId = ?;", [frames, id]);
+        }
+        raw.execSync(`
+            CREATE TRIGGER refuse_frame_conversion BEFORE UPDATE ON brew_frames
+            WHEN OLD.brewId = 'bad' BEGIN SELECT RAISE(ABORT, 'unconvertible frame'); END;
+        `);
+        expect(() => store.sweep(0)).not.toThrow();
+        expect(raw.getFirstSync("SELECT frames FROM brew_frames WHERE brewId = 'bad';"))
+            .toEqual({frames});
+        expect(raw.getFirstSync("SELECT frames FROM brew_frames WHERE brewId = 'good';"))
+            .toEqual({frames: encodeText(frames)});
+    });
+
+    it.each([traceBytes, 1])("includes frame-only logs in eviction order at budget %p", (budget) => {
+        const {raw, store} = database();
+        store.insert({...record, id: "frame-only", startedAt: 1}, [], frames);
+        seedTrace(store, "sample-trace", {startedAt: 2});
+        expect(store.get("frame-only")?.hasStream).toBe(false);
+
+        store.sweepBytes(budget);
+
+        expect(raw.getAllSync("SELECT brewId FROM brew_frames WHERE brewId = 'frame-only';"))
+            .toEqual([]);
+        expect(store.get("frame-only")?.hasStream).toBe(false);
+        expect(store.get("sample-trace")?.hasStream).toBe(budget === traceBytes);
+        expect(storedBytes(raw)).toBe(budget === traceBytes ? traceBytes : 0);
+        expect(store.all()).toHaveLength(2);
+    });
+
+    it("measures the total once and preserves tier victims for unequal trace sizes", () => {
+        const {raw, store} = database();
+        seedTrace(store, "rated", {recipeUuid: "rated", rating: 4, startedAt: 1});
+        seedTrace(store, "old", {startedAt: 2});
+        seedTrace(store, "recent", {startedAt: 3});
+        seedTrace(store, "newest", {startedAt: 4});
+        raw.runSync("UPDATE brew_frames SET frames = ? WHERE brewId = 'recent';",
+            [encodeText("é☕".repeat(200))]);
+        const budget = traceBytes * 2;
+        const totals = jest.spyOn(raw, "getFirstSync");
+        const candidates = jest.spyOn(raw, "getAllSync");
+
+        store.sweepBytes(budget);
+
+        expect(totals.mock.calls.filter(([sql]) => sql.includes("SUM(length("))).toHaveLength(1);
+        expect(candidates.mock.calls.filter(([sql]) => sql.includes("AS tier"))).toHaveLength(1);
+        expect(store.all().filter((brew) => brew.hasStream).map((brew) => brew.id).sort())
+            .toEqual(["newest", "rated"]);
+        expect(storedBytes(raw)).toBe(budget);
+    });
+
+    it("sweeps 1,500 compressed 1,000-sample traces to half within two seconds", () => {
+        const {raw, store} = database();
+        const stream = encodeSamples(Array.from({length: 1000}, (_, i) => ({
+            at: i * 237, water: i * 0.123456789, cup: i * 0.0987654321, pour: 1
+        })));
+        for (let i = 0; i < 1500; i += 1) {
+            const id = `trace-${i}`;
+            store.insert({...record, id, startedAt: i + 1}, []);
+            raw.runSync("INSERT INTO brew_samples (brewId, stream) VALUES (?, ?);", [id, stream]);
+            raw.runSync("UPDATE brews SET hasStream = 1 WHERE id = ?;", [id]);
+        }
+        const before = storedBytes(raw);
+        const start = performance.now();
+
+        store.sweepBytes(before / 2);
+
+        expect(performance.now() - start).toBeLessThan(2000);
+        expect(storedBytes(raw)).toBe(before / 2);
+        expect(store.all().filter((brew) => brew.hasStream).map((brew) => brew.startedAt))
+            .toEqual(Array.from({length: 750}, (_, i) => 1500 - i));
+    });
+
     it("handles an empty history", () => {
         const {raw, store} = database();
         store.sweepBytes(1);
