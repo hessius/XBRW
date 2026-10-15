@@ -99,6 +99,8 @@ describe("the fixed candidate", () => {
         expect(tampered({name: "Other"})).toThrow();
         expect(tampered({sourceUuid: "other"})).toThrow();
         expect(tampered({probe: "other"})).toThrow();
+        expect(tampered({scaleEnabled: true})).toThrow(/unapproved/i);
+        expect(tampered({scaleEnabled: false})).toThrow(/unapproved/i);
         expect(tampered({blob: [...exact.blob.slice(0, 1), 61, ...exact.blob.slice(2)]})).toThrow();
         expect(tampered({blob: [...exact.blob, 0]})).toThrow();
         expect(tampered({recipeJSON: "{"})).toThrow();
@@ -117,6 +119,39 @@ describe("the fixed candidate", () => {
 });
 
 describe("preserving the original set", () => {
+    it("rejects a pending probe journal whose scale differs from the preserved candidate", async () => {
+        const {store, sql} = seeded(false);
+        await expect(writeTeaSlotProbe(store, identity, scripted(store, {sent: [], failAt: 1})))
+            .rejects.toThrow(/unknown/i);
+        const corrupt = JSON.parse(JSON.stringify(store.read("one")));
+        corrupt.journal.slots[1].scaleEnabled = true;
+        corrupt.journal.frames = prepareSet(corrupt.journal.slots);
+        sql.runSync("UPDATE easy_mode_slots SET recordJSON = ? WHERE deviceId = ?",
+            [JSON.stringify(corrupt), "one"]);
+        expect(() => new SlotDatabase(sql).read("one")).toThrow(/preserved set/i);
+    });
+
+    it("preserves independent written and draft scale choices through a probe and restoration", async () => {
+        const {store, sql} = seeded(false);
+        store.setScaleEnabled("one", 0, true);
+        store.setScaleEnabled("one", 1, true);
+        await written(store);
+        const original = store.read("one").written!;
+        store.setScaleEnabled("one", 1, false);
+        store.setScaleEnabled("one", 2, true);
+        const drafts = store.read("one").drafts;
+        const script: Script = {sent: []};
+        await writeTeaSlotProbe(store, identity, scripted(store, script), {id: () => "scale-probe"});
+        expect(script.sent.map(frame => frame[11])).toEqual([0x02, 0x12, 0x02]);
+        expect(store.read("one").written?.slots[0]).not.toHaveProperty("scaleEnabled");
+        const reopened = new SlotDatabase(sql);
+        await restoreTeaSlotOriginal(reopened, identity, scripted(reopened, script), {id: () => "scale-restore"});
+        expect(script.sent.slice(3)).toEqual(prepareSet(original.slots));
+        const restored = new SlotDatabase(sql).read("one");
+        expect(restored.written?.slots).toEqual(original.slots);
+        expect(restored.drafts).toEqual(drafts);
+    });
+
     it("records the last-written set and distinct drafts before the first send", async () => {
         const {store} = seeded(false);
         await written(store);
@@ -142,6 +177,7 @@ describe("preserving the original set", () => {
         };
         await writeTeaSlotProbe(store, identity, port, {id: () => "t1"});
         expect(store.read("one").drafts).toEqual(draftsBefore);
+        expect(() => store.setScaleEnabled("one", 0, true)).toThrow(/restore/i);
     });
 
     it("falls back to a complete draft set and refuses an incomplete one before anything", async () => {

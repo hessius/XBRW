@@ -142,6 +142,7 @@ export default function EasyModeScreen() {
                            onRestoreOriginal={() => void slots.restoreTeaOriginal()}
                            onDismissWrite={() => void slots.dismissWrite()}
                            onAssign={slots.assign} onWrite={slots.write}
+                           onSetScaleEnabled={slots.setScaleEnabled}
                            onRecover={slots.recover} onCancel={slots.cancel}/>
             </YStack>
             <XbrwSheet open={departureOpen} onOpenChange={open => { if (!open) stay(); }}

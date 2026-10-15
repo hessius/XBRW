@@ -6,6 +6,7 @@ import Swipeable, {type SwipeableMethods} from "react-native-gesture-handler/Rea
 import {Button, Text, XStack, YStack} from "tamagui";
 
 import BrewHistoryRow from "@/components/BrewHistoryRow";
+import BrewHistoryControls, {BrewHistorySortSheet} from "@/components/BrewHistoryControls";
 import DotIcon from "@/components/DotIcon";
 import DotMatrixText from "@/components/DotMatrixText";
 import ExportButton from "@/components/ExportButton";
@@ -15,10 +16,12 @@ import {COMPARE_SELECTION_COPY} from "@/constants/brewCopy";
 import {palette} from "@/constants/colors";
 import {useBrewBatchHandoff} from "@/hooks/useBrewBatchHandoff";
 import {useBrewHistory} from "@/hooks/useBrewHistory";
+import {useBrewHistoryQuery} from "@/hooks/useBrewHistoryQuery";
 import {useLiveBrew} from "@/hooks/useLiveBrew";
 import {useSetting} from "@/hooks/useSetting";
 import type {StoredBrew} from "@/library/BrewDatabase";
 import {canHandOff} from "@/library/brew/handoff/targets";
+import {queryBrewHistory, type HistorySort, type HistorySortDirection} from "@/library/brew/historyQuery";
 import {UNCLIPPED_LIST} from "@/constants/lists";
 
 /** How long one push to the record screen refuses a second (same latch as index.tsx). */
@@ -116,7 +119,6 @@ function SelectionActionRow({
     busy,
     canSend,
     comparable,
-    onSelect,
     onSend,
     onCompare,
     onDelete,
@@ -130,30 +132,12 @@ function SelectionActionRow({
     busy: boolean;
     canSend: boolean;
     comparable: boolean;
-    onSelect: () => void;
     onSend: () => void;
     onCompare: () => void;
     onDelete: () => void;
     onCancel: () => void;
 }) {
-    if (!selecting) {
-        return (
-            <XStack paddingHorizontal="$4" paddingVertical="$2" justifyContent="flex-end"
-                    borderBottomWidth={1} borderColor={palette.line}>
-                <Button
-                    accessibilityRole="button"
-                    accessibilityLabel="Select brews"
-                    chromeless
-                    size="$2"
-                    onPress={onSelect}>
-                    <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.2}
-                                   color={palette.dim}>
-                        SELECT
-                    </DotMatrixText>
-                </Button>
-            </XStack>
-        );
-    }
+    if (!selecting) return null;
 
     const tooLarge = count > 0 && !fits;
 
@@ -307,6 +291,8 @@ function SwipeableBrewRow({
 export default function BrewHistory() {
     const {recipeUuid} = useLocalSearchParams<{recipeUuid?: string}>();
     const {brews, open, remove, refresh} = useBrewHistory();
+    const historyQuery = useBrewHistoryQuery(recipeUuid);
+    const [sortOpen, setSortOpen] = useState(false);
     const [handoffEnabled] = useSetting("beanconquerorHandoff");
     const handoff = useBrewBatchHandoff((id) => {
         const opened = open(id);
@@ -338,20 +324,18 @@ export default function BrewHistory() {
         React.useCallback(() => { refresh(); }, [])
     );
 
-    const filtered = recipeUuid
+    const scoped = recipeUuid !== undefined
         ? brews.filter((b) => b.recipeUuid === recipeUuid)
         : brews;
+    const filtered = queryBrewHistory(brews, historyQuery.query);
 
-    // How many of the selected brews cannot be handed over. Counted from the
-    // rows on screen rather than from the database so it agrees with what the
-    // user can actually see and tick.
-    const blockedCount = selectedIds.filter((id) => {
-        const brew = filtered.find((candidate) => candidate.id === id);
-        return brew !== undefined && !canHandOff(brew.outcome);
-    }).length;
+    // Resolve all batch actions against visible rows, even after a refresh.
     const selectedBrews = selectedIds
         .map((id) => filtered.find((brew) => brew.id === id))
         .filter((brew): brew is StoredBrew => brew !== undefined);
+    const visibleSelectedIds = selectedBrews.map((brew) => brew.id);
+    const blockedCount = selectedBrews.filter((brew) => !canHandOff(brew.outcome)).length;
+    const visibleSelectionFits = selectionFits && selectedBrews.length === selectedIds.length;
     const comparable = selectedBrews.length === 2
         && selectedBrews[0].recipeUuid === selectedBrews[1].recipeUuid;
 
@@ -387,18 +371,29 @@ export default function BrewHistory() {
         handoff.reset();
     }
 
+    function handleQueryChange(change: () => void) {
+        handleSelectCancel();
+        handleDeleteCancel();
+        change();
+    }
+
+    function handleSortChange(sort: HistorySort, direction: HistorySortDirection) {
+        if (sort === historyQuery.query.sort && direction === historyQuery.query.direction) return;
+        handleQueryChange(() => historyQuery.onSortChange(sort, direction));
+    }
+
     function toggleSelected(id: string) {
-        const next = selectedIds.includes(id)
-            ? selectedIds.filter((selectedId) => selectedId !== id)
-            : [...selectedIds, id];
+        const next = visibleSelectedIds.includes(id)
+            ? visibleSelectedIds.filter((selectedId) => selectedId !== id)
+            : [...visibleSelectedIds, id];
         setSelectedIds(next);
         setSelectionFits(handoff.fits(next));
     }
 
     async function handleSelectionSend() {
-        if (selectedIds.length === 0 || !selectionFits || handoff.busy) return;
+        if (visibleSelectedIds.length === 0 || !visibleSelectionFits || handoff.busy) return;
         if (blockedCount > 0) return;
-        await handoff.send(selectedIds);
+        await handoff.send(visibleSelectedIds);
         handleSelectCancel();
     }
 
@@ -418,7 +413,7 @@ export default function BrewHistory() {
     }
 
     function handleSelectionDelete() {
-        for (const id of selectedIds) remove(id);
+        for (const id of visibleSelectedIds) remove(id);
         handleSelectCancel();
     }
 
@@ -441,32 +436,12 @@ export default function BrewHistory() {
     // When filtered to one recipe, name it under the heading. Taken from the
     // brew rows themselves (the name at brew time), so a since-renamed recipe
     // does not relabel its own history.
-    const recipeName = recipeUuid ? filtered[0]?.recipeName : undefined;
+    const recipeName = recipeUuid !== undefined ? scoped[0]?.recipeName : undefined;
     // Every open sheet has to be named here. On Android a Tamagui sheet renders
     // as a sibling of the screen and isolates nothing on its own, so one left
     // out leaves the rows and the selection actions reachable underneath a
     // destructive confirmation -- see `components/XbrwSheet.tsx`.
-    const screenCovered = pendingBrew !== null || confirmingBatchDelete || ratingNoteOpen;
-
-    if (filtered.length === 0) {
-        return (
-            <YStack flex={1} backgroundColor={palette.base}
-                    accessibilityElementsHidden={screenCovered}
-                    importantForAccessibility={screenCovered ? "no-hide-descendants" : "auto"}>
-                <HistoryHeader recipeName={recipeName} count={filtered.length} />
-                <YStack flex={1} padding="$4" alignItems="center"
-                        justifyContent="center" gap="$2">
-                    <DotMatrixText fontSize={14} weight="bold" letterSpacing={1.6}
-                                   color={palette.dim}>
-                        NO BREWS YET
-                    </DotMatrixText>
-                    <Text color={palette.muted} fontSize={13} textAlign="center">
-                        Brew a recipe and it will appear here.
-                    </Text>
-                </YStack>
-            </YStack>
-        );
-    }
+    const screenCovered = pendingBrew !== null || confirmingBatchDelete || ratingNoteOpen || sortOpen;
 
     return (
         <YStack flex={1} backgroundColor={palette.base}>
@@ -477,23 +452,27 @@ export default function BrewHistory() {
                     accessibilityElementsHidden={screenCovered}
                     importantForAccessibility={screenCovered ? "no-hide-descendants" : "auto"}>
                 <HistoryHeader recipeName={recipeName} count={filtered.length} />
-                {/* Always rendered. Selecting several brews to delete them is worth
-                    having whether or not the handoff is switched on; the gate is
-                    carried into the row and hides the Send button alone. */}
-                <SelectionActionRow
+                <BrewHistoryControls query={historyQuery.query}
+                    onToggleHideUnsuccessful={() => handleQueryChange(historyQuery.toggleHideUnsuccessful)}
+                    onToggleRatedOnly={() => handleQueryChange(historyQuery.toggleRatedOnly)}
+                    editing={selecting}
+                    onToggleEdit={filtered.length > 0 || selecting
+                        ? (selecting ? handleSelectCancel : handleSelectStart) : undefined}
+                    onOpenSort={() => setSortOpen(true)}/>
+                {/* Selection does not depend on the handoff gate, which hides Send alone. */}
+                {selecting && <SelectionActionRow
                     selecting={selecting}
-                    count={selectedIds.length}
+                    count={visibleSelectedIds.length}
                     blocked={blockedCount}
-                    fits={selectionFits}
+                    fits={visibleSelectionFits}
                     busy={handoff.busy}
                     canSend={handoffEnabled}
                     comparable={comparable}
-                    onSelect={handleSelectStart}
                     onSend={() => void handleSelectionSend()}
                     onCompare={handleSelectionCompare}
                     onDelete={() => setConfirmingBatchDelete(true)}
                     onCancel={handleSelectCancel}
-                />
+                />}
                 <FlatList {...UNCLIPPED_LIST}
                     data={filtered}
                     keyExtractor={(item) => item.id}
@@ -507,8 +486,31 @@ export default function BrewHistory() {
                         />
                     )}
                     contentContainerStyle={{paddingVertical: 8}}
+                    ListEmptyComponent={
+                        <YStack padding="$4" alignItems="center" gap="$2">
+                            <DotMatrixText fontSize={14} weight="bold" letterSpacing={1.6}
+                                           color={palette.dim}>
+                                {scoped.length === 0 ? "NO BREWS YET" : "NO MATCHING BREWS"}
+                            </DotMatrixText>
+                            <Text color={palette.muted} fontSize={13} textAlign="center">
+                                {scoped.length === 0
+                                    ? "Brew a recipe and it will appear here."
+                                    : "No brews match these filters."}
+                            </Text>
+                            {(historyQuery.query.hideUnsuccessful || historyQuery.query.ratedOnly) && (
+                                <Button accessibilityRole="button" accessibilityLabel="Clear filters"
+                                        onPress={() => handleQueryChange(historyQuery.clearFilters)}>
+                                    Clear filters
+                                </Button>
+                            )}
+                        </YStack>
+                    }
                 />
             </YStack>
+
+            <BrewHistorySortSheet open={sortOpen} onOpenChange={setSortOpen}
+                sort={historyQuery.query.sort} direction={historyQuery.query.direction}
+                onSortChange={handleSortChange}/>
 
             {/* Confirmation sheet — shown after swipe+tap, before the delete lands. */}
             <XbrwSheet
@@ -547,9 +549,9 @@ export default function BrewHistory() {
                 heightPercent={40}>
                 <YStack gap="$3" paddingHorizontal="$4" paddingBottom="$4">
                     <Text fontSize={15} color={palette.text}>
-                        {selectedIds.length === 1
+                        {visibleSelectedIds.length === 1
                             ? "Delete 1 brew? This cannot be undone."
-                            : `Delete ${selectedIds.length} brews? This cannot be undone.`}
+                            : `Delete ${visibleSelectedIds.length} brews? This cannot be undone.`}
                     </Text>
                     <Button
                         accessibilityRole="button"

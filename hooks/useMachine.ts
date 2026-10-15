@@ -13,7 +13,7 @@ import Machine, {
 } from "@/library/machine/Machine";
 import {asMachineModel, type MachineModel} from "@/library/machine/machineModel";
 import type {Settings} from "@/library/Settings";
-import {BluetoothPermissionError, SlotOperationError} from "@/library/machine/errors";
+import {BluetoothPermissionError, RadioUnavailableError, SlotOperationError} from "@/library/machine/errors";
 import {
     BleTransport,
     ensureBluetoothPermission,
@@ -370,6 +370,7 @@ export async function openLink(
             await attemptLink(machine, store);
             return;
         } catch (e) {
+            if (e instanceof RadioUnavailableError) throw e;
             lastFailure = e as Error;
         }
     }
@@ -397,6 +398,7 @@ async function attemptLink(machine: Machine, store: LinkStore): Promise<void> {
     try {
         await machine.connect(id);
     } catch (e) {
+        if (e instanceof RadioUnavailableError) throw e;
         // A remembered id can go stale — settings restored onto another phone,
         // or a machine that changed its identifier. Falling back to a scan
         // means the user is never stuck retrying a dead id with "forget this

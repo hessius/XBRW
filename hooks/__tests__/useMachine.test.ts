@@ -9,7 +9,7 @@ import {sharedSettings} from "@/hooks/useSetting";
 import {DEFAULTS} from "@/library/Settings";
 import {FakeTransport} from "@/library/machine/__tests__/FakeTransport";
 import Machine, {isActiveBrewPhase, type BrewPhase} from "@/library/machine/Machine";
-import {BluetoothPermissionError} from "@/library/machine/errors";
+import {BluetoothPermissionError, RadioUnavailableError} from "@/library/machine/errors";
 import type {BluetoothPermissionResult} from "@/library/machine/Transport";
 
 // `library/machine/Transport` (imported transitively by the hook) builds a
@@ -162,6 +162,53 @@ describe("the machine link", () => {
         expect(result.current.status).toBe("connected");
         expect(transport.connectedTo).toBe("NEW:ID");
         expect(result.current.remembered).toBe("NEW:ID");
+    });
+
+    it("propagates a remembered connect radio refusal without scanning or retrying", async () => {
+        const transport = new FakeTransport();
+        const error = new RadioUnavailableError("Bluetooth is switched off.");
+        transport.failConnect = error;
+        const connect = jest.spyOn(transport, "connect");
+        const scan = jest.spyOn(transport, "scan");
+        const wait = jest.fn(async () => {});
+        const store = {
+            rememberedId: () => "AA:BB",
+            rememberId: jest.fn(),
+            recordMachine: () => false
+        };
+
+        await expect(openLink(
+            new Machine(transport, {frameGapMs: 0}), store,
+            async () => ({granted: true} as const),
+            {delays: [0, 100, 200], wait}
+        )).rejects.toBe(error);
+
+        expect(connect).toHaveBeenCalledTimes(1);
+        expect(scan).not.toHaveBeenCalled();
+        expect(wait).not.toHaveBeenCalled();
+    });
+
+    it("propagates an initial scan radio refusal without connecting or retrying", async () => {
+        const transport = new FakeTransport();
+        const error = new RadioUnavailableError("Bluetooth is switched off.");
+        const scan = jest.spyOn(transport, "scan").mockRejectedValue(error);
+        const connect = jest.spyOn(transport, "connect");
+        const wait = jest.fn(async () => {});
+        const store = {
+            rememberedId: () => "",
+            rememberId: jest.fn(),
+            recordMachine: () => false
+        };
+
+        await expect(openLink(
+            new Machine(transport, {frameGapMs: 0}), store,
+            async () => ({granted: true} as const),
+            {delays: [0, 100, 200], wait}
+        )).rejects.toBe(error);
+
+        expect(scan).toHaveBeenCalledTimes(1);
+        expect(connect).not.toHaveBeenCalled();
+        expect(wait).not.toHaveBeenCalled();
     });
 
     it("records what the machine said, without touching the setting", async () => {

@@ -18,6 +18,21 @@ found, tuned or were sent can be put on a card and brewed.
   JSON.
 * Backs the whole library up to a file and restores it again.
 
+### Brew history
+
+History uses the same sort, filter and edit chips as the library. History opens with all records, newest first; the filter chip opens a row with **Hide unsuccessful** keeps
+completed and machine-ended cups, including hand-logged cups; **Rated only**
+keeps cups with a rating. The filters work independently or together, within
+the recipe if you opened its history. If nothing matches, **Clear filters**
+removes those filters without leaving the recipe.
+
+Sort by date, rating, dose, ratio or grind, in either direction. The order is
+remembered across visits and in settings backups; filters reset on reopening.
+Values are the brew-time snapshots, not the recipe's current settings. Missing
+values, unrated entries and grinder-off entries stay last in either direction.
+Changing filters or sorting clears batch selection before comparing, deleting
+or sending brews.
+
 ## Limitations
 
 These are properties of the cards and the machine, not of this app:

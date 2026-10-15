@@ -1,6 +1,6 @@
 import {createTestDatabase} from "@/test-utils/sqlite";
 import {SlotDatabase} from "@/library/slots/SlotDatabase";
-import {snapshotRecipe, prepareSet, type SlotJournal} from "@/library/slots/slotModel";
+import {snapshotRecipe, prepareSet, unwrittenSlotCount, type SlotJournal} from "@/library/slots/slotModel";
 import {coffee} from "./fixtures";
 
 export function batch(id = "attempt"): SlotJournal {
@@ -11,6 +11,78 @@ export function batch(id = "attempt"): SlotJournal {
         acknowledged: 0, inFlight: null, error: null
     };
 }
+
+it("persists independent scale choices and preserves them across replacement and library updates", () => {
+    const sql = createTestDatabase();
+    const store = new SlotDatabase(sql);
+    const snapshot = snapshotRecipe(coffee());
+    expect(() => store.setScaleEnabled("one", 0, true)).toThrow(/choose|empty|assign/i);
+    store.assign("one", 0, {...snapshot, scaleEnabled: true});
+    expect(store.read("one").drafts[0]?.scaleEnabled).not.toBe(true);
+    store.assign("one", 1, snapshot);
+    store.setScaleEnabled("one", 0, true);
+    expect(new SlotDatabase(sql).read("one").drafts.map(slot => slot?.scaleEnabled))
+        .toEqual([true, undefined, undefined]);
+    store.assign("one", 0, snapshotRecipe(coffee("Replacement")));
+    expect(store.read("one").drafts[0]?.scaleEnabled).toBe(true);
+    const updated = coffee("Replacement");
+    updated.pours[0].temperature = 92;
+    store.assign("one", 0, snapshotRecipe(updated));
+    expect(store.read("one").drafts[0]?.scaleEnabled).toBe(true);
+    expect(store.read("one").drafts[0]?.blob).toEqual(snapshotRecipe(updated).blob);
+    store.setScaleEnabled("one", 0, false);
+    expect(new SlotDatabase(sql).read("one").drafts[0]?.scaleEnabled).toBe(false);
+    store.assign("one", 0, {...snapshot, scaleEnabled: true});
+    expect(store.read("one").drafts[0]?.scaleEnabled).toBe(false);
+    store.assign("one", 0, null);
+    store.assign("one", 0, snapshot);
+    expect(store.read("one").drafts[0]?.scaleEnabled).not.toBe(true);
+});
+
+it("hydrates old pending journals unchanged and refuses scale edits while pending", () => {
+    const sql = createTestDatabase();
+    const store = new SlotDatabase(sql);
+    const legacy = batch();
+    store.assign("one", 0, legacy.slots[0]);
+    store.begin("one", legacy);
+    expect(new SlotDatabase(sql).read("one").journal).toEqual(legacy);
+    expect(() => store.setScaleEnabled("one", 0, true)).toThrow(/incomplete/i);
+    expect(new SlotDatabase(sql).read("one").journal?.frames).toEqual(legacy.frames);
+});
+
+it("keeps scale in written snapshots and counts a scale-only edit as pending", () => {
+    const sql = createTestDatabase();
+    const store = new SlotDatabase(sql);
+    const journal = batch();
+    journal.slots.forEach((slot, index) => store.assign("one", index as 0 | 1 | 2, slot));
+    store.setScaleEnabled("one", 1, true);
+    journal.slots = store.read("one").drafts.map(slot => slot!) as SlotJournal["slots"];
+    journal.frames = prepareSet(journal.slots);
+    store.begin("one", journal);
+    for (const index of [0, 1, 2] as const) {
+        store.dispatching("one", journal.id, index);
+        store.acknowledge("one", journal.id, index);
+    }
+    store.complete("one", journal.id, 42);
+    expect(new SlotDatabase(sql).read("one").written?.slots[1].scaleEnabled).toBe(true);
+    expect(unwrittenSlotCount(store.read("one"))).toBe(0);
+    store.setScaleEnabled("one", 1, false);
+    expect(unwrittenSlotCount(store.read("one"))).toBe(1);
+});
+
+it("rolls back scale persistence failures without notifying subscribers", () => {
+    const sql = createTestDatabase();
+    const store = new SlotDatabase(sql);
+    store.assign("one", 0, snapshotRecipe(coffee()));
+    const before = store.read("one");
+    const listener = jest.fn();
+    store.subscribe(listener);
+    sql.execSync("CREATE TRIGGER fail_scale BEFORE INSERT ON easy_mode_slots BEGIN SELECT RAISE(ABORT, 'disk full'); END;");
+    expect(() => store.setScaleEnabled("one", 0, true)).toThrow(/disk full/i);
+    expect(store.read("one")).toBe(before);
+    expect(new SlotDatabase(sql).read("one")).toEqual(before);
+    expect(listener).not.toHaveBeenCalled();
+});
 
 it("keeps drafts per machine and returns stable subscribed snapshots", () => {
     const store = new SlotDatabase(createTestDatabase());

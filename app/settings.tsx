@@ -27,6 +27,7 @@ import type {BrewRecord} from "@/library/brew/BrewRecord";
 import type {BackupExcluded, Settings, SettingKey} from "@/library/Settings";
 import {isMachineModel} from "@/library/machine/machineModel";
 import {isSortAxis, isSortDirection} from "@/library/librarySort";
+import {isHistorySort, isHistorySortDirection} from "@/library/brew/historyQuery";
 import {isLibraryView} from "@/library/libraryView";
 import {asTemperatureUnit} from "@/library/units";
 
@@ -141,6 +142,9 @@ export default function SettingsScreen({settings}: Props) {
         useSetting("brewTraceRetention", settings);
     // Read only so backups carry the user's story-card sharing preference.
     const [storyCardHidden] = useSetting("storyCardHidden", settings);
+    const [brewHistorySort, setBrewHistorySort] = useSetting("brewHistorySort", settings);
+    const [brewHistorySortDirection, setBrewHistorySortDirection] =
+        useSetting("brewHistorySortDirection", settings);
     // Owned by the library rail, not shown as rows here. Read anyway, because a
     // backup carries every preference and these are four.
     const [librarySort, setLibrarySort] = useSetting("librarySort", settings);
@@ -196,6 +200,7 @@ export default function SettingsScreen({settings}: Props) {
             firstBrewDone, machineConsoleAcknowledged, machineConsoleConfirmations,
             machineModel, machineAutoStart, animateBrewChart, askForRatings,
             brewTraceRetention, storyCardHidden,
+            brewHistorySort, brewHistorySortDirection,
             librarySort, librarySortDirection, libraryFavouritesFirst,
             libraryView, invertAutoShelves, hiddenShelves, myShelves
         };
@@ -313,6 +318,12 @@ export default function SettingsScreen({settings}: Props) {
         }
         if (isSortDirection(incoming.librarySortDirection)) {
             setLibrarySortDirection(incoming.librarySortDirection);
+        }
+        if (isHistorySort(incoming.brewHistorySort)) {
+            setBrewHistorySort(incoming.brewHistorySort);
+        }
+        if (isHistorySortDirection(incoming.brewHistorySortDirection)) {
+            setBrewHistorySortDirection(incoming.brewHistorySortDirection);
         }
         if (typeof incoming.libraryFavouritesFirst === "boolean") {
             setLibraryFavouritesFirst(incoming.libraryFavouritesFirst);

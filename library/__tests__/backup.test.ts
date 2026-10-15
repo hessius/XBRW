@@ -682,6 +682,26 @@ describe("authored fields through backup", () => {
 });
 
 describe("every setting is carried or deliberately excluded", () => {
+    it("round-trips history ordering but never invents preferences in older backups", () => {
+        expect(DEFAULTS.brewHistorySort).toBe("date");
+        expect(DEFAULTS.brewHistorySortDirection).toBe("desc");
+        expect(NOT_IN_BACKUP).not.toContain("brewHistorySort");
+        expect(NOT_IN_BACKUP).not.toContain("brewHistorySortDirection");
+        const parsed = parseBackup(buildBackup([recipeNamed("A", "u1")], {
+            brewHistorySort: "grind", brewHistorySortDirection: "asc"
+        }));
+        expect(parsed.ok).toBe(true);
+        if (!parsed.ok) throw new Error(parsed.reason);
+        expect(parsed.payload.settings).toEqual({
+            brewHistorySort: "grind", brewHistorySortDirection: "asc"
+        });
+        const old = parseBackup(buildBackup([recipeNamed("A", "u1")], {}));
+        expect(old.ok).toBe(true);
+        if (!old.ok) throw new Error(old.reason);
+        expect(old.payload.settings).not.toHaveProperty("brewHistorySort");
+        expect(old.payload.settings).not.toHaveProperty("brewHistorySortDirection");
+    });
+
     // The showHints bug was a key that lived in DEFAULTS but not in the snapshot
     // the settings screen hands buildBackup, so the backup silently dropped it.
     // The snapshot's type (Record<Exclude<SettingKey, BackupExcluded>, unknown>)
