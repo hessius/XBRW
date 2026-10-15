@@ -40,6 +40,27 @@ describe("sample trace codec", () => {
         },
     );
 
+    it("rejects a compressed trace with a missing water column", () => {
+        const stored = encodeText(JSON.stringify({at: [0], cup: [0], pour: [0]}));
+        expect(decodeSamples(stored)).toEqual([]);
+    });
+
+    it.each(["at", "water", "cup", "pour"])("rejects mismatched %s column lengths", (column) => {
+        const columns = {at: [0], water: [0], cup: [0], pour: [0], [column]: [0, 1]};
+        expect(decodeSamples(encodeText(JSON.stringify(columns)))).toEqual([]);
+    });
+
+    it.each(["at", "water", "cup", "pour"])("rejects non-numeric %s entries", (column) => {
+        const columns = {at: [0], water: [0], cup: [0], pour: [0], [column]: ["0"]};
+        expect(decodeSamples(encodeText(JSON.stringify(columns)))).toEqual([]);
+    });
+
+    it.each(["at", "water", "cup", "pour"])("rejects non-finite %s entries", (column) => {
+        const json = JSON.stringify({at: [0], water: [0], cup: [0], pour: [0]})
+            .replace(`"${column}":[0]`, `"${column}":[1e400]`);
+        expect(decodeSamples(encodeText(json))).toEqual([]);
+    });
+
     it("produces deterministic compressed output", () => {
         expect(encodeSamples(samples)).toBe(encodeSamples(samples));
     });

@@ -64,6 +64,9 @@ export function decodeSamples(stored: string): BrewSample[] {
     try {
         const parsed = JSON.parse(unpack(stored));
         if (Array.isArray(parsed)) return parsed as BrewSample[];
+        const columns = [parsed.at, parsed.water, parsed.cup, parsed.pour];
+        if (!columns.every((column) => Array.isArray(column)
+            && column.length === parsed.at.length && column.every(Number.isFinite))) return [];
         const at = undelta(parsed.at), pour = undelta(parsed.pour);
         return at.map((t: number, i: number) => ({
             at: t, water: parsed.water[i], cup: parsed.cup[i], pour: pour[i],
