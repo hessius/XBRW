@@ -3,6 +3,7 @@ import {act, fireEvent, screen, waitFor, within} from "@testing-library/react-na
 import {AccessibilityInfo, Dimensions, StyleSheet} from "react-native";
 import {renderWithProviders, SHEET_PRESS_TIMEOUT} from "@/test-utils/render";
 import EasyModeSlots from "@/components/EasyModeSlots";
+import EasyModeSlotCard from "@/components/EasyModeSlotCard";
 import {emptySlotRecord, prepareSet, snapshotRecipe} from "@/library/slots/slotModel";
 import {coffee} from "@/library/slots/__tests__/fixtures";
 import {SLOT_INTEGRATION_BLOCK, unavailableSlotPort} from "@/library/slots/slotWriter";
@@ -15,6 +16,8 @@ import {onAccent, palette} from "@/constants/colors";
 import {resolveAccent} from "@/library/accent";
 import * as motion from "@/constants/motion";
 import {restoreTeaSlotOriginal, writeTeaSlotProbe} from "@/library/slots/teaSlotProbe";
+import {PROFILE_BLEED} from "@/components/PourProfile";
+import {DOTO_FAMILIES} from "@/components/DotMatrixText";
 
 const recipes = [coffee("Morning"), coffee("Evening")];
 const native = jest.requireActual<typeof import("react-native")>("react-native");
@@ -22,6 +25,68 @@ const props = () => ({
     record: emptySlotRecord(), recipes, deviceId: "one", connected: true,
     available: false, running: false, error: null,
     onAssign: jest.fn(), onWrite: jest.fn(), onRecover: jest.fn(), onCancel: jest.fn()
+});
+
+it.each([1, 3])("keeps the Scale hit target at least 44pt without changing its visual size at font scale %p",
+    async (fontScale) => {
+        const dimensions = jest.spyOn(Dimensions, "get").mockReturnValue({
+            width: 320, height: 568, scale: 2, fontScale
+        });
+        try {
+            const options = props();
+            options.record.drafts[0] = snapshotRecipe(recipes[0]);
+            await renderWithProviders(<EasyModeSlots {...options} onSetScaleEnabled={jest.fn()}/>);
+            const scale = screen.getByRole("switch", {name: "Scale for slot A"});
+            expect(scale).toHaveStyle({width: 46, height: 23, minHeight: 23});
+            expect(scale.props.hitSlop).toEqual({top: 10.5, bottom: 10.5, left: 0, right: 0});
+            const {width, height} = StyleSheet.flatten(scale.props.style);
+            const {top, bottom, left, right} = scale.props.hitSlop;
+            expect(width + left + right).toBeGreaterThanOrEqual(44);
+            expect(height + top + bottom).toBeGreaterThanOrEqual(44);
+            // RN clips hitSlop at the parent: padding keeps it inside even when the label wraps.
+            const group = screen.getByTestId("slot-A-scale");
+            expect(group).toHaveStyle({minHeight: 44, paddingTop: top, paddingBottom: bottom});
+            expect(group.props.onPress).toBeUndefined();
+            expect(group.props.onStartShouldSetResponder).toBeUndefined();
+            const footer = screen.getByTestId("slot-A-footer");
+            expect(footer).toHaveStyle({gap: 13, flexWrap: "wrap"});
+            expect(footer.props.onPress).toBeUndefined();
+            expect(within(footer).getByRole("button", {name: "Change slot A recipe"}).props.hitSlop)
+                .toBeUndefined();
+        } finally {
+            dimensions.mockRestore();
+        }
+    });
+
+it("presses Scale exactly once independently of CHANGE and retains checked and disabled behavior", async () => {
+    const snapshot = snapshotRecipe(recipes[0]);
+    const onSetScaleEnabled = jest.fn();
+    const onChange = jest.fn();
+    const cardProps = {
+        index: 0 as const, snapshot, needsWrite: true, status: null, recovery: false,
+        locked: false, updateProblem: null, onChange, onUpdate: jest.fn(), onSetScaleEnabled
+    };
+    const view = await renderWithProviders(<EasyModeSlotCard {...cardProps}/>);
+    const scale = () => screen.getByRole("switch", {name: "Scale for slot A"});
+    expect(scale()).not.toBeChecked();
+    await fireEvent.press(scale());
+    expect(onSetScaleEnabled).toHaveBeenCalledTimes(1);
+    expect(onSetScaleEnabled).toHaveBeenLastCalledWith(true);
+    expect(onChange).not.toHaveBeenCalled();
+    await fireEvent.press(screen.getByRole("button", {name: "Change slot A recipe"}));
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onSetScaleEnabled).toHaveBeenCalledTimes(1);
+    await view.rerender(<EasyModeSlotCard {...cardProps} snapshot={{...snapshot, scaleEnabled: true}}/>);
+    expect(scale()).toBeChecked();
+    expect(screen.getByText("SCALE ON")).toBeOnTheScreen();
+    await fireEvent.press(scale());
+    expect(onSetScaleEnabled).toHaveBeenCalledTimes(2);
+    expect(onSetScaleEnabled).toHaveBeenLastCalledWith(false);
+    await view.rerender(<EasyModeSlotCard {...cardProps} locked/>);
+    expect(scale()).toBeDisabled();
+    await fireEvent.press(scale());
+    expect(onSetScaleEnabled).toHaveBeenCalledTimes(2);
+    expect(onChange).toHaveBeenCalledTimes(1);
 });
 
 it("hides LAB while keeping retained original restoration on the normal screen", async () => {
@@ -65,36 +130,154 @@ it("shows a normal tea slot as steeps and water rather than coffee ratio and gri
     const card = within(screen.getByTestId("slot-A"));
     expect(card.getByText("2 STEEPS · 180ML · GRIND OFF")).toBeOnTheScreen();
     expect(card.queryByText(/1:30/)).toBeNull();
+    const band = card.getByTestId("slot-A-profile-band", {includeHiddenElements: true});
+    expect(band).toHaveStyle({height: 45, marginHorizontal: -14, overflow: "hidden"});
+    expect(card.queryByTestId("slot-A-profile", {includeHiddenElements: true})).toBeNull();
+    await fireEvent(band, "layout", {nativeEvent: {layout: {width: 320, height: 45, x: 0, y: 0}}});
+    const profile = card.getByTestId("slot-A-profile", {includeHiddenElements: true});
+    expect(profile.props.width).toBe(320 + 2 * PROFILE_BLEED);
+    expect(profile.props.height).toBe(45 + 2 * PROFILE_BLEED);
     expect(screen.getByRole("button", {name: "Change slot A recipe"})).toBeEnabled();
 });
 
-function PersistentSlots({store}: {store: SlotDatabase}) {
+function PersistentSlots({store, libraryRecipes = recipes}: {store: SlotDatabase; libraryRecipes?: Recipe[]}) {
     const slots = useEasyModeSlots({deviceId: "one", serial: "serial"}, unavailableSlotPort, store);
-    return <EasyModeSlots {...slots} recipes={recipes} deviceId="one" connected
+    return <EasyModeSlots {...slots} recipes={libraryRecipes} deviceId="one" connected
         onAssign={slots.assign} onWrite={slots.write} onRecover={slots.recover} onCancel={slots.cancel}
+        onSetScaleEnabled={slots.setScaleEnabled}
         onDismissSuccess={slots.resetAttempt}/>;
 }
 
-it("uses compact accent slabs with a top status and inline stats/change, without a profile row", async () => {
+it("toggles each assigned slot independently and persists until WRITE", async () => {
+    const sql = createTestDatabase();
+    const store = new SlotDatabase(sql);
+    const saved = snapshotRecipe(recipes[0]);
+    for (const index of [0, 1, 2] as const) store.assign("one", index, saved);
+    await renderWithProviders(<PersistentSlots store={store}/>);
+    const scale = (name: string) => screen.getByRole("switch", {name: `Scale for slot ${name}`});
+    expect(scale("A")).not.toBeChecked();
+    expect(scale("B")).not.toBeChecked();
+    await fireEvent(scale("A"), "onCheckedChange", true);
+    expect(scale("A")).toBeChecked();
+    expect(scale("B")).not.toBeChecked();
+    expect(within(screen.getByTestId("slot-A")).getByText("SCALE ON")).toBeOnTheScreen();
+    expect(within(screen.getByTestId("slot-B")).getByText("SCALE OFF")).toBeOnTheScreen();
+    expect(screen.queryByText("RECIPE UPDATED")).toBeNull();
+    expect(new SlotDatabase(sql).read("one").drafts[0]?.scaleEnabled).toBe(true);
+    expect(store.read("one").written).toBeNull();
+    await fireEvent(scale("B"), "onCheckedChange", true);
+    await fireEvent(scale("A"), "onCheckedChange", false);
+    expect(scale("A")).not.toBeChecked();
+    expect(scale("B")).toBeChecked();
+    await fireEvent.press(screen.getByRole("button", {name: "About Easy Mode"}));
+    expect(await screen.findByText(/automatically tares.*slot.*started/i)).toBeOnTheScreen();
+    expect(screen.getByText(/scale changes.*WRITE TO MACHINE/i)).toBeOnTheScreen();
+});
+
+it("retains the slot's selected scale when accepting updated library content", async () => {
+    const store = new SlotDatabase(createTestDatabase());
+    const recipe = recipes[0];
+    store.assign("one", 0, snapshotRecipe(recipe));
+    store.setScaleEnabled("one", 0, true);
+    const updated = new Recipe(undefined, JSON.stringify(recipe));
+    updated.pours[0].temperature = 92;
+    await renderWithProviders(<PersistentSlots store={store} libraryRecipes={[updated]}/>);
+    expect(screen.getByRole("switch", {name: "Scale for slot A"})).toBeChecked();
+    await fireEvent.press(screen.getByRole("button", {name: "Update slot A from library"}));
+    expect(screen.getByRole("switch", {name: "Scale for slot A"})).toBeChecked();
+    expect(screen.queryByText("RECIPE UPDATED")).toBeNull();
+    expect(store.read("one").drafts[0]?.blob).toEqual(snapshotRecipe(updated).blob);
+});
+
+it("shows no scale control for an empty slot and disables it without an optional handler", async () => {
+    const options = props();
+    options.record.drafts[0] = snapshotRecipe(recipes[0]);
+    await renderWithProviders(<EasyModeSlots {...options}/>);
+    expect(screen.getByRole("switch", {name: "Scale for slot A"})).toBeDisabled();
+    expect(screen.queryByRole("switch", {name: "Scale for slot B"})).toBeNull();
+    const empty = within(screen.getByTestId("slot-B"));
+    expect(empty.getByText("B")).toBeOnTheScreen();
+    expect(empty.getByText("CHOOSE RECIPE")).toBeOnTheScreen();
+    expect(empty.queryByTestId("slot-B-profile-band", {includeHiddenElements: true})).toBeNull();
+    expect(empty.queryByText(/SCALE|NOT WRITTEN|LAST WRITTEN/)).toBeNull();
+});
+
+it("locks scale during operations and active fixed trials, and omits it from recovery probes", async () => {
+    const store = new SlotDatabase(createTestDatabase());
+    for (const index of [0, 1, 2] as const) store.assign("one", index, snapshotRecipe(recipes[0]));
+    const onSetScaleEnabled = jest.fn();
+    const view = await renderWithProviders(<EasyModeSlots {...props()} record={store.read("one")}
+        running onSetScaleEnabled={onSetScaleEnabled}/>);
+    expect(screen.getByRole("switch", {name: "Scale for slot A", includeHiddenElements: true})).toBeDisabled();
+    await writeTeaSlotProbe(store, {deviceId: "one", serial: "serial"}, {
+        available: true, acquire: async () => ({
+            sendAndConfirm: async () => {}, confirmSaved: async () => {}, release: () => {}
+        })
+    });
+    await view.rerender(<EasyModeSlots {...props()} record={store.read("one")}
+        onSetScaleEnabled={onSetScaleEnabled}/>);
+    expect(screen.queryByRole("switch", {name: "Scale for slot A"})).toBeNull();
+    expect(screen.queryByTestId("slot-A-profile-band", {includeHiddenElements: true})).toBeNull();
+    expect(screen.getByRole("switch", {name: "Scale for slot B"})).toBeDisabled();
+    expect(onSetScaleEnabled).not.toHaveBeenCalled();
+    await view.rerender(<EasyModeSlots {...interruptedOptions()} onSetScaleEnabled={onSetScaleEnabled}/>);
+    expect(screen.queryByRole("switch")).toBeNull();
+});
+
+it("uses accent slabs with a measured full-width profile band and wrapping shared footer", async () => {
     const options = props();
     const recipe = coffee("Hunkute - DROP COFFEE ROASTERS");
     const saved = snapshotRecipe(recipe);
     options.record.drafts = [saved, saved, saved];
     await renderWithProviders(<EasyModeSlots {...options} recipes={[recipe]} available/>);
     const card = screen.getByTestId("slot-A");
-    expect(card).toHaveStyle({backgroundColor: resolveAccent(recipe), paddingTop: 14, paddingLeft: 14});
+    expect(card).toHaveStyle({
+        backgroundColor: resolveAccent(recipe), paddingTop: 14, paddingBottom: 14,
+        paddingLeft: 14, paddingRight: 14, borderTopLeftRadius: 18, borderTopRightRadius: 18,
+        borderBottomLeftRadius: 18, borderBottomRightRadius: 18
+    });
+    expect(StyleSheet.flatten(card.props.style).height).toBeUndefined();
+    expect(StyleSheet.flatten(card.props.style).overflow).not.toBe("hidden");
     const identity = within(card).getByText(saved.name);
-    expect(identity).toHaveStyle({fontSize: 16});
+    expect(identity).toHaveStyle({fontSize: 16, fontWeight: "600"});
+    expect(StyleSheet.flatten(identity.props.style).fontFamily).not.toBe(DOTO_FAMILIES.bold);
     expect(identity.props.numberOfLines).toBeUndefined();
     expect(identity.props.allowFontScaling).not.toBe(false);
-    expect(within(screen.getByTestId("slot-A-heading")).getByText("NOT WRITTEN")).toBeOnTheScreen();
-    const bottom = within(screen.getByTestId("slot-A-details"));
-    expect(bottom.getByText(/GRIND/)).toBeOnTheScreen();
-    expect(bottom.getByRole("button", {name: "Change slot A recipe"})).toHaveStyle({
+    const heading = within(screen.getByTestId("slot-A-heading"));
+    expect(heading.getByText("A")).toHaveStyle({fontSize: 24, fontFamily: DOTO_FAMILIES.bold});
+    expect(heading.getByText("NOT WRITTEN")).toHaveStyle({fontSize: 11, fontFamily: DOTO_FAMILIES.bold});
+    const details = within(screen.getByTestId("slot-A-details"));
+    const figures = details.getByText(/GRIND/);
+    expect(figures).toHaveStyle({fontSize: 11, fontFamily: DOTO_FAMILIES.bold});
+    expect(figures.props.numberOfLines).toBeUndefined();
+    expect(details.queryByRole("button")).toBeNull();
+    const footer = screen.getByTestId("slot-A-footer");
+    expect(footer).toHaveStyle({alignItems: "center", justifyContent: "space-between", flexWrap: "wrap"});
+    const controls = within(footer);
+    expect(controls.getByRole("switch", {name: "Scale for slot A"})).toBeOnTheScreen();
+    expect(controls.getByText("SCALE OFF")).toHaveStyle({fontSize: 11, fontFamily: DOTO_FAMILIES.bold});
+    expect(controls.getByText("CHANGE")).toHaveStyle({fontSize: 11, fontFamily: DOTO_FAMILIES.bold});
+    expect(controls.getByRole("button", {name: "Change slot A recipe"})).toHaveStyle({
         height: "auto", minHeight: 44, backgroundColor: palette.base
     });
-    expect(screen.getByTestId("slot-A-profile-watermark", {includeHiddenElements: true})).toHaveStyle({position: "absolute"});
-    expect(screen.getByTestId("slot-A-profile-watermark", {includeHiddenElements: true}).props.pointerEvents).toBe("none");
+    const band = screen.getByTestId("slot-A-profile-band", {includeHiddenElements: true});
+    expect(band).toHaveStyle({height: 45, marginHorizontal: -14, overflow: "hidden"});
+    const bandStyle = StyleSheet.flatten(band.props.style);
+    expect(bandStyle.marginLeft ?? bandStyle.marginHorizontal).toBe(-14);
+    expect(bandStyle.marginRight ?? bandStyle.marginHorizontal).toBe(-14);
+    expect(band.props.pointerEvents).toBe("none");
+    expect(band.props.accessibilityElementsHidden).toBe(true);
+    expect(band.props.importantForAccessibility).toBe("no-hide-descendants");
+    expect(screen.queryByTestId("slot-A-profile-watermark", {includeHiddenElements: true})).toBeNull();
+    expect(screen.queryByTestId("slot-A-profile", {includeHiddenElements: true})).toBeNull();
+    await fireEvent(band, "layout", {nativeEvent: {layout: {width: 320, height: 45, x: 0, y: 0}}});
+    let profile = screen.getByTestId("slot-A-profile", {includeHiddenElements: true});
+    expect(profile.props.width).toBe(320 + 2 * PROFILE_BLEED);
+    expect(profile.props.height).toBe(45 + 2 * PROFILE_BLEED);
+    await fireEvent(band, "layout", {nativeEvent: {layout: {width: 240, height: 45, x: 0, y: 0}}});
+    profile = screen.getByTestId("slot-A-profile", {includeHiddenElements: true});
+    expect(profile.props.width).toBe(240 + 2 * PROFILE_BLEED);
+    expect(profile.props.height).toBe(45 + 2 * PROFILE_BLEED);
     expect(screen.getByRole("button", {name: "About Easy Mode"})).toHaveStyle({backgroundColor: palette.none});
     expect(screen.getByRole("button", {name: "Write all three slots"})).toHaveStyle({
         backgroundColor: palette.text, color: onAccent.text
@@ -262,12 +445,14 @@ it("compares bytes, keeps snapshot identity and clears dirty status when bytes r
     const renamed = new Recipe(undefined, JSON.stringify(recipe));
     renamed.name = "Renamed";
     const view = await renderWithProviders(<EasyModeSlots {...options} recipes={[renamed]} available/>);
-    expect(screen.getAllByText("LAST WRITTEN")).toHaveLength(3);
+    expect(screen.queryByText("LAST WRITTEN")).toBeNull();
+    expect(screen.queryByText("NOT WRITTEN")).toBeNull();
+    expect(screen.getAllByText(/Last written by XBRW\+\+/)).toHaveLength(1);
     expect(screen.getByText("0 CHANGES")).toBeOnTheScreen();
     expect(screen.queryByText("RECIPE UPDATED")).toBeNull();
     expect(screen.queryByText("Renamed")).toBeNull();
     expect(screen.getAllByText(/GRIND OFF/)).toHaveLength(3);
-    expect(screen.getByTestId("slot-A-profile", {includeHiddenElements: true})).toBeOnTheScreen();
+    expect(screen.getByTestId("slot-A-profile-band", {includeHiddenElements: true})).toBeOnTheScreen();
     const changed = coffee("Different bytes");
     options.record.drafts[1] = snapshotRecipe(changed);
     await view.rerender(<EasyModeSlots {...options} available/>);
@@ -276,6 +461,31 @@ it("compares bytes, keeps snapshot identity and clears dirty status when bytes r
     options.record.drafts[1] = saved;
     await view.rerender(<EasyModeSlots {...options} available/>);
     expect(screen.queryByText("NOT WRITTEN")).toBeNull();
+    expect(screen.queryByText("LAST WRITTEN")).toBeNull();
+    expect(screen.getByText("0 CHANGES")).toBeOnTheScreen();
+    expect(screen.getByRole("button", {name: "Write all three slots"})).toBeEnabled();
+});
+
+it("shows pending status for a scale-only change and clears it when the receipt matches again", async () => {
+    const options = props();
+    const saved = snapshotRecipe(recipes[0]);
+    options.record.drafts = [saved, saved, saved];
+    options.record.written = {at: 1000, slots: [saved, saved, saved]};
+    const view = await renderWithProviders(<EasyModeSlots {...options} available/>);
+    expect(screen.queryByText("NOT WRITTEN")).toBeNull();
+    expect(screen.queryByText("LAST WRITTEN")).toBeNull();
+    expect(screen.getByText("0 CHANGES")).toBeOnTheScreen();
+    options.record.drafts[0] = {...saved, scaleEnabled: true};
+    await view.rerender(<EasyModeSlots {...options} available/>);
+    expect(screen.getAllByText("NOT WRITTEN")).toHaveLength(1);
+    expect(within(screen.getByTestId("slot-A-heading")).getByText("NOT WRITTEN")).toBeOnTheScreen();
+    expect(screen.getByText("1 CHANGE")).toBeOnTheScreen();
+    options.record.drafts[0] = saved;
+    await view.rerender(<EasyModeSlots {...options} available/>);
+    expect(screen.queryByText("NOT WRITTEN")).toBeNull();
+    expect(screen.queryByText("LAST WRITTEN")).toBeNull();
+    expect(screen.getByText("0 CHANGES")).toBeOnTheScreen();
+    expect(screen.getAllByText(/Last written by XBRW\+\+/)).toHaveLength(1);
     expect(screen.getByRole("button", {name: "Write all three slots"})).toBeEnabled();
 });
 
@@ -370,7 +580,8 @@ it("shows the last-written time once and treats a new source with identical byte
     options.record.written = {at: 1000, slots: [saved, saved, saved]};
     await renderWithProviders(<EasyModeSlots {...options} recipes={[...recipes, otherSource]} available/>);
     expect(screen.getAllByText(/Last written by XBRW\+\+/)).toHaveLength(1);
-    expect(screen.getAllByText("LAST WRITTEN")).toHaveLength(3);
+    expect(screen.queryByText("LAST WRITTEN")).toBeNull();
+    expect(screen.queryByText("NOT WRITTEN")).toBeNull();
     expect(screen.getByText("0 CHANGES")).toBeOnTheScreen();
     expect(screen.getByRole("button", {name: "Write all three slots"})).toBeEnabled();
 });

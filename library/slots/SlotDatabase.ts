@@ -25,6 +25,11 @@ function triple<T>(value: unknown, read: (item: unknown) => T): Triple<T> {
     return [read(value[0]), read(value[1]), read(value[2])];
 }
 
+function samePreservedSet(left: Triple<SlotSnapshot | null>, right: Triple<SlotSnapshot | null>): boolean {
+    return sameSnapshotSet(left, right) && left.every((slot, index) =>
+        (slot?.scaleEnabled === true) === (right[index]?.scaleEnabled === true));
+}
+
 function readJournal(value: unknown): SlotJournal | null {
     if (value === null) return null;
     if (!objectValue(value) || typeof value.id !== "string" || value.id === ""
@@ -119,7 +124,7 @@ function readExperiment(value: unknown, deviceId: string, journal: SlotJournal |
     const candidate = triple(value.candidate, readSnapshot);
     const evidence = value.evidence.map(readEvidence);
     if (slots.some(isTeaProbeSnapshot) || originalDrafts.some(isTeaProbeSnapshot)
-        || !sameSnapshotSet(candidate, teaProbeCandidateSet(slots, value.candidateId))) {
+        || !samePreservedSet(candidate, teaProbeCandidateSet(slots, value.candidateId))) {
         throw new Error("The tea slot probe sets are inconsistent.");
     }
     if (evidence[0]?.kind !== "prepared" || evidence[0].journalId !== value.trialId) {
@@ -157,7 +162,7 @@ function readExperiment(value: unknown, deviceId: string, journal: SlotJournal |
         }
         if (journal !== null) {
             const expected = pending?.kind === "candidate" ? candidate : slots;
-            if (journal.serial !== value.serial || !sameSnapshotSet(journal.slots, expected)) {
+            if (journal.serial !== value.serial || !samePreservedSet(journal.slots, expected)) {
                 throw new Error("The tea slot probe journal is not the preserved set.");
             }
         }
@@ -216,7 +221,7 @@ function readRecord(json: string, deviceId: string): SlotRecord {
         const history = record.experimentHistory ?? [];
         const current = record.experiment;
         if (written?.slots.some(isTeaProbeSnapshot)
-            && (current?.phase !== "active" || !sameSnapshotSet(written.slots, current.candidate))) {
+            && (current?.phase !== "active" || !samePreservedSet(written.slots, current.candidate))) {
             throw new Error("The last-written tea slot probe does not match the active trial.");
         }
         if (current !== undefined && SLOT_LAB_IDS.some(id => id === current.candidateId)) {
@@ -337,7 +342,25 @@ export class SlotDatabase {
             }
             const checked = snapshot === null ? null : readSnapshot(snapshot);
             if (isTeaProbeSnapshot(checked)) throw new Error("The tea slot probe is not a draft.");
+            if (checked !== null) {
+                const scaleEnabled = record.drafts[index]?.scaleEnabled;
+                delete checked.scaleEnabled;
+                if (scaleEnabled !== undefined) checked.scaleEnabled = scaleEnabled;
+            }
             record.drafts[index] = checked;
+        });
+    }
+
+    setScaleEnabled(deviceId: string, index: SlotIndex, enabled: boolean): void {
+        this.change(deviceId, record => {
+            if (record.journal !== null) throw new Error("Finish the incomplete write first.");
+            if (this.activeExperiment(record)) {
+                throw new Error("Restore the original set before changing slots.");
+            }
+            const snapshot = record.drafts[index];
+            if (snapshot === null) throw new Error("Choose a recipe before changing its scale setting.");
+            if (typeof enabled !== "boolean") throw new Error("The Easy Mode scale setting is invalid.");
+            snapshot.scaleEnabled = enabled;
         });
     }
 
@@ -390,7 +413,7 @@ export class SlotDatabase {
             }
             const original = teaProbeOriginal(record);
             const candidate = teaProbeCandidateSet(original.slots, candidateId);
-            if (!sameSnapshotSet(journal.slots, candidate)) {
+            if (!samePreservedSet(journal.slots, candidate)) {
                 throw new Error("The tea slot probe is not built on the preserved original set.");
             }
             const checked = readJournal(journal);
@@ -441,7 +464,7 @@ export class SlotDatabase {
             if (journal.acknowledged !== 0 || journal.inFlight !== null) {
                 throw new Error("A new write must begin before any receipt.");
             }
-            if (!sameSnapshotSet(journal.slots, experiment.original.slots)) {
+            if (!samePreservedSet(journal.slots, experiment.original.slots)) {
                 throw new Error("The restore is not the preserved original set.");
             }
             const checked = readJournal(journal);

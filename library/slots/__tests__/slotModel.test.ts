@@ -6,6 +6,39 @@ import {
 } from "@/library/slots/slotModel";
 import {coffee} from "./fixtures";
 
+it("adds only the scale flag to coffee and preserves old scale-off frames exactly", () => {
+    const recipe = coffee();
+    const off = snapshotRecipe(recipe);
+    const on = {...off, scaleEnabled: true};
+    const explicitOff = {...off, scaleEnabled: false};
+    expect(readSnapshot(on)).toEqual(on);
+    expect(readSnapshot(explicitOff)).toEqual(explicitOff);
+    expect(readSnapshot(off)).not.toHaveProperty("scaleEnabled");
+    const frames = prepareSet([off, on, explicitOff]);
+    expect(frames.map(frame => frame[11])).toEqual([0x02, 0x12, 0x02]);
+    frames.forEach(frame => expect(frame.slice(12, -2)).toEqual(off.blob));
+    expect(prepareSet([explicitOff, explicitOff, explicitOff])).toEqual(prepareSet([off, off, off]));
+    expect(prepareSet([off, off, off])).toEqual([
+        [88, 1, 2, 246, 44, 29, 0, 0, 0, 1, 0, 2, 12, 127, 93, 0, 0, 98, 93, 0, 0, 0, 0, 90, 30, 65, 150, 3, 75],
+        [88, 1, 2, 246, 44, 29, 0, 0, 0, 1, 1, 2, 12, 127, 93, 0, 0, 98, 93, 0, 0, 0, 0, 90, 30, 65, 150, 12, 91],
+        [88, 1, 2, 246, 44, 29, 0, 0, 0, 1, 2, 2, 12, 127, 93, 0, 0, 98, 93, 0, 0, 0, 0, 90, 30, 65, 150, 29, 107]
+    ]);
+    expect(snapshotStatus(on, recipe)).toBe("unchanged");
+    recipe.pours[0].temperature = 92;
+    expect(snapshotStatus(on, recipe)).toBe("edited");
+    const record = emptySlotRecord();
+    record.written = {at: 1, slots: [off, off, off]};
+    record.drafts = [off, on, explicitOff];
+    expect(unwrittenSlotCount(record)).toBe(1);
+    record.drafts[1] = explicitOff;
+    expect(unwrittenSlotCount(record)).toBe(0);
+});
+
+it.each([null, 0, 1, "true", {}, []])("rejects a supplied non-boolean scale value %p", scaleEnabled => {
+    const snapshot = {...snapshotRecipe(coffee()), scaleEnabled};
+    expect(() => readSnapshot(snapshot)).toThrow(/scale/i);
+});
+
 it("counts only populated drafts whose bytes differ from the last written set", () => {
     const record = emptySlotRecord();
     const recipe = coffee();
@@ -81,6 +114,10 @@ it.each([1, 2, 3])("writes ordinary %i-steep tea with the official slot selector
     expect(prepareSet([coffeeSlot, snapshot, coffeeSlot]).map(frame => frame[11]))
         .toEqual([2, 12 + (count - 1) * 32, 2]);
     expect(readSnapshot(snapshot)).toEqual(snapshot);
+    const on = {...snapshot, scaleEnabled: true};
+    expect(prepareSet([on, coffeeSlot, coffeeSlot])[0][11]).toBe([0x1C, 0x3C, 0x5C][count - 1]);
+    expect(prepareSet([on, coffeeSlot, coffeeSlot])[0].slice(12, -2)).toEqual(snapshot.blob);
+    expect(snapshotStatus(on, recipe)).toBe("unchanged");
 });
 
 it("marks a coffee-to-tea selector change as unwritten even when blob bytes match", () => {

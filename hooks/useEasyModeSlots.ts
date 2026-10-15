@@ -112,6 +112,22 @@ export function useEasyModeSlots(
         }
     }
 
+    function setScaleEnabled(index: SlotIndex, enabled: boolean): boolean {
+        if (active.current) {
+            report("Wait for the current slot operation to finish.");
+            return false;
+        }
+        try {
+            (supplied ?? sharedSlotDatabase()).setScaleEnabled(identity.deviceId, index, enabled);
+            setFailure(null);
+            setReading(null);
+            return true;
+        } catch (failure) {
+            report(failure);
+            return false;
+        }
+    }
+
     async function run(
         operation: SlotOperation, restart = false, probeOptions: TeaProbeOptions = {}
     ): Promise<void> {
@@ -178,7 +194,7 @@ export function useEasyModeSlots(
         operation: attempt?.operation ?? null, attempt,
         /** Event-only reset; never hide a running attempt or its lock. */
         resetAttempt: () => { if (!active.current) { setReading(null); setFailure(null); } },
-        running, available: port.available, assign, observeTeaProbe,
+        running, available: port.available, assign, setScaleEnabled, observeTeaProbe,
         write: () => run("write"), recover: (restart = false) => run("recover", restart),
         cancel: () => run("cancel"),
         dismissWrite: () => run("dismiss"),
