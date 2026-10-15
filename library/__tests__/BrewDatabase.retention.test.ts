@@ -153,6 +153,40 @@ describe("BrewDatabase budgeted trace sweep", () => {
         ]));
     });
 
+    it("bounds the indexed recency lookup with 5,000 same-recipe traces", () => {
+        const {raw, store} = database();
+        for (let i = 0; i < 5000; i += 1) {
+            seedTrace(store, `trace-${i}`, {startedAt: i + 1});
+        }
+        const queries = jest.spyOn(raw, "getAllSync");
+        const start = performance.now();
+        store.sweepBytes(traceBytes * 2);
+        expect(performance.now() - start).toBeLessThan(2000);
+        expect(store.all().filter((brew) => brew.hasStream).map((brew) => brew.startedAt))
+            .toEqual([5000, 4999]);
+        const query = queries.mock.calls.find(([sql]) => sql.includes("AS tier"))![0];
+        expect(query).toMatch(/NOT EXISTS[\s\S]*LIMIT 1 OFFSET 1/);
+        expect(query).not.toContain("COUNT(*)");
+        expect(raw.getAllSync(`EXPLAIN QUERY PLAN ${query}`)).toEqual(expect.arrayContaining([
+            expect.objectContaining({
+                detail: expect.stringMatching(/SEARCH n USING COVERING INDEX idx_brews_recipe_started/)
+            })
+        ]));
+    });
+
+    it("counts strictly newer summaries, not equal timestamps, for tier two", () => {
+        const {store} = database();
+        seedTrace(store, "single", {recipeUuid: "single", startedAt: 2});
+        seedTrace(store, "tied-a", {startedAt: 1});
+        seedTrace(store, "tied-b", {startedAt: 1});
+        seedTrace(store, "newer", {startedAt: 3});
+        store.sweepBytes(traceBytes * 3);
+        // Both tied brews have only one strictly newer summary and share tier two.
+        expect(store.get("single")?.hasStream).toBe(true);
+        expect(store.get("newer")?.hasStream).toBe(true);
+        expect(store.all().filter((brew) => brew.hasStream)).toHaveLength(3);
+    });
+
     it("keeps everything under budget and at the exact byte boundary", () => {
         const {raw, store} = database();
         seedTrace(store, "one");

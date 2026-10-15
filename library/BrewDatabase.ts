@@ -1094,15 +1094,16 @@ class BrewDatabase {
                   COALESCE(length(s.stream), 0) + COALESCE(length(f.frames), 0) AS bytes,
                   CASE
                     WHEN b.rating > 0 OR TRIM(b.note) <> '' THEN 1
-                    WHEN (SELECT COUNT(*) FROM brews n
-                          WHERE n.recipeUuid = b.recipeUuid AND n.startedAt > b.startedAt) < 2 THEN 2
+                    WHEN NOT EXISTS (SELECT 1 FROM brews n
+                          WHERE n.recipeUuid = b.recipeUuid AND n.startedAt > b.startedAt
+                          LIMIT 1 OFFSET 1) THEN 2
                     ELSE 3
                   END AS tier
                 FROM brews b
                 LEFT JOIN brew_samples s ON s.brewId = b.id
                 LEFT JOIN brew_frames f ON f.brewId = b.id
                 WHERE s.brewId IS NOT NULL OR f.brewId IS NOT NULL
-                ORDER BY tier DESC, b.startedAt ASC;
+                ORDER BY tier DESC, b.startedAt ASC, b.id ASC;
             `);
             for (const brew of candidates) {
                 if (total <= limitBytes) break;
