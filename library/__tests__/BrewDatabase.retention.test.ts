@@ -113,6 +113,46 @@ function seedTrace(store: BrewDatabase, id: string, extra: Partial<BrewRecord> =
 }
 
 describe("BrewDatabase budgeted trace sweep", () => {
+    it.each([false, true])("indexes recipe recency on an existing database: %p", (existing) => {
+        const {raw, store} = database();
+        if (existing) {
+            seedTrace(store, "existing");
+            raw.execSync("DROP INDEX idx_brews_recipe_started;");
+            ensureBrewTables(raw as Parameters<typeof ensureBrewTables>[0]);
+            expect(store.get("existing")?.hasStream).toBe(true);
+        }
+
+        expect(raw.getFirstSync(`
+            SELECT sql FROM sqlite_master
+            WHERE type = 'index' AND name = 'idx_brews_recipe_started' AND tbl_name = 'brews';
+        `)).toEqual({sql: "CREATE INDEX idx_brews_recipe_started ON brews(recipeUuid, startedAt)"});
+    });
+
+    it("uses the recency index to evict among 5,000 summaries within one second", () => {
+        const {raw, store} = database();
+        for (let i = 0; i < 5000; i += 1) {
+            const brew = {...record, id: `brew-${i}`, startedAt: i + 1};
+            store.insert(brew, i < 300 ? samples : [], i < 300 ? frames : undefined);
+        }
+        const queries = jest.spyOn(raw, "getAllSync");
+        const start = performance.now();
+
+        store.sweepBytes(traceBytes * 299);
+
+        expect(performance.now() - start).toBeLessThan(1000);
+        expect(storedBytes(raw)).toBe(traceBytes * 299);
+        expect(store.get("brew-0")?.hasStream).toBe(false);
+        expect(raw.getFirstSync("SELECT COUNT(*) AS count FROM brews;"))
+            .toEqual({count: 5000});
+        const sweepQuery = queries.mock.calls.find(([sql]) => sql.includes("AS tier"))?.[0];
+        expect(sweepQuery).toBeDefined();
+        expect(raw.getAllSync(`EXPLAIN QUERY PLAN ${sweepQuery}`)).toEqual(expect.arrayContaining([
+            expect.objectContaining({
+                detail: expect.stringMatching(/SEARCH n USING COVERING INDEX idx_brews_recipe_started .*recipeUuid=\? AND startedAt>\?/)
+            })
+        ]));
+    });
+
     it("keeps everything under budget and at the exact byte boundary", () => {
         const {raw, store} = database();
         seedTrace(store, "one");
