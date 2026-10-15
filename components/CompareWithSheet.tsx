@@ -28,11 +28,11 @@ function CandidateRow({brew, onPick}: {brew: StoredBrew; onPick: (id: string) =>
     // case and the reason to mention it at all is that its loss changes what
     // the comparison can draw, which a sighted reader learns from the warning
     // line below and a screen reader would otherwise learn after choosing.
-    const expiry = brew.hasStream
+    const missingTrace = brew.hasStream
         ? ""
-        : " The trace for this brew has expired. Its figures are still here.";
+        : " The trace for this brew was not kept. Its figures are still here.";
     const label = `${when}, ${Math.round(brew.cupTotal)} grams in the cup. `
-        + `${ratingAccessibilityLabel(rating)}${expiry}`;
+        + `${ratingAccessibilityLabel(rating)}${missingTrace}`;
 
     return (
         <Pressable
@@ -61,7 +61,7 @@ function CandidateRow({brew, onPick}: {brew: StoredBrew; onPick: (id: string) =>
                 </XStack>
                 {!brew.hasStream && (
                     <Text color={palette.muted} fontSize={12}>
-                        The trace for this brew has expired. Its figures are still here.
+                        The trace for this brew was not kept. Its figures are still here.
                     </Text>
                 )}
             </YStack>

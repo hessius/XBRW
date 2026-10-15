@@ -430,12 +430,10 @@ export const COMPARE_COPY: Record<
 
 /** What the screen says when it cannot draw one or both traces. */
 export const COMPARE_DEGRADED = {
-    /** One stream survived the retention sweep and the other did not. */
-    one: "One of these brews has lost its trace to the retention sweep, so the"
-        + " chart shows the other alone. Pin a brew to keep its trace.",
-    /** Neither did. The chart is not drawn at all. */
-    both: "Both of these brews have lost their traces to the retention sweep."
-        + " The figures below are all that remain."
+    /** One trace is missing; the other can still be drawn. */
+    one: "One of these brews has no trace, so the chart shows the other alone.",
+    /** Neither trace is available, so the chart is not drawn. */
+    both: "Neither brew has a trace. The figures below are all that remain."
 };
 
 export const COMPARE_GUARD = {

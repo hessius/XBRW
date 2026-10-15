@@ -116,7 +116,7 @@ describe("BrewHistoryRow", () => {
             .toBe("#4A7BC8");
     });
 
-    it("says a stream has expired rather than hiding it", async () => {
+    it("labels a missing trace rather than hiding the row", async () => {
         const {getByText, getByLabelText} = await renderWithProviders(
             <BrewHistoryRow brew={brew({hasStream: false, pinned: true})} onPress={jest.fn()} />
         );

@@ -569,7 +569,7 @@ describe("brew record", () => {
         expect(screen.getAllByText("GRIND")).toHaveLength(1);
     });
 
-    it("says the trace has expired rather than drawing an empty chart", async () => {
+    it("explains a missing trace rather than drawing an empty chart", async () => {
         mockOpened = {record: {...record, hasStream: false}, samples: []};
         await renderWithProviders(<BrewRecord recipeLookup={mockLookup} />);
         expect(screen.getByText(/no trace was kept/i)).toBeTruthy();
