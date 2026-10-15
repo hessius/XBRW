@@ -97,7 +97,7 @@ function harness() {
         vitals,
         dials,
         store: {
-            sweep: jest.fn((_budgetMB: number) => {}),
+            sweepWhenReady: jest.fn(async (_budgetMB: number) => {}),
             insert: (record: BrewRecord, samples: BrewSample[]) =>
                 written.push({record, samples}),
             recordDialAfter: (id: string, dial: number) => dials.push([id, dial])
@@ -464,26 +464,26 @@ describe("useBrewRun", () => {
     it.each([0, 10, 25, 50])("sweeps after saving a finished brew using the current %i MB budget", async (budgetMB) => {
         const h = harness();
         const savedCounts: number[] = [];
-        h.store.sweep.mockImplementation(() => {
+        h.store.sweepWhenReady.mockImplementation(async () => {
             savedCounts.push(h.written.length);
         });
         await renderHook(() => useBrewRun(recipe(), h.store));
         await h.setPhase({name: "pouring", pour: 1, pours: 2});
         mockReadSetting.mockReturnValue(budgetMB);
         await h.water(40);
-        expect(h.store.sweep).not.toHaveBeenCalled();
+        expect(h.store.sweepWhenReady).not.toHaveBeenCalled();
         await h.setPhase({name: "done"});
         await h.setPhase({name: "done"});
         expect(mockReadSetting).toHaveBeenCalledWith("brewTraceBudgetMB");
-        expect(h.store.sweep).toHaveBeenCalledTimes(1);
-        expect(h.store.sweep).toHaveBeenCalledWith(budgetMB);
+        expect(h.store.sweepWhenReady).toHaveBeenCalledTimes(1);
+        expect(h.store.sweepWhenReady).toHaveBeenCalledWith(budgetMB);
         expect(savedCounts).toEqual([1]);
     });
 
     it("keeps the record and dial reading when the post-brew sweep fails", async () => {
         const h = harness();
         const error = new Error("sweep unavailable");
-        h.store.sweep.mockImplementation(() => { throw error; });
+        h.store.sweepWhenReady.mockImplementation(async () => { throw error; });
         const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
         const {result} = await renderHook(() => useBrewRun(recipe(), h.store));
         await h.setPhase({name: "pouring", pour: 1, pours: 2});

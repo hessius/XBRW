@@ -261,7 +261,7 @@ describe("overflow protection through useBrew's real preflight retry", () => {
         }
         const pause = jest.spyOn(machine, "pauseBrew");
         const resume = jest.spyOn(machine, "resumeBrew");
-        const store = {insert: jest.fn(), sweep: jest.fn()};
+        const store = {insert: jest.fn(), sweepWhenReady: jest.fn(async () => {})};
         const hook = await renderHook(
             ({runId}: {runId: number}) => useBrewRun(r, store, runId),
             {initialProps: {runId: 7}}

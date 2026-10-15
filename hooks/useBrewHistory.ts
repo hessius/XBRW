@@ -13,7 +13,7 @@ export type HistoryStore = {
     remove: (id: string) => void;
     clear: () => void;
     insert: (record: BrewRecord, samples: BrewSample[], frames?: string) => void;
-    sweep: (budgetMB: number) => void;
+    sweepWhenReady: (budgetMB: number) => Promise<void>;
 };
 
 let shared: BrewDatabase | undefined;
@@ -212,9 +212,11 @@ export function useBrewHistory(store?: HistoryStore) {
 }
 
 /** Enforce the trace storage budget once at launch without blocking startup on failure. */
-export function sweepOnLaunch(store: Pick<HistoryStore, "sweep">, budgetMB: number): void {
+export function sweepOnLaunch(store: Pick<HistoryStore, "sweepWhenReady">, budgetMB: number): void {
     try {
-        store.sweep(budgetMB);
+        void store.sweepWhenReady(budgetMB).catch((error) => {
+            console.warn("Could not sweep brew traces at launch", error);
+        });
     } catch (error) {
         console.warn("Could not sweep brew traces at launch", error);
     }

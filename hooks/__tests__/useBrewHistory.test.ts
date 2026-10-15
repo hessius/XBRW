@@ -24,7 +24,7 @@ function fakeStore(seed: StoredBrew[] = []) {
         remove: (id: string) => { rows = rows.filter((r) => r.id !== id); },
         clear: () => { rows = []; },
         insert: (_r: BrewRecord, _s: BrewSample[]) => {},
-        sweep: (budgetMB: number) => { swept.push(budgetMB); }
+        sweepWhenReady: async (budgetMB: number) => { swept.push(budgetMB); }
     };
 }
 
@@ -61,14 +61,15 @@ describe("useBrewHistory", () => {
         expect(store.swept).toEqual([10]);
     });
 
-    it("logs a failed launch sweep without crashing startup", () => {
+    it("logs a failed launch sweep without crashing startup", async () => {
         const error = new Error("storage unavailable");
-        const sweep = jest.fn(() => { throw error; });
+        const sweepWhenReady = jest.fn(async () => { throw error; });
         const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
         try {
-            expect(() => sweepOnLaunch({sweep}, 25)).not.toThrow();
-            expect(sweep).toHaveBeenCalledTimes(1);
-            expect(sweep).toHaveBeenCalledWith(25);
+            expect(() => sweepOnLaunch({sweepWhenReady}, 25)).not.toThrow();
+            await Promise.resolve();
+            expect(sweepWhenReady).toHaveBeenCalledTimes(1);
+            expect(sweepWhenReady).toHaveBeenCalledWith(25);
             expect(warn).toHaveBeenCalledWith(expect.any(String), error);
         } finally {
             warn.mockRestore();

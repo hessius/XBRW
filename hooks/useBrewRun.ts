@@ -22,7 +22,7 @@ import type Recipe from "@/library/Recipe";
 /** The part of `BrewDatabase` a run writes to. Injected, so tests need no SQLite. */
 export type BrewStore = {
     insert: (record: BrewRecord, samples: BrewSample[], frames?: string) => void;
-    sweep: (budgetMB: number) => void;
+    sweepWhenReady: (budgetMB: number) => Promise<void>;
     /**
      * Optional so a test store stays a two-line literal. A store without it is
      * a run whose dial reading has nowhere to go, which is the same outcome as
@@ -163,7 +163,10 @@ export function useBrewRun(
                 setRecorded({runId: id, record});
                 database.current?.insert(record, taken, frames);
                 try {
-                    database.current?.sweep(sharedSettings().get("brewTraceBudgetMB"));
+                    void database.current?.sweepWhenReady(sharedSettings().get("brewTraceBudgetMB"))
+                        .catch((error) => {
+                            console.warn("Could not sweep brew traces after a brew", error);
+                        });
                 } catch (error) {
                     console.warn("Could not sweep brew traces after a brew", error);
                 }

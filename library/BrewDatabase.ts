@@ -456,6 +456,15 @@ const PROFILE_COLUMN: Record<typeof BEAN_FIELDS[number], string> = {
     fermentation: "fermentation"
 };
 
+type TraceMaintenance = {
+    migration?: Promise<boolean>;
+    sweep?: Promise<void>;
+    budgetMB: number;
+};
+
+// History and the live run wrap the same appDatabase connection separately.
+const traceMaintenance = new WeakMap<SQLite.SQLiteDatabase, TraceMaintenance>();
+
 /**
  * A brew whose recipe is still in the library.
  *
@@ -1075,15 +1084,46 @@ class BrewDatabase {
         });
     }
 
+    private maintenance(): TraceMaintenance {
+        let state = traceMaintenance.get(this.db);
+        if (state === undefined) {
+            state = {budgetMB: 0};
+            traceMaintenance.set(this.db, state);
+        }
+        return state;
+    }
+
+    /** Migrate before enforcing a budget. Overlapping callers share the latest requested budget. */
+    public sweepWhenReady(budgetMB: number): Promise<void> {
+        const state = this.maintenance();
+        state.budgetMB = budgetMB;
+        if (state.sweep !== undefined) return state.sweep;
+        state.sweep = this.migrateLegacyTraces().then((complete) => {
+            if (complete) this.sweep(state.budgetMB);
+        }).finally(() => {
+            state.sweep = undefined;
+        });
+        return state.sweep;
+    }
+
+    /** False means migration could not finish; callers must not enforce a budget yet. Never rejects. */
+    public migrateLegacyTraces(): Promise<boolean> {
+        const state = this.maintenance();
+        if (state.migration !== undefined) return state.migration;
+        state.migration = Promise.resolve().then(() => this.convertLegacyTraces()).finally(() => {
+            state.migration = undefined;
+        });
+        return state.migration;
+    }
+
     /** Drop trace detail by storage budget in MiB; 0 means Unlimited. Summaries stay. */
     public sweep(budgetMB: number): void {
         this.sweepBytes(budgetMB * 1024 * 1024);
     }
 
-    /** Byte-sized entry point so retention boundaries can be tested without large fixtures. */
+    /** Synchronous accounting includes raw legacy lengths. App callers must use sweepWhenReady. */
     public sweepBytes(limitBytes: number): void {
         if (!Number.isFinite(limitBytes) || limitBytes < 0) return;
-        this.compressLegacyTraces();
         if (limitBytes === 0) return;
 
         this.db.withTransactionSync(() => {
@@ -1122,51 +1162,59 @@ class BrewDatabase {
         `)!.bytes;
     }
 
-    private compressLegacyTraces(): void {
-        let after: string | null = null;
-        for (;;) {
-            const rows: {brewId: string; stream: string}[] = this.db.getAllSync(`
-                SELECT brewId, stream FROM brew_samples
-                WHERE stream NOT LIKE 'z1:%' AND (? IS NULL OR brewId > ?)
-                ORDER BY brewId LIMIT 50;
-            `, [after, after]);
-            if (rows.length === 0) break;
-            after = rows[rows.length - 1].brewId;
-            this.db.withTransactionSync(() => {
-                for (const row of rows) {
-                    try {
-                        const samples: unknown = JSON.parse(row.stream);
-                        if (!Array.isArray(samples) || !samples.every((sample) =>
-                            sample !== null && typeof sample === "object"
-                            && ["at", "water", "cup", "pour"].every((field) =>
-                                Number.isFinite(sample[field])))) continue;
-                        this.db.runSync("UPDATE brew_samples SET stream = ? WHERE brewId = ?;",
-                            [encodeSamples(samples), row.brewId]);
-                    } catch {
-                        // Preserve unreadable legacy data; the next page still advances past it.
+    private async convertLegacyTraces(): Promise<boolean> {
+        try {
+            let after: string | null = null;
+            for (;;) {
+                const rows: {brewId: string; stream: string}[] = this.db.getAllSync(`
+                    SELECT brewId, stream FROM brew_samples
+                    WHERE stream NOT LIKE 'z1:%' ${after === null ? "" : "AND brewId > ?"}
+                    ORDER BY brewId LIMIT 25;
+                `, after === null ? [] : [after]);
+                if (rows.length === 0) break;
+                after = rows[rows.length - 1].brewId;
+                this.db.withTransactionSync(() => {
+                    for (const row of rows) {
+                        try {
+                            const samples: unknown = JSON.parse(row.stream);
+                            if (!Array.isArray(samples) || !samples.every((sample) =>
+                                sample !== null && typeof sample === "object"
+                                && ["at", "water", "cup", "pour"].every((field) =>
+                                    Number.isFinite(sample[field])))) continue;
+                            this.db.runSync("UPDATE brew_samples SET stream = ? WHERE brewId = ?;",
+                                [encodeSamples(samples), row.brewId]);
+                        } catch {
+                            // Preserve unreadable legacy data; the next page still advances past it.
+                        }
                     }
-                }
-            });
-        }
-        after = null;
-        for (;;) {
-            const rows: {brewId: string; frames: string}[] = this.db.getAllSync(`
-                SELECT brewId, frames FROM brew_frames
-                WHERE frames NOT LIKE 'z1:%' AND (? IS NULL OR brewId > ?)
-                ORDER BY brewId LIMIT 50;
-            `, [after, after]);
-            if (rows.length === 0) break;
-            after = rows[rows.length - 1].brewId;
-            this.db.withTransactionSync(() => {
-                for (const row of rows) {
-                    try {
-                        this.db.runSync("UPDATE brew_frames SET frames = ? WHERE brewId = ?;",
-                            [encodeText(row.frames), row.brewId]);
-                    } catch {
-                        // A failed conversion must not prevent the rest of the launch sweep.
+                });
+                await new Promise<void>((resolve) => setTimeout(resolve, 0));
+            }
+            after = null;
+            for (;;) {
+                const rows: {brewId: string; frames: string}[] = this.db.getAllSync(`
+                    SELECT brewId, frames FROM brew_frames
+                    WHERE frames NOT LIKE 'z1:%' ${after === null ? "" : "AND brewId > ?"}
+                    ORDER BY brewId LIMIT 25;
+                `, after === null ? [] : [after]);
+                if (rows.length === 0) break;
+                after = rows[rows.length - 1].brewId;
+                this.db.withTransactionSync(() => {
+                    for (const row of rows) {
+                        try {
+                            this.db.runSync("UPDATE brew_frames SET frames = ? WHERE brewId = ?;",
+                                [encodeText(row.frames), row.brewId]);
+                        } catch {
+                            // A failed conversion must not prevent the rest of the launch sweep.
+                        }
                     }
-                }
-            });
+                });
+                await new Promise<void>((resolve) => setTimeout(resolve, 0));
+            }
+            return true;
+        } catch (error) {
+            console.warn("Could not migrate legacy brew traces", error);
+            return false;
         }
     }
 

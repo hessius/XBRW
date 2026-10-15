@@ -52,9 +52,14 @@ New module `library/brew/traceCodec.ts`, pure TypeScript:
   values, so the round trip is verified sample for sample in tests.
 
 `BrewDatabase.insert` writes the compressed form. Reads accept both, so there is
-no blocking migration. Legacy rows are rewritten compressed the first time the
-sweep runs, in one transaction per batch. Batches advance by brew ID, including
-past skipped rows. Each conversion is isolated: malformed sample arrays (including
+no blocking migration. At launch and after a brew, `sweepWhenReady` awaits
+`migrateLegacyTraces` before enforcing the budget, including with Unlimited.
+Legacy rows are rewritten in transactions of at most 25 rows, with a macrotask
+yield between batches so startup can keep rendering. Batches advance by brew ID,
+including past skipped rows. Concurrent callers sharing the database connection
+share one migration and sweep, with the latest requested budget winning.
+A database-level migration failure leaves the budget unenforced until a later
+attempt; `migrateLegacyTraces` resolves false rather than throwing. Each conversion is isolated: malformed sample arrays (including
 non-object samples or non-finite numeric fields) and failed frame conversions
 remain untouched rather than blocking launch or being retried within that sweep.
 
@@ -69,6 +74,9 @@ remain untouched rather than blocking launch or being retried within that sweep.
   in SQL. Stored text is ASCII after base64, so characters equal bytes. Measure
   the total once, select ordered candidates with their combined SQL `length()`
   once, and subtract those lengths as rows are deleted in a transaction.
+  The synchronous `sweep` / `sweepBytes` path does not migrate: it still counts
+  any legacy raw text with SQL `length()`. App callers use `sweepWhenReady` so
+  larger, uncompressed traces cannot cause premature eviction.
 
 ### 3. What goes first
 
@@ -80,7 +88,10 @@ Tiers, highest protection first:
 
 1. Brews with a rating or a note.
 2. The two newest brews of every recipe, so a recipe with a single brew always
-   keeps it.
+   keeps it. Recency counts strictly newer summaries, including ones whose
+   traces are gone; equal timestamps do not count as newer. The indexed lookup
+   stops after finding two newer rows. Equal-time eviction candidates use brew
+   ID as a stable tiebreaker.
 3. Everything else.
 
 A brew that qualifies for several tiers takes the highest. If tier 1 and 2
@@ -121,7 +132,9 @@ projects.
   brew outlives an unrated one, the budget boundary, `0` meaning Unlimited, and
   a bad value deleting nothing.
 - Migration: mixed legacy and compressed rows both read; legacy rows get
-  compressed once.
+  compressed once across multiple yielded batches, including with Unlimited;
+  corrupt rows cannot stall keyset pagination. Budget enforcement waits for
+  conversion, overlapping callers share one run, and database failures allow retry.
 - Settings and backup: the new key is in `DEFAULTS` and the snapshot, restore
   ignores the old count key.
 - Components: the tag in the list and the record sentence, and the absence of
@@ -133,8 +146,9 @@ projects.
   "no trace", never to a crash, and the round-trip test guards the format.
 - Compression adds a little CPU on write and on opening a record; at a few KB
   per brew this is negligible but should be checked on a device.
-- The legacy rewrite runs inside the sweep, so it must not block launch on a
-  large history; it works in batches.
+- Legacy compression yields between 25-row transactions, but each individual
+  batch still uses synchronous CPU and SQLite work. Confirm launch responsiveness
+  on a device with a large legacy history.
 
 ## Open questions
 

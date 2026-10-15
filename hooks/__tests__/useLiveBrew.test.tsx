@@ -85,7 +85,7 @@ function harness() {
         }),
         store: {
             insert: (record: BrewRecord, samples: BrewSample[]) => written.push({record, samples}),
-            sweep: jest.fn()
+            sweepWhenReady: jest.fn(async () => {})
         }
     };
 }

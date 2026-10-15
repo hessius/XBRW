@@ -113,6 +113,8 @@ function seedTrace(store: BrewDatabase, id: string, extra: Partial<BrewRecord> =
 }
 
 describe("BrewDatabase budgeted trace sweep", () => {
+    afterEach(() => jest.useRealTimers());
+
     it.each([false, true])("indexes recipe recency on an existing database: %p", (existing) => {
         const {raw, store} = database();
         if (existing) {
@@ -176,13 +178,15 @@ describe("BrewDatabase budgeted trace sweep", () => {
 
     it("counts strictly newer summaries, not equal timestamps, for tier two", () => {
         const {store} = database();
-        seedTrace(store, "single", {recipeUuid: "single", startedAt: 2});
+        seedTrace(store, "single", {recipeUuid: "single", startedAt: 0});
         seedTrace(store, "tied-a", {startedAt: 1});
         seedTrace(store, "tied-b", {startedAt: 1});
         seedTrace(store, "newer", {startedAt: 3});
         store.sweepBytes(traceBytes * 3);
         // Both tied brews have only one strictly newer summary and share tier two.
-        expect(store.get("single")?.hasStream).toBe(true);
+        expect(store.get("single")?.hasStream).toBe(false);
+        expect(store.get("tied-a")?.hasStream).toBe(true);
+        expect(store.get("tied-b")?.hasStream).toBe(true);
         expect(store.get("newer")?.hasStream).toBe(true);
         expect(store.all().filter((brew) => brew.hasStream)).toHaveLength(3);
     });
@@ -293,7 +297,7 @@ describe("BrewDatabase budgeted trace sweep", () => {
         }
     );
 
-    it("compresses legacy samples and frames before measuring the budget", () => {
+    it("compresses legacy samples and frames before measuring the budget", async () => {
         const {raw, store} = database();
         const legacySamples = Array.from({length: 1000}, (_, i) => ({
             at: i * 237, water: i * 0.123456789, cup: i * 0.0987654321, pour: 1
@@ -306,7 +310,7 @@ describe("BrewDatabase budgeted trace sweep", () => {
             [legacyFrames, "legacy"]);
         const budget = encodeSamples(legacySamples).length + encodeText(legacyFrames).length;
         expect(storedBytes(raw)).toBeGreaterThan(budget);
-        store.sweepBytes(budget);
+        await store.sweepWhenReady(budget / (1024 * 1024));
         expect(storedBytes(raw)).toBe(budget);
         expect(store.get("legacy")?.hasStream).toBe(true);
         expect(store.samples("legacy")).toEqual(legacySamples);
@@ -317,7 +321,8 @@ describe("BrewDatabase budgeted trace sweep", () => {
             .toEqual({frames: expect.stringMatching(/^z1:/)});
     });
 
-    it("compresses more than two batches of each legacy table even with Unlimited", () => {
+    it("compresses more than two batches of each legacy table with macrotask yields even with Unlimited", async () => {
+        jest.useFakeTimers();
         const {raw, store} = database();
         seedTrace(store, "compressed");
         for (let i = 0; i < 101; i += 1) {
@@ -328,8 +333,19 @@ describe("BrewDatabase budgeted trace sweep", () => {
             raw.runSync("UPDATE brew_frames SET frames = ? WHERE brewId = ?;", [frames, id]);
         }
         const transactions = jest.spyOn(raw, "withTransactionSync");
-        store.sweep(0);
-        expect(transactions.mock.calls.length).toBeGreaterThanOrEqual(6);
+        const yields = jest.spyOn(globalThis, "setTimeout");
+        const migration = store.sweepWhenReady(0);
+        await Promise.resolve();
+        expect(raw.getAllSync("SELECT brewId FROM brew_samples WHERE stream NOT LIKE 'z1:%';").length)
+            .toBeGreaterThan(0);
+        expect(transactions).toHaveBeenCalledTimes(1);
+        expect(jest.getTimerCount()).toBe(1);
+        await jest.runAllTimersAsync();
+        await migration;
+        expect(transactions).toHaveBeenCalledTimes(10);
+        expect(yields).toHaveBeenCalledTimes(10);
+        yields.mockRestore();
+        jest.useRealTimers();
         expect(raw.getAllSync("SELECT brewId FROM brew_samples WHERE stream NOT LIKE 'z1:%';"))
             .toEqual([]);
         expect(raw.getAllSync("SELECT brewId FROM brew_frames WHERE frames NOT LIKE 'z1:%';"))
@@ -339,7 +355,7 @@ describe("BrewDatabase budgeted trace sweep", () => {
         expect(store.samples("compressed")).toEqual(samples);
         expect(store.all().filter((brew) => brew.hasStream)).toHaveLength(102);
         const writes = jest.spyOn(raw, "runSync");
-        store.sweep(0);
+        await store.sweepWhenReady(0);
         expect(writes).not.toHaveBeenCalled();
     });
 
@@ -350,7 +366,7 @@ describe("BrewDatabase budgeted trace sweep", () => {
             '[{"at":0,"water":0,"cup":0}]',
             '[{"at":0,"water":"0","cup":0,"pour":1}]',
             '[{"at":1e999,"water":0,"cup":0,"pour":1}]'
-        ])("leaves unreadable samples untouched: %s", (stream) => {
+        ])("leaves unreadable samples untouched: %s", async (stream) => {
             const {raw, store} = database();
             seedTrace(store, "corrupt", {rating: 5});
             raw.runSync("UPDATE brew_samples SET stream = ? WHERE brewId = 'corrupt';", [stream]);
@@ -369,7 +385,7 @@ describe("BrewDatabase budgeted trace sweep", () => {
                 expect(storedBytes(raw)).toBeGreaterThan(budgetMB * 1024 * 1024);
             }
 
-            expect(() => store.sweep(budgetMB)).not.toThrow();
+            await expect(store.sweepWhenReady(budgetMB)).resolves.toBeUndefined();
 
             expect(raw.getFirstSync("SELECT stream FROM brew_samples WHERE brewId = 'corrupt';"))
                 .toEqual({stream});
@@ -382,7 +398,7 @@ describe("BrewDatabase budgeted trace sweep", () => {
         });
     });
 
-    it("continues past a failed legacy frame conversion without retrying it forever", () => {
+    it("continues past a failed legacy frame conversion without retrying it forever", async () => {
         const {raw, store} = database();
         for (const id of ["bad", "good"]) {
             seedTrace(store, id);
@@ -392,11 +408,82 @@ describe("BrewDatabase budgeted trace sweep", () => {
             CREATE TRIGGER refuse_frame_conversion BEFORE UPDATE ON brew_frames
             WHEN OLD.brewId = 'bad' BEGIN SELECT RAISE(ABORT, 'unconvertible frame'); END;
         `);
-        expect(() => store.sweep(0)).not.toThrow();
+        await expect(store.sweepWhenReady(0)).resolves.toBeUndefined();
         expect(raw.getFirstSync("SELECT frames FROM brew_frames WHERE brewId = 'bad';"))
             .toEqual({frames});
         expect(raw.getFirstSync("SELECT frames FROM brew_frames WHERE brewId = 'good';"))
             .toEqual({frames: encodeText(frames)});
+    });
+
+    it("shares overlapping migration and sweep runs across database wrappers", async () => {
+        const {raw, store} = database();
+        seedTrace(store, "legacy");
+        raw.runSync("UPDATE brew_samples SET stream = ?;", [JSON.stringify(samples)]);
+        const other = Object.create(BrewDatabase.prototype) as BrewDatabase;
+        (other as unknown as {db: FakeSQLiteDatabase}).db = raw;
+        const sweep = jest.spyOn(store, "sweep");
+        const otherSweep = jest.spyOn(other, "sweep");
+        const migration = store.migrateLegacyTraces();
+        expect(other.migrateLegacyTraces()).toBe(migration);
+        const first = store.sweepWhenReady(1);
+        expect(other.sweepWhenReady(0)).toBe(first);
+        await first;
+        expect(sweep).toHaveBeenCalledTimes(1);
+        expect(sweep).toHaveBeenCalledWith(0);
+        expect(otherSweep).not.toHaveBeenCalled();
+        expect(store.samples("legacy")).toEqual(samples);
+    });
+
+    it("never measures or evicts while legacy conversion is yielding", async () => {
+        jest.useFakeTimers();
+        const {raw, store} = database();
+        for (let i = 0; i < 51; i += 1) {
+            seedTrace(store, `legacy-${i}`);
+            raw.runSync("UPDATE brew_samples SET stream = ? WHERE brewId = ?;",
+                [JSON.stringify(samples), `legacy-${i}`]);
+        }
+        const measure = jest.spyOn(raw, "getFirstSync");
+        const run = store.sweepWhenReady(traceBytes * 51 / (1024 * 1024));
+        await Promise.resolve();
+        expect(measure.mock.calls.some(([sql]) => sql.includes("SUM(length("))).toBe(false);
+        expect(store.all().every((brew) => brew.hasStream)).toBe(true);
+        await jest.runAllTimersAsync();
+        await run;
+        jest.useRealTimers();
+        expect(storedBytes(raw)).toBe(traceBytes * 51);
+        expect(store.all().every((brew) => brew.hasStream)).toBe(true);
+    });
+
+    it("does not throw or enforce the budget after a migration query fails", async () => {
+        const {raw, store} = database();
+        seedTrace(store, "legacy");
+        raw.runSync("UPDATE brew_samples SET stream = ?;", [JSON.stringify(samples)]);
+        const sweep = jest.spyOn(store, "sweep");
+        const queries = jest.spyOn(raw, "getAllSync").mockImplementationOnce(() => {
+            throw new Error("database unavailable");
+        });
+        await expect(store.sweepWhenReady(1 / (1024 * 1024))).resolves.toBeUndefined();
+        expect(sweep).not.toHaveBeenCalled();
+        queries.mockRestore();
+        expect(store.get("legacy")?.hasStream).toBe(true);
+        // A later attempt retries, migrates, then enforces its budget.
+        await store.sweepWhenReady(1 / (1024 * 1024));
+        expect(sweep).toHaveBeenCalledTimes(1);
+        expect(store.get("legacy")?.hasStream).toBe(false);
+    });
+
+    it("counts raw legacy lengths on the synchronous path without converting", () => {
+        const {raw, store} = database();
+        seedTrace(store, "legacy");
+        const stream = JSON.stringify(samples);
+        raw.runSync("UPDATE brew_samples SET stream = ?;", [stream]);
+        const bytes = stream.length + frameBytes;
+        store.sweepBytes(bytes);
+        expect(storedBytes(raw)).toBe(bytes);
+        expect(raw.getFirstSync("SELECT stream FROM brew_samples;"))
+            .toEqual({stream});
+        store.sweepBytes(bytes - 1);
+        expect(store.get("legacy")?.hasStream).toBe(false);
     });
 
     it.each([traceBytes, 1])("includes frame-only logs in eviction order at budget %p", (budget) => {
