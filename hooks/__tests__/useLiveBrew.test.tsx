@@ -10,6 +10,11 @@ import type {Notification} from "@/library/machine/protocol";
 import Pour from "@/library/Pour";
 import Recipe from "@/library/Recipe";
 
+jest.mock("@/hooks/useSetting", () => ({
+    ...jest.requireActual("@/hooks/useSetting"),
+    sharedSettings: () => ({get: () => 10})
+}));
+
 const appStateDescriptor = Object.getOwnPropertyDescriptor(AppState, "currentState")!;
 
 jest.mock("@/hooks/useBrew", () => ({
@@ -78,8 +83,10 @@ function harness() {
             global.__brewer.machine.phase = p;
             [...phaseListeners].forEach((l) => l(p));
         }),
-        store: {insert: (record: BrewRecord, samples: BrewSample[]) =>
-            written.push({record, samples})}
+        store: {
+            insert: (record: BrewRecord, samples: BrewSample[]) => written.push({record, samples}),
+            sweep: jest.fn()
+        }
     };
 }
 

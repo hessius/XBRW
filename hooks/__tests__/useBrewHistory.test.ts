@@ -61,6 +61,20 @@ describe("useBrewHistory", () => {
         expect(store.swept).toEqual([10]);
     });
 
+    it("logs a failed launch sweep without crashing startup", () => {
+        const error = new Error("storage unavailable");
+        const sweep = jest.fn(() => { throw error; });
+        const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+        try {
+            expect(() => sweepOnLaunch({sweep}, 25)).not.toThrow();
+            expect(sweep).toHaveBeenCalledTimes(1);
+            expect(sweep).toHaveBeenCalledWith(25);
+            expect(warn).toHaveBeenCalledWith(expect.any(String), error);
+        } finally {
+            warn.mockRestore();
+        }
+    });
+
     it("passes zero through for Unlimited storage", () => {
         // Zero is a real choice and must not fall through to a default.
         const store = fakeStore([]);

@@ -31,6 +31,7 @@ jest.mock("@/components/XbrwToast", () => ({notify: jest.fn()}));
 let mockAutoStart = true;
 
 jest.mock("@/hooks/useSetting", () => ({
+    sharedSettings: () => ({get: () => 10}),
     useSetting: (key: string) => [key === "machineAutoStart" ? mockAutoStart : "scaled", () => undefined]
 }));
 
@@ -260,7 +261,7 @@ describe("overflow protection through useBrew's real preflight retry", () => {
         }
         const pause = jest.spyOn(machine, "pauseBrew");
         const resume = jest.spyOn(machine, "resumeBrew");
-        const store = {insert: jest.fn()};
+        const store = {insert: jest.fn(), sweep: jest.fn()};
         const hook = await renderHook(
             ({runId}: {runId: number}) => useBrewRun(r, store, runId),
             {initialProps: {runId: 7}}

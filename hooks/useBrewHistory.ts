@@ -219,19 +219,13 @@ export function useBrewHistory(store?: HistoryStore) {
     return {brews, open, remove, clear, refresh: () => setBrews(database.all())};
 }
 
-/**
- * Expire old streams, once, at launch.
- *
- * `keep` is the number of recent brews whose streams to preserve. When it is
- * zero every stream is swept — that is an explicit user choice and must not
- * silently fall back to a default.
- *
- * Not after each brew: it is a tidy-up, and running it on the way out of a brew
- * puts a delete in the moment the user most wants the app to be drawing them a
- * chart.
- */
-export function sweepOnLaunch(store: Pick<HistoryStore, "sweep">, keep: number): void {
-    store.sweep(keep);
+/** Enforce the trace storage budget once at launch without blocking startup on failure. */
+export function sweepOnLaunch(store: Pick<HistoryStore, "sweep">, budgetMB: number): void {
+    try {
+        store.sweep(budgetMB);
+    } catch (error) {
+        console.warn("Could not sweep brew traces at launch", error);
+    }
 }
 
 export default useBrewHistory;

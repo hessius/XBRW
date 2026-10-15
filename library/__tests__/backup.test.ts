@@ -42,6 +42,14 @@ describe("buildBackup", () => {
 });
 
 describe("the round trip", () => {
+    it.each([0, 10, 25, 50])("preserves the brew trace storage budget of %i MB", (budgetMB) => {
+        const result = parseBackup(buildBackup([recipeNamed("A", "u1")], {brewTraceBudgetMB: budgetMB}));
+        expect(result.ok).toBe(true);
+        if (!result.ok) throw new Error(result.reason);
+        expect(result.payload.settings.brewTraceBudgetMB).toBe(budgetMB);
+        expect(result.payload.settings).not.toHaveProperty("brewTraceRetention");
+    });
+
     it("gives back the recipes that went in", () => {
         const recipes = [recipeNamed("Morning", "u1"), recipeNamed("Evening", "u2")];
         const result = parseBackup(buildBackup(recipes, {}));

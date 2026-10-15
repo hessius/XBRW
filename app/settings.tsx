@@ -138,8 +138,8 @@ export default function SettingsScreen({settings}: Props) {
     const [machineAutoStart, setMachineAutoStart] = useSetting("machineAutoStart", settings);
     const [animateBrewChart, setAnimateBrewChart] = useSetting("animateBrewChart", settings);
     const [askForRatings, setAskForRatings] = useSetting("askForRatings", settings);
-    const [brewTraceRetention, setBrewTraceRetention] =
-        useSetting("brewTraceRetention", settings);
+    const [brewTraceBudgetMB, setBrewTraceBudgetMB] =
+        useSetting("brewTraceBudgetMB", settings);
     // Read only so backups carry the user's story-card sharing preference.
     const [storyCardHidden] = useSetting("storyCardHidden", settings);
     const [brewHistorySort, setBrewHistorySort] = useSetting("brewHistorySort", settings);
@@ -199,7 +199,7 @@ export default function SettingsScreen({settings}: Props) {
             bypassTempEncoding,
             firstBrewDone, machineConsoleAcknowledged, machineConsoleConfirmations,
             machineModel, machineAutoStart, animateBrewChart, askForRatings,
-            brewTraceRetention, storyCardHidden,
+            brewTraceBudgetMB, storyCardHidden,
             brewHistorySort, brewHistorySortDirection,
             librarySort, librarySortDirection, libraryFavouritesFirst,
             libraryView, invertAutoShelves, hiddenShelves, myShelves
@@ -305,8 +305,9 @@ export default function SettingsScreen({settings}: Props) {
         if (typeof incoming.askForRatings === "boolean") {
             setAskForRatings(incoming.askForRatings);
         }
-        if (typeof incoming.brewTraceRetention === "number") {
-            setBrewTraceRetention(incoming.brewTraceRetention);
+        if (typeof incoming.brewTraceBudgetMB === "number"
+            && [0, 10, 25, 50].includes(incoming.brewTraceBudgetMB)) {
+            setBrewTraceBudgetMB(incoming.brewTraceBudgetMB);
         }
         // The same `isSortAxis` the ordinary read path narrows through, so the
         // two places that decide what a valid axis is cannot come to disagree.

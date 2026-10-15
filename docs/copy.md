@@ -954,9 +954,12 @@ machine card's error line).
 | `machine.section.autostart.desc` | `components/MachineSection.tsx:123` | Toggle description. | `Off, BREW loads the recipe onto the machine and waits for you to press START. On, it starts grinding the moment the recipe lands.` |
 | `machine.section.animate.label` | `components/MachineSection.tsx:128` | Toggle label. | `Animate the brew chart` |
 | `machine.section.animate.desc` | `components/MachineSection.tsx:129` | Toggle description. | `When off, each phase change holds its end state immediately. The system Reduced Motion switch also disables animation independently.` |
-| `machine.section.traces.label` | `components/MachineSection.tsx:134` | Toggle/choice label. | `Keep raw brew traces` |
-| `machine.section.traces.desc` | `components/MachineSection.tsx:135` | Description. | `How many past brews keep their full sample stream. Records are always kept; only the detail behind them expires.` |
-| `machine.section.traces.off` | `components/MachineSection.tsx:22` (`TRACE_RETENTION`) | Choice value: keep no traces. | `Don't keep traces` |
+| `machine.section.traces.label` | `components/MachineSection.tsx` | Choice label. | `Brew detail storage` |
+| `machine.section.traces.desc` | `components/MachineSection.tsx` | Description. | `Brew traces are the detailed charts. When they pass this limit, the oldest are dropped first. Rated and noted brews, and the newest brews of each recipe, go last. Summaries are always kept.` |
+| `machine.section.traces.10` | `components/MachineSection.tsx` (`BUDGET_OPTIONS`) | Choice value: default budget. | `10 MB` |
+| `machine.section.traces.25` | `components/MachineSection.tsx` (`BUDGET_OPTIONS`) | Choice value. | `25 MB` |
+| `machine.section.traces.50` | `components/MachineSection.tsx` (`BUDGET_OPTIONS`) | Choice value. | `50 MB` |
+| `machine.section.traces.unlimited` | `components/MachineSection.tsx` (`BUDGET_OPTIONS`) | Choice value: no storage limit. | `Unlimited` |
 | `machine.section.forget.label` | `components/MachineSection.tsx:141` | Action row label. | `Forget this machine` |
 | `machine.section.forget.detail` | `components/MachineSection.tsx:142` | Action row detail. | `XBRW++ will scan again next time.` |
 
