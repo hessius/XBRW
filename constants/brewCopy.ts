@@ -536,3 +536,5 @@ export const RATING_SHEET_DONE = "DONE";
 export function HANDOFF_ALREADY_SENT(when: string): string {
     return `Sent ${when}. Sending again will add another brew rather than update the one you sent.`;
 }
+
+export const HANDOFF_TEA_UNSUPPORTED = "Tea brews cannot be sent to Beanconqueror.";

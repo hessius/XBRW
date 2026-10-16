@@ -267,7 +267,7 @@ export default function BrewRecord({recipeLookup}: Props) {
     // The record screen renders the first target only; adding a second target
     // means revisiting this selection rather than assuming it appears here.
     const [handoffTarget] = HANDOFF_TARGETS;
-    const showHandoff = handoffEnabled && canHandOff(record.outcome);
+    const showHandoff = handoffEnabled && canHandOff(record);
     const accent = record.accent;
 
     // Measured from the first drop, because that is where the sample stream is

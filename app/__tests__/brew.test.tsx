@@ -11,7 +11,7 @@ import {
     LONGEST_ACTIVE_HEADLINE, OVERFLOW_FOREGROUND_CAUTION, OVERFLOW_MANUAL_OVERRIDE,
     PAUSED_NOTE, RATING_CAN_WAIT
 } from "@/constants/brewCopy";
-import {renderWithProviders} from "@/test-utils/render";
+import {renderWithProviders, SHEET_PRESS_TIMEOUT} from "@/test-utils/render";
 import type {BrewPhase} from "@/library/machine/Machine";
 import type {OverflowSnapshot} from "@/library/brew/OverflowController";
 import type {StoredBrew} from "@/library/BrewDatabase";
@@ -1565,6 +1565,29 @@ describe("Beanconqueror handoff on the finished brew", () => {
         all: () => [brew], samples: () => [], markSent: jest.fn()
     });
 
+    it("never offers tea handoff or bean naming when the live run finishes", async () => {
+        mockRecipe.cupType = CUP_TYPE.TEA;
+        mockPhase = {name: "pouring"} as BrewPhase;
+        const history = store({...record, beverageKind: "tea"});
+        const {rerender} = await renderWithProviders(<Brew historyStore={history} />);
+        mockPhase = {name: "done"} as BrewPhase;
+        await rerender(<Brew historyStore={history} />);
+        expect(screen.queryByLabelText(handoffTarget.buttonLabel)).toBeNull();
+        expect(screen.queryByTestId("bean-name-field")).toBeNull();
+        expect(screen.getByLabelText("Export the data")).toBeTruthy();
+        expect(screen.getByLabelText("Save as image")).toBeTruthy();
+        expect(openURL).not.toHaveBeenCalled();
+        expect(history.markSent).not.toHaveBeenCalled();
+    });
+
+    it("uses a known tea record to gate handoff even if the active recipe says coffee", async () => {
+        mockRecord = {...record, beverageKind: "tea"};
+        await renderWithProviders(<Brew historyStore={store(mockRecord)} />);
+        expect(screen.queryByLabelText(handoffTarget.buttonLabel)).toBeNull();
+        expect(screen.queryByTestId("bean-name-field")).toBeNull();
+        expect(openURL).not.toHaveBeenCalled();
+    });
+
     it("offers the handoff when the gate is on", async () => {
         const {getByLabelText} = await renderWithProviders(
             <Brew historyStore={store()} />
@@ -1607,7 +1630,7 @@ describe("Beanconqueror handoff on the finished brew", () => {
         await waitFor(async () => {
             await fireEvent.press(getByTestId("bean-name-send"));
             expect(openURL).toHaveBeenCalledTimes(1);
-        });
+        }, {timeout: SHEET_PRESS_TIMEOUT});
     });
 
     it("opens Beanconqueror straight away for a pod brew, which knows its coffee", async () => {

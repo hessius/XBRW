@@ -767,22 +767,22 @@ is outside the screen-covered accessibility subtree.
 | `brewHistory.selection.count.none` | `app/brewHistory.tsx` | Selection-mode count with nothing selected. | `0 brews selected` |
 | `brewHistory.selection.count.one` | `app/brewHistory.tsx` | Selection-mode count with one selected brew. | `1 brew selected` |
 | `brewHistory.selection.count.many` | `app/brewHistory.tsx` | Selection-mode count. `${count}` is the number of selected brews. | `${count} brews selected` |
-| `brewHistory.selection.send.a11y` | `app/brewHistory.tsx` (a11y) | (a11y) Sends the selected brews to Beanconqueror. | `Send selected brews to Beanconqueror` |
-| `brewHistory.selection.send` | `library/brew/handoff/targets.ts` (`HANDOFF_TARGETS[0].buttonLabel`, passed from `app/brewHistory.tsx`) | Doto action-row label, shared with the single-brew button so both read as the same action. Hidden while the `beanconquerorHandoff` Labs setting is off. | `Send to Beanconqueror` |
+| `brewHistory.selection.send.a11y` | `app/brewHistory.tsx` (a11y) | (a11y) Sends only eligible selected brews to Beanconqueror; the eligible count is shown below the actions. | `Send selected brews to Beanconqueror` |
+| `brewHistory.selection.send` | `app/brewHistory.tsx` | Doto action-row label. Hidden while the `beanconquerorHandoff` Labs setting is off or a nonempty selection contains no eligible brews. Tea and unfinished brews remain selectable for delete and compare. | `SEND` |
+| `brewHistory.selection.sendable` | `app/brewHistory.tsx` | Explicit sendable count for a nonempty selection with handoff enabled. `${sendableCount}` excludes known tea and unfinished records; `${count}` includes every selected record. Unknown legacy beverage kind retains outcome-based eligibility. | `${sendableCount} of ${count} selected brews can be sent to Beanconqueror.` |
 | `brewHistory.selection.delete.a11y` | `app/brewHistory.tsx` (a11y) | (a11y) Opens the confirmation for deleting every selected brew. | `Delete selected brews` |
 | `brewHistory.selection.delete` | `app/brewHistory.tsx` | Doto action-row label, beside SEND. | `DELETE` |
 | `brewHistory.selection.cancel.a11y` | `app/brewHistory.tsx` (a11y) | (a11y) Leaves selection mode and clears the selected brews. | `Cancel selection` |
 | `brewHistory.selection.cancel` | `app/brewHistory.tsx` | Doto action-row label. | `CANCEL` |
-| `brewHistory.selection.tooLarge` | `app/brewHistory.tsx` | Warning shown when the selected batch will not fit in one Beanconqueror handoff URL. | `Select fewer brews to send them together.` |
-| `brewHistory.selection.blocked.one` | `app/brewHistory.tsx` | Warning when one selected brew was cancelled, failed, or lost contact, so the send is blocked. It stays selectable for delete. | `1 selected brew did not finish, so it cannot be sent.` |
-| `brewHistory.selection.blocked.many` | `app/brewHistory.tsx` | Plural of the above. `${blocked}` is how many. | `${blocked} selected brews did not finish, so they cannot be sent.` |
+| `brewHistory.selection.tooLarge` | `app/brewHistory.tsx` | Warning shown when the eligible part of the selected batch will not fit in one Beanconqueror handoff URL. Not shown for all-tea or otherwise ineligible selections. | `Select fewer brews to send them together.` |
+| `brewHistory.selection.blocked` | `app/brewHistory.tsx` | Explains exclusions when any selected brew is known tea, cancelled, failed, or lost contact. Eligible brews can still be sent; delete and compare use the whole selection. | `Tea and unfinished brews are excluded from sending.` |
 | `brewHistory.selection.delete.title` | `app/brewHistory.tsx` | Title of the batch delete confirmation sheet. | `Delete brews` |
 | `brewHistory.selection.delete.body.one` | `app/brewHistory.tsx` | Batch delete confirmation with one brew selected. | `Delete 1 brew? This cannot be undone.` |
 | `brewHistory.selection.delete.body.many` | `app/brewHistory.tsx` | Batch delete confirmation. `${count}` is how many are selected. | `Delete ${count} brews? This cannot be undone.` |
 | `brewHistory.selection.delete.confirm.a11y` | `app/brewHistory.tsx` (a11y) | (a11y) Confirms the batch delete. | `Delete the selected brews` |
 | `brewHistory.selection.delete.cancel.a11y` | `app/brewHistory.tsx` (a11y) | (a11y) Dismisses the batch delete without removing anything. | `Keep these brews` |
 | `brewHistory.selection.delete.cancel` | `app/brewHistory.tsx` | Button that dismisses the batch delete confirmation. | `Keep these brews` |
-| `brewHistory.handoff.empty` | `hooks/useBrewBatchHandoff.ts` | Error toast when every selected brew disappeared before sending. | `No selected brews could be sent. They may have been deleted.` |
+| `brewHistory.handoff.empty` | `hooks/useBrewBatchHandoff.ts` | Error toast when a direct or stale batch send has no eligible records, including all-tea selections. | `No selected brews can be sent. Tea, unfinished and deleted brews are excluded.` |
 | `brewHistory.handoff.tooLarge` | `hooks/useBrewBatchHandoff.ts` | Error toast if the batch is too large at send time. Usually prevented by the selection warning. | `That selection is too large to send to Beanconqueror at once.` |
 | `brewHistory.handoff.openFailed` | `hooks/useBrewBatchHandoff.ts` | Error toast when iOS or Android rejects the Beanconqueror deep link. | `Could not open Beanconqueror. Make sure it is installed and try again.` |
 | `brewHistory.row.delete.a11y` | `app/brewHistory.tsx:32` (a11y) | (a11y) Swipe delete on a history row. | `Delete brew` |
@@ -824,7 +824,7 @@ is outside the screen-covered accessibility subtree.
 | `brewRecord.pin.state` | `app/brewRecord.tsx:475` (`record-pinned`) | Doto state shown after judging pins a brew so its trace survives retention. | `TRACE KEPT` |
 | `brewRecord.pin.release` | `app/brewRecord.tsx:484` (`record-release`) | Doto action beside the pinned state. | `LET IT EXPIRE` |
 | `brewRecord.export.busy` | `components/ExportButton.tsx:34` | Replaces either label while the capture and share sheet are in flight, so a press is visibly acknowledged. | `WORKING…` |
-| `brewRecord.handoff.beanconqueror.label` | `library/brew/handoff/targets.ts` (`HANDOFF_TARGETS[0].buttonLabel`, passed from `app/brewRecord.tsx`) | Button to hand a brew that produced a drink to Beanconqueror. Hidden behind the `beanconquerorHandoff` Labs setting, and on a brew that was cancelled, failed, or lost contact. | `Send to Beanconqueror` |
+| `brewRecord.handoff.beanconqueror.label` | `library/brew/handoff/targets.ts` (`HANDOFF_TARGETS[0].buttonLabel`, passed from `app/brewRecord.tsx` and `app/brew.tsx`) | Button to hand an eligible finished brew to Beanconqueror. Hidden behind the `beanconquerorHandoff` Labs setting, for known tea, and for cancelled, failed, or lost-contact outcomes. Legacy records keep outcome-based eligibility. Tea never opens send prerequisites; neutral JSON/image export and ordinary judgement remain available. | `Send to Beanconqueror` |
 | `brewRecord.handoff.bean.title` | `components/BeanNameSheet.tsx` | Sheet heading asked before a brew from beans is handed over, since the machine only knows the coffee for a pod. | `What was the coffee?` |
 | `brewRecord.handoff.bean.hint` | `components/BeanNameSheet.tsx` | Says what Beanconqueror will try if the field is left empty, naming the guess taken from the recipe. | `Beanconqueror will look for a bean by this name. Skip and it will try "<name>".` |
 | `brewRecord.handoff.bean.hintNone` | `components/BeanNameSheet.tsx` | The same, for a recipe whose name yields no guess at all. | `Beanconqueror will look for a bean by this name. Skip to let it pick one.` |
@@ -834,6 +834,7 @@ is outside the screen-covered accessibility subtree.
 | `brewRecord.handoff.bean.send.named.a11y` | `components/BeanNameSheet.tsx` (a11y) | (a11y) The button, once a name is typed. | `Send with this coffee name` |
 | `brewRecord.handoff.openFailed` | `hooks/useBrewHandoff.ts:9` | Error toast when the Beanconqueror deep link cannot be opened, usually because Beanconqueror is not installed. | `Could not open Beanconqueror. Make sure it is installed and try again.` |
 | `brewRecord.handoff.tooLarge` | `hooks/useBrewHandoff.ts:10` | Error toast when the handoff payload still cannot fit in a URL after dropping every lossy fallback. | `This brew is too large to hand over to Beanconqueror.` |
+| `brewRecord.handoff.teaUnsupported` | `constants/brewCopy.ts` (`HANDOFF_TEA_UNSUPPORTED`) | Standard error toast for an unexpected direct single-brew handoff of known tea, before recipe lookup or busy state. The defensive envelope boundary throws the same message; normal UI never offers this send. | `Tea brews cannot be sent to Beanconqueror.` |
 
 ---
 

@@ -424,7 +424,7 @@ export default function Brew({historyStore}: {historyStore?: ExportStore} = {}) 
         ? undefined
         : {markSent: historyStore.markSent};
     const {send: sendHandoff, busy: handoffBusy} = useBrewHandoff(
-        () => latestExport(historyStore ?? sharedBrewDatabase()),
+        () => recipe.isTea() ? null : latestExport(historyStore ?? sharedBrewDatabase()),
         handoffStore
     );
     // The machine knows what a pod was and never what a hopper held, so the
@@ -771,7 +771,11 @@ export default function Brew({historyStore}: {historyStore?: ExportStore} = {}) 
                         </XStack>
                     )}
                     {phase.name === "done" && handoffEnabled
-                        && canHandOff(finalOutcome("done", brewWater, plannedWater)) && (
+                        && !recipe.isTea()
+                        && canHandOff({
+                            outcome: finalOutcome("done", brewWater, plannedWater),
+                            beverageKind: run?.record?.beverageKind
+                        }) && (
                         // Read through `canHandOff` rather than assumed from
                         // the phase. Reaching "done" today means one of the two
                         // outcomes that may be handed over, but the rule for
@@ -785,9 +789,11 @@ export default function Brew({historyStore}: {historyStore?: ExportStore} = {}) 
                             <ExportButton label={handoffTarget.buttonLabel}
                                           busy={handoffBusy}
                                           onPress={() => {
+                                              if (recipe.isTea()) return;
                                               const source = latestExport(
                                                   historyStore ?? sharedBrewDatabase()
                                               );
+                                              if (source !== null && !canHandOff(source.record)) return;
                                               if (source == null
                                                   || handoffCoffee(source.record, recipe) === undefined) {
                                                   setNamingBean(true);
