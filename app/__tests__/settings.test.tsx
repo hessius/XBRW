@@ -209,7 +209,7 @@ describe("SettingsScreen", () => {
         const order = renderOrder(rendered.toJSON());
         const brewing = order.indexOf("BREWING");
         expect(brewing).toBeGreaterThan(order.indexOf("MACHINE"));
-        for (const label of ["Animate the brew chart", "Ask how a brew was", "Keep raw brew traces"]) {
+        for (const label of ["Animate the brew chart", "Ask how a brew was", "Brew detail storage"]) {
             expect(order.indexOf(label)).toBeGreaterThan(brewing);
             expect(order.indexOf(label)).toBeLessThan(order.indexOf("XBLOOM ACCOUNT"));
         }

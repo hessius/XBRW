@@ -231,6 +231,7 @@ describe("the machine section", () => {
         expect(screen.queryByText("Animate the brew chart")).toBeNull();
         expect(screen.queryByText("Ask how a brew was")).toBeNull();
         expect(screen.queryByText("Keep raw brew traces")).toBeNull();
+        expect(screen.queryByText("Brew detail storage")).toBeNull();
     });
 
     it("remembers the original xBloom when that is what you picked", async () => {

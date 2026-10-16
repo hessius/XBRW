@@ -72,18 +72,14 @@ Found by cross-checking the files against each other. Listed here because a
 number that appears in three places with three values is the most likely way
 this research gets someone into trouble.
 
-**Grind size — card encoding and Bluetooth limits are separate.** The
-**grinder** takes **1–80**; the standalone grind command is documented as
+**Grind size differs by transport.** BLE recipes carry grind directly and use
+**1–80**, also used by the standalone grind command
 `build_grinder_start(grind size 1–80, RPM 60–120)` (`ble-protocol.md`, `spec`).
-A **recipe card** stores grind as `value - 40`, so it carries **40–80**, which is
-what `library/cardLimits.ts` enforces.
-
-The card offset does not establish a minimum for Bluetooth recipe brewing:
-`encodeCoffeeBlob` sends the raw grind value without subtracting 40.
-The app currently shares the 40–80 validation between both paths. Earlier
-wording here called that the machine's whole brewing band, but the verified
-card offset does not prove that broader claim. Qualify a separate BLE range
-before changing validation; do not widen the NFC range.
+A **recipe card** stores grind as `value - 40`, so it carries **40–80**.
+`library/cardLimits.ts` keeps those bounds separate as `BLE_GRIND_SIZE` and
+`GRIND_SIZE`. Editing, quick edits and Easy Mode use the BLE range; writing a
+card still refuses a grind below 40. The card's minimum does not establish the
+minimum for BLE brewing, and importing a finer grind must not silently coarsen it.
 
 The offset was **confirmed on hardware** — grind sizes written by XBRW++ appear
 as intended on the machine (issue #68, closed). `verified` — one of only two

@@ -48,6 +48,7 @@ import {
 import {useSetting} from "@/hooks/useSetting";
 import {resolveAccent} from "@/library/accent";
 import {CARD_GRIND_MIN, grindBand} from "@/library/grindBands";
+import {BLE_GRIND_SIZE} from "@/library/cardLimits";
 import {parseCapture} from "@/library/cardDiagnostics";
 import {maxStagesForBytes, SIGNATURE_BYTES} from "@/library/cardWriteErrors";
 import type Pour from "@/library/Pour";
@@ -281,16 +282,7 @@ function BrewDeck({
                         "GRIND SIZE · POUROVER" beside "55 Pourover". */}
                     <Stepper label="Grind size" value={recipe.grindSize}
                              unit={grindBand(recipe.grindSize)?.label}
-                             // The floor is the card's, except for a recipe that
-                             // already sits below it. With a fixed floor of 40 an
-                             // imported espresso grind of 12 made "decrease"
-                             // *raise* the value to 40 -- the control clamped
-                             // upward and silently changed a number nobody asked
-                             // it to change, and announced a value below its own
-                             // advertised minimum. Below the floor the value is
-                             // its own minimum, so decrease does nothing and the
-                             // banner's SET TO 40 stays the only way up.
-                             min={Math.min(CARD_GRIND_MIN, recipe.grindSize)} max={80} step={1}
+                             min={BLE_GRIND_SIZE.min} max={BLE_GRIND_SIZE.max} step={1}
                              onChange={(value) => dispatch(RECIPE_LABELS.GRIND_SIZE, String(value))}/>
                 </FieldRow>
             )}
