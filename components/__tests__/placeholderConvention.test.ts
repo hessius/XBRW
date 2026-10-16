@@ -1,6 +1,10 @@
 import {readFileSync} from "node:fs";
 import {join} from "node:path";
 
+import {
+    COFFEE_JUDGEMENT_PLACEHOLDER, TEA_JUDGEMENT_PLACEHOLDER
+} from "@/constants/brewCopy";
+
 /**
  * Placeholders are examples, not values.
  *
@@ -16,7 +20,6 @@ const EXAMPLE_FIELDS = [
     "components/RenameSheet.tsx",
     "components/NameShelfSheet.tsx",
     "components/NoteSection.tsx",
-    "components/BrewJudgement.tsx",
     "components/PodSection.tsx"
 ];
 
@@ -28,17 +31,8 @@ const LABEL_FIELDS = [
 
 function placeholders(file: string): string[] {
     const source = readFileSync(join(__dirname, "..", "..", file), "utf8");
-    const literals = [...source.matchAll(/placeholder=(?:"([^"]*)"|\{"([^"]*)"\})/g)]
+    return [...source.matchAll(/placeholder=(?:"([^"]*)"|\{"([^"]*)"\})/g)]
         .map((match) => match[1] ?? match[2]);
-    return [...literals, ...(file === "components/BrewJudgement.tsx" ? judgementCopy() : [])];
-}
-
-// BrewJudgement picks its placeholder by beverage, so the words live in
-// brewCopy as constants rather than as a literal prop.
-function judgementCopy(): string[] {
-    const copy = readFileSync(join(__dirname, "..", "..", "constants/brewCopy.ts"), "utf8");
-    return [...copy.matchAll(/export const \w+_JUDGEMENT_PLACEHOLDER = "([^"]*)"/g)]
-        .map((match) => match[1]);
 }
 
 describe("placeholder convention", () => {
@@ -50,5 +44,12 @@ describe("placeholder convention", () => {
 
     it.each(LABEL_FIELDS)("%s is exempt and says what the field does", (file) => {
         placeholders(file).forEach((text) => expect(text).not.toMatch(/^e\.g\. /));
+    });
+
+    it.each([
+        ["coffee", COFFEE_JUDGEMENT_PLACEHOLDER],
+        ["tea", TEA_JUDGEMENT_PLACEHOLDER]
+    ])("phrases the %s judgement placeholder as an example", (_beverage, text) => {
+        expect(text).toMatch(/^e\.g\. /);
     });
 });
