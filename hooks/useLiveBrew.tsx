@@ -3,7 +3,7 @@ import React, {createContext, useContext, useRef, useState} from "react";
 import {OVER} from "@/constants/brewCopy";
 import {useBrewRun} from "@/hooks/useBrewRun";
 import type {BrewStore} from "@/hooks/useBrewRun";
-import type {BrewRecord, BrewSample} from "@/library/brew/BrewRecord";
+import type {BrewRecord, BrewSample, TeaCycleObservation} from "@/library/brew/BrewRecord";
 import type {OverflowSnapshot} from "@/library/brew/OverflowController";
 import type {PauseInterval} from "@/library/brew/pauseIntervals";
 import type {Stall} from "@/library/brew/stalls";
@@ -32,6 +32,10 @@ export type LiveBrewSnapshot = {
     bypass?: BypassView;
     /** The row the recorder wrote for a finished brew. */
     record?: BrewRecord;
+    /** Tea cycle boundaries, published on the recorder's live cadence. */
+    teaCycles?: TeaCycleObservation[];
+    /** Live sample-clock time, used only for tea observation timers. */
+    teaNow?: number;
     overflow?: OverflowSnapshot;
     /** Epoch ms the owner last published `overflow` at; drives its countdown. */
     overflowNow?: number;
@@ -212,7 +216,7 @@ function RunOwner({
            heldSeconds, stalls, stageWater, pauseElapsed, brew, startBrew,
            pauseBrew, resumeBrew,
            cancelBrew, canOfferProMode, switchToProAndRetry, bypass, record,
-           overflow, overflowNow, pauseIntervals} = result;
+           overflow, overflowNow, pauseIntervals, teaCycles, teaNow} = result;
 
     // Command the machine exactly once, on the first mount of this RunOwner.
     // How many screens are showing this run in full. A count rather than a
@@ -249,7 +253,7 @@ function RunOwner({
     const snapshot: LiveBrewSnapshot | null = recipe === null ? null : {
         recipe, samples, elapsed, stageElapsed, activeIndex, phase,
         holding, heldSeconds, stalls, stageWater, pauseElapsed, bypass, record, startedAt, quickEdit,
-        overflow, overflowNow, pauseIntervals,
+        overflow, overflowNow, pauseIntervals, teaCycles, teaNow,
     };
     const quickEditFor = (
         next: Recipe,

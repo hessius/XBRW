@@ -1,6 +1,10 @@
 import {readFileSync} from "node:fs";
 import {join} from "node:path";
 
+import {
+    COFFEE_JUDGEMENT_PLACEHOLDER, TEA_JUDGEMENT_PLACEHOLDER
+} from "@/constants/brewCopy";
+
 /**
  * Placeholders are examples, not values.
  *
@@ -16,7 +20,6 @@ const EXAMPLE_FIELDS = [
     "components/RenameSheet.tsx",
     "components/NameShelfSheet.tsx",
     "components/NoteSection.tsx",
-    "components/BrewJudgement.tsx",
     "components/PodSection.tsx"
 ];
 
@@ -35,11 +38,18 @@ function placeholders(file: string): string[] {
 describe("placeholder convention", () => {
     it.each(EXAMPLE_FIELDS)("%s phrases its placeholder as an example", (file) => {
         const found = placeholders(file);
-        expect(found.length).toBeGreaterThan(0);
+        expect(found.length).toBeGreaterThan(file === "components/BrewJudgement.tsx" ? 1 : 0);
         found.forEach((text) => expect(text).toMatch(/^e\.g\. /));
     });
 
     it.each(LABEL_FIELDS)("%s is exempt and says what the field does", (file) => {
         placeholders(file).forEach((text) => expect(text).not.toMatch(/^e\.g\. /));
+    });
+
+    it.each([
+        ["coffee", COFFEE_JUDGEMENT_PLACEHOLDER],
+        ["tea", TEA_JUDGEMENT_PLACEHOLDER]
+    ])("phrases the %s judgement placeholder as an example", (_beverage, text) => {
+        expect(text).toMatch(/^e\.g\. /);
     });
 });

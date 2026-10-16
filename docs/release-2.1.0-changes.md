@@ -11,6 +11,25 @@ The two newest traces for each recipe and rated or noted traces go last. Brew
 records and summaries remain available when their detailed trace is removed.
 Unlimited disables budget-based trace removal.
 
+## Tea-cycle observations and presentation (2026-10-16)
+
+Known-tea brews now retain compact, explicitly observed fill, steep and
+combined release/drain cycle boundaries independently of the sample-retention
+window. Live, finished, record/story and comparison views distinguish the
+programmed fill from measured fill and later measured water; the cycle view
+does not claim that the latter is overflow, a fixed amount, or a measured drain
+duration. Coffee stall/held/drawdown semantics remain separate. This feature
+does not explain or resolve the earlier report of a truncated tea recording.
+
+**Physical-device qualification remains open.** Replay of one sanitized
+three-steep capture verifies the mapped event sequence, not the new live
+rendering or every interruption path. On real iOS and Android hardware, verify
+all three stages, timer updates, pause/resume, manual stop, link loss, a brew
+ending short, history after sample expiry, and completed PNG/JSON exports.
+Confirm that unknown release/drain boundaries remain unknown. The captured
+machine model and app build were not established; do not infer them from this
+evidence.
+
 ## Development workflow migration (2026-10-11)
 
 The former `integration/2.1.0` candidate now lives in `develop`. Beta fixes

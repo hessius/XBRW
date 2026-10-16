@@ -57,6 +57,45 @@ function decode(url: string): HandoffBatch {
 }
 
 describe("useBrewBatchHandoff", () => {
+    it("sends and marks only eligible coffee in a mixed selection", async () => {
+        const markSent = jest.fn();
+        const {result} = await renderHook(() => useBrewBatchHandoff(source({
+            a: {record: brew({id: "a", beverageKind: "coffee"}), samples},
+            b: {record: brew({id: "b", beverageKind: "tea"}), samples},
+            c: {record: brew({id: "c", outcome: "failed"}), samples}
+        }), {markSent}));
+        expect(result.current.fits(["a", "b", "c"])).toBe(true);
+        await act(async () => { await result.current.send(["a", "b", "c"]); });
+        expect(decode(openURL.mock.calls[0][0]).brews).toHaveLength(1);
+        expect(markSent).toHaveBeenCalledTimes(1);
+        expect(markSent).toHaveBeenCalledWith("a", expect.any(Number));
+    });
+
+    it("refuses an all-tea selection without looking up recipes", async () => {
+        const markSent = jest.fn();
+        const {result} = await renderHook(() => useBrewBatchHandoff(source({
+            a: {record: brew({beverageKind: "tea"}), samples}
+        }), {markSent}));
+        expect(result.current.fits(["a"])).toBe(false);
+        await act(async () => { expect(await result.current.send(["a"])).toBeNull(); });
+        expect(RecipeDatabaseMock).not.toHaveBeenCalled();
+        expect(openURL).not.toHaveBeenCalled();
+        expect(markSent).not.toHaveBeenCalled();
+        expect(notifyMock).toHaveBeenCalledWith({tone: "error", message: BATCH_HANDOFF_EMPTY});
+    });
+
+    it("rechecks eligibility at send time despite a cached coffee envelope", async () => {
+        const records = {a: {record: brew({id: "a"}), samples}};
+        const markSent = jest.fn();
+        const {result} = await renderHook(() => useBrewBatchHandoff(source(records), {markSent}));
+        expect(result.current.fits(["a"])).toBe(true);
+        records.a.record.beverageKind = "tea";
+        await act(async () => { await result.current.send(["a"]); });
+        expect(openURL).not.toHaveBeenCalled();
+        expect(markSent).not.toHaveBeenCalled();
+        expect(notifyMock).toHaveBeenCalledWith({tone: "error", message: BATCH_HANDOFF_EMPTY});
+    });
+
     beforeEach(() => {
         RecipeDatabaseMock.mockReset();
         RecipeDatabaseMock.mockImplementation(() => recipeStore(null));

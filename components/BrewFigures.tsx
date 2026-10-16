@@ -10,7 +10,8 @@ import FlowSparkline, {
 import {palette} from "@/constants/colors";
 import {formatBrewClock} from "@/library/brew/brewFormat";
 import {grindRecipeBadges, type GrindFigure} from "@/library/brew/dialAfterBrew";
-import type {BrewFigureAdjustments} from "@/library/brew/brewFigures";
+import {brewFigureDetails, type BrewFigureAdjustments} from "@/library/brew/brewFigures";
+import type {BeverageKind} from "@/library/brew/BrewRecord";
 import {
     BREW_FIGURE_DETAIL_VALUE_SIZE,
     BREW_FIGURE_INTERNAL_GAP,
@@ -43,6 +44,7 @@ export function detailRowMinHeight(): number {
 }
 
 type Props = {
+    beverageKind?: BeverageKind;
     water: number;
     cup: number;
     seconds: number;
@@ -284,12 +286,17 @@ export function brewFigureAdjustmentMeasures(
  */
 export default function BrewFigures(
     {
-        water, cup, seconds, accent, bypass, drawdown = null, flow = null,
-        flowTail, pourRate = null, reserveFlow = false, reserveDrawdown = false,
-        drawdownRate = null, delay = null, grind = null, contentWidth, textScale = 1,
+        water, cup, seconds, accent, bypass, drawdown: rawDrawdown = null, flow = null,
+        flowTail, pourRate = null, reserveFlow = false, reserveDrawdown: rawReserveDrawdown = false,
+        drawdownRate: rawDrawdownRate = null, delay: rawDelay = null, grind: rawGrind = null,
+        contentWidth, textScale = 1, beverageKind,
         adjustments
     }: Props
 ) {
+    const {drawdown, drawdownRate, delay, grind, reserveDrawdown} = brewFigureDetails(
+        beverageKind, {drawdown: rawDrawdown, drawdownRate: rawDrawdownRate,
+            delay: rawDelay, grind: rawGrind, reserveDrawdown: rawReserveDrawdown}
+    );
     const {fontScale = 1} = useWindowDimensions();
     const figureText = brewFigureTextGeometry(textScale);
     const badgeGeometry = brewFigureBadgeGeometry(textScale);

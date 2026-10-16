@@ -52,6 +52,7 @@ let mockBrewSummary = {
     timed: 0, meanBrewSeconds: 0, measured: 0, meanCupMl: 0, abandoned: 0, lastDial: null
 };
 const mockRate = jest.fn();
+const mockRecipeRatingInput = jest.fn();
 const mockRefreshBeanProfile = jest.fn();
 let mockBeanProfile: BeanProfile = {
     rows: [],
@@ -60,7 +61,10 @@ let mockBeanProfile: BeanProfile = {
 };
 jest.mock("@/hooks/useBrewHistory", () => ({
     ...jest.requireActual("@/hooks/useBrewHistory"),
-    useRecipeRating: () => ({summary: mockBrewSummary, rate: mockRate}),
+    useRecipeRating: (recipe: unknown) => {
+        mockRecipeRatingInput(recipe);
+        return {summary: mockBrewSummary, rate: mockRate};
+    },
     useBeanProfile: () => ({profile: mockBeanProfile, refresh: mockRefreshBeanProfile})
 }));
 
@@ -184,6 +188,7 @@ beforeEach(() => {
     mockPush.mockClear();
     mockNotify.mockClear();
     mockRefreshBeanProfile.mockClear();
+    mockRecipeRatingInput.mockClear();
     mockBeanProfile = {
         rows: [],
         untagged: {brews: 0, rated: 0, avgRating: 0},
@@ -293,6 +298,16 @@ function fillsWithin(element: unknown): string[] {
 }
 
 describe("the editor", () => {
+    it.each([
+        [CUP_TYPE.TEA, "tea"],
+        [CUP_TYPE.XPOD, "coffee"]
+    ])("passes beverage identity to recipe ratings for cup type %s", async (cupType, beverageKind) => {
+        await renderEditor({cupType});
+        expect(mockRecipeRatingInput).toHaveBeenLastCalledWith(
+            expect.objectContaining({beverageKind})
+        );
+    });
+
     it("opens on the recipe, not on a form", async () => {
         await renderEditor();
 

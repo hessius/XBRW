@@ -139,7 +139,8 @@ function SelectionActionRow({
 }) {
     if (!selecting) return null;
 
-    const tooLarge = count > 0 && !fits;
+    const sendableCount = count - blocked;
+    const tooLarge = canSend && sendableCount > 0 && !fits;
 
     return (
         <YStack paddingHorizontal="$4" paddingVertical="$2" gap="$2"
@@ -180,12 +181,12 @@ function SelectionActionRow({
                         the count and the cancel need. The screen reader hears
                         the whole sentence below, where there is no row in
                         earshot to supply it. */}
-                    {canSend && (
+                    {canSend && (count === 0 || sendableCount > 0) && (
                         <ExportButton
                             label="SEND"
                             accessibilityLabel="Send selected brews to Beanconqueror"
                             busy={busy}
-                            disabled={count === 0 || tooLarge || blocked > 0}
+                            disabled={sendableCount === 0 || tooLarge}
                             onPress={onSend}
                         />
                     )}
@@ -205,6 +206,11 @@ function SelectionActionRow({
             <Text color={palette.dim} fontSize={13}>
                 {count === 1 ? "1 brew selected" : `${count} brews selected`}
             </Text>
+            {canSend && count > 0 && (
+                <Text color={palette.dim} fontSize={13}>
+                    {`${sendableCount} of ${count} selected brews can be sent to Beanconqueror.`}
+                </Text>
+            )}
             {tooLarge && (
                 <Text color={palette.warn} fontSize={12}>
                     Select fewer brews to send them together.
@@ -215,16 +221,9 @@ function SelectionActionRow({
                     {COMPARE_SELECTION_COPY.notComparable}
                 </Text>
             )}
-            {/* A brew that was cancelled, that failed, or that the app stopped
-                watching has no drink behind it, so it stays selectable for
-                delete but blocks the send rather than being quietly dropped
-                from it. Sending the rest without saying so would write a
-                different diary than the one the user picked. */}
             {canSend && blocked > 0 && (
                 <Text testID="selection-blocked" color={palette.warn} fontSize={12}>
-                    {blocked === 1
-                        ? "1 selected brew did not finish, so it cannot be sent."
-                        : `${blocked} selected brews did not finish, so they cannot be sent.`}
+                    Tea and unfinished brews are excluded from sending.
                 </Text>
             )}
         </YStack>
@@ -334,7 +333,8 @@ export default function BrewHistory() {
         .map((id) => filtered.find((brew) => brew.id === id))
         .filter((brew): brew is StoredBrew => brew !== undefined);
     const visibleSelectedIds = selectedBrews.map((brew) => brew.id);
-    const blockedCount = selectedBrews.filter((brew) => !canHandOff(brew.outcome)).length;
+    const sendableIds = selectedBrews.filter(canHandOff).map((brew) => brew.id);
+    const blockedCount = selectedBrews.length - sendableIds.length;
     const visibleSelectionFits = selectionFits && selectedBrews.length === selectedIds.length;
     const comparable = selectedBrews.length === 2
         && selectedBrews[0].recipeUuid === selectedBrews[1].recipeUuid;
@@ -387,13 +387,13 @@ export default function BrewHistory() {
             ? visibleSelectedIds.filter((selectedId) => selectedId !== id)
             : [...visibleSelectedIds, id];
         setSelectedIds(next);
-        setSelectionFits(handoff.fits(next));
+        const eligible = filtered.filter((brew) => next.includes(brew.id) && canHandOff(brew));
+        setSelectionFits(handoff.fits(eligible.map((brew) => brew.id)));
     }
 
     async function handleSelectionSend() {
-        if (visibleSelectedIds.length === 0 || !visibleSelectionFits || handoff.busy) return;
-        if (blockedCount > 0) return;
-        await handoff.send(visibleSelectedIds);
+        if (sendableIds.length === 0 || !visibleSelectionFits || handoff.busy) return;
+        await handoff.send(sendableIds);
         handleSelectCancel();
     }
 

@@ -10,6 +10,7 @@ import {
     plannedSeconds,
     planPoints,
     splitAtPauses,
+    traceTimeExtent,
     toPath,
     type Box,
     type Point
@@ -263,6 +264,10 @@ function rateSeriesFor({record, samples}: BrewUnderComparison): FlowPoint[] {
     return retrospectiveFlowSeries(samples, record.pours);
 }
 
+function observedVolumeTop(samples: BrewSample[]): number {
+    return samples.reduce((max, sample) => Math.max(max, sample.water, sample.cup), 0);
+}
+
 /**
  * The one axis both brews share.
  *
@@ -280,8 +285,17 @@ export function compareAxis(
     const referenceRate = rateSeriesFor(reference);
     const subjectPauses = drawnPauses(subject);
     const referencePauses = drawnPauses(reference);
+    const tea = subject.record.beverageKind === "tea" || reference.record.beverageKind === "tea";
     return {
-        maxT: Math.max(
+        maxT: tea ? Math.max(
+            1,
+            traceTimeExtent(
+                plannedSeconds(subjectPours), subject.samples, undefined, subjectPauses
+            ),
+            traceTimeExtent(
+                plannedSeconds(referencePours), reference.samples, undefined, referencePauses
+            )
+        ) : Math.max(
             1,
             lastSecond(subject.samples),
             lastSecond(reference.samples),
@@ -295,8 +309,10 @@ export function compareAxis(
             subject.record.waterTotal,
             reference.record.waterTotal,
             planTop(subject.record),
-            planTop(reference.record)
-        ),
+            planTop(reference.record),
+            tea ? observedVolumeTop(subject.samples) : 0,
+            tea ? observedVolumeTop(reference.samples) : 0
+        ) * (tea ? 1.02 : 1),
         maxRate: Math.max(maxRateOf(subjectRate), maxRateOf(referenceRate)),
         subjectRate,
         referenceRate,

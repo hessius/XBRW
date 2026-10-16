@@ -115,6 +115,9 @@ export function buildEnvelope(
     backfilled: BackfilledField[] = [],
     beanNameHint?: string
 ): HandoffEnvelope {
+    if (brew.beverageKind === "tea") {
+        throw new Error("Tea brews cannot be sent to Beanconqueror.");
+    }
     const flow = brew.hasStream && samples.length > 0 ? flowFromSamples(samples) : undefined;
     const metrics = metricsFromPlan(brew.plan);
     const bean = beanFor(brew, beanNameHint);

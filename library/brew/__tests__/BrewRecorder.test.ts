@@ -2,9 +2,9 @@ import BrewRecorder, {type RecorderMachine} from "@/library/brew/BrewRecorder";
 import {drawdownSeconds} from "@/library/brew/BrewRecord";
 import type {BrewRecord, BrewSample} from "@/library/brew/BrewRecord";
 import type {BrewPhase} from "@/library/machine/Machine";
-import type {Notification} from "@/library/machine/protocol";
+import {EVENT, MACHINE_STATE, type Notification} from "@/library/machine/protocol";
 import Pour from "@/library/Pour";
-import Recipe from "@/library/Recipe";
+import Recipe, {CUP_TYPE} from "@/library/Recipe";
 
 /** A machine that says only what a test tells it to. */
 function fakeMachine() {
@@ -68,6 +68,86 @@ afterEach(() => {
 });
 
 describe("BrewRecorder", () => {
+    it.each([
+        [CUP_TYPE.TEA, "tea", CUP_TYPE.XPOD],
+        [CUP_TYPE.XPOD, "coffee", CUP_TYPE.TEA]
+    ])("snapshots beverage kind at construction for cup type %s", (cupType, kind, changedType) => {
+        const r = recipe();
+        r.cupType = cupType;
+        const fake = fakeMachine();
+        const records: BrewRecord[] = [];
+        const recorder = new BrewRecorder({
+            machine: fake.machine, recipe: r,
+            onRecord: (record) => records.push(record)
+        });
+        built.push(recorder);
+        r.cupType = changedType;
+        recorder.start();
+        fake.phase({name: "cancelled"});
+        expect(records).toHaveLength(1);
+        expect(records[0]).toHaveProperty("beverageKind", kind);
+    });
+
+    it("keeps the tea cup-only tail until the machine terminal without coffee completion heuristics", () => {
+        const tea = recipe();
+        tea.cupType = CUP_TYPE.TEA;
+        const {fake, time, records, recorder} = build({recipe: tea});
+        fake.phase({name: "pouring", pour: 1, pours: 2});
+        fake.cup(100);
+        fake.water(200);
+        fake.phase({name: "settling"});
+        fake.state(MACHINE_STATE.READY);
+        time.advance(1_000);
+        fake.cup(150);
+        time.advance(120_000);
+        fake.cup(150);
+        time.advance(1_000);
+        fake.cup(10);
+        expect(records).toHaveLength(0);
+        expect(recorder.samples.at(-1)).toMatchObject({
+            at: 122_000, water: 200, cup: 10
+        });
+        time.advance(1_000);
+        fake.cup(160);
+        fake.phase({name: "done"});
+        expect(records).toHaveLength(1);
+        expect(records[0].samples.at(-1)).toMatchObject({
+            at: 123_000, water: 200, cup: 160
+        });
+        expect(records[0].samples.map(({cup}) => cup)).toEqual([100, 150, 150, 10, 160]);
+        expect(records[0].record).toMatchObject({
+            beverageKind: "tea", waterTotal: 200, cupTotal: 160, heldSeconds: 0
+        });
+        expect(records[0].record).not.toHaveProperty("drawdownAt");
+    });
+
+    it("does not interpret the resume acknowledgement state as a tea steep end", () => {
+        const tea = recipe();
+        tea.cupType = CUP_TYPE.TEA;
+        tea.pours = [new Pour(1, 90, 92, 35, 0, 0, 45)];
+        const {fake, time, recorder} = build({recipe: tea});
+        fake.phase({name: "pouring", pour: 1, pours: 1});
+        fake.water(0);
+        fake.water(2);
+        fake.event(EVENT.POUR_START, 0);
+        fake.state(MACHINE_STATE.TEA_STEEPING);
+        time.advance(20_000);
+        fake.phase({
+            name: "paused", pour: 1, pours: 1,
+            was: {name: "pouring", pour: 1, pours: 1}
+        });
+        time.advance(5_000);
+        fake.phase({name: "pouring", pour: 1, pours: 1});
+        fake.event(EVENT.COFFEE_RESUMED);
+        fake.state(MACHINE_STATE.BREWING_SUB);
+
+        expect(recorder.teaCycleObservations[0].steepEndedAt).toBeUndefined();
+
+        time.advance(1_000);
+        fake.state(MACHINE_STATE.BREWING_SUB);
+        expect(recorder.teaCycleObservations[0].steepEndedAt).toBe(26_000);
+    });
+
     it("ignores weights that arrive before the first pour", () => {
         // The machine chatters while it grinds. None of it belongs on a plan
         // whose axis starts at the first drop.

@@ -500,6 +500,9 @@ export const RATING_CAN_WAIT = "No rush. You can rate it later.";
 
 /** Drawn on the rating bar's second row, after the recipe name. */
 export const RATING_PROMPT_QUESTION = "HOW WAS IT";
+export const TEA_JUDGEMENT_HEADING = "HOW WAS THE TEA";
+export const COFFEE_JUDGEMENT_PLACEHOLDER = "e.g. Sweet, a little thin. Grind finer.";
+export const TEA_JUDGEMENT_PLACEHOLDER = "e.g. Floral, a little bitter. Steep less.";
 
 /**
  * The accessibility label for the rating bar's left hand tap target, which
@@ -533,3 +536,5 @@ export const RATING_SHEET_DONE = "DONE";
 export function HANDOFF_ALREADY_SENT(when: string): string {
     return `Sent ${when}. Sending again will add another brew rather than update the one you sent.`;
 }
+
+export const HANDOFF_TEA_UNSUPPORTED = "Tea brews cannot be sent to Beanconqueror.";

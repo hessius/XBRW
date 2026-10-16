@@ -2,9 +2,33 @@ import React from "react";
 import {fireEvent, screen, waitFor} from "@testing-library/react-native";
 
 import BrewNoteSheet from "@/components/BrewNoteSheet";
-import {renderWithProviders} from "@/test-utils/render";
+import {
+    COFFEE_JUDGEMENT_PLACEHOLDER, TEA_JUDGEMENT_PLACEHOLDER
+} from "@/constants/brewCopy";
+import {renderWithProviders, SHEET_PRESS_TIMEOUT} from "@/test-utils/render";
 
 describe("BrewNoteSheet", () => {
+    it.each([undefined, "coffee", "tea"] as const)(
+        "uses %s note copy and still commits edits",
+        async (beverageKind) => {
+            const onNote = jest.fn();
+            await renderWithProviders(
+                <BrewNoteSheet open={true} onOpenChange={() => {}}
+                               figures="14:32 · 244 G" recipeName="Morning Bloem"
+                               beverageKind={beverageKind}
+                               rating={4} note="" onRate={() => {}} onNote={onNote}/>
+            );
+            const placeholder = beverageKind === "tea"
+                ? TEA_JUDGEMENT_PLACEHOLDER : COFFEE_JUDGEMENT_PLACEHOLDER;
+            const field = await screen.findByPlaceholderText(placeholder);
+            if (beverageKind === "tea") {
+                expect(screen.queryByPlaceholderText(COFFEE_JUDGEMENT_PLACEHOLDER)).toBeNull();
+            }
+            await fireEvent(field, "endEditing", {nativeEvent: {text: "Floral"}});
+            expect(onNote).toHaveBeenCalledWith("Floral");
+        }
+    );
+
     it("names the brew by its figures", async () => {
         await renderWithProviders(
             <BrewNoteSheet open={true} onOpenChange={() => {}}
@@ -35,9 +59,10 @@ describe("BrewNoteSheet", () => {
                            rating={4} note="" onRate={onRate} onNote={() => {}}/>
         );
 
-        await fireEvent.press(await screen.findByLabelText("Rate 4 stars"));
-
-        expect(onRate).toHaveBeenCalledWith(4);
+        await waitFor(async () => {
+            await fireEvent.press(screen.getByLabelText("Rate 4 stars"));
+            expect(onRate).toHaveBeenCalledWith(4);
+        }, {timeout: SHEET_PRESS_TIMEOUT});
     });
 
     it("closes when done is pressed", async () => {
@@ -52,6 +77,6 @@ describe("BrewNoteSheet", () => {
         await waitFor(async () => {
             await fireEvent.press(screen.getByTestId("brew-note-done"));
             expect(onOpenChange).toHaveBeenCalledWith(false);
-        });
+        }, {timeout: SHEET_PRESS_TIMEOUT});
     });
 });

@@ -5,6 +5,7 @@ import {notify} from "@/components/XbrwToast";
 import {backfillFromRecipe} from "@/library/brew/handoff/backfill";
 import {buildEnvelope, type HandoffEnvelope} from "@/library/brew/handoff/envelope";
 import {batchFits, encodeHandoffBatch} from "@/library/brew/handoff/encode";
+import {canHandOff} from "@/library/brew/handoff/targets";
 import type {BrewSample} from "@/library/brew/BrewRecord";
 import type {StoredBrew} from "@/library/BrewDatabase";
 import RecipeDatabase from "@/library/RecipeDatabase";
@@ -16,7 +17,7 @@ export const BATCH_HANDOFF_OPEN_FAILED =
 export const BATCH_HANDOFF_TOO_LARGE =
     "That selection is too large to send to Beanconqueror at once.";
 export const BATCH_HANDOFF_EMPTY =
-    "No selected brews could be sent. They may have been deleted.";
+    "No selected brews can be sent. Tea, unfinished and deleted brews are excluded.";
 
 type BatchSource = {record: StoredBrew; samples: BrewSample[]};
 type SendableEnvelope = {id: string; envelope: HandoffEnvelope};
@@ -25,8 +26,8 @@ type SendableEnvelope = {id: string; envelope: HandoffEnvelope};
  * Hands several finished brews to Beanconqueror over one deep link.
  *
  * `load` is resolved at press time so a stale selection can be trimmed if a
- * record was deleted underneath it. Missing records are skipped; an entirely
- * stale selection is the only empty case surfaced to the user.
+ * record was deleted underneath it. Missing and ineligible records are skipped;
+ * an empty sendable selection is surfaced to the user.
  */
 export function useBrewBatchHandoff(
     load: (id: string) => BatchSource | null,
@@ -58,7 +59,7 @@ export function useBrewBatchHandoff(
 
     function build(id: string): HandoffEnvelope | null {
         const opened = load(id);
-        if (opened === null) return null;
+        if (opened === null || !canHandOff(opened.record)) return null;
         const recipe = recipes().getRecipe(opened.record.recipeUuid);
         const backfill = recipe === null
             ? {record: opened.record, filled: []}

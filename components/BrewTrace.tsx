@@ -7,7 +7,7 @@ import {XStack, YStack} from "tamagui";
 import {dotMatrixSvgProps, drawnFontSize} from "@/components/DotMatrixText";
 import TraceLegendItem, {LEGEND_SIZE, rowHeight} from "@/components/TraceLegendItem";
 import {palette} from "@/constants/colors";
-import type {BrewSample} from "@/library/brew/BrewRecord";
+import type {BeverageKind, BrewSample} from "@/library/brew/BrewRecord";
 import {livePoints, pathLength, planPoints, splitAtPauses, stageSpans, toPath,
         traceAxisFor, traceTimeParts,
         type Box} from "@/library/brew/brewShape";
@@ -23,6 +23,7 @@ import type Pour from "@/library/Pour";
 type Props = {
     pours: Pour[];
     samples: BrewSample[];
+    beverageKind?: BeverageKind;
     accent: string;
     width: number;
     /** Total rendered height of the component. In non-compact mode this includes the legend row. */
@@ -196,7 +197,7 @@ function temperatureAccessibilityLabel(marks: {temperature: number}[]): string {
  * axis would erase the one thing worth seeing.
  */
 export default function BrewTrace({
-    pours, samples, accent, width, height, plannedSeconds,
+    pours, samples, beverageKind, accent, width, height, plannedSeconds,
     axis, pauseIntervals = NO_INTERVALS,
     holding = false, role = "subject", planOpacity = 1, planColor = palette.muted,
     planDashed = true, planHeadAt = 1,
@@ -213,7 +214,7 @@ export default function BrewTrace({
     // The plan's final water level: where the target line ends, and the floor
     // the bypass box is stacked on.
     const planTop = plan.length > 0 ? plan[plan.length - 1].v : 0;
-    const extent = axis ?? traceAxisFor(pours, samples, plannedSeconds, bypass, pauseIntervals);
+    const extent = axis ?? traceAxisFor(pours, samples, plannedSeconds, bypass, pauseIntervals, beverageKind);
     // In compact mode the SVG fills the full height; otherwise the legend row
     // takes its height first.
     const svgHeight = compact
