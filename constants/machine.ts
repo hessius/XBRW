@@ -107,7 +107,7 @@ export const SLOT_DISPATCH_MS = 15_000;
 export const SLOT_RECEIPT_MS = 15_000;
 export const SLOT_COMPLETION_MS = 15_000;
 
-/** How long to wait for a sent recipe to reach `loading` or `armed`. */
+/** Start-response silence budget; changing grinder positions renew it. */
 export const RECIPE_ACK_MS = 8000;
 
 /**

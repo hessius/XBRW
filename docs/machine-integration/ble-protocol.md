@@ -222,7 +222,41 @@ document's `single-source` marking on those two comes from.
 | 9008 | 0x2330 | Scale Out | — | Object removed from scale | `spec` |
 | 9009 | 0x2331 | Grinder Paused | — | | `spec` |
 | 9010 | 0x2332 | Brewer Paused | — | | `spec` |
-| 40505 | 0x9E39 | Gear Report | — | Gear position report during grind | `spec` |
+| 40505 | 0x9E39 | Gear Report | position | Changing positions also arrive before grinding starts; see startup timing below. | `field capture 2026-10-16, V12.0D.500` |
+
+#### Grinder positioning before brew start
+
+A tester reported a physically completed eight-stage BLE brew while XBRW++
+showed "The machine would not take the recipe" and no samples. Their diagnostic
+log shows this sequence (times on the copied log's clock):
+
+| Time | Observation |
+| --- | --- |
+| 14:39:36.093 | App sends commit 8002. |
+| 14:39:36.375 | Machine acknowledges 8002. |
+| 14:39:36.427 | Event 40502. |
+| 14:39:36.577 to 14:39:44.384 | Event 40505 positions change from 109 to 71. |
+| 14:39:36.825 | State 0x1E, awaiting confirmation. |
+| 14:39:45.172 | State 0x22, starting. |
+| 14:40:06.952 | Grinder-stop event 40507. |
+| 14:40:17.527 to 14:42:43.617 | All eight pour starts, indices 0 through 7. |
+| 14:43:13.497 / 14:43:52.602 | Brewer stop 40511 / enjoy 40512. |
+
+The starting state arrives more than eight seconds after the commit. The old
+eight-second timer therefore marked the app's run rejected while positioning
+was still progressing. That terminal phase disabled later event handling and
+ended recording even though the machine continued.
+
+While a committed run is still `sending`, a changed, present 40505 position
+now renews the same eight-second silence budget. It does not claim grinding
+has started. Repeated identical positions, missing values and unrelated
+telemetry do not renew it. Silence still fails, and failures/cancellation
+remain terminal. No brew payload, pacing or retry command changes.
+
+This is a startup-tracking correction replayed from field evidence, not a new
+physical qualification. The uploaded grind byte was 40; the current share
+response specifies 30, so this capture does not establish that BLE brewing at
+30 works. The NFC card's minimum of 40 remains unchanged.
 
 ---
 

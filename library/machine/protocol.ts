@@ -190,6 +190,7 @@ export function frameCommand(frame: Uint8Array): number | null {
 /** Notification codes the brew state machine reacts to. */
 export const EVENT = {
     COFFEE_STARTING:  40502,
+    GRINDER_POSITION: 40505,
     BREWER_START:     40506,
     GRINDER_STOP:     40507,
     POUR_START:       40510,

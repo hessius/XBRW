@@ -4,6 +4,7 @@ import Recipe, {CUP_TYPE} from "@/library/Recipe";
 import {FRAME_GAP_MS, INFO_ATTEMPTS, RECIPE_ACK_MS, STATE_FRESH_MS} from "@/constants/machine";
 import {buildType1, PAUSE_COMMAND, RESUME_COMMAND} from "@/library/machine/protocol";
 import {RadioUnavailableError} from "@/library/machine/errors";
+import BrewRecorder from "@/library/brew/BrewRecorder";
 
 import {FakeTransport, machineInfoFrame} from "./FakeTransport";
 import {event, float32, notification, status} from "./protocolFixtures";
@@ -1181,6 +1182,97 @@ describe("brewing", () => {
 });
 
 describe("waiting for the user to start the brew", () => {
+    it.each([false, true])("keeps tracking the captured grinder positioning before start (auto-start %s)", async (autoStart) => {
+        jest.useFakeTimers();
+        try {
+            const {machine, transport} = await readyMachine();
+            machine.setAutoStart(autoStart);
+            const recipe = brewable([85, 10, 10, 10, 10, 10, 103, 104]);
+            recipe.ratio = 19;
+            recipe.grindSize = 40;
+            const onRecord = jest.fn();
+            const recorder = new BrewRecorder({machine, recipe, onRecord});
+            recorder.start();
+            await machine.brew(recipe);
+            if (!autoStart) await machine.startBrew();
+            transport.emit(event(8002));
+            transport.emit(event(40502));
+            transport.emit(status(0x1E));
+
+            // Field log: start at 14:39:36.093, gear 109 at 36.577,
+            // gear 71 at 44.384, STARTING at 45.172.
+            jest.advanceTimersByTime(484);
+            transport.emit(event(40505, 109));
+            for (let gear = 108; gear >= 71; gear--) {
+                jest.advanceTimersByTime(206);
+                transport.emit(event(40505, gear));
+            }
+            jest.advanceTimersByTime(767);
+            expect(machine.phase.name).toBe("sending");
+            transport.emit(status(0x22));
+            expect(machine.phase.name).toBe("grinding");
+            jest.advanceTimersByTime(RECIPE_ACK_MS + 1);
+            expect(machine.phase.name).toBe("grinding");
+            transport.emit(event(40507));
+            let water = 0;
+            for (let index = 0; index < 8; index++) {
+                transport.emit(Uint8ArrayPourEvent(index));
+                expect(machine.phase).toMatchObject({name: "pouring", pour: index + 1, pours: 8});
+                jest.advanceTimersByTime(250);
+                water += recipe.pours[index].volume;
+                transport.emit(notification(0x4B, 0x9E, float32(water * 1000)));
+            }
+            transport.emit(event(40511));
+            expect(machine.phase.name).toBe("settling");
+            transport.emit(event(40512));
+            expect(machine.phase.name).toBe("done");
+            expect(onRecord).toHaveBeenCalledTimes(1);
+            expect(onRecord.mock.calls[0][0]).toMatchObject({outcome: "done", pours: 8});
+            expect(onRecord.mock.calls[0][1].map((sample: {pour: number}) => sample.pour))
+                .toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+            recorder.stop();
+        } finally {
+            jest.useRealTimers();
+        }
+    });
+
+    it("still times out if positioning stops progressing", async () => {
+        jest.useFakeTimers();
+        try {
+            const {machine, transport} = await readyMachine();
+            await machine.brew(brewable());
+            jest.advanceTimersByTime(RECIPE_ACK_MS - 1);
+            transport.emit(event(40505, 109));
+            jest.advanceTimersByTime(RECIPE_ACK_MS - 1);
+            expect(machine.phase.name).toBe("sending");
+            transport.emit(event(40505, 109));
+            jest.advanceTimersByTime(2);
+            expect(machine.phase).toMatchObject({name: "failed", reason: "rejected"});
+        } finally {
+            jest.useRealTimers();
+        }
+    });
+
+    it.each([event(40505), event(8100), notification(0x4B, 0x9E, float32(0))]
+        .map((frame) => ({frame})))(
+        "does not extend the start timeout for missing gear values or unrelated telemetry (%#)",
+        async ({frame}) => {
+            jest.useFakeTimers();
+            try {
+                const {machine, transport} = await readyMachine();
+                await machine.brew(brewable());
+                jest.advanceTimersByTime(RECIPE_ACK_MS - 1);
+                transport.emit(frame);
+                jest.advanceTimersByTime(2);
+                expect(machine.phase).toMatchObject({name: "failed", reason: "rejected"});
+                transport.emit(event(40505, 108));
+                expect(machine.phase).toMatchObject({name: "failed", reason: "rejected"});
+            } finally {
+                jest.useRealTimers();
+            }
+        }
+    );
+
     it("uploads the recipe but holds the commit back", async () => {
         const {transport, machine} = await readyMachine();
         machine.setAutoStart(false);
