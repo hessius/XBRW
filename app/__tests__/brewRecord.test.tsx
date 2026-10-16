@@ -1439,6 +1439,27 @@ describe("brew record's story card", () => {
         );
     }
 
+    it("subtracts the recorded pause from a tea steep in record and story", async () => {
+        mockOpened = {
+            record: makeBrewRecordFixture({
+                beverageKind: "tea", pouringAt: 1_000, endedAt: 81_000,
+                plan: planFromPours([new Pour(1, 90, 92, 35, 0, 0, 45)]),
+                teaCycles: [{
+                    index: 0, steepStartedAt: 10_000, steepEndedAt: 65_000,
+                    endingEndedAt: 80_000, fillMl: 90
+                }],
+                pauseIntervals: [{from: 20_000, to: 30_000, pour: 1, reason: "manual"}]
+            }),
+            samples: []
+        };
+        await renderWithProviders(<BrewRecord recipeLookup={lookup}/>);
+        expect(within(screen.getByTestId("brew-capture"))
+            .getByText("STEEP · 0:45 planned · 0:45 elapsed")).toBeTruthy();
+        await openCard();
+        expect(within(screen.getByTestId("story-capture"))
+            .getByText("STEEP · 0:45 planned · 0:45 elapsed")).toBeTruthy();
+    });
+
     it.each([
         {orientation: "portrait", width: 393, height: 852, stageHeight: 740},
         {orientation: "landscape", width: 852, height: 393, stageHeight: 360}

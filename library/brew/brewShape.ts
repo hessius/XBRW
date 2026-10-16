@@ -1,6 +1,6 @@
 import type Pour from "@/library/Pour";
 
-import type {BrewSample} from "./BrewRecord";
+import type {BeverageKind, BrewSample} from "./BrewRecord";
 import {intervalExtent, pausedWithin, type PauseInterval} from "./pauseIntervals";
 
 /** A point on the brew's plane: seconds since the start, and millilitres. */
@@ -249,21 +249,23 @@ export function traceAxisFor(
     samples: BrewSample[],
     plannedSeconds: number,
     bypass?: {volume: number; startedAt: number | null},
-    intervals: readonly PauseInterval[] = []
+    intervals: readonly PauseInterval[] = [],
+    beverageKind?: BeverageKind
 ): {maxT: number; maxV: number} {
     const times = traceTimeParts(plannedSeconds, samples, bypass, intervals);
     const plan = planPoints(pours);
     // The plan's final water level: the floor the bypass box is stacked on.
     const planTop = plan.length > 0 ? plan[plan.length - 1].v : 0;
-    const observedTop = samples.reduce(
-        (max, sample) => Math.max(max, sample.water, sample.cup), 0
-    );
+    const water = livePoints(samples, "water");
+    const observedTop = beverageKind === "tea"
+        ? samples.reduce((max, sample) => Math.max(max, sample.water, sample.cup), 0)
+        : water.length > 0 ? water[water.length - 1].v : 0;
     const unpaddedMaxV = Math.max(observedTop, planTop + times.bypassMl);
     return {
         maxT: times.maxT,
-        // Leave two percent above the highest drawn channel so its stroke
+        // For tea, leave two percent above the highest drawn channel so its stroke
         // remains inside the SVG viewport instead of clipping at the frame.
-        maxV: unpaddedMaxV === 0 ? 0 : unpaddedMaxV * 1.02
+        maxV: beverageKind === "tea" ? unpaddedMaxV * 1.02 : unpaddedMaxV
     };
 }
 

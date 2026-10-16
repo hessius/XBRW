@@ -84,20 +84,20 @@ describe("traceAxisFor", () => {
     it("clears a plan that reaches higher than the run did", () => {
         const axis = traceAxisFor(pours, [sample(30_000, 90, 60)], 120);
 
-        expect(axis.maxV).toBeCloseTo(306);
+        expect(axis.maxV).toBe(300);
     });
 
     it("clears a run that overshot its plan", () => {
         const axis = traceAxisFor(pours, [sample(30_000, 340, 300)], 120);
 
-        expect(axis.maxV).toBeCloseTo(346.8);
+        expect(axis.maxV).toBe(340);
     });
 
     it("stacks the bypass on top of the plan rather than beside it", () => {
         const axis = traceAxisFor(pours, [sample(30_000, 300, 260)], 120,
                                   {volume: 50, startedAt: 130});
 
-        expect(axis.maxV).toBeCloseTo(357);
+        expect(axis.maxV).toBe(350);
     });
 
     it("includes intermediate peaks on either drawn channel with room for the stroke", () => {
@@ -105,10 +105,25 @@ describe("traceAxisFor", () => {
             sample(10_000, 250, 180),
             sample(20_000, 300, 400),
             sample(30_000, 280, 200)
-        ], 10);
+        ], 10, undefined, [], "tea");
 
         expect(axis.maxV).toBeCloseTo(408);
         expect(axis.maxV).toBeGreaterThan(400);
+        expect(axis.maxT).toBe(30);
+        expect(axis.maxT).toBe(traceTimeExtent(10, [
+            sample(10_000, 250, 180),
+            sample(20_000, 300, 400),
+            sample(30_000, 280, 200)
+        ]));
+    });
+
+    it.each([undefined, "coffee"] as const)("preserves the original water geometry for %s", (kind) => {
+        const axis = traceAxisFor([], [
+            sample(10_000, 250, 180),
+            sample(20_000, 300, 400),
+            sample(30_000, 280, 200)
+        ], 10, undefined, [], kind);
+        expect(axis).toEqual({maxT: 30, maxV: 280});
     });
 
     it("falls back to nothing when there is neither plan nor run", () => {

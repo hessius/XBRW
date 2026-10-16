@@ -119,6 +119,26 @@ describe("the comparison screen", () => {
         }
     });
 
+    it("subtracts the recorded pause from a tea steep in comparison", async () => {
+        const tea = makeBrewRecordFixture({
+            id: "a", beverageKind: "tea",
+            pouringAt: 1_000, endedAt: 81_000,
+            plan: planFromPours([new Pour(1, 90, 92, 35, 0, 0, 45)]),
+            teaCycles: [{
+                index: 0, steepStartedAt: 10_000, steepEndedAt: 65_000,
+                endingEndedAt: 80_000, fillMl: 90
+            }],
+            pauseIntervals: [{from: 20_000, to: 30_000, pour: 1, reason: "manual"}]
+        });
+        setRecords({
+            a: {record: tea, samples: []},
+            b: {record: {...tea, id: "b"}, samples: []}
+        });
+        setParams({a: "a", b: "b"});
+        const {getAllByText} = await renderWithProviders(<BrewCompareScreen/>);
+        expect(getAllByText("STEEP · 0:45 planned · 0:45 elapsed")).toHaveLength(2);
+    });
+
     it("shows each tea brew's retained steep cycles even without sample streams", async () => {
         const teaPlan = planFromPours([
             ...comparisonPours,
@@ -199,7 +219,7 @@ describe("the comparison screen", () => {
             const band = getByTestId("trace-pause-subject-overflow-0");
             expect(band.props.x).toBeCloseTo(width * 2 / 12);
             expect(band.props.width).toBeCloseTo(width * 6 / 12);
-            const box = {width, height: compareTracePlotHeight(220), maxT: 12, maxV: 102};
+            const box = {width, height: compareTracePlotHeight(220), maxT: 12, maxV: 100};
             const polygons = [
                 [{t: 0, v: 0}, {t: 2, v: 20}, {t: 2, v: 10}, {t: 0, v: 0}],
                 [{t: 8, v: 80}, {t: 10, v: 100}, {t: 10, v: 50}, {t: 8, v: 40}]
@@ -266,7 +286,7 @@ describe("the comparison screen", () => {
             setParams({a: "a", b: "b"});
             const {getByTestId, getByLabelText} = await renderWithProviders(<BrewCompareScreen />);
             const width = getByTestId("compare-trace-plot").props.width;
-            const box = {width, height: compareTracePlotHeight(220), maxT: 10, maxV: 102};
+            const box = {width, height: compareTracePlotHeight(220), maxT: 10, maxV: 100};
             const polygons = [
                 [{t: 0, v: 0}, {t: 1, v: 10}, {t: 1, v: 5}, {t: 0, v: 0}],
                 [{t: 9, v: 90}, {t: 10, v: 100}, {t: 10, v: 50}, {t: 9, v: 45}]

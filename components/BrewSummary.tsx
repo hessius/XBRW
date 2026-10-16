@@ -193,7 +193,7 @@ export default function BrewSummary({
     const chartSlotStyle = chartBleed > 0
         ? {marginHorizontal: -chartBleed}
         : undefined;
-    const traceAxis = traceAxisFor(NO_PLAN, samples, plannedSeconds, bypass, pauseIntervals);
+    const traceAxis = traceAxisFor(NO_PLAN, samples, plannedSeconds, bypass, pauseIntervals, shownKind);
     const rates = rateSeries ?? [];
     const drawsRateChart = hasStream && showRateChart && hasDrawableRateRun(rates);
 
@@ -234,6 +234,7 @@ export default function BrewSummary({
             {hasStream ? (
                 <View testID="trace-chart-slot" style={chartSlotStyle}>
                 <BrewTrace
+                    beverageKind={shownKind}
                     pours={NO_PLAN}
                     samples={samples}
                     accent={accent}

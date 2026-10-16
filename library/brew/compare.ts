@@ -15,7 +15,7 @@ import {
     type Box,
     type Point
 } from "./brewShape";
-import type {PauseInterval} from "./pauseIntervals";
+import {intervalExtent, type PauseInterval} from "./pauseIntervals";
 import {NOISE_FLOOR_ML} from "./stalls";
 import {maxRateOf, retrospectiveFlowSeries, type FlowPoint} from "./flowRate";
 
@@ -285,8 +285,9 @@ export function compareAxis(
     const referenceRate = rateSeriesFor(reference);
     const subjectPauses = drawnPauses(subject);
     const referencePauses = drawnPauses(reference);
+    const tea = subject.record.beverageKind === "tea" || reference.record.beverageKind === "tea";
     return {
-        maxT: Math.max(
+        maxT: tea ? Math.max(
             1,
             traceTimeExtent(
                 plannedSeconds(subjectPours), subject.samples, undefined, subjectPauses
@@ -294,6 +295,14 @@ export function compareAxis(
             traceTimeExtent(
                 plannedSeconds(referencePours), reference.samples, undefined, referencePauses
             )
+        ) : Math.max(
+            1,
+            lastSecond(subject.samples),
+            lastSecond(reference.samples),
+            plannedSeconds(subjectPours),
+            plannedSeconds(referencePours),
+            intervalExtent(subjectPauses),
+            intervalExtent(referencePauses)
         ),
         maxV: Math.max(
             1,
@@ -301,9 +310,9 @@ export function compareAxis(
             reference.record.waterTotal,
             planTop(subject.record),
             planTop(reference.record),
-            observedVolumeTop(subject.samples),
-            observedVolumeTop(reference.samples)
-        ) * 1.02,
+            tea ? observedVolumeTop(subject.samples) : 0,
+            tea ? observedVolumeTop(reference.samples) : 0
+        ) * (tea ? 1.02 : 1),
         maxRate: Math.max(maxRateOf(subjectRate), maxRateOf(referenceRate)),
         subjectRate,
         referenceRate,

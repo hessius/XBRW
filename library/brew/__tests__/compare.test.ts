@@ -409,7 +409,7 @@ describe("compareAxis", () => {
         );
 
         expect(axis.maxT).toBe(70);
-        expect(axis.maxV).toBe(255);
+        expect(axis.maxV).toBe(250);
         expect(axis.subjectPours).toHaveLength(2);
         expect(axis.referencePours).toHaveLength(1);
     });
@@ -425,8 +425,8 @@ describe("compareAxis", () => {
             {at: 30_000, water: 300, cup: 395.2, pour: 3}
         ];
         const axis = compareAxis(
-            {record: brew({plan: [stage({volume: 90})]}), samples: subject},
-            {record: brew({id: "b", plan: [stage({volume: 270})]}), samples: reference}
+            {record: brew({beverageKind: "tea", plan: [stage({volume: 90})]}), samples: subject},
+            {record: brew({id: "b", beverageKind: "tea", plan: [stage({volume: 270})]}), samples: reference}
         );
 
         expect(axis.maxV).toBeGreaterThanOrEqual(395.2 * 1.02);

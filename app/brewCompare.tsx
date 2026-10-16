@@ -24,6 +24,7 @@ import {SCREEN_PADDING} from "@/constants/layout";
 import {useBrewComparison} from "@/hooks/useBrewComparison";
 import type {StoredBrew} from "@/library/BrewDatabase";
 import {plannedSeconds, toPath} from "@/library/brew/brewShape";
+import {pourDurationSeconds} from "@/library/brew/compare";
 import type {Point} from "@/library/brew/brewShape";
 import {formatBrewDate, formatBrewTime} from "@/library/brew/brewFormat";
 import type {FlowPoint} from "@/library/brew/flowRate";
@@ -221,12 +222,9 @@ function TeaCompareCycles({record, label, testID, accent}: {
 }) {
     if (record.beverageKind !== "tea") return null;
     const observations = record.teaCycles ?? [];
-    const now = observations.reduce((latest, cycle) =>
-        Math.max(latest, ...Object.values(cycle).filter(
-            (value): value is number => typeof value === "number"
-        )), 0);
     const stages = buildTeaCycleViews(record.plan ?? [], observations, {
-        now,
+        now: pourDurationSeconds(record) * 1000,
+        pauseIntervals: record.pauseIntervals,
         finished: true,
         outcome: record.outcome
     });

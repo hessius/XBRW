@@ -631,6 +631,7 @@ export default function Brew({historyStore}: {historyStore?: ExportStore} = {}) 
                     <YStack testID="brew-band-region" flex={1} gap={BREW_BAND_GAP}
                             onLayout={(e) => setFlexHeight(e.nativeEvent.layout.height)}>
                         <BrewTrace
+                            beverageKind={recipe.isTea() ? "tea" : "coffee"}
                             pours={recipe.pours}
                             samples={samples}
                             accent={accent}

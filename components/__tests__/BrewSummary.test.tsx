@@ -457,8 +457,8 @@ describe("BrewSummary pause intervals", () => {
         expect(slot.getByTestId("trace-pause-manual-1")).toBeTruthy();
     });
 
-    it("sizes the trace and the rate chart to the intervals, not the last sample", async () => {
-        await draw({samples: rows, pauseIntervals: intervals, plannedSeconds: 50, rateSeries});
+    it.each(["tea", "coffee"] as const)("sizes the %s trace and rate chart to the same interval extent", async beverageKind => {
+        await draw({beverageKind, samples: rows, pauseIntervals: intervals, plannedSeconds: 50, rateSeries});
         // The final pause ends at 90 s, thirty seconds after the last sample.
         const manual = screen.getByTestId("trace-pause-manual-1");
         expect(Number(manual.props.x) + Number(manual.props.width)).toBeCloseTo(traceWidth, 1);
