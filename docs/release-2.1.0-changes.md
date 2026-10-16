@@ -3,6 +3,26 @@
 This is the source for the full release-testing checklist, not a claim that
 device testing is complete. Update it whenever release scope or behaviour changes.
 
+## Consolidated beta candidate (2026-10-16)
+
+`chore/beta-consolidation-20261016` combines trace retention from #221,
+platform-separated CI, settings and machine-panel refinements, grinder-position
+startup tracking, BLE grind 1–80 with NFC 40–80 unchanged, and tea-cycle
+recording/presentation. The approved develop merge of #221 is included by
+ancestry; no shared history was rewritten.
+
+Software verification at `af5c217aae925c22137760ea0b77ec1e8b3905f6`:
+746 dual-platform Jest suites passed, with 14,988 tests passed, 24 skipped and
+two snapshots passed. Typecheck and repository lint passed (29 existing
+warnings); Expo Doctor passed all 21 checks, and all 12 local capture-analysis
+tests passed. Integration review found no further issues after fixes.
+
+No new beta artifact has been built or submitted from this candidate.
+Physical tea UI/interruption qualification, the reported recipe's startup
+retest, settings visual acceptance and existing native/external-app release
+gates remain open. The earlier truncated tea recording is still unexplained.
+The new CI runtime/cache benefit also awaits an actual Actions run.
+
 ## Brew history trace storage (2026-10-15)
 
 Brew traces are compressed and managed under a configurable storage budget. When
