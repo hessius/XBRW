@@ -86,7 +86,7 @@ describe("persistent beverage kind", () => {
             [{at: 0, water: 0, cup: 0, pour: 1}]
         );
         expect(database.get("b1")).toMatchObject({teaCycles, hasStream: true});
-        database.sweep(0);
+        database.sweepBytes(1);
         expect(database.get("b1")).toMatchObject({teaCycles, hasStream: false});
     });
 
