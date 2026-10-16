@@ -409,6 +409,14 @@ export default function Brew({historyStore}: {historyStore?: ExportStore} = {}) 
     const plannedWater = recipe.pours.reduce(
         (sum, pour) => sum + Math.max(pour.volume, 0), 0
     );
+    function canHandOffCurrentBrew() {
+        // A finished snapshot, including a legacy one without a kind, owns
+        // the brewed identity; the mutable recipe only guards an unsaved run.
+        if (run?.record != null) return canHandOff(run.record);
+        return !recipe.isTea() && canHandOff({
+            outcome: finalOutcome("done", brewWater, plannedWater)
+        });
+    }
     const {shotRef, shareImage, shareData, busy} = useBrewExport(
         () => latestExport(historyStore ?? sharedBrewDatabase())
     );
@@ -424,7 +432,7 @@ export default function Brew({historyStore}: {historyStore?: ExportStore} = {}) 
         ? undefined
         : {markSent: historyStore.markSent};
     const {send: sendHandoff, busy: handoffBusy} = useBrewHandoff(
-        () => recipe.isTea() ? null : latestExport(historyStore ?? sharedBrewDatabase()),
+        () => canHandOffCurrentBrew() ? latestExport(historyStore ?? sharedBrewDatabase()) : null,
         handoffStore
     );
     // The machine knows what a pod was and never what a hopper held, so the
@@ -771,11 +779,7 @@ export default function Brew({historyStore}: {historyStore?: ExportStore} = {}) 
                         </XStack>
                     )}
                     {phase.name === "done" && handoffEnabled
-                        && !recipe.isTea()
-                        && canHandOff({
-                            outcome: finalOutcome("done", brewWater, plannedWater),
-                            beverageKind: run?.record?.beverageKind
-                        }) && (
+                        && canHandOffCurrentBrew() && (
                         // Read through `canHandOff` rather than assumed from
                         // the phase. Reaching "done" today means one of the two
                         // outcomes that may be handed over, but the rule for
@@ -789,7 +793,7 @@ export default function Brew({historyStore}: {historyStore?: ExportStore} = {}) 
                             <ExportButton label={handoffTarget.buttonLabel}
                                           busy={handoffBusy}
                                           onPress={() => {
-                                              if (recipe.isTea()) return;
+                                              if (!canHandOffCurrentBrew()) return;
                                               const source = latestExport(
                                                   historyStore ?? sharedBrewDatabase()
                                               );

@@ -1588,6 +1588,34 @@ describe("Beanconqueror handoff on the finished brew", () => {
         expect(openURL).not.toHaveBeenCalled();
     });
 
+    it.each(["coffee", undefined] as const)(
+        "hands off a finished %s record even if the current recipe says tea",
+        async (beverageKind) => {
+            mockRecord = {...record, beverageKind, coffee: {name: "Kenya Sakami"}};
+            mockRecipe.cupType = CUP_TYPE.TEA;
+            const history = store(mockRecord);
+            await renderWithProviders(<Brew historyStore={history} />);
+
+            await fireEvent.press(screen.getByLabelText(handoffTarget.buttonLabel));
+
+            await waitFor(() => expect(openURL).toHaveBeenCalledTimes(1));
+            expect(history.markSent).toHaveBeenCalledWith(record.id, expect.any(Number));
+            expect(screen.queryByTestId("bean-name-field")).toBeNull();
+        }
+    );
+
+    it("rechecks the current recipe on press while no finished snapshot exists", async () => {
+        const history = store({...record, coffee: {name: "Kenya Sakami"}});
+        await renderWithProviders(<Brew historyStore={history} />);
+        mockRecipe.cupType = CUP_TYPE.TEA;
+
+        await fireEvent.press(screen.getByLabelText(handoffTarget.buttonLabel));
+
+        expect(screen.queryByTestId("bean-name-field")).toBeNull();
+        expect(openURL).not.toHaveBeenCalled();
+        expect(history.markSent).not.toHaveBeenCalled();
+    });
+
     it("offers the handoff when the gate is on", async () => {
         const {getByLabelText} = await renderWithProviders(
             <Brew historyStore={store()} />
