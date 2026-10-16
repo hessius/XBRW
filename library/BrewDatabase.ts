@@ -8,7 +8,7 @@ import {
     TIMED_SQL
 } from "@/library/brew/brewPopulation";
 import type {BrewFailure} from "./machine/Machine";
-import {isRating} from "./brew/BrewRecord";
+import {isBeverageKind, isRating} from "./brew/BrewRecord";
 import {isPauseIntervals} from "./brew/pauseIntervals";
 import {
     BEAN_FIELDS,
@@ -96,6 +96,7 @@ type BrewRow = {
     recipeUuid: string;
     recipeName: string;
     accent: string;
+    beverageKind: string;
     startedAt: number;
     /** 0 on a brew that never poured, and on rows written before the column. */
     pouringAt: number | null;
@@ -186,6 +187,7 @@ export function ensureBrewTables(db: SQLite.SQLiteDatabase): void {
                 recipeUuid TEXT NOT NULL,
                 recipeName TEXT NOT NULL,
                 accent TEXT NOT NULL,
+                beverageKind TEXT NOT NULL DEFAULT '',
                 startedAt INTEGER NOT NULL,
                 pouringAt INTEGER NOT NULL DEFAULT 0,
                 drawdownAt INTEGER NOT NULL DEFAULT 0,
@@ -257,6 +259,9 @@ export function ensureBrewTables(db: SQLite.SQLiteDatabase): void {
     // unlike `cupAtDrawdown` there is nothing for `hydrate` to translate back
     // into absence beyond omitting the key.
     const columns = db.getAllSync<{name: string}>("PRAGMA table_info(brews);");
+    if (!columns.some((column) => column.name === "beverageKind")) {
+        db.execSync("ALTER TABLE brews ADD COLUMN beverageKind TEXT NOT NULL DEFAULT '';");
+    }
     if (!columns.some((column) => column.name === "pausedSeconds")) {
         db.execSync("ALTER TABLE brews ADD COLUMN pausedSeconds INTEGER NOT NULL DEFAULT 0;");
     }
@@ -532,9 +537,9 @@ class BrewDatabase {
                                 dose, ratio,
                                 grindSize, grinderRpm, grinderUsed,
                                 dialBefore, dialAfter, coffee, recipeUrl,
-                                origin, roast, process, fermentation, sentAt, hasStream)
+                                origin, roast, process, fermentation, sentAt, hasStream, beverageKind)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+                     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
             [
                 record.id, record.recipeUuid, record.recipeName, record.accent,
                 record.startedAt, record.pouringAt ?? 0, record.drawdownAt ?? 0,
@@ -576,7 +581,8 @@ class BrewDatabase {
                 isProcess(record.process) ? record.process : "",
                 isFermentation(record.fermentation) ? record.fermentation : "",
                 record.sentAt ?? 0,
-                hasStream ? 1 : 0
+                hasStream ? 1 : 0,
+                record.beverageKind ?? ""
             ]
         );
     }
@@ -1201,6 +1207,7 @@ function hydrate(row: BrewRow): StoredBrew {
         recipeUuid: row.recipeUuid,
         recipeName: row.recipeName,
         accent: row.accent,
+        ...(isBeverageKind(row.beverageKind) ? {beverageKind: row.beverageKind} : {}),
         startedAt: row.startedAt,
         pouringAt: row.pouringAt ?? 0,
         drawdownAt: row.drawdownAt ?? 0,

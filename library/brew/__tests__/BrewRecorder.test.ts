@@ -4,7 +4,7 @@ import type {BrewRecord, BrewSample} from "@/library/brew/BrewRecord";
 import type {BrewPhase} from "@/library/machine/Machine";
 import type {Notification} from "@/library/machine/protocol";
 import Pour from "@/library/Pour";
-import Recipe from "@/library/Recipe";
+import Recipe, {CUP_TYPE} from "@/library/Recipe";
 
 /** A machine that says only what a test tells it to. */
 function fakeMachine() {
@@ -68,6 +68,26 @@ afterEach(() => {
 });
 
 describe("BrewRecorder", () => {
+    it.each([
+        [CUP_TYPE.TEA, "tea", CUP_TYPE.XPOD],
+        [CUP_TYPE.XPOD, "coffee", CUP_TYPE.TEA]
+    ])("snapshots beverage kind at construction for cup type %s", (cupType, kind, changedType) => {
+        const r = recipe();
+        r.cupType = cupType;
+        const fake = fakeMachine();
+        const records: BrewRecord[] = [];
+        const recorder = new BrewRecorder({
+            machine: fake.machine, recipe: r,
+            onRecord: (record) => records.push(record)
+        });
+        built.push(recorder);
+        r.cupType = changedType;
+        recorder.start();
+        fake.phase({name: "cancelled"});
+        expect(records).toHaveLength(1);
+        expect(records[0]).toHaveProperty("beverageKind", kind);
+    });
+
     it("ignores weights that arrive before the first pour", () => {
         // The machine chatters while it grinds. None of it belongs on a plan
         // whose axis starts at the first drop.

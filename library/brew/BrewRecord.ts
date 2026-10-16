@@ -8,6 +8,12 @@ import type {Fermentation, Process, Roast} from "./beanTags";
 import {NOISE_FLOOR_ML, stageWaterFrom, stallsInStage, type Stall} from "./stalls";
 import {pausedWithin, type PauseInterval} from "./pauseIntervals";
 
+export type BeverageKind = "coffee" | "tea";
+
+export function isBeverageKind(value: unknown): value is BeverageKind {
+    return value === "coffee" || value === "tea";
+}
+
 /**
  * One instant of a brew, as the machine reported it.
  *
@@ -98,6 +104,8 @@ export type BrewRecord = {
     recipeUuid: string;
     recipeName: string;
     accent: string;
+    /** Snapshotted at brew creation; absent on records written before it was known. */
+    beverageKind?: BeverageKind;
     startedAt: number;
     /**
      * Wall clock of the first drop. Absent on rows written before it existed,
@@ -614,6 +622,7 @@ export function unobservedBrew(input: {
     recipeUuid: string;
     recipeName: string;
     accent: string;
+    beverageKind?: BeverageKind;
     rating: number;
     /** Injected by tests; the wall clock otherwise. */
     at?: number;
@@ -626,6 +635,7 @@ export function unobservedBrew(input: {
         recipeUuid: input.recipeUuid,
         recipeName: input.recipeName,
         accent: input.accent,
+        ...(input.beverageKind !== undefined ? {beverageKind: input.beverageKind} : {}),
         startedAt: at,
         // Zero, the app's own word for "it never poured". A first drop would
         // be an invention, and the record draws from this.

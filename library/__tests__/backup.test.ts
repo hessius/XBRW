@@ -793,6 +793,36 @@ function backupFileWithBrewFields(extra: Record<string, unknown>): string {
 }
 
 describe("brew history through a backup", () => {
+    it.each(["tea", "coffee"] as const)("round trips %s without a version bump", (beverageKind) => {
+        const text = buildBackup([recipeNamed("A", "u1")], {}, "2.6.0",
+                                 [brewNamed("b1", {beverageKind})]);
+        expect(JSON.parse(text).version).toBe(1);
+        const result = parseBackup(text);
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.payload.brews[0]).toHaveProperty("beverageKind", beverageKind);
+        expect(result.payload.skippedBrews).toBe(0);
+    });
+
+    it("keeps a legacy backup's beverage kind absent", () => {
+        const result = parseBackup(backupFileWithBrewFields({}));
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.payload.brews[0]).not.toHaveProperty("beverageKind");
+        expect(reviveBrew(brewNamed("b1"))).not.toHaveProperty("beverageKind");
+    });
+
+    it.each(["Tea", "COFFEE", "water", "", "tea ", null, 0, {}, []])(
+        "skips an invalid present beverage discriminator (%p)", (beverageKind) => {
+            expect(reviveBrew({...brewNamed("b1"), beverageKind})).toBeNull();
+            const result = parseBackup(backupFileWithBrewFields({beverageKind}));
+            expect(result.ok).toBe(true);
+            if (!result.ok) return;
+            expect(result.payload.brews).toEqual([]);
+            expect(result.payload.skippedBrews).toBe(1);
+        }
+    );
+
     it("round trips pause intervals without changing the backup version", () => {
         const pauseIntervals: NonNullable<BrewRecord["pauseIntervals"]> = [
             {from: 0, to: 1000, pour: 0, reason: "manual"},

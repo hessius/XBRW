@@ -117,6 +117,32 @@ function ratingStore(seed: BrewRecord[] = []) {
 describe("useRecipeRating", () => {
     const recipe = {uuid: "uuid-1", name: "Ethiopia", accent: "#C86A3B"};
 
+    it.each(["tea", "coffee"] as const)("records an unobserved %s rating", async (beverageKind) => {
+        const store = ratingStore();
+        const {result} = await renderHook(() => useRecipeRating({...recipe, beverageKind}, store));
+        await act(async () => { result.current.rate(4); });
+        expect(store.rows[0]).toMatchObject({beverageKind, watched: false, rating: 4});
+    });
+
+    it.each(["coffee", undefined] as const)(
+        "does not rewrite an observed brew's kind (%p) when rating a now-tea recipe",
+        async (beverageKind) => {
+            const observed = {...record("today"), startedAt: Date.now(), endedAt: Date.now(),
+                ...(beverageKind !== undefined ? {beverageKind} : {})};
+            const store = ratingStore([observed]);
+            const {result} = await renderHook(() =>
+                useRecipeRating({...recipe, beverageKind: "tea"}, store));
+            await act(async () => { result.current.rate(5); });
+            expect(store.rows).toHaveLength(1);
+            expect(store.rows[0].rating).toBe(5);
+            if (beverageKind === undefined) {
+                expect(store.rows[0]).not.toHaveProperty("beverageKind");
+            } else {
+                expect(store.rows[0]).toHaveProperty("beverageKind", beverageKind);
+            }
+        }
+    );
+
     it("writes a brew nobody watched when there is none from today", async () => {
         const store = ratingStore();
         const {result} = await renderHook(() => useRecipeRating(recipe, store));
@@ -126,6 +152,7 @@ describe("useRecipeRating", () => {
         expect(store.rows).toHaveLength(1);
         expect(store.rows[0].watched).toBe(false);
         expect(store.rows[0].rating).toBe(4);
+        expect(store.rows[0]).not.toHaveProperty("beverageKind");
     });
 
     it("rates today's brew rather than inventing a second one", async () => {

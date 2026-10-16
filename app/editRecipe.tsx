@@ -1024,7 +1024,8 @@ export default function EditRecipe(
         {
             uuid: recipe?.uuid ?? "",
             name: recipe?.displayName() ?? "",
-            accent
+            accent,
+            beverageKind: recipe ? (recipe.isTea() ? "tea" : "coffee") : undefined
         },
         historyStore
     );

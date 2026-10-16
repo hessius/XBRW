@@ -7,7 +7,7 @@ import {LIFT_DROP_G, SETTLE_CAP_MS, SETTLE_CEILING_MS, SETTLE_FLAT_MS}
     from "@/constants/machine";
 import {EVENT, MACHINE_STATE} from "@/library/machine/protocol";
 
-import type {BrewRecord, BrewSample} from "./BrewRecord";
+import type {BeverageKind, BrewRecord, BrewSample} from "./BrewRecord";
 import {drawdownFrom, finalOutcome, newBrewId, planFromPours,
         stageWaterFromSamples, stallsFromSamples, summarise} from "./BrewRecord";
 import {plannedSeconds} from "./brewShape";
@@ -64,6 +64,7 @@ const TERMINAL: ReadonlySet<BrewPhase["name"]> =
  */
 export default class BrewRecorder {
     private readonly options: RecorderOptions;
+    private readonly beverageKind: BeverageKind;
     private readonly collected: BrewSample[] = [];
     private unsubscribers: (() => void)[] = [];
 
@@ -131,6 +132,7 @@ export default class BrewRecorder {
 
     constructor(options: RecorderOptions) {
         this.options = options;
+        this.beverageKind = options.recipe.isTea() ? "tea" : "coffee";
     }
 
     get samples(): readonly BrewSample[] {
@@ -494,6 +496,7 @@ export default class BrewRecorder {
             recipeUuid: recipe.uuid,
             recipeName: recipe.displayName(),
             accent: resolveAccent(recipe),
+            beverageKind: this.beverageKind,
             startedAt: this.startedAt,
             pouringAt: this.pouringAt,
             drawdownAt,

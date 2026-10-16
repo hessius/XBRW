@@ -1,6 +1,6 @@
 import {useState} from "react";
 
-import type {BrewRecord, BrewSample} from "@/library/brew/BrewRecord";
+import type {BeverageKind, BrewRecord, BrewSample} from "@/library/brew/BrewRecord";
 import {isRating, unobservedBrew} from "@/library/brew/BrewRecord";
 import BrewDatabase, {type BrewSummary, type StoredBrew} from "@/library/BrewDatabase";
 import type {BeanProfile} from "@/library/beanProfile";
@@ -59,10 +59,10 @@ export type RecipeRatingStore = BrewSummaryStore & {
  * does not exist.
  */
 export function useRecipeRating(
-    recipe: {uuid: string; name: string; accent: string},
+    recipe: {uuid: string; name: string; accent: string; beverageKind?: BeverageKind},
     store?: RecipeRatingStore
 ): {summary: BrewSummary; rate: (rating: number) => void} {
-    const {uuid, name, accent} = recipe;
+    const {uuid, name, accent, beverageKind} = recipe;
     const [summary, setSummary] = useState<BrewSummary>(
         () => (store ?? sharedBrewDatabase()).summaryFor(uuid)
     );
@@ -79,7 +79,7 @@ export function useRecipeRating(
             database.judge(today, {rating});
         } else {
             database.insert(
-                unobservedBrew({recipeUuid: uuid, recipeName: name, accent, rating, at}),
+                unobservedBrew({recipeUuid: uuid, recipeName: name, accent, beverageKind, rating, at}),
                 []
             );
         }

@@ -1,4 +1,4 @@
-import {isRating, type BrewRecord} from "./brew/BrewRecord";
+import {isBeverageKind, isRating, type BrewRecord} from "./brew/BrewRecord";
 import {isOverflowProtection} from "./brew/overflowConfig";
 import {isPauseIntervals} from "./brew/pauseIntervals";
 import {
@@ -602,6 +602,7 @@ const BREW_FIELDS: Record<string, (value: unknown) => boolean> = {
  * file rather than a plausible thing to find in an honest one.
  */
 const OPTIONAL_BREW_FIELDS: Record<string, (value: unknown) => boolean> = {
+    beverageKind: isBeverageKind,
     pouringAt:  isNumber,
     drawdownAt: isNumber,
     cupAtDrawdown: isNumber,
@@ -732,6 +733,7 @@ export function reviveBrew(entry: unknown): BrewRecord | null {
         recipeUuid: record.recipeUuid,
         recipeName: record.recipeName,
         accent: record.accent,
+        ...(isBeverageKind(record.beverageKind) ? {beverageKind: record.beverageKind} : {}),
         startedAt: record.startedAt,
         pouringAt: record.pouringAt,
         drawdownAt: record.drawdownAt,
