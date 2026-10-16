@@ -8,7 +8,7 @@ import {
 } from "@/constants/brewCopy";
 import {plannedSeconds, traceAxisFor} from "@/library/brew/brewShape";
 import Pour from "@/library/Pour";
-import Recipe from "@/library/Recipe";
+import Recipe, {CUP_TYPE} from "@/library/Recipe";
 import {renderWithProviders, SHEET_PRESS_TIMEOUT} from "@/test-utils/render";
 
 let mockPathname = "/";
@@ -90,6 +90,27 @@ beforeEach(() => {
 });
 
 describe("LiveBrewBar", () => {
+    it.each([CUP_TYPE.TEA, CUP_TYPE.XPOD])("sizes the mini trace from the live beverage kind %s", async cupType => {
+        const r = recipe();
+        r.cupType = cupType;
+        r.pours = [new Pour(1, 90, 92, 35, 0, 0, 45)];
+        const samples = [
+            {at: 0, water: 0, cup: 0, pour: 1},
+            {at: 20_000, water: 390, cup: 400, pour: 1},
+            {at: 30_000, water: 270, cup: 200, pour: 1}
+        ];
+        mockRun = {
+            recipe: r, samples, elapsed: 30, holding: false, heldSeconds: 0,
+            phase: {name: "pouring", pour: 1, pours: 1}
+        };
+        const {getByTestId} = await renderWithProviders(<LiveBrewBar/>);
+        const path = getByTestId("trace-cup").props.d as string;
+        const points = [...path.matchAll(/[ML]([0-9.-]+) ([0-9.-]+)/g)];
+        const maxV = cupType === CUP_TYPE.TEA ? 400 * 1.02 : 270;
+        expect(Number(points[1][2])).toBeCloseTo(34 - 400 / maxV * 34, 1);
+        expect(Number(points[2][2])).toBeCloseTo(34 - 200 / maxV * 34, 1);
+    });
+
     it("carries an open automatic pause and the full live axis into its real compact trace", async () => {
         const r = recipe();
         const samples = [

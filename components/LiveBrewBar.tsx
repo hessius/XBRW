@@ -125,6 +125,7 @@ export default function LiveBrewBar() {
                 importantForAccessibility={covered ? "no-hide-descendants" : "auto"}
                 pointerEvents={covered ? "none" : "auto"}>
                 <BrewMiniBar
+                    beverageKind={run.recipe.isTea() ? "tea" : "coffee"}
                     recipeName={run.recipe.displayName()}
                     dose={run.recipe.dosage}
                     pours={run.recipe.pours}
