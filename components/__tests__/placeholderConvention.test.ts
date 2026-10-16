@@ -28,14 +28,23 @@ const LABEL_FIELDS = [
 
 function placeholders(file: string): string[] {
     const source = readFileSync(join(__dirname, "..", "..", file), "utf8");
-    return [...source.matchAll(/placeholder=(?:"([^"]*)"|\{"([^"]*)"\})/g)]
+    const literals = [...source.matchAll(/placeholder=(?:"([^"]*)"|\{"([^"]*)"\})/g)]
         .map((match) => match[1] ?? match[2]);
+    return [...literals, ...(file === "components/BrewJudgement.tsx" ? judgementCopy() : [])];
+}
+
+// BrewJudgement picks its placeholder by beverage, so the words live in
+// brewCopy as constants rather than as a literal prop.
+function judgementCopy(): string[] {
+    const copy = readFileSync(join(__dirname, "..", "..", "constants/brewCopy.ts"), "utf8");
+    return [...copy.matchAll(/export const \w+_JUDGEMENT_PLACEHOLDER = "([^"]*)"/g)]
+        .map((match) => match[1]);
 }
 
 describe("placeholder convention", () => {
     it.each(EXAMPLE_FIELDS)("%s phrases its placeholder as an example", (file) => {
         const found = placeholders(file);
-        expect(found.length).toBeGreaterThan(0);
+        expect(found.length).toBeGreaterThan(file === "components/BrewJudgement.tsx" ? 1 : 0);
         found.forEach((text) => expect(text).toMatch(/^e\.g\. /));
     });
 

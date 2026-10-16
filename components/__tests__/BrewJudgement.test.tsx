@@ -12,6 +12,7 @@ describe("BrewJudgement", () => {
         expect(screen.getByPlaceholderText("e.g. Sweet, a little thin. Grind finer."))
             .toBeTruthy();
         expect(screen.queryByText("HOW WAS THE TEA")).toBeNull();
+        expect(screen.getByTestId("judgement-note").props.placeholder).toMatch(/^e\.g\. /);
     });
 
     it("uses tea copy without changing rating or note handlers", async () => {
@@ -23,6 +24,7 @@ describe("BrewJudgement", () => {
             .toHaveProp("defaultValue", "Floral");
         expect(screen.queryByPlaceholderText("e.g. Sweet, a little thin. Grind finer."))
             .toBeNull();
+        expect(screen.getByTestId("judgement-note").props.placeholder).toMatch(/^e\.g\. /);
         await fireEvent.press(screen.getByLabelText("Rate 4 stars"));
         await fireEvent(screen.getByTestId("judgement-note"), "endEditing",
             {nativeEvent: {text: "Steep less."}});
