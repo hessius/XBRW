@@ -99,6 +99,26 @@ function pair(over: Parameters<typeof makeBrewRecordFixture>[0] = {}) {
 }
 
 describe("the comparison screen", () => {
+    it("compares tea leaf, water, cup and time without coffee metrics", async () => {
+        const tea = {beverageKind: "tea" as const, dose: 5, ratio: 18,
+            grindSize: 81, grinderRpm: 120, drawdownAt: 0};
+        pair(tea);
+        setRecords({
+            a: {record: makeBrewRecordFixture({id: "a", plan: comparisonPlan, ...tea}),
+                samples: makeBrewRecordSamples(comparisonSamples)},
+            b: {record: makeBrewRecordFixture({id: "b", plan: comparisonPlan, ...tea}),
+                samples: makeBrewRecordSamples(comparisonSamples)}
+        });
+        const {getByTestId} = await renderWithProviders(<BrewCompareScreen/>);
+        const table = within(getByTestId("compare-table"));
+        for (const label of ["LEAF", "WATER", "CUP", "POUR"]) {
+            expect(table.getByText(label)).toBeTruthy();
+        }
+        for (const label of ["DOSE", "RATIO", "GRIND", "RPM", "DRAWDOWN"]) {
+            expect(table.queryByText(label)).toBeNull();
+        }
+    });
+
     beforeEach(() => {
         setRecords({});
         setJudgementStore(undefined);

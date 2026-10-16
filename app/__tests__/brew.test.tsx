@@ -367,7 +367,7 @@ describe("brew route", () => {
         }
     );
 
-    it("keeps tea dose and ratio independent of partial measured yield", async () => {
+    it("keeps tea leaf dose independent of yield and hides coffee ratio", async () => {
         mockRecipe.cupType = CUP_TYPE.TEA;
         mockRecipe.dosage = 5;
         mockRecipe.ratio = 18;
@@ -376,9 +376,38 @@ describe("brew route", () => {
         await renderWithProviders(<Brew />);
 
         expect(screen.getByText("5 G")).toBeOnTheScreen();
-        expect(screen.getByText("1:18")).toBeOnTheScreen();
-        expect(screen.getByLabelText("Recipe ratio, 1 to 18")).toBeOnTheScreen();
+        expect(screen.getByText("LEAF")).toBeOnTheScreen();
+        expect(screen.queryByText("1:18")).toBeNull();
+        expect(screen.queryByText("DRAWDOWN")).toBeNull();
+        expect(screen.queryByText("DELAY")).toBeNull();
     });
+
+    it("uses finished tea identity even when the owner's recipe is coffee", async () => {
+        mockRecord = {...record, beverageKind: "tea", dose: 5, ratio: 18,
+            grinderUsed: false, drawdownAt: 0};
+        await drawDone();
+        expect(screen.getByText("LEAF")).toBeOnTheScreen();
+        expect(screen.getByText("HOW WAS THE TEA")).toBeOnTheScreen();
+        for (const label of ["GRIND", "OFF", "RATIO", "DRAWDOWN", "DELAY"]) {
+            expect(screen.queryByText(label)).toBeNull();
+        }
+        expect(screen.getByLabelText("Save as image")).toBeTruthy();
+        expect(screen.getByLabelText("Export the data")).toBeTruthy();
+        expect(screen.queryByLabelText(HANDOFF_TARGETS[0].buttonLabel)).toBeNull();
+    });
+
+    it.each(["coffee", undefined] as const)(
+        "keeps finished %s identity when the current recipe is tea",
+        async (beverageKind) => {
+            mockRecipe.cupType = CUP_TYPE.TEA;
+            mockRecord = {...record, beverageKind, dose: 15, ratio: 16};
+            await drawDone();
+            expect(screen.getByText("HOW WAS IT")).toBeTruthy();
+            expect(screen.getByText("DOSE")).toBeTruthy();
+            expect(screen.getByText("1:16")).toBeTruthy();
+            expect(screen.queryByText("LEAF")).toBeNull();
+        }
+    );
 
     it("retains context rows and spacing from pouring through settling", async () => {
         mockRecipe.dosage = 16;

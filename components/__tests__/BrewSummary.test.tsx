@@ -85,6 +85,23 @@ function pathPoints(path: string): {x: number; y: number}[] {
 }
 
 describe("BrewSummary", () => {
+    it("shows tea leaf and neutral figures without coffee context in a capture", async () => {
+        await draw({
+            beverageKind: "tea", recipeInputs: {dose: 5, ratio: 18,
+                adjustedFromDose: 4, adjustedFromRatio: 16},
+            grind: {kind: "dial", dial: 53, recipe: 50, savedRecipe: 48},
+            drawdown: 0, delay: 0, drawdownRate: 0
+        });
+        for (const label of ["LEAF", "5 G", "RECIPE 4", "WATER", "CUP", "TIME"]) {
+            expect(screen.getAllByText(label).length).toBeGreaterThan(0);
+        }
+        for (const label of ["RATIO", "GRIND", "DRAWDOWN", "DELAY", "0:00",
+            "RECIPE 48", "RECIPE 50", "1:18"]) {
+            expect(screen.queryByText(label)).toBeNull();
+        }
+        expect(screen.getByTestId("ladder")).toBeTruthy();
+    });
+
     it("draws the trace when the brew kept a stream", async () => {
         const {getByLabelText} = await draw({hasStream: true});
         expect(getByLabelText("Brew trace, 93 then 93 then 93 degrees")).toBeTruthy();

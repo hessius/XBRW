@@ -44,6 +44,23 @@ function mockWindowFontScale(fontScale: number): void {
 }
 
 describe("BrewFigures", () => {
+    it("keeps tea totals and temperature, not coffee grind, drawdown or delay", async () => {
+        await renderWithProviders(
+            <BrewFigures beverageKind="tea" contentWidth={333}
+                         water={90} cup={85} seconds={126} accent={TEST_ACCENT}
+                         grind={{kind: "off"}} drawdown={0} delay={0} drawdownRate={0}
+                         reserveDrawdown
+                         adjustments={{temperature: {offset: -2, temperatures: [88]}}}/>
+        );
+        for (const label of ["WATER", "CUP", "TIME", "90", "85", "2:06", "TEMP"]) {
+            expect(screen.getByText(label)).toBeTruthy();
+        }
+        for (const label of ["GRIND", "OFF", "DRAWDOWN", "DELAY", "0:00"]) {
+            expect(screen.queryByText(label)).toBeNull();
+        }
+        expect(screen.queryByTestId("figures-detail-slot")).toBeNull();
+    });
+
     beforeEach(() => {
         mockWindowFontScale(1);
     });

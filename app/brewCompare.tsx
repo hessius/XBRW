@@ -479,7 +479,9 @@ export default function BrewCompareScreen() {
                         </YStack>
                     )}
 
-                    <CompareTable rows={comparison.rows} accent={subject.record.accent} />
+                    <CompareTable rows={comparison.rows} accent={subject.record.accent}
+                                  beverageKinds={[subject.record.beverageKind,
+                                      reference.record.beverageKind]}/>
 
                     <XStack gap="$3">
                         <YStack flex={1}>

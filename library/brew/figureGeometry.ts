@@ -1,4 +1,5 @@
 import {dotoRowHeight, dotoTextWidth, DOTO_MIN_FONT_SIZE} from "@/library/dotoMetrics";
+import type {BeverageKind} from "@/library/brew/BrewRecord";
 
 export const BREW_FIGURE_LABEL_SIZE = 10;
 export const BREW_FIGURE_VALUE_SIZE = 28;
@@ -87,6 +88,7 @@ export const BREW_RECIPE_ROW_GAP = 6;
 export const BREW_RECIPE_AFTER_GAP = 8;
 
 export type BrewRecipeInputs = {
+    beverageKind?: BeverageKind;
     dose?: number;
     ratio?: number;
     adjustedFromDose?: number;
@@ -103,6 +105,7 @@ export type BrewRecipeUnit = {
 
 export function brewRecipeUnits(inputs: BrewRecipeInputs = {}): BrewRecipeUnit[] {
     const {dose, ratio, adjustedFromDose, adjustedFromRatio} = inputs;
+    const tea = inputs.beverageKind === "tea";
     const units: BrewRecipeUnit[] = [];
     if (dose !== undefined && Number.isFinite(dose) && dose > 0) {
         const hasBaseline = adjustedFromDose !== undefined
@@ -110,14 +113,14 @@ export function brewRecipeUnits(inputs: BrewRecipeInputs = {}): BrewRecipeUnit[]
             && adjustedFromDose !== dose;
         units.push({
             key: "dose",
-            label: "DOSE",
+            label: tea ? "LEAF" : "DOSE",
             value: `${dose} G`,
             badge: hasBaseline ? `RECIPE ${adjustedFromDose}` : null,
-            accessibilityLabel: `Recipe dose, ${dose} grams`
+            accessibilityLabel: `${tea ? "Recipe leaf dose" : "Recipe dose"}, ${dose} grams`
                 + (hasBaseline ? `, saved recipe ${adjustedFromDose} grams` : "")
         });
     }
-    if (ratio !== undefined && Number.isFinite(ratio) && ratio > 0) {
+    if (!tea && ratio !== undefined && Number.isFinite(ratio) && ratio > 0) {
         const hasBaseline = adjustedFromRatio !== undefined
             && Number.isFinite(adjustedFromRatio) && adjustedFromRatio > 0
             && adjustedFromRatio !== ratio;

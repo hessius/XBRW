@@ -27,7 +27,7 @@ import {sharedBrewDatabase, useBrewHistory, useBrewJudgement, type JudgementStor
 import {useSetting} from "@/hooks/useSetting";
 import {bypassViewFromRecord} from "@/library/brew/bypassState";
 import {formatBrewDate, formatBrewTime} from "@/library/brew/brewFormat";
-import {brewFigures, brewFigureAdjustments} from "@/library/brew/brewFigures";
+import {brewFigures, brewFigureAdjustments, brewFigureDetails} from "@/library/brew/brewFigures";
 import {poursFromPlan} from "@/library/brew/BrewRecord";
 import {dialNote, grindRecipeBadges, type GrindFigure} from "@/library/brew/dialAfterBrew";
 import {drawdownFigures, retrospectiveFlowSeries} from "@/library/brew/flowRate";
@@ -350,8 +350,10 @@ export default function BrewRecord({recipeLookup}: Props) {
     // story card adds its own width and nothing else. Neither works the
     // figures out a second time.
     const summary = {
+        beverageKind:      record.beverageKind,
         recipeName:        record.recipeName,
         recipeInputs:      {
+            beverageKind:      record.beverageKind,
             dose:              record.dose,
             ratio:             record.ratio,
             adjustedFromDose:  record.adjustedFromDose,
@@ -379,19 +381,21 @@ export default function BrewRecord({recipeLookup}: Props) {
             : pausedNote(record.pausedSeconds),
         stagesUnavailable: snapshot.length === 0 && recipe === null,
         bypass,
-        drawdown:          drawdown?.seconds ?? null,
-        drawdownRate:      drawdown?.rate ?? null,
         rateSeries:        record.hasStream && samples.length > 0
             ? retrospectiveFlowSeries(samples, record.pours)
             : [],
-        delay:             pourEndDelaySeconds(
-            durationSeconds,
-            drawdown?.seconds ?? null,
-            plannedSecs,
-            pausedBeforeDrawdownSeconds(
-                record.pauseIntervals, record.drawdownAt, record.pausedSeconds)
-        ),
-        grind,
+        ...brewFigureDetails(record.beverageKind, {
+            drawdown:     drawdown?.seconds ?? null,
+            drawdownRate: drawdown?.rate ?? null,
+            delay:        pourEndDelaySeconds(
+                durationSeconds,
+                drawdown?.seconds ?? null,
+                plannedSecs,
+                pausedBeforeDrawdownSeconds(
+                    record.pauseIntervals, record.drawdownAt, record.pausedSeconds)
+            ),
+            grind
+        }),
         adjustments
     };
     const pauseReasons = pauseReasonsNote(record.pauseIntervals);
@@ -574,6 +578,7 @@ export default function BrewRecord({recipeLookup}: Props) {
             <YStack paddingHorizontal={SCREEN_PADDING} gap="$2"
                     marginBottom={JUDGEMENT_ACTION_GAP}>
                 <BrewJudgement rating={judgement.rating} note={judgement.note}
+                               beverageKind={record.beverageKind}
                                onRate={handoff.rateBrew}
                                onNote={handoff.annotateBrew}
                                onNoteDraft={handoff.setNoteDraft}/>

@@ -638,6 +638,28 @@ The persistent live brew bar (`components/LiveBrewBar.tsx` →
 
 ## Brew — figures, trace and stage ladder
 
+Known tea keeps the familiar chart and ladder pending hardware evidence for its
+full cycle lifecycle. Its recipe context labels dose `LEAF` and omits the coffee
+ratio; figures omit grind/dial/RPM and coffee final-bed drawdown and pour-end
+delay on live, finished, record, comparison and image/story captures. Leaf dose
+(including a saved-dose badge), delivered water, cup, time and temperature edits
+remain. A comparison involving tea omits coffee-only rows; mixed known-tea and
+coffee/legacy pairs label the dose row `DOSE / LEAF`. Stored observations and
+coffee arithmetic are unchanged. An absent kind retains legacy coffee display;
+finished display identity comes from the immutable brew record, never a recipe
+edited since the brew.
+
+### Brew judgement
+
+| ID | Source | Context — when the user sees this | Current text |
+|----|--------|-----------------------------------|--------------|
+| `brew.judgement.heading` | `constants/brewCopy.ts` (`RATING_PROMPT_QUESTION`) | Existing coffee/legacy judgement heading. | `HOW WAS IT` |
+| `brew.judgement.teaHeading` | `constants/brewCopy.ts` (`TEA_JUDGEMENT_HEADING`) | Known-tea judgement heading on finished brew and record. | `HOW WAS THE TEA` |
+| `brew.judgement.placeholder` | `constants/brewCopy.ts` (`COFFEE_JUDGEMENT_PLACEHOLDER`) | Existing coffee/legacy note example. | `e.g. Sweet, a little thin. Grind finer.` |
+| `brew.judgement.teaPlaceholder` | `constants/brewCopy.ts` (`TEA_JUDGEMENT_PLACEHOLDER`) | Known-tea note example; rating and note handlers are unchanged. | `e.g. Floral, a little bitter. Steep less.` |
+
+### Readouts
+
 Shared readouts on the brew screen and record (`components/BrewFigures.tsx`,
 `components/BrewTrace.tsx`, `components/BrewStageRung.tsx`).
 

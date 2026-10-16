@@ -13,7 +13,7 @@ import {palette} from "@/constants/colors";
 import {SCREEN_PADDING} from "@/constants/layout";
 import {summaryBands} from "@/library/brew/bands";
 import {traceAxisFor} from "@/library/brew/brewShape";
-import type {BrewSample} from "@/library/brew/BrewRecord";
+import type {BeverageKind, BrewSample} from "@/library/brew/BrewRecord";
 import type {BypassView} from "@/library/brew/bypassState";
 import type {PauseInterval} from "@/library/brew/pauseIntervals";
 import type {GrindFigure} from "@/library/brew/dialAfterBrew";
@@ -56,6 +56,7 @@ export function summaryLadderHeight(
 }
 
 type Props = {
+    beverageKind?: BeverageKind;
     recipeName: string;
     recipeInputs?: BrewRecipeInputs;
     hasStream: boolean;
@@ -166,7 +167,7 @@ const NO_PLAN: Pour[] = [];
  * figures near-invisible.
  */
 export default function BrewSummary({
-    recipeName, recipeInputs, hasStream, samples, stages, accent, width, plannedSeconds,
+    recipeName, recipeInputs, beverageKind, hasStream, samples, stages, accent, width, plannedSeconds,
     water, cup, seconds, activeIndex, stageWater, stalls, stagesUnavailable,
     note, nameStill = false, selectedIndex = null, onSelectStage, bypass, pauseIntervals,
     drawdown = null, rateSeries, drawdownRate = null, delay = null, grind = null,
@@ -180,6 +181,7 @@ export default function BrewSummary({
     chartWidth,
     testID = "brew-capture"
 }: Props) {
+    const shownKind = beverageKind ?? recipeInputs?.beverageKind;
     // The drawable width inside the capture's own padding.
     const traceWidth = width - capturePadding * 2;
     const bleedChartWidth = chartWidth ?? traceWidth;
@@ -222,7 +224,8 @@ export default function BrewSummary({
                 </DotMatrixText>
             </MarqueeText>
 
-            <BrewRecipeContext inputs={recipeInputs} contentWidth={traceWidth} textScale={textScale}/>
+            <BrewRecipeContext inputs={{...recipeInputs, beverageKind: shownKind}}
+                               contentWidth={traceWidth} textScale={textScale}/>
 
             {hasStream ? (
                 <View testID="trace-chart-slot" style={chartSlotStyle}>
@@ -285,6 +288,7 @@ export default function BrewSummary({
             )}
 
             <BrewFigures
+                beverageKind={shownKind}
                 water={water}
                 cup={cup}
                 seconds={seconds}

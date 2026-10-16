@@ -254,8 +254,12 @@ export default function Brew({historyStore}: {historyStore?: ExportStore} = {}) 
     // The recipe the provider is running takes precedence once it is available,
     // because it is the object the recorder was started with.
     const recipe = run?.recipe ?? localRecipe;
+    const beverageKind = run?.record === undefined
+        ? (recipe.isTea() ? "tea" : "coffee")
+        : run.record.beverageKind;
     const activeQuickEdit = run === null ? quickEditRecord : run.quickEdit;
     const recipeInputs: BrewRecipeInputs = run?.record ?? {
+        beverageKind,
         dose: recipe.dosage,
         ratio: recipe.ratio,
         adjustedFromDose: activeQuickEdit?.adjustedFromDose,
@@ -549,6 +553,7 @@ export default function Brew({historyStore}: {historyStore?: ExportStore} = {}) 
                             contentContainerStyle={{flexGrow: 1}}>
                 <ViewShot ref={shotRef} options={{format: "png", quality: 1}}>
                     <BrewSummary
+                        beverageKind={beverageKind}
                         recipeName={recipe.displayName()}
                         recipeInputs={recipeInputs}
                         hasStream={samples.length > 0}
@@ -630,6 +635,7 @@ export default function Brew({historyStore}: {historyStore?: ExportStore} = {}) 
                     </YStack>
 
                     <BrewFigures
+                        beverageKind={beverageKind}
                         water={brewWater}
                         cup={last?.cup ?? 0}
                         seconds={elapsed}
@@ -762,6 +768,7 @@ export default function Brew({historyStore}: {historyStore?: ExportStore} = {}) 
                         // rating that can only be given from a history screen is
                         // a rating nobody gives.
                         <BrewJudgement rating={judgement.rating} note={judgement.note}
+                                       beverageKind={beverageKind}
                                        onRate={judgement.rate}
                                        onNote={judgement.annotate}
                                        hint={RATING_CAN_WAIT}/>
