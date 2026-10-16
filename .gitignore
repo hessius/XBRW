@@ -48,3 +48,4 @@ skills-lock.json
 
 # Jest writes this in CI so an intermittent failure can name itself (#91).
 jest-results.json
+.jest-cache/

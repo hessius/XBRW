@@ -25,7 +25,7 @@ Work only in `/Users/jesperhessius/Dev/XBRW-ci-20261016`, branch
 
 ### Task 1: Persist the approved contract
 
-- [ ] Read `AGENTS.md`, `.github/copilot-instructions.md`, and
+- [x] Read `AGENTS.md`, `.github/copilot-instructions.md`, and
   `docs/development-workflow.md`; confirm status, branch, upstream and base.
 
 ```bash
@@ -36,7 +36,7 @@ git fetch origin --no-prune
 npm run worktrees:check
 ```
 
-- [ ] Save this plan and the approved specification, self-review every spec
+- [x] Save this plan and the approved specification, self-review every spec
   section against Tasks 2–4, then commit both documents.
 
 ```bash
@@ -48,7 +48,7 @@ git commit -m "docs: record approved CI optimization design and plan" -m "Co-aut
 
 **Files:** `.github/workflows/ci.yml`
 
-- [ ] Replace the workflow with this complete definition:
+- [x] Replace the workflow with this complete definition:
 
 ```yaml
 name: CI
@@ -153,13 +153,13 @@ jobs:
 
 **Files:** `.gitignore`, `docs/development-workflow.md`
 
-- [ ] Add this Git ignore entry beside `jest-results.json`:
+- [x] Add this Git ignore entry beside `jest-results.json`:
 
 ```gitignore
 .jest-cache/
 ```
 
-- [ ] Add the following subsection before `## Preserve before cleaning`:
+- [x] Add the following subsection before `## Preserve before cleaning`:
 
 ```markdown
 ### CI jobs, caches and failure reports
@@ -196,7 +196,7 @@ evidence of those Actions runtime outcomes.
 
 ### Task 4: Validate, checkpoint and preserve
 
-- [ ] Run actionlint. If missing, download an official release into the
+- [x] Run actionlint. If missing, download an official release into the
   worktree's `.ci-validation` scratch directory, run it there, then remove only
   the generated scratch files at the end. Do not change dependencies to add a
   workflow linter.
@@ -205,7 +205,16 @@ evidence of those Actions runtime outcomes.
 actionlint .github/workflows/ci.yml
 ```
 
-- [ ] Parse YAML and execute the actual aggregate shell body for all result
+The command was missing locally; the worktree-local fallback is:
+
+```bash
+mkdir -p .ci-validation
+gh release download v1.7.12 --repo rhysd/actionlint --pattern 'actionlint_1.7.12_darwin_arm64.tar.gz' --dir .ci-validation
+tar -xzf .ci-validation/actionlint_1.7.12_darwin_arm64.tar.gz -C .ci-validation actionlint
+.ci-validation/actionlint .github/workflows/ci.yml
+```
+
+- [x] Parse YAML and execute the actual aggregate shell body for all result
   combinations using an existing parser dependency:
 
 ```bash
@@ -235,7 +244,7 @@ console.log('YAML semantics and all 16 aggregate result pairs passed');
 NODE
 ```
 
-- [ ] Confirm the two existing scripts select exactly one intended project
+- [x] Confirm the two existing scripts select exactly one intended project
   and identical discovered suite lists; unchanged package/Jest files establish
   equivalence to the pinned base. Run the small harness serially, not full suites.
 
@@ -251,12 +260,16 @@ npm run test:worktrees
 git diff --check
 ```
 
-Expected: each configuration has one platform, suite lists match and no
+Expected: each script selects one platform, suite lists match and no
 package/Jest diff exists; three harness tests pass per platform; audit tests
-and workflow validation pass. Install dependencies only after a missing-tool
-failure. Record real Actions behavior as unverified rather than faking runs.
+and workflow validation pass. `--showConfig` prints both configured projects
+even with `--selectProjects`, not a filtered project list; verify selection
+through the script, discovery's `Running one project` output and the harness's
+platform-labelled execution instead. Install dependencies only after a
+missing-tool failure. Record real Actions behavior as unverified rather than
+faking runs.
 
-- [ ] Mark completed plan tasks, record validation evidence, commit, push the
+- [x] Mark completed plan tasks, record validation evidence, commit, push the
   authorized branch, then run the final read-only audit:
 
 ```bash
@@ -282,3 +295,30 @@ ignored cache and operator documentation; Tasks 1 and 4 cover ownership,
 persistence, verification and authorized handoff. No uncovered requirements.
 YAML IDs, output names and environment variables match across implementation
 and validation. No package or application changes are planned.
+
+## Local verification evidence (2026-10-16)
+
+- actionlint 1.7.12: workflow accepted without diagnostics.
+- Existing `js-yaml` dependency: semantic assertions passed for unchanged
+  triggers/concurrency, read-only permissions, independent runners, timeouts,
+  complete quality commands, platform matrix, cache scope/key relationship,
+  save guard, failed-Jest diagnostics and artifact conditions.
+- Actual aggregate shell command: all sixteen dependency-result pairs passed;
+  only `success` / `success` exited zero.
+- Platform discovery: 363 suites per project, identical sorted lists, matching
+  every tracked TypeScript test in the pinned base (excluding `tools/`).
+- Existing platform scripts and presets select iOS / Android as intended.
+  Configuration retains four workers on this machine and the 20-second timeout;
+  package files and Jest/Babel configuration remain unchanged.
+- Targeted platformHarness: 3/3 tests passed on iOS and 3/3 on Android, serially,
+  using separate cache directories and the approved JSON report arguments.
+- Worktree-audit tests: 2/2 passed. `git diff --check` passed.
+- Missing dependencies were restored with `npm ci` only after resolution
+  failures. npm reported a blocked optional `unrs-resolver` install script;
+  no approval or dependency-manifest change was made.
+- One initial validation assertion incorrectly expected `--showConfig` to
+  expose `globalConfig.selectProjects`; corrected the validation method above,
+  without changing the workflow or application.
+- No full platform suite, remote workflow dispatch, PR, review request,
+  integration, deployment or hardware operation was performed. Actions timing,
+  cache transport, artifact delivery and cancellation remain unverified.
