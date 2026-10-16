@@ -90,6 +90,27 @@ describe("persistent beverage kind", () => {
         expect(database.get("b1")).toMatchObject({teaCycles, hasStream: false});
     });
 
+    it.each(["{broken", '{"index":0}', '[{"index":-1}]'])(
+        "keeps the brew and logs invalid stored tea observations (%s)", (value) => {
+            const database = new BrewDatabase();
+            database.insert(record({beverageKind: "tea"}), []);
+            mockBacking.runSync("UPDATE brews SET teaCycles = ? WHERE id = ?;", [value, "b1"]);
+            const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+            try {
+                expect(database.get("b1")).toMatchObject(record({beverageKind: "tea"}));
+                expect(database.get("b1")).not.toHaveProperty("teaCycles");
+                expect(database.all()).toHaveLength(1);
+                expect(warn).toHaveBeenCalledWith(
+                    "BrewDatabase: could not read teaCycles for brew b1", expect.any(Error)
+                );
+                expect(mockBacking.getFirstSync("SELECT teaCycles FROM brews WHERE id = 'b1';"))
+                    .toEqual({teaCycles: value});
+            } finally {
+                warn.mockRestore();
+            }
+        }
+    );
+
     it("keeps legacy rows without tea-cycle observations", () => {
         const database = new BrewDatabase();
         database.insert(record(), []);

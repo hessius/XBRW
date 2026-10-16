@@ -111,6 +111,8 @@ export default class BrewRecorder {
     /** The most recent water reading, carried onto cup-driven settling samples. */
     private lastWater = 0;
     private emitted = false;
+    /** Tea keeps observing the tail, but only the machine can end it. */
+    private teaTail = false;
 
     /** True while draining after the pour: still sampling, not yet a record. */
     private settling = false;
@@ -218,7 +220,10 @@ export default class BrewRecorder {
         if (this.settling) this.armSettleCap();
         if (parsed.kind === "cupWeight") {
             this.cup = parsed.grams;
-            if (this.beverageKind === "tea") return;
+            if (this.beverageKind === "tea") {
+                if (this.teaTail && this.pausedAt === null) this.push(this.lastWater);
+                return;
+            }
             // During settling the water stream may have stopped at BREWER_STOP
             // — that is the very hardware unknown this phase is contingent on.
             // If it has, the drawdown reaches the record only through the cup
@@ -446,6 +451,8 @@ export default class BrewRecorder {
         if (phase.name === "settling") {
             if (this.beverageKind === "tea") {
                 this.closeTeaEnding(this.teaNow());
+                this.ensurePouringAt();
+                this.teaTail = true;
                 return;
             }
             this.beginSettle();

@@ -1210,7 +1210,7 @@ function hydrate(row: BrewRow): StoredBrew {
     const stalls = jsonOf<Stall[]>(row.stalls);
     const plan = jsonOf<PlanStage>(row.plan);
     const stageWater = jsonOf<number>(row.stageWater);
-    const teaCycles = teaCyclesFromStoredColumn(row.teaCycles);
+    const teaCycles = teaCyclesFromStoredColumn(row.teaCycles, row.id);
     const bypass = bypassFromStoredColumn(row.bypass);
     const coffee = coffeeFromStoredColumn(row.coffee);
     return {
@@ -1308,19 +1308,18 @@ function coffeeFromStoredColumn(value: string): PodCoffee | null {
     }
 }
 
-function teaCyclesFromStoredColumn(value: string): TeaCycleObservation[] | null {
+function teaCyclesFromStoredColumn(value: string, brewId: string): TeaCycleObservation[] | null {
     if (value === "") return null;
-    let parsed: unknown;
     try {
-        parsed = JSON.parse(value);
+        const parsed: unknown = JSON.parse(value);
+        if (!isTeaCycleObservations(parsed)) {
+            throw new Error("Invalid stored teaCycles: invalid observations.");
+        }
+        return parsed;
     } catch (error) {
-        if (!(error instanceof SyntaxError)) throw error;
-        throw new Error("Invalid stored teaCycles: invalid JSON.");
+        console.warn(`BrewDatabase: could not read teaCycles for brew ${brewId}`, error);
+        return null;
     }
-    if (!isTeaCycleObservations(parsed)) {
-        throw new Error("Invalid stored teaCycles: invalid observations.");
-    }
-    return parsed;
 }
 
 function bypassFromStoredColumn(value: string): BypassRecord | null {

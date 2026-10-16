@@ -88,6 +88,39 @@ describe("BrewRecorder", () => {
         expect(records[0]).toHaveProperty("beverageKind", kind);
     });
 
+    it("keeps the tea cup-only tail until the machine terminal without coffee completion heuristics", () => {
+        const tea = recipe();
+        tea.cupType = CUP_TYPE.TEA;
+        const {fake, time, records, recorder} = build({recipe: tea});
+        fake.phase({name: "pouring", pour: 1, pours: 2});
+        fake.cup(100);
+        fake.water(200);
+        fake.phase({name: "settling"});
+        fake.state(MACHINE_STATE.READY);
+        time.advance(1_000);
+        fake.cup(150);
+        time.advance(120_000);
+        fake.cup(150);
+        time.advance(1_000);
+        fake.cup(10);
+        expect(records).toHaveLength(0);
+        expect(recorder.samples.at(-1)).toMatchObject({
+            at: 122_000, water: 200, cup: 10
+        });
+        time.advance(1_000);
+        fake.cup(160);
+        fake.phase({name: "done"});
+        expect(records).toHaveLength(1);
+        expect(records[0].samples.at(-1)).toMatchObject({
+            at: 123_000, water: 200, cup: 160
+        });
+        expect(records[0].samples.map(({cup}) => cup)).toEqual([100, 150, 150, 10, 160]);
+        expect(records[0].record).toMatchObject({
+            beverageKind: "tea", waterTotal: 200, cupTotal: 160, heldSeconds: 0
+        });
+        expect(records[0].record).not.toHaveProperty("drawdownAt");
+    });
+
     it("does not interpret the resume acknowledgement state as a tea steep end", () => {
         const tea = recipe();
         tea.cupType = CUP_TYPE.TEA;
