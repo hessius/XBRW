@@ -24,6 +24,7 @@ import {useSetting} from "@/hooks/useSetting";
 import {useLiveBrew} from "@/hooks/useLiveBrew";
 import {type BackupPayload} from "@/library/backup";
 import type {BrewRecord} from "@/library/brew/BrewRecord";
+import {RATING_PROMPT_WINDOW_MS} from "@/library/brew/ratingPrompt";
 import type {BackupExcluded, Settings, SettingKey} from "@/library/Settings";
 import {isMachineModel} from "@/library/machine/machineModel";
 import {isSortAxis, isSortDirection} from "@/library/librarySort";
@@ -41,6 +42,12 @@ const TEMPERATURE_OPTIONS = [
     {value: "F", label: "°F"}
 ] as const;
 
+const BUDGET_OPTIONS = [
+    {value: "10", label: "10 MB"},
+    {value: "25", label: "25 MB"},
+    {value: "50", label: "50 MB"},
+    {value: "0", label: "Unlimited"}
+] as const;
 
 const VERSION = Application.nativeApplicationVersion ?? "unknown";
 
@@ -140,6 +147,7 @@ export default function SettingsScreen({settings}: Props) {
     const [askForRatings, setAskForRatings] = useSetting("askForRatings", settings);
     const [brewTraceBudgetMB, setBrewTraceBudgetMB] =
         useSetting("brewTraceBudgetMB", settings);
+    const ratingPromptHours = Math.round(RATING_PROMPT_WINDOW_MS / (60 * 60 * 1000));
     // Read only so backups carry the user's story-card sharing preference.
     const [storyCardHidden] = useSetting("storyCardHidden", settings);
     const [brewHistorySort, setBrewHistorySort] = useSetting("brewHistorySort", settings);
@@ -521,6 +529,23 @@ export default function SettingsScreen({settings}: Props) {
 
                 <MachineSection settings={settings}/>
 
+                <SettingsSection title="Brewing">
+                    <SettingsToggleRow
+                        label="Animate the brew chart"
+                        description="When off, each phase change holds its end state immediately. The system Reduced Motion switch also disables animation independently."
+                        value={animateBrewChart} onChange={setAnimateBrewChart}/>
+                    <SettingsToggleRow
+                        label="Ask how a brew was"
+                        description={`On, the last brew XBRW++ watched can ask how it was along the bottom for up to ${ratingPromptHours} hours. Off, ratings are only given on the brew itself.`}
+                        value={askForRatings} onChange={setAskForRatings}/>
+                    <SettingsChoiceRow
+                        label="Brew detail storage"
+                        description="Brew traces are the detailed charts. When they pass this limit, the oldest are dropped first. Rated and noted brews, and the newest brews of each recipe, go last. Summaries are always kept."
+                        value={String(brewTraceBudgetMB)}
+                        options={BUDGET_OPTIONS}
+                        onChange={(value) => setBrewTraceBudgetMB(Number(value))}/>
+                </SettingsSection>
+
                 {/* Its own section above Library, not a line inside it: Library
                     is the recipes you hold, and this is where some of them can
                     come from.
@@ -590,11 +615,6 @@ export default function SettingsScreen({settings}: Props) {
                                        onPress={() => setConfirmingDeleteAll(true)}/>
                 </SettingsSection>
 
-                {/* Gated behind the machine console's acknowledgement, so it is
-                    invisible until a user opens the developer area — see the
-                    component. */}
-                <CardReadDiagnostic settings={settings}/>
-
                 {/* Last, under everything a user came here for, and absent
                     until seven taps on the version line open it.
 
@@ -610,7 +630,11 @@ export default function SettingsScreen({settings}: Props) {
                     just a trap. Note it hides the section and changes nothing
                     inside it -- what you switched on stays on, which is the
                     honest reading of two separate switches. */}
-                {labsUnlocked && <SettingsSection title="Labs">
+                {labsUnlocked && <>
+                <SettingsSection title="Labs">
+                    <SettingsActionRow label="Machine console"
+                                       detail="Connection logs and diagnostic commands."
+                                       onPress={() => router.push("/machine")}/>
                     <SettingsToggleRow
                         label="Send brews to Beanconqueror"
                         description="Needs a version of Beanconqueror that can read the link. Older ones will say they do not recognise it."
@@ -618,7 +642,9 @@ export default function SettingsScreen({settings}: Props) {
                     <SettingsActionRow label="Hide Labs"
                                        detail="Anything you switched on here stays on."
                                        onPress={() => setLabsUnlocked(false)}/>
-                </SettingsSection>}
+                </SettingsSection>
+                <CardReadDiagnostic settings={settings}/>
+                </>}
             </YStack>
             </ScrollView>
         </YStack>

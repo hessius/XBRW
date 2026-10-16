@@ -933,6 +933,7 @@ machine card's error line).
 | ID | Source | Context — when the user sees this | Current text |
 |----|--------|-----------------------------------|--------------|
 | `machine.section.title` | `components/MachineSection.tsx:79` | Section title. | `Machine` |
+| `machine.section.model.description` | `components/MachineSection.tsx` | Full-width explanation above the model selector. | `Choose your model for matching imports. Grind scales differ. Saved recipes stay unchanged.` |
 | `machine.section.idle.connecting` | `components/MachineSection.tsx:58` | Status while connecting. | `Connecting…` |
 | `machine.section.idle.none` | `components/MachineSection.tsx:59` | Status when no machine is paired. | `No machine paired` |
 | `machine.section.idle.notConnected` | `components/MachineSection.tsx:60` | Status when a machine is remembered but no connection attempt has been made. `${remembered}` is the machine name. | `Not connected · ${remembered}` |
@@ -952,22 +953,27 @@ machine card's error line).
 | `machine.section.vital.mode` | `components/MachineSection.tsx:117` | Vital label; value is the machine mode (PRO/EASY). | `Mode` |
 | `machine.section.autostart.label` | `components/MachineSection.tsx:122` | Toggle label. | `Start brewing automatically` |
 | `machine.section.autostart.desc` | `components/MachineSection.tsx:123` | Toggle description. | `Off, BREW loads the recipe onto the machine and waits for you to press START. On, it starts grinding the moment the recipe lands.` |
-| `machine.section.animate.label` | `components/MachineSection.tsx:128` | Toggle label. | `Animate the brew chart` |
-| `machine.section.animate.desc` | `components/MachineSection.tsx:129` | Toggle description. | `When off, each phase change holds its end state immediately. The system Reduced Motion switch also disables animation independently.` |
-| `machine.section.traces.label` | `components/MachineSection.tsx` | Choice label. | `Brew detail storage` |
-| `machine.section.traces.desc` | `components/MachineSection.tsx` | Description. | `Brew traces are the detailed charts. When they pass this limit, the oldest are dropped first. Rated and noted brews, and the newest brews of each recipe, go last. Summaries are always kept.` |
-| `machine.section.traces.10` | `components/MachineSection.tsx` (`BUDGET_OPTIONS`) | Choice value: default budget. | `10 MB` |
-| `machine.section.traces.25` | `components/MachineSection.tsx` (`BUDGET_OPTIONS`) | Choice value. | `25 MB` |
-| `machine.section.traces.50` | `components/MachineSection.tsx` (`BUDGET_OPTIONS`) | Choice value. | `50 MB` |
-| `machine.section.traces.unlimited` | `components/MachineSection.tsx` (`BUDGET_OPTIONS`) | Choice value: no storage limit. | `Unlimited` |
+| `settings.brewing.title` | `app/settings.tsx` | App brewing preferences, separate from Machine. | `Brewing` |
+| `settings.brewing.animate.label` | `app/settings.tsx` | Toggle label. | `Animate the brew chart` |
+| `settings.brewing.animate.desc` | `app/settings.tsx` | Toggle description. | `When off, each phase change holds its end state immediately. The system Reduced Motion switch also disables animation independently.` |
+| `settings.brewing.rating.label` | `app/settings.tsx` | Toggle label. | `Ask how a brew was` |
+| `settings.brewing.traces.label` | `app/settings.tsx` | Choice label. | `Brew detail storage` |
+| `settings.brewing.traces.desc` | `app/settings.tsx` | Description. | `Brew traces are the detailed charts. When they pass this limit, the oldest are dropped first. Rated and noted brews, and the newest brews of each recipe, go last. Summaries are always kept.` |
+| `settings.brewing.traces.10` | `app/settings.tsx` (`BUDGET_OPTIONS`) | Default budget. | `10 MB` |
+| `settings.brewing.traces.25` | `app/settings.tsx` (`BUDGET_OPTIONS`) | Choice value. | `25 MB` |
+| `settings.brewing.traces.50` | `app/settings.tsx` (`BUDGET_OPTIONS`) | Choice value. | `50 MB` |
+| `settings.brewing.traces.unlimited` | `app/settings.tsx` (`BUDGET_OPTIONS`) | No storage limit. | `Unlimited` |
+| `settings.labs.console.label` | `app/settings.tsx` | Shortcut to the console's existing acknowledgement gate. | `Machine console` |
+| `settings.labs.console.detail` | `app/settings.tsx` | Shortcut description. | `Connection logs and diagnostic commands.` |
+| `machine.panel.easyMode` | `components/MachinePanel.tsx` | Outlined action matching the machine panel's other buttons. | `A B C · EASY MODE` |
 | `machine.section.forget.label` | `components/MachineSection.tsx:141` | Action row label. | `Forget this machine` |
 | `machine.section.forget.detail` | `components/MachineSection.tsx:142` | Action row detail. | `XBRW++ will scan again next time.` |
 
 ### Card diagnostics (`components/CardReadDiagnostic.tsx`)
 
-Hidden until the machine console has been acknowledged — the same developer gate
-as the console — this hands the raw bytes of the last card read back as copyable
-text, so a crash on an unusual card can be diagnosed from a phone with no console.
+Shown only under unlocked Labs, this hands the raw bytes of the last card read
+back as copyable text. Read-only card diagnostics do not require acknowledging
+machine commands; the console retains its own acknowledgement gate.
 
 | ID | Source | Context — when the user sees this | Current text |
 |----|--------|-----------------------------------|--------------|
@@ -1221,8 +1227,9 @@ copy, so they are not edited here.
 
 ## Machine console (developer, gated)
 
-`app/machine.tsx` is a developer-oriented console reached behind an "I
-understand" gate. Everything here **is** shown to a user who opens it, so it is
+`app/machine.tsx` is a developer-oriented console reached from Labs or the
+machine card's seven-tap shortcut, behind an "I understand" gate.
+Everything here **is** shown to a user who opens it, so it is
 catalogued, but it is written in a terser, more technical register than the rest
 of the app and reviewed on those terms. The command table's `name`, `note` and
 `contradiction` fields live in `library/machine/commands.ts`.

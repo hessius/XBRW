@@ -1,5 +1,5 @@
 import React from "react";
-import {fireEvent, screen, waitFor} from "@testing-library/react-native";
+import {fireEvent, screen, waitFor, within} from "@testing-library/react-native";
 
 import MachineSection from "@/components/MachineSection";
 import {renderWithProviders} from "@/test-utils/render";
@@ -220,6 +220,17 @@ describe("the machine section", () => {
         expect(screen.getByText("Your xBloom")).toBeTruthy();
         expect(screen.getByText("Studio")).toBeTruthy();
         expect(screen.getByText("Original")).toBeTruthy();
+        const stacked = within(screen.getByTestId("settings-choice-stacked"));
+        expect(stacked.getByText("Your xBloom")).toBeTruthy();
+        expect(stacked.getByText("Choose your model for matching imports. Grind scales differ. Saved recipes stay unchanged."))
+            .toBeTruthy();
+    });
+
+    it("keeps app brewing preferences out of the machine section", async () => {
+        await renderWithProviders(<MachineSection/>);
+        expect(screen.queryByText("Animate the brew chart")).toBeNull();
+        expect(screen.queryByText("Ask how a brew was")).toBeNull();
+        expect(screen.queryByText("Keep raw brew traces")).toBeNull();
     });
 
     it("remembers the original xBloom when that is what you picked", async () => {
