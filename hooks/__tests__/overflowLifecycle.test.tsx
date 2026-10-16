@@ -194,7 +194,7 @@ it("runs two confirmed protection intervals through the real machine, owner, rec
         .toEqual([[]]);
     expect(database.get(record.id)?.pauseIntervals).toEqual(intervals);
     expect(database.samples(record.id)).toEqual(samples);
-    database.sweep(0);
+    database.sweepBytes(1);
     expect(database.get(record.id)).toMatchObject({pauseIntervals: intervals, hasStream: false});
     const backup = parseBackup(buildBackup([r], {}, "2.1.0", database.all()));
     expect(backup.ok).toBe(true);

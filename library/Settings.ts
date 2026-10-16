@@ -181,15 +181,8 @@ export const DEFAULTS = {
      * cost of a migration and a field on every row that will never read it.
      */
     ratingPromptDismissed: "",
-    /**
-     * How many brews keep their raw sample stream.
-     *
-     * A stream is about 2 400 samples — some tens of kilobytes — and only the
-     * brews you are still dialling in are worth that. The records themselves
-     * are never swept: history stays complete, and only the detail behind it
-     * expires. Zero is a real choice and means zero.
-     */
-    brewTraceRetention: 50,
+    /** Storage budget for brew traces in MB. Zero means Unlimited; summaries always remain. */
+    brewTraceBudgetMB: 10,
     /** History filters are transient; only its ordering is a preference. */
     brewHistorySort: "date" as HistorySort,
     brewHistorySortDirection: "desc" as HistorySortDirection,

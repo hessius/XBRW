@@ -1,6 +1,7 @@
 import BrewDatabase, {ensureBrewTables} from "@/library/BrewDatabase";
 import BrewRecorder, {type RecorderMachine} from "@/library/brew/BrewRecorder";
 import type {BrewRecord, BrewSample} from "@/library/brew/BrewRecord";
+import {encodeSamples, encodeText} from "@/library/brew/traceCodec";
 import {drawdownSeconds, unobservedBrew} from "@/library/brew/BrewRecord";
 import {
     MAX_BEAN_TAG_LENGTH,
@@ -576,13 +577,13 @@ describe("BrewDatabase", () => {
         expect(db.samples("brew-1")).toEqual([]);
     });
 
-    it("sweeps streams beyond the keep count and leaves the records", () => {
-        const db = new BrewDatabase();
+    it("sweeps streams beyond the byte budget and leaves the records", () => {
+        const db = realBrewDatabase();
         db.insert(record({id: "a", startedAt: 1}), stream);
         db.insert(record({id: "b", startedAt: 2}), stream);
         db.insert(record({id: "c", startedAt: 3}), stream);
 
-        db.sweep(2);
+        db.sweepBytes(encodeSamples(stream).length * 2);
 
         expect(db.all().map((b) => b.id)).toEqual(["c", "b", "a"]);
         expect(db.samples("a")).toEqual([]);
@@ -590,27 +591,23 @@ describe("BrewDatabase", () => {
         expect(db.samples("b")).toEqual(stream);
     });
 
-    it("sweeps nothing when the keep count covers everything", () => {
-        const db = new BrewDatabase();
+    it("sweeps nothing when the storage budget covers everything", () => {
+        const db = realBrewDatabase();
         db.insert(record({id: "a", startedAt: 1}), stream);
         db.sweep(10);
         expect(db.samples("a")).toEqual(stream);
     });
 
-    it("drops every stream when told to keep none", () => {
-        // The retention picker's "Don't keep traces" position. Zero must mean
-        // zero, not fall through to a default.
-        const db = new BrewDatabase();
+    it("keeps every stream when the storage budget is Unlimited", () => {
+        const db = realBrewDatabase();
         db.insert(record({id: "a", startedAt: 1}), stream);
         db.sweep(0);
-        expect(db.samples("a")).toEqual([]);
+        expect(db.samples("a")).toEqual(stream);
         expect(db.all()).toHaveLength(1);
     });
 
-    it("refuses a nonsense keep count rather than deleting everything", () => {
-        // NaN slices from zero, so an unguarded sweep would expire every trace
-        // the user has on a single corrupt settings row.
-        const db = new BrewDatabase();
+    it("refuses a nonsense budget rather than deleting everything", () => {
+        const db = realBrewDatabase();
         db.insert(record({id: "a", startedAt: 1}), stream);
         db.sweep(Number.NaN);
         db.sweep(-3);
@@ -618,32 +615,28 @@ describe("BrewDatabase", () => {
     });
 
     it("keeps a judged brew's trace through a sweep that takes the rest", () => {
-        // The whole point of the pin: a 5 star brew with no trace left is a
-        // judgement the user cannot act on.
-        const db = new BrewDatabase();
+        const db = realBrewDatabase();
         db.insert(record({id: "a", startedAt: 1}), stream);
         db.insert(record({id: "b", startedAt: 2}), stream);
         db.insert(record({id: "c", startedAt: 3}), stream);
 
         db.judge("a", {rating: 5});
-        db.sweep(1);
+        db.sweepBytes(encodeSamples(stream).length);
 
         expect(db.samples("a")).toEqual(stream);
         expect(db.get("a")?.hasStream).toBe(true);
         expect(db.samples("b")).toEqual([]);
     });
 
-    it("does not spend the keep count on a pinned brew", () => {
-        // Pinning the oldest brew must not push the newest ordinary one over
-        // the edge; the pinned row is outside the sweep, not ahead of it.
-        const db = new BrewDatabase();
-        db.insert(record({id: "a", startedAt: 1}), stream);
+    it("counts a pinned brew against the budget without granting it protection", () => {
+        const db = realBrewDatabase();
+        db.insert(record({id: "a", startedAt: 1, pinned: true}), stream);
         db.insert(record({id: "b", startedAt: 2}), stream);
 
-        db.judge("a", {rating: 4});
-        db.sweep(1);
+        db.sweepBytes(encodeSamples(stream).length);
 
-        expect(db.samples("a")).toEqual(stream);
+        expect(db.samples("a")).toEqual([]);
+        expect(db.get("a")?.pinned).toBe(true);
         expect(db.samples("b")).toEqual(stream);
     });
 
@@ -656,7 +649,7 @@ describe("BrewDatabase", () => {
         expect(brew?.pinned).toBe(false);
     });
 
-    it("writes a rating and a note, and pins on either", () => {
+    it("writes a rating and a note without changing the legacy pin", () => {
         const db = new BrewDatabase();
         db.insert(record({id: "a"}), stream);
         db.insert(record({id: "b"}), stream);
@@ -665,14 +658,14 @@ describe("BrewDatabase", () => {
         db.judge("b", {note: "Too sour, grind finer."});
 
         expect(db.get("a")?.rating).toBe(4);
-        expect(db.get("a")?.pinned).toBe(true);
+        expect(db.get("a")?.pinned).toBe(false);
         expect(db.get("b")?.note).toBe("Too sour, grind finer.");
-        expect(db.get("b")?.pinned).toBe(true);
+        expect(db.get("b")?.pinned).toBe(false);
     });
 
     it("refuses a rating off the scale rather than clamping it", () => {
         // A 9 reaching here is a caller that is wrong. Clamping would write a
-        // verdict nobody gave, and pin the brew on the strength of it.
+        // verdict nobody gave.
         const db = new BrewDatabase();
         db.insert(record({id: "a"}), stream);
 
@@ -683,14 +676,12 @@ describe("BrewDatabase", () => {
         expect(db.get("a")?.pinned).toBe(false);
     });
 
-    it("releases a pin without touching the judgement", () => {
+    it("preserves an inert legacy pin when updating the judgement", () => {
         const db = new BrewDatabase();
-        db.insert(record({id: "a"}), stream);
+        db.insert(record({id: "a", pinned: true}), stream);
         db.judge("a", {rating: 3, note: "Fine."});
 
-        db.setPinned("a", false);
-
-        expect(db.get("a")?.pinned).toBe(false);
+        expect(db.get("a")?.pinned).toBe(true);
         expect(db.get("a")?.rating).toBe(3);
         expect(db.get("a")?.note).toBe("Fine.");
     });
@@ -1299,10 +1290,10 @@ describe("the frame log of a brew", () => {
      * wants to keep.
      */
     it("expires with the stream it was recorded beside", () => {
-        const db = new BrewDatabase();
+        const db = realBrewDatabase();
         db.insert(record({id: "old", startedAt: 1}), stream, log);
         db.insert(record({id: "new", startedAt: 2}), stream, log);
-        db.sweep(1);
+        db.sweepBytes(encodeSamples(stream).length + encodeText(log).length);
         expect(db.frames("old")).toBe("");
         expect(db.frames("new")).toBe(log);
     });
@@ -1440,7 +1431,7 @@ describe("a brew the app never watched", () => {
             .toMatchObject({times: 1, lastAt: 7_000});
     });
 
-    it("keeps its verdict and its pin", () => {
+    it("keeps its verdict without setting a pin", () => {
         const db = new BrewDatabase();
         db.insert(unobservedBrew({
             recipeUuid: "uuid-1", recipeName: "Ethiopia", accent: "#f00",
@@ -1449,7 +1440,7 @@ describe("a brew the app never watched", () => {
 
         const brew = db.get("hand-1");
         expect(brew?.rating).toBe(5);
-        expect(brew?.pinned).toBe(true);
+        expect(brew?.pinned).toBe(false);
     });
 
     it("survives a restore still unwatched", () => {

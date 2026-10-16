@@ -1,6 +1,6 @@
 import {act, renderHook} from "@testing-library/react-native";
 
-import {sweepOnLaunch, useBrewHistory, useRecipeRating} from "@/hooks/useBrewHistory";
+import {sweepOnLaunch, useBrewHistory, useBrewJudgement, useRecipeRating} from "@/hooks/useBrewHistory";
 import type {BrewRecord, BrewSample} from "@/library/brew/BrewRecord";
 import {countsAsBrewed, isRated} from "@/library/brew/brewPopulation";
 import type {StoredBrew} from "@/library/BrewDatabase";
@@ -24,7 +24,7 @@ function fakeStore(seed: StoredBrew[] = []) {
         remove: (id: string) => { rows = rows.filter((r) => r.id !== id); },
         clear: () => { rows = []; },
         insert: (_r: BrewRecord, _s: BrewSample[]) => {},
-        sweep: (keep: number) => { swept.push(keep); }
+        sweepWhenReady: async (budgetMB: number) => { swept.push(budgetMB); }
     };
 }
 
@@ -55,13 +55,28 @@ describe("useBrewHistory", () => {
         expect(result.current.brews.map((b) => b.id)).toEqual(["b"]);
     });
 
-    it("sweeps to the retention the user chose", () => {
+    it("passes the chosen storage budget to the sweep", () => {
         const store = fakeStore([]);
         sweepOnLaunch(store, 10);
         expect(store.swept).toEqual([10]);
     });
 
-    it("sweeps everything when retention is zero", () => {
+    it("logs a failed launch sweep without crashing startup", async () => {
+        const error = new Error("storage unavailable");
+        const sweepWhenReady = jest.fn(async () => { throw error; });
+        const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+        try {
+            expect(() => sweepOnLaunch({sweepWhenReady}, 25)).not.toThrow();
+            await Promise.resolve();
+            expect(sweepWhenReady).toHaveBeenCalledTimes(1);
+            expect(sweepWhenReady).toHaveBeenCalledWith(25);
+            expect(warn).toHaveBeenCalledWith(expect.any(String), error);
+        } finally {
+            warn.mockRestore();
+        }
+    });
+
+    it("passes zero through for Unlimited storage", () => {
         // Zero is a real choice and must not fall through to a default.
         const store = fakeStore([]);
         sweepOnLaunch(store, 0);
@@ -214,5 +229,40 @@ describe("useRecipeRating", () => {
         await act(async () => { result.current.rate(9); });
 
         expect(store.rows).toHaveLength(0);
+    });
+});
+
+describe("useBrewJudgement", () => {
+    it("writes ratings and notes without a pin API or pin state", async () => {
+        const store = {judge: jest.fn()};
+        const {result} = await renderHook(() => useBrewJudgement(
+            () => "a", {rating: 0, note: ""}, store
+        ));
+
+        await act(async () => result.current.rate(4));
+        expect(store.judge).toHaveBeenLastCalledWith("a", {rating: 4});
+        expect(result.current.rating).toBe(4);
+        await act(async () => result.current.annotate("Sweet."));
+        expect(store.judge).toHaveBeenLastCalledWith("a", {note: "Sweet."});
+        expect(result.current.note).toBe("Sweet.");
+        expect(result.current).not.toHaveProperty("pinned");
+        expect(result.current).not.toHaveProperty("setPinned");
+
+        await act(async () => result.current.annotate("Sweet."));
+        expect(store.judge).toHaveBeenCalledTimes(2);
+        await act(async () => result.current.rate(0));
+        expect(store.judge).toHaveBeenLastCalledWith("a", {rating: 0});
+        expect(result.current).toMatchObject({rating: 0, note: "Sweet."});
+    });
+
+    it("does not write or change the verdict before the record exists", async () => {
+        const store = {judge: jest.fn()};
+        const {result} = await renderHook(() => useBrewJudgement(
+            () => null, {rating: 2, note: "Original."}, store
+        ));
+        await act(async () => result.current.rate(5));
+        await act(async () => result.current.annotate("New."));
+        expect(store.judge).not.toHaveBeenCalled();
+        expect(result.current).toMatchObject({rating: 2, note: "Original."});
     });
 });

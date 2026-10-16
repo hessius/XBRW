@@ -61,7 +61,6 @@ let mockBrews: StoredBrew[] = [];
 // The judgement writes the screen makes, recorded rather than performed.
 const mockJudgementStore = {
     judge: jest.fn(),
-    setPinned: jest.fn(),
     brewsFor: jest.fn(),
     markSent: jest.fn()
 };
@@ -570,7 +569,7 @@ describe("brew record", () => {
         expect(screen.getAllByText("GRIND")).toHaveLength(1);
     });
 
-    it("says the trace has expired rather than drawing an empty chart", async () => {
+    it("explains a missing trace rather than drawing an empty chart", async () => {
         mockOpened = {record: {...record, hasStream: false}, samples: []};
         await renderWithProviders(<BrewRecord recipeLookup={mockLookup} />);
         expect(screen.getByText(/no trace was kept/i)).toBeTruthy();
@@ -1112,7 +1111,6 @@ describe("a verdict on a record", () => {
     beforeEach(() => {
         mockParams = {id: "brew-1"};
         mockJudgementStore.judge.mockReset();
-        mockJudgementStore.setPinned.mockReset();
         mockJudgementStore.markSent.mockReset();
         mockOpened = {record, samples: []};
     });
@@ -1138,19 +1136,14 @@ describe("a verdict on a record", () => {
         expect(screen.queryByTestId("record-pinned")).toBeNull();
     });
 
-    it("reports the pin, and lets it go", async () => {
-        // The pin is set by judging rather than asked for, so the screen's job
-        // is to say what happened and offer the way out.
+    it("does not offer trace pin controls for a legacy pinned record", async () => {
         mockOpened = {record: {...record, rating: 5, pinned: true}, samples: []};
         await renderWithProviders(<BrewRecord recipeLookup={mockLookup} />);
 
-        expect(screen.getByTestId("record-pinned")).toHaveTextContent("TRACE KEPT");
-        expect(screen.getByTestId("record-release")).toHaveTextContent("LET IT EXPIRE");
-        await fireEvent.press(screen.getByTestId("record-release"));
-
-        expect(mockJudgementStore.setPinned).toHaveBeenCalledWith("brew-1", false);
         expect(screen.queryByTestId("record-pinned")).toBeNull();
-        // Releasing is about the trace, not the verdict.
+        expect(screen.queryByTestId("record-release")).toBeNull();
+        expect(screen.queryByText("TRACE KEPT")).toBeNull();
+        expect(screen.queryByText("LET IT EXPIRE")).toBeNull();
         expect(screen.getByLabelText("Clear the rating, currently 5 stars")).toBeTruthy();
     });
 

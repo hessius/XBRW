@@ -34,19 +34,19 @@ describe("CompareWithSheet", () => {
         });
     });
 
-    it("announces rating and expired traces in the candidate label", async () => {
-        const expired = makeBrewRecordFixture({
-            id: "expired",
+    it("announces rating and missing traces in the candidate label", async () => {
+        const missingTrace = makeBrewRecordFixture({
+            id: "missing-trace",
             hasStream: false,
             rating: 4
         });
         const {getByLabelText} = await renderWithProviders(
-            <CompareWithSheet open candidates={[expired]} onPick={jest.fn()}
+            <CompareWithSheet open candidates={[missingTrace]} onPick={jest.fn()}
                               onClose={jest.fn()} />
         );
 
         expect(getByLabelText(
-            /Rated 4 stars\. The trace for this brew has expired\. Its figures are still here\./
+            /Rated 4 stars\. The trace for this brew was not kept\. Its figures are still here\./
         )).toBeTruthy();
     });
 

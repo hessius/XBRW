@@ -2,7 +2,6 @@ import {
     COMPARE_COPY,
     COMPARE_DEGRADED,
     COMPARE_GUARD,
-    COMPARE_PINNED,
     COMPARE_SELECTION_COPY,
     PLAN_FIELD_WORD,
     compareDriftSentence
@@ -36,7 +35,6 @@ describe("compare copy", () => {
             ...Object.values(COMPARE_GUARD).flatMap((g) => [g.title, g.body]),
             ...Object.values(COMPARE_SELECTION_COPY),
             ...Object.values(PLAN_FIELD_WORD),
-            COMPARE_PINNED,
             NOT_RECORDED
         ];
         for (const line of sentences) {

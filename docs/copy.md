@@ -660,6 +660,9 @@ Shared readouts on the brew screen and record (`components/BrewFigures.tsx`,
 | `brew.rateChart.a11y` | `components/BrewRateChart.tsx:93` (a11y) | (a11y) The retained stream's flow rate chart on a finished brew record, shared image and compare screen. On the compare screen this child label sits inside the lane's own grouped label. | `Brew rate chart` |
 | `brew.rateChart.label` | `components/BrewRateChart.tsx:102` | Doto label above the retained stream's rate chart. Names what the second chart measures without pretending the unlabelled y axis is calibrated for reading exact values. | `FLOW RATE` |
 | `brew.compare.traceLane.a11y` | `app/brewCompare.tsx:204,401,439` (a11y) | (a11y) The separate comparison lane's grouped spoken label. When the all-or-nothing rate lanes draw, the label says the grouped lane includes flow rate because the lane is one accessibility element. `${...}` is the brew date and time. | `This brew trace with flow rate, ${formatBrewDate(startedAt)} ${formatBrewTime(startedAt)}` / `That brew trace with flow rate, ${formatBrewDate(startedAt)} ${formatBrewTime(startedAt)}` |
+| `brew.compare.degraded.one` | `constants/brewCopy.ts` (`COMPARE_DEGRADED.one`) | Explanation when only one trace is available to compare. | `One of these brews has no trace, so the chart shows the other alone.` |
+| `brew.compare.degraded.both` | `constants/brewCopy.ts` (`COMPARE_DEGRADED.both`) | Explanation when neither trace is available to compare. | `Neither brew has a trace. The figures below are all that remain.` |
+| `brew.compare.candidate.noTrace` | `components/CompareWithSheet.tsx:33,64` | Visible note and (a11y) addition for a comparison candidate without a trace. | `The trace for this brew was not kept. Its figures are still here.` |
 | `brew.story.sheet.title` | `components/BrewStorySheet.tsx:89` | Sheet title while previewing the fixed 9:16 story card before sharing. | `STORY CARD` |
 | `brew.story.share` | `components/BrewStorySheet.tsx:108` | Button to share the story card PNG. | `Share the card` |
 | `brew.story.toggle.coffee` | `app/brewRecord.tsx:70` | Doto toggle label requesting the coffee line on the story card. | `COFFEE` |
@@ -799,7 +802,6 @@ is outside the screen-covered accessibility subtree.
 | `brewHistory.row.notWatched` | `components/BrewHistoryRow.tsx:143` | Doto flag for a brew the app did not watch. | `NOT WATCHED` |
 | `brewHistory.row.endedEarly` | `components/BrewHistoryRow.tsx:149` | Doto flag, warn colour, on a brew the machine ended short. Deliberately not the danger colour: this is an observation, not a failure. | `ENDED EARLY` |
 | `brewHistory.row.stopped` | `components/BrewHistoryRow.tsx:155` | Doto flag on a cancelled, failed or link-lost brew. | `STOPPED` |
-| `brewHistory.row.kept` | `components/BrewHistoryRow.tsx:168` | Doto flag on a pinned brew whose stream is kept through retention. | `KEPT` |
 | `brewHistory.row.noTrace` | `components/BrewHistoryRow.tsx:174` | Doto flag when no trace was kept. | `NO TRACE KEPT` |
 
 ---
@@ -821,8 +823,6 @@ is outside the screen-covered accessibility subtree.
 | `brewRecord.export.data` | `components/ExportButton.tsx` (`label`, passed from `app/brewRecord.tsx:357`) | Button to export the underlying data as JSON. | `Export the data` |
 | `brewRecord.story.open` | `components/ExportButton.tsx` (`label`, passed from `app/brewRecord.tsx:372`) | Button that opens the story-card preview sheet. | `Share story` |
 | `brewRecord.story.open.a11y` | `components/ExportButton.tsx` (`accessibilityLabel`, passed from `app/brewRecord.tsx:374`) | (a11y) Story-card preview button. | `Share this brew as a story card` |
-| `brewRecord.pin.state` | `app/brewRecord.tsx:475` (`record-pinned`) | Doto state shown after judging pins a brew so its trace survives retention. | `TRACE KEPT` |
-| `brewRecord.pin.release` | `app/brewRecord.tsx:484` (`record-release`) | Doto action beside the pinned state. | `LET IT EXPIRE` |
 | `brewRecord.export.busy` | `components/ExportButton.tsx:34` | Replaces either label while the capture and share sheet are in flight, so a press is visibly acknowledged. | `WORKING…` |
 | `brewRecord.handoff.beanconqueror.label` | `library/brew/handoff/targets.ts` (`HANDOFF_TARGETS[0].buttonLabel`, passed from `app/brewRecord.tsx`) | Button to hand a brew that produced a drink to Beanconqueror. Hidden behind the `beanconquerorHandoff` Labs setting, and on a brew that was cancelled, failed, or lost contact. | `Send to Beanconqueror` |
 | `brewRecord.handoff.bean.title` | `components/BeanNameSheet.tsx` | Sheet heading asked before a brew from beans is handed over, since the machine only knows the coffee for a pod. | `What was the coffee?` |
@@ -954,9 +954,12 @@ machine card's error line).
 | `machine.section.autostart.desc` | `components/MachineSection.tsx:123` | Toggle description. | `Off, BREW loads the recipe onto the machine and waits for you to press START. On, it starts grinding the moment the recipe lands.` |
 | `machine.section.animate.label` | `components/MachineSection.tsx:128` | Toggle label. | `Animate the brew chart` |
 | `machine.section.animate.desc` | `components/MachineSection.tsx:129` | Toggle description. | `When off, each phase change holds its end state immediately. The system Reduced Motion switch also disables animation independently.` |
-| `machine.section.traces.label` | `components/MachineSection.tsx:134` | Toggle/choice label. | `Keep raw brew traces` |
-| `machine.section.traces.desc` | `components/MachineSection.tsx:135` | Description. | `How many past brews keep their full sample stream. Records are always kept; only the detail behind them expires.` |
-| `machine.section.traces.off` | `components/MachineSection.tsx:22` (`TRACE_RETENTION`) | Choice value: keep no traces. | `Don't keep traces` |
+| `machine.section.traces.label` | `components/MachineSection.tsx` | Choice label. | `Brew detail storage` |
+| `machine.section.traces.desc` | `components/MachineSection.tsx` | Description. | `Brew traces are the detailed charts. When they pass this limit, the oldest are dropped first. Rated and noted brews, and the newest brews of each recipe, go last. Summaries are always kept.` |
+| `machine.section.traces.10` | `components/MachineSection.tsx` (`BUDGET_OPTIONS`) | Choice value: default budget. | `10 MB` |
+| `machine.section.traces.25` | `components/MachineSection.tsx` (`BUDGET_OPTIONS`) | Choice value. | `25 MB` |
+| `machine.section.traces.50` | `components/MachineSection.tsx` (`BUDGET_OPTIONS`) | Choice value. | `50 MB` |
+| `machine.section.traces.unlimited` | `components/MachineSection.tsx` (`BUDGET_OPTIONS`) | Choice value: no storage limit. | `Unlimited` |
 | `machine.section.forget.label` | `components/MachineSection.tsx:141` | Action row label. | `Forget this machine` |
 | `machine.section.forget.detail` | `components/MachineSection.tsx:142` | Action row detail. | `XBRW++ will scan again next time.` |
 

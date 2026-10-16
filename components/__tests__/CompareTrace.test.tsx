@@ -192,7 +192,7 @@ describe("CompareTrace", () => {
         expect(getByText("WATER, BOTH")).toBeTruthy();
     });
 
-    it("says only the surviving water line was drawn when this trace expired", async () => {
+    it("says only the surviving water line was drawn when this trace is missing", async () => {
         const {getByLabelText} = await draw({subject: [], reference: B, verdict: "differed"});
         expect(getByLabelText(
             "Brew comparison. This brew is coloured and that brew is grey. "

@@ -18,11 +18,11 @@ import {MACHINE_MODELS, isMachineModel, type MachineModel} from "@/library/machi
 /** How many taps on the firmware row open the console. */
 const CONSOLE_TAPS = 7;
 
-const RETENTION_OPTIONS = [
-    {value: "10",  label: "10"},
-    {value: "50",  label: "50"},
-    {value: "200", label: "200"},
-    {value: "0",   label: "Don't keep traces"}
+const BUDGET_OPTIONS = [
+    {value: "10", label: "10 MB"},
+    {value: "25", label: "25 MB"},
+    {value: "50", label: "50 MB"},
+    {value: "0", label: "Unlimited"}
 ] as const;
 
 /**
@@ -77,7 +77,7 @@ export default function MachineSection({settings}: {settings?: Settings}) {
     const [autoStart, setAutoStart] = useSetting("machineAutoStart", settings);
     const [animateBrewChart, setAnimateBrewChart] = useSetting("animateBrewChart", settings);
     const [askForRatings, setAskForRatings] = useSetting("askForRatings", settings);
-    const [brewTraceRetention, setBrewTraceRetention] = useSetting("brewTraceRetention", settings);
+    const [brewTraceBudgetMB, setBrewTraceBudgetMB] = useSetting("brewTraceBudgetMB", settings);
     const [machineModel, setMachineModel] = useSetting("machineModel", settings);
     const [taps, setTaps] = useState(0);
     const info = machine.info;
@@ -207,11 +207,11 @@ export default function MachineSection({settings}: {settings?: Settings}) {
                 value={askForRatings} onChange={setAskForRatings}/>
 
             <SettingsChoiceRow
-                label="Keep raw brew traces"
-                description="How many past brews keep their full sample stream. Records are always kept; only the detail behind them expires."
-                value={String(brewTraceRetention)}
-                options={RETENTION_OPTIONS}
-                onChange={(v) => setBrewTraceRetention(Number(v))}/>
+                label="Brew detail storage"
+                description="Brew traces are the detailed charts. When they pass this limit, the oldest are dropped first. Rated and noted brews, and the newest brews of each recipe, go last. Summaries are always kept."
+                value={String(brewTraceBudgetMB)}
+                options={BUDGET_OPTIONS}
+                onChange={(v) => setBrewTraceBudgetMB(Number(v))}/>
 
             {remembered !== "" && (
                 <SettingsActionRow label="Forget this machine" tone="danger"
