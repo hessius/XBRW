@@ -2,6 +2,7 @@ import {useEffect, useRef, useState} from "react";
 
 import {OVER} from "@/constants/brewCopy";
 import {useBrew} from "@/hooks/useBrew";
+import {sharedSettings} from "@/hooks/useSetting";
 import {useOverflowProtection} from "@/hooks/useOverflowProtection";
 import {bypassRungState, type BypassView} from "@/library/brew/bypassState";
 import BrewDatabase from "@/library/BrewDatabase";
@@ -21,6 +22,7 @@ import type Recipe from "@/library/Recipe";
 /** The part of `BrewDatabase` a run writes to. Injected, so tests need no SQLite. */
 export type BrewStore = {
     insert: (record: BrewRecord, samples: BrewSample[], frames?: string) => void;
+    sweepWhenReady: (budgetMB: number) => Promise<void>;
     /**
      * Optional so a test store stays a two-line literal. A store without it is
      * a run whose dial reading has nowhere to go, which is the same outcome as
@@ -160,6 +162,14 @@ export function useBrewRun(
             onRecord: (record, taken, frames) => {
                 setRecorded({runId: id, record});
                 database.current?.insert(record, taken, frames);
+                try {
+                    void database.current?.sweepWhenReady(sharedSettings().get("brewTraceBudgetMB"))
+                        .catch((error) => {
+                            console.warn("Could not sweep brew traces after a brew", error);
+                        });
+                } catch (error) {
+                    console.warn("Could not sweep brew traces after a brew", error);
+                }
                 // After the insert, and not awaited. The reading is a BLE
                 // round trip that beeps, and the brew is over: holding the
                 // record back for it would delay the one thing that must not

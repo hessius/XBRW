@@ -274,9 +274,7 @@ export default function BrewCompareScreen() {
         showRateLanes,
         traceCount,
         survivingTrace,
-        hasChart,
-        canKeepTrace,
-        keepSurvivingTrace
+        hasChart
     } = comparisonState;
     const copy = COMPARE_COPY[comparison.pour.verdict];
 
@@ -361,18 +359,6 @@ export default function BrewCompareScreen() {
                             <Text color={palette.warn} fontSize={13}>
                                 {COMPARE_DEGRADED.one}
                             </Text>
-                            {canKeepTrace && (
-                                <Button accessibilityRole="button"
-                                        accessibilityLabel="Keep this trace"
-                                        alignSelf="flex-start"
-                                        chromeless
-                                        onPress={keepSurvivingTrace}>
-                                    <DotMatrixText fontSize={11} weight="bold"
-                                                   letterSpacing={1.2} color={palette.warn}>
-                                        KEEP TRACE
-                                    </DotMatrixText>
-                                </Button>
-                            )}
                         </YStack>
                     )}
                     {traceCount === 0 && (

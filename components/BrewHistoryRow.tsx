@@ -63,8 +63,7 @@ export default function BrewHistoryRow({brew, onPress, selectionMode = false, se
         // Only when there is one. "Not rated" on every unjudged row would be
         // the loudest thing in a history nobody has rated yet, and it is the
         // one part of the row that carries no information.
-        (brew.rating ?? 0) > 0 ? spokenRating(brew.rating ?? 0) : undefined,
-        brew.pinned ? "kept through the sweep" : undefined
+        (brew.rating ?? 0) > 0 ? spokenRating(brew.rating ?? 0) : undefined
     ].filter((part) => part !== undefined).join(", ");
 
     return (
@@ -153,19 +152,6 @@ export default function BrewHistoryRow({brew, onPress, selectionMode = false, se
                             <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.4}
                                            color={palette.danger}>
                                 STOPPED
-                            </DotMatrixText>
-                        )}
-                        {brew.pinned && (
-                            // A word rather than a second glyph: the only pin
-                            // icon this app owns is the star, which is already
-                            // three points to the left meaning the rating. It
-                            // joins the chip family that NO TRACE KEPT belongs
-                            // to, and answers the question that chip raises --
-                            // why this old brew still has one.
-                            <DotMatrixText testID="history-row-pin" fontSize={11}
-                                           weight="bold" letterSpacing={1.4}
-                                           color={palette.muted}>
-                                KEPT
                             </DotMatrixText>
                         )}
                         {!brew.hasStream && (

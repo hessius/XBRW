@@ -1,7 +1,7 @@
 import {useLocalSearchParams} from "expo-router";
 import router from "@/hooks/steadyRouter";
 import React, {useState} from "react";
-import {PixelRatio, Pressable, ScrollView, useWindowDimensions} from "react-native";
+import {PixelRatio, ScrollView, useWindowDimensions} from "react-native";
 import {Text, XStack, YStack} from "tamagui";
 
 import BrewJudgement from "@/components/BrewJudgement";
@@ -225,16 +225,13 @@ export default function BrewRecord({recipeLookup}: Props) {
     // injected store need not grow a judgement fake to draw a trace.
     const judgementStore: JudgementStore = {
         judge: (id, verdict) =>
-            (sharedBrewDatabase() as Partial<JudgementStore>).judge?.(id, verdict),
-        setPinned: (id, pinned) =>
-            (sharedBrewDatabase() as Partial<JudgementStore>).setPinned?.(id, pinned)
+            (sharedBrewDatabase() as Partial<JudgementStore>).judge?.(id, verdict)
     };
     const judgement = useBrewJudgement(
         () => opened?.record.id ?? null,
         {
             rating: opened?.record.rating ?? 0,
-            note:   opened?.record.note ?? "",
-            pinned: opened?.record.pinned ?? false
+            note:   opened?.record.note ?? ""
         },
         judgementStore
     );
@@ -577,28 +574,6 @@ export default function BrewRecord({recipeLookup}: Props) {
                                onRate={handoff.rateBrew}
                                onNote={handoff.annotateBrew}
                                onNoteDraft={handoff.setNoteDraft}/>
-                {judgement.pinned && (
-                    // The pin as a state rather than a question. It is set by
-                    // judging, so the user is told what happened and offered
-                    // the way out, instead of being asked twice whether a brew
-                    // they just rated is worth keeping.
-                    <XStack alignItems="center" justifyContent="space-between">
-                        <DotMatrixText testID="record-pinned" fontSize={11}
-                                       letterSpacing={1.4} color={palette.dim}>
-                            TRACE KEPT
-                        </DotMatrixText>
-                        <Pressable testID="record-release"
-                                   accessibilityRole="button"
-                                   accessibilityLabel="Let this brew expire with the rest"
-                                   hitSlop={8}
-                                   onPress={() => judgement.setPinned(false)}>
-                            <DotMatrixText fontSize={11} letterSpacing={1.4}
-                                           color={palette.muted}>
-                                LET IT EXPIRE
-                            </DotMatrixText>
-                        </Pressable>
-                    </XStack>
-                )}
             </YStack>
 
             {/* No stream to export or share as a story for a brew the app never

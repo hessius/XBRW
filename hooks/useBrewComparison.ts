@@ -1,8 +1,6 @@
 import {useState} from "react";
 
-import {COMPARE_PINNED} from "@/constants/brewCopy";
-import {notify} from "@/components/XbrwToast";
-import {sharedBrewDatabase, useBrewHistory, type JudgementStore} from "@/hooks/useBrewHistory";
+import {useBrewHistory} from "@/hooks/useBrewHistory";
 import {
     compareAxis,
     compareBrews,
@@ -34,8 +32,6 @@ type ReadyComparison = {
     traceCount: number;
     survivingTrace: BrewUnderComparison | null;
     hasChart: boolean;
-    canKeepTrace: boolean;
-    keepSurvivingTrace: () => void;
 };
 
 type BlockedComparison =
@@ -76,7 +72,6 @@ export function useBrewComparison({
     const {open} = useBrewHistory();
     const [mode, setMode] = useState<CompareMode>("overlay");
     const [swapped, setSwapped] = useState(false);
-    const [keptTraceIds, setKeptTraceIds] = useState<ReadonlySet<string>>(() => new Set());
     const [opened] = useState<{a: Opened; b: Opened; sameId: boolean}>(() => ({
         a: a === undefined ? null : open(a),
         b: b === undefined ? null : open(b),
@@ -115,18 +110,6 @@ export function useBrewComparison({
     const survivingTrace = traceCount === 1
         ? subjectHasTrace ? subject : reference
         : null;
-    const survivingId = survivingTrace?.record.id;
-    const canKeepTrace = survivingTrace !== null
-        && !survivingTrace.record.pinned
-        && !keptTraceIds.has(survivingTrace.record.id);
-
-    function keepSurvivingTrace(): void {
-        if (survivingId === undefined) return;
-        (sharedBrewDatabase() as Partial<JudgementStore>).setPinned?.(survivingId, true);
-        setKeptTraceIds((was) => new Set(was).add(survivingId));
-        notify({tone: "success", message: COMPARE_PINNED});
-    }
-
     return {
         state: "ready",
         mode,
@@ -143,8 +126,6 @@ export function useBrewComparison({
         showRateLanes,
         traceCount,
         survivingTrace,
-        hasChart: traceCount > 0,
-        canKeepTrace,
-        keepSurvivingTrace
+        hasChart: traceCount > 0
     };
 }

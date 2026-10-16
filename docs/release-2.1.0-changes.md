@@ -3,6 +3,14 @@
 This is the source for the full release-testing checklist, not a claim that
 device testing is complete. Update it whenever release scope or behaviour changes.
 
+## Brew history trace storage (2026-10-15)
+
+Brew traces are compressed and managed under a configurable storage budget. When
+the budget is exceeded, older traces without a rating or note are removed first.
+The two newest traces for each recipe and rated or noted traces go last. Brew
+records and summaries remain available when their detailed trace is removed.
+Unlimited disables budget-based trace removal.
+
 ## Development workflow migration (2026-10-11)
 
 The former `integration/2.1.0` candidate now lives in `develop`. Beta fixes

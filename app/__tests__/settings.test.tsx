@@ -364,6 +364,8 @@ describe("SettingsScreen", () => {
         // silently absent from every backup while the tests stayed green. A
         // test that names the keys itself would have gone on passing too.
         const snapshot = mockExportBackup.mock.calls[0][1] as Record<string, unknown>;
+        expect(snapshot.brewTraceBudgetMB).toBe(10);
+        expect(snapshot).not.toHaveProperty("brewTraceRetention");
         expect(Object.keys(snapshot).sort()).toEqual(
             Object.keys(DEFAULTS).filter(key => !NOT_IN_BACKUP.includes(key as SettingKey)).sort()
         );
@@ -424,6 +426,47 @@ describe("SettingsScreen", () => {
         await fireEvent.press(screen.getByRole("button", {name: /add to my library/i}));
 
         expect(new Settings(storage).get("machineDeviceId")).toBe("mine");
+    });
+
+    it("shows the brew detail storage budget and stores a choice of 25 MB", async () => {
+        const settings = new Settings(memoryStorage());
+        await renderWithProviders(<SettingsScreen settings={settings}/>);
+        expect(screen.getByText("Brew detail storage")).toBeTruthy();
+        expect(screen.getByText("Brew traces are the detailed charts. When they pass this limit, the oldest are dropped first. Rated and noted brews, and the newest brews of each recipe, go last. Summaries are always kept.")).toBeTruthy();
+        expect(screen.getByRole("radio", {name: "10 MB", checked: true})).toBeTruthy();
+        expect(screen.getByRole("radio", {name: "50 MB"})).toBeTruthy();
+        expect(screen.getByRole("radio", {name: "Unlimited"})).toBeTruthy();
+        await fireEvent.press(screen.getByRole("radio", {name: "25 MB"}));
+        expect(settings.get("brewTraceBudgetMB")).toBe(25);
+    });
+
+    it.each([
+        [{brewTraceRetention: 200}, 25],
+        [{brewTraceBudgetMB: 50}, 50],
+        [{brewTraceBudgetMB: 10}, 10],
+        [{brewTraceBudgetMB: 25}, 25],
+        [{brewTraceBudgetMB: 0}, 0],
+        [{brewTraceBudgetMB: 200}, 25],
+        [{brewTraceBudgetMB: -1}, 25],
+        [{brewTraceBudgetMB: 10.5}, 25],
+        [{brewTraceBudgetMB: "50"}, 25],
+        [{brewTraceBudgetMB: null}, 25]
+    ])("restores only supported brew storage budgets from %j", async (incoming, expected) => {
+        const storage = memoryStorage();
+        const settings = new Settings(storage);
+        settings.set("brewTraceBudgetMB", 25);
+        mockPickBackup.mockResolvedValue(backupOf([recipeNamed("A", "u1")], incoming));
+        mockApplyRestore.mockReturnValue({status: "restored", added: 1});
+        await renderWithProviders(<SettingsScreen settings={settings}/>);
+        await fireEvent.press(screen.getByRole("button",
+            {name: "Restore from a backup, Adds anything your library does not already have."}));
+        await waitFor(async () => {
+            await fireEvent(screen.getByLabelText(/settings from this backup/i), "checkedChange", true);
+            await fireEvent.press(screen.getByRole("button", {name: /add to my library/i}));
+            expect(mockApplyRestore).toHaveBeenCalled();
+        }, {timeout: SHEET_PRESS_TIMEOUT});
+        expect(new Settings(storage).get("brewTraceBudgetMB")).toBe(expected);
+        expect(mockNotify).not.toHaveBeenCalledWith(expect.objectContaining({tone: "error"}));
     });
 
     it("restores every setting a backup carries, not a subset of them", async () => {
@@ -975,11 +1018,11 @@ describe("SettingsScreen", () => {
         expect(mockPush).toHaveBeenCalledWith("/importCloud");
     });
 
-    it("offers a retention choice, including keeping none", async () => {
+    it("offers a storage budget choice, including Unlimited", async () => {
         const {getByText} = await renderWithProviders(
             <SettingsScreen settings={new Settings(memoryStorage())}/>
         );
-        expect(getByText("Don't keep traces")).toBeTruthy();
+        expect(getByText("Unlimited")).toBeTruthy();
     });
 
     describe("Labs", () => {

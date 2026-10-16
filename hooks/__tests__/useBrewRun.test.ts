@@ -9,6 +9,12 @@ import Pour from "@/library/Pour";
 import {applyQuickEdit, quickEditRecordAdjustments} from "@/library/quickEdit";
 import Recipe from "@/library/Recipe";
 
+const mockReadSetting = jest.fn(() => 10);
+jest.mock("@/hooks/useSetting", () => ({
+    ...jest.requireActual("@/hooks/useSetting"),
+    sharedSettings: () => ({get: mockReadSetting})
+}));
+
 const appStateDescriptor = Object.getOwnPropertyDescriptor(AppState, "currentState")!;
 
 jest.mock("@/hooks/useBrew", () => ({
@@ -91,6 +97,7 @@ function harness() {
         vitals,
         dials,
         store: {
+            sweepWhenReady: jest.fn(async (_budgetMB: number) => {}),
             insert: (record: BrewRecord, samples: BrewSample[]) =>
                 written.push({record, samples}),
             recordDialAfter: (id: string, dial: number) => dials.push([id, dial])
@@ -100,6 +107,7 @@ function harness() {
 
 describe("useBrewRun", () => {
     beforeEach(() => {
+        mockReadSetting.mockReset().mockReturnValue(10);
         jest.useFakeTimers();
         Object.defineProperty(AppState, "currentState", {configurable: true, value: "active"});
     });
@@ -451,6 +459,41 @@ describe("useBrewRun", () => {
 
         expect(result.current.holding).toBe(false);
         expect(result.current.heldSeconds).toBe(0);
+    });
+
+    it.each([0, 10, 25, 50])("sweeps after saving a finished brew using the current %i MB budget", async (budgetMB) => {
+        const h = harness();
+        const savedCounts: number[] = [];
+        h.store.sweepWhenReady.mockImplementation(async () => {
+            savedCounts.push(h.written.length);
+        });
+        await renderHook(() => useBrewRun(recipe(), h.store));
+        await h.setPhase({name: "pouring", pour: 1, pours: 2});
+        mockReadSetting.mockReturnValue(budgetMB);
+        await h.water(40);
+        expect(h.store.sweepWhenReady).not.toHaveBeenCalled();
+        await h.setPhase({name: "done"});
+        await h.setPhase({name: "done"});
+        expect(mockReadSetting).toHaveBeenCalledWith("brewTraceBudgetMB");
+        expect(h.store.sweepWhenReady).toHaveBeenCalledTimes(1);
+        expect(h.store.sweepWhenReady).toHaveBeenCalledWith(budgetMB);
+        expect(savedCounts).toEqual([1]);
+    });
+
+    it("keeps the record and dial reading when the post-brew sweep fails", async () => {
+        const h = harness();
+        const error = new Error("sweep unavailable");
+        h.store.sweepWhenReady.mockImplementation(async () => { throw error; });
+        const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+        const {result} = await renderHook(() => useBrewRun(recipe(), h.store));
+        await h.setPhase({name: "pouring", pour: 1, pours: 2});
+        await h.water(40);
+        await h.setPhase({name: "done"});
+        expect(h.written).toHaveLength(1);
+        expect(result.current.record?.id).toBe(h.written[0].record.id);
+        expect(result.current.phase.name).toBe("done");
+        expect(h.dials).toEqual([[h.written[0].record.id, 52]]);
+        expect(warn).toHaveBeenCalledWith(expect.any(String), error);
     });
 
     it("writes the brew to history when it ends", async () => {

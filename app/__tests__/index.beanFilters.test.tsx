@@ -9,7 +9,7 @@ import type {ProfileField} from "@/library/beanProfile";
 import type {LibraryQuery} from "@/library/libraryQuery";
 import type {SettingsStorage} from "@/library/Settings";
 import {Settings} from "@/library/Settings";
-import {renderWithProviders} from "@/test-utils/render";
+import {renderWithProviders, SHEET_PRESS_TIMEOUT} from "@/test-utils/render";
 
 const mockPush = jest.fn();
 
@@ -184,7 +184,7 @@ async function pressOnSheet(label: string, landed: () => boolean): Promise<void>
     await waitFor(async () => {
         await fireEvent.press(screen.getByLabelText(label));
         expect(landed()).toBe(true);
-    });
+    }, {timeout: SHEET_PRESS_TIMEOUT});
 }
 
 async function openBeanSheet(database = store([

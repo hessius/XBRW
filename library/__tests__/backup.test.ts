@@ -42,6 +42,14 @@ describe("buildBackup", () => {
 });
 
 describe("the round trip", () => {
+    it.each([0, 10, 25, 50])("preserves the brew trace storage budget of %i MB", (budgetMB) => {
+        const result = parseBackup(buildBackup([recipeNamed("A", "u1")], {brewTraceBudgetMB: budgetMB}));
+        expect(result.ok).toBe(true);
+        if (!result.ok) throw new Error(result.reason);
+        expect(result.payload.settings.brewTraceBudgetMB).toBe(budgetMB);
+        expect(result.payload.settings).not.toHaveProperty("brewTraceRetention");
+    });
+
     it("gives back the recipes that went in", () => {
         const recipes = [recipeNamed("Morning", "u1"), recipeNamed("Evening", "u2")];
         const result = parseBackup(buildBackup(recipes, {}));
@@ -1051,6 +1059,17 @@ describe("brew history through a backup", () => {
         expect(result.payload.recipes).toHaveLength(1);
         expect(result.payload.skipped).toBe(0);
         expect(result.payload.skippedBrews).toBe(1);
+    });
+
+    it.each([undefined, false, true])("round trips an optional legacy pin (%p)", (pinned) => {
+        const record = brewNamed("legacy-pin", pinned === undefined ? {} : {pinned});
+        const result = parseBackup(buildBackup([recipeNamed("A", "u1")], {}, "2.6.0", [record]));
+
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.payload.skippedBrews).toBe(0);
+        expect(result.payload.brews).toHaveLength(1);
+        expect(result.payload.brews[0]).toMatchObject({id: "legacy-pin", pinned: pinned ?? false});
     });
 
     it("fills in the judgement a record never got", () => {

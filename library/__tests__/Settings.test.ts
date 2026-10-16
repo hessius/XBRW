@@ -96,15 +96,21 @@ describe("Settings", () => {
         expect(new Settings(fakeStorage()).get("animateBrewChart")).toBe(true);
     });
 
-    it("keeps the last fifty streams by default", () => {
-        expect(new Settings(fakeStorage()).get("brewTraceRetention")).toBe(50);
+    it("budgets ten megabytes for brew details by default", () => {
+        expect(new Settings(fakeStorage()).get("brewTraceBudgetMB")).toBe(10);
     });
 
-    it("round-trips a retention of zero rather than falling back to the default", () => {
-        // "Don't keep traces" is a real choice, and `stored || default` would
+    it("ignores the old retention count in stored settings", () => {
+        expect(new Settings(fakeStorage({brewTraceRetention: "200"}))
+            .get("brewTraceBudgetMB")).toBe(10);
+        expect(Object.keys(DEFAULTS)).not.toContain("brewTraceRetention");
+    });
+
+    it("round-trips zero for Unlimited rather than falling back to the default", () => {
+        // Unlimited is a real choice, and `stored || default` would
         // silently ignore it. The same trap as `false` for a boolean.
         const storage = fakeStorage();
-        new Settings(storage).set("brewTraceRetention", 0);
-        expect(new Settings(storage).get("brewTraceRetention")).toBe(0);
+        new Settings(storage).set("brewTraceBudgetMB", 0);
+        expect(new Settings(storage).get("brewTraceBudgetMB")).toBe(0);
     });
 });
