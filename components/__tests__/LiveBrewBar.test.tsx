@@ -1,13 +1,15 @@
-import {fireEvent, screen} from "@testing-library/react-native";
+import {fireEvent, screen, waitFor} from "@testing-library/react-native";
 import React from "react";
 
 import LiveBrewBar from "@/components/LiveBrewBar";
 import {accents} from "@/constants/colors";
-import {OVERFLOW_PAUSED_HEADLINE} from "@/constants/brewCopy";
+import {
+    COFFEE_JUDGEMENT_PLACEHOLDER, OVERFLOW_PAUSED_HEADLINE, TEA_JUDGEMENT_PLACEHOLDER
+} from "@/constants/brewCopy";
 import {plannedSeconds, traceAxisFor} from "@/library/brew/brewShape";
 import Pour from "@/library/Pour";
 import Recipe from "@/library/Recipe";
-import {renderWithProviders} from "@/test-utils/render";
+import {renderWithProviders, SHEET_PRESS_TIMEOUT} from "@/test-utils/render";
 
 let mockPathname = "/";
 const mockPush = jest.fn();
@@ -173,6 +175,33 @@ describe("LiveBrewBar", () => {
         await fireEvent.press(screen.getByLabelText("Rate 4 stars"));
         expect(await screen.findByTestId("brew-note-done")).toBeTruthy();
     });
+
+    it.each([undefined, "coffee", "tea"] as const)(
+        "keeps the saved %s identity in the global note sheet and saves edits",
+        async (beverageKind) => {
+            mockRun = null;
+            mockPrompt.brew = {...BREW, beverageKind};
+            mockPrompt.annotate.mockReturnValue(true);
+            const view = await renderWithProviders(<LiveBrewBar />);
+
+            await fireEvent.press(screen.getByLabelText("Rate 4 stars"));
+            expect(mockPrompt.rate).toHaveBeenCalledWith(BREW.id, 4);
+            mockPrompt.brew = null;
+            await view.rerender(<LiveBrewBar />);
+
+            const placeholder = beverageKind === "tea"
+                ? TEA_JUDGEMENT_PLACEHOLDER : COFFEE_JUDGEMENT_PLACEHOLDER;
+            const field = await screen.findByPlaceholderText(placeholder);
+            if (beverageKind === "tea") {
+                expect(screen.queryByPlaceholderText(COFFEE_JUDGEMENT_PLACEHOLDER)).toBeNull();
+            }
+            await fireEvent.changeText(field, "Floral, steep less.");
+            await waitFor(async () => {
+                await fireEvent.press(screen.getByTestId("brew-note-done"));
+                expect(mockPrompt.annotate).toHaveBeenCalledWith(BREW.id, "Floral, steep less.");
+            }, {timeout: SHEET_PRESS_TIMEOUT});
+        }
+    );
 
     it("does not open the note sheet when a rating write is refused", async () => {
         mockRun = null;

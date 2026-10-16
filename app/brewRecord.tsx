@@ -637,6 +637,7 @@ export default function BrewRecord({recipeLookup}: Props) {
                 onDone={handoff.continueSend}
                 figures={figures}
                 recipeName={record.recipeName}
+                beverageKind={record.beverageKind}
                 rating={judgement.rating}
                 note={judgement.note}
                 onRate={handoff.rateBrew}

@@ -181,6 +181,7 @@ export default function LiveBrewBar() {
                     onDone={closeNoteSheet}
                     figures={brewFigures(noting)}
                     recipeName={noting.recipeName}
+                    beverageKind={noting.beverageKind}
                     rating={noting.rating ?? 0}
                     note={noting.note ?? ""}
                     onRate={(rating) => {
