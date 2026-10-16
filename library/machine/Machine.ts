@@ -556,6 +556,7 @@ export default class Machine {
      */
     private pauseSent = false;
     private ackTimer: ReturnType<typeof setTimeout> | null = null;
+    private startupGrinderPosition: number | undefined;
     /**
      * Whether a pause we sent is still waiting to be acknowledged.
      *
@@ -1120,6 +1121,7 @@ export default class Machine {
     }
 
     private setPhase(phase: BrewPhase): void {
+        if (phase.name === "sending") this.startupGrinderPosition = undefined;
         // The acknowledgement timer only asks one question — did the recipe
         // reach the machine? — and any phase other than `sending` has already
         // answered it. A stale timer left running would fire a "rejected"
@@ -1713,6 +1715,15 @@ export default class Machine {
         }
 
         switch (code) {
+            case EVENT.GRINDER_POSITION:
+                // Positioning can outlast the start timeout. Changing gear
+                // readings prove progress, not that grinding has begun.
+                if (this.committed && this.phase.name === "sending"
+                    && value !== undefined && value !== this.startupGrinderPosition) {
+                    this.startupGrinderPosition = value;
+                    this.armAckTimer();
+                }
+                break;
             case EVENT.GRINDER_STOP:
                 this.setPhase({name: "pouring", pour: 1, pours: this.pourCount});
                 break;
