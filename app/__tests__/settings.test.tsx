@@ -217,8 +217,8 @@ describe("SettingsScreen", () => {
         expect(settings.get("animateBrewChart")).toBe(false);
         await fireEvent.press(screen.getByRole("switch", {name: "Ask how a brew was"}));
         expect(settings.get("askForRatings")).toBe(false);
-        await fireEvent.press(screen.getByLabelText("200"));
-        expect(settings.get("brewTraceRetention")).toBe(200);
+        await fireEvent.press(screen.getByRole("radio", {name: "50 MB"}));
+        expect(settings.get("brewTraceBudgetMB")).toBe(50);
     });
 
     it("shows the coffee marker toggle in its stored state", async () => {
