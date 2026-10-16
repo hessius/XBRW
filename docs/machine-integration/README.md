@@ -72,16 +72,14 @@ Found by cross-checking the files against each other. Listed here because a
 number that appears in three places with three values is the most likely way
 this research gets someone into trouble.
 
-**Grind size — resolved, and it was two scales rather than a bug.** The
-**grinder** takes **1–80**; the standalone grind command is documented as
+**Grind size differs by transport.** BLE recipes carry grind directly and use
+**1–80**, also used by the standalone grind command
 `build_grinder_start(grind size 1–80, RPM 60–120)` (`ble-protocol.md`, `spec`).
-A **recipe card** stores grind as `value - 40`, so it carries **40–80**, which is
-what `library/cardLimits.ts` enforces.
-
-Both are right; they describe different things. The bands a card cannot reach
-(espresso, Aeropress) are the ones you would grind for and brew elsewhere, which
-is what standalone grind mode is for. Our range covers the machine's whole
-brewing band.
+A **recipe card** stores grind as `value - 40`, so it carries **40–80**.
+`library/cardLimits.ts` keeps those bounds separate as `BLE_GRIND_SIZE` and
+`GRIND_SIZE`. Editing, quick edits and Easy Mode use the BLE range; writing a
+card still refuses a grind below 40. The card's minimum does not establish the
+minimum for BLE brewing, and importing a finer grind must not silently coarsen it.
 
 The offset was **confirmed on hardware** — grind sizes written by XBRW++ appear
 as intended on the machine (issue #68, closed). `verified` — one of only two

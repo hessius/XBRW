@@ -29,6 +29,24 @@ describe("a recipe the machine would accept", () => {
     });
 });
 
+describe("Bluetooth grind range is independent of card encoding", () => {
+    it.each([1, 30, 39, 40, 80])("accepts grind %s for BLE", (grind) => {
+        const recipe = validRecipe();
+        recipe.grindSize = grind;
+        expect(brewProblems(recipe)).toEqual([]);
+        expect(outOfRangeProblems(recipe)).toEqual([]);
+        expect(canWriteToCard(recipe)).toBe(grind >= 40);
+    });
+
+    it.each([0, -1, 81, 100, NaN, Infinity, 1.5, 39.5])(
+        "rejects invalid BLE grind %s", (grind) => {
+            const recipe = validRecipe();
+            recipe.grindSize = grind;
+            expect(brewProblems(recipe).join(" ")).toContain("The range is 1-80.");
+        }
+    );
+});
+
 describe("Bluetooth stages are not NFC card capacity", () => {
     function stages(count: number, volume = 5, dose = count, ratio = 5): Recipe {
         const recipe = validRecipe();
@@ -349,7 +367,7 @@ describe("a recipe with a half ratio", () => {
 
     it("is still stopped from brewing by a problem the machine shares", () => {
         const recipe = halfRatio();
-        recipe.grindSize = 5;
+        recipe.grindSize = 0;
 
         expect(brewProblems(recipe).length).toBeGreaterThan(0);
     });

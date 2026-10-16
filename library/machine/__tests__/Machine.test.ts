@@ -2,7 +2,7 @@ import Machine, {isActiveBrewPhase, type BrewPhase} from "@/library/machine/Mach
 import Pour, {AGITATION, POUR_PATTERN} from "@/library/Pour";
 import Recipe, {CUP_TYPE} from "@/library/Recipe";
 import {FRAME_GAP_MS, INFO_ATTEMPTS, RECIPE_ACK_MS, STATE_FRESH_MS} from "@/constants/machine";
-import {buildType1, PAUSE_COMMAND, RESUME_COMMAND} from "@/library/machine/protocol";
+import {buildType1, encodeCoffeeBlob, PAUSE_COMMAND, RESUME_COMMAND} from "@/library/machine/protocol";
 import {RadioUnavailableError} from "@/library/machine/errors";
 
 import {FakeTransport, machineInfoFrame} from "./FakeTransport";
@@ -542,9 +542,7 @@ describe("brewing", () => {
         expect(phases).toContain("failed");
     });
 
-    it("refuses a recipe the card limits would reject", async () => {
-        // The same gate as WRITE. A recipe the machine cannot execute should
-        // not be attempted just because it arrived by a different route.
+    it("refuses a recipe outside the shared ratio range", async () => {
         const {transport, machine} = await readyMachine();
         const broken = brewable();
         broken.ratio = 900;
@@ -558,6 +556,26 @@ describe("brewing", () => {
         await machine.brew(brewable());
 
         expect(brewFrames(transport)).toEqual([8100, 8102, 8104, 8001, 8002]);
+    });
+
+    it.each([1, 30, 39, 40, 80])("uploads BLE grind %s without a card offset", async (grind) => {
+        const {transport, machine} = await readyMachine();
+        const recipe = brewable();
+        recipe.grindSize = grind;
+        await machine.brew(recipe);
+
+        expect(brewFrames(transport)).toEqual([8100, 8102, 8104, 8001, 8002]);
+        expect(Array.from(encodeCoffeeBlob(recipe).slice(-2))).toEqual([grind, 160]);
+        await machine.disconnect();
+    });
+
+    it.each([0, 81, NaN, Infinity, 1.5])("does not upload invalid BLE grind %s", async (grind) => {
+        const {transport, machine} = await readyMachine();
+        const recipe = brewable();
+        recipe.grindSize = grind;
+        await expect(machine.brew(recipe)).rejects.toThrow();
+        expect(brewFrames(transport)).toEqual([]);
+        await machine.disconnect();
     });
 
     it("uses the no-grind opcode for a recipe that does not grind", async () => {
@@ -1498,7 +1516,7 @@ describe("asking how the machine is doing now", () => {
         await machine.connect("AA:BB");
         transport.emit(status(0x01));
         const recipe = brewable();
-        recipe.grindSize = 5;
+        recipe.grindSize = 0;
 
         expect(machine.brewBlock(recipe)).toMatchObject({kind: "recipe"});
     });

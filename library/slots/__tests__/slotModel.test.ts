@@ -82,6 +82,15 @@ it("retains the existing encoder's upward ratio rounding", () => {
     expect(snapshotRecipe(recipe).blob.at(-1)).toBe(134);
 });
 
+it.each([1, 30, 39, 80])("preserves BLE grind %i in Easy Mode slots", grind => {
+    const recipe = coffee();
+    recipe.grindSize = grind;
+    const snapshot = snapshotRecipe(recipe);
+    expect(snapshot.blob.slice(-2)).toEqual([grind, 150]);
+    expect(prepareSet([snapshot, snapshot, snapshot])[0].slice(-4, -2))
+        .toEqual([grind, 150]);
+});
+
 it("rejects a ratio outside the shared brew bounds", () => {
     const recipe = coffee();
     recipe.ratio = 99;

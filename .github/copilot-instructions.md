@@ -145,7 +145,7 @@ Byte layout (see `Recipe.parseData` / `Recipe.getData`, and `Data Format.png`):
 - 40: pour count `<< 3`
 - 41 + 8·n: per-pour records — volume, temperature, pattern, agitation, pause (stored as `256 − seconds`), a combined byte (bits 0–4 = dose, bits 5–7 = pause minutes — **dose and RPM only live in pour 1**), RPM, flow rate
 - then: grind size (stored with `GRIND_SIZE_OFFSET` = 40; byte `GRINDER_OFF` = 41 disables the grinder, which is the user-facing value **81**), ratio, CRC-8 checksum
-  - The offset is **hardware-verified** (#68): grind sizes written by the app appear as intended on the machine. **Do not widen `GRIND_SIZE` in `cardLimits.ts` below 40** — the encoder would emit a negative byte. The official app's 1–80 scale belongs to the grinder itself (including standalone grinding); a card carries 40–80, which is the machine's whole brewing band.
+  - The offset is **hardware-verified** (#68): grind sizes written by the app appear as intended on the machine. **Do not widen `GRIND_SIZE` in `cardLimits.ts` below 40** — the encoder would emit a negative byte. BLE recipes carry grind directly and use the separate `BLE_GRIND_SIZE` range of **1–80**. Editor controls, quick edits and Easy Mode use the BLE range; card writes retain **40–80**. Do not infer BLE brewing limits from the card's offset or silently coarsen an imported recipe.
 
 Other domain invariants:
 

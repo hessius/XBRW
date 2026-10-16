@@ -1517,16 +1517,27 @@ describe("grind-too-fine banner", () => {
         expect(screen.queryByTestId("grind-too-fine")).toBeNull();
     });
 
-    it("does not let the stepper raise a below-minimum grind through Decrease", async () => {
-        // With a fixed floor of 40, `stepped()` clamped 11 *up* to 40, so the
-        // control announced as Decrease raised the value -- and the stepper
-        // advertised a minimum of 40 while reporting 12.
+    it("allows decreasing a BLE grind below the card minimum", async () => {
         await renderEditor({grindSize: 12});
 
         await fireEvent.press(screen.getByLabelText("Decrease Grind size"));
 
-        expect(screen.getByLabelText(/^Grind size, 12/)).toBeTruthy();
+        expect(screen.getByLabelText(/^Grind size, 11/)).toBeTruthy();
         expect(screen.getByTestId("grind-too-fine")).toBeTruthy();
+    });
+
+    it("lets a card-range recipe cross into the BLE-only grind range", async () => {
+        await renderEditor({grindSize: 40});
+        await fireEvent.press(screen.getByLabelText("Decrease Grind size"));
+        expect(screen.getByLabelText(/^Grind size, 39/)).toBeTruthy();
+        expect(screen.getByTestId("grind-too-fine")).toBeTruthy();
+        expect(screen.queryByTestId("range-problems")).toBeNull();
+    });
+
+    it("stops the grind stepper at the BLE minimum", async () => {
+        await renderEditor({grindSize: 1});
+        await fireEvent.press(screen.getByLabelText("Decrease Grind size"));
+        expect(screen.getByLabelText(/^Grind size, 1 /)).toBeTruthy();
     });
 
     it("speaks the band with the value, because the label is only visual", async () => {

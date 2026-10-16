@@ -33,6 +33,8 @@ export const RATIO: Range = {min: 5, max: 100};
 export const DOSE: Range = {min: 1, max: 31};
 /** Exported for the test that keeps `library/grindBands` in step with the card. */
 export const GRIND_SIZE: Range = {min: 40, max: 80};
+/** BLE carries the grind directly, without the card's offset. */
+export const BLE_GRIND_SIZE: Range = {min: 1, max: 80};
 export const GRIND_RPM: Range = {min: 60, max: 120};
 /** Exported for the test that keeps `library/units` in step with the card. */
 export const TEMPERATURE: Range = {min: 39, max: 99};
@@ -112,6 +114,14 @@ export function cardWriteProblems(
     recipe: Recipe,
     temperatureUnit: TemperatureUnit = "C"
 ): string[] {
+    return recipeProblems(recipe, temperatureUnit, GRIND_SIZE);
+}
+
+function recipeProblems(
+    recipe: Recipe,
+    temperatureUnit: TemperatureUnit,
+    grindRange: Range
+): string[] {
     const problems: string[] = [];
     const tea = recipe.isTea();
 
@@ -133,10 +143,10 @@ export function cardWriteProblems(
         // Below the minimum is worth distinguishing: it is what an imported
         // recipe carries when it was ground for espresso, and "the range is
         // 40-80" alone does not explain how it got that way.
-        const grindSizeMsg = recipe.grindSize < GRIND_SIZE.min
+        const grindSizeMsg = grindRange === GRIND_SIZE && recipe.grindSize < GRIND_SIZE.min
             ? `The grind size is ${recipe.grindSize}. ${grindTooFine(GRIND_SIZE.min)}`
-            : `The grind size is ${recipe.grindSize}. The range is ${GRIND_SIZE.min}-${GRIND_SIZE.max}.`;
-        if (outside(recipe.grindSize, GRIND_SIZE)) {
+            : `The grind size is ${recipe.grindSize}. The range is ${grindRange.min}-${grindRange.max}.`;
+        if (outside(recipe.grindSize, grindRange)) {
             problems.push(grindSizeMsg);
         } else {
             checkInteger(recipe.grindSize, grindSizeMsg, problems);
@@ -249,7 +259,9 @@ export function canWriteToCard(recipe: Recipe): boolean {
  * What stops a Bluetooth brew, which is not quite what stops a card write.
  *
  * Nearly everything a card refuses, the machine refuses too, because the two
- * carry the same recipe. Coffee stage capacity and fractional ratios differ.
+ * carry the same recipe. Grind range, coffee stage capacity and fractional
+ * ratios differ. BLE carries a raw grind from 1–80; cards require 40–80 for
+ * their offset.
  * The ten-stage ceiling is card-only; Bluetooth capacity is instead limited by
  * the segment body's one-byte length. Tea retains its existing three-stage
  * app constraint.
@@ -274,7 +286,7 @@ export function brewProblems(
 ): string[] {
     const cardOnlyRatio = FRACTIONAL_RATIO(recipe.ratio);
     const cardOnlyStages = recipe.isTea() ? null : STAGE_COUNT(recipe.pours.length, MAX_POURS);
-    const problems = cardWriteProblems(recipe, temperatureUnit)
+    const problems = recipeProblems(recipe, temperatureUnit, BLE_GRIND_SIZE)
         .filter((problem) => problem !== cardOnlyRatio && problem !== cardOnlyStages);
     if (problems.length === 0 && encodedSegmentsLength(recipe) > MAX_BLOB_SEGMENT_BYTES) {
         problems.push("The recipe is too large to send over Bluetooth. Reduce the number or volume of stages.");
