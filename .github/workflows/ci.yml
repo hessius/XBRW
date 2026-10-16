@@ -5,14 +5,18 @@ on:
     branches: [main, develop]
   pull_request:
 
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  check:
-    name: Typecheck, lint and test
+  quality:
+    name: Typecheck, lint and Expo Doctor
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
 
@@ -33,30 +37,74 @@ jobs:
       - name: Worktree audit tests
         run: npm run test:worktrees
 
-      # The JSON report is written alongside the usual output, because a test
-      # has failed twice under load (#91) and has never been identified: both
-      # times the log that named it was thrown away, and it has not reproduced
-      # since. A file that outlives the job means the next occurrence names
-      # itself instead of costing another twenty runs.
+      # Dependency/configuration drift remains a hard failure.
+      - name: Expo Doctor
+        run: npx expo-doctor
+
+  tests:
+    name: Jest (${{ matrix.platform }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [ios, android]
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        id: node
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Restore Jest transforms
+        id: jest-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .jest-cache/${{ matrix.platform }}
+          key: jest-v1-${{ runner.os }}-${{ runner.arch }}-node-${{ steps.node.outputs.node-version }}-${{ matrix.platform }}-${{ hashFiles('package-lock.json', 'package.json', '.nvmrc', 'jest.config.js', 'jest.setup.js', 'jest.afterEnv.js', 'babel.config.js', 'tsconfig.json', 'tamagui.config.ts') }}-${{ github.sha }}
+          restore-keys: |
+            jest-v1-${{ runner.os }}-${{ runner.arch }}-node-${{ steps.node.outputs.node-version }}-${{ matrix.platform }}-${{ hashFiles('package-lock.json', 'package.json', '.nvmrc', 'jest.config.js', 'jest.setup.js', 'jest.afterEnv.js', 'babel.config.js', 'tsconfig.json', 'tamagui.config.ts') }}-
+
       - name: Test
-        run: npm test -- --ci --json --outputFile=jest-results.json
+        id: jest
+        run: npm run test:${{ matrix.platform }} -- --ci --cacheDirectory="$GITHUB_WORKSPACE/.jest-cache/${{ matrix.platform }}" --json --outputFile=jest-results.json
+
+      - name: Save Jest transforms
+        if: ${{ success() && steps.jest.outcome == 'success' && steps.jest-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: .jest-cache/${{ matrix.platform }}
+          key: ${{ steps.jest-cache.outputs.cache-primary-key }}
 
       - name: Name the failing test
-        if: failure()
+        if: ${{ failure() && steps.jest.outcome == 'failure' }}
         run: node scripts/name-failing-tests.mjs jest-results.json
 
       - name: Keep the jest report
-        if: failure()
+        if: ${{ failure() && steps.jest.outcome == 'failure' && hashFiles('jest-results.json') != '' }}
         uses: actions/upload-artifact@v4
         with:
-          name: jest-results
+          name: jest-results-${{ matrix.platform }}
           path: jest-results.json
           retention-days: 14
+          if-no-files-found: error
 
-      # Catches dependency versions drifting out of step with the installed
-      # Expo SDK, which is how this project ended up a year stale in the first
-      # place. All 21 checks pass today, so this is a hard failure; the
-      # exceptions we have deliberately accepted live in package.json's
-      # expo.doctor config.
-      - name: Expo Doctor
-        run: npx expo-doctor
+  check:
+    name: Typecheck, lint and test
+    needs: [quality, tests]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require every validation job to succeed
+        env:
+          QUALITY_RESULT: ${{ needs.quality.result }}
+          TESTS_RESULT: ${{ needs.tests.result }}
+        run: |
+          printf 'quality=%s tests=%s\n' "$QUALITY_RESULT" "$TESTS_RESULT"
+          test "$QUALITY_RESULT" = success && test "$TESTS_RESULT" = success
