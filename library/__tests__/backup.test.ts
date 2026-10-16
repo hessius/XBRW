@@ -812,6 +812,39 @@ describe("brew history through a backup", () => {
         expect(reviveBrew(brewNamed("b1"))).not.toHaveProperty("beverageKind");
     });
 
+    it("round trips compact tea observations while leaving legacy identity absent", () => {
+        const teaCycles = [{
+            index: 0, fillStartedAt: -500, fillEndedAt: 20_000,
+            steepStartedAt: 20_500, steepEndedAt: 65_000, endingEndedAt: 90_000,
+            fillMl: 90, releaseWaterMl: 40
+        }];
+        const text = buildBackup([recipeNamed("A", "u1")], {}, "2.6.0", [
+            brewNamed("tea", {beverageKind: "tea", teaCycles})
+        ]);
+        const result = parseBackup(text);
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.payload.brews[0]).toMatchObject({beverageKind: "tea", teaCycles});
+
+        const old = reviveBrew(brewNamed("old"));
+        expect(old).not.toHaveProperty("beverageKind");
+        expect(old).not.toHaveProperty("teaCycles");
+    });
+
+    const invalidTeaCycles: unknown[][] = [
+        [{index: -1}],
+        [{index: 0, fillMl: -1}],
+        [{index: 0, steepStartedAt: Infinity}],
+        [{index: 1}, {index: 0}],
+        [{index: 2}]
+    ];
+    it.each(invalidTeaCycles)("skips invalid or out-of-plan tea observations (%p)", (cycles) => {
+        const entry = brewNamed("b1", {
+            beverageKind: "tea", teaCycles: cycles as BrewRecord["teaCycles"]
+        });
+        expect(reviveBrew(entry)).toBeNull();
+    });
+
     it.each(["Tea", "COFFEE", "water", "", "tea ", null, 0, {}, []])(
         "skips an invalid present beverage discriminator (%p)", (beverageKind) => {
             expect(reviveBrew({...brewNamed("b1"), beverageKind})).toBeNull();

@@ -1,4 +1,6 @@
-import {isBeverageKind, isRating, type BrewRecord} from "./brew/BrewRecord";
+import {
+    isBeverageKind, isRating, isTeaCycleObservations, type BrewRecord
+} from "./brew/BrewRecord";
 import {isOverflowProtection} from "./brew/overflowConfig";
 import {isPauseIntervals} from "./brew/pauseIntervals";
 import {
@@ -608,6 +610,7 @@ const OPTIONAL_BREW_FIELDS: Record<string, (value: unknown) => boolean> = {
     cupAtDrawdown: isNumber,
     pausedSeconds: isNumber,
     pauseIntervals: isPauseIntervals,
+    teaCycles: isTeaCycleObservations,
     failure:    (v) => v === null || typeof v === "string",
     // A stall is `{atMl, seconds}`, not a number: one list of them per stage.
     // Checked to that shape rather than to a list of numbers, because a
@@ -728,6 +731,8 @@ export function reviveBrew(entry: unknown): BrewRecord | null {
         if (record.pauseIntervals.some((interval) =>
             interval.pour > record.pours + 1 || interval.to > duration)) return null;
     }
+    if (record.teaCycles !== undefined
+        && record.teaCycles.some((cycle) => cycle.index >= record.pours)) return null;
     return {
         id: record.id,
         recipeUuid: record.recipeUuid,
@@ -754,6 +759,7 @@ export function reviveBrew(entry: unknown): BrewRecord | null {
         stalls: record.stalls,
         plan: record.plan,
         stageWater: record.stageWater,
+        ...(record.teaCycles === undefined ? {} : {teaCycles: record.teaCycles}),
         bypass: record.bypass,
         rating: record.rating ?? 0,
         note: (record.note ?? "").slice(0, MAX_BACKUP_NOTE),

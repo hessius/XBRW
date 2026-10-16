@@ -119,6 +119,35 @@ describe("the comparison screen", () => {
         }
     });
 
+    it("shows each tea brew's retained steep cycles even without sample streams", async () => {
+        const teaPlan = planFromPours([
+            ...comparisonPours,
+            new Pour(3, 90, 80, 40, AGITATION.ALL_OFF, POUR_PATTERN.CENTERED, 90)
+        ]);
+        const teaCycles = [
+            {index: 0, steepStartedAt: 100, steepEndedAt: 45_000, endingEndedAt: 80_000},
+            {index: 1, steepStartedAt: 80_000, steepEndedAt: 140_000, endingEndedAt: 170_000},
+            {index: 2, steepStartedAt: 170_000, steepEndedAt: 260_000}
+        ];
+        const a = makeBrewRecordFixture({
+            id: "a", beverageKind: "tea", plan: teaPlan, teaCycles
+        });
+        const b = makeBrewRecordFixture({
+            id: "b", beverageKind: "tea", plan: teaPlan, teaCycles, hasStream: false
+        });
+        setRecords({
+            a: {record: a, samples: []},
+            b: {record: b, samples: []}
+        });
+        setParams({a: "a", b: "b"});
+
+        const {getByTestId, getAllByText} = await renderWithProviders(<BrewCompareScreen/>);
+        expect(getByTestId("compare-tea-this")).toBeTruthy();
+        expect(getByTestId("compare-tea-that")).toBeTruthy();
+        expect(getAllByText("STEEP 03")).toHaveLength(2);
+        expect(getAllByText("STEEP · 1:30 planned · 1:30 elapsed")).toHaveLength(2);
+    });
+
     beforeEach(() => {
         setRecords({});
         setJudgementStore(undefined);
@@ -170,7 +199,7 @@ describe("the comparison screen", () => {
             const band = getByTestId("trace-pause-subject-overflow-0");
             expect(band.props.x).toBeCloseTo(width * 2 / 12);
             expect(band.props.width).toBeCloseTo(width * 6 / 12);
-            const box = {width, height: compareTracePlotHeight(220), maxT: 12, maxV: 100};
+            const box = {width, height: compareTracePlotHeight(220), maxT: 12, maxV: 102};
             const polygons = [
                 [{t: 0, v: 0}, {t: 2, v: 20}, {t: 2, v: 10}, {t: 0, v: 0}],
                 [{t: 8, v: 80}, {t: 10, v: 100}, {t: 10, v: 50}, {t: 8, v: 40}]
@@ -179,11 +208,12 @@ describe("the comparison screen", () => {
                 .toBe(polygons.map((run) => `${toPath(run, box)} Z`).join(" "));
             await fireEvent.press(getByLabelText("Show the brews separately"));
             const runs = [[0, 1, 2], [8, 9, 10]];
+            const separateBox = {...box, height: 34, maxV: 100};
             function separatePath(sign: number): string {
                 return runs.map((times) => {
                     const top = times.map((t) => ({t, v: 50 + sign * t * 5}));
                     const bottom = [...times].reverse().map((t) => ({t, v: 50}));
-                    return `${toPath([...top, ...bottom], {...box, height: 34})} Z`;
+                    return `${toPath([...top, ...bottom], separateBox)} Z`;
                 }).join(" ");
             }
             expect(getByTestId("compare-cup-gap-separate").props.d).toBe(separatePath(1));
@@ -236,7 +266,7 @@ describe("the comparison screen", () => {
             setParams({a: "a", b: "b"});
             const {getByTestId, getByLabelText} = await renderWithProviders(<BrewCompareScreen />);
             const width = getByTestId("compare-trace-plot").props.width;
-            const box = {width, height: compareTracePlotHeight(220), maxT: 10, maxV: 100};
+            const box = {width, height: compareTracePlotHeight(220), maxT: 10, maxV: 102};
             const polygons = [
                 [{t: 0, v: 0}, {t: 1, v: 10}, {t: 1, v: 5}, {t: 0, v: 0}],
                 [{t: 9, v: 90}, {t: 10, v: 100}, {t: 10, v: 50}, {t: 9, v: 45}]
@@ -249,12 +279,15 @@ describe("the comparison screen", () => {
                 .toBe(polygons.map((run) => `${toPath(run, box)} Z`).join(" "));
             await fireEvent.press(getByLabelText("Show the brews separately"));
             expect(getByTestId("compare-cup-gap-separate").props.d).toBe(
-                separatePolygons.map((run) => `${toPath(run, {...box, height: 34})} Z`).join(" ")
+                separatePolygons.map((run) =>
+                    `${toPath(run, {...box, height: 34, maxV: 100})} Z`
+                ).join(" ")
             );
             await fireEvent.press(getByLabelText("Swap which brew leads"));
             expect(getByTestId("compare-cup-gap-separate").props.d).toBe(
                 separatePolygons.map((run) => `${toPath(
-                    run.map(({t, v}) => ({t, v: 100 - v})), {...box, height: 34}
+                    run.map(({t, v}) => ({t, v: 100 - v})),
+                    {...box, height: 34, maxV: 100}
                 )} Z`).join(" ")
             );
             await fireEvent.press(getByLabelText("Show the brews overlaid"));

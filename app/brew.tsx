@@ -12,6 +12,8 @@ import BrewJudgement from "@/components/BrewJudgement";
 import BrewNowCard from "@/components/BrewNowCard";
 import BrewRecipeContext from "@/components/BrewRecipeContext";
 import BrewStageLadder from "@/components/BrewStageLadder";
+import TeaStageLadder from "@/components/TeaStageLadder";
+import TeaStageDetail from "@/components/TeaStageDetail";
 import BrewSummary from "@/components/BrewSummary";
 import BrewWakeLock from "@/components/BrewWakeLock";
 import ScrollFade from "@/components/ScrollFade";
@@ -57,6 +59,7 @@ import {canHandOff, HANDOFF_TARGETS} from "@/library/brew/handoff/targets";
 import {handoffCoffee} from "@/library/brew/handoff/backfill";
 import {beanNameFromRecipe} from "@/library/brew/handoff/beanName";
 import {liveDrawdown} from "@/library/brew/liveDrawdown";
+import {buildTeaCycleViews} from "@/library/brew/teaCycle";
 import {pauseSeconds, pausedBeforeDrawdownSeconds, plannedSeconds, pourEndDelaySeconds} from "@/library/brew/brewShape";
 import {pausedWithin} from "@/library/brew/pauseIntervals";
 import {isActiveBrewPhase} from "@/library/machine/Machine";
@@ -218,6 +221,7 @@ export default function Brew({historyStore}: {historyStore?: ExportStore} = {}) 
     const [quickEditRecord] = useState(() =>
         quickEditRecordFromRoute(localRecipe, quickEditAdjustments)
     );
+    const [selectedTeaStage, setSelectedTeaStage] = useState<number | null>(null);
 
     const {run, start, startInPro, startBrew, pauseBrew, resumeBrew, cancelBrew,
            canOfferProMode, error, watch, ratingNoteOpen} = useLiveBrew();
@@ -268,6 +272,21 @@ export default function Brew({historyStore}: {historyStore?: ExportStore} = {}) 
     const stageWater = run?.stageWater ?? recipe.pours.map(() => 0);
     const stalls = run?.stalls ?? recipe.pours.map(() => []);
     const pauseElapsed = run?.pauseElapsed ?? 0;
+    const teaStages = beverageKind === "tea"
+        ? buildTeaCycleViews(
+            recipe.pours,
+            run?.teaCycles ?? run?.record?.teaCycles ?? [],
+            {
+                now: run?.record
+                    ? run.record.endedAt - (run.record.pouringAt || run.record.startedAt)
+                    : run?.teaNow ?? elapsed * 1000,
+                pauseIntervals: run?.pauseIntervals,
+                paused: phase.name === "paused",
+                finished: run?.record !== undefined,
+                outcome: run?.record?.outcome
+            }
+        )
+        : undefined;
 
     const [flexHeight, setFlexHeight] = useState(0);
     const usableBandHeight = Math.max(0, flexHeight - BREW_BAND_GAP);
@@ -317,16 +336,18 @@ export default function Brew({historyStore}: {historyStore?: ExportStore} = {}) 
         finalStageTargetMl,
     });
     const doneDrawdownFigures = run?.record === undefined ? null : drawdownFigures(run.record);
-    const doneDrawdown = phase.name === "done" ? doneDrawdownFigures?.seconds ?? null : null;
-    const doneDrawdownRate = phase.name === "done" ? doneDrawdownFigures?.rate ?? null : null;
-    const doneDelay = phase.name === "done"
+    const doneDrawdown = beverageKind === "tea" ? null
+        : phase.name === "done" ? doneDrawdownFigures?.seconds ?? null : null;
+    const doneDrawdownRate = beverageKind === "tea" ? null
+        : phase.name === "done" ? doneDrawdownFigures?.rate ?? null : null;
+    const doneDelay = phase.name === "done" && beverageKind !== "tea"
         ? pourEndDelaySeconds(elapsed, doneDrawdown, plannedSecs,
                               pausedBeforeDrawdownSeconds(
                                   run?.record?.pauseIntervals ?? run?.pauseIntervals,
                                   run?.record?.drawdownAt,
                                   run?.record?.pausedSeconds))
         : null;
-    const liveDelay = pourEndDelaySeconds(
+    const liveDelay = beverageKind === "tea" ? null : pourEndDelaySeconds(
         elapsed,
         liveDrawdownFigure.drawdown,
         plannedSecs,
@@ -559,6 +580,7 @@ export default function Brew({historyStore}: {historyStore?: ExportStore} = {}) 
                         hasStream={samples.length > 0}
                         samples={samples}
                         stages={recipe.pours}
+                        teaStages={teaStages}
                         accent={accent}
                         // The summary sits inside this screen's own padding,
                         // so the width it may draw in is not the window's.
@@ -589,8 +611,15 @@ export default function Brew({historyStore}: {historyStore?: ExportStore} = {}) 
                         bypass={bypass}
                         pauseIntervals={run?.pauseIntervals}
                         availableHeight={doneHeight}
+                        selectedIndex={selectedTeaStage}
+                        onSelectStage={teaStages === undefined ? undefined
+                            : (index) => setSelectedTeaStage((was) => was === index ? null : index)}
                     />
                 </ViewShot>
+                    {selectedTeaStage !== null && teaStages?.[selectedTeaStage] !== undefined && (
+                        <TeaStageDetail stage={teaStages[selectedTeaStage]} accent={accent}
+                                         onClose={() => setSelectedTeaStage(null)}/>
+                    )}
                 </ScrollView>
                 <ScrollFade progress={doneFade.progress} testID="done-fade" />
                 </View>
@@ -617,6 +646,7 @@ export default function Brew({historyStore}: {historyStore?: ExportStore} = {}) 
                             pauseIntervals={run?.pauseIntervals}
                         />
 
+                        {teaStages === undefined ? (
                         <BrewStageLadder
                             pours={recipe.pours}
                             accent={accent}
@@ -631,6 +661,18 @@ export default function Brew({historyStore}: {historyStore?: ExportStore} = {}) 
                             bypass={bypass}
                             pauseKind={phase.name === "paused" ? phase.pauseKind ?? "manual" : undefined}
                         />
+                        ) : (
+                            <TeaStageLadder stages={teaStages} accent={accent}
+                                            selectedIndex={selectedTeaStage}
+                                            onSelectStage={(index) => setSelectedTeaStage(
+                                                (was) => was === index ? null : index
+                                            )}
+                                            scrolls={bands.scrolls}/>
+                        )}
+                        {selectedTeaStage !== null && teaStages?.[selectedTeaStage] !== undefined && (
+                            <TeaStageDetail stage={teaStages[selectedTeaStage]} accent={accent}
+                                             onClose={() => setSelectedTeaStage(null)}/>
+                        )}
                     </YStack>
                     </YStack>
 
@@ -645,8 +687,9 @@ export default function Brew({historyStore}: {historyStore?: ExportStore} = {}) 
                         {...(flow === null
                             ? {}
                             : {flow: flow.cup, pourRate: flow.water, flowTail: flowTailValues})}
-                        reserveDrawdown={liveDrawdownFigure.reserveDrawdown}
-                        {...(liveDrawdownFigure.drawdown === null
+                        reserveDrawdown={beverageKind !== "tea"
+                            && liveDrawdownFigure.reserveDrawdown}
+                        {...(beverageKind === "tea" || liveDrawdownFigure.drawdown === null
                             ? {}
                             : {drawdown: liveDrawdownFigure.drawdown})}
                         {...(liveDelay === null ? {} : {delay: liveDelay})}

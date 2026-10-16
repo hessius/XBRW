@@ -249,7 +249,10 @@ come from `hooks/useRecipeEditor.ts`.
 | `editor.stages.ceiling.count` | `app/editRecipe.tsx:590` | Doto headline of the stage-ceiling advisory. `${...}` is the stage count. | `${recipe.pours.length} STAGES` |
 | `editor.stages.ceiling.body` | `app/editRecipe.tsx:593` | Prose body of the stage-ceiling advisory, shown when a recipe has more stages than the last card read could hold. `${...}` is the card's capacity in stages. | `A card holds ${maxStages} stages. This recipe can still be saved and brewed over Bluetooth, but it cannot be written to a card.` |
 | `editor.tea.banner.title` | `components/TeaBanner.tsx:23` | Doto title of the tea explainer banner. | `TEA` |
-| `editor.tea.banner.body` | `components/TeaBanner.tsx:26` | Prose body of the tea explainer banner. | `Tea stages are capped at 90 ml each and the grinder is not used. The siphon draws roughly 30 ml more than the recipe asks for, so a cup finishes fuller than the numbers here.` |
+| `editor.tea.banner.body` | `components/TeaBanner.tsx:26` | Prose body of the tea explainer banner. | `Tea stages are capped at 90 ml each and the grinder is not used. A tea cycle may dispense water after the programmed fill; the brew view keeps that separate from the fill target.` |
+| `brew.teaCycle.fill` | `components/TeaStageLadder.tsx` and `TeaStageDetail.tsx` | Tea-only programmed fill target and optional measured fill. A measured amount appears only when observed. | `FILL` / `Target` / `Measured fill` |
+| `brew.teaCycle.steep` | `components/TeaStageLadder.tsx` and `TeaStageDetail.tsx` | Tea-only planned steep and observed elapsed time; reaching the plan does not itself declare completion. | `STEEP` / `planned` / `elapsed` |
+| `brew.teaCycle.ending` | `components/TeaStageLadder.tsx` and `TeaStageDetail.tsx` | Observed release water after a steep and combined release/drain boundary. The separate drain duration stays unknown. | `RELEASE + DRAIN` / `Release water` / `Drain duration` |
 
 ### Bypass water
 
@@ -359,7 +362,7 @@ lines — the cited line is the property's first line.
 | `help.tea.title` | `constants/recipeHelp.ts:158` | Tea field label. | `Tea` |
 | `help.tea.hint` | `constants/recipeHelp.ts:159` | Tea field hint. | `Steeps are capped at 90 ml.` |
 | `help.tea.question` | `constants/recipeHelp.ts:160` | Tea help-sheet heading. | `How is tea different?` |
-| `help.tea.detail` | `constants/recipeHelp.ts:161` | Tea long-form help. | `A tea recipe shows 90 ml per steep, but roughly 30 ml more than that reaches the cup: the machine adds it to trigger the siphon, so a steep lands at about 120 ml. If the siphon triggers early because the leaf has swollen, take volume off the later steeps. Tea recipes are also limited to 3 steeps.` |
+| `help.tea.detail` | `constants/recipeHelp.ts:161` | Tea long-form help. | `A tea recipe shows up to 90 ml for each programmed fill. The machine may dispense additional water later in the tea cycle; the brew view keeps that separate from the fill. Tea recipes are limited to 3 steeps.` |
 
 ---
 

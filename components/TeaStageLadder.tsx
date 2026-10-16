@@ -1,27 +1,20 @@
 import React from "react";
+import {Pressable, ScrollView} from "react-native";
 import {Text, XStack, YStack} from "tamagui";
 
 import DotMatrixText from "@/components/DotMatrixText";
 import {palette} from "@/constants/colors";
+import type {
+    TeaObservationStatus,
+    TeaStageView
+} from "@/library/brew/teaCycle";
 
-type ObservationStatus = "not-observed" | "observing" | "complete" | "interrupted";
-type TimedObservation = {status: ObservationStatus; elapsedSeconds?: number};
+export type {TeaStageView} from "@/library/brew/teaCycle";
 
-/** Explicit observations only. No machine phase, event or elapsed-time mapping lives here. */
-export type TeaStageView = {
-    fillMl: number;
-    temperatureC: number;
-    steepSeconds: number;
-    fill: {status: ObservationStatus; measuredMl?: number};
-    steep: TimedObservation;
-    ending:
-        | {boundary: "unknown"; combined: TimedObservation}
-        | {boundary: "known"; release: TimedObservation; drain: TimedObservation};
-};
-
-const STATUS_TEXT: Record<ObservationStatus, string> = {
+const STATUS_TEXT: Record<TeaObservationStatus, string> = {
     "not-observed": "Not observed",
     observing: "Observing",
+    paused: "Paused",
     complete: "Observed complete",
     interrupted: "Interrupted"
 };
@@ -31,15 +24,20 @@ function duration(seconds: number): string {
     return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, "0")}`;
 }
 
+function volume(millilitres: number): string {
+    return `${millilitres.toFixed(1)} ml`;
+}
+
 function Phase({label, status, detail, accent, note}: {
     label: string;
-    status: ObservationStatus;
+    status: TeaObservationStatus;
     detail: string;
     accent: string;
     note?: string;
 }) {
     const colour = status === "observing" ? accent
-        : status === "interrupted" ? palette.warn : palette.muted;
+        : status === "interrupted" ? palette.warn
+            : status === "paused" ? palette.dim : palette.muted;
     return (
         <YStack flexGrow={1} flexBasis={160} gap="$1" borderTopWidth={3}
                 borderTopColor={colour} paddingTop="$2">
@@ -52,63 +50,82 @@ function Phase({label, status, detail, accent, note}: {
     );
 }
 
-function endingTime(observation: TimedObservation): string {
-    return observation.elapsedSeconds === undefined
-        ? "duration unknown" : `${duration(observation.elapsedSeconds)} elapsed`;
+function endingDetail(stage: TeaStageView): string {
+    const details: string[] = [];
+    if (stage.ending.elapsedSeconds !== undefined) {
+        details.push(`${duration(stage.ending.elapsedSeconds)} elapsed`);
+    }
+    if (stage.ending.releaseWaterMl !== undefined) {
+        details.push(`${volume(stage.ending.releaseWaterMl)} release water`);
+    }
+    if (stage.ending.drainSeconds === null) details.push("drain duration unknown");
+    return details.join(" · ") || "duration unknown";
 }
 
-/**
- * Isolated presentation prototype; intentionally has no production caller.
- * An observed boundary/status must be supplied, never inferred from the clock.
- */
-export default function TeaStageLadder({stages, accent}: {
+/** Explicit observations only; the elapsed clock never advances a phase. */
+export default function TeaStageLadder({
+    stages, accent, selectedIndex = null, onSelectStage, scrolls = false
+}: {
     stages: readonly TeaStageView[];
     accent: string;
+    selectedIndex?: number | null;
+    onSelectStage?: (index: number) => void;
+    /** The parent owns the scroll viewport; this flag labels its contents. */
+    scrolls?: boolean;
 }) {
-    return (
-        <YStack gap="$4">
-            {stages.map((stage, index) => {
+    const rows = stages.map((stage) => {
                 const {fill, steep, ending} = stage;
-                const endLabel = ending.boundary === "unknown"
-                    ? `Release + drain: ${STATUS_TEXT[ending.combined.status]}, ${endingTime(ending.combined)}`
-                    : `Release: ${STATUS_TEXT[ending.release.status]}, ${endingTime(ending.release)}, Drain: ${STATUS_TEXT[ending.drain.status]}, ${endingTime(ending.drain)}`;
                 const elapsed = steep.elapsedSeconds;
                 const atPlan = elapsed !== undefined && elapsed >= stage.steepSeconds;
                 const steepTime = elapsed === undefined ? "elapsed unknown"
-                    : `${elapsed > stage.steepSeconds ? "≥" : ""}${duration(Math.min(elapsed, stage.steepSeconds))} elapsed`;
+                    : `${duration(elapsed)} elapsed`;
                 const fillDetail = `${stage.fillMl} ml target · ${stage.temperatureC}°C${
-                    fill.measuredMl === undefined ? "" : ` · ${fill.measuredMl} ml measured`
+                    fill.measuredMl === undefined ? "" : ` · ${volume(fill.measuredMl)} measured`
                 }`;
                 const steepDetail = `${duration(stage.steepSeconds)} planned · ${steepTime}`;
                 const steepNote = atPlan && steep.status === "observing"
                     ? "Planned time reached; completion not observed" : undefined;
-                return (
-                    <YStack key={index} gap="$2" accessible accessibilityLabel={
-                        `Tea stage ${index + 1}, Fill: ${STATUS_TEXT[fill.status]}, ${fillDetail}, Steep: ${STATUS_TEXT[steep.status]}, ${steepDetail}, ${steepNote ? `${steepNote}, ` : ""}${endLabel}`
-                    }>
-                        <DotMatrixText fontSize={12} weight="bold" letterSpacing={1.4} color={palette.text}>
-                            {`STAGE ${String(index + 1).padStart(2, "0")}`}
+                const summary = `Tea stage ${stage.index + 1}, Fill: ${STATUS_TEXT[fill.status]}, `
+                    + `${fillDetail}, Steep: ${STATUS_TEXT[steep.status]}, ${steepDetail}, `
+                    + `${steepNote ? `${steepNote}, ` : ""}Release + drain: `
+                    + `${STATUS_TEXT[ending.status]}, ${endingDetail(stage)}`;
+                const row = (
+                    <YStack key={stage.index} gap="$2" padding="$2"
+                            borderWidth={selectedIndex === stage.index ? 1 : 0}
+                            borderColor={accent} borderRadius="$3">
+                        <DotMatrixText fontSize={12} weight="bold" letterSpacing={1.4}
+                                       color={palette.text}>
+                            {`STEEP ${String(stage.index + 1).padStart(2, "0")}`}
                         </DotMatrixText>
                         <XStack flexWrap="wrap" gap="$3">
                             <Phase label="FILL" status={fill.status} accent={accent}
                                    detail={fillDetail}/>
                             <Phase label="STEEP" status={steep.status} accent={accent}
                                    detail={steepDetail} note={steepNote}/>
-                            {ending.boundary === "unknown" ? (
-                                <Phase label="RELEASE + DRAIN" status={ending.combined.status}
-                                       detail={endingTime(ending.combined)} accent={accent}/>
-                            ) : (
-                                <>
-                                    <Phase label="RELEASE" status={ending.release.status}
-                                           detail={endingTime(ending.release)} accent={accent}/>
-                                    <Phase label="DRAIN" status={ending.drain.status}
-                                           detail={endingTime(ending.drain)} accent={accent}/>
-                                </>
-                            )}
+                            <Phase label="RELEASE + DRAIN" status={ending.status}
+                                   detail={endingDetail(stage)} accent={accent}/>
                         </XStack>
                     </YStack>
                 );
-            })}
+                return onSelectStage === undefined
+                    ? <YStack key={stage.index} accessible accessibilityLabel={summary}>{row}</YStack>
+                    : (
+                        <Pressable key={stage.index} accessibilityRole="button"
+                                   accessibilityLabel={summary}
+                                   accessibilityState={{selected: selectedIndex === stage.index}}
+                                   onPress={() => onSelectStage(stage.index)}>
+                            {row}
+                        </Pressable>
+                    );
+    });
+    return scrolls ? (
+        <ScrollView testID="tea-stage-ladder" accessibilityLabel="Scrollable tea stages"
+                    style={{flex: 1}} contentContainerStyle={{gap: 16}}>
+            {rows}
+        </ScrollView>
+    ) : (
+        <YStack gap="$4" testID="tea-stage-ladder" accessibilityLabel="Tea stages">
+            {rows}
         </YStack>
     );
 }

@@ -8,7 +8,7 @@ import {
     TIMED_SQL
 } from "@/library/brew/brewPopulation";
 import type {BrewFailure} from "./machine/Machine";
-import {isBeverageKind, isRating} from "./brew/BrewRecord";
+import {isBeverageKind, isRating, isTeaCycleObservations} from "./brew/BrewRecord";
 import {isPauseIntervals} from "./brew/pauseIntervals";
 import {
     BEAN_FIELDS,
@@ -28,7 +28,8 @@ import type {
     BrewRecord,
     BrewSample,
     BypassRecord,
-    PlanStage
+    PlanStage,
+    TeaCycleObservation
 } from "./brew/BrewRecord";
 import type {Stall} from "./brew/stalls";
 import type {PodCoffee} from "./podCoffee";
@@ -119,6 +120,8 @@ type BrewRow = {
     plan: string | null;
     /** JSON, one delivered volume per stage. `[]` on rows written before it. */
     stageWater: string | null;
+    /** JSON, compact tea observations; empty on older and non-tea rows. */
+    teaCycles: string;
     /** 0 on a brew nobody judged, and on rows written before the column. */
     rating: number | null;
     note: string | null;
@@ -204,6 +207,7 @@ export function ensureBrewTables(db: SQLite.SQLiteDatabase): void {
                 stalls TEXT NOT NULL DEFAULT '[]',
                 plan TEXT NOT NULL DEFAULT '[]',
                 stageWater TEXT NOT NULL DEFAULT '[]',
+                teaCycles TEXT NOT NULL DEFAULT '',
                 rating INTEGER NOT NULL DEFAULT 0,
                 note TEXT NOT NULL DEFAULT '',
                 pinned INTEGER NOT NULL DEFAULT 0,
@@ -317,6 +321,11 @@ export function ensureBrewTables(db: SQLite.SQLiteDatabase): void {
     try {
         db.execSync(
             "ALTER TABLE brews ADD COLUMN stageWater TEXT NOT NULL DEFAULT '[]';");
+    } catch {
+        // Already there.
+    }
+    try {
+        db.execSync("ALTER TABLE brews ADD COLUMN teaCycles TEXT NOT NULL DEFAULT '';");
     } catch {
         // Already there.
     }
@@ -530,7 +539,7 @@ class BrewDatabase {
                                 drawdownAt, cupAtDrawdown,
                                 endedAt, outcome, failure, pours, waterTotal, cupTotal,
                                 heldSeconds, pausedSeconds, pauseIntervals,
-                                stalls, plan, stageWater, bypass,
+                                stalls, plan, stageWater, teaCycles, bypass,
                                 rating, note, pinned, watched,
                                 adjustedFromDose, adjustedFromRatio,
                                 adjustedFromGrind, adjustedTempOffset,
@@ -539,7 +548,7 @@ class BrewDatabase {
                                 dialBefore, dialAfter, coffee, recipeUrl,
                                 origin, roast, process, fermentation, sentAt, hasStream, beverageKind)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+                     ?, ?,                      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
             [
                 record.id, record.recipeUuid, record.recipeName, record.accent,
                 record.startedAt, record.pouringAt ?? 0, record.drawdownAt ?? 0,
@@ -555,6 +564,7 @@ class BrewDatabase {
                 JSON.stringify(record.stalls ?? []),
                 JSON.stringify(record.plan ?? []),
                 JSON.stringify(record.stageWater ?? []),
+                record.teaCycles ? JSON.stringify(record.teaCycles) : "",
                 record.bypass ? JSON.stringify(record.bypass) : "",
                 // A restore carries a judgement in with the record, so the
                 // insert has to take one. A live brew never does: nothing
@@ -1200,6 +1210,7 @@ function hydrate(row: BrewRow): StoredBrew {
     const stalls = jsonOf<Stall[]>(row.stalls);
     const plan = jsonOf<PlanStage>(row.plan);
     const stageWater = jsonOf<number>(row.stageWater);
+    const teaCycles = teaCyclesFromStoredColumn(row.teaCycles);
     const bypass = bypassFromStoredColumn(row.bypass);
     const coffee = coffeeFromStoredColumn(row.coffee);
     return {
@@ -1228,6 +1239,7 @@ function hydrate(row: BrewRow): StoredBrew {
         ...(stalls.length > 0 ? {stalls} : {}),
         ...(plan.length > 0 ? {plan} : {}),
         ...(stageWater.length > 0 ? {stageWater} : {}),
+        ...(teaCycles !== null ? {teaCycles} : {}),
         rating: row.rating ?? 0,
         note: row.note ?? "",
         pinned: row.pinned === 1,
@@ -1294,6 +1306,21 @@ function coffeeFromStoredColumn(value: string): PodCoffee | null {
     } catch {
         return null;
     }
+}
+
+function teaCyclesFromStoredColumn(value: string): TeaCycleObservation[] | null {
+    if (value === "") return null;
+    let parsed: unknown;
+    try {
+        parsed = JSON.parse(value);
+    } catch (error) {
+        if (!(error instanceof SyntaxError)) throw error;
+        throw new Error("Invalid stored teaCycles: invalid JSON.");
+    }
+    if (!isTeaCycleObservations(parsed)) {
+        throw new Error("Invalid stored teaCycles: invalid observations.");
+    }
+    return parsed;
 }
 
 function bypassFromStoredColumn(value: string): BypassRecord | null {

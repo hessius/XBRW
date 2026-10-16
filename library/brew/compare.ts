@@ -10,11 +10,12 @@ import {
     plannedSeconds,
     planPoints,
     splitAtPauses,
+    traceTimeExtent,
     toPath,
     type Box,
     type Point
 } from "./brewShape";
-import {intervalExtent, type PauseInterval} from "./pauseIntervals";
+import type {PauseInterval} from "./pauseIntervals";
 import {NOISE_FLOOR_ML} from "./stalls";
 import {maxRateOf, retrospectiveFlowSeries, type FlowPoint} from "./flowRate";
 
@@ -263,6 +264,10 @@ function rateSeriesFor({record, samples}: BrewUnderComparison): FlowPoint[] {
     return retrospectiveFlowSeries(samples, record.pours);
 }
 
+function observedVolumeTop(samples: BrewSample[]): number {
+    return samples.reduce((max, sample) => Math.max(max, sample.water, sample.cup), 0);
+}
+
 /**
  * The one axis both brews share.
  *
@@ -283,20 +288,22 @@ export function compareAxis(
     return {
         maxT: Math.max(
             1,
-            lastSecond(subject.samples),
-            lastSecond(reference.samples),
-            plannedSeconds(subjectPours),
-            plannedSeconds(referencePours),
-            intervalExtent(subjectPauses),
-            intervalExtent(referencePauses)
+            traceTimeExtent(
+                plannedSeconds(subjectPours), subject.samples, undefined, subjectPauses
+            ),
+            traceTimeExtent(
+                plannedSeconds(referencePours), reference.samples, undefined, referencePauses
+            )
         ),
         maxV: Math.max(
             1,
             subject.record.waterTotal,
             reference.record.waterTotal,
             planTop(subject.record),
-            planTop(reference.record)
-        ),
+            planTop(reference.record),
+            observedVolumeTop(subject.samples),
+            observedVolumeTop(reference.samples)
+        ) * 1.02,
         maxRate: Math.max(maxRateOf(subjectRate), maxRateOf(referenceRate)),
         subjectRate,
         referenceRate,

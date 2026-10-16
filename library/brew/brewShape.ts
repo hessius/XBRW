@@ -255,16 +255,15 @@ export function traceAxisFor(
     const plan = planPoints(pours);
     // The plan's final water level: the floor the bypass box is stacked on.
     const planTop = plan.length > 0 ? plan[plan.length - 1].v : 0;
-    const water = livePoints(samples, "water");
+    const observedTop = samples.reduce(
+        (max, sample) => Math.max(max, sample.water, sample.cup), 0
+    );
+    const unpaddedMaxV = Math.max(observedTop, planTop + times.bypassMl);
     return {
         maxT: times.maxT,
-        maxV: Math.max(
-            water.length > 0 ? water[water.length - 1].v : 0,
-            // The bypass box is stacked on the plan's final level rather than
-            // drawn beside it. `bypassMl` is clamped non-negative upstream, so
-            // this covers a plan with no bypass at all.
-            planTop + times.bypassMl
-        )
+        // Leave two percent above the highest drawn channel so its stroke
+        // remains inside the SVG viewport instead of clipping at the frame.
+        maxV: unpaddedMaxV === 0 ? 0 : unpaddedMaxV * 1.02
     };
 }
 

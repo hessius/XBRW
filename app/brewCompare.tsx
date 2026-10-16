@@ -11,6 +11,7 @@ import BrewTrace from "@/components/BrewTrace";
 import CompareTable from "@/components/CompareTable";
 import CompareTrace, {compareTracePlotHeight} from "@/components/CompareTrace";
 import DotMatrixText from "@/components/DotMatrixText";
+import TeaStageLadder from "@/components/TeaStageLadder";
 import ScreenHeader from "@/components/ScreenHeader";
 import {
     COMPARE_COPY,
@@ -26,6 +27,7 @@ import {plannedSeconds, toPath} from "@/library/brew/brewShape";
 import type {Point} from "@/library/brew/brewShape";
 import {formatBrewDate, formatBrewTime} from "@/library/brew/brewFormat";
 import type {FlowPoint} from "@/library/brew/flowRate";
+import {buildTeaCycleViews} from "@/library/brew/teaCycle";
 import {referenceCupColour, type Role} from "@/library/brew/traceStyle";
 
 const CHART_HEIGHT = 220;
@@ -209,6 +211,35 @@ function traceLaneLabel(kind: "This" | "That", drewRate: boolean, startedAt: num
     return drewRate
         ? `${kind} brew trace with flow rate, ${suffix}`
         : `${kind} brew trace, ${suffix}`;
+}
+
+function TeaCompareCycles({record, label, testID, accent}: {
+    record: StoredBrew;
+    label: string;
+    testID: string;
+    accent: string;
+}) {
+    if (record.beverageKind !== "tea") return null;
+    const observations = record.teaCycles ?? [];
+    const now = observations.reduce((latest, cycle) =>
+        Math.max(latest, ...Object.values(cycle).filter(
+            (value): value is number => typeof value === "number"
+        )), 0);
+    const stages = buildTeaCycleViews(record.plan ?? [], observations, {
+        now,
+        finished: true,
+        outcome: record.outcome
+    });
+    if (stages.length === 0) return null;
+    return (
+        <YStack testID={testID} gap="$2" padding="$3" borderRadius="$5"
+                backgroundColor={palette.surface}>
+            <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.2} color={accent}>
+                {label}
+            </DotMatrixText>
+            <TeaStageLadder stages={stages} accent={accent}/>
+        </YStack>
+    );
 }
 
 /**
@@ -482,6 +513,11 @@ export default function BrewCompareScreen() {
                     <CompareTable rows={comparison.rows} accent={subject.record.accent}
                                   beverageKinds={[subject.record.beverageKind,
                                       reference.record.beverageKind]}/>
+
+                    <TeaCompareCycles record={subject.record} label="THIS BREW · TEA CYCLES"
+                                      testID="compare-tea-this" accent={subject.record.accent}/>
+                    <TeaCompareCycles record={reference.record} label="THAT BREW · TEA CYCLES"
+                                      testID="compare-tea-that" accent={referenceCupColour}/>
 
                     <XStack gap="$3">
                         <YStack flex={1}>

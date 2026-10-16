@@ -5,7 +5,7 @@ import {useBrew} from "@/hooks/useBrew";
 import {useOverflowProtection} from "@/hooks/useOverflowProtection";
 import {bypassRungState, type BypassView} from "@/library/brew/bypassState";
 import BrewDatabase from "@/library/BrewDatabase";
-import type {BrewRecord, BrewSample} from "@/library/brew/BrewRecord";
+import type {BrewRecord, BrewSample, TeaCycleObservation} from "@/library/brew/BrewRecord";
 import BrewRecorder from "@/library/brew/BrewRecorder";
 import type {PauseInterval} from "@/library/brew/pauseIntervals";
 import {overflowFor} from "@/library/brew/overflowConfig";
@@ -35,6 +35,7 @@ const PUBLISH_MS = 250;
 /** One empty array, so "no samples yet" is a stable identity across renders. */
 const NO_SAMPLES: BrewSample[] = [];
 const NO_PAUSES: PauseInterval[] = [];
+const NO_TEA_CYCLES: TeaCycleObservation[] = [];
 
 function publishedSeconds(samples: readonly BrewSample[], intervals: PauseInterval[]): number {
     const lastSampleAt = samples.length > 0 ? samples[samples.length - 1].at : 0;
@@ -83,8 +84,12 @@ export function useBrewRun(
     } | null>(null);
     const refused = refusal?.from === machine && refusal.runId === runId ? refusal : null;
     const [published, setPublished] = useState<
-        {runId: number; samples: BrewSample[]; elapsed: number; pauseIntervals: PauseInterval[]}
-    >({runId, samples: NO_SAMPLES, elapsed: 0, pauseIntervals: NO_PAUSES});
+        {runId: number; samples: BrewSample[]; elapsed: number; pauseIntervals: PauseInterval[];
+         teaNow: number; teaCycles: TeaCycleObservation[]}
+    >({
+        runId, samples: NO_SAMPLES, elapsed: 0, pauseIntervals: NO_PAUSES,
+        teaNow: 0, teaCycles: NO_TEA_CYCLES
+    });
     const [recorded, setRecorded] = useState<{runId: number; record: BrewRecord} | null>(null);
     const current = published.runId === runId;
     const samples = current ? published.samples : NO_SAMPLES;
@@ -242,7 +247,9 @@ export function useBrewRun(
                 runId,
                 samples: [...taken],
                 pauseIntervals: intervals,
-                elapsed: publishedSeconds(taken, intervals)
+                elapsed: publishedSeconds(taken, intervals),
+                teaNow: recorder.current?.sampleClockNow ?? 0,
+                teaCycles: recorder.current?.teaCycleObservations ?? NO_TEA_CYCLES
             });
         }, PUBLISH_MS);
         return () => clearInterval(tick);
@@ -258,7 +265,9 @@ export function useBrewRun(
             runId,
             samples: [...taken],
             pauseIntervals: intervals,
-            elapsed: publishedSeconds(taken, intervals)
+            elapsed: publishedSeconds(taken, intervals),
+            teaNow: recorder.current?.sampleClockNow ?? 0,
+            teaCycles: recorder.current?.teaCycleObservations ?? NO_TEA_CYCLES
         });
     }, [over, runId]);
 
@@ -398,6 +407,8 @@ export function useBrewRun(
         // the brewer's raw one, is what callers should see.
         ...brewer, phase, samples, pauseIntervals, elapsed, stageElapsed, activeIndex, holding,
         heldSeconds, stalls, stageWater, pauseElapsed, bypass, record,
+        teaNow: current ? published.teaNow : 0,
+        teaCycles: record?.teaCycles ?? (current ? published.teaCycles : NO_TEA_CYCLES),
         overflow: protection.overflow, overflowNow: protection.now, brew, pauseBrew, resumeBrew,
         cancelBrew, switchToProAndRetry
     };

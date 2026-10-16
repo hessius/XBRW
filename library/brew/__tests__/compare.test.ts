@@ -409,9 +409,29 @@ describe("compareAxis", () => {
         );
 
         expect(axis.maxT).toBe(70);
-        expect(axis.maxV).toBe(250);
+        expect(axis.maxV).toBe(255);
         expect(axis.subjectPours).toHaveLength(2);
         expect(axis.referencePours).toHaveLength(1);
+    });
+
+    it("keeps intermediate water and cup peaks inside the shared trace axis", () => {
+        const subject = [
+            {at: 0, water: 0, cup: 0, pour: 1},
+            {at: 20_000, water: 390.6, cup: 360, pour: 3},
+            {at: 40_000, water: 270, cup: 350, pour: 3}
+        ];
+        const reference = [
+            {at: 0, water: 0, cup: 0, pour: 1},
+            {at: 30_000, water: 300, cup: 395.2, pour: 3}
+        ];
+        const axis = compareAxis(
+            {record: brew({plan: [stage({volume: 90})]}), samples: subject},
+            {record: brew({id: "b", plan: [stage({volume: 270})]}), samples: reference}
+        );
+
+        expect(axis.maxV).toBeGreaterThanOrEqual(395.2 * 1.02);
+        expect(axis.maxV).toBeGreaterThanOrEqual(390.6 * 1.02);
+        expect(axis.maxT).toBe(87.5);
     });
 
     it("negotiates one rate axis across both brews", () => {

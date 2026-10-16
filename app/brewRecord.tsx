@@ -11,6 +11,7 @@ import BrewStorySheet from "@/components/BrewStorySheet";
 import BrewSummary from "@/components/BrewSummary";
 import CompareWithSheet from "@/components/CompareWithSheet";
 import StageDetail from "@/components/StageDetail";
+import TeaStageDetail from "@/components/TeaStageDetail";
 import DotMatrixText from "@/components/DotMatrixText";
 
 import ExportButton from "@/components/ExportButton";
@@ -34,6 +35,7 @@ import {drawdownFigures, retrospectiveFlowSeries} from "@/library/brew/flowRate"
 import {hasDrawableRateRun} from "@/library/brew/rateChartGeometry";
 import {canHandOff, HANDOFF_TARGETS} from "@/library/brew/handoff/targets";
 import {ladderFrontier} from "@/library/brew/ladderState";
+import {buildTeaCycleViews} from "@/library/brew/teaCycle";
 import {
     offeredStoryContent,
     storyCoffeeLine,
@@ -303,6 +305,14 @@ export default function BrewRecord({recipeLookup}: Props) {
     // what it always did and is only ever right for a brew that finished.
     const delivered = record.stageWater
         ?? stages.map((pour) => Math.max(pour.volume, 0));
+    const teaStages = record.beverageKind === "tea"
+        ? buildTeaCycleViews(stages, record.teaCycles ?? [], {
+            now: durationSeconds * 1000,
+            pauseIntervals: record.pauseIntervals,
+            finished: true,
+            outcome: record.outcome
+        })
+        : undefined;
 
     const bypass = bypassViewFromRecord(record.bypass);
     // The scale's running total includes the bypass, so the brew water is the
@@ -373,6 +383,7 @@ export default function BrewRecord({recipeLookup}: Props) {
         activeIndex:       ladderFrontier(record.outcome, delivered),
         stageWater:        delivered,
         stalls:            record.stalls ?? stages.map(() => []),
+        teaStages,
         // A paused brew's clock runs long and its trace holds a flat stretch
         // nothing else on the screen accounts for. Ending on the machine is
         // the louder fact, so it keeps the slot where both are true.
@@ -559,12 +570,17 @@ export default function BrewRecord({recipeLookup}: Props) {
             {/* Below the figures rather than over them: the panel explains a
                 stage that stays highlighted above it, and a sheet would cover
                 the very highlight that opened it. */}
-            {selectedIndex !== null && stages[selectedIndex] !== undefined && (
+            {record.beverageKind === "tea" && selectedIndex !== null
+                && teaStages?.[selectedIndex] !== undefined ? (
+                <TeaStageDetail stage={teaStages[selectedIndex]} accent={accent}
+                                onClose={() => setSelectedIndex(null)}/>
+            ) : selectedIndex !== null && stages[selectedIndex] !== undefined && (
                 <StageDetail
                     index={selectedIndex}
                     stage={stages[selectedIndex]}
                     deliveredMl={delivered[selectedIndex] ?? 0}
-                    stalls={(record.stalls ?? [])[selectedIndex] ?? []}
+                    stalls={(record.beverageKind === "tea"
+                        ? [] : (record.stalls ?? [])[selectedIndex] ?? [])}
                     samples={samples}
                     hasStream={record.hasStream}
                     outcome={record.outcome}

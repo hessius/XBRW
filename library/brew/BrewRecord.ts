@@ -32,6 +32,47 @@ export type BrewSample = {
 };
 
 /**
+ * A compact tea-cycle observation retained with the brew after its sample
+ * stream expires. Time markers share the sample clock; a negative start is
+ * valid when the machine announced a cycle just before the first water sample.
+ * Missing boundaries and amounts stay absent, never zero.
+ */
+export type TeaCycleObservation = {
+    /** Zero-based index from the observed tea `40510` event. */
+    index: number;
+    fillStartedAt?: number;
+    fillEndedAt?: number;
+    steepStartedAt?: number;
+    steepEndedAt?: number;
+    endingEndedAt?: number;
+    fillMl?: number;
+    releaseWaterMl?: number;
+};
+
+export function isTeaCycleObservations(value: unknown): value is TeaCycleObservation[] {
+    if (!Array.isArray(value)) return false;
+    let previousIndex = -1;
+    for (const entry of value) {
+        if (typeof entry !== "object" || entry === null || Array.isArray(entry)) return false;
+        const cycle = entry as Record<string, unknown>;
+        if (!Number.isInteger(cycle.index) || (cycle.index as number) <= previousIndex) return false;
+        previousIndex = cycle.index as number;
+        const markers = [
+            cycle.fillStartedAt, cycle.fillEndedAt, cycle.steepStartedAt,
+            cycle.steepEndedAt, cycle.endingEndedAt
+        ];
+        if (markers.some((marker) => marker !== undefined
+            && (typeof marker !== "number" || !Number.isFinite(marker)))) return false;
+        const ordered = markers.filter((marker): marker is number => typeof marker === "number");
+        if (ordered.some((marker, index) => index > 0 && marker < ordered[index - 1])) return false;
+        const amounts = [cycle.fillMl, cycle.releaseWaterMl];
+        if (amounts.some((amount) => amount !== undefined
+            && (typeof amount !== "number" || !Number.isFinite(amount) || amount < 0))) return false;
+    }
+    return true;
+}
+
+/**
  * How a brew ended. `failed` carries the reason separately.
  *
  * `endedOnMachine` is a brew the machine reported as complete but which
@@ -218,6 +259,8 @@ export type BrewRecord = {
      * silently go back to drawing the plan as though it had all poured.
      */
     stageWater?: number[];
+    /** Tea-only cycle markers and measured amounts, independent of trace retention. */
+    teaCycles?: TeaCycleObservation[];
     /**
      * The bypass, if the recipe had one.
      *

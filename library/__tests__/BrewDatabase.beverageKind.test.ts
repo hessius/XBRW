@@ -28,6 +28,9 @@ function expectSchema(): void {
         expect.arrayContaining([
             expect.objectContaining({
                 name: "beverageKind", type: "TEXT", notnull: 1, dflt_value: "''"
+            }),
+            expect.objectContaining({
+                name: "teaCycles", type: "TEXT", notnull: 1, dflt_value: "''"
             })
         ])
     );
@@ -65,9 +68,34 @@ describe("persistent beverage kind", () => {
         const database = new BrewDatabase();
         const before = database.get("old");
         expect(before).not.toHaveProperty("beverageKind");
+        expect(before).not.toHaveProperty("teaCycles");
         database.insert(record({beverageKind: "tea"}), []);
         expect(database.get("b1")).toHaveProperty("beverageKind", "tea");
         expect(database.get("old")).toEqual(before);
+    });
+
+    it("retains compact tea observations after the sample stream is swept", () => {
+        const database = new BrewDatabase();
+        const teaCycles = [{
+            index: 0, fillStartedAt: -500, fillEndedAt: 20_000,
+            steepStartedAt: 20_500, steepEndedAt: 65_000, endingEndedAt: 90_000,
+            fillMl: 90, releaseWaterMl: 40
+        }];
+        database.insert(
+            record({beverageKind: "tea", teaCycles}),
+            [{at: 0, water: 0, cup: 0, pour: 1}]
+        );
+        expect(database.get("b1")).toMatchObject({teaCycles, hasStream: true});
+        database.sweep(0);
+        expect(database.get("b1")).toMatchObject({teaCycles, hasStream: false});
+    });
+
+    it("keeps legacy rows without tea-cycle observations", () => {
+        const database = new BrewDatabase();
+        database.insert(record(), []);
+        expect(database.get("b1")).not.toHaveProperty("teaCycles");
+        expect(mockBacking.getFirstSync("SELECT teaCycles FROM brews WHERE id = 'b1';"))
+            .toEqual({teaCycles: ""});
     });
 
     it.each(["tea", "coffee"] as const)("preserves %s through inserts and history queries", (beverageKind) => {

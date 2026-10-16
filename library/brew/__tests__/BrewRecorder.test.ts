@@ -2,7 +2,7 @@ import BrewRecorder, {type RecorderMachine} from "@/library/brew/BrewRecorder";
 import {drawdownSeconds} from "@/library/brew/BrewRecord";
 import type {BrewRecord, BrewSample} from "@/library/brew/BrewRecord";
 import type {BrewPhase} from "@/library/machine/Machine";
-import type {Notification} from "@/library/machine/protocol";
+import {EVENT, MACHINE_STATE, type Notification} from "@/library/machine/protocol";
 import Pour from "@/library/Pour";
 import Recipe, {CUP_TYPE} from "@/library/Recipe";
 
@@ -86,6 +86,33 @@ describe("BrewRecorder", () => {
         fake.phase({name: "cancelled"});
         expect(records).toHaveLength(1);
         expect(records[0]).toHaveProperty("beverageKind", kind);
+    });
+
+    it("does not interpret the resume acknowledgement state as a tea steep end", () => {
+        const tea = recipe();
+        tea.cupType = CUP_TYPE.TEA;
+        tea.pours = [new Pour(1, 90, 92, 35, 0, 0, 45)];
+        const {fake, time, recorder} = build({recipe: tea});
+        fake.phase({name: "pouring", pour: 1, pours: 1});
+        fake.water(0);
+        fake.water(2);
+        fake.event(EVENT.POUR_START, 0);
+        fake.state(MACHINE_STATE.TEA_STEEPING);
+        time.advance(20_000);
+        fake.phase({
+            name: "paused", pour: 1, pours: 1,
+            was: {name: "pouring", pour: 1, pours: 1}
+        });
+        time.advance(5_000);
+        fake.phase({name: "pouring", pour: 1, pours: 1});
+        fake.event(EVENT.COFFEE_RESUMED);
+        fake.state(MACHINE_STATE.BREWING_SUB);
+
+        expect(recorder.teaCycleObservations[0].steepEndedAt).toBeUndefined();
+
+        time.advance(1_000);
+        fake.state(MACHINE_STATE.BREWING_SUB);
+        expect(recorder.teaCycleObservations[0].steepEndedAt).toBe(26_000);
     });
 
     it("ignores weights that arrive before the first pour", () => {

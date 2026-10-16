@@ -185,11 +185,10 @@ const ENTRIES = {
         title:  "Tea",
         hint:   "Steeps are capped at 90 ml.",
         question: "How is tea different?",
-        detail: "A tea recipe shows 90 ml per steep, but roughly 30 ml more " +
-                "than that reaches the cup: the machine adds it to trigger the " +
-                "siphon, so a steep lands at about 120 ml. If the siphon " +
-                "triggers early because the leaf has swollen, take volume off " +
-                "the later steeps. Tea recipes are also limited to 3 steeps."
+        detail: "A tea recipe shows up to 90 ml for each programmed fill. " +
+                "The machine may dispense additional water later in the tea " +
+                "cycle; the brew view keeps that separate from the fill. " +
+                "Tea recipes are limited to 3 steeps."
     },
     bypass: {
         title:    "Bypass water",
