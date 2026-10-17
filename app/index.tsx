@@ -19,6 +19,7 @@ import ImportTile from "@/components/ImportTile";
 import BrewMindBrowser from "@/components/BrewMindBrowser";
 import LibraryRail, {type RailFilter} from "@/components/LibraryRail";
 import MachinePanel from "@/components/MachinePanel";
+import MachinePickerSheet from "@/components/MachinePickerSheet";
 import NewRecipeSheet from "@/components/NewRecipeSheet";
 import NfcOverlay from "@/components/NfcOverlay";
 import QuickEditPanel from "@/components/QuickEditPanel";
@@ -35,6 +36,7 @@ import {useShelfPicker} from "@/hooks/useShelfPicker";
 import {useCardWriter} from "@/hooks/useCardWriter";
 import {useBeanFilters, type BeanVocabularyStore} from "@/hooks/useBeanFilters";
 import {useMachine} from "@/hooks/useMachine";
+import {useMachinePicker} from "@/hooks/useMachinePicker";
 import {openEasyModeRecipe, useSlotRecord} from "@/hooks/useEasyModeSlots";
 import {slotMarkers} from "@/library/slots/slotModel";
 import {useLibraryQuery} from "@/hooks/useLibraryQuery";
@@ -322,6 +324,9 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
 
     const {machine, status: machineStatus, connect: connectMachine, remembered} =
         useMachine();
+    // The same picker the editor's chip opens. Only with two or more saved:
+    // one machine has nothing to choose between.
+    const machinePicker = useMachinePicker(settings);
     const slotRecord = useSlotRecord(remembered);
     // Seeded from machine.info so a machine that is already connected when the
     // screen mounts does not show "Not in range" while the header dot says
@@ -1297,7 +1302,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
         || namingShelf || renamingShelf !== null || shelfActions !== null
         || deletingShelf !== null || beanFilterOpen
         || removingShelf !== null || overflowRecipe !== null || quickEdit !== null
-        || ratingNoteOpen;
+        || ratingNoteOpen || machinePicker.open;
 
     // The sheet's own row, reachable without the long press that opens it. A
     // reader cannot make that gesture, so every verb the sheet offers is also an
@@ -1401,6 +1406,8 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                             onRefreshWater={refreshWater}
                             onConnect={connectMachine}
                             onEasyMode={() => router.push("/easyMode")}
+                            machineLabel={machinePicker.available ? machinePicker.label : undefined}
+                            onChooseMachine={machinePicker.show}
                         />
                     )}
                     onMachinePress={() => {
@@ -1791,6 +1798,16 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                 onChange={onQuickEditChange}
                 onBrew={brewQuickEdit}
                 temperatureUnit={temperatureUnit}/>
+
+            <MachinePickerSheet open={machinePicker.open}
+                                onOpenChange={machinePicker.setOpen}
+                                machines={machinePicker.machines}
+                                activeId={machinePicker.activeId}
+                                connected={machinePicker.connected}
+                                survey={machinePicker.survey}
+                                onRescan={machinePicker.rescan}
+                                blocker={machinePicker.blocker}
+                                onChoose={machinePicker.choose}/>
 
             <ImportSheet
                 open={importOpen}

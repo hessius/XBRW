@@ -4,6 +4,9 @@ import React, {useState} from "react";
 import {ScrollView, Text, YStack} from "tamagui";
 
 import DeleteAllSheet from "@/components/DeleteAllSheet";
+import MachineAddSheet from "@/components/MachineAddSheet";
+import MachineDetailSheet from "@/components/MachineDetailSheet";
+import {useMachineAdder} from "@/hooks/useMachineAdder";
 import CardReadDiagnostic from "@/components/CardReadDiagnostic";
 import MachineSection from "@/components/MachineSection";
 import RestoreSheet, {type RestoreChoice} from "@/components/RestoreSheet";
@@ -177,6 +180,11 @@ export default function SettingsScreen({settings}: Props) {
     // way out; the next pick replaces it.
     const [pending, setPending] = useState<BackupPayload | null>(null);
     const [restoreOpen, setRestoreOpen] = useState(false);
+    /** The saved machine whose sheet is open, or null. */
+    const [machineSheetId, setMachineSheetId] = useState<string | null>(null);
+    // A newly added machine opens its own sheet, so it can be named at once.
+    const machineAdder = useMachineAdder(setMachineSheetId, settings);
+    const machineSheetOpen = machineSheetId !== null || machineAdder.open;
     const [confirmingDeleteAll, setConfirmingDeleteAll] = useState(false);
     // Asked once, on arrival, because answering it parses every blob in the
     // table (#124). Kept in state rather than taken at render so that cost is
@@ -437,8 +445,10 @@ export default function SettingsScreen({settings}: Props) {
             made Delete all appear to do nothing at all. `app/index.tsx` and
             `app/editRecipe.tsx` both already use this shape. */}
         <YStack testID="settings-screen" flex={1} backgroundColor={palette.base}
-                accessibilityElementsHidden={restoreOpen || confirmingDeleteAll || ratingNoteOpen}
+                accessibilityElementsHidden={restoreOpen || confirmingDeleteAll || ratingNoteOpen
+                    || machineSheetOpen}
                 importantForAccessibility={restoreOpen || confirmingDeleteAll || ratingNoteOpen
+                    || machineSheetOpen
                     ? "no-hide-descendants"
                     : "auto"}>
             <ScreenHeader title="Settings" onBack={() => router.back()}/>
@@ -519,7 +529,8 @@ export default function SettingsScreen({settings}: Props) {
                         onChange={(value) => setTemperatureUnit(asTemperatureUnit(value))}/>
                 </SettingsSection>
 
-                <MachineSection settings={settings}/>
+                <MachineSection settings={settings} onOpenMachine={setMachineSheetId}
+                                onAddMachine={machineAdder.start}/>
 
                 {/* Its own section above Library, not a line inside it: Library
                     is the recipes you hold, and this is where some of them can
@@ -622,6 +633,11 @@ export default function SettingsScreen({settings}: Props) {
             </YStack>
             </ScrollView>
         </YStack>
+
+            <MachineDetailSheet machineId={machineSheetId} settings={settings}
+                                onClose={() => setMachineSheetId(null)}/>
+
+            <MachineAddSheet adder={machineAdder}/>
 
             <RestoreSheet open={restoreOpen} payload={pending} existing={library.recipes}
                           onCancel={() => setRestoreOpen(false)}

@@ -25,6 +25,7 @@ const mockLink: {
     forget: jest.Mock;
     canOpenSettings: boolean;
     openSettings: jest.Mock;
+    machines: import("@/library/machine/savedMachines").SavedMachine[];
 } = {
     machine: {info: null, askHowItIsDoing: mockAsk, modelNumber: ""},
     status: "disconnected",
@@ -33,7 +34,8 @@ const mockLink: {
     connect: jest.fn(),
     forget: jest.fn(),
     canOpenSettings: false,
-    openSettings: jest.fn()
+    openSettings: jest.fn(),
+    machines: []
 };
 
 jest.mock("@/hooks/useMachine", () => ({
@@ -62,6 +64,7 @@ describe("the machine section", () => {
         mockLink.error = null;
         mockLink.canOpenSettings = false;
         mockLink.openSettings.mockClear();
+        mockLink.machines = [];
     });
 
     it("asks the machine how it is doing when the settings screen opens", async () => {
@@ -348,5 +351,67 @@ describe("a Bluetooth permission only Settings can undo", () => {
         await renderWithProviders(<MachineSection/>);
 
         await waitFor(() => expect(screen.queryByText(/Open app settings/)).toBeNull());
+    });
+});
+
+describe("several saved machines", () => {
+    const entry = (id: string, label: string, model: "studio" | "original" = "studio") => ({
+        id, label, model, modelString: "", advertisedName: "", serial: ""
+    });
+
+    beforeEach(() => {
+        mockLink.status = "connected";
+        mockLink.remembered = "WORK";
+        mockLink.machine = {info: null, askHowItIsDoing: mockAsk};
+        mockLink.error = null;
+        mockLink.canOpenSettings = false;
+        mockLink.machines = [entry("HOME", "Home"), entry("WORK", "Work", "original")];
+    });
+
+    it("lists them in order, default marked, with the one in use", async () => {
+        await renderWithProviders(<MachineSection/>);
+
+        expect(screen.getByLabelText(/^Home, Studio · Default/)).toBeTruthy();
+        expect(screen.getByLabelText(/^Work, Original · Choice 2 · ID WORK · Connected$/)).toBeTruthy();
+    });
+
+    it("moves the model choice into each machine, because one row could only describe one", async () => {
+        await renderWithProviders(<MachineSection/>);
+
+        expect(screen.queryByText("Your xBloom")).toBeNull();
+    });
+
+    it("moves Forget into each machine's sheet", async () => {
+        await renderWithProviders(<MachineSection/>);
+
+        expect(screen.queryByText("Forget this machine")).toBeNull();
+    });
+
+    it("opens a machine's sheet from its row", async () => {
+        const onOpenMachine = jest.fn();
+        await renderWithProviders(<MachineSection onOpenMachine={onOpenMachine}/>);
+
+        await fireEvent.press(screen.getByLabelText(/^Home, /));
+
+        expect(onOpenMachine).toHaveBeenCalledWith("HOME");
+    });
+
+    it("offers to add another, through the screen's sheet", async () => {
+        const onAddMachine = jest.fn();
+        await renderWithProviders(<MachineSection onAddMachine={onAddMachine}/>);
+
+        await fireEvent.press(screen.getByText("Add another machine"));
+
+        expect(onAddMachine).toHaveBeenCalled();
+    });
+
+    it("keeps one machine's section as it was, with a row to name it and a way to add a second", async () => {
+        mockLink.machines = [entry("WORK", "")];
+        await renderWithProviders(<MachineSection/>);
+
+        expect(screen.getByText("Your xBloom")).toBeTruthy();
+        expect(screen.getByText("Forget this machine")).toBeTruthy();
+        expect(screen.getByText("Add another machine")).toBeTruthy();
+        expect(screen.getByLabelText(/^xBloom 1, Studio · Default/)).toBeTruthy();
     });
 });
