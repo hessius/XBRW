@@ -19,7 +19,9 @@ export const SUPPORT_BODY =
  * A filled tile rather than a settings row, and the only solid `brand` fill in
  * the app. `brand` is documented as marking the app being itself and never a
  * state, which is exactly what this is: the author asking, not the app
- * reporting. It is loud on purpose. Almost nobody opens an About screen, and a
+ * reporting. The one exception is a switch that is on (`switchColours`);
+ * position carries the state too, so the colour is reinforcement, not the
+ * only cue. It is loud on purpose. Almost nobody opens an About screen, and a
  * row that reads like every other row is a row that gets scrolled past.
  *
  * It unlocks nothing and remembers nothing. There is no receipt, no thanks

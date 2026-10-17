@@ -1,11 +1,12 @@
 import React, {useState} from "react";
 import {View} from "react-native";
-import {Button, Switch, Text, XStack, YStack} from "tamagui";
+import {Button, Text, XStack, YStack} from "tamagui";
 import Recipe from "@/library/Recipe";
 import {resolveAccent} from "@/library/accent";
 import {SLOT_NAMES, type SlotIndex, type SlotSnapshot} from "@/library/slots/slotModel";
 import DotMatrixText from "@/components/DotMatrixText";
 import PourProfile, {PROFILE_BLEED} from "@/components/PourProfile";
+import XbrwSwitch from "@/components/XbrwSwitch";
 import {onAccent, palette} from "@/constants/colors";
 import {isTeaProbeSnapshot} from "@/library/slots/teaSlotCandidate";
 
@@ -79,16 +80,12 @@ export default function EasyModeSlotCard({
                     <DotMatrixText fontSize={11} weight="bold" color={ink}>
                         {scaleEnabled ? "SCALE ON" : "SCALE OFF"}
                     </DotMatrixText>
-                    <Switch accessibilityRole="switch" accessibilityLabel={`Scale for slot ${name}`}
+                    <XbrwSwitch accessibilityLabel={`Scale for slot ${name}`}
                         accessibilityHint="Automatically tares when this slot is started. Write to machine to apply."
-                        accessibilityState={{checked: scaleEnabled, disabled: scaleLocked}}
-                        checked={scaleEnabled} disabled={scaleLocked} size="$3"
+                        checked={scaleEnabled} disabled={scaleLocked} ground="accent"
                         // The 46 x 23pt switch needs only vertical slop; parent padding prevents clipping.
                         hitSlop={{top: 10.5, bottom: 10.5, left: 0, right: 0}}
-                        backgroundColor={scaleEnabled ? palette.base : palette.control}
-                        onCheckedChange={enabled => { if (!scaleLocked) onSetScaleEnabled?.(enabled); }}>
-                        <Switch.Thumb backgroundColor={palette.text}/>
-                    </Switch>
+                        onCheckedChange={enabled => { if (!scaleLocked) onSetScaleEnabled?.(enabled); }}/>
                 </XStack>}
                 {!locked && <Button ref={changeRef} height="auto" minHeight={44} paddingVertical="$2"
                     paddingHorizontal="$3" borderRadius={8}

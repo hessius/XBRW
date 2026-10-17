@@ -1,8 +1,9 @@
 import React from "react";
-import {ScrollView, Switch, Text, XStack, YStack} from "tamagui";
+import {ScrollView, Text, XStack, YStack} from "tamagui";
 
 import DotMatrixText from "@/components/DotMatrixText";
 import XbrwSheet from "@/components/XbrwSheet";
+import XbrwSwitch from "@/components/XbrwSwitch";
 import {onAccent, palette} from "@/constants/colors";
 import {beanFilterId, parseBeanFilterId} from "@/library/beanFilters";
 import {BEAN_FIELDS} from "@/library/brew/beanTags";
@@ -126,15 +127,9 @@ export default function BeanFilterSheet({
                             Average 4★ or better.
                         </Text>
                     </YStack>
-                    <Switch accessibilityLabel="Highly rated only"
-                            accessibilityRole="switch"
-                            accessibilityState={{checked: ratedOnly}}
-                            checked={ratedOnly}
-                            onCheckedChange={setRatedOnly}
-                            size="$3"
-                            backgroundColor={ratedOnly ? palette.success : palette.control}>
-                        <Switch.Thumb backgroundColor={palette.text}/>
-                    </Switch>
+                    <XbrwSwitch accessibilityLabel="Highly rated only"
+                                checked={ratedOnly}
+                                onCheckedChange={setRatedOnly}/>
                 </XStack>
 
                 {groups.length === 0 ? (

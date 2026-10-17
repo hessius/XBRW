@@ -81,7 +81,9 @@ export const palette = {
      * screen dropped it, so the app's own identity stopped at the home screen
      * icon. It is a brand colour rather than a semantic one, so it marks the
      * app being itself (the mark, the wordmark's `++`) and never a state: a
-     * user cannot learn it means anything, because it does not.
+     * user cannot learn it means anything, because it does not. The one
+     * exception is a switch that is on (`switchColours`); position carries the
+     * state too, so the colour is reinforcement, not the only cue.
      *
      * 5.56:1 on `base`, so it clears AA for body text as well as for graphics.
      */
@@ -223,6 +225,51 @@ export const onBrand = {
      */
     marker: "rgba(255,255,255,0.80)"
 } as const;
+
+/**
+ * The colours of an on/off switch, by state and by what the switch sits on.
+ *
+ * On and off have to differ in more than where the thumb is. With the track
+ * the same grey both ways, a row of switches cannot be read at a glance, and
+ * WCAG 1.4.11 asks the parts that show state to reach 3:1 against what is
+ * next to them. So the two states differ three ways at once: the track fills,
+ * the ring around it changes, and the thumb brightens.
+ *
+ * `dark` is every switch on `base`, `surface` or `raised`: settings rows and
+ * sheets. On, the track is `brand`, the magenta of the `++`, with a white
+ * thumb: 5.04:1 on `surface`, 4.79:1 on `raised`, 3.59:1 against the off
+ * track, and 3.78:1 for the thumb on it. `brand` rather than `brandFill`,
+ * though the thumb is white: `brandFill` is only 2.53:1 against the off
+ * track, so the two states would sit too close. Off, the track stays the
+ * quiet `control` grey and a `muted` ring draws its edge, 3.73:1 on `surface`
+ * and 3.55:1 on `raised`, with a `dim` thumb that steps back from the white.
+ *
+ * `accent` is the switch on an Easy Mode slot card, which is filled with a
+ * recipe accent. On is a solid `base` track; off is the same outline drawn in
+ * `onAccent.text` ink with nothing inside, so the accent shows through. Filled
+ * against hollow reads at any size.
+ *
+ * The off fill is `control` rather than `line` because `line` is for
+ * hairlines: on the card's `surface` fill the lighter `control` grey is what
+ * tells the switch apart from a divider.
+ *
+ * `ring` equals `track` when on, so the ring adds no colour there; it exists in
+ * both states so the thumb's travel and size do not jump when the state flips.
+ * `components/__tests__/colors.test.ts` measures every pairing.
+ */
+export const switchColours = {
+    dark: {
+        on:  {track: palette.brand, ring: palette.brand, thumb: palette.text},
+        off: {track: palette.control, ring: palette.muted, thumb: palette.dim}
+    },
+    accent: {
+        on:  {track: palette.base, ring: palette.base, thumb: palette.text},
+        off: {track: palette.none, ring: onAccent.text, thumb: onAccent.text}
+    }
+} as const;
+
+/** What a switch is drawn on. See `switchColours`. */
+export type SwitchGround = keyof typeof switchColours;
 
 /**
  * Recipe accents, split by beverage. Colour is a redundant signal — a Doto
