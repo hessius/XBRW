@@ -62,7 +62,9 @@ export default function PodSection({
     // answer one question -- does a picture help at all -- and it could not
     // answer it while half the pictures it names drew regardless of it. Its own
     // description already promised the pod photo; this section had simply never
-    // been asked.
+    // been asked. It now names the coffee photo too, because an import link's
+    // `bean.image` becomes `imageURL` on a recipe made without a pod
+    // (`decorateImport`), and this is where that picture is drawn.
     const podImage = showAvatar ? recipe.imageURL ?? "" : "";
 
     return (
