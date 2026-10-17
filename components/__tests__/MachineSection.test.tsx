@@ -17,7 +17,7 @@ jest.mock("expo-router", () => ({router: {push: (...args: unknown[]) => mockPush
 
 const mockAsk = jest.fn().mockResolvedValue(true);
 const mockLink: {
-    machine: {info: null | object; askHowItIsDoing: jest.Mock};
+    machine: {info: null | object; askHowItIsDoing: jest.Mock; modelNumber: string};
     status: import("@/hooks/useMachine").LinkStatus;
     error: string | null;
     remembered: string;
@@ -26,7 +26,7 @@ const mockLink: {
     canOpenSettings: boolean;
     openSettings: jest.Mock;
 } = {
-    machine: {info: null, askHowItIsDoing: mockAsk},
+    machine: {info: null, askHowItIsDoing: mockAsk, modelNumber: ""},
     status: "disconnected",
     error: null,
     remembered: "",
@@ -58,7 +58,7 @@ describe("the machine section", () => {
         mockAsk.mockClear();
         mockLink.status = "disconnected";
         mockLink.remembered = "";
-        mockLink.machine = {info: null, askHowItIsDoing: mockAsk};
+        mockLink.machine = {info: null, askHowItIsDoing: mockAsk, modelNumber: ""};
         mockLink.error = null;
         mockLink.canOpenSettings = false;
         mockLink.openSettings.mockClear();
@@ -109,6 +109,53 @@ describe("the machine section", () => {
 
         expect(screen.getByText("J15ABC123456")).toBeTruthy();
         expect(screen.getByText("V12.0D.500")).toBeTruthy();
+    });
+
+    it("names the model the info blob reports", async () => {
+        mockLink.status = "connected";
+        mockLink.remembered = "AA:BB";
+        mockLink.machine = {askHowItIsDoing: mockAsk, modelNumber: "", info: {
+            kind: "info", serial: "J15ABC123456", model: "J15",
+            firmware: "V12.0D.500", waterEnough: true, waterFeed: "tank",
+            grindSize: 62, mode: "PRO"
+        }} as never;
+
+        await renderWithProviders(<MachineSection/>);
+
+        expect(screen.getByText("Model")).toBeTruthy();
+        expect(screen.getByText("J15")).toBeTruthy();
+    });
+
+    it("falls back to the Device Information model when the blob's model is blank", async () => {
+        // A Studio on V12.0D.500 fills the blob's model bytes with 0xFF, which
+        // parses as "". The row used to render with nothing beside it.
+        mockLink.status = "connected";
+        mockLink.remembered = "AA:BB";
+        mockLink.machine = {askHowItIsDoing: mockAsk, modelNumber: "XB-2", info: {
+            kind: "info", serial: "J15A01D48H051", model: "",
+            firmware: "V12.0D.500", waterEnough: true, waterFeed: "tank",
+            grindSize: 68, mode: "PRO"
+        }} as never;
+
+        await renderWithProviders(<MachineSection/>);
+
+        expect(screen.getByText("Model")).toBeTruthy();
+        expect(screen.getByText("XB-2")).toBeTruthy();
+    });
+
+    it("leaves the model row out when nothing reported a model", async () => {
+        mockLink.status = "connected";
+        mockLink.remembered = "AA:BB";
+        mockLink.machine = {askHowItIsDoing: mockAsk, modelNumber: "", info: {
+            kind: "info", serial: "J15A01D48H051", model: "",
+            firmware: "V12.0D.500", waterEnough: true, waterFeed: "tank",
+            grindSize: 68, mode: "PRO"
+        }} as never;
+
+        await renderWithProviders(<MachineSection/>);
+
+        expect(screen.getByText("J15A01D48H051")).toBeTruthy();
+        expect(screen.queryByText("Model")).toBeNull();
     });
 
     it("shows a tap-fed machine as plumbed rather than low on water", async () => {
@@ -267,7 +314,7 @@ describe("a Bluetooth permission only Settings can undo", () => {
     beforeEach(() => {
         mockLink.status = "failed";
         mockLink.remembered = "";
-        mockLink.machine = {info: null, askHowItIsDoing: mockAsk};
+        mockLink.machine = {info: null, askHowItIsDoing: mockAsk, modelNumber: ""};
         mockLink.error = "Bluetooth permission is off for XBRW++. Turn it on in Settings to reach the machine.";
         mockLink.canOpenSettings = true;
         mockLink.openSettings.mockClear();
