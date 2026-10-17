@@ -97,6 +97,22 @@ describe("nextCollapsed", () => {
         expect(nextCollapsed(extent, false, extent)).toBe(true);
     });
 
+    it("judges a screen by its own fold-away when it passes one", () => {
+        // The editor folds away far more than the home screen when a recipe
+        // has a four-line name. A page with room for the home screen's
+        // collapse but not for the editor's must not collapse the editor.
+        const shrink = COLLAPSE_SHRINK + 150;
+        const extent = COLLAPSE_SHRINK + EXPAND_AT + 100;
+        expect(nextCollapsed(extent, false, extent)).toBe(true);
+        expect(nextCollapsed(extent, false, extent, shrink)).toBe(false);
+        expect(nextCollapsed(shrink + EXPAND_AT + 1, false, shrink + EXPAND_AT + 1, shrink))
+            .toBe(true);
+    });
+
+    it("keeps the home screen's figure at 140", () => {
+        expect(COLLAPSE_SHRINK).toBe(140);
+    });
+
     it("assumes there is room when nobody measured", () => {
         // The two-argument form is the pure decision, used where the extent is
         // not to hand. It must not become the conservative one by default.

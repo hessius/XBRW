@@ -7,13 +7,24 @@ device testing is complete. Update it whenever release scope or behaviour change
 
 A roaster's import can name a recipe with its origin, farm, producer and lot,
 often 40 to 90 characters. The recipe screen cut that off after two lines.
-Now a name over 28 characters steps down from 26 pt to 22 pt and may wrap to
-three lines; shorter names look exactly as before. The folded header bar, the
-brew screen's title and a catalogue recipe's screen title each allow two lines
-in place of one. Library cards and shelf tiles keep their fixed heights, so
-they still truncate. `COLLAPSE_SHRINK` rises from 140 to 180, so the taller
-slab cannot make the editor header strobe. Name limits are unchanged.
-Not yet checked on a device.
+Names of 28 characters or fewer look exactly as before (26 pt, two lines).
+29 to 56 characters step down to 22 pt and up to three lines. Longer names step
+down to 18 pt and up to four lines, with less space under the button row; the
+COFFEE label stays. A name past 28 characters is never drawn across the
+pour-profile watermark: on a phone it takes the full width and the watermark
+gets a band of its own under it (the slab grows by about 64 pt), and on a wide
+screen such as the Fold's inner display it sits in the column beside the
+watermark instead. The size and layout come from the name's length and the
+screen width, so the title never jumps after the screen opens.
+The folded header bar, the brew screen's title and a catalogue recipe's screen
+title each allow two lines in place of one. Library cards and shelf tiles keep
+their fixed heights, so they still truncate. The editor now tells its collapsing
+header how much it folds away for the current name (up to about 285 pt for a
+four-line name at the largest text size), so the taller slab cannot make the
+header strobe on a short page; the home screen keeps its 140. Name limits are
+unchanged. The first device build (Fold cover screen) still cut a 77-character
+name after three lines and ran it into the watermark; this revision is not yet
+checked on a device.
 
 ## Brew history trace storage (2026-10-15)
 

@@ -34,15 +34,14 @@ export const EXPAND_AT = 24;
  * enlarges `extent`, which makes a collapse easier to grant, not harder. The
  * fold-away on both screens stays well under 140, so the overestimate stands.
  *
- * Raised to 180 when the editor's name was allowed a third line. Added up from
- * the tokens, the slab folds away its beverage row (about 25) and a name of up
- * to three 27 pt lines plus its margin (about 88), and the curve gives back 40
- * of height and about 21 of padding: roughly 174 for the longest name. 140 was
- * no longer an overestimate for that screen. The home screen only loses a
- * little by it: a list now needs about 40 more points of scroll before its
- * header will fold.
+ * The editor is the exception, and passes its own figure instead: its slab
+ * folds away a name that can run to four lines plus the room reserved under it
+ * for the pour-profile watermark, which at the largest text size is well over
+ * 200. Raising this constant to cover that cost the home screen scroll it never
+ * needed, so the editor's number lives with the slab (`heroFoldAway`) and this
+ * one stays the home screen's.
  */
-export const COLLAPSE_SHRINK = 180;
+export const COLLAPSE_SHRINK = 140;
 
 /**
  * The next collapsed state, given where the list is and where the header is now.
@@ -68,15 +67,17 @@ export const COLLAPSE_SHRINK = 180;
  * that is already near its top.
  *
  * Omitting `extent` asks for the decision without that guard, for callers with
- * no measurement to hand.
+ * no measurement to hand. `shrink` is how much this screen folds away, and
+ * defaults to the home screen's `COLLAPSE_SHRINK`.
  */
 export function nextCollapsed(
-    offset: number, collapsed: boolean, extent: number = Infinity
+    offset: number, collapsed: boolean, extent: number = Infinity,
+    shrink: number = COLLAPSE_SHRINK
 ): boolean {
     if (collapsed) {
         return offset > EXPAND_AT;
     }
-    return offset > COLLAPSE_AT && extent - COLLAPSE_SHRINK > EXPAND_AT;
+    return offset > COLLAPSE_AT && extent - shrink > EXPAND_AT;
 }
 
 export type CollapsibleHeader = {
@@ -85,18 +86,20 @@ export type CollapsibleHeader = {
 };
 
 /**
- * Drives the home screen header from the list's scroll position.
+ * Drives a collapsing header from the list's scroll position.
  *
  * The state lives in React rather than on the UI thread because it switches
- * which components are mounted, not just how they are styled.
+ * which components are mounted, not just how they are styled. `shrink` is read
+ * on every scroll event, so a screen whose fold-away changes (the editor, when
+ * a recipe is renamed) is judged by its current figure.
  */
-export function useCollapsibleHeader(): CollapsibleHeader {
+export function useCollapsibleHeader(shrink: number = COLLAPSE_SHRINK): CollapsibleHeader {
     const [collapsed, setCollapsed] = useState(false);
 
     function onScroll(event: NativeSyntheticEvent<NativeScrollEvent>) {
         const {contentOffset, contentSize, layoutMeasurement} = event.nativeEvent;
         const extent = contentSize.height - layoutMeasurement.height;
-        setCollapsed((current) => nextCollapsed(contentOffset.y, current, extent));
+        setCollapsed((current) => nextCollapsed(contentOffset.y, current, extent, shrink));
     }
 
     return {collapsed, onScroll};
