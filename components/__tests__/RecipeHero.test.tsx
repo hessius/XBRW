@@ -2,7 +2,7 @@ import React from "react";
 import {StyleSheet} from "react-native";
 import {fireEvent, screen} from "@testing-library/react-native";
 
-import RecipeHero from "@/components/RecipeHero";
+import RecipeHero, {HERO_NAME_LONG, heroNameStyle} from "@/components/RecipeHero";
 import {onAccent} from "@/constants/colors";
 import Pour from "@/library/Pour";
 import {renderWithProviders, TEST_INSETS} from "@/test-utils/render";
@@ -24,6 +24,10 @@ const BASE = {
     onHelp:    () => {},
     onRename:  () => {}
 };
+
+/** The shape of name a roaster's import link brings, 78 characters. */
+const LONG_NAME =
+    "Colombia | Las Flores | Jhoan Vergara | Chiroso Natural Signature Series - 18g";
 
 type Node = ReturnType<typeof screen.getByTestId>;
 
@@ -180,6 +184,48 @@ describe("RecipeHero", () => {
         const found = screen.getAllByText("Ethiopia Guji");
         expect(found).toHaveLength(1);
         expect(found[0].props.style).toEqual(expect.objectContaining({fontSize: 26}));
+    });
+
+    it("keeps a short name exactly as it was: two lines at 26", async () => {
+        await renderWithProviders(<RecipeHero {...BASE}/>);
+
+        const title = screen.getByTestId("hero-name");
+        expect(title.props.numberOfLines).toBe(2);
+        expect(StyleSheet.flatten(title.props.style))
+            .toEqual(expect.objectContaining({fontSize: 26, lineHeight: 31}));
+    });
+
+    it("lets a long name wrap to three lines, one size down", async () => {
+        // A roaster's import names the origin, the farm, the producer and the
+        // lot. Two lines at 26 cut that off after the farm.
+        await renderWithProviders(<RecipeHero {...BASE} name={LONG_NAME}/>);
+
+        const title = screen.getByTestId("hero-name");
+        expect(title.props.numberOfLines).toBe(3);
+        expect(StyleSheet.flatten(title.props.style))
+            .toEqual(expect.objectContaining({fontSize: 22, lineHeight: 27}));
+        // Never a shrink-to-fit: the size is a step on the scale, not
+        // whatever the text engine settles on.
+        expect(title.props.adjustsFontSizeToFit).toBeFalsy();
+        // The whole name is still the button's label, however much is drawn.
+        expect(screen.getByTestId("hero-rename").props.accessibilityLabel).toBe(LONG_NAME);
+        expect(screen.getByText(LONG_NAME)).toBeTruthy();
+    });
+
+    it("gives the folded bar's name a second line", async () => {
+        await renderWithProviders(<RecipeHero {...BASE} name={LONG_NAME} collapsed/>);
+
+        const title = screen.getByTestId("hero-name-collapsed");
+        expect(title.props.numberOfLines).toBe(2);
+        expect(StyleSheet.flatten(title.props.style))
+            .toEqual(expect.objectContaining({fontSize: 15}));
+    });
+
+    it("steps the size down only past the long-name threshold", () => {
+        expect(heroNameStyle("x".repeat(HERO_NAME_LONG)))
+            .toEqual({fontSize: 26, lineHeight: 31, lines: 2});
+        expect(heroNameStyle("x".repeat(HERO_NAME_LONG + 1)))
+            .toEqual({fontSize: 22, lineHeight: 27, lines: 3});
     });
 
     it("carries no EXPLAIN toggle", async () => {

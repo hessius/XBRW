@@ -13,6 +13,32 @@ import type Pour from "@/library/Pour";
 /** How far the watermark runs past the slab before it is clipped. */
 const PROFILE_OVERHANG = 2;
 
+/**
+ * The longest name drawn at the full title size.
+ *
+ * Two lines at 26 hold roughly this many characters in the slab's 72% column
+ * on a narrow phone. A name that fits stays exactly as it always was. Past
+ * this, the name steps down one size and may take a third line, so a roaster's
+ * full "origin | farm | producer | lot - dose" name can be read without
+ * renaming it first.
+ *
+ * Counted in characters rather than measured, on purpose: measuring needs a
+ * first layout to read back, and a title that redraws itself a frame after the
+ * screen opens is a title that visibly jumps.
+ */
+export const HERO_NAME_LONG = 28;
+
+/** How the slab sets a name, chosen from its length alone. */
+export function heroNameStyle(name: string): {
+    fontSize: number;
+    lineHeight: number;
+    lines: number;
+} {
+    return name.length > HERO_NAME_LONG
+        ? {fontSize: 22, lineHeight: 27, lines: 3}
+        : {fontSize: 26, lineHeight: 31, lines: 2};
+}
+
 /** A control in the header's chrome row, drawn in a well cut out of the accent. */
 function HeaderButton({label, icon, accent, onPress}: {
     label: string;
@@ -85,6 +111,7 @@ export default function RecipeHero({
     // it, so the screen has one surface at the top instead of a black strip
     // above a coloured card.
     const insets = useSafeAreaInsets();
+    const nameStyle = heroNameStyle(name);
 
     // `pours` is the recipe's own array, mutated in place, and the watermark
     // reads each pour through a getter rather than a property — so there is
@@ -123,14 +150,18 @@ export default function RecipeHero({
                     it does: renaming is reachable from every scroll position and
                     every deck, which it never was while Name was a row near the
                     bottom of BREW. Not a button while the slab is open, where
-                    the pressable would be an empty strip between BACK and HELP. */}
+                    the pressable would be an empty strip between BACK and HELP.
+                    Two lines rather than one: two at this size are no taller
+                    than the 32 pt wells beside them plus their padding, so a
+                    long name costs the folded bar a few points at most. */}
                 {collapsed ? (
                     <Pressable accessibilityRole="button" accessibilityLabel={name}
                                accessibilityHint="Opens a sheet to rename this recipe"
                                testID="hero-rename-collapsed"
                                style={{flex: 1, flexDirection: "row", alignItems: "center"}}
                                onPress={onRename} hitSlop={8}>
-                        <Text flex={1} numberOfLines={1} fontSize={15} fontWeight="700"
+                        <Text testID="hero-name-collapsed" flex={1} numberOfLines={2}
+                              fontSize={15} fontWeight="700"
                               maxFontSizeMultiplier={DOTO_MAX_FONT_SCALE}
                               color={named ? onAccent.text : onAccent.label}>
                             {name}
@@ -186,10 +217,14 @@ export default function RecipeHero({
                            testID="hero-rename"
                            style={{flexDirection: "row", alignItems: "flex-start", gap: 8}}
                            onPress={onRename} hitSlop={8}>
-                    <Text fontSize={26} fontWeight="700" lineHeight={31} marginTop="$2"
+                    {/* Still inside 72% at three lines: the watermark is drawn
+                        bottom right, and a wider name would run across it. */}
+                    <Text testID="hero-name" fontSize={nameStyle.fontSize}
+                          fontWeight="700" lineHeight={nameStyle.lineHeight}
+                          marginTop="$2"
                           maxFontSizeMultiplier={DOTO_MAX_FONT_SCALE}
                           color={named ? onAccent.text : onAccent.label}
-                          numberOfLines={2} maxWidth="72%">
+                          numberOfLines={nameStyle.lines} maxWidth="72%">
                         {name}
                     </Text>
                     <YStack marginTop="$3">
