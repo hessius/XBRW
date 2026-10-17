@@ -3,6 +3,16 @@
 This is the source for the full release-testing checklist, not a claim that
 device testing is complete. Update it whenever release scope or behaviour changes.
 
+## Rename sheet opens on the visible name (2026-10-17)
+
+A recipe following its pod used to open the Rename sheet with an empty field.
+It now opens on the pod name. Saving that name unchanged keeps the recipe
+following its pod; clearing the field still does the same, and only a
+different name becomes the recipe's own. A recipe titled only by its Recipe ID
+or a placeholder still opens empty. A pod name lookup that lands while the
+sheet is open replaces the field only if it has not been edited.
+Not yet checked on a device.
+
 ## Brew history trace storage (2026-10-15)
 
 Brew traces are compressed and managed under a configurable storage budget. When
