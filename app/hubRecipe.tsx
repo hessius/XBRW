@@ -350,7 +350,9 @@ export default function HubRecipeScreen() {
     return (
         <YStack flex={1} backgroundColor={palette.base}
                 paddingBottom={insets.bottom}>
-            <ScreenHeader title={title} onBack={() => router.back()}/>
+            {/* The title is the catalogue recipe's own name, which can be
+                long, so it may take a second line. */}
+            <ScreenHeader title={title} titleLines={2} onBack={() => router.back()}/>
             {loading && <LoadingState/>}
             {!loading && error !== null && (
                 <ErrorState error={error} onRetry={() => setRetry((value) => value + 1)}/>
