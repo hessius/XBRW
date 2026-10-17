@@ -103,9 +103,16 @@ when a partner qualifies its implementation.
 
 This task changes static integration artwork and directly related
 documentation only. No app UI, icon, scheme, import behaviour, deployment or
-release changes. No PR, merge or production action is authorised by this design.
+release changes. After approving this design, the user separately authorised
+a documentation-only PR into main, with develop left unchanged. No merge,
+rebase or production action is authorised.
 
 Task owner: the current Copilot session. Worktree:
-`/Users/jesperhessius/Dev/XBRW-link-assets-20261017`.
-Branch: `docs/link-assets-20261017`.
-Pinned base: `5cb58676c0cde53675d378edcb27db43e2c5bbf1`.
+`/Users/jesperhessius/Dev/XBRW-link-assets-main-20261017`.
+Branch: `docs/link-assets-main-20261017`.
+Pinned base: `40d700200558055c34444efeb188a9eec4fc6f27`.
+
+The initial design/artwork task was based on develop at
+`5cb58676c0cde53675d378edcb27db43e2c5bbf1`. Its documentation and artwork
+commits alone were copied onto the approved main-based branch, without
+promoting any beta application code.

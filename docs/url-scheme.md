@@ -47,7 +47,7 @@ replace `src` with your own hosted copy if preferred. Do not use a GitHub
 ```html
 <a href="xbrw://import?v=1&amp;share=XB0001">
   <img
-    src="https://raw.githubusercontent.com/hessius/XBRW/8ca49ac066eb28791a91deefaaf47b5c3d0ae2e5/assets/branding/link-buttons/open-in-xbrw-muted-logo.svg"
+    src="https://raw.githubusercontent.com/hessius/XBRW/0faf007174121d91d070d0627920fe2029e62183/assets/branding/link-buttons/open-in-xbrw-muted-logo.svg"
     alt="Open recipe in XBRW++"
     width="215"
     height="48"
@@ -128,22 +128,22 @@ The [asset notice](../assets/branding/link-buttons/NOTICE.txt) includes the
 permission and font attribution. This permission covers the supplied buttons,
 not unrelated repository content or third-party marks.
 
-[muted-logo-svg]: https://raw.githubusercontent.com/hessius/XBRW/8ca49ac066eb28791a91deefaaf47b5c3d0ae2e5/assets/branding/link-buttons/open-in-xbrw-muted-logo.svg
-[muted-logo-1x]: https://raw.githubusercontent.com/hessius/XBRW/8ca49ac066eb28791a91deefaaf47b5c3d0ae2e5/assets/branding/link-buttons/open-in-xbrw-muted-logo.png
-[muted-logo-2x]: https://raw.githubusercontent.com/hessius/XBRW/8ca49ac066eb28791a91deefaaf47b5c3d0ae2e5/assets/branding/link-buttons/open-in-xbrw-muted-logo@2x.png
-[muted-logo-3x]: https://raw.githubusercontent.com/hessius/XBRW/8ca49ac066eb28791a91deefaaf47b5c3d0ae2e5/assets/branding/link-buttons/open-in-xbrw-muted-logo@3x.png
-[muted-text-svg]: https://raw.githubusercontent.com/hessius/XBRW/8ca49ac066eb28791a91deefaaf47b5c3d0ae2e5/assets/branding/link-buttons/open-in-xbrw-muted-text.svg
-[muted-text-1x]: https://raw.githubusercontent.com/hessius/XBRW/8ca49ac066eb28791a91deefaaf47b5c3d0ae2e5/assets/branding/link-buttons/open-in-xbrw-muted-text.png
-[muted-text-2x]: https://raw.githubusercontent.com/hessius/XBRW/8ca49ac066eb28791a91deefaaf47b5c3d0ae2e5/assets/branding/link-buttons/open-in-xbrw-muted-text@2x.png
-[muted-text-3x]: https://raw.githubusercontent.com/hessius/XBRW/8ca49ac066eb28791a91deefaaf47b5c3d0ae2e5/assets/branding/link-buttons/open-in-xbrw-muted-text@3x.png
-[bold-logo-svg]: https://raw.githubusercontent.com/hessius/XBRW/8ca49ac066eb28791a91deefaaf47b5c3d0ae2e5/assets/branding/link-buttons/open-in-xbrw-bold-logo.svg
-[bold-logo-1x]: https://raw.githubusercontent.com/hessius/XBRW/8ca49ac066eb28791a91deefaaf47b5c3d0ae2e5/assets/branding/link-buttons/open-in-xbrw-bold-logo.png
-[bold-logo-2x]: https://raw.githubusercontent.com/hessius/XBRW/8ca49ac066eb28791a91deefaaf47b5c3d0ae2e5/assets/branding/link-buttons/open-in-xbrw-bold-logo@2x.png
-[bold-logo-3x]: https://raw.githubusercontent.com/hessius/XBRW/8ca49ac066eb28791a91deefaaf47b5c3d0ae2e5/assets/branding/link-buttons/open-in-xbrw-bold-logo@3x.png
-[bold-text-svg]: https://raw.githubusercontent.com/hessius/XBRW/8ca49ac066eb28791a91deefaaf47b5c3d0ae2e5/assets/branding/link-buttons/open-in-xbrw-bold-text.svg
-[bold-text-1x]: https://raw.githubusercontent.com/hessius/XBRW/8ca49ac066eb28791a91deefaaf47b5c3d0ae2e5/assets/branding/link-buttons/open-in-xbrw-bold-text.png
-[bold-text-2x]: https://raw.githubusercontent.com/hessius/XBRW/8ca49ac066eb28791a91deefaaf47b5c3d0ae2e5/assets/branding/link-buttons/open-in-xbrw-bold-text@2x.png
-[bold-text-3x]: https://raw.githubusercontent.com/hessius/XBRW/8ca49ac066eb28791a91deefaaf47b5c3d0ae2e5/assets/branding/link-buttons/open-in-xbrw-bold-text@3x.png
+[muted-logo-svg]: https://raw.githubusercontent.com/hessius/XBRW/0faf007174121d91d070d0627920fe2029e62183/assets/branding/link-buttons/open-in-xbrw-muted-logo.svg
+[muted-logo-1x]: https://raw.githubusercontent.com/hessius/XBRW/0faf007174121d91d070d0627920fe2029e62183/assets/branding/link-buttons/open-in-xbrw-muted-logo.png
+[muted-logo-2x]: https://raw.githubusercontent.com/hessius/XBRW/0faf007174121d91d070d0627920fe2029e62183/assets/branding/link-buttons/open-in-xbrw-muted-logo@2x.png
+[muted-logo-3x]: https://raw.githubusercontent.com/hessius/XBRW/0faf007174121d91d070d0627920fe2029e62183/assets/branding/link-buttons/open-in-xbrw-muted-logo@3x.png
+[muted-text-svg]: https://raw.githubusercontent.com/hessius/XBRW/0faf007174121d91d070d0627920fe2029e62183/assets/branding/link-buttons/open-in-xbrw-muted-text.svg
+[muted-text-1x]: https://raw.githubusercontent.com/hessius/XBRW/0faf007174121d91d070d0627920fe2029e62183/assets/branding/link-buttons/open-in-xbrw-muted-text.png
+[muted-text-2x]: https://raw.githubusercontent.com/hessius/XBRW/0faf007174121d91d070d0627920fe2029e62183/assets/branding/link-buttons/open-in-xbrw-muted-text@2x.png
+[muted-text-3x]: https://raw.githubusercontent.com/hessius/XBRW/0faf007174121d91d070d0627920fe2029e62183/assets/branding/link-buttons/open-in-xbrw-muted-text@3x.png
+[bold-logo-svg]: https://raw.githubusercontent.com/hessius/XBRW/0faf007174121d91d070d0627920fe2029e62183/assets/branding/link-buttons/open-in-xbrw-bold-logo.svg
+[bold-logo-1x]: https://raw.githubusercontent.com/hessius/XBRW/0faf007174121d91d070d0627920fe2029e62183/assets/branding/link-buttons/open-in-xbrw-bold-logo.png
+[bold-logo-2x]: https://raw.githubusercontent.com/hessius/XBRW/0faf007174121d91d070d0627920fe2029e62183/assets/branding/link-buttons/open-in-xbrw-bold-logo@2x.png
+[bold-logo-3x]: https://raw.githubusercontent.com/hessius/XBRW/0faf007174121d91d070d0627920fe2029e62183/assets/branding/link-buttons/open-in-xbrw-bold-logo@3x.png
+[bold-text-svg]: https://raw.githubusercontent.com/hessius/XBRW/0faf007174121d91d070d0627920fe2029e62183/assets/branding/link-buttons/open-in-xbrw-bold-text.svg
+[bold-text-1x]: https://raw.githubusercontent.com/hessius/XBRW/0faf007174121d91d070d0627920fe2029e62183/assets/branding/link-buttons/open-in-xbrw-bold-text.png
+[bold-text-2x]: https://raw.githubusercontent.com/hessius/XBRW/0faf007174121d91d070d0627920fe2029e62183/assets/branding/link-buttons/open-in-xbrw-bold-text@2x.png
+[bold-text-3x]: https://raw.githubusercontent.com/hessius/XBRW/0faf007174121d91d070d0627920fe2029e62183/assets/branding/link-buttons/open-in-xbrw-bold-text@3x.png
 
 ## Query parameters
 

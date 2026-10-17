@@ -12,9 +12,13 @@
 
 ## Context and file map
 
-Work only in `/Users/jesperhessius/Dev/XBRW-link-assets-20261017`,
-branch `docs/link-assets-20261017`, pinned base
-`5cb58676c0cde53675d378edcb27db43e2c5bbf1`.
+Current PR worktree: `/Users/jesperhessius/Dev/XBRW-link-assets-main-20261017`,
+branch `docs/link-assets-main-20261017`, pinned base
+`40d700200558055c34444efeb188a9eec4fc6f27`.
+The user explicitly approved a main-based, documentation-only PR after
+implementation. Original artwork was prepared on develop in
+`/Users/jesperhessius/Dev/XBRW-link-assets-20261017`; only this task's
+documentation/artwork commits were copied to the main-based PR branch.
 Read `AGENTS.md` and the approved spec:
 `docs/superpowers/specs/2026-10-17-link-buttons-design.md`.
 
@@ -300,10 +304,13 @@ Fetch `origin --no-prune`, then run `npm run worktrees:check`. Record base/head,
 worktree/branch, clean state and push state. Retain this owned worktree for
 pending integration, with the remote branch as its recovery pointer. No PR,
 merge, deployment, release build or cleanup is authorised by this plan.
+Subsequent user approval authorises the main-targeted documentation PR only;
+develop must remain unchanged.
 
 ## Execution evidence
 
-- Artwork checkpoint: `8ca49ac066eb28791a91deefaaf47b5c3d0ae2e5`.
+- Main-based artwork checkpoint: `0faf007174121d91d070d0627920fe2029e62183`.
+  Original develop-based artwork: `8ca49ac066eb28791a91deefaaf47b5c3d0ae2e5`.
 - Four self-contained SVGs and 12 density-specific PNGs; logo width 215,
   text-only width 175, logical height 48.
 - XML checks confirmed no live text, external references, scripts or filters;
