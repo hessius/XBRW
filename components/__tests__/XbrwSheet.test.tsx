@@ -1,9 +1,10 @@
 import React from "react";
-import {Text} from "react-native";
+import {StyleSheet, Text} from "react-native";
 import {act, fireEvent, screen} from "@testing-library/react-native";
 
 import XbrwSheet, {EXIT_GRACE} from "@/components/XbrwSheet";
-import {renderWithProviders} from "@/test-utils/render";
+import {SCREEN_PADDING} from "@/constants/layout";
+import {renderWithProviders, TEST_INSETS} from "@/test-utils/render";
 
 function open(onOpenChange = jest.fn()) {
     return renderWithProviders(
@@ -26,6 +27,19 @@ describe("XbrwSheet", () => {
 
         expect(screen.getByLabelText("ABOUT").props.style)
             .toEqual(expect.objectContaining({flex: 1}));
+    });
+
+    it("pads its bottom by the inset so full content clears the navigation bar", async () => {
+        // Tamagui draws a second, empty copy of the frame, so every copy is
+        // checked rather than whichever comes first.
+        await open();
+        const frames = screen.getAllByTestId("sheet-frame", {includeHiddenElements: true});
+
+        expect(frames.length).toBeGreaterThan(0);
+        for (const frame of frames) {
+            expect(StyleSheet.flatten(frame.props.style).paddingBottom)
+                .toBe(SCREEN_PADDING + TEST_INSETS.bottom);
+        }
     });
 
     it("can be dismissed without the platform gesture", async () => {
