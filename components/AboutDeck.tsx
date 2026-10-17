@@ -2,6 +2,7 @@ import React from "react";
 import {YStack} from "tamagui";
 
 import {BeanProfileDeck} from "@/components/BeanProfileDeck";
+import CoffeeSection from "@/components/CoffeeSection";
 import FromSection from "@/components/FromSection";
 import HistorySection from "@/components/HistorySection";
 import NoteSection from "@/components/NoteSection";
@@ -69,8 +70,9 @@ type Props = {
  * bottom of the brew deck, among dose, ratio and grind, and they are identity
  * and a lookup key rather than brew parameters. Taking them off gives the deck
  * of steppers and segmented rows its subject back, and gives the sections that
- * answer what a recipe is -- the note, the pod, where it arrived from and how
- * it has gone -- somewhere to be that is not a fourth thing bolted to BREW.
+ * answer what a recipe is -- the note, the pod and its coffee, where it arrived
+ * from and how it has gone -- somewhere to be that is not a fourth thing bolted
+ * to BREW.
  *
  * The name has no row here. It is the screen header, renamed through a sheet
  * from any of the three decks, and a second place to type it would be two
@@ -106,6 +108,8 @@ export default function AboutDeck({
                         onDraft={(value) => onDraft(RECIPE_LABELS.XID, value)}
                         onCommit={(value) => dispatch(RECIPE_LABELS.XID, value)}
                         onFollowPod={() => dispatch(RECIPE_LABELS.TITLE, "")}/>
+
+            <CoffeeSection recipe={recipe}/>
 
             <FromSection recipe={recipe} accent={accent} showAvatar={showAvatar}/>
 
