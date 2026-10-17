@@ -922,17 +922,47 @@ anything happens, so "discard" there would suggest the brew could be called off.
 
 ## Machine connection
 
-The machine card in Settings (`components/MachineSection.tsx`), the header dot
+The machine cards in Settings (`components/MachineSection.tsx`,
+`components/MachineCard.tsx`), the header dot
 (`components/MachineDot.tsx`), the water/mode popover
 (`components/MachinePanel.tsx`), and the Bluetooth errors from
 `hooks/useMachine.ts` and `library/machine/Transport.ts` (surfaced via the
 machine card's error line).
 
-### Machine card (`components/MachineSection.tsx`)
+### Machine cards (`components/MachineSection.tsx`, `components/MachineCard.tsx`)
+
+First on the Settings screen. One card per saved machine. The card of the
+machine in use starts open; the others start closed until tapped.
+An open card shows the link, the model, a row to name it, a Details fold with
+the machine's readings, and Forget. With no machine saved, the section is one
+plain card with the model choice and Connect.
 
 | ID | Source | Context — when the user sees this | Current text |
 |----|--------|-----------------------------------|--------------|
-| `machine.section.title` | `components/MachineSection.tsx:79` | Section title. | `Machine` |
+| `machine.section.title` | `components/MachineSection.tsx` | Section title, first on the screen. | `Machines` |
+| `machine.section.model.label` | `components/MachineSection.tsx` | Model choice label before any machine is saved. | `Your xBloom` |
+| `machine.section.model.description` | `components/MachineSection.tsx` (`MODEL_DESCRIPTION`) | Full-width explanation above the model selector, both before pairing and inside each machine's card. | `Choose your model for matching imports. Grind scales differ. Saved recipes stay unchanged.` |
+| `machine.card.summary.default` | `components/MachineSection.tsx` (`machineSummary`) | Part of the line under a machine's name: the first machine in the order. | `Default` |
+| `machine.card.summary.choice` | `components/MachineSection.tsx` (`machineSummary`) | Part of the same line for the others. `${index + 1}` is its place. | `Choice ${index + 1}` |
+| `machine.card.summary.connected` | `components/MachineSection.tsx` (`machineSummary`) | Part of the same line: the machine in use, linked. | `Connected` |
+| `machine.card.summary.inUse` | `components/MachineSection.tsx` (`machineSummary`) | Part of the same line: the machine in use, not linked. | `In use` |
+| `machine.card.header.a11y` | `components/MachineCard.tsx` (a11y) | (a11y) The card's header button, with its expanded state. | `${title}, ${summary}` |
+| `machine.card.model.label` | `components/MachineSection.tsx` | Model choice label inside a machine's card. | `Model` |
+| `machine.card.useNow.label` | `components/MachineSection.tsx` | Action row in the card of a machine that is not in use. | `Use this machine now` |
+| `machine.card.useNow.detail` | `components/MachineSection.tsx` | Its detail, unless a brew blocks the change (then the blocker's own message). | `Connects to it until the app is closed.` |
+| `machine.card.useNow.connecting` | `components/MachineSection.tsx` (`switchTo`) | Info toast. `${name}` is the machine's name. | `Connecting to ${name}…` |
+| `machine.card.useNow.connected` | `components/MachineSection.tsx` (`switchTo`) | Success toast. | `Connected to ${name}` |
+| `machine.card.useNow.failed` | `components/MachineSection.tsx` (`switchTo`) | Error toast after the link's own message. | `Check it is switched on and nearby, then try again.` |
+| `machine.card.name.label` | `components/MachineSection.tsx` | Opens the machine's sheet, one machine saved. | `Name` |
+| `machine.card.name.detail` | `components/MachineSection.tsx` | Its detail. | `Give it a name, like Home or Work.` |
+| `machine.card.nameOrder.label` | `components/MachineSection.tsx` | Opens the machine's sheet, two or more saved. | `Name and order` |
+| `machine.card.nameOrder.detail` | `components/MachineSection.tsx` | Its detail. | `Rename it, make it the default or change its place in the list.` |
+| `machine.card.details.label` | `components/MachineCard.tsx` | Row that opens the readings fold. | `Details` |
+| `machine.card.details.detail` | `components/MachineCard.tsx` | Its detail. | `Serial, firmware, water and grind size.` |
+| `machine.card.details.a11y` | `components/MachineCard.tsx` (a11y) | (a11y) The same row, with its expanded state. | `Details, Serial, firmware, water and grind size` |
+| `machine.card.details.offline` | `components/MachineSection.tsx` | Inside Details for a machine with no live link. | `Firmware, water, grind size and mode show here while this machine is connected.` |
+| `machine.card.add.label` | `components/MachineSection.tsx` | Action row under the cards. | `Add another machine` |
+| `machine.card.add.detail` | `components/MachineSection.tsx` | Its detail. | `Switch the new one on and keep it nearby. Machines already saved are skipped.` |
 | `machine.section.idle.connecting` | `components/MachineSection.tsx:58` | Status while connecting. | `Connecting…` |
 | `machine.section.idle.none` | `components/MachineSection.tsx:59` | Status when no machine is paired. | `No machine paired` |
 | `machine.section.idle.notConnected` | `components/MachineSection.tsx:60` | Status when a machine is remembered but no connection attempt has been made. `${remembered}` is the machine name. | `Not connected · ${remembered}` |
@@ -941,27 +971,18 @@ machine card's error line).
 | `machine.section.connect.connect` | `components/MachineSection.tsx:96` | Row label when not connected. | `Connect to my machine` |
 | `machine.section.connected.desc` | `components/MachineSection.tsx:98` | Sub-note when connected. | `The link is held while XBRW++ is open.` |
 | `machine.section.disconnected.desc` | `components/MachineSection.tsx:99` | Sub-note when not connected. | `Your xBloom Studio has to be switched on and nearby.` |
-| `machine.section.vital.serial` | `components/MachineSection.tsx:108` | Vital label. | `Serial` |
-| `machine.section.vital.model` | `components/MachineSection.tsx:109` | Vital label. | `Model` |
-| `machine.section.vital.firmware.a11y` | `components/MachineSection.tsx:111` (a11y) | (a11y) Firmware vital. `${...}` is the firmware string. | `Firmware, ${info.firmware}` |
-| `machine.section.vital.firmware` | `components/MachineSection.tsx:113` | Vital label. | `Firmware` |
-| `machine.section.vital.water` | `components/MachineSection.tsx:115` | Vital label; value is OK/Low. | `Water` |
-| `machine.section.vital.water.ok` | `components/MachineSection.tsx:115` | Vital value when the tank is fine. | `OK` |
-| `machine.section.vital.water.low` | `components/MachineSection.tsx:115` | Vital value when the tank is low. | `Low` |
-| `machine.section.vital.grind` | `components/MachineSection.tsx:116` | Vital label. | `Grind size` |
-| `machine.section.vital.mode` | `components/MachineSection.tsx:117` | Vital label; value is the machine mode (PRO/EASY). | `Mode` |
-| `machine.section.autostart.label` | `components/MachineSection.tsx:122` | Toggle label. | `Start brewing automatically` |
-| `machine.section.autostart.desc` | `components/MachineSection.tsx:123` | Toggle description. | `Off, BREW loads the recipe onto the machine and waits for you to press START. On, it starts grinding the moment the recipe lands.` |
-| `machine.section.animate.label` | `components/MachineSection.tsx:128` | Toggle label. | `Animate the brew chart` |
-| `machine.section.animate.desc` | `components/MachineSection.tsx:129` | Toggle description. | `When off, each phase change holds its end state immediately. The system Reduced Motion switch also disables animation independently.` |
-| `machine.section.traces.label` | `components/MachineSection.tsx` | Choice label. | `Brew detail storage` |
-| `machine.section.traces.desc` | `components/MachineSection.tsx` | Description. | `Brew traces are the detailed charts. When they pass this limit, the oldest are dropped first. Rated and noted brews, and the newest brews of each recipe, go last. Summaries are always kept.` |
-| `machine.section.traces.10` | `components/MachineSection.tsx` (`BUDGET_OPTIONS`) | Choice value: default budget. | `10 MB` |
-| `machine.section.traces.25` | `components/MachineSection.tsx` (`BUDGET_OPTIONS`) | Choice value. | `25 MB` |
-| `machine.section.traces.50` | `components/MachineSection.tsx` (`BUDGET_OPTIONS`) | Choice value. | `50 MB` |
-| `machine.section.traces.unlimited` | `components/MachineSection.tsx` (`BUDGET_OPTIONS`) | Choice value: no storage limit. | `Unlimited` |
+| `machine.section.vital.serial` | `components/MachineSection.tsx` | Vital label. Inside the Details fold of the connected machine's card. | `Serial` |
+| `machine.section.vital.model` | `components/MachineSection.tsx` | Vital label. Inside the Details fold of the connected machine's card. | `Model` |
+| `machine.section.vital.firmware.a11y` | `components/MachineSection.tsx` (a11y) | (a11y) Firmware vital. `${...}` is the firmware string. Inside the Details fold of the connected machine's card. | `Firmware, ${info.firmware}` |
+| `machine.section.vital.firmware` | `components/MachineSection.tsx` | Vital label. Inside the Details fold of the connected machine's card. | `Firmware` |
+| `machine.section.vital.water` | `components/MachineSection.tsx` | Vital label; value is OK/Low. Inside the Details fold of the connected machine's card. | `Water` |
+| `machine.section.vital.water.ok` | `components/MachineSection.tsx` | Vital value when the tank is fine. Inside the Details fold of the connected machine's card. | `OK` |
+| `machine.section.vital.water.low` | `components/MachineSection.tsx` | Vital value when the tank is low. Inside the Details fold of the connected machine's card. | `Low` |
+| `machine.section.vital.grind` | `components/MachineSection.tsx` | Vital label. Inside the Details fold of the connected machine's card. | `Grind size` |
+| `machine.section.vital.mode` | `components/MachineSection.tsx` | Vital label; value is the machine mode (PRO/EASY). Inside the Details fold of the connected machine's card. | `Mode` |
 | `machine.section.forget.label` | `components/MachineSection.tsx:141` | Action row label. | `Forget this machine` |
-| `machine.section.forget.detail` | `components/MachineSection.tsx:142` | Action row detail. | `XBRW++ will scan again next time.` |
+| `machine.section.forget.detail` | `components/MachineSection.tsx` | Action row detail, one machine saved. Replaced by the brew blocker's message while a brew owns the link. | `XBRW++ will scan again next time.` |
+| `machine.section.forget.detailSeveral` | `components/MachineSection.tsx` | The same, two or more saved. | `Takes it off the list. Add it again to get it back.` |
 
 ### Card diagnostics (`components/CardReadDiagnostic.tsx`)
 
@@ -1049,8 +1070,25 @@ messages from `hooks/useBackup.ts` and `library/backup.ts`.
 | ID | Source | Context — when the user sees this | Current text |
 |----|--------|-----------------------------------|--------------|
 | `settings.title` | `app/settings.tsx:231` | Screen header title. | `Settings` |
-| `settings.about.label` | `app/settings.tsx:240` | Row that opens About. | `About XBRW++` |
-| `settings.about.detail` | `app/settings.tsx:241` | Version line under About. `${VERSION}` is the app version. | `Version ${VERSION}` |
+| `settings.brewing.title` | `app/settings.tsx` | Section title, second on the screen. App brewing preferences, separate from Machines. | `Brewing` |
+| `settings.brewing.autostart.label` | `app/settings.tsx` | Toggle label. Moved from the machine card. | `Start brewing automatically` |
+| `settings.brewing.autostart.desc` | `app/settings.tsx` | Toggle description. | `Off, BREW loads the recipe onto the machine and waits for you to press START. On, it starts grinding the moment the recipe lands.` |
+| `settings.brewing.animate.label` | `app/settings.tsx` | Toggle label. | `Animate the brew chart` |
+| `settings.brewing.animate.desc` | `app/settings.tsx` | Toggle description. | `When off, each phase change holds its end state immediately. The system Reduced Motion switch also disables animation independently.` |
+| `settings.brewing.rating.label` | `app/settings.tsx` | Toggle label. | `Ask how a brew was` |
+| `settings.brewing.rating.desc` | `app/settings.tsx` | Toggle description. `${ratingPromptHours}` is the prompt window. | `On, the last brew XBRW++ watched can ask how it was along the bottom for up to ${ratingPromptHours} hours. Off, ratings are only given on the brew itself.` |
+| `settings.brewing.traces.label` | `app/settings.tsx` | Choice label. | `Brew detail storage` |
+| `settings.brewing.traces.desc` | `app/settings.tsx` | Description. | `Brew traces are the detailed charts. When they pass this limit, the oldest are dropped first. Rated and noted brews, and the newest brews of each recipe, go last. Summaries are always kept.` |
+| `settings.brewing.traces.10` | `app/settings.tsx` (`BUDGET_OPTIONS`) | Choice value: default budget. | `10 MB` |
+| `settings.brewing.traces.25` | `app/settings.tsx` (`BUDGET_OPTIONS`) | Choice value. | `25 MB` |
+| `settings.brewing.traces.50` | `app/settings.tsx` (`BUDGET_OPTIONS`) | Choice value. | `50 MB` |
+| `settings.brewing.traces.unlimited` | `app/settings.tsx` (`BUDGET_OPTIONS`) | Choice value: no storage limit. | `Unlimited` |
+| `settings.about.label` | `app/settings.tsx` | Row that opens About, near the bottom of the screen. | `About XBRW++` |
+| `settings.about.detail` | `app/settings.tsx` | Version line under About. `${VERSION}` is the app version. | `Version ${VERSION}` |
+| `settings.network.label` | `app/settings.tsx` | Row under About. | `What leaves this device` |
+| `settings.network.detail` | `app/settings.tsx` | Its detail. | `Every request the app can make, and what it carries.` |
+| `settings.labs.console.label` | `app/settings.tsx` | Labs row. A shortcut to the console's existing acknowledgement gate. | `Machine console` |
+| `settings.labs.console.detail` | `app/settings.tsx` | Its detail. | `Connection logs and diagnostic commands.` |
 | `settings.section.recipeList` | `app/settings.tsx:245` | Section title. | `Recipe list` |
 | `settings.coffeeMarker.label` | `app/settings.tsx:247` | Toggle label. | `Show the COFFEE marker` |
 | `settings.coffeeMarker.desc` | `app/settings.tsx:248` | Toggle description. | `The TEA marker is always shown. COFFEE is redundant in a mostly-coffee library.` |
@@ -1071,8 +1109,8 @@ messages from `hooks/useBackup.ts` and `library/backup.ts`.
 | `settings.temperature.celsius` | `app/settings.tsx:30` (`TEMPERATURE_OPTIONS`) | Doto choice value. | `°C` |
 | `settings.temperature.fahrenheit` | `app/settings.tsx:31` (`TEMPERATURE_OPTIONS`) | Doto choice value. | `°F` |
 | `settings.section.library` | `app/settings.tsx:283` | Section title. | `Library` |
-| `settings.history.label` | `app/settings.tsx:284` | Action row label. | `Brew history` |
-| `settings.history.detail` | `app/settings.tsx:285` | Action row detail. | `Every brew you have recorded.` |
+| `settings.history.label` | `app/settings.tsx` | Action row label, last row of Brewing. | `Brew history` |
+| `settings.history.detail` | `app/settings.tsx` | Action row detail. | `Every brew you have recorded.` |
 | `settings.backup.label` | `app/settings.tsx:287` | Action row label. | `Back up my recipes` |
 | `settings.backup.detail` | `app/settings.tsx:288` | Action row detail. | `Writes a file and hands it to the share sheet.` |
 | `settings.restore.label` | `app/settings.tsx:290` | Action row label. | `Restore from a backup` |
@@ -1221,8 +1259,8 @@ copy, so they are not edited here.
 
 ## Machine console (developer, gated)
 
-`app/machine.tsx` is a developer-oriented console reached behind an "I
-understand" gate. Everything here **is** shown to a user who opens it, so it is
+`app/machine.tsx` is a developer-oriented console reached from Labs or the
+machine card's seven-tap shortcut, behind an "I understand" gate. Everything here **is** shown to a user who opens it, so it is
 catalogued, but it is written in a terser, more technical register than the rest
 of the app and reviewed on those terms. The command table's `name`, `note` and
 `contradiction` fields live in `library/machine/commands.ts`.

@@ -46,6 +46,7 @@ jest.mock("@/hooks/useMachine", () => ({
         status: "connected",
         error: null,
         remembered: "",
+        machines: [],
         forget: jest.fn()
     })
 }));

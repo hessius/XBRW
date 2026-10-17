@@ -32,7 +32,7 @@ describe("the machine link", () => {
         // The mock's store outlives each test, unlike the seed object it
         // replaced, so every key a test writes has to be put back by hand.
         for (const key of ["machineDeviceId", "machineModel",
-                           "machineModelString", "machineName"] as const) {
+                           "machineModelString", "machineName", "savedMachines"] as const) {
             sharedSettings().set(key, DEFAULTS[key]);
         }
     });

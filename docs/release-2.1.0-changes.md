@@ -3,6 +3,27 @@
 This is the source for the full release-testing checklist, not a claim that
 device testing is complete. Update it whenever release scope or behaviour changes.
 
+## Settings order and machine cards (2026-10-18)
+
+Settings now opens on Machines: one card per saved machine. The card of the
+machine in use starts open; the others start closed until tapped. Its summary
+line turns red while the link has an error. An open card holds the link status and Connect (or Use this machine
+now), the model, a row to the machine's existing name-and-order sheet, a
+Details fold with serial, firmware, water, grind size and mode, and Forget.
+Add another machine sits under the cards. With no machine saved, the section
+is one plain card with the model choice and Connect.
+
+Brewing follows (Start brewing automatically, Animate the brew chart, Ask how
+a brew was, Brew detail storage, Brew history), then Units, Recipe list,
+xBloom account and Library. About, What leaves this device and the support
+tile moved to the bottom, followed by Labs and card diagnostics. Labs gains a
+Machine console row; the console keeps its own acknowledgement gate.
+
+Placement only. No setting, default, backup key or machine-safety rule
+changed: Forget and Use this machine now are still refused while a brew owns
+the link. Not yet checked on a device: large text, TalkBack/VoiceOver reading
+of the expanded state, and the fold animation on a folding phone.
+
 ## Brew history trace storage (2026-10-15)
 
 Brew traces are compressed and managed under a configurable storage budget. When

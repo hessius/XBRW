@@ -1,4 +1,4 @@
-import type {FoundMachine, MachineTransport} from "@/library/machine/Transport";
+import type {FoundMachine, MachineTransport, ScanDecider} from "@/library/machine/Transport";
 
 import {notification} from "./protocolFixtures";
 
@@ -114,10 +114,18 @@ export class FakeTransport implements MachineTransport {
         return this.written.map((frame) => frame[3] | (frame[4] << 8));
     }
 
-    async scan(): Promise<FoundMachine[]> {
+    /** How many scans have run, and what each was asked to decide with. */
+    public scans: (ScanDecider | undefined)[] = [];
+    private heardNames = new Map<string, string>();
+
+    async scan(_seconds?: number, decide?: ScanDecider): Promise<FoundMachine[]> {
+        this.scans.push(decide);
         // As the real transport does: a name is only ever learned by a scan,
         // and it is the machine `attemptLink` will take, which is the first.
         if (this.devices.length > 0) this.advertisedName = this.devices[0].name;
+        for (const device of this.devices) this.heardNames.set(device.id, device.name);
+        // Every device is heard at once, so a decider has nothing to cut
+        // short here: the settle timing is the real transport's alone.
         return this.devices;
     }
 
@@ -130,6 +138,10 @@ export class FakeTransport implements MachineTransport {
         if (this.refuseConnection || this.refuseIds.includes(id)) {
             throw refusal();
         }
+        // Keyed by id, as the real transport's name is. Only when a scan
+        // heard it, so a returning user still has no name.
+        const heard = this.heardNames.get(id);
+        if (heard !== undefined) this.advertisedName = heard;
         this.connectedTo = id;
     }
 
