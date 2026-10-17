@@ -3,6 +3,7 @@
 This is the source for the full release-testing checklist, not a claim that
 device testing is complete. Update it whenever release scope or behaviour changes.
 
+<<<<<<< HEAD
 ## Rename sheet opens on the visible name (2026-10-17)
 
 A recipe following its pod used to open the Rename sheet with an empty field.
@@ -12,6 +13,12 @@ different name becomes the recipe's own. A recipe titled only by its Recipe ID
 or a placeholder still opens empty. A pod name lookup that lands while the
 sheet is open replaces the field only if it has not been edited.
 Not yet checked on a device.
+=======
+## Recipe pictures on by default (2026-10-17)
+
+`showRecipeAvatars` defaults to true; stored choices and restored backups are
+unchanged; no card, BLE or native changes.
+>>>>>>> origin/chore/recipe-pictures-default-on
 
 ## Brew history trace storage (2026-10-15)
 
