@@ -1219,6 +1219,12 @@ describe("the brew screen says true things", () => {
         expect(style.fontFamily).toBe("Doto-Bold");
         expect(style.fontSize).toBe(13);
     });
+
+    it("gives a long recipe title a second line before it cuts it off", async () => {
+        const {getByTestId} = await renderWithProviders(<Brew />);
+
+        expect(getByTestId("brew-recipe-title").props.numberOfLines).toBe(2);
+    });
 });
 
 async function renderBrew(overrides: {

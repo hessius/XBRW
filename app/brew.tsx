@@ -493,8 +493,11 @@ export default function Brew({historyStore}: {historyStore?: ExportStore} = {}) 
                 </Pressable>
                 <MachineDot status={status} collapsed={false}
                             onPress={() => void connect()} />
+                {/* Two lines, so a roaster's long name still says which
+                    coffee this is. The row centres on it, and the chart below
+                    measures what is left rather than assuming a height. */}
                 <DotMatrixText testID="brew-recipe-title" fontSize={13}
-                               color={palette.dim} numberOfLines={1}
+                               color={palette.dim} numberOfLines={2}
                                style={{flex: 1}}>
                     {recipe.displayName()}
                 </DotMatrixText>

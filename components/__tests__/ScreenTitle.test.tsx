@@ -41,6 +41,19 @@ function styleValue(node: Node, key: string): unknown {
 }
 
 describe("ScreenTitle", () => {
+    it("holds a title to one line unless asked for more", async () => {
+        await renderWithProviders(<ScreenTitle title="Recipes"/>);
+        expect(screen.getByTestId("screen-title-text").props.numberOfLines).toBe(1);
+    });
+
+    it("lets a recipe's long name wrap to the lines it is given", async () => {
+        const name = "Colombia | Las Flores | Jhoan Vergara | Chiroso Natural - 18g";
+        await renderWithProviders(<ScreenTitle title={name} lines={2}/>);
+
+        expect(screen.getByTestId("screen-title-text").props.numberOfLines).toBe(2);
+        expect(screen.getByText(name)).toBeTruthy();
+    });
+
     it("renders the title", async () => {
         await renderWithProviders(<ScreenTitle title="Recipes" count={12}/>);
         expect(screen.getByText("Recipes")).toBeTruthy();

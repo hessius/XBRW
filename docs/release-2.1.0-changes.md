@@ -3,6 +3,18 @@
 This is the source for the full release-testing checklist, not a claim that
 device testing is complete. Update it whenever release scope or behaviour changes.
 
+## Long recipe names wrap (2026-10-18)
+
+A roaster's import can name a recipe with its origin, farm, producer and lot,
+often 40 to 90 characters. The recipe screen cut that off after two lines.
+Now a name over 28 characters steps down from 26 pt to 22 pt and may wrap to
+three lines; shorter names look exactly as before. The folded header bar, the
+brew screen's title and a catalogue recipe's screen title each allow two lines
+in place of one. Library cards and shelf tiles keep their fixed heights, so
+they still truncate. `COLLAPSE_SHRINK` rises from 140 to 180, so the taller
+slab cannot make the editor header strobe. Name limits are unchanged.
+Not yet checked on a device.
+
 ## Brew history trace storage (2026-10-15)
 
 Brew traces are compressed and managed under a configurable storage budget. When

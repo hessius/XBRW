@@ -33,8 +33,16 @@ export const EXPAND_AT = 24;
  * collapse, so it folds almost nothing away; its persistent height instead
  * enlarges `extent`, which makes a collapse easier to grant, not harder. The
  * fold-away on both screens stays well under 140, so the overestimate stands.
+ *
+ * Raised to 180 when the editor's name was allowed a third line. Added up from
+ * the tokens, the slab folds away its beverage row (about 25) and a name of up
+ * to three 27 pt lines plus its margin (about 88), and the curve gives back 40
+ * of height and about 21 of padding: roughly 174 for the longest name. 140 was
+ * no longer an overestimate for that screen. The home screen only loses a
+ * little by it: a list now needs about 40 more points of scroll before its
+ * header will fold.
  */
-export const COLLAPSE_SHRINK = 140;
+export const COLLAPSE_SHRINK = 180;
 
 /**
  * The next collapsed state, given where the list is and where the header is now.
