@@ -155,10 +155,14 @@ export default function MachineDetailSheet({machineId, onClose, settings}: Props
                         )}
                         <SettingsActionRow
                             label="Forget this machine" tone="danger"
-                            detail={machines.length > 1
+                            // Locked like "Use this machine now": forgetting
+                            // the machine in use mid-brew would hand the next
+                            // BREW to another machine while this one pours.
+                            detail={changeBlocker ?? (machines.length > 1
                                 ? "Takes it off the list. Add it again to get it back."
-                                : "XBRW++ will scan again next time."}
+                                : "XBRW++ will scan again next time.")}
                             onPress={() => {
+                                if (changeBlocker !== null) return;
                                 void forgetMachine(machine.id).then((gone) => {
                                     if (gone) onClose();
                                 });
