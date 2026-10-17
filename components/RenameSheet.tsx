@@ -75,7 +75,10 @@ export default function RenameSheet({open, onOpenChange, name, borrowedName, onR
     }
 
     function submit() {
-        const next = draft.trim();
+        // A name is one line. Return submits rather than breaking the line, but
+        // a pasted name can still carry a line break, and the header and the
+        // library row have nowhere to put one.
+        const next = draft.replace(/\s*[\r\n]+\s*/g, " ").trim();
         // The borrowed title saved untouched keeps the recipe on its pod, so a
         // later change to the pod name still reaches it. Compared after Unicode
         // normalisation, so the same name typed with a different keyboard's
@@ -96,7 +99,7 @@ export default function RenameSheet({open, onOpenChange, name, borrowedName, onR
             // not offer back the name the user just decided against.
             if (!next) setDraft(seed);
             onOpenChange(next);
-        }} title="Rename recipe" heightPercent={34}>
+        }} title="Rename recipe" heightPercent={RENAME_HEIGHT}>
             <YStack gap="$3" paddingHorizontal="$4" paddingBottom="$4">
                 <Text fontSize={13} color={palette.dim}>
                     Clear it to follow the pod name.
@@ -110,18 +113,31 @@ export default function RenameSheet({open, onOpenChange, name, borrowedName, onR
                     onChangeText={setDraft}
                     maxLength={MAX_LENGTH}
                     autoFocus
+                    // Wraps, so a long name is read whole. Single line, Android
+                    // scrolled a pre-filled name to its end and cut the first
+                    // visible letter at the field's edge. Return still saves,
+                    // as in every other field in the app: see BrewJudgement.
+                    multiline
+                    submitBehavior="blurAndSubmit"
                     returnKeyType="done"
                     onSubmitEditing={submit}
                     placeholder="e.g. Yirgacheffe"
                     placeholderTextColor={palette.placeholder}
                     autoCorrect={false}
+                    textAlignVertical="top"
                     style={{
                         fontSize:        16,
+                        lineHeight:      FIELD_LINE,
+                        // Three lines, then it scrolls inside itself rather
+                        // than pushing SAVE NAME down under the keyboard.
+                        maxHeight:       FIELD_LINE * FIELD_LINES + 2 * FIELD_PAD_V,
                         color:           palette.text,
                         backgroundColor: palette.raised,
                         borderRadius:    12,
+                        // On the input itself, not a wrapper, so the text
+                        // clears the rounded corner on both platforms.
                         paddingHorizontal: 14,
-                        paddingVertical: 12
+                        paddingVertical: FIELD_PAD_V
                     }}/>
 
                 <XStack
@@ -141,3 +157,20 @@ export default function RenameSheet({open, onOpenChange, name, borrowedName, onR
         </XbrwSheet>
     );
 }
+
+/** Line height and vertical padding of the name field, and how many lines it shows. */
+const FIELD_LINE = 22;
+const FIELD_LINES = 3;
+const FIELD_PAD_V = 12;
+
+/**
+ * Taller than the 34 the single-line field had, for the two lines a long name
+ * can now wrap onto (about 44 dp).
+ *
+ * From a 1080 x 2520 Android screenshot with the keyboard up: the 34 sheet had
+ * been lifted by the keyboard with its bottom edge just under the keyboard's
+ * top, and left about 50 dp free beneath SAVE NAME. That is too close to spend
+ * all of it, so the sheet grows instead and the extra comes off the dimmed
+ * screen above it.
+ */
+const RENAME_HEIGHT = 40;
