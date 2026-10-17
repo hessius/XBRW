@@ -32,6 +32,27 @@ function linked(over: Partial<Recipe> = {}): Recipe {
 }
 
 describe("PodSection", () => {
+    it("lists what the pod carries directly under the pod line", async () => {
+        await renderWithProviders(
+            <PodSection {...props({recipe: linked({
+                coffee: {name: "Ethiopia Guji", roaster: "Some Roastery", processing: "Natural"}
+            })})}/>
+        );
+
+        expect(screen.getAllByTestId(/^pod-(linked|coffee)$/).map((node) => node.props.testID))
+            .toEqual(["pod-linked", "pod-coffee"]);
+        expect(screen.getByLabelText("Roaster, Some Roastery")).toBeTruthy();
+        expect(screen.getByLabelText("Process, Natural")).toBeTruthy();
+        // The pod line already names it.
+        expect(screen.getAllByText("Ethiopia Guji")).toHaveLength(1);
+    });
+
+    it("adds nothing under the pod line for a recipe without a coffee", async () => {
+        await renderWithProviders(<PodSection {...props({recipe: linked()})}/>);
+
+        expect(screen.queryByTestId("pod-coffee")).toBeNull();
+    });
+
     it("draws the ID field even for a recipe with no pod", async () => {
         // Always there, because someone hunting for the field needs it in a
         // fixed place rather than in a section that appears once they have

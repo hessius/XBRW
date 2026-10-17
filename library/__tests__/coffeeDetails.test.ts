@@ -29,7 +29,7 @@ const FULL: PodCoffee = {
     imageUrl:       "https://example.com/coffee.png"
 };
 
-const nothingShown = {shownNames: [] as string[]};
+const nothingShown = {podName: ""};
 
 function fields(coffee: PodCoffee, options = nothingShown): string[] {
     return coffeeDetails(coffee, options)?.groups.flat().map((row) => row.field) ?? [];
@@ -71,7 +71,7 @@ describe("coffeeDetails", () => {
 
         expect(details?.groups.map((group) => group.map((row) => row.field))).toEqual([
             ["roaster"],
-            ["origin", "country", "region", "farm", "farmer", "elevation"],
+            ["country", "region", "farm", "farmer", "elevation"],
             ["processing", "fermentation", "variety", "beanMix"],
             ["roast", "roastingDate", "decaffeinated"],
             ["aromatics", "cupping_points"]
@@ -106,34 +106,55 @@ describe("coffeeDetails", () => {
         expect(fields({name: "X", decaffeinated: true})).toEqual(["decaffeinated"]);
     });
 
-    it("drops the pod's origin line when it only repeats the country", () => {
-        expect(fields({name: "X", origin: "colombia", country: "Colombia"})).toEqual(["country"]);
+    it("draws the pod's origin line only when there is no country", () => {
+        // The finer fields replace it: country, region and farm say the same
+        // thing better, so both would be the same fact twice.
+        expect(fields({name: "X", origin: "Colombia, Huila", country: "Colombia"}))
+            .toEqual(["country"]);
         expect(fields({name: "X", origin: "Ethiopia"})).toEqual(["origin"]);
     });
 
-    it("repeats the name only when the screen does not already show it", () => {
-        const coffee = {name: "La Esperanza Gesha", roaster: "R"};
+    it("names the farmer and the varietal in the app's own words", () => {
+        const rows = coffeeDetails({name: "X", farmer: "R. Herrera", variety: "Gesha"}, nothingShown)!
+            .groups.flat();
 
-        expect(coffeeDetails(coffee, {shownNames: ["la esperanza  gesha"]})?.name)
-            .toBeUndefined();
-        expect(coffeeDetails(coffee, {shownNames: ["", "Morning V60"]})?.name)
-            .toBe("La Esperanza Gesha");
+        expect(rows.map((row) => [row.label, row.spokenLabel])).toEqual([
+            ["FARMER", "Farmer"],
+            ["VARIETAL", "Varietal"]
+        ]);
     });
 
-    it("is null when the coffee says nothing beyond a name already shown", () => {
-        expect(coffeeDetails({name: "Pod Name"}, {shownNames: ["Pod Name"]})).toBeNull();
-        // The picture alone is not a reason to draw: XPOD owns pictures.
+    it("repeats the name only when it is not the pod name above it", () => {
+        const coffee = {name: "La Esperanza Gesha", roaster: "R"};
+
+        expect(coffeeDetails(coffee, {podName: "la esperanza  gesha"})?.name).toBeUndefined();
+        expect(coffeeDetails(coffee, {podName: ""})?.name).toBe("La Esperanza Gesha");
+        expect(coffeeDetails(coffee, {podName: "Morning V60"})?.name).toBe("La Esperanza Gesha");
+    });
+
+    it("is null when the coffee says nothing beyond the pod name", () => {
+        expect(coffeeDetails({name: "Pod Name"}, {podName: "Pod Name"})).toBeNull();
+        // The picture alone is not a reason to draw: XPOD already draws it.
         expect(coffeeDetails({name: "Pod Name", imageUrl: "https://x/a.png"},
-                             {shownNames: ["Pod Name"]})).toBeNull();
+                             {podName: "Pod Name"})).toBeNull();
     });
 
     it("drops the coffee link when it is the recipe page FROM already links to", () => {
         const coffee = {name: "X", url: "https://example.com/page"};
 
-        expect(coffeeDetails(coffee, {shownNames: ["X"], recipeUrl: "https://example.com/page"}))
+        expect(coffeeDetails(coffee, {podName: "X", recipeUrl: "https://example.com/page"}))
             .toBeNull();
-        expect(coffeeDetails(coffee, {shownNames: ["X"], recipeUrl: "https://example.com/other"})?.url)
+        expect(coffeeDetails(coffee, {podName: "X", recipeUrl: "https://example.com/other"})?.url)
             .toBe("https://example.com/page");
+    });
+
+    it("treats the same page written two ways as one page", () => {
+        expect(coffeeDetails({name: "X", url: "https://Example.com"},
+                             {podName: "X", recipeUrl: "https://example.com/"})).toBeNull();
+        // An unparseable recipe URL matches nothing, so the coffee link stays.
+        expect(coffeeDetails({name: "X", url: "https://example.com/"},
+                             {podName: "X", recipeUrl: "not a url"})?.url)
+            .toBe("https://example.com/");
     });
 
     it("gives every row a spoken label in words, not a spelled-out caption", () => {
