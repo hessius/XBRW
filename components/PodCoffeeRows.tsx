@@ -3,7 +3,6 @@ import {Pressable} from "react-native";
 import {Text, XStack, YStack} from "tamagui";
 
 import Collapsible from "@/components/Collapsible";
-import DeckSection from "@/components/DeckSection";
 import DotMatrixText from "@/components/DotMatrixText";
 import LinkText from "@/components/LinkText";
 import {palette} from "@/constants/colors";
@@ -14,11 +13,19 @@ import {
 } from "@/library/coffeeDetails";
 import Recipe from "@/library/Recipe";
 
-/** Wide enough for the longest caption, ELEVATION, so values line up. */
-const LABEL_WIDTH = 92;
+/**
+ * Room for the longest caption, ELEVATION, so values line up.
+ *
+ * A floor rather than a width: at a large text size the caption grows instead
+ * of breaking mid-word, and only that row's value moves over.
+ */
+const LABEL_MIN_WIDTH = 92;
 
-export const COFFEE_TITLE = "COFFEE";
-export const COFFEE_PAGE_LABEL = "View the coffee page";
+/**
+ * Says where the link goes without naming coffee, because a tea pod carries
+ * the same block and the same kind of link.
+ */
+export const PRODUCT_PAGE_LABEL = "View the product page";
 
 /**
  * One label and value.
@@ -29,7 +36,7 @@ export const COFFEE_PAGE_LABEL = "View the coffee page";
  * spelled out and a value with nothing to say what it is.
  *
  * Values wrap rather than truncate. This is the one place a long farm name or a
- * list of tasting notes can be read whole.
+ * list of flavours can be read whole.
  */
 function DetailRow({row}: {row: CoffeeDetailRow}) {
     return (
@@ -39,7 +46,7 @@ function DetailRow({row}: {row: CoffeeDetailRow}) {
                 alignItems="flex-start" gap="$2">
             <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.3}
                            color={palette.dim}
-                           style={{width: LABEL_WIDTH, paddingTop: 2}}>
+                           style={{minWidth: LABEL_MIN_WIDTH, paddingTop: 2}}>
                 {row.label}
             </DotMatrixText>
             <Text flex={1} minWidth={0} fontSize={13} lineHeight={19}
@@ -71,7 +78,7 @@ function CoffeeNote({note}: {note: string}) {
     return (
         <YStack>
             <Pressable accessibilityRole="button"
-                       accessibilityLabel="Coffee note"
+                       accessibilityLabel="Pod note"
                        accessibilityState={{expanded: open}}
                        testID="coffee-note-toggle"
                        onPress={() => setOpen((was) => !was)}
@@ -95,33 +102,31 @@ function CoffeeNote({note}: {note: string}) {
 }
 
 /**
- * The coffee a recipe carries, field by field.
+ * What the pod carries, field by field, under the pod line in XPOD.
  *
- * A recipe gets a coffee from an xPod, from an import link (BrewMind, or a
- * roaster's own page) or from a backup, and keeps it for Beanconqueror. Until
- * this section the deck showed almost none of it.
+ * A recipe gets this block from an xPod, from an import link (BrewMind, or a
+ * roaster's own page) or from a backup, and keeps it for Beanconqueror. XPOD
+ * used to show only its name and photo.
  *
- * It sits straight after XPOD because both answer what is in the cup, and
- * before FROM, which answers who the recipe arrived from. The pod's name and
- * photo stay in XPOD: this section repeats the coffee's name only when no other
- * part of the screen already shows it, and draws no picture of its own.
+ * Inside XPOD rather than under a heading of its own, because it answers the
+ * same question the pod line does, and because a tea pod carries the same block:
+ * a heading saying COFFEE would be wrong for it.
  *
- * Every field is optional and an empty one gets no row. A coffee with nothing
- * left to say once the duplicates are gone draws no section at all, rather
- * than a heading over nothing.
+ * Every field is optional and an empty one gets no row. The coffee's name is
+ * drawn only when it differs from the pod name on the line above, and a block
+ * with nothing else to say draws nothing at all.
  */
-export default function CoffeeSection({recipe}: {recipe: Recipe}) {
+export default function PodCoffeeRows({recipe}: {recipe: Recipe}) {
     const details = coffeeDetails(recipe.coffee, {
-        shownNames: [recipe.xbloomName, recipe.displayName()],
-        recipeUrl:  recipe.recipeUrl
+        podName:   recipe.xbloomName,
+        recipeUrl: recipe.recipeUrl
     });
     if (details === null) return null;
 
     return (
-        <DeckSection title={COFFEE_TITLE} testID="about-coffee">
+        <YStack testID="pod-coffee" gap="$2">
             {details.name !== undefined && (
-                <Text testID="coffee-name" fontSize={16} color={palette.text}
-                      accessibilityLabel={`Coffee, ${details.name}`}>
+                <Text testID="coffee-name" fontSize={14} color={palette.text}>
                     {details.name}
                 </Text>
             )}
@@ -139,10 +144,10 @@ export default function CoffeeSection({recipe}: {recipe: Recipe}) {
             {details.note !== undefined && <CoffeeNote note={details.note}/>}
 
             {details.url !== undefined && (
-                <LinkText label={COFFEE_PAGE_LABEL}
+                <LinkText label={PRODUCT_PAGE_LABEL}
                           url={details.url}
-                          accessibilityLabel={`${COFFEE_PAGE_LABEL}. Opens in your browser.`}/>
+                          accessibilityLabel={`${PRODUCT_PAGE_LABEL}. Opens in your browser.`}/>
             )}
-        </DeckSection>
+        </YStack>
     );
 }

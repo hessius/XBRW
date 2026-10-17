@@ -193,6 +193,56 @@ from `library/Recipe.ts`.
 | `recipe.cup.other` | `library/Recipe.ts:371` | Cup-type name, Other (a brewer the machine cannot measure, overflow protection off). | `Other` |
 | `recipe.cup.unknown` | `library/Recipe.ts:373` | Cup-type name fallback. | `Unknown` |
 
+### What the pod carries (`components/PodCoffeeRows.tsx`, `library/coffeeDetails.ts`)
+
+Rows under the pod line in the XPOD section on ABOUT. Each row is drawn only
+when its field has a value. Values are the roaster's own text and are not
+listed here.
+
+| ID | Source | Context — when the user sees this | Current text |
+|----|--------|-----------------------------------|--------------|
+| `editor.pod.coffee.roaster.label` | `library/coffeeDetails.ts:112` | Doto caption on an XPOD detail row. Who roasted it. | `ROASTER` |
+| `editor.pod.coffee.roaster.a11y` | `library/coffeeDetails.ts:112` | (a11y) Spoken name for the same row, read as `${spoken}, ${value}`. | `Roaster` |
+| `editor.pod.coffee.origin.label` | `library/coffeeDetails.ts:115` | Doto caption on an XPOD detail row. The pod's one-line origin. Drawn only when there is no country. | `ORIGIN` |
+| `editor.pod.coffee.origin.a11y` | `library/coffeeDetails.ts:115` | (a11y) Spoken name for the same row, read as `${spoken}, ${value}`. | `Origin` |
+| `editor.pod.coffee.country.label` | `library/coffeeDetails.ts:116` | Doto caption on an XPOD detail row. Country of origin. | `COUNTRY` |
+| `editor.pod.coffee.country.a11y` | `library/coffeeDetails.ts:116` | (a11y) Spoken name for the same row, read as `${spoken}, ${value}`. | `Country` |
+| `editor.pod.coffee.region.label` | `library/coffeeDetails.ts:117` | Doto caption on an XPOD detail row. Growing region. | `REGION` |
+| `editor.pod.coffee.region.a11y` | `library/coffeeDetails.ts:117` | (a11y) Spoken name for the same row, read as `${spoken}, ${value}`. | `Region` |
+| `editor.pod.coffee.farm.label` | `library/coffeeDetails.ts:118` | Doto caption on an XPOD detail row. Farm or washing station. | `FARM` |
+| `editor.pod.coffee.farm.a11y` | `library/coffeeDetails.ts:118` | (a11y) Spoken name for the same row, read as `${spoken}, ${value}`. | `Farm` |
+| `editor.pod.coffee.farmer.label` | `library/coffeeDetails.ts:121` | Doto caption on an XPOD detail row. Who grew it (`farmer`). Not "producer", which in this app means whoever made the recipe. | `FARMER` |
+| `editor.pod.coffee.farmer.a11y` | `library/coffeeDetails.ts:121` | (a11y) Spoken name for the same row, read as `${spoken}, ${value}`. | `Farmer` |
+| `editor.pod.coffee.elevation.label` | `library/coffeeDetails.ts:122` | Doto caption on an XPOD detail row. Growing height. | `ELEVATION` |
+| `editor.pod.coffee.elevation.a11y` | `library/coffeeDetails.ts:122` | (a11y) Spoken name for the same row, read as `${spoken}, ${value}`. | `Elevation` |
+| `editor.pod.coffee.process.label` | `library/coffeeDetails.ts:129` | Doto caption on an XPOD detail row. Processing method. | `PROCESS` |
+| `editor.pod.coffee.process.a11y` | `library/coffeeDetails.ts:129` | (a11y) Spoken name for the same row, read as `${spoken}, ${value}`. | `Process` |
+| `editor.pod.coffee.fermentation.label` | `library/coffeeDetails.ts:130` | Doto caption on an XPOD detail row. Fermentation, when stated. | `FERMENT` |
+| `editor.pod.coffee.fermentation.a11y` | `library/coffeeDetails.ts:130` | (a11y) Spoken name for the same row, read as `${spoken}, ${value}`. | `Fermentation` |
+| `editor.pod.coffee.varietal.label` | `library/coffeeDetails.ts:132` | Doto caption on an XPOD detail row. Variety (`variety`), named as the catalogue filter names it. | `VARIETAL` |
+| `editor.pod.coffee.varietal.a11y` | `library/coffeeDetails.ts:132` | (a11y) Spoken name for the same row, read as `${spoken}, ${value}`. | `Varietal` |
+| `editor.pod.coffee.type.label` | `library/coffeeDetails.ts:133` | Doto caption on an XPOD detail row. `beanMix`, for example Single origin or Blend. | `TYPE` |
+| `editor.pod.coffee.type.a11y` | `library/coffeeDetails.ts:133` | (a11y) Spoken name for the same row, read as `${spoken}, ${value}`. | `Type` |
+| `editor.pod.coffee.roast.label` | `library/coffeeDetails.ts:137` | Doto caption on an XPOD detail row. Roast level. | `ROAST` |
+| `editor.pod.coffee.roast.a11y` | `library/coffeeDetails.ts:137` | (a11y) Spoken name for the same row, read as `${spoken}, ${value}`. | `Roast` |
+| `editor.pod.coffee.roasted.label` | `library/coffeeDetails.ts:138` | Doto caption on an XPOD detail row. Roast date, `YYYY-MM-DD` as written by the roaster. | `ROASTED` |
+| `editor.pod.coffee.roasted.a11y` | `library/coffeeDetails.ts:138` | (a11y) Spoken name for the same row, read as `${spoken}, ${value}`. | `Roasted on` |
+| `editor.pod.coffee.caffeine.label` | `library/coffeeDetails.ts:142` | Doto caption on an XPOD detail row. Shown only when the block says decaf. | `CAFFEINE` |
+| `editor.pod.coffee.caffeine.a11y` | `library/coffeeDetails.ts:142` | (a11y) Spoken name for the same row, read as `${spoken}, ${value}`. | `Caffeine` |
+| `editor.pod.coffee.flavour.label` | `library/coffeeDetails.ts:147` | Doto caption on an XPOD detail row. Flavour notes (`aromatics`). | `FLAVOUR` |
+| `editor.pod.coffee.flavour.a11y` | `library/coffeeDetails.ts:147` | (a11y) Spoken name for the same row, read as `${spoken}, ${value}`. | `Flavour` |
+| `editor.pod.coffee.score.label` | `library/coffeeDetails.ts:148` | Doto caption on an XPOD detail row. Cupping score (`cupping_points`). | `SCORE` |
+| `editor.pod.coffee.score.a11y` | `library/coffeeDetails.ts:148` | (a11y) Spoken name for the same row, read as `${spoken}, ${value}`. | `Cupping score` |
+| `editor.pod.coffee.row.a11y` | `components/PodCoffeeRows.tsx:45` | (a11y) Each detail row is one element. `${row.spokenLabel}` is the spoken name above; `${row.value}` is what the row shows. | `${row.spokenLabel}, ${row.value}` |
+| `editor.pod.coffee.elevation.value` | `library/coffeeDetails.ts:69` | Elevation value. `${...}` is whole metres, thousands grouped with a comma. | `${metres} m` |
+| `editor.pod.coffee.score.value` | `library/coffeeDetails.ts:150` | Cupping score value. `${...}` is the score, up to two decimals. | `${points} points` |
+| `editor.pod.coffee.caffeine.value` | `library/coffeeDetails.ts:143` | Value of the CAFFEINE row. | `Decaf` |
+| `editor.pod.coffee.note.show` | `components/PodCoffeeRows.tsx:92` | Doto control under the rows when the note is longer than 200 characters and folded. | `SHOW NOTE ›` |
+| `editor.pod.coffee.note.hide` | `components/PodCoffeeRows.tsx:92` | The same control while the note is open. | `HIDE NOTE` |
+| `editor.pod.coffee.note.a11y` | `components/PodCoffeeRows.tsx:81` | (a11y) Name of the note control. Its expanded state is announced with it. | `Pod note` |
+| `editor.pod.coffee.link` | `components/PodCoffeeRows.tsx:28` | Link to the page named in the block's `url`. Cup-type neutral, since a tea pod carries the same block. Not drawn when it is the recipe page FROM links to. | `View the product page` |
+| `editor.pod.coffee.link.a11y` | `components/PodCoffeeRows.tsx:149` | (a11y) The same link. | `View the product page. Opens in your browser.` |
+
 ### Brew-settings deck
 
 | ID | Source | Context — when the user sees this | Current text |
