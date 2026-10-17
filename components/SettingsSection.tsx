@@ -31,6 +31,21 @@ type Props = {
  * same BREW-deck card's, so a user crossing from the editor to settings meets
  * the same corner.
  */
+/**
+ * A section heading on its own, for a group that draws its own cards.
+ *
+ * Settings → Machines is one card per machine rather than rows in one card,
+ * and it still needs the same heading as every other section.
+ */
+export function SettingsSectionTitle({title}: {title: string}) {
+    return (
+        <DotMatrixText testID="settings-section-title" fontSize={11}
+                       weight="bold" letterSpacing={1.6} color={palette.dim}>
+            {title.toUpperCase()}
+        </DotMatrixText>
+    );
+}
+
 export default function SettingsSection({title, children}: Props) {
     // The divider lives here rather than on each row so that the first row has
     // nothing above it and the last nothing below it — the rounded corners stay
@@ -40,12 +55,7 @@ export default function SettingsSection({title, children}: Props) {
 
     return (
         <YStack gap="$2" paddingTop="$4">
-            {title !== undefined && (
-                <DotMatrixText testID="settings-section-title" fontSize={11}
-                               weight="bold" letterSpacing={1.6} color={palette.dim}>
-                    {title.toUpperCase()}
-                </DotMatrixText>
-            )}
+            {title !== undefined && <SettingsSectionTitle title={title}/>}
             <YStack backgroundColor={palette.surface} borderRadius="$5" overflow="hidden">
                 {rows.map((row, index) => (
                     // Keyed by index, honestly. `toArray` hands out positional
