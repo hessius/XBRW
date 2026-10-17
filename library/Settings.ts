@@ -29,12 +29,19 @@ export const DEFAULTS = {
     /**
      * Draw the picture a recipe arrived with, where there is one.
      *
-     * Off by default, because this is here to find out whether a face or a pod
-     * photo helps at all. A 40 pt mark is a far smaller promise than the recipe
-     * images the roadmap deferred, and anything that will not load falls back
-     * to the accent mark without saying a word about it.
+     * On by default. It started off, because it was here to find out whether a
+     * face or a pod photo helps at all, and at the time most recipes had
+     * neither. They usually have one now: a pod recipe carries its artwork, a
+     * shared one its sharer's picture, and an import link its coffee's photo.
+     * Off, all of that arrives and is never drawn, which is a quiet way to
+     * answer the question in the negative.
+     *
+     * The promise is still small. It is a 40 pt mark, not the recipe images
+     * the roadmap deferred, and anything that will not load falls back to the
+     * accent mark without saying a word about it, so a recipe with no picture
+     * looks exactly as it did.
      */
-    showRecipeAvatars: false,
+    showRecipeAvatars: true,
     /**
      * Draw the one-line hint under every label on the BREW deck.
      *

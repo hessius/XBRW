@@ -39,7 +39,7 @@ function pageLabel(recipe: Recipe): string {
  * this one with you", which is a row spent telling someone something they
  * already knew about a recipe they had just written.
  *
- * The picture is behind a setting, off by default, and anything that will not
+ * The picture is behind a setting, on by default, and anything that will not
  * load falls back to the accent mark without a word. A missing image is not an
  * error, and it is never a broken-image box.
  */
