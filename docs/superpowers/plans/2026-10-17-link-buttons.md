@@ -38,7 +38,7 @@ Do not create a second integration guide.
 **Create:** the four SVGs and `NOTICE.txt` listed above.
 **Read:** `assets/branding/xbrw-icon.svg`, `constants/colors.ts`.
 
-- [ ] **Step 1: Check ownership and tool availability.**
+- [x] **Step 1: Check ownership and tool availability.**
 
 Run:
 
@@ -53,7 +53,7 @@ Expected: clean owned task branch; Swift and librsvg available. Do not switch
 the shared root checkout. The approved visual previews are preserved under
 session artifact `files/link-assets/.superpowers/brainstorm/42736-1792230714/content/`.
 
-- [ ] **Step 2: Prepare font outlines without adding an app dependency.**
+- [x] **Step 2: Prepare font outlines without adding an app dependency.**
 
 Use existing `Inter-SemiBold.otf` from
 `/Users/jesperhessius/Dev/XBRW-beta-20261016/node_modules/@tamagui/font-inter/otf/`
@@ -133,7 +133,7 @@ for reuse in all four SVGs. Confirm advance widths are positive and no
 conversion reports missing glyphs. Use measured outlines rather than assuming
 CSS font metrics equal the final artwork.
 
-- [ ] **Step 3: Compose the SVG assets with exact approved styling.**
+- [x] **Step 3: Compose the SVG assets with exact approved styling.**
 
 Use a height of 48, radius 10, 17-pixel horizontal padding, 14-pixel lettering
 and 10-pixel gaps. Determine integer intrinsic widths from the actual content
@@ -154,7 +154,7 @@ Include intrinsic width/height and matching viewBox, SVG namespace,
 `role="img"` and `<title>Open recipe in XBRW++</title>`. No `<text>`,
 `<image>`, scripts, external references, font CSS, blur or glow filters.
 
-- [ ] **Step 4: Record font and asset permissions.**
+- [x] **Step 4: Record font and asset permissions.**
 
 Read the upstream font notices for the exact Inter and Space Mono fonts.
 The Tamagui package's top-level software license alone is not proof of the
@@ -169,7 +169,7 @@ This permission does not imply endorsement or grant rights to unrelated
 repository content or third-party marks.
 ```
 
-- [ ] **Step 5: Inspect the vector buttons before raster export.**
+- [x] **Step 5: Inspect the vector buttons before raster export.**
 
 Show all four on light and dark surfaces using the existing visual companion.
 Compare against the approved preview at 48 pixels high. Inspect the actual
@@ -180,7 +180,7 @@ Correct artwork issues before exporting.
 
 **Create:** the 12 PNGs matching the SVG filenames.
 
-- [ ] **Step 1: Export every density from its final SVG.**
+- [x] **Step 1: Export every density from its final SVG.**
 
 From the owned task root:
 
@@ -198,7 +198,7 @@ done
 Expected: four SVGs and twelve PNGs. Each scale has exactly proportionate
 dimensions and transparent outer corners. Do not add a raster background.
 
-- [ ] **Step 2: Inspect dimensions and visual consistency.**
+- [x] **Step 2: Inspect dimensions and visual consistency.**
 
 Run `sips -g pixelWidth -g pixelHeight -g hasAlpha` on each PNG. Verify heights
 48/96/144, widths at exact scale multiples, and alpha channels. Inspect the
@@ -210,7 +210,7 @@ detail is clean at 1x and the 2x/3x versions are not blurry upscales.
 Check label contrast: white on bold, white on charcoal, and brand on charcoal
 must each meet 4.5:1. Confirm the muted outline remains visible on dark hosts.
 
-- [ ] **Step 3: Commit the complete artwork checkpoint.**
+- [x] **Step 3: Commit the complete artwork checkpoint.**
 
 ```bash
 git add assets/branding/link-buttons
@@ -222,14 +222,14 @@ git commit -m "docs: add ready-to-use XBRW linking buttons" \
 
 **Create on this base:** `docs/url-scheme.md`, preserving its existing content.
 
-- [ ] **Step 1: Bring across the existing guide only.**
+- [x] **Step 1: Bring across the existing guide only.**
 
 Read `docs/url-scheme.md` from commit
 `a121929e0d770d39db07168b482e2e3cd7c1102a` and add that exact content using
 the normal file-edit tool. Do not cherry-pick or merge the beta branch.
 Keep the original version-1 contract unchanged.
 
-- [ ] **Step 2: Add a button section after Supported entry point.**
+- [x] **Step 2: Add a button section after Supported entry point.**
 
 Show the four SVG previews with relative image paths. Each row must link its
 SVG and all three PNG densities. State intrinsic logical sizes using the
@@ -275,7 +275,7 @@ fallback or installation link and opening the URL is not proof of import/save.
 Link `NOTICE.txt`, describe asset-use permission, and prohibit implying
 endorsement. Do not change broader repository licensing.
 
-- [ ] **Step 3: Check the guide and scope.**
+- [x] **Step 3: Check the guide and scope.**
 
 Open the guide preview and follow every relative asset link. Confirm HTML
 escaping and the native example's matching names, aspect ratio, density files
@@ -300,3 +300,21 @@ Fetch `origin --no-prune`, then run `npm run worktrees:check`. Record base/head,
 worktree/branch, clean state and push state. Retain this owned worktree for
 pending integration, with the remote branch as its recovery pointer. No PR,
 merge, deployment, release build or cleanup is authorised by this plan.
+
+## Execution evidence
+
+- Artwork checkpoint: `8ca49ac066eb28791a91deefaaf47b5c3d0ae2e5`.
+- Four self-contained SVGs and 12 density-specific PNGs; logo width 215,
+  text-only width 175, logical height 48.
+- XML checks confirmed no live text, external references, scripts or filters;
+  embedded logo circle geometry exactly matches the original.
+- All PNG dimensions and all four outside-corner alpha values checked at
+  every density. Visual contact sheets inspected on light/dark backgrounds.
+- Measured text contrast: white/bold 5.36:1, white/charcoal 18.10:1,
+  magenta/charcoal 4.79:1.
+- Guide checks confirmed the original URL contract is byte-identical outside
+  the added button section; all 16 download targets and local previews exist.
+  The native TSX example parses, and the URL example preserves reserved
+  characters through both encoding layers.
+- No app behaviour changed. Physical-device URL qualification remains a
+  partner integration check, not a claim made from these artwork checks.
