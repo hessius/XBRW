@@ -77,6 +77,28 @@ describe("decorateImport", () => {
         expect(decorateImport(once, {coffee}).tags).toEqual(["Natural"]);
     });
 
+    it("names the recipe as the producer does", () => {
+        const fetched = recipe();
+        fetched.xbloomName = "col chiroso -18g";
+
+        const decorated = decorateImport(fetched, {
+            recipeName: "Colombia | Las Flores | Chiroso Natural - 18g"
+        });
+
+        expect(decorated.name).toBe("Colombia | Las Flores | Chiroso Natural - 18g");
+        expect(decorated.displayName()).toBe("Colombia | Las Flores | Chiroso Natural - 18g");
+    });
+
+    it("leaves xBloom's own name where it was", () => {
+        // `xbloomName` is what USE THIS NAME restores, so overwriting it would
+        // take away the way back to what xBloom called the recipe.
+        const fetched = recipe();
+        fetched.xbloomName = "col chiroso -18g";
+
+        expect(decorateImport(fetched, {recipeName: "Chiroso Natural"}).xbloomName)
+            .toBe("col chiroso -18g");
+    });
+
     it("changes nothing when there is nothing to apply", () => {
         const plain = recipe();
         const before = plain.source;
@@ -86,5 +108,6 @@ describe("decorateImport", () => {
         expect(decorated.coffee).toBeUndefined();
         expect(decorated.tags).toEqual([]);
         expect(decorated.source).toBe(before);
+        expect(decorated.name).toBe("");
     });
 });

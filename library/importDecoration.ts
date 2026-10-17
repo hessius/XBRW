@@ -14,6 +14,11 @@ export type ImportDecoration = {
     source?: RecipeSource;
     /** `recipe.url`: the producer's own page for this recipe. */
     recipeUrl?: string;
+    /**
+     * `recipe.name`: the producer's name for this recipe. Written to `name`,
+     * never to `xbloomName`, which stays what xBloom published.
+     */
+    recipeName?: string;
 };
 
 /**
@@ -55,12 +60,17 @@ function tagsFrom(coffee: PodCoffee): string[] {
  * The caller must apply this to the *candidate*, before de-duplication. When
  * the link points at a recipe already in the library, the stored recipe wins
  * and keeps its own coffee: a link should not quietly rewrite the coffee on a
- * recipe the user has already edited.
+ * recipe the user has already edited. The name follows the same rule, for the
+ * same reason and more so: a name may be one the user typed.
  */
 export function decorateImport(recipe: Recipe, decoration: ImportDecoration): Recipe {
-    const {coffee, source, recipeUrl} = decoration;
+    const {coffee, source, recipeUrl, recipeName} = decoration;
     if (source !== undefined) recipe.source = source;
     if (recipeUrl !== undefined) recipe.recipeUrl = recipeUrl;
+    // `name`, not `xbloomName`. `displayName()` already prefers `name`, so the
+    // recipe reads as the producer called it, while xBloom's own title stays
+    // cached underneath for USE THIS NAME to restore.
+    if (recipeName !== undefined) recipe.name = recipeName;
     if (coffee === undefined) return recipe;
 
     recipe.coffee = coffee;

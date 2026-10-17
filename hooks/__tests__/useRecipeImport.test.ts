@@ -392,6 +392,27 @@ describe("a recipe already in the library", () => {
         expect(onOpenRecipe.mock.calls[0][1]).toBe(true);
     });
 
+    it("keeps the name it already has when a link names it differently", async () => {
+        // The decoration lands on the candidate, before de-duplication, so
+        // the stored recipe wins and keeps its own name. A link must not
+        // rename a recipe the user may have renamed themselves.
+        const existing = importedRecipe();
+        existing.name = "My Ethiopia";
+        const {onOpenRecipe, stored} = setup([existing]);
+        const {result} = await renderHook(() => useRecipeImport({stored, onOpenRecipe}));
+
+        await act(async () => {
+            result.current.resolveNow(
+                {kind: "xid", xid: "ETH120"}, "atomic", {recipeName: "Ethiopia Guji - 15g"}
+            );
+        });
+
+        await waitFor(() => expect(onOpenRecipe).toHaveBeenCalledTimes(1));
+        expect(onOpenRecipe.mock.calls[0][0]).toBe(existing);
+        expect(onOpenRecipe.mock.calls[0][1]).toBe(true);
+        expect(existing.name).toBe("My Ethiopia");
+    });
+
     it("brings in a bypass recipe rather than opening its plain twin", async () => {
         // The card bytes are identical, because no card carries bypass. Opening
         // the stored one here would hand the user the recipe without the

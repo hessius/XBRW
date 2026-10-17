@@ -137,6 +137,28 @@ uses. Copied at write time for the same reason `recipeName` and `accent` are:
 an export must still say where the recipe came from after the recipe itself
 has been deleted.
 
+### `recipe.name`, the producer's name for the recipe
+
+Requested by Central Coast Coffee, who link to XBRW++ from their product pages.
+A roaster's xBloom recipe tends to be named by whoever keyed it into xBloom
+("col chiroso -18g"), and a share link can only carry that name, so the recipe
+arrived named for the keying rather than for the coffee.
+
+`recipe.name` sets the recipe's own `name`, the field a rename writes. It does
+not touch `xbloomName`: that stays what xBloom published, so `displayName()`
+shows the producer's name while USE THIS NAME still has xBloom's to go back to.
+
+It is trimmed, and dropped when empty. It is capped at `MAX_NAME` (100), the
+rename sheet's ceiling, which now lives on `Recipe` so both read one constant.
+Not the 120 of the bean's short text: a link should not be able to set a name
+the rename sheet would then refuse to hold whole. Over-length drops the name
+rather than truncating it, as with every other field, and the recipe falls back
+to xBloom's.
+
+Like the rest of the decoration it applies only to a new import. A recipe
+already in the library keeps its stored name; see "How the coffee reaches the
+recipe" below.
+
 ### Why the pod output does not change
 
 `podCoffeeFromPodsVo` maps only the fields the pod endpoint carries. The new
@@ -233,7 +255,8 @@ Applied to the *candidate*, before `resolveOnOpen`. The consequence is
 deliberate: when the link points at a recipe already in the library, the stored
 recipe wins and its own coffee is kept. A link should not silently rewrite the
 coffee on a recipe the user has already edited, and "already in your library"
-is what the sheet says in that case.
+is what the sheet says in that case. The same holds for `recipe.url` and
+`recipe.name`: a stored recipe keeps its own page and its own name.
 
 ### Provenance
 

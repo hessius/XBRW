@@ -90,6 +90,15 @@ export const MAX_TAGS_PER_RECIPE = 20;
  * cannot drift.
  */
 export const MAX_DESCRIPTION = 60;
+/**
+ * The ceiling on a recipe's own `name`, in characters.
+ *
+ * `RenameSheet` enforces it where the name is typed, and an import link's
+ * `recipe.name` is held to it where that name arrives. Both read this constant,
+ * so a link cannot set a name the rename sheet would then refuse to show whole.
+ * A name is a headline, not a description; the note is where a sentence goes.
+ */
+export const MAX_NAME = 100;
 
 const POLY_TABLE = [
     0x00, 0x5E, 0xBC, 0xE2, 0x61, 0x3F, 0xDD, 0x83,

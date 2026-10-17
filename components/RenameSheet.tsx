@@ -5,14 +5,16 @@ import {Text, XStack, YStack} from "tamagui";
 import DotMatrixText from "@/components/DotMatrixText";
 import XbrwSheet from "@/components/XbrwSheet";
 import {onAccent, palette} from "@/constants/colors";
+import {MAX_NAME} from "@/library/Recipe";
 
 /**
  * The same ceiling the Name row carried on the brew deck.
  *
  * A name is a headline, not a description. The note on ABOUT is where a
- * sentence belongs.
+ * sentence belongs. Shared with the import link's `recipe.name`, which is why
+ * it lives on `Recipe` rather than here.
  */
-const MAX_LENGTH = 100;
+const MAX_LENGTH = MAX_NAME;
 
 /**
  * Renames a recipe, from wherever in the editor you happen to be.
