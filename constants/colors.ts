@@ -81,7 +81,9 @@ export const palette = {
      * screen dropped it, so the app's own identity stopped at the home screen
      * icon. It is a brand colour rather than a semantic one, so it marks the
      * app being itself (the mark, the wordmark's `++`) and never a state: a
-     * user cannot learn it means anything, because it does not.
+     * user cannot learn it means anything, because it does not. The one
+     * exception is a switch that is on (`switchColours`); position carries the
+     * state too, so the colour is reinforcement, not the only cue.
      *
      * 5.56:1 on `base`, so it clears AA for body text as well as for graphics.
      */
@@ -234,11 +236,13 @@ export const onBrand = {
  * the ring around it changes, and the thumb brightens.
  *
  * `dark` is every switch on `base`, `surface` or `raised`: settings rows and
- * sheets. On, the track is `success`, which marks "active" the way it does
- * everywhere else the app confirms a state, and the thumb is `base` because
- * white on `success` is only 1.74:1. Off, the track stays the quiet `control`
- * grey and a `muted` ring draws its edge, 3.73:1 on `surface` and 3.55:1 on
- * `raised`, with a `dim` thumb that steps back from the white `text`.
+ * sheets. On, the track is `brand`, the magenta of the `++`, with a white
+ * thumb: 5.04:1 on `surface`, 4.79:1 on `raised`, 3.59:1 against the off
+ * track, and 3.78:1 for the thumb on it. `brand` rather than `brandFill`,
+ * though the thumb is white: `brandFill` is only 2.53:1 against the off
+ * track, so the two states would sit too close. Off, the track stays the
+ * quiet `control` grey and a `muted` ring draws its edge, 3.73:1 on `surface`
+ * and 3.55:1 on `raised`, with a `dim` thumb that steps back from the white.
  *
  * `accent` is the switch on an Easy Mode slot card, which is filled with a
  * recipe accent. On is a solid `base` track; off is the same outline drawn in
@@ -255,7 +259,7 @@ export const onBrand = {
  */
 export const switchColours = {
     dark: {
-        on:  {track: palette.success, ring: palette.success, thumb: palette.base},
+        on:  {track: palette.brand, ring: palette.brand, thumb: palette.text},
         off: {track: palette.control, ring: palette.muted, thumb: palette.dim}
     },
     accent: {

@@ -174,6 +174,14 @@ describe("switch states", () => {
         expect(contrast(dark.on.track, dark.off.track)).toBeGreaterThanOrEqual(3);
     });
 
+    it("fills the on track with the brighter of the two magentas", () => {
+        // `brandFill` would carry the white thumb better, but sits only 2.53:1
+        // from the off track. Pinned so it is not swapped in by symmetry with
+        // the support tile.
+        expect(dark.on.track).toBe(palette.brand);
+        expect(contrast(palette.brandFill, dark.off.track)).toBeLessThan(3);
+    });
+
     it("keeps each thumb visible on its own track", () => {
         expect(contrast(dark.on.thumb, dark.on.track)).toBeGreaterThanOrEqual(3);
         expect(contrast(dark.off.thumb, dark.off.track)).toBeGreaterThanOrEqual(3);
@@ -182,10 +190,10 @@ describe("switch states", () => {
     it("pins the measured values", () => {
         // The figures quoted in `switchColours`. A retuned token has to move
         // these on purpose rather than drift past them.
-        expect(contrast(dark.on.track, palette.surface)).toBeCloseTo(10.94, 2);
-        expect(contrast(dark.on.track, palette.raised)).toBeCloseTo(10.40, 2);
-        expect(contrast(dark.on.track, dark.off.track)).toBeCloseTo(7.80, 2);
-        expect(contrast(dark.on.thumb, dark.on.track)).toBeCloseTo(12.07, 2);
+        expect(contrast(dark.on.track, palette.surface)).toBeCloseTo(5.04, 2);
+        expect(contrast(dark.on.track, palette.raised)).toBeCloseTo(4.79, 2);
+        expect(contrast(dark.on.track, dark.off.track)).toBeCloseTo(3.59, 2);
+        expect(contrast(dark.on.thumb, dark.on.track)).toBeCloseTo(3.78, 2);
         expect(contrast(dark.off.ring, palette.surface)).toBeCloseTo(3.73, 2);
         expect(contrast(dark.off.ring, palette.raised)).toBeCloseTo(3.55, 2);
         expect(contrast(dark.off.thumb, dark.off.track)).toBeCloseTo(5.38, 2);
