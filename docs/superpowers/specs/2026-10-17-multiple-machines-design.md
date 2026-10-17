@@ -132,8 +132,11 @@ which is the price.
   new default, model included, rather than leaving the phone with no machine
   (an empty `machineDeviceId` takes BREW off every recipe). Forgetting the last
   one clears the keys and readings, as unpairing always has.
-- `recordSerial(id, serial)`: kept against the entry, written only when it
-  changes.
+- `recordSerial(id, serial)`: kept against the entry the first time it is
+  heard, and never replaced by a different one. A machine's serial does not
+  change, so a different serial under an entry means the id now names a
+  different machine, and keeping the old one is what lets the brew guard
+  notice.
 - `saveSavedMachines(list)`: also pushes the active entry's model to
   `machineModel`, so changing the model in a machine's sheet behaves like the
   old "Your xBloom" row.
@@ -201,15 +204,36 @@ connects to `window`.
 The rule above makes this the normal outcome. `useBrew.attempt` makes it a
 guarantee. BREW records the machine in use at the press, connects, and then
 compares it with `Machine.linkedDeviceId`. If they differ, nothing is sent and
-the brew fails with `WrongMachineError`: "Connected to Home, not Work. Check
-the machine shown, then press BREW again." It is not relinked, because a retry
-would land in the same place. The connect has made Home the machine in use, so
-the screen now says Home, and a second press is a deliberate choice. With one
-machine saved the check is off, because the stale-id rescan may legitimately
-bring the same machine back under a new id.
+the brew fails with `WrongMachineError`: "Found Home, not Work, so nothing was
+sent. Check Work is on and nearby, or pick Home, then press BREW again." It is
+not relinked, because a retry would land in the same place. The link to Home is
+dropped and Work is put back as the machine in use (`restoreMachineInUse`), so
+the chip and the panel go on naming the machine the user was looking at rather
+than the one that happened to answer.
+
+With one machine saved the id is not a reliable check, because the stale-id
+rescan brings the machine back under a new id. But that rescan takes whatever
+xBloom answers first, which in a cafe is somebody else's, and it renames the
+saved entry's id to it. So with one machine saved the **serial** is the check:
+if the saved entry has a serial and the connected machine reports a different
+one, nothing is sent, the entry's old id is put back, and the brew fails with
+"This xBloom is not your saved machine (serial ending 0001), so nothing was
+sent. Check yours is on and nearby, then press BREW again." The saved serial is
+never re-pointed to the stranger's (see `recordSerial`). A machine that has
+never reported a serial cannot be checked this way; that is the gap left.
 
 `linkedDeviceId` rather than `slotIdentity`: it needs no reading from the
-machine, so it is known the moment the link is up.
+machine, so it is known the moment the link is up. `switchToProAndRetry`, which
+also sends a recipe, refuses the same way if the link has moved.
+
+**The brew is pinned to its link.** `Machine.brewAttempt` records the link
+generation it starts on and refuses to send ("The machine connection changed.")
+if the link was replaced during its pre-flight, which can spend several seconds
+waiting for the machine to answer. Without it, a machine picked by hand in that
+window would receive the recipe. This mirrors the generation checks already in
+`connectAttempt` and `shakeHands`. A link that merely dropped is not caught
+here: `brewBlock` still refuses it as `notConnected`, which keeps the brew
+path's one relink.
 
 ### Signal strength
 
@@ -227,11 +251,13 @@ the order is how the user said to handle a new place.
 
 ### When the machine cannot change
 
-`machineChangeBlocker` refuses a switch, an add, and locks every picker row
-while a brew is active (`isActiveBrewPhase`) or `lostContact` (the machine is
+`machineChangeBlocker` refuses a switch, an add and a forget, and locks every
+picker row while a brew is active (`isActiveBrewPhase`) or `lostContact` (the machine is
 assumed to still be brewing), and while an Easy Mode slot operation holds the
 device (`assertCanForgetDevice`). A switch during a brew would leave a dose on
-one machine and the recorder, wake lock and STOP pointing at another.
+one machine and the recorder, wake lock and STOP pointing at another. Forget is
+included because forgetting the machine in use makes the next one active, and
+the next BREW would go there while the first may still be pouring.
 
 ### Scans do not overlap
 

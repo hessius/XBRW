@@ -1,3 +1,5 @@
+import {act, renderHook} from "@testing-library/react-native";
+
 import {
     addMachine,
     chooseMachine,
@@ -7,6 +9,7 @@ import {
     settingsStore,
     surveyMachines,
     latestSurvey,
+    useMachine,
     __resetSharedMachine
 } from "@/hooks/useMachine";
 import {FakeTransport} from "@/library/machine/__tests__/FakeTransport";
@@ -344,5 +347,22 @@ describe("looking around for the picker", () => {
         expect(latestSurvey()?.heard.map((machineFound) => machineFound.id))
             .toEqual(["bar-2", "window", "back"]);
         void settings;
+    });
+});
+
+describe("forgetting while a brew owns the link", () => {
+    it("refuses to forget the machine in use mid-brew, and keeps the list as it was", async () => {
+        const settings = cafe();
+        const {machine} = rig(settings, heard("bar-1"));
+        machine.phase = {name: "lostContact"};
+        const {result} = await renderHook(() => useMachine(machine, {settings, ...instant}));
+
+        let forgotten = true;
+        await act(async () => { forgotten = await result.current.forgetMachine("bar-1"); });
+
+        expect(forgotten).toBe(false);
+        expect(settings.get("machineDeviceId")).toBe("bar-1");
+        expect(loadSavedMachines(settings)).toHaveLength(5);
+        expect(result.current.error).toMatch(/A brew is running/);
     });
 });

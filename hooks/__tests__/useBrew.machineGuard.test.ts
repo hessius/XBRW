@@ -79,10 +79,64 @@ it("refuses to send, and says why, when the connect lands on a machine the scree
 
     await act(async () => { await result.current.brew(coffee()); });
 
-    expect(result.current.error)
-        .toBe("Connected to Home, not Work. Check the machine shown, then press BREW again.");
+    expect(result.current.error).toBe(
+        "Found Home, not Work, so nothing was sent. Check Work is on and nearby, or pick Home, then press BREW again."
+    );
     // Nothing past the connect sequence was written: no recipe.
     expect(BREW_COMMANDS_SEEN(transport, connectOnly)).toEqual([]);
     // Not retried: one scan, one link.
     expect(transport.scans).toHaveLength(1);
+    // The screen goes on naming Work, and the link to Home is let go.
+    expect(sharedSettings().get("machineDeviceId")).toBe("WORK");
+    expect(transport.connectedTo).toBeNull();
+});
+
+describe("one machine saved", () => {
+    beforeEach(() => {
+        sharedSettings().set("savedMachines", serialiseSavedMachines([
+            {...entry("HOME", "Home"), serial: "J15HOME00001"}
+        ]));
+        sharedSettings().set("machineDeviceId", "HOME");
+    });
+
+    it("refuses a stranger's machine found by the stale-id rescan, by its serial", async () => {
+        const connectOnly = await connectOnlyFrames();
+        const transport = new FakeTransport();
+        // Home's id has gone stale; the rescan hears somebody else's xBloom,
+        // whose serial (the fake's) is not Home's.
+        transport.refuseIds = ["HOME"];
+        transport.devices = [{id: "STRANGER", name: "XBLOOM"}];
+        const machine = new Machine(transport, {frameGapMs: 0});
+        const {result} = await renderHook(() => useBrew(machine));
+
+        await act(async () => { await result.current.brew(coffee()); });
+
+        expect(result.current.error).toBe(
+            "This xBloom is not your saved machine (serial ending 0001), so nothing was sent. "
+            + "Check yours is on and nearby, then press BREW again."
+        );
+        expect(BREW_COMMANDS_SEEN(transport, connectOnly)).toEqual([]);
+        // The saved machine still names Home, with Home's serial.
+        expect(sharedSettings().get("machineDeviceId")).toBe("HOME");
+        expect(sharedSettings().get("savedMachines")).toContain("J15HOME00001");
+        expect(sharedSettings().get("savedMachines")).not.toContain("STRANGER");
+    });
+
+    it("still brews when the rescan finds the same machine under a new id", async () => {
+        sharedSettings().set("savedMachines", serialiseSavedMachines([
+            {...entry("HOME", "Home"), serial: "J15ABC123456"}
+        ]));
+        const connectOnly = await connectOnlyFrames();
+        const transport = new FakeTransport();
+        transport.refuseIds = ["HOME"];
+        transport.devices = [{id: "HOME-NEW-ID", name: "XBLOOM"}];
+        const machine = new Machine(transport, {frameGapMs: 0});
+        const {result} = await renderHook(() => useBrew(machine));
+
+        await act(async () => { await result.current.brew(coffee()); });
+
+        expect(result.current.error).toBeNull();
+        expect(BREW_COMMANDS_SEEN(transport, connectOnly).length).toBeGreaterThan(0);
+        expect(sharedSettings().get("machineDeviceId")).toBe("HOME-NEW-ID");
+    });
 });
