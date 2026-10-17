@@ -20,6 +20,8 @@ import NfcOverlay from "@/components/NfcOverlay";
 import RecipeHero from "@/components/RecipeHero";
 import RecipeOverflowSheet from "@/components/RecipeOverflowSheet";
 import RenameSheet from "@/components/RenameSheet";
+import MachineChip from "@/components/MachineChip";
+import MachinePickerSheet from "@/components/MachinePickerSheet";
 import RevertSheet from "@/components/RevertSheet";
 import QuickEditPanel from "@/components/QuickEditPanel";
 import OverflowSection from "@/components/OverflowSection";
@@ -36,6 +38,7 @@ import {DURATION, EASING, useReducedMotionState} from "@/constants/motion";
 import {useCardWriter} from "@/hooks/useCardWriter";
 import {useCollapsibleHeader} from "@/hooks/useCollapsibleHeader";
 import {useLiveBrew} from "@/hooks/useLiveBrew";
+import {useMachinePicker} from "@/hooks/useMachinePicker";
 import {RECIPE_LABELS, useRecipeEditor} from "@/hooks/useRecipeEditor";
 import type {BypassField} from "@/hooks/useRecipeEditor";
 import {SHARE_FAILURE_MESSAGE, useShareRecipe} from "@/hooks/useShareRecipe";
@@ -905,6 +908,7 @@ export default function EditRecipe(
     const [revertOpen, setRevertOpen] = useState(false);
     const [helpOpen, setHelpOpen] = useState(false);
     const [renameOpen, setRenameOpen] = useState(false);
+    const machinePicker = useMachinePicker();
     const [beanProfileOpen, setBeanProfileOpen] = useState(false);
     const [bypassWriteOpen, setBypassWriteOpen] = useState(false);
     const [quickEditOpen, setQuickEditOpen] = useState(false);
@@ -1276,7 +1280,7 @@ export default function EditRecipe(
     // `accessibilityViewIsModal` does on iOS.
     const screenCovered = showNfcOverlay || overflowOpen || revertOpen || helpOpen
         || bypassWriteOpen || renameOpen || beanProfileOpen || leavePrompt !== null
-        || ratingNoteOpen;
+        || ratingNoteOpen || machinePicker.open;
     // The quick edit panel covers the deck but not the action bar, which holds
     // the BREW it adjusts. So it hides the deck rather than the screen.
     const deckCovered = screenCovered || quickEditOpen;
@@ -1350,8 +1354,18 @@ export default function EditRecipe(
                         onScroll={onScroll} scrollEventThrottle={16}>
                 {recipe.isTea() ? <TeaBanner accent={accent}/> : <YStack/>}
 
-                <DeckSwitch deck={deck} stageCount={recipe.pours.length}
-                            accent={accent} onChange={setDeck}/>
+                {/* One slot with the deck switch, not a slot of its own:
+                    `stickyHeaderIndices` counts direct children, and a new
+                    child here would move the stages deck's sticky profile
+                    off index 2. */}
+                <YStack>
+                    {machinePicker.available && (
+                        <MachineChip label={machinePicker.label}
+                                     onPress={machinePicker.show}/>
+                    )}
+                    <DeckSwitch deck={deck} stageCount={recipe.pours.length}
+                                accent={accent} onChange={setDeck}/>
+                </YStack>
 
                 {/* Above the decks rather than on one of them, because a
                     recipe can be out of range in a stage's temperature and in
@@ -1524,6 +1538,16 @@ export default function EditRecipe(
             <RenameSheet open={renameOpen} onOpenChange={setRenameOpen}
                          name={recipe.name}
                          onRename={(next) => dispatch(RECIPE_LABELS.TITLE, next)}/>
+
+            <MachinePickerSheet open={machinePicker.open}
+                                onOpenChange={machinePicker.setOpen}
+                                machines={machinePicker.machines}
+                                activeId={machinePicker.activeId}
+                                connected={machinePicker.connected}
+                                survey={machinePicker.survey}
+                                onRescan={machinePicker.rescan}
+                                blocker={machinePicker.blocker}
+                                onChoose={machinePicker.choose}/>
 
             <BypassWriteSheet open={bypassWriteOpen}
                               recipe={recipe}

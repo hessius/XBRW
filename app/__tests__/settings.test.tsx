@@ -120,7 +120,8 @@ jest.mock("@/hooks/useMachine", () => {
         error:      null,
         remembered: "",
         connect:    jest.fn(),
-        forget:     jest.fn()
+        forget:     jest.fn(),
+        machines:   []
     };
     return {__esModule: true, default: () => link, useMachine: () => link};
 });

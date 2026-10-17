@@ -233,3 +233,20 @@ describe("MachinePanel", () => {
         expect(style.paddingBottom).toBeGreaterThanOrEqual(14);
     });
 });
+
+describe("MachinePanel with several machines saved", () => {
+    it("says whose readings these are, and opens the picker from there", async () => {
+        const onChooseMachine = jest.fn();
+        const r = await draw({machineLabel: "Work", onChooseMachine});
+
+        expect(r.getByTestId("machine-choice-label").props.children).toBe("WORK");
+        await fireEvent.press(r.getByLabelText("Machine, Work"));
+        expect(onChooseMachine).toHaveBeenCalled();
+    });
+
+    it("draws no machine row with only one machine, so nothing changes for that user", async () => {
+        const r = await draw();
+
+        expect(r.queryByTestId("machine-choice")).toBeNull();
+    });
+});
