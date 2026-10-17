@@ -141,7 +141,10 @@ describe("a BrewMind coffee, end to end", () => {
 });
 
 describe("a link's name and picture, end to end", () => {
-    /** A share-link import: xBloom's own title, no pod, no artwork. */
+    /**
+     * A share-link import of a recipe made without a pod: xBloom's own title
+     * and no artwork.
+     */
     const imported = () => {
         const link = parseBrewMindLink("xbrw://import?v=1&source=centralcoastcoffee"
             + "&share=" + encodeURIComponent("https://share-h5.xbloom.com/r?id=abc123")

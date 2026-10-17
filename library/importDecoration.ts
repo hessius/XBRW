@@ -79,9 +79,10 @@ export function decorateImport(recipe: Recipe, decoration: ImportDecoration): Re
     // none of its own. `XBloomRecipe` sets `imageURL` from the pod's coffee or
     // its artwork before this runs, so a pod recipe already has a picture and
     // keeps it: real pod artwork is a better likeness than a bag shot, and it
-    // is what the recipe showed before links existed. A share-link import has
-    // no pod, so without this the link's `bean.image` reached Beanconqueror
-    // and never the app's own screen.
+    // is what the recipe showed before links existed. A share-link import of
+    // a recipe made without a pod has no artwork, so without this the link's
+    // `bean.image` reached Beanconqueror and never the app's own screen. (A
+    // share link to a pod-made recipe carries `podsVo`, and the pod wins.)
     //
     // Through `podImageUrl`, the rule every other picture on a recipe passes,
     // although the coffee has already been through it in `podCoffeeFromStored`.

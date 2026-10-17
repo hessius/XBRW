@@ -149,8 +149,9 @@ not touch `xbloomName`: that stays what xBloom published, so `displayName()`
 shows the producer's name while USE THIS NAME still has xBloom's to go back to.
 
 Runs of whitespace, line breaks and U+2028 included, fold to one space, so a
-link cannot split a one-line title. It is then trimmed, and dropped when empty. It is capped at `MAX_NAME` (100), the
-rename sheet's ceiling, which now lives on `Recipe` so both read one constant.
+link cannot split a one-line title. It is then trimmed, and dropped when
+empty. It is capped at `MAX_NAME` (100), the rename sheet's ceiling, which now
+lives on `Recipe` so both read one constant.
 Not the 120 of the bean's short text: a link should not be able to set a name
 the rename sheet would then refuse to hold whole. Over-length drops the name
 rather than truncating it, as with every other field, and the recipe falls back
@@ -165,8 +166,9 @@ recipe" below.
 `bean.image` was stored on the coffee as `imageUrl` and sent on to
 Beanconqueror, but never became the recipe's own `imageURL`. `XBloomRecipe`
 sets `imageURL` from the pod's coffee or artwork, and it does so before the
-link's coffee is applied, so a share-link import, which has no pod, arrived
-with no picture.
+link's coffee is applied, so a share-link import of a recipe made without a
+pod arrived with no picture. (A share link to a pod-made recipe carries
+`podsVo`, so it already had the pod's artwork.)
 
 `decorateImport` now sets `imageURL` from the decorated coffee's `imageUrl`,
 through `podImageUrl` (https only, the rule backup restore applies to

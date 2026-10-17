@@ -103,7 +103,8 @@ describe("decorateImport", () => {
         const BAG = "https://example.com/bag.png";
 
         it("comes from the link's coffee when the recipe has none", () => {
-            // A share-link import: no pod, so no artwork of its own.
+            // A share-link import of a recipe made without a pod: no artwork
+            // of its own.
             const decorated = decorateImport(recipe(), {coffee: {name: "X", imageUrl: BAG}});
 
             expect(decorated.imageURL).toBe(BAG);
