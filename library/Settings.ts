@@ -40,12 +40,6 @@ export const DEFAULTS = {
      * the roadmap deferred, and anything that will not load falls back to the
      * accent mark without saying a word about it, so a recipe with no picture
      * looks exactly as it did.
-     *
-     * Only the default moved. `get()` hands back the default only while no row
-     * exists, and nothing writes defaults on launch, so whoever never touched
-     * the switch gets the new one and whoever turned it off keeps it off. A
-     * restored backup writes its value as a row too, so it stays whatever the
-     * backup said.
      */
     showRecipeAvatars: true,
     /**

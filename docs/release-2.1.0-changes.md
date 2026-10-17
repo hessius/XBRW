@@ -3,6 +3,11 @@
 This is the source for the full release-testing checklist, not a claim that
 device testing is complete. Update it whenever release scope or behaviour changes.
 
+## Recipe pictures on by default (2026-10-17)
+
+`showRecipeAvatars` defaults to true; stored choices and restored backups are
+unchanged; no card, BLE or native changes.
+
 ## Brew history trace storage (2026-10-15)
 
 Brew traces are compressed and managed under a configurable storage budget. When
