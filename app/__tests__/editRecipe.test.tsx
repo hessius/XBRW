@@ -646,6 +646,23 @@ describe("the editor", () => {
         expect(deck().props.importantForAccessibility).toBe("no-hide-descendants");
     });
 
+    it("keeps the deck in the same native parent while a sheet opens and closes", async () => {
+        await renderEditor();
+        const content = () => screen.getByTestId("editor-content", {includeHiddenElements: true});
+        const deck = () => screen.getByTestId("editor-deck", {includeHiddenElements: true});
+
+        // Hiding toggles a stacking context under Fabric. Without a fixed one,
+        // closing the more menu lifted the deck out of `editor-content` into
+        // the screen's host, which crashed Android on Duplicate.
+        expect(content().props.collapsable).toBe(false);
+        expect(deck().props.collapsable).toBe(false);
+
+        await fireEvent.press(screen.getByLabelText("More"));
+        expect(content().props.accessibilityElementsHidden).toBe(true);
+        expect(content().props.collapsable).toBe(false);
+        expect(deck().props.collapsable).toBe(false);
+    });
+
     it("disables the quick edit brew action when the adjusted recipe is refused", async () => {
         mockSettings = {machineDeviceId: "AA:BB:CC:DD:EE:FF"};
         await renderEditor({dosage: 31, ratio: 100});

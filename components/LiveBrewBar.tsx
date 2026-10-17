@@ -16,6 +16,7 @@ import {resolveAccent} from "@/library/accent";
 import {poursFromPlan} from "@/library/brew/BrewRecord";
 import {brewFigures} from "@/library/brew/brewFigures";
 import type {StoredBrew} from "@/library/BrewDatabase";
+import {STABLE_HOST} from "@/constants/views";
 
 /**
  * Whatever the bottom of the app has to say, wherever you are.
@@ -121,7 +122,7 @@ export default function LiveBrewBar() {
 
     if (run !== null) {
         return (
-            <View testID="live-brew-bar-host" accessibilityElementsHidden={covered}
+            <View {...STABLE_HOST} testID="live-brew-bar-host" accessibilityElementsHidden={covered}
                 importantForAccessibility={covered ? "no-hide-descendants" : "auto"}
                 pointerEvents={covered ? "none" : "auto"}>
                 <BrewMiniBar
@@ -149,7 +150,7 @@ export default function LiveBrewBar() {
     if (asking === null && noting === null) return null;
 
     return (
-        <View testID="live-brew-bar-host" accessibilityElementsHidden={covered}
+        <View {...STABLE_HOST} testID="live-brew-bar-host" accessibilityElementsHidden={covered}
             importantForAccessibility={covered ? "no-hide-descendants" : "auto"}
             pointerEvents={covered ? "none" : "auto"}>
             {asking !== null && (

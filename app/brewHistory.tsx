@@ -24,6 +24,7 @@ import type {StoredBrew} from "@/library/BrewDatabase";
 import {canHandOff} from "@/library/brew/handoff/targets";
 import {queryBrewHistory, type HistorySort, type HistorySortDirection} from "@/library/brew/historyQuery";
 import {UNCLIPPED_LIST} from "@/constants/lists";
+import {STABLE_HOST} from "@/constants/views";
 
 /** How long one push to the record screen refuses a second (same latch as index.tsx). */
 const PUSH_GUARD_MS = 2000;
@@ -450,7 +451,7 @@ export default function BrewHistory() {
             {/* The Android half of what `accessibilityViewIsModal` does on iOS.
                 The sheets sit outside this subtree, so they never hide
                 themselves. */}
-            <YStack flex={1} testID="brew-history-content"
+            <YStack {...STABLE_HOST} flex={1} testID="brew-history-content"
                     accessibilityElementsHidden={screenCovered}
                     importantForAccessibility={screenCovered ? "no-hide-descendants" : "auto"}>
                 <HistoryHeader recipeName={recipeName} count={filtered.length} />

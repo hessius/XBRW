@@ -64,6 +64,7 @@ import Recipe, {CUP_TYPE} from "@/library/Recipe";
 import RecipeDatabase from "@/library/RecipeDatabase";
 import {shareBlockReason} from "@/library/shareLink";
 import {asTemperatureUnit, type TemperatureUnit} from "@/library/units";
+import {STABLE_HOST} from "@/constants/views";
 
 /** What a field's edit callback commits, given a label and the new value. */
 type Dispatch = (label: string, value: string) => void;
@@ -1293,10 +1294,10 @@ export default function EditRecipe(
                 screen reader, so TalkBack cannot reach and fire the controls
                 behind it — the Android half of what `accessibilityViewIsModal`
                 does on iOS. */}
-            <YStack testID="editor-content" flex={1} backgroundColor={palette.base}
+            <YStack {...STABLE_HOST} testID="editor-content" flex={1} backgroundColor={palette.base}
                     accessibilityElementsHidden={screenCovered}
                     importantForAccessibility={screenCovered ? "no-hide-descendants" : "auto"}>
-            <YStack testID="editor-deck" flex={1}
+            <YStack {...STABLE_HOST} testID="editor-deck" flex={1}
                     accessibilityElementsHidden={deckCovered}
                     importantForAccessibility={deckCovered ? "no-hide-descendants" : "auto"}>
             {/* Outside the scroll view, so it is the screen's header rather

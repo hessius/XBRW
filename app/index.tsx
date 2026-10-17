@@ -97,6 +97,7 @@ import {tagKey} from "@/library/tagKey";
 import {shareBlockReason} from "@/library/shareLink";
 import {type Settings} from "@/library/Settings";
 import {UNCLIPPED_LIST} from "@/constants/lists";
+import {STABLE_HOST} from "@/constants/views";
 
 /**
  * How long one import link stays claimed after it is acted on.
@@ -1354,7 +1355,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                 — the Android half of what `accessibilityViewIsModal` does on
                 iOS. The sheets are rendered outside this guarded subtree, so
                 they never hide themselves. */}
-            <YStack testID="home-content" flex={1} backgroundColor={palette.base}
+            <YStack {...STABLE_HOST} testID="home-content" flex={1} backgroundColor={palette.base}
                     accessibilityElementsHidden={screenCovered}
                     importantForAccessibility={screenCovered ? "no-hide-descendants" : "auto"}>
                 {picker.active ? (

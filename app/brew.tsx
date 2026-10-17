@@ -70,6 +70,7 @@ import {
 import Recipe from "@/library/Recipe";
 import RecipeDatabase from "@/library/RecipeDatabase";
 import {SCREEN_PADDING} from "@/constants/layout";
+import {STABLE_HOST} from "@/constants/views";
 
 const WORKING = new Set(["idle", "waking", "sending"]);
 export const BREW_BAND_GAP = 13;
@@ -492,7 +493,7 @@ export default function Brew({historyStore}: {historyStore?: ExportStore} = {}) 
             navigation bar: with three-button navigation CANCEL and START
             BREWING sat half under it. The mini bar, which clears the inset on
             other screens, is not drawn on this one. */}
-        <YStack testID="brew-screen" flex={1} backgroundColor={palette.base}
+        <YStack {...STABLE_HOST} testID="brew-screen" flex={1} backgroundColor={palette.base}
                 padding="$4" paddingBottom={SCREEN_PADDING + insets.bottom} gap="$3"
                 accessibilityElementsHidden={namingBean || ratingNoteOpen}
                 importantForAccessibility={namingBean || ratingNoteOpen

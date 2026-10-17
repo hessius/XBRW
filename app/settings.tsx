@@ -34,6 +34,7 @@ import {isSortAxis, isSortDirection} from "@/library/librarySort";
 import {isHistorySort, isHistorySortDirection} from "@/library/brew/historyQuery";
 import {isLibraryView} from "@/library/libraryView";
 import {asTemperatureUnit} from "@/library/units";
+import {STABLE_HOST} from "@/constants/views";
 
 type Props = {
     /** Injected by tests. The route renders with the shared store. */
@@ -452,7 +453,7 @@ export default function SettingsScreen({settings}: Props) {
             as looking "exactly like a control that did nothing", and it is what
             made Delete all appear to do nothing at all. `app/index.tsx` and
             `app/editRecipe.tsx` both already use this shape. */}
-        <YStack testID="settings-screen" flex={1} backgroundColor={palette.base}
+        <YStack {...STABLE_HOST} testID="settings-screen" flex={1} backgroundColor={palette.base}
                 accessibilityElementsHidden={restoreOpen || confirmingDeleteAll || ratingNoteOpen
                     || machineSheetOpen}
                 importantForAccessibility={restoreOpen || confirmingDeleteAll || ratingNoteOpen

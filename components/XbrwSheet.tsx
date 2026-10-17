@@ -7,6 +7,7 @@ import DotMatrixText from "@/components/DotMatrixText";
 import {palette} from "@/constants/colors";
 import {SCREEN_PADDING} from "@/constants/layout";
 import {DURATION} from "@/constants/motion";
+import {STABLE_HOST} from "@/constants/views";
 
 type Props = {
     open: boolean;
@@ -233,7 +234,7 @@ export default function XbrwSheet({
                     separates rows within the content. The heading is a label
                     for the sheet rather than its first row, and at `$3` it
                     crowded the first control enough to read as part of it. */}
-                <YStack flex={1} gap="$5" aria-label={title} accessibilityViewIsModal={shown}>
+                <YStack {...STABLE_HOST} flex={1} gap="$5" aria-label={title} accessibilityViewIsModal={shown}>
                     {heading}
                     {children}
                 </YStack>
