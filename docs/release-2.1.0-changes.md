@@ -3,6 +3,18 @@
 This is the source for the full release-testing checklist, not a claim that
 device testing is complete. Update it whenever release scope or behaviour changes.
 
+## Pod details in XPOD (2026-10-18)
+
+The XPOD section on ABOUT now lists what the recipe's coffee block carries
+(from an xPod, an import link or a backup), under the pod line: roaster,
+origin, country, region, farm, farmer, elevation, process, fermentation,
+varietal, type, roast, roast date, decaf, flavour, cupping score, the note and
+a link to the product page. A field with no value has no row, and nothing is
+added when the block has nothing beyond the pod name. ORIGIN shows only when
+there is no country. The link is dropped when it is the recipe page FROM
+links to. Notes over 200 characters fold behind SHOW NOTE. Display only: no
+storage, backup, card or BLE change. Not yet checked on a device.
+
 ## Brew history trace storage (2026-10-15)
 
 Brew traces are compressed and managed under a configurable storage budget. When
