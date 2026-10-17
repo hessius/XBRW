@@ -96,6 +96,25 @@ describe("AboutDeck", () => {
             ]);
     });
 
+    it("puts the coffee between the pod and FROM, when the recipe carries one", async () => {
+        await renderWithProviders(
+            <AboutDeck {...props({recipe: recipeWith({
+                xid:    "CGL12",
+                coffee: {name: "Huila", roaster: "Some Roastery"}
+            })})}/>
+        );
+
+        expect(screen.getAllByTestId(/^about-/).map((section) => section.props.testID))
+            .toEqual([
+                "about-note",
+                "about-tags",
+                "about-pod",
+                "about-coffee",
+                "about-from",
+                "about-history"
+            ]);
+    });
+
     it("drops the FROM section for a recipe that came from nowhere", async () => {
         // The deck does not decide this; the section absents itself. Asserted
         // here too because the deck is where a stray spacer or divider around
