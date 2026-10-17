@@ -1,7 +1,7 @@
 import React from "react";
 import {fireEvent, screen} from "@testing-library/react-native";
 
-import CoffeeSection, {COFFEE_PAGE_LABEL} from "@/components/CoffeeSection";
+import PodCoffeeRows, {PRODUCT_PAGE_LABEL} from "@/components/PodCoffeeRows";
 import {openLink} from "@/components/openLink";
 import {NOTE_INLINE_MAX} from "@/library/coffeeDetails";
 import type {PodCoffee} from "@/library/podCoffee";
@@ -42,40 +42,41 @@ beforeEach(() => {
     jest.mocked(openLink).mockClear();
 });
 
-describe("CoffeeSection", () => {
-    it("shows every field of a full coffee, each read as label and value", async () => {
-        await renderWithProviders(<CoffeeSection recipe={recipeWith({coffee: FULL})}/>);
+describe("PodCoffeeRows", () => {
+    it("shows every field of a full block, each read as label and value", async () => {
+        await renderWithProviders(<PodCoffeeRows recipe={recipeWith({coffee: FULL})}/>);
 
-        expect(screen.getByTestId("about-coffee")).toBeTruthy();
+        expect(screen.getByTestId("pod-coffee")).toBeTruthy();
         expect(screen.getByText("La Esperanza Gesha")).toBeTruthy();
         for (const label of [
             "Roaster, Central Coast Coffee",
-            "Origin, Colombia, Huila",
             "Country, Colombia",
             "Region, Huila",
             "Farm, Finca La Esperanza",
-            "Producer, Rigoberto Herrera",
+            "Farmer, Rigoberto Herrera",
             "Elevation, 1,730 m",
             "Process, Washed",
             "Fermentation, Anaerobic",
-            "Variety, Gesha",
+            "Varietal, Gesha",
             "Type, Single origin",
             "Roast, Light",
             "Roasted on, 2026-09-03",
             "Caffeine, Decaf",
-            "Tasting notes, Jasmine, bergamot, peach",
+            "Flavour, Jasmine, bergamot, peach",
             "Cupping score, 88.5 points"
         ]) {
             expect(screen.getByLabelText(label)).toBeTruthy();
         }
+        // The pod's one-line origin gives way to the finer country and region.
+        expect(screen.queryByTestId("coffee-origin")).toBeNull();
         expect(screen.getByText("Grown on a steep slope above the river.")).toBeTruthy();
-        expect(screen.getByLabelText(`${COFFEE_PAGE_LABEL}. Opens in your browser.`))
+        expect(screen.getByLabelText(`${PRODUCT_PAGE_LABEL}. Opens in your browser.`))
             .toBeTruthy();
     });
 
     it("draws no row for an empty field", async () => {
         await renderWithProviders(
-            <CoffeeSection recipe={recipeWith({
+            <PodCoffeeRows recipe={recipeWith({
                 coffee: {name: "Huila", region: "Huila", roaster: " ", decaffeinated: false}
             })}/>
         );
@@ -86,59 +87,59 @@ describe("CoffeeSection", () => {
             expect(screen.queryByTestId(`coffee-${field}`)).toBeNull();
         }
         expect(screen.queryByTestId("coffee-note")).toBeNull();
-        expect(screen.queryByLabelText(`${COFFEE_PAGE_LABEL}. Opens in your browser.`))
+        expect(screen.queryByLabelText(`${PRODUCT_PAGE_LABEL}. Opens in your browser.`))
             .toBeNull();
     });
 
-    it("is absent for a recipe with no coffee", async () => {
-        await renderWithProviders(<CoffeeSection recipe={recipeWith()}/>);
+    it("draws nothing for a recipe with no coffee", async () => {
+        await renderWithProviders(<PodCoffeeRows recipe={recipeWith()}/>);
 
-        expect(screen.queryByTestId("about-coffee")).toBeNull();
+        expect(screen.queryByTestId("pod-coffee")).toBeNull();
     });
 
-    it("is absent when the coffee only repeats the pod name XPOD shows", async () => {
+    it("draws nothing when the coffee only repeats the pod name", async () => {
         await renderWithProviders(
-            <CoffeeSection recipe={recipeWith({
+            <PodCoffeeRows recipe={recipeWith({
                 xid:        "CGL12",
                 xbloomName: "Pod Name",
                 coffee:     {name: "Pod Name", imageUrl: "https://x/a.png"}
             })}/>
         );
 
-        expect(screen.queryByTestId("about-coffee")).toBeNull();
+        expect(screen.queryByTestId("pod-coffee")).toBeNull();
     });
 
     it("does not repeat a name the pod section already shows", async () => {
         await renderWithProviders(
-            <CoffeeSection recipe={recipeWith({
+            <PodCoffeeRows recipe={recipeWith({
                 xbloomName: "Pod Name",
                 coffee:     {name: "Pod Name", roaster: "R"}
             })}/>
         );
 
-        expect(screen.getByTestId("about-coffee")).toBeTruthy();
+        expect(screen.getByTestId("pod-coffee")).toBeTruthy();
         expect(screen.queryByTestId("coffee-name")).toBeNull();
     });
 
-    it("opens the coffee page in the browser", async () => {
-        await renderWithProviders(<CoffeeSection recipe={recipeWith({coffee: FULL})}/>);
+    it("opens the product page in the browser", async () => {
+        await renderWithProviders(<PodCoffeeRows recipe={recipeWith({coffee: FULL})}/>);
 
         await fireEvent.press(
-            screen.getByLabelText(`${COFFEE_PAGE_LABEL}. Opens in your browser.`)
+            screen.getByLabelText(`${PRODUCT_PAGE_LABEL}. Opens in your browser.`)
         );
 
         expect(openLink).toHaveBeenCalledWith("https://example.com/coffee");
     });
 
-    it("leaves the link to FROM when the coffee page is the recipe page", async () => {
+    it("leaves the link to FROM when the product page is the recipe page", async () => {
         await renderWithProviders(
-            <CoffeeSection recipe={recipeWith({
+            <PodCoffeeRows recipe={recipeWith({
                 recipeUrl: "https://example.com/coffee",
                 coffee:    {...FULL}
             })}/>
         );
 
-        expect(screen.queryByLabelText(`${COFFEE_PAGE_LABEL}. Opens in your browser.`))
+        expect(screen.queryByLabelText(`${PRODUCT_PAGE_LABEL}. Opens in your browser.`))
             .toBeNull();
     });
 
@@ -147,7 +148,7 @@ describe("CoffeeSection", () => {
         expect(note.length).toBeGreaterThan(NOTE_INLINE_MAX);
 
         await renderWithProviders(
-            <CoffeeSection recipe={recipeWith({coffee: {name: "X", note}})}/>
+            <PodCoffeeRows recipe={recipeWith({coffee: {name: "X", note}})}/>
         );
 
         const toggle = screen.getByTestId("coffee-note-toggle");
@@ -165,7 +166,7 @@ describe("CoffeeSection", () => {
 
     it("shows a short note as it is, with no control", async () => {
         await renderWithProviders(
-            <CoffeeSection recipe={recipeWith({coffee: {name: "X", note: "Sweet and clean."}})}/>
+            <PodCoffeeRows recipe={recipeWith({coffee: {name: "X", note: "Sweet and clean."}})}/>
         );
 
         expect(screen.getByText("Sweet and clean.")).toBeTruthy();

@@ -3,6 +3,18 @@
 This is the source for the full release-testing checklist, not a claim that
 device testing is complete. Update it whenever release scope or behaviour changes.
 
+## Pod details in XPOD (2026-10-18)
+
+The XPOD section on ABOUT now lists what the recipe's coffee block carries
+(from an xPod, an import link or a backup), under the pod line: roaster,
+origin, country, region, farm, farmer, elevation, process, fermentation,
+varietal, type, roast, roast date, decaf, flavour, cupping score, the note and
+a link to the product page. A field with no value has no row, and nothing is
+added when the block has nothing beyond the pod name. ORIGIN shows only when
+there is no country. The link is dropped when it is the recipe page FROM
+links to. Notes over 200 characters fold behind SHOW NOTE. Display only: no
+storage, backup, card or BLE change. Not yet checked on a device.
+
 ## Brew history trace storage (2026-10-15)
 
 Brew traces are compressed and managed under a configurable storage budget. When
@@ -10,19 +22,6 @@ the budget is exceeded, older traces without a rating or note are removed first.
 The two newest traces for each recipe and rated or noted traces go last. Brew
 records and summaries remain available when their detailed trace is removed.
 Unlimited disables budget-based trace removal.
-
-## Coffee details on ABOUT (2026-10-18)
-
-ABOUT has a COFFEE section between XPOD and FROM. It shows the coffee block a
-recipe already carries (from an xPod, an import link or a backup): roaster,
-origin, country, region, farm, producer, elevation, process, fermentation,
-variety, type, roast, roast date, decaf, tasting notes, cupping score, the note
-and a link to the coffee page. A field with no value has no row. The section is
-absent when there is no coffee or nothing beyond a name already on screen. The
-name is not repeated when XPOD or the header shows it, and the link is dropped
-when it is the recipe page FROM links to. Notes over 200 characters fold behind
-SHOW NOTE. Display only: no storage, backup, card or BLE change.
-Not yet checked on a device.
 
 ## Development workflow migration (2026-10-11)
 

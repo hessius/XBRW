@@ -1,7 +1,7 @@
 import type {PodCoffee} from "@/library/podCoffee";
 
 /**
- * What the ABOUT deck says about a recipe's coffee.
+ * What the XPOD section on ABOUT says about a recipe's coffee.
  *
  * Pure and React-free, so the decisions the section makes can be tested as
  * decisions: which fields are worth a row, in which order, and how a height, a
@@ -25,8 +25,7 @@ export type CoffeeDetailRow = {
 
 export type CoffeeDetails = {
     /**
-     * The coffee's name, only when nothing else on the screen already says it.
-     * An xPod's coffee is usually the pod, and the XPOD section names the pod.
+     * The coffee's name, only when it is not the pod name XPOD already shows.
      */
     name?: string;
     /** Rows in reading order, grouped: roaster, origin, bean, roast, cup. */
@@ -102,24 +101,24 @@ function row(
 /**
  * The rows for a coffee, in groups, with empty fields and empty groups gone.
  *
- * `origin` is the pod's own one-line origin. It is kept beside the finer
- * country, region and farm, but dropped when it says no more than the country.
+ * `origin` is the pod's own one-line origin. The finer country, region and
+ * farm replace it (BrewMind integration design, 2026-09-28), so it is drawn
+ * only when there is no country to say the same thing better.
  */
 function groupsFor(coffee: PodCoffee): CoffeeDetailRow[][] {
     const country = said(coffee.country);
-    const origin = said(coffee.origin);
     const roastingDate = said(coffee.roastingDate);
-    const originAddsSomething = origin !== undefined &&
-        (country === undefined || folded(origin) !== folded(country));
 
     const roaster = row("roaster", "ROASTER", "Roaster", coffee.roaster);
 
     const place = [
-        ...row("origin", "ORIGIN", "Origin", originAddsSomething ? origin : undefined),
+        ...row("origin", "ORIGIN", "Origin", country === undefined ? coffee.origin : undefined),
         ...row("country", "COUNTRY", "Country", country),
         ...row("region", "REGION", "Region", coffee.region),
         ...row("farm", "FARM", "Farm", coffee.farm),
-        ...row("farmer", "PRODUCER", "Producer", coffee.farmer),
+        // FARMER, not producer: elsewhere in this app the producer is whoever
+        // made the recipe (FROM, the import link, the brew record).
+        ...row("farmer", "FARMER", "Farmer", coffee.farmer),
         ...row("elevation", "ELEVATION", "Elevation",
                typeof coffee.elevation === "number" && coffee.elevation > 0
                    ? formatElevation(coffee.elevation)
@@ -129,7 +128,8 @@ function groupsFor(coffee: PodCoffee): CoffeeDetailRow[][] {
     const bean = [
         ...row("processing", "PROCESS", "Process", coffee.processing),
         ...row("fermentation", "FERMENT", "Fermentation", coffee.fermentation),
-        ...row("variety", "VARIETY", "Variety", coffee.variety),
+        // The catalogue's word for the same field.
+        ...row("variety", "VARIETAL", "Varietal", coffee.variety),
         ...row("beanMix", "TYPE", "Type", coffee.beanMix)
     ];
 
@@ -144,7 +144,7 @@ function groupsFor(coffee: PodCoffee): CoffeeDetailRow[][] {
     ];
 
     const cup = [
-        ...row("aromatics", "FLAVOUR", "Tasting notes", coffee.aromatics),
+        ...row("aromatics", "FLAVOUR", "Flavour", coffee.aromatics),
         ...row("cupping_points", "SCORE", "Cupping score",
                typeof coffee.cupping_points === "number" && coffee.cupping_points > 0
                    ? `${formatCuppingPoints(coffee.cupping_points)} points`
@@ -155,33 +155,46 @@ function groupsFor(coffee: PodCoffee): CoffeeDetailRow[][] {
 }
 
 /**
- * What the section should draw, or null when it should not be drawn at all.
+ * A URL in the form the URL parser writes it, so `https://Example.com` and
+ * `https://example.com/` compare equal. Undefined for anything unparseable.
+ */
+function normalisedUrl(value: string | undefined): string | undefined {
+    const raw = said(value);
+    if (raw === undefined) return undefined;
+    try {
+        return new URL(raw).href;
+    } catch {
+        return undefined;
+    }
+}
+
+/**
+ * What to draw under the pod, or null when there is nothing to add.
  *
- * `shownNames` are the names already on screen for this recipe: the pod name
- * in XPOD and the title in the header. The coffee's name is repeated only when
- * it matches neither. `recipeUrl` is the page FROM already links to; the
- * coffee's own link is dropped when it is the same page, so one destination
- * never has two buttons.
+ * `podName` is the name XPOD already shows on the line above. The coffee's
+ * name is repeated only when it differs. `recipeUrl` is the page FROM already
+ * links to; the coffee's own link is dropped when it is the same page, so one
+ * destination never has two buttons.
  *
  * Null for a recipe without a coffee, and for one whose coffee carries nothing
- * beyond a name the screen already shows. An empty heading is worse than none.
+ * beyond the pod name. Nothing is better than a block that only repeats it.
  */
 export function coffeeDetails(
     coffee: PodCoffee | undefined,
-    {shownNames, recipeUrl}: {shownNames: readonly string[]; recipeUrl?: string}
+    {podName, recipeUrl}: {podName: string; recipeUrl?: string}
 ): CoffeeDetails | null {
     if (coffee === undefined) return null;
 
     const groups = groupsFor(coffee);
     const note = said(coffee.note);
     const coffeeUrl = said(coffee.url);
-    const url = coffeeUrl !== undefined && coffeeUrl !== said(recipeUrl) ? coffeeUrl : undefined;
+    const sameAsRecipe = coffeeUrl !== undefined &&
+        normalisedUrl(coffeeUrl) !== undefined &&
+        normalisedUrl(coffeeUrl) === normalisedUrl(recipeUrl);
+    const url = coffeeUrl !== undefined && !sameAsRecipe ? coffeeUrl : undefined;
 
     const name = said(coffee.name);
-    const alreadyShown = name !== undefined && shownNames.some(
-        (shown) => said(shown) !== undefined && folded(shown) === folded(name)
-    );
-    const newName = alreadyShown ? undefined : name;
+    const newName = name !== undefined && folded(name) !== folded(podName) ? name : undefined;
 
     if (groups.length === 0 && note === undefined && url === undefined && newName === undefined) {
         return null;
