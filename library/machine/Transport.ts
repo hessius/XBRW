@@ -19,10 +19,26 @@ import {
     MACHINE_WRITE_CHARACTERISTIC,
     MODEL_NUMBER_CHARACTERISTIC,
     RADIO_READY_MS,
+    SAVED_MACHINE_SETTLE_MS,
     SCAN_SECONDS
 } from "@/constants/machine";
+import type {ScanVerdict} from "./savedMachines";
 
-export type FoundMachine = {id: string; name: string};
+/**
+ * A machine a scan heard. `rssi` is the signal strength it was heard at,
+ * where the radio reported one. Used only to order the list of unsaved
+ * machines when adding one, as a hint about which is nearest; never to choose
+ * between saved machines, where the user's order is the rule.
+ */
+export type FoundMachine = {id: string; name: string; rssi?: number};
+/**
+ * How a scan decides it has heard enough, given every machine heard so far.
+ *
+ * Absent, a scan stops at the first xBloom, which is what it has always done
+ * and what one remembered machine, or none, still wants. With machines saved,
+ * the list decides: see `scanVerdict` in `savedMachines.ts`.
+ */
+export type ScanDecider = (found: FoundMachine[]) => ScanVerdict;
 export type ConnectionScope = {deviceId: string; generation: number};
 type ConnectionAttempt = ConnectionScope & {dropped: boolean};
 
@@ -37,7 +53,7 @@ type ConnectionAttempt = ConnectionScope & {dropped: boolean};
 export interface MachineTransport {
     readonly connectedDeviceId?: string | null;
     readonly connectionGeneration?: number;
-    scan(seconds?: number): Promise<FoundMachine[]>;
+    scan(seconds?: number, decide?: ScanDecider): Promise<FoundMachine[]>;
     /** What the connected machine says it is, or empty when it will not say. */
     readonly modelNumber: string;
     /** The name the machine advertised when it was found. */
@@ -259,7 +275,7 @@ export class BleTransport implements MachineTransport {
         });
     }
 
-    async scan(seconds = SCAN_SECONDS): Promise<FoundMachine[]> {
+    async scan(seconds = SCAN_SECONDS, decide?: ScanDecider): Promise<FoundMachine[]> {
         await this.start();
         await this.waitForRadio();
         const found = new Map<string, FoundMachine>();
@@ -270,6 +286,10 @@ export class BleTransport implements MachineTransport {
         // official app. There is only ever one machine to find.
         let stop: () => void = () => {};
         const finished = new Promise<void>((resolve) => { stop = resolve; });
+        // Only for a `decide` that answers `settle`: a saved machine is in
+        // range but not the default, and the default gets a short grace to
+        // advertise before the scan settles for what it has.
+        let settleTimer: ReturnType<typeof setTimeout> | null = null;
 
         const subscription = BleManager.onDiscoverPeripheral(
             (peripheral: BleDiscoverPeripheralEvent) => {
@@ -287,8 +307,24 @@ export class BleTransport implements MachineTransport {
                     // and `attemptLink` takes `found[0]`, so last-match-wins
                     // would record the name of the machine it did not connect to.
                     this.advertisedNames.set(peripheral.id, name);
-                    found.set(peripheral.id, {id: peripheral.id, name});
-                    stop();
+                    found.set(peripheral.id, typeof peripheral.rssi === "number"
+                        ? {id: peripheral.id, name, rssi: peripheral.rssi}
+                        : {id: peripheral.id, name});
+                    if (decide === undefined) {
+                        stop();
+                        return;
+                    }
+                    // With saved machines, every xBloom is collected and the
+                    // list judges. `advertisedName` is keyed by the connected
+                    // id, so hearing a second machine can no longer record
+                    // the wrong one's name, which is what the comment above
+                    // guards against on the single-machine path.
+                    const verdict = decide([...found.values()]);
+                    if (verdict === "stop") {
+                        stop();
+                    } else if (verdict === "settle" && settleTimer === null) {
+                        settleTimer = setTimeout(stop, SAVED_MACHINE_SETTLE_MS);
+                    }
                 }
             }
         );
@@ -299,6 +335,7 @@ export class BleTransport implements MachineTransport {
             await BleManager.scan({seconds, allowDuplicates: false});
             await Promise.race([finished, sleep(seconds * 1000)]);
         } finally {
+            if (settleTimer !== null) clearTimeout(settleTimer);
             subscription.remove();
             await BleManager.stopScan().catch(() => {});
         }

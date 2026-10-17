@@ -80,6 +80,20 @@ export const DEFAULTS = {
      */
     machineDeviceId: "",
     /**
+     * Every machine the user has saved, in the order the app reaches for them.
+     *
+     * A JSON array of `SavedMachine` (`library/machine/savedMachines.ts`),
+     * stored as a string for the reason `hiddenShelves` is: this table holds
+     * strings, and `get` can only type-check primitives.
+     *
+     * Empty by default and empty on upgrade. The active machine is still
+     * `machineDeviceId` and the three keys after it, and the list is read
+     * through `resolveSavedMachines`, which lays those keys over it. Somebody
+     * upgrading with a paired machine therefore sees a list of one, their
+     * machine as the default, without anything being written.
+     */
+    savedMachines: "",
+    /**
      * Which xBloom this phone is driving.
      *
      * The setting is what the app acts on, and detection may only ever
@@ -368,6 +382,10 @@ export type SettingKey = keyof typeof DEFAULTS;
  * machine that, as far as it is concerned, does not exist -- and it would have
  * displaced whatever pairing that phone had made for itself.
  *
+ * `savedMachines` is held out for the same reason: it is a list of those
+ * identifiers. The names the user gave them go with it, which is the price of
+ * not restoring a list of machines the new phone cannot reach.
+ *
  * `labsUnlocked` is held out for a different reason: a backup file is not
  * private. It goes to the share sheet, and the whole point of the seven taps
  * is that an unfinished feature is off for everybody who has not deliberately
@@ -390,12 +408,12 @@ export type SettingKey = keyof typeof DEFAULTS;
  * in a backup or on this list, never quietly missing from both.
  */
 export type BackupExcluded =
-    "machineDeviceId" | "lastCardRead" | "labsUnlocked" | "beanconquerorHandoff" |
+    "machineDeviceId" | "savedMachines" | "lastCardRead" | "labsUnlocked" | "beanconquerorHandoff" |
     "machineModelString" | "machineName" | "ratingPromptDismissed" |
     "drawerHintLastShownAt" | "drawerHintShownCount" | "drawerHintManualOpens" |
     "drawerHintSignature" | "drawerHintLastSeenAt";
 export const NOT_IN_BACKUP: readonly SettingKey[] = [
-    "machineDeviceId", "lastCardRead", "labsUnlocked", "beanconquerorHandoff",
+    "machineDeviceId", "savedMachines", "lastCardRead", "labsUnlocked", "beanconquerorHandoff",
     "machineModelString", "machineName", "ratingPromptDismissed",
     "drawerHintLastShownAt", "drawerHintShownCount", "drawerHintManualOpens",
     "drawerHintSignature", "drawerHintLastSeenAt"

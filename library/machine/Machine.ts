@@ -35,7 +35,7 @@ import {
     type MachineInfo,
     type Notification,
 } from "./protocol";
-import type {ConnectionScope, FoundMachine, MachineTransport} from "./Transport";
+import type {ConnectionScope, FoundMachine, MachineTransport, ScanDecider} from "./Transport";
 
 export type SlotSession = {
     restartFromBeginning: boolean;
@@ -307,6 +307,19 @@ export default class Machine {
 
     get slotStateIsNormal(): boolean {
         return this.state !== null && STARTABLE.has(this.state);
+    }
+
+    /**
+     * The peripheral this machine holds a link to, or null.
+     *
+     * For the brew path's last check before sending: with several machines
+     * saved, the connect can land on a different one from the machine the
+     * screen named, and a recipe must not follow it there. Unlike
+     * `slotIdentity` it needs no reading from the machine, so it is known
+     * the moment the link is up.
+     */
+    get linkedDeviceId(): string | null {
+        return this.isConnected() ? this.connectedId : null;
     }
 
     get slotIdentity(): SlotIdentity | null {
@@ -659,8 +672,11 @@ export default class Machine {
         }
     }
 
-    scan(): Promise<FoundMachine[]> {
-        return this.transport.scan();
+    scan(decide?: ScanDecider, seconds?: number): Promise<FoundMachine[]> {
+        // Called bare when nothing is asked for, exactly as it always was.
+        return decide === undefined && seconds === undefined
+            ? this.transport.scan()
+            : this.transport.scan(seconds, decide);
     }
 
     /** What the radio last heard the machine call itself. Delegated, not stored:
@@ -1235,6 +1251,11 @@ export default class Machine {
     }
 
     private async brewAttempt(recipe: Recipe): Promise<void> {
+        // Pinned to the link this attempt started on, as `connectAttempt` and
+        // `shakeHands` are. The pre-flight below can take several seconds of
+        // asking, and a machine picked by hand meanwhile replaces the link: the
+        // recipe must not go to that machine instead.
+        const generation = this.generation;
         // A fresh attempt: the PRO-mode offer is per-brew, and this was not
         // reached through `switchToProAndRetry`, so the machine may be asked
         // about its mode again if this send also goes nowhere.
@@ -1268,6 +1289,13 @@ export default class Machine {
             // worth pestering, because without it the brew cannot start.
             if (answered || this.info !== null) break;
             if (round + 1 >= BREW_INFO_ROUNDS) break;
+        }
+        // Replaced, not merely lost: a link that dropped is left to
+        // `brewBlock`, which refuses it as `notConnected` and so keeps the
+        // brew path's one relink. A link that is up again under a newer
+        // generation was opened by somebody else, to whatever they chose.
+        if (generation !== this.generation && this.isConnected()) {
+            throw new Error("The machine connection changed.");
         }
         await this.brewOnce(recipe);
     }

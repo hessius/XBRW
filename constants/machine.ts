@@ -60,6 +60,39 @@ export const CONNECT_TIMEOUT_MS = 10_000;
 export const SCAN_SECONDS = 10;
 
 /**
+ * How long a scan keeps listening once it has heard a saved machine that is
+ * not the default.
+ *
+ * The scan above stops at the first xBloom because a machine that is on and
+ * nearby advertises within a second or two. With several saved, the first one
+ * heard is not necessarily the one wanted: at home, Work is never heard, but
+ * in a cafe with both in range the default may simply advertise a moment
+ * later. Two seconds is that "second or two", and it is only ever spent when
+ * the default has not been heard yet. Not measured on hardware with two
+ * machines; nobody has had two in front of them.
+ */
+export const SAVED_MACHINE_SETTLE_MS = 2000;
+
+/**
+ * How long the machine picker listens to mark saved machines "Nearby".
+ *
+ * Shorter than `SCAN_SECONDS`, because it runs while somebody is looking at
+ * a sheet, and a machine that is on and nearby advertises within a second or
+ * two. It never stops early: the point is to hear every machine in the room.
+ * Not measured with several machines; four is the guess to tune on hardware.
+ */
+export const SURVEY_SECONDS = 4;
+
+/**
+ * How long adding a machine listens before offering what it heard.
+ *
+ * Longer than the picker's look around, because a machine left out of this
+ * list cannot be added at all, and adding one is rare enough to be worth a
+ * few seconds more.
+ */
+export const ADD_SCAN_SECONDS = 6;
+
+/**
  * The handshake has to reach the machine within about 200 ms of connecting or
  * it ignores everything that follows. This is the budget, not the target.
  */

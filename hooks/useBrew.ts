@@ -4,7 +4,14 @@ import {useMachine} from "@/hooks/useMachine";
 import {useSetting} from "@/hooks/useSetting";
 import type Machine from "@/library/machine/Machine";
 import {isActiveBrewPhase, type BrewPhase} from "@/library/machine/Machine";
-import {BluetoothPermissionError, RadioUnavailableError, SlotOperationError} from "@/library/machine/errors";
+import {
+    BluetoothPermissionError,
+    NoSavedMachineError,
+    RadioUnavailableError,
+    SlotOperationError,
+    WrongMachineError
+} from "@/library/machine/errors";
+import {machineLabel, type SavedMachine} from "@/library/machine/savedMachines";
 import {notify} from "@/components/XbrwToast";
 import type {BypassTempEncoding} from "@/library/machine/protocol";
 import type Recipe from "@/library/Recipe";
@@ -54,7 +61,7 @@ export type Brewer = {
  * and back. This subscribes rather than owns.
  */
 export function useBrew(injected?: Machine): Brewer {
-    const {machine, connect} = useMachine(injected);
+    const {machine, connect, remembered, machines, keepMachineInUse} = useMachine(injected);
     const [bypassTempEncoding] = useSetting("bypassTempEncoding");
     const [autoStart] = useSetting("machineAutoStart");
     const [phase, setPhase] = useState<BrewPhase>(machine.phase);
@@ -73,10 +80,49 @@ export function useBrew(injected?: Machine): Brewer {
         }
     }, [machine, bypassTempEncoding, autoStart]);
 
-    async function attempt(recipe: Recipe): Promise<void> {
+    /**
+     * @param shown The machine in use when BREW was pressed: the one the
+     *   editor's chip and the home panel name. Captured once per press, so a
+     *   relink cannot move it.
+     * @param saved The saved machines at that moment, for names.
+     */
+    async function attempt(recipe: Recipe, shown: string, saved: SavedMachine[]): Promise<void> {
         // Lazy connect: this is the first moment the user has actually
         // reached for the machine, and it is the beep they are expecting.
         if (!machine.isConnected()) await connect();
+        // The hard guarantee. With several machines saved, the connect picks
+        // by scan, and when the machine on screen is out of range it can land
+        // on another. Nothing has been sent yet, and nothing is: the recipe
+        // goes only to the machine the user was looking at, and the machine on
+        // screen is put back as the machine in use, so the chip goes on naming
+        // it rather than the one that happened to answer.
+        const linked = machine.linkedDeviceId;
+        if (saved.length >= 2 && shown !== "" && linked !== null && linked !== shown) {
+            const name = (id: string) => {
+                const index = saved.findIndex((entry) => entry.id === id);
+                return index < 0 ? "another machine" : machineLabel(saved[index], index);
+            };
+            machine.note(`brew refused — connected to ${linked}, but the screen named ${shown}`);
+            await keepMachineInUse(shown, linked);
+            throw new WrongMachineError(
+                `Found ${name(linked)}, not ${name(shown)}, so nothing was sent. `
+                + `Check ${name(shown)} is on and nearby, or pick ${name(linked)}, then press BREW again.`
+            );
+        }
+        // With one machine saved the id is not a reliable check: the stale-id
+        // rescan brings the machine back under a new id, but it takes whatever
+        // xBloom answers first, which in a cafe is somebody else's. The serial
+        // is the check there, once both sides of it are known.
+        const known = saved.length === 1 ? saved[0].serial.trim() : "";
+        const heard = machine.info?.serial.trim() ?? "";
+        if (known !== "" && heard !== "" && heard !== known && linked !== null) {
+            machine.note(`brew refused — serial ${heard} is not the saved machine's ${known}`);
+            await keepMachineInUse(shown, linked);
+            throw new WrongMachineError(
+                `This xBloom is not your saved machine (serial ending ${known.slice(-4)}), `
+                + `so nothing was sent. Check yours is on and nearby, then press BREW again.`
+            );
+        }
         // A refused ambient update is applied only on an explicit new brew.
         machine.setBypassTempEncoding(bypassTempEncoding as BypassTempEncoding);
         machine.setAutoStart(autoStart);
@@ -105,6 +151,13 @@ export function useBrew(injected?: Machine): Brewer {
         if (e instanceof RadioUnavailableError) return false;
         if (e instanceof SlotOperationError) return false;
         if (e instanceof BluetoothPermissionError) return false;
+        // A scan that listened for every saved machine and heard none of them
+        // is an answer about the room, not a flaky link. A second ten-second
+        // scan of the same room would only make somebody wait twice as long.
+        if (e instanceof NoSavedMachineError) return false;
+        // Landed on a machine the screen did not name. A relink would land
+        // there again, and the answer is for the user to look, not to retry.
+        if (e instanceof WrongMachineError) return false;
         const phase = machine.phase;
         // Every other failed phase is left alone, including `rejected`. The
         // transport writes without response, so a write that threw does not
@@ -122,8 +175,11 @@ export function useBrew(injected?: Machine): Brewer {
     async function brew(recipe: Recipe, onPreflightRetry?: () => void,
                         onSlotRefusal?: (error: SlotOperationError) => void): Promise<void> {
         setError(null);
+        // What the screen named when BREW was pressed. See `attempt`.
+        const shown = remembered;
+        const saved = machines;
         try {
-            await attempt(recipe);
+            await attempt(recipe, shown, saved);
             return;
         } catch (e) {
             if (!worthRelinking(e)) {
@@ -138,7 +194,7 @@ export function useBrew(injected?: Machine): Brewer {
             // state this exists to escape.
             await machine.disconnect();
             onPreflightRetry?.();
-            await attempt(recipe);
+            await attempt(recipe, shown, saved);
         } catch (e) {
             setError((e as Error).message);
             if (e instanceof SlotOperationError) onSlotRefusal?.(e);
@@ -192,6 +248,13 @@ export function useBrew(injected?: Machine): Brewer {
     async function switchToProAndRetry(recipe: Recipe,
                                       onSlotRefusal?: (error: SlotOperationError) => void): Promise<void> {
         setError(null);
+        // The same rule as BREW: the retry goes to the machine on screen, or
+        // nowhere. It sends a recipe, so it gets the same check.
+        const linked = machine.linkedDeviceId;
+        if (machines.length >= 2 && remembered !== "" && linked !== null && linked !== remembered) {
+            setError("The machine connection changed, so nothing was sent. Press BREW again.");
+            return;
+        }
         try {
             await machine.switchToProAndRetry(recipe);
         } catch (e) {
