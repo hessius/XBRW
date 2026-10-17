@@ -143,8 +143,35 @@ export function recordSerial(settings: Store, id: string, serial: string): void 
     const machines = loadSavedMachines(settings);
     const entry = machines.find((machine) => machine.id === id);
     if (entry === undefined || entry.serial === trimmed) return;
+    // Never re-pointed. A machine's serial does not change, so a different
+    // one under this entry means the id now names a different machine (the
+    // stale-id rescan takes whatever xBloom answers first). Keeping the
+    // serial the entry already had is what lets the brew guard notice.
+    if (entry.serial !== "") return;
     saveSavedMachines(settings, machines.map((machine) =>
         machine.id === id ? {...machine, serial: trimmed} : machine));
+}
+
+/**
+ * Put the machine on screen back as the machine in use, after a brew refused
+ * to follow the link somewhere else.
+ *
+ * The connect that landed elsewhere has already made that machine active
+ * (with several saved), or renamed the only saved entry's id to it (the
+ * stale-id rescan). Either way the screen would now name a machine the user
+ * never chose. This undoes it, so the chip and the panel go on naming the
+ * machine the user was looking at.
+ */
+export function restoreMachineInUse(settings: Store, shown: string, linked: string): void {
+    const machines = loadSavedMachines(settings);
+    if (machines.some((machine) => machine.id === shown)) {
+        activateSavedMachine(settings, shown);
+        return;
+    }
+    if (machines.some((machine) => machine.id === linked)) {
+        settings.set("savedMachines", serialiseSavedMachines(replaceSavedMachineId(machines, linked, shown)));
+        settings.set("machineDeviceId", shown);
+    }
 }
 
 /**

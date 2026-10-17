@@ -1251,6 +1251,11 @@ export default class Machine {
     }
 
     private async brewAttempt(recipe: Recipe): Promise<void> {
+        // Pinned to the link this attempt started on, as `connectAttempt` and
+        // `shakeHands` are. The pre-flight below can take several seconds of
+        // asking, and a machine picked by hand meanwhile replaces the link: the
+        // recipe must not go to that machine instead.
+        const generation = this.generation;
         // A fresh attempt: the PRO-mode offer is per-brew, and this was not
         // reached through `switchToProAndRetry`, so the machine may be asked
         // about its mode again if this send also goes nowhere.
@@ -1284,6 +1289,13 @@ export default class Machine {
             // worth pestering, because without it the brew cannot start.
             if (answered || this.info !== null) break;
             if (round + 1 >= BREW_INFO_ROUNDS) break;
+        }
+        // Replaced, not merely lost: a link that dropped is left to
+        // `brewBlock`, which refuses it as `notConnected` and so keeps the
+        // brew path's one relink. A link that is up again under a newer
+        // generation was opened by somebody else, to whatever they chose.
+        if (generation !== this.generation && this.isConnected()) {
+            throw new Error("The machine connection changed.");
         }
         await this.brewOnce(recipe);
     }

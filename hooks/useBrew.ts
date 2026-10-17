@@ -61,7 +61,7 @@ export type Brewer = {
  * and back. This subscribes rather than owns.
  */
 export function useBrew(injected?: Machine): Brewer {
-    const {machine, connect, remembered, machines} = useMachine(injected);
+    const {machine, connect, remembered, machines, keepMachineInUse} = useMachine(injected);
     const [bypassTempEncoding] = useSetting("bypassTempEncoding");
     const [autoStart] = useSetting("machineAutoStart");
     const [phase, setPhase] = useState<BrewPhase>(machine.phase);
@@ -93,9 +93,9 @@ export function useBrew(injected?: Machine): Brewer {
         // The hard guarantee. With several machines saved, the connect picks
         // by scan, and when the machine on screen is out of range it can land
         // on another. Nothing has been sent yet, and nothing is: the recipe
-        // goes only to the machine the user was looking at. With one machine
-        // saved the stale-id rescan may legitimately bring the same machine
-        // back under a new id, so the check is for two or more only.
+        // goes only to the machine the user was looking at, and the machine on
+        // screen is put back as the machine in use, so the chip goes on naming
+        // it rather than the one that happened to answer.
         const linked = machine.linkedDeviceId;
         if (saved.length >= 2 && shown !== "" && linked !== null && linked !== shown) {
             const name = (id: string) => {
@@ -103,8 +103,24 @@ export function useBrew(injected?: Machine): Brewer {
                 return index < 0 ? "another machine" : machineLabel(saved[index], index);
             };
             machine.note(`brew refused — connected to ${linked}, but the screen named ${shown}`);
+            await keepMachineInUse(shown, linked);
             throw new WrongMachineError(
-                `Connected to ${name(linked)}, not ${name(shown)}. Check the machine shown, then press BREW again.`
+                `Found ${name(linked)}, not ${name(shown)}, so nothing was sent. `
+                + `Check ${name(shown)} is on and nearby, or pick ${name(linked)}, then press BREW again.`
+            );
+        }
+        // With one machine saved the id is not a reliable check: the stale-id
+        // rescan brings the machine back under a new id, but it takes whatever
+        // xBloom answers first, which in a cafe is somebody else's. The serial
+        // is the check there, once both sides of it are known.
+        const known = saved.length === 1 ? saved[0].serial.trim() : "";
+        const heard = machine.info?.serial.trim() ?? "";
+        if (known !== "" && heard !== "" && heard !== known && linked !== null) {
+            machine.note(`brew refused — serial ${heard} is not the saved machine's ${known}`);
+            await keepMachineInUse(shown, linked);
+            throw new WrongMachineError(
+                `This xBloom is not your saved machine (serial ending ${known.slice(-4)}), `
+                + `so nothing was sent. Check yours is on and nearby, then press BREW again.`
             );
         }
         // A refused ambient update is applied only on an explicit new brew.
@@ -232,6 +248,13 @@ export function useBrew(injected?: Machine): Brewer {
     async function switchToProAndRetry(recipe: Recipe,
                                       onSlotRefusal?: (error: SlotOperationError) => void): Promise<void> {
         setError(null);
+        // The same rule as BREW: the retry goes to the machine on screen, or
+        // nowhere. It sends a recipe, so it gets the same check.
+        const linked = machine.linkedDeviceId;
+        if (machines.length >= 2 && remembered !== "" && linked !== null && linked !== remembered) {
+            setError("The machine connection changed, so nothing was sent. Press BREW again.");
+            return;
+        }
         try {
             await machine.switchToProAndRetry(recipe);
         } catch (e) {

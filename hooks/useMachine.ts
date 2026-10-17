@@ -38,7 +38,8 @@ import {
     forgetSavedMachine,
     loadSavedMachines,
     recordSerial,
-    rememberMachine
+    rememberMachine,
+    restoreMachineInUse
 } from "@/library/machine/savedMachineSettings";
 import {
     BleTransport,
@@ -818,6 +819,11 @@ export type MachineLink = {
      * it cannot change or the machine does not answer.
      */
     choose: (id: string) => Promise<void>;
+    /**
+     * After a brew refused to follow the link to another machine: drop that
+     * link and make the machine that was on screen the machine in use again.
+     */
+    keepMachineInUse: (shown: string, linked: string) => Promise<void>;
     /** Connect to and save an unsaved machine the user picked from a scan. */
     add: (id: string) => Promise<void>;
     /** The saved machines, default first. */
@@ -945,6 +951,15 @@ export function useMachine(injected?: Machine, options: MachineOptions = {}): Ma
     async function forgetMachine(id: string): Promise<boolean> {
         const settings = store();
         const active = settings.get("machineDeviceId");
+        // Forgetting is a change of machine too: forgetting the machine in use
+        // makes the next one active, and the next BREW would go there while
+        // the first may still be pouring.
+        const blocker = machineChangeBlocker(machine, active);
+        if (blocker !== null) {
+            setError(blocker);
+            notify({tone: "error", message: blocker});
+            return false;
+        }
         try {
             if (id === active) {
                 const actual = machine.slotIdentity;
@@ -968,6 +983,12 @@ export function useMachine(injected?: Machine, options: MachineOptions = {}): Ma
         return true;
     }
 
+    async function keepMachineInUse(shown: string, linked: string): Promise<void> {
+        await machine.disconnect();
+        restoreMachineInUse(store(), shown, linked);
+        setStatus("idle");
+    }
+
     async function forget(): Promise<void> {
         const settings = store();
         const active = settings.get("machineDeviceId");
@@ -987,6 +1008,7 @@ export function useMachine(injected?: Machine, options: MachineOptions = {}): Ma
     return {
         machine, slotPort: injected === undefined ? sharedPort : unavailableSlotPort,
         status, error, remembered, connect, forget, forgetMachine, choose, add, machines,
+        keepMachineInUse,
         changeBlocker: machineChangeBlocker(machine, remembered),
         canOpenSettings,
         /** Send the user to the app's own page in the system settings. */
