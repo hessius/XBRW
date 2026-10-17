@@ -36,6 +36,21 @@ changed: Forget and Use this machine now are still refused while a brew owns
 the link. Not yet checked on a device: large text, TalkBack/VoiceOver reading
 of the expanded state, and the fold animation on a folding phone.
 
+## Brew screens clear the bottom inset (2026-10-18)
+
+Android 15+ draws the app under the navigation bar, and the brew screen had no
+bottom inset, so with three-button navigation START BREWING, PAUSE, RESUME and
+CANCEL sat partly behind the bar. The brew screen now pads its bottom by the
+safe-area inset. The brew record, brew history and compare screens add the inset
+to the end of their scroll content, so their last rows scroll clear too. Every
+XbrwSheet frame adds the inset to its bottom padding as well, so a sheet whose
+content fills its height ends above the bar. On iOS the same inset keeps these
+controls off the home indicator, and the brew screen's keyboard offset takes it
+back out so the rating note sits where it did above the keys. Release checks:
+the brew screen and a full sheet on Android with three-button and gesture
+navigation, and on iOS; the brew rating note with the keyboard up, on iOS and
+Android.
+
 ## Rename sheet opens on the visible name (2026-10-17)
 
 A recipe following its pod used to open the Rename sheet with an empty field.

@@ -1,9 +1,11 @@
 import React, {useEffect, useState} from "react";
 import {Sheet, XStack, YStack} from "tamagui";
 import {InteractionManager, Pressable, View} from "react-native";
+import {useSafeAreaInsets} from "react-native-safe-area-context";
 
 import DotMatrixText from "@/components/DotMatrixText";
 import {palette} from "@/constants/colors";
+import {SCREEN_PADDING} from "@/constants/layout";
 import {DURATION} from "@/constants/motion";
 
 type Props = {
@@ -62,6 +64,7 @@ export default function XbrwSheet({
     open, onOpenChange, title, showTitle = true, heightPercent = 70,
     prewarm = false, children
 }: Props) {
+    const insets = useSafeAreaInsets();
     // The sheet is put in the tree closed, and opened on the frame after.
     //
     // Tamagui animates the entrance by transitioning from closed to open, so a
@@ -208,7 +211,13 @@ export default function XbrwSheet({
                 sibling views that each claim to be the modal one make a screen
                 reader treat the other as hidden -- including the one with the
                 content in it. */}
-            <Sheet.Frame padding="$4" backgroundColor={palette.surface}>
+            {/* The bottom padding adds the inset. The frame reaches the
+                bottom of the display, which on Android 15+ is behind the
+                navigation bar, so a sheet whose content filled its height put
+                the end of it under the bar. */}
+            <Sheet.Frame testID="sheet-frame" padding="$4"
+                         paddingBottom={SCREEN_PADDING + insets.bottom}
+                         backgroundColor={palette.surface}>
                 {/* Modal only while it is actually up. It stays in the tree
                     through its exit, and a sheet on its way out must not go on
                     hiding the screen it is uncovering.
