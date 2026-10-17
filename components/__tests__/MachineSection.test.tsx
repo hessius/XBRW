@@ -1,10 +1,12 @@
 import React from "react";
-import {fireEvent, screen, waitFor} from "@testing-library/react-native";
+import {fireEvent, screen, waitFor, within} from "@testing-library/react-native";
 
 import MachineSection from "@/components/MachineSection";
 import {renderWithProviders} from "@/test-utils/render";
+import {palette} from "@/constants/colors";
 import {notify} from "@/components/XbrwToast";
 import {SlotOperationError} from "@/library/machine/errors";
+import type {SavedMachine} from "@/library/machine/savedMachines";
 
 jest.mock("@/components/XbrwToast", () => ({notify: jest.fn()}));
 
@@ -23,9 +25,12 @@ const mockLink: {
     remembered: string;
     connect: jest.Mock;
     forget: jest.Mock;
+    forgetMachine: jest.Mock;
+    choose: jest.Mock;
+    changeBlocker: string | null;
     canOpenSettings: boolean;
     openSettings: jest.Mock;
-    machines: import("@/library/machine/savedMachines").SavedMachine[];
+    machines: SavedMachine[];
 } = {
     machine: {info: null, askHowItIsDoing: mockAsk, modelNumber: ""},
     status: "disconnected",
@@ -33,6 +38,9 @@ const mockLink: {
     remembered: "",
     connect: jest.fn(),
     forget: jest.fn(),
+    forgetMachine: jest.fn(async () => true),
+    choose: jest.fn(async () => undefined),
+    changeBlocker: null,
     canOpenSettings: false,
     openSettings: jest.fn(),
     machines: []
@@ -42,6 +50,14 @@ jest.mock("@/hooks/useMachine", () => ({
     __esModule: true,
     default: () => mockLink,
     useMachine: () => mockLink
+}));
+
+// Each card's model row writes through the saved list, which reaches for the
+// shared store (SQLite) on an edit. Observed rather than run.
+const mockSetModel = jest.fn();
+jest.mock("@/hooks/useSavedMachines", () => ({
+    __esModule: true,
+    useSavedMachines: () => ({setModel: mockSetModel})
 }));
 
 // The section now carries a preference row, and the shared settings store opens
@@ -54,24 +70,63 @@ jest.mock("@/hooks/useSetting", () => {
     return {__esModule: true, default: useSetting, useSetting};
 });
 
+const entry = (id: string, label: string, model: "studio" | "original" = "studio",
+               serial = ""): SavedMachine => ({
+    id, label, model, modelString: "", advertisedName: "", serial
+});
+
+const INFO = {
+    kind: "info", serial: "J15ABC123456", model: "J15",
+    firmware: "V12.0D.500", waterEnough: true, waterFeed: "tank",
+    grindSize: 62, mode: "PRO"
+};
+
+/**
+ * Open a machine's card from its header, if it is not open already.
+ *
+ * The machine in use starts open, so pressing its header blindly would close it.
+ */
+async function openCard(name: RegExp): Promise<void> {
+    const header = screen.getByRole("button", {name});
+    if (header.props.accessibilityState?.expanded !== true) await fireEvent.press(header);
+}
+
+/** Open a machine's card and then its Details fold. */
+async function openDetails(name: RegExp, id: string): Promise<void> {
+    await openCard(name);
+    await fireEvent.press(card(id).getByRole("button", {name: /^Details/}));
+}
+
+/** Queries scoped to one machine's card, now that the machine in use starts open. */
+function card(id: string) {
+    return within(screen.getByTestId(`saved-machine-${id}-card`));
+}
+
+function resetLink(): void {
+    mockPush.mockClear();
+    mockAsk.mockClear();
+    mockSetModel.mockClear();
+    mockLink.status = "disconnected";
+    mockLink.remembered = "";
+    mockLink.machine = {info: null, askHowItIsDoing: mockAsk, modelNumber: ""};
+    mockLink.error = null;
+    mockLink.canOpenSettings = false;
+    mockLink.openSettings.mockClear();
+    mockLink.forgetMachine.mockClear();
+    mockLink.choose.mockClear();
+    mockLink.changeBlocker = null;
+    mockLink.machines = [];
+}
+
 describe("the machine section", () => {
-    beforeEach(() => {
-        mockPush.mockClear();
-        mockAsk.mockClear();
-        mockLink.status = "disconnected";
-        mockLink.remembered = "";
-        mockLink.machine = {info: null, askHowItIsDoing: mockAsk, modelNumber: ""};
-        mockLink.error = null;
-        mockLink.canOpenSettings = false;
-        mockLink.openSettings.mockClear();
-        mockLink.machines = [];
-    });
+    beforeEach(resetLink);
 
     it("asks the machine how it is doing when the settings screen opens", async () => {
         // Otherwise the water level on show is whatever it was at connect. Fill
         // the tank and Settings still says Low until the app is relaunched.
         mockLink.status = "connected";
         mockLink.remembered = "AA:BB";
+        mockLink.machines = [entry("AA:BB", "")];
         await renderWithProviders(<MachineSection/>);
         expect(mockAsk).toHaveBeenCalled();
     });
@@ -95,101 +150,24 @@ describe("the machine section", () => {
         // Otherwise nothing in the app tells a new owner that pairing exists:
         // BREW only appears once a machine is remembered.
         await renderWithProviders(<MachineSection/>);
+        expect(screen.getByText("MACHINES")).toBeTruthy();
         expect(await screen.findByText(/no machine paired/i)).toBeTruthy();
         expect(screen.getByLabelText(/^Connect to my machine/)).toBeTruthy();
-    });
-
-    it("shows what the machine says about itself once connected", async () => {
-        mockLink.status = "connected";
-        mockLink.remembered = "AA:BB";
-        mockLink.machine = {askHowItIsDoing: mockAsk, info: {
-            kind: "info", serial: "J15ABC123456", model: "J15",
-            firmware: "V12.0D.500", waterEnough: true, waterFeed: "tank",
-            grindSize: 62, mode: "PRO"
-        }} as never;
-
-        await renderWithProviders(<MachineSection/>);
-
-        expect(screen.getByText("J15ABC123456")).toBeTruthy();
-        expect(screen.getByText("V12.0D.500")).toBeTruthy();
-    });
-
-    it("names the model the info blob reports", async () => {
-        mockLink.status = "connected";
-        mockLink.remembered = "AA:BB";
-        mockLink.machine = {askHowItIsDoing: mockAsk, modelNumber: "", info: {
-            kind: "info", serial: "J15ABC123456", model: "J15",
-            firmware: "V12.0D.500", waterEnough: true, waterFeed: "tank",
-            grindSize: 62, mode: "PRO"
-        }} as never;
-
-        await renderWithProviders(<MachineSection/>);
-
-        expect(screen.getByText("Model")).toBeTruthy();
-        expect(screen.getByText("J15")).toBeTruthy();
-    });
-
-    it("falls back to the Device Information model when the blob's model is blank", async () => {
-        // A Studio on V12.0D.500 fills the blob's model bytes with 0xFF, which
-        // parses as "". The row used to render with nothing beside it.
-        mockLink.status = "connected";
-        mockLink.remembered = "AA:BB";
-        mockLink.machine = {askHowItIsDoing: mockAsk, modelNumber: "XB-2", info: {
-            kind: "info", serial: "J15A01D48H051", model: "",
-            firmware: "V12.0D.500", waterEnough: true, waterFeed: "tank",
-            grindSize: 68, mode: "PRO"
-        }} as never;
-
-        await renderWithProviders(<MachineSection/>);
-
-        expect(screen.getByText("Model")).toBeTruthy();
-        expect(screen.getByText("XB-2")).toBeTruthy();
-    });
-
-    it("leaves the model row out when nothing reported a model", async () => {
-        mockLink.status = "connected";
-        mockLink.remembered = "AA:BB";
-        mockLink.machine = {askHowItIsDoing: mockAsk, modelNumber: "", info: {
-            kind: "info", serial: "J15A01D48H051", model: "",
-            firmware: "V12.0D.500", waterEnough: true, waterFeed: "tank",
-            grindSize: 68, mode: "PRO"
-        }} as never;
-
-        await renderWithProviders(<MachineSection/>);
-
-        expect(screen.getByText("J15A01D48H051")).toBeTruthy();
-        expect(screen.queryByText("Model")).toBeNull();
-    });
-
-    it("shows a tap-fed machine as plumbed rather than low on water", async () => {
-        mockLink.status = "connected";
-        mockLink.remembered = "AA:BB";
-        mockLink.machine = {askHowItIsDoing: mockAsk, info: {
-            kind: "info", serial: "J15ABC123456", model: "J15",
-            firmware: "V12.0D.500", waterEnough: false, waterFeed: "tap",
-            grindSize: 62, mode: "PRO"
-        }} as never;
-
-        await renderWithProviders(<MachineSection/>);
-
-        expect(screen.getByText("Plumbed")).toBeTruthy();
-        expect(screen.queryByText("Low")).toBeNull();
     });
 
     it("says whether a machine is paired at all, not only whether it is connected", async () => {
         // "Not connected" was true of both a phone that has never seen a
         // machine and one that has paired with a machine and lost it, and the
         // difference decides everything: whether the app connects at launch,
-        // and whether it pays for a scan. The only way to tell them apart was
-        // whether a "forget this machine" button happened to be on screen.
-        mockLink.status = "disconnected";
-        mockLink.remembered = "";
+        // and whether it pays for a scan.
         await renderWithProviders(<MachineSection/>);
         expect(await screen.findByText(/no machine paired/i)).toBeTruthy();
 
         mockLink.status = "idle";
         mockLink.remembered = "AA:BB1122";
+        mockLink.machines = [entry("AA:BB1122", "")];
         await renderWithProviders(<MachineSection/>);
+        await openCard(/^xBloom 1, /);
         expect(await screen.findByText(/AA:BB1122/)).toBeTruthy();
     });
 
@@ -197,17 +175,21 @@ describe("the machine section", () => {
         // "Not connected" = no attempt made; "Not in range" = attempt made but
         // the machine was not reachable. Different facts, different words.
         mockLink.remembered = "MY:MACHINE";
+        mockLink.machines = [entry("MY:MACHINE", "Home")];
 
         mockLink.status = "idle";
         await renderWithProviders(<MachineSection/>);
+        await openCard(/^Home, /);
         expect(await screen.findByText("Not connected · MY:MACHINE")).toBeTruthy();
 
         mockLink.status = "disconnected";
         await renderWithProviders(<MachineSection/>);
+        await openCard(/^Home, /);
         expect(await screen.findByText("Not in range · MY:MACHINE")).toBeTruthy();
 
         mockLink.status = "failed";
         await renderWithProviders(<MachineSection/>);
+        await openCard(/^Home, /);
         expect(await screen.findByText("Not in range · MY:MACHINE")).toBeTruthy();
     });
 
@@ -224,52 +206,16 @@ describe("the machine section", () => {
         expect(mockPush).toHaveBeenCalledWith("/machine");
     });
 
-    it("opens the console after seven taps on the firmware, and not before", async () => {
-        mockLink.status = "connected";
-        mockLink.remembered = "AA:BB";
-        mockLink.machine = {askHowItIsDoing: mockAsk, info: {
-            kind: "info", serial: "J15ABC123456", model: "J15",
-            firmware: "V12.0D.500", waterEnough: true, waterFeed: "tank",
-            grindSize: 62, mode: "PRO"
-        }} as never;
-
-        await renderWithProviders(<MachineSection/>);
-        const firmware = screen.getByLabelText(/firmware/i);
-
-        for (let i = 0; i < 6; i++) await fireEvent.press(firmware);
-        expect(mockPush).not.toHaveBeenCalled();
-
-        await fireEvent.press(firmware);
-        expect(mockPush).toHaveBeenCalledWith("/machine");
-    });
-
-    it("offers to forget a machine it remembers", async () => {
-        mockLink.status = "connected";
-        mockLink.remembered = "AA:BB";
-
-        await renderWithProviders(<MachineSection/>);
-
-        expect(screen.getByLabelText(/forget/i)).toBeTruthy();
-    });
-
-    it("offers auto-start, off, because committing is what starts a grinder", async () => {
-        // The machine goes from committed to grinding with nothing in between
-        // and no confirmation of its own, so the default has to be the one
-        // where a curious first press does not leave somebody standing over a
-        // running burr.
-        await renderWithProviders(<MachineSection/>);
-
-        const toggle = screen.getByLabelText(/start brewing automatically/i);
-        expect(toggle).toBeTruthy();
-        expect(toggle.props.accessibilityState?.checked ?? toggle.props.value).toBe(false);
-    });
-
-    it("asks which xBloom you own, because the two grind on different scales", async () => {
+    it("asks which xBloom you own before one is paired, because the two grind on different scales", async () => {
         await renderWithProviders(<MachineSection/>);
 
         expect(screen.getByText("Your xBloom")).toBeTruthy();
         expect(screen.getByText("Studio")).toBeTruthy();
         expect(screen.getByText("Original")).toBeTruthy();
+        const stacked = within(screen.getByTestId("settings-choice-stacked"));
+        expect(stacked.getByText(
+            "Choose your model for matching imports. Grind scales differ. Saved recipes stay unchanged."
+        )).toBeTruthy();
     });
 
     it("remembers the original xBloom when that is what you picked", async () => {
@@ -303,6 +249,18 @@ describe("the machine section", () => {
             expect(screen.getByText(/Only the Studio has been tested/)).toBeTruthy());
         expect(screen.queryByText(/Your xBloom Studio has to be switched on/)).toBeNull();
     });
+
+    it("leaves the brewing preferences to the Brewing section", async () => {
+        mockLink.machines = [entry("AA:BB", "")];
+        mockLink.remembered = "AA:BB";
+        await renderWithProviders(<MachineSection/>);
+        await openDetails(/^xBloom 1, /, "AA:BB");
+
+        for (const label of ["Start brewing automatically", "Animate the brew chart",
+                             "Ask how a brew was", "Brew detail storage"]) {
+            expect(screen.queryByText(label, {includeHiddenElements: true})).toBeNull();
+        }
+    });
 });
 
 /**
@@ -315,12 +273,10 @@ describe("the machine section", () => {
  */
 describe("a Bluetooth permission only Settings can undo", () => {
     beforeEach(() => {
+        resetLink();
         mockLink.status = "failed";
-        mockLink.remembered = "";
-        mockLink.machine = {info: null, askHowItIsDoing: mockAsk, modelNumber: ""};
         mockLink.error = "Bluetooth permission is off for XBRW++. Turn it on in Settings to reach the machine.";
         mockLink.canOpenSettings = true;
-        mockLink.openSettings.mockClear();
     });
 
     it("offers the way out", async () => {
@@ -344,6 +300,17 @@ describe("a Bluetooth permission only Settings can undo", () => {
             .toBeTruthy();
     });
 
+    it("offers it inside the card of the machine in use too", async () => {
+        mockLink.remembered = "AA:BB";
+        mockLink.machines = [entry("AA:BB", "Home")];
+        await renderWithProviders(<MachineSection/>);
+        await openCard(/^Home, /);
+
+        await fireEvent.press(await screen.findByText(/Open app settings/));
+
+        expect(mockLink.openSettings).toHaveBeenCalled();
+    });
+
     it("offers nothing when the refusal can still be asked about again", async () => {
         mockLink.error = "XBRW++ needs permission to use Bluetooth to reach the machine.";
         mockLink.canOpenSettings = false;
@@ -354,49 +321,149 @@ describe("a Bluetooth permission only Settings can undo", () => {
     });
 });
 
-describe("several saved machines", () => {
-    const entry = (id: string, label: string, model: "studio" | "original" = "studio") => ({
-        id, label, model, modelString: "", advertisedName: "", serial: ""
-    });
-
+describe("one card per saved machine", () => {
     beforeEach(() => {
+        resetLink();
         mockLink.status = "connected";
         mockLink.remembered = "WORK";
-        mockLink.machine = {info: null, askHowItIsDoing: mockAsk, modelNumber: ""};
-        mockLink.error = null;
-        mockLink.canOpenSettings = false;
-        mockLink.machines = [entry("HOME", "Home"), entry("WORK", "Work", "original")];
+        mockLink.machines = [entry("HOME", "Home", "studio", "J15A01D48H051"), entry("WORK", "Work", "original")];
     });
 
     it("lists them in order, default marked, with the one in use", async () => {
         await renderWithProviders(<MachineSection/>);
 
-        expect(screen.getByLabelText(/^Home, Studio · Default/)).toBeTruthy();
-        expect(screen.getByLabelText(/^Work, Original · Choice 2 · ID WORK · Connected$/)).toBeTruthy();
+        expect(screen.getByRole("button", {name: /^Home, Studio · Default · #H051$/})).toBeTruthy();
+        expect(screen.getByRole("button", {name: /^Work, Original · Choice 2 · ID WORK · Connected$/}))
+            .toBeTruthy();
     });
 
-    it("moves the model choice into each machine, because one row could only describe one", async () => {
+    it("keeps every card closed until it is tapped, and says so to a screen reader", async () => {
+        await renderWithProviders(<MachineSection/>);
+        const home = screen.getByRole("button", {name: /^Home, /});
+
+        expect(home.props.accessibilityState).toEqual(expect.objectContaining({expanded: false}));
+        // Folded away is hidden from a screen reader, not only from sight.
+        expect(card("HOME").queryByText("Forget this machine")).toBeNull();
+        expect(card("HOME").queryByText("Use this machine now")).toBeNull();
+
+        await fireEvent.press(home);
+
+        expect(screen.getByRole("button", {name: /^Home, /}).props.accessibilityState)
+            .toEqual(expect.objectContaining({expanded: true}));
+        expect(card("HOME").getByText("Use this machine now")).toBeTruthy();
+        expect(card("HOME").getByText("Forget this machine")).toBeTruthy();
+        // Opening one card leaves the other as it was: Work, in use, open.
+        expect(screen.getByRole("button", {name: /^Work, /}).props.accessibilityState)
+            .toEqual(expect.objectContaining({expanded: true}));
+    });
+
+    it("closes a card again from its header", async () => {
+        await renderWithProviders(<MachineSection/>);
+        await fireEvent.press(screen.getByRole("button", {name: /^Home, /}));
+        await fireEvent.press(screen.getByRole("button", {name: /^Home, /}));
+
+        expect(screen.queryByText("Use this machine now")).toBeNull();
+    });
+
+    it("starts the machine in use open and the others closed", async () => {
         await renderWithProviders(<MachineSection/>);
 
-        expect(screen.queryByText("Your xBloom")).toBeNull();
+        expect(screen.getByRole("button", {name: /^Work, /}).props.accessibilityState)
+            .toEqual(expect.objectContaining({expanded: true}));
+        expect(screen.getByRole("button", {name: /^Home, /}).props.accessibilityState)
+            .toEqual(expect.objectContaining({expanded: false}));
+        // The machine in use's own rows are there without a tap.
+        expect(screen.getByText("Connected")).toBeTruthy();
+        expect(screen.queryByText("Use this machine now")).toBeNull();
     });
 
-    it("moves Forget into each machine's sheet", async () => {
+    it("shows the machine in use's error and the way out without a tap", async () => {
+        mockLink.status = "failed";
+        mockLink.error = "Bluetooth permission is off for XBRW++. Turn it on in Settings to reach the machine.";
+        mockLink.canOpenSettings = true;
         await renderWithProviders(<MachineSection/>);
 
-        expect(screen.queryByText("Forget this machine")).toBeNull();
+        expect(screen.getByText(/Bluetooth permission is off/)).toBeTruthy();
+        expect(screen.getByText("Open app settings")).toBeTruthy();
+        expect(screen.getByLabelText(/^Connect to my machine/)).toBeTruthy();
     });
 
-    it("opens a machine's sheet from its row", async () => {
+    it("turns the summary red while the machine in use has an error", async () => {
+        mockLink.status = "failed";
+        mockLink.error = "The machine did not answer.";
+        await renderWithProviders(<MachineSection/>);
+
+        expect(screen.getByTestId("saved-machine-WORK-summary")).toHaveStyle({color: palette.danger});
+        expect(screen.getByTestId("saved-machine-HOME-summary")).toHaveStyle({color: palette.dim});
+    });
+
+    it("turns the summary green while the machine in use is connected", async () => {
+        await renderWithProviders(<MachineSection/>);
+
+        expect(screen.getByTestId("saved-machine-WORK-summary")).toHaveStyle({color: palette.success});
+    });
+
+    it("drops the one-line model question for a model row in each card", async () => {
+        await renderWithProviders(<MachineSection/>);
+
+        expect(screen.queryByText("Your xBloom", {includeHiddenElements: true})).toBeNull();
+
+        await openCard(/^Work, /);
+        await fireEvent.press(screen.getByLabelText("Studio"));
+
+        expect(mockSetModel).toHaveBeenCalledWith("WORK", "studio");
+    });
+
+    it("switches to a machine that is not in use, from its card", async () => {
+        await renderWithProviders(<MachineSection/>);
+        await openCard(/^Home, /);
+
+        await fireEvent.press(screen.getByText("Use this machine now"));
+
+        expect(mockLink.choose).toHaveBeenCalledWith("HOME");
+    });
+
+    it("will not switch machines while a brew owns the link, and says why", async () => {
+        mockLink.changeBlocker = "A brew is running. Stop it or let it finish before changing machines.";
+        await renderWithProviders(<MachineSection/>);
+        await openCard(/^Home, /);
+
+        await fireEvent.press(screen.getByText("Use this machine now"));
+
+        expect(mockLink.choose).not.toHaveBeenCalled();
+    });
+
+    it("forgets the machine from its card", async () => {
+        await renderWithProviders(<MachineSection/>);
+        await openCard(/^Home, /);
+
+        await fireEvent.press(card("HOME").getByText("Forget this machine"));
+
+        expect(mockLink.forgetMachine).toHaveBeenCalledWith("HOME");
+    });
+
+    it("will not forget a machine while a brew owns the link, and says why", async () => {
+        mockLink.changeBlocker = "A brew is running. Stop it or let it finish before changing machines.";
+        await renderWithProviders(<MachineSection/>);
+        await openCard(/^Work, /);
+
+        await fireEvent.press(screen.getByText("Forget this machine"));
+
+        expect(mockLink.forgetMachine).not.toHaveBeenCalled();
+        expect(screen.getAllByText(/A brew is running/).length).toBeGreaterThan(0);
+    });
+
+    it("opens a machine's sheet for its name and order", async () => {
         const onOpenMachine = jest.fn();
         await renderWithProviders(<MachineSection onOpenMachine={onOpenMachine}/>);
+        await openCard(/^Home, /);
 
-        await fireEvent.press(screen.getByLabelText(/^Home, /));
+        await fireEvent.press(card("HOME").getByRole("button", {name: /^Name and order/}));
 
         expect(onOpenMachine).toHaveBeenCalledWith("HOME");
     });
 
-    it("offers to add another, through the screen's sheet", async () => {
+    it("offers to add another directly under the cards", async () => {
         const onAddMachine = jest.fn();
         await renderWithProviders(<MachineSection onAddMachine={onAddMachine}/>);
 
@@ -405,13 +472,140 @@ describe("several saved machines", () => {
         expect(onAddMachine).toHaveBeenCalled();
     });
 
-    it("keeps one machine's section as it was, with a row to name it and a way to add a second", async () => {
-        mockLink.machines = [entry("WORK", "")];
+    it("folds the machine's readings away inside its card", async () => {
+        mockLink.machine = {askHowItIsDoing: mockAsk, modelNumber: "", info: INFO};
+        await renderWithProviders(<MachineSection/>);
+        await openCard(/^Work, /);
+
+        // Open card, closed details: the readings are still out of the way.
+        expect(screen.queryByText("V12.0D.500")).toBeNull();
+        const toggle = card("WORK").getByRole("button", {name: /^Details/});
+        expect(toggle.props.accessibilityState).toEqual(expect.objectContaining({expanded: false}));
+
+        await fireEvent.press(toggle);
+
+        expect(card("WORK").getByRole("button", {name: /^Details/}).props.accessibilityState)
+            .toEqual(expect.objectContaining({expanded: true}));
+        expect(screen.getByText("J15ABC123456")).toBeTruthy();
+        expect(screen.getByText("V12.0D.500")).toBeTruthy();
+    });
+
+    it("reads a machine that is not in use from what was saved about it", async () => {
+        mockLink.machine = {askHowItIsDoing: mockAsk, modelNumber: "", info: INFO};
+        await renderWithProviders(<MachineSection/>);
+        await openDetails(/^Home, /, "HOME");
+
+        // Home's own serial, not the connected Work's readings.
+        expect(screen.getByText("J15A01D48H051")).toBeTruthy();
+        expect(screen.queryByText("V12.0D.500")).toBeNull();
+        expect(screen.getByText(/show here while this machine is connected/)).toBeTruthy();
+    });
+});
+
+describe("a single saved machine", () => {
+    const INFO_ON = {askHowItIsDoing: mockAsk, modelNumber: "", info: INFO};
+
+    beforeEach(() => {
+        resetLink();
+        mockLink.status = "connected";
+        mockLink.remembered = "AA:BB";
+        mockLink.machines = [entry("AA:BB", "")];
+    });
+
+    it("gets a clean card of its own, with a way to add a second", async () => {
         await renderWithProviders(<MachineSection/>);
 
-        expect(screen.getByText("Your xBloom")).toBeTruthy();
-        expect(screen.getByText("Forget this machine")).toBeTruthy();
+        expect(screen.getByRole("button", {name: /^xBloom 1, Studio · Default · ID AABB · Connected$/}))
+            .toBeTruthy();
         expect(screen.getByText("Add another machine")).toBeTruthy();
-        expect(screen.getByLabelText(/^xBloom 1, Studio · Default/)).toBeTruthy();
+        expect(screen.queryByText("Your xBloom", {includeHiddenElements: true})).toBeNull();
+
+        await openCard(/^xBloom 1, /);
+
+        expect(screen.getByText("Connected")).toBeTruthy();
+        expect(screen.getByRole("button", {name: /^Name, Give it a name/})).toBeTruthy();
+        expect(screen.getByText("XBRW++ will scan again next time.")).toBeTruthy();
+    });
+
+    it("shows what the machine says about itself once connected", async () => {
+        mockLink.machine = INFO_ON;
+        await renderWithProviders(<MachineSection/>);
+        await openDetails(/^xBloom 1, /, "AA:BB");
+
+        expect(screen.getByText("J15ABC123456")).toBeTruthy();
+        expect(screen.getByText("V12.0D.500")).toBeTruthy();
+    });
+
+    it("names the model the info blob reports", async () => {
+        mockLink.machine = INFO_ON;
+        await renderWithProviders(<MachineSection/>);
+        await openDetails(/^xBloom 1, /, "AA:BB");
+
+        expect(within(screen.getByTestId("machine-card-details")).getByText("Model")).toBeTruthy();
+        expect(screen.getByText("J15")).toBeTruthy();
+    });
+
+    it("falls back to the Device Information model when the blob's model is blank", async () => {
+        // A Studio on V12.0D.500 fills the blob's model bytes with 0xFF, which
+        // parses as "". The row used to render with nothing beside it.
+        mockLink.machine = {askHowItIsDoing: mockAsk, modelNumber: "XB-2",
+            info: {...INFO, serial: "J15A01D48H051", model: ""}};
+        await renderWithProviders(<MachineSection/>);
+        await openDetails(/^xBloom 1, /, "AA:BB");
+
+        expect(within(screen.getByTestId("machine-card-details")).getByText("Model")).toBeTruthy();
+        expect(screen.getByText("XB-2")).toBeTruthy();
+    });
+
+    it("leaves the model row out when nothing reported a model", async () => {
+        mockLink.machine = {askHowItIsDoing: mockAsk, modelNumber: "",
+            info: {...INFO, serial: "J15A01D48H051", model: ""}};
+        await renderWithProviders(<MachineSection/>);
+        await openDetails(/^xBloom 1, /, "AA:BB");
+
+        expect(screen.getByText("J15A01D48H051")).toBeTruthy();
+        expect(within(screen.getByTestId("machine-card-details")).queryByText("Model")).toBeNull();
+    });
+
+    it("shows a tap-fed machine as plumbed rather than low on water", async () => {
+        mockLink.machine = {askHowItIsDoing: mockAsk, modelNumber: "", info: {...INFO, waterEnough: false, waterFeed: "tap"}};
+        await renderWithProviders(<MachineSection/>);
+        await openDetails(/^xBloom 1, /, "AA:BB");
+
+        expect(screen.getByText("Plumbed")).toBeTruthy();
+        expect(screen.queryByText("Low")).toBeNull();
+    });
+
+    it("opens the console after seven taps on the firmware, and not before", async () => {
+        mockLink.machine = INFO_ON;
+        await renderWithProviders(<MachineSection/>);
+        await openDetails(/^xBloom 1, /, "AA:BB");
+        const firmware = screen.getByLabelText(/^Firmware/);
+
+        for (let i = 0; i < 6; i++) await fireEvent.press(firmware);
+        expect(mockPush).not.toHaveBeenCalled();
+
+        await fireEvent.press(firmware);
+        expect(mockPush).toHaveBeenCalledWith("/machine");
+    });
+
+    it("offers to forget the machine it remembers", async () => {
+        await renderWithProviders(<MachineSection/>);
+        await openCard(/^xBloom 1, /);
+
+        await fireEvent.press(screen.getByText("Forget this machine"));
+
+        expect(mockLink.forgetMachine).toHaveBeenCalledWith("AA:BB");
+    });
+
+    it("connects from its card when the link is down", async () => {
+        mockLink.status = "idle";
+        mockLink.connect.mockResolvedValue(undefined);
+        await renderWithProviders(<MachineSection/>);
+        await openCard(/^xBloom 1, /);
+
+        await fireEvent.press(screen.getByLabelText(/^Connect to my machine, Your xBloom Studio/));
+
+        expect(mockLink.connect).toHaveBeenCalled();
     });
 });

@@ -946,7 +946,25 @@ describe("SettingsScreen", () => {
         expect(screen.getByText(/cannot be undone/i)).toBeTruthy();
     });
 
-    it("opens About from the top of the screen, not the bottom", async () => {
+    it("opens on the machines and keeps the rows about the app at the bottom", async () => {
+        await renderWithProviders(<SettingsScreen settings={accountOn()}/>);
+
+        // People open Settings to reach a machine or change how brewing
+        // behaves. The app's own rows, the tip jar and anything diagnostic
+        // come after everything they came for.
+        const order = renderOrder(screen.toJSON());
+        const indexOf = (text: string) => order.indexOf(text);
+        const sequence = ["MACHINES", "BREWING", "UNITS", "RECIPE LIST", "XBLOOM ACCOUNT",
+                          "LIBRARY", "About XBRW++", "What leaves this device", SUPPORT_TITLE];
+        for (const text of sequence) expect(indexOf(text)).toBeGreaterThanOrEqual(0);
+        for (let i = 1; i < sequence.length; i++) {
+            expect(indexOf(sequence[i - 1])).toBeLessThan(indexOf(sequence[i]));
+        }
+        expect(order[0]).toBe("Settings");
+        expect(order[1]).toBe("MACHINES");
+    });
+
+    it("still opens About, with the version in its name", async () => {
         await renderWithProviders(<SettingsScreen settings={accountOn()}/>);
 
         // SettingsActionRow folds its label and detail into one accessible
@@ -955,37 +973,54 @@ describe("SettingsScreen", () => {
         // alone — matched here in full, not by a prefix, so this test would
         // notice if the version ever stopped reaching the name.
         const version = Application.nativeApplicationVersion ?? "unknown";
-        const about = screen.getByRole("button", {name: `About XBRW++, Version ${version}`});
-        await fireEvent.press(about);
+        await fireEvent.press(screen.getByRole("button", {name: `About XBRW++, Version ${version}`}));
 
         expect(mockPush).toHaveBeenCalledWith("/about");
-
-        // The name only proves the row exists and works; it says nothing about
-        // where it sits. Moving About to the bottom — the regression this test
-        // is named for — would leave the assertion above green, so position is
-        // checked directly against every other section, including the two
-        // this task adds.
-        const order = renderOrder(screen.toJSON());
-        const indexOf = (text: string) => order.indexOf(text);
-        expect(indexOf("About XBRW++")).toBeGreaterThanOrEqual(0);
-        expect(indexOf("About XBRW++")).toBeLessThan(indexOf("RECIPE LIST"));
-        expect(indexOf("RECIPE LIST")).toBeLessThan(indexOf("UNITS"));
-        expect(indexOf("UNITS")).toBeLessThan(indexOf("XBLOOM ACCOUNT"));
-        expect(indexOf("XBLOOM ACCOUNT")).toBeLessThan(indexOf("LIBRARY"));
     });
 
-    // Placement is the whole argument for the tile. Put it down with About and
-    // it is a row almost nobody scrolls to; the point of it is that it sits
-    // among the things people actually open Settings for.
-    it("puts the tip jar above the preferences, not down with About", async () => {
+    it("keeps the tip jar with About, at the end of the screen", async () => {
         await renderWithProviders(<SettingsScreen settings={accountOn()}/>);
 
         expect(screen.getByTestId("support-tile")).toBeTruthy();
 
         const order = renderOrder(screen.toJSON());
         const indexOf = (text: string) => order.indexOf(text);
-        expect(indexOf(SUPPORT_TITLE)).toBeGreaterThan(indexOf("Brew history"));
-        expect(indexOf(SUPPORT_TITLE)).toBeLessThan(indexOf("RECIPE LIST"));
+        expect(indexOf(SUPPORT_TITLE)).toBeGreaterThan(indexOf("About XBRW++"));
+        expect(indexOf(SUPPORT_TITLE)).toBeGreaterThan(indexOf("LIBRARY"));
+    });
+
+    it("groups the brewing preferences under Brewing, after the machines", async () => {
+        const settings = new Settings(memoryStorage());
+        const rendered = await renderWithProviders(<SettingsScreen settings={settings}/>);
+        const order = renderOrder(rendered.toJSON());
+        const brewing = order.indexOf("BREWING");
+        expect(brewing).toBeGreaterThan(order.indexOf("MACHINES"));
+        for (const label of ["Start brewing automatically", "Animate the brew chart",
+                             "Ask how a brew was", "Brew detail storage", "Brew history"]) {
+            expect(order.indexOf(label)).toBeGreaterThan(brewing);
+            expect(order.indexOf(label)).toBeLessThan(order.indexOf("UNITS"));
+        }
+
+        // Moved, not changed: each row still writes the setting it always did.
+        await fireEvent.press(screen.getByRole("switch", {name: "Start brewing automatically"}));
+        expect(settings.get("machineAutoStart")).toBe(true);
+        await fireEvent.press(screen.getByRole("switch", {name: "Animate the brew chart"}));
+        expect(settings.get("animateBrewChart")).toBe(false);
+        await fireEvent.press(screen.getByRole("switch", {name: "Ask how a brew was"}));
+        expect(settings.get("askForRatings")).toBe(false);
+        await fireEvent.press(screen.getByRole("button", {name: "Brew history, Every brew you have recorded."}));
+        expect(mockPush).toHaveBeenCalledWith("/brewHistory");
+    });
+
+    it("starts brewing automatically only when asked, because committing is what starts a grinder", async () => {
+        // The machine goes from committed to grinding with nothing in between
+        // and no confirmation of its own, so the default has to be the one
+        // where a curious first press does not leave somebody standing over a
+        // running burr.
+        await renderWithProviders(<SettingsScreen settings={new Settings(memoryStorage())}/>);
+
+        expect(screen.getByRole("switch", {name: "Start brewing automatically"}).props.accessibilityState)
+            .toEqual(expect.objectContaining({checked: false}));
     });
 
     // It unlocks nothing, so it stores nothing. A key added here would also
@@ -1094,6 +1129,34 @@ describe("SettingsScreen", () => {
             await renderWithProviders(<SettingsScreen settings={new Settings(memoryStorage())}/>);
 
             expect(screen.queryByText("LABS")).toBeNull();
+            expect(screen.queryByRole("button", {name: /^Machine console/})).toBeNull();
+        });
+
+        it("puts card diagnostics last, after Labs", async () => {
+            const settings = new Settings(memoryStorage());
+            settings.set("labsUnlocked", true);
+            settings.set("machineConsoleAcknowledged", true);
+            const rendered = await renderWithProviders(<SettingsScreen settings={settings}/>);
+            const order = renderOrder(rendered.toJSON());
+
+            expect(order.indexOf("CARD DIAGNOSTICS")).toBeGreaterThan(order.indexOf("Hide Labs"));
+            expect(order.indexOf("LABS")).toBeGreaterThan(order.indexOf(SUPPORT_TITLE));
+        });
+
+        it("offers the machine console from Labs, still behind its own gate", async () => {
+            const settings = new Settings(memoryStorage());
+            settings.set("labsUnlocked", true);
+            const rendered = await renderWithProviders(<SettingsScreen settings={settings}/>);
+            const order = renderOrder(rendered.toJSON());
+            expect(order.indexOf("Machine console")).toBeGreaterThan(order.indexOf("LABS"));
+            expect(order.indexOf("LABS")).toBeGreaterThan(order.indexOf("About XBRW++"));
+
+            await fireEvent.press(screen.getByRole("button", {name: /^Machine console/}));
+
+            expect(mockPush).toHaveBeenCalledWith("/machine");
+            // The shortcut opens the console's own "I understand" step; it
+            // does not answer it on the user's behalf.
+            expect(settings.get("machineConsoleAcknowledged")).toBe(false);
         });
 
         it("offers a way back out once Labs is open", async () => {

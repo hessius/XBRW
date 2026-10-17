@@ -27,6 +27,7 @@ import {useSetting} from "@/hooks/useSetting";
 import {useLiveBrew} from "@/hooks/useLiveBrew";
 import {type BackupPayload} from "@/library/backup";
 import type {BrewRecord} from "@/library/brew/BrewRecord";
+import {RATING_PROMPT_WINDOW_MS} from "@/library/brew/ratingPrompt";
 import type {BackupExcluded, Settings, SettingKey} from "@/library/Settings";
 import {isMachineModel} from "@/library/machine/machineModel";
 import {isSortAxis, isSortDirection} from "@/library/librarySort";
@@ -44,6 +45,12 @@ const TEMPERATURE_OPTIONS = [
     {value: "F", label: "°F"}
 ] as const;
 
+const BUDGET_OPTIONS = [
+    {value: "10", label: "10 MB"},
+    {value: "25", label: "25 MB"},
+    {value: "50", label: "50 MB"},
+    {value: "0", label: "Unlimited"}
+] as const;
 
 const VERSION = Application.nativeApplicationVersion ?? "unknown";
 
@@ -135,14 +142,15 @@ export default function SettingsScreen({settings}: Props) {
         useSetting("machineConsoleAcknowledged", settings);
     const [machineConsoleConfirmations, setMachineConsoleConfirmations] =
         useSetting("machineConsoleConfirmations", settings);
-    // Shown as rows inside MachineSection, not here. Read anyway, because a
-    // backup carries every preference and these are two.
+    // Shown inside MachineSection, not here. Read anyway, because a backup
+    // carries every preference and this is one.
     const [machineModel, setMachineModel] = useSetting("machineModel", settings);
     const [machineAutoStart, setMachineAutoStart] = useSetting("machineAutoStart", settings);
     const [animateBrewChart, setAnimateBrewChart] = useSetting("animateBrewChart", settings);
     const [askForRatings, setAskForRatings] = useSetting("askForRatings", settings);
     const [brewTraceBudgetMB, setBrewTraceBudgetMB] =
         useSetting("brewTraceBudgetMB", settings);
+    const ratingPromptHours = Math.round(RATING_PROMPT_WINDOW_MS / (60 * 60 * 1000));
     // Read only so backups carry the user's story-card sharing preference.
     const [storyCardHidden] = useSetting("storyCardHidden", settings);
     const [brewHistorySort, setBrewHistorySort] = useSetting("brewHistorySort", settings);
@@ -455,47 +463,55 @@ export default function SettingsScreen({settings}: Props) {
             <ScrollView testID="settings-scroll"
                         contentContainerStyle={{padding: 16, paddingBottom: 48}}>
             <YStack>
-                {/* At the top rather than the conventional bottom. The row
-                    carries the app's name and version, so it reads as the
-                    screen's identity rather than its footnote — the shape iOS
-                    uses for the Apple ID row — and it is the row an App Store
-                    reviewer comes here looking for. */}
-                <SettingsSection>
-                    <SettingsActionRow label="About XBRW++"
-                                       detail={`Version ${VERSION}`}
-                                       onPress={() => router.push("/about")}/>
-                </SettingsSection>
+                {/* Ordered by what people open Settings for. The machines come
+                    first: connecting one, or checking which is in use, is the
+                    common errand. Brewing preferences next, then how the app
+                    looks, then the library's housekeeping. The rows about the
+                    app itself, and anything diagnostic, go to the bottom. A
+                    machine's own readings are folded inside its card. */}
+                <MachineSection settings={settings} onOpenMachine={setMachineSheetId}
+                                onAddMachine={machineAdder.start}/>
 
-                {/* Beside About rather than buried under Library, because it is
-                    the same kind of row: something about the app itself rather
-                    than a preference. High on the screen on purpose. A privacy
-                    claim nobody can find is a privacy claim nobody can check,
-                    and this screen is what makes the claim checkable. */}
-                <SettingsSection>
-                    <SettingsActionRow label="What leaves this device"
-                                       detail="Every request the app can make, and what it carries."
-                                       onPress={() => router.push("/network")}/>
-                </SettingsSection>
-
-                {/* Its own section rather than a line in Library. Everything
-                    else under Library is about the recipes you hold; a brew
-                    history is a record of what the machine did, and burying it
-                    among backup and delete made the app's own diary read as
-                    file management. */}
-                <SettingsSection>
+                {/* What the app does around a brew, on any machine. Kept apart
+                    from the machines so a second machine does not repeat them,
+                    and so they are not mistaken for settings stored on one. */}
+                <SettingsSection title="Brewing">
+                    <SettingsToggleRow
+                        label="Start brewing automatically"
+                        description="Off, BREW loads the recipe onto the machine and waits for you to press START. On, it starts grinding the moment the recipe lands."
+                        value={machineAutoStart}
+                        onChange={setMachineAutoStart}/>
+                    <SettingsToggleRow
+                        label="Animate the brew chart"
+                        description="When off, each phase change holds its end state immediately. The system Reduced Motion switch also disables animation independently."
+                        value={animateBrewChart}
+                        onChange={setAnimateBrewChart}/>
+                    <SettingsToggleRow
+                        label="Ask how a brew was"
+                        description={`On, the last brew XBRW++ watched can ask how it was along the bottom for up to ${ratingPromptHours} hours. Off, ratings are only given on the brew itself.`}
+                        value={askForRatings} onChange={setAskForRatings}/>
+                    <SettingsChoiceRow
+                        label="Brew detail storage"
+                        description="Brew traces are the detailed charts. When they pass this limit, the oldest are dropped first. Rated and noted brews, and the newest brews of each recipe, go last. Summaries are always kept."
+                        value={String(brewTraceBudgetMB)}
+                        options={BUDGET_OPTIONS}
+                        onChange={(value) => setBrewTraceBudgetMB(Number(value))}/>
+                    {/* A record of what the machine did, so it sits with the
+                        brewing rows rather than with backup and delete, where
+                        the app's own diary read as file management. */}
                     <SettingsActionRow label="Brew history"
                                        detail="Every brew you have recorded."
                                        onPress={() => router.push("/brewHistory")}/>
                 </SettingsSection>
 
-                {/* Between Brew history and the preferences, not down with
-                    About. Almost nobody opens an About screen, and the ask is
-                    worth more than the rows under it are. Not wrapped in
-                    `SettingsSection`: that draws a `surface` card and rules
-                    hairlines between its children, and this is one filled tile
-                    rather than a list of rows. It carries the section's own
-                    `$4` top gap so the rhythm of the screen is unbroken. */}
-                <SupportTile/>
+                <SettingsSection title="Units">
+                    <SettingsChoiceRow
+                        label="Temperature"
+                        description="What the editor shows and takes. The card always stores Celsius, so switching back and forth changes nothing that is written."
+                        value={temperatureUnit}
+                        options={TEMPERATURE_OPTIONS}
+                        onChange={(value) => setTemperatureUnit(asTemperatureUnit(value))}/>
+                </SettingsSection>
 
                 <SettingsSection title="Recipe list">
                     <SettingsToggleRow
@@ -519,18 +535,6 @@ export default function SettingsScreen({settings}: Props) {
                         value={showRecipeAvatars}
                         onChange={setShowRecipeAvatars}/>
                 </SettingsSection>
-
-                <SettingsSection title="Units">
-                    <SettingsChoiceRow
-                        label="Temperature"
-                        description="What the editor shows and takes. The card always stores Celsius, so switching back and forth changes nothing that is written."
-                        value={temperatureUnit}
-                        options={TEMPERATURE_OPTIONS}
-                        onChange={(value) => setTemperatureUnit(asTemperatureUnit(value))}/>
-                </SettingsSection>
-
-                <MachineSection settings={settings} onOpenMachine={setMachineSheetId}
-                                onAddMachine={machineAdder.start}/>
 
                 {/* Its own section above Library, not a line inside it: Library
                     is the recipes you hold, and this is where some of them can
@@ -601,10 +605,31 @@ export default function SettingsScreen({settings}: Props) {
                                        onPress={() => setConfirmingDeleteAll(true)}/>
                 </SettingsSection>
 
-                {/* Gated behind the machine console's acknowledgement, so it is
-                    invisible until a user opens the developer area — see the
-                    component. */}
-                <CardReadDiagnostic settings={settings}/>
+                {/* The rows about the app itself, at the bottom where they are
+                    looked for. The version is the row an App Store reviewer
+                    comes for, and the end of the screen is where it is sought. */}
+                <SettingsSection>
+                    <SettingsActionRow label="About XBRW++"
+                                       detail={`Version ${VERSION}`}
+                                       onPress={() => router.push("/about")}/>
+                </SettingsSection>
+
+                {/* Beside About, because it is the same kind of row: something
+                    about the app itself rather than a preference. A privacy
+                    claim nobody can find is a privacy claim nobody can check,
+                    and this screen is what makes the claim checkable. */}
+                <SettingsSection>
+                    <SettingsActionRow label="What leaves this device"
+                                       detail="Every request the app can make, and what it carries."
+                                       onPress={() => router.push("/network")}/>
+                </SettingsSection>
+
+                {/* Not wrapped in `SettingsSection`: that draws a `surface`
+                    card and rules hairlines between its children, and this is
+                    one filled tile rather than a list of rows. It carries the
+                    section's own `$4` top gap so the rhythm of the screen is
+                    unbroken. Its fill is loud enough to be seen down here. */}
+                <SupportTile/>
 
                 {/* Last, under everything a user came here for, and absent
                     until seven taps on the version line open it.
@@ -622,6 +647,11 @@ export default function SettingsScreen({settings}: Props) {
                     inside it -- what you switched on stays on, which is the
                     honest reading of two separate switches. */}
                 {labsUnlocked && <SettingsSection title="Labs">
+                    {/* The console keeps its own "I understand" gate. This
+                        is a way to it that does not need seven taps. */}
+                    <SettingsActionRow label="Machine console"
+                                       detail="Connection logs and diagnostic commands."
+                                       onPress={() => router.push("/machine")}/>
                     <SettingsToggleRow
                         label="Send brews to Beanconqueror"
                         description="Needs a version of Beanconqueror that can read the link. Older ones will say they do not recognise it."
@@ -630,6 +660,11 @@ export default function SettingsScreen({settings}: Props) {
                                        detail="Anything you switched on here stays on."
                                        onPress={() => setLabsUnlocked(false)}/>
                 </SettingsSection>}
+
+                {/* Gated behind the machine console's acknowledgement, so it is
+                    invisible until a user opens the developer area. See the
+                    component. Down here with Labs, because it is diagnostics. */}
+                <CardReadDiagnostic settings={settings}/>
             </YStack>
             </ScrollView>
         </YStack>
