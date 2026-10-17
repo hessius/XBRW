@@ -22,6 +22,7 @@ import {useCloudSession} from "@/hooks/useCloudSession";
 import {useRecipeLibrary} from "@/hooks/useRecipeLibrary";
 import {useSetting} from "@/hooks/useSetting";
 import {useLiveBrew} from "@/hooks/useLiveBrew";
+import {useScrollEndPadding} from "@/hooks/useBottomInset";
 import {type BackupPayload} from "@/library/backup";
 import type {BrewRecord} from "@/library/brew/BrewRecord";
 import type {BackupExcluded, Settings, SettingKey} from "@/library/Settings";
@@ -92,6 +93,9 @@ function restoredMessage(recipes: number, brews: number): string {
  * decision in place.
  */
 export default function SettingsScreen({settings}: Props) {
+    // The end of the scroll clears whatever is under the screen: the
+    // navigation bar on Android, the home indicator on iOS.
+    const scrollEnd = useScrollEndPadding(48);
     const router = useSteadyRouter();
     const {ratingNoteOpen} = useLiveBrew();
     const [labsUnlocked, setLabsUnlocked] = useSetting("labsUnlocked", settings);
@@ -443,7 +447,7 @@ export default function SettingsScreen({settings}: Props) {
                     : "auto"}>
             <ScreenHeader title="Settings" onBack={() => router.back()}/>
             <ScrollView testID="settings-scroll"
-                        contentContainerStyle={{padding: 16, paddingBottom: 48}}>
+                        contentContainerStyle={{padding: 16, paddingBottom: scrollEnd}}>
             <YStack>
                 {/* At the top rather than the conventional bottom. The row
                     carries the app's name and version, so it reads as the

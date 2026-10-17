@@ -3,7 +3,6 @@ import {BackHandler, Platform, Share} from "react-native";
 // gesture-handler's FlatList, not React Native's: it keeps the list scroll
 // gesture and each row's swipe gesture from fighting each other on Android.
 import {FlatList} from "react-native-gesture-handler";
-import {useSafeAreaInsets} from "react-native-safe-area-context";
 import {useFocusEffect, useNavigation} from "expo-router";
 import {useShareIntentContext} from "expo-share-intent";
 import {Button, Text, XStack, YStack} from "tamagui";
@@ -30,6 +29,7 @@ import type {MachineVitals} from "@/components/MachinePanel";
 import {OVER} from "@/constants/brewCopy";
 import {ALREADY_IN_LIBRARY, CARD_READ_FAILED, HOLD_CARD} from "@/constants/copy";
 import {onAccent, palette, type AccentGroup} from "@/constants/colors";
+import {useBottomInset} from "@/hooks/useBottomInset";
 import {useCollapsibleHeader} from "@/hooks/useCollapsibleHeader";
 import {useShelfPicker} from "@/hooks/useShelfPicker";
 import {useCardWriter} from "@/hooks/useCardWriter";
@@ -282,7 +282,7 @@ function HomeQuickEditSheet({
 }
 
 export default function HomeScreen({db, beanStore, settings}: Props) {
-    const insets = useSafeAreaInsets();
+    const bottomInset = useBottomInset();
     const router = useSteadyRouter();
     const navigation = useNavigation();
 
@@ -1495,7 +1495,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                         showCoffeeMarker={showCoffeeMarker}
                         dottedProfile={dottedProfile}
                         editing={editing}
-                        paddingBottom={insets.bottom + 8}/>
+                        paddingBottom={bottomInset + 8}/>
                 ) : libraryQuery.view === "shelves" && !picker.active ? (
                     // The grid steps aside while picking without changing the
                     // remembered view, so cancelling puts the user back where
@@ -1516,7 +1516,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                                onHideShelf={(id) =>
                                    setHiddenShelves(toggleHidden(hiddenShelves, id))}
                                onScroll={onScroll}
-                               paddingBottom={insets.bottom + 8}/>
+                               paddingBottom={bottomInset + 8}/>
                 ) : listEmpty ? (
                     nothingTicked ? (
                         <EmptySelection/>
@@ -1549,7 +1549,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                         // last card scrolls clear of the home indicator, rather
                         // than the whole screen stopping short of it.
                         contentContainerStyle={{
-                            paddingBottom: insets.bottom + 8
+                            paddingBottom: bottomInset + 8
                                 + (picker.active ? PICKER_BAR_HEIGHT : 0)
                         }}
                         renderItem={({item}: {item: RecipeListItem}) => item.kind === "heading" ? (
@@ -1618,7 +1618,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
             {picker.active && !screenCovered && (
                 <ShelfPickerBar count={picker.count}
                                 editing={picker.mode.kind === "editing"}
-                                paddingBottom={insets.bottom}
+                                paddingBottom={bottomInset}
                                 onCancel={stopPicking}
                                 onDone={finishPicking}/>
             )}

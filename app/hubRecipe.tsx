@@ -1,7 +1,6 @@
 import {useLocalSearchParams} from "expo-router";
 import React, {useEffect, useState} from "react";
 import {Image, Pressable, ScrollView} from "react-native";
-import {useSafeAreaInsets} from "react-native-safe-area-context";
 import {Text, XStack, YStack} from "tamagui";
 
 import BrewStageLadder from "@/components/BrewStageLadder";
@@ -11,6 +10,7 @@ import {notify} from "@/components/XbrwToast";
 import {onAccent, palette} from "@/constants/colors";
 import {SCREEN_PADDING} from "@/constants/layout";
 import router from "@/hooks/steadyRouter";
+import {useBottomInset} from "@/hooks/useBottomInset";
 import {useHubSave} from "@/hooks/useHubSave";
 import {fetchHubDetail, type HubDetailRow, HubApiError} from "@/library/hub/hubApi";
 import {criteriaVocabulary, heldHubCriteria} from "@/library/hub/hubCriteria";
@@ -295,7 +295,7 @@ function RecipeDetail({
 export default function HubRecipeScreen() {
     const {id} = useLocalSearchParams<{id: string}>();
     const recipeId = hubIdIn(id);
-    const insets = useSafeAreaInsets();
+    const bottomInset = useBottomInset();
     const save = useHubSave();
     const [retry, setRetry] = useState(0);
     const [loaded, setLoaded] = useState<Loaded | null>(null);
@@ -349,7 +349,7 @@ export default function HubRecipeScreen() {
 
     return (
         <YStack flex={1} backgroundColor={palette.base}
-                paddingBottom={insets.bottom}>
+                paddingBottom={bottomInset}>
             <ScreenHeader title={title} onBack={() => router.back()}/>
             {loading && <LoadingState/>}
             {!loading && error !== null && (

@@ -14,6 +14,7 @@ import {
     type OutboundCall
 } from "@/constants/network";
 import {useLiveBrew} from "@/hooks/useLiveBrew";
+import {useScrollEndPadding} from "@/hooks/useBottomInset";
 
 const PRIVACY_URL = `${REPO_URL}/blob/main/PRIVACY.md`;
 
@@ -39,6 +40,9 @@ const PRIVACY_URL = `${REPO_URL}/blob/main/PRIVACY.md`;
  * carries the name instead, where it has room.
  */
 export default function NetworkScreen() {
+    // The end of the scroll clears whatever is under the screen: the
+    // navigation bar on Android, the home indicator on iOS.
+    const scrollEnd = useScrollEndPadding(48);
     const {ratingNoteOpen} = useLiveBrew();
 
     return (
@@ -47,7 +51,7 @@ export default function NetworkScreen() {
                 importantForAccessibility={ratingNoteOpen ? "no-hide-descendants" : "auto"}>
             <ScreenHeader title="Network" onBack={() => router.back()}/>
             <ScrollView testID="network-scroll"
-                        contentContainerStyle={{padding: 16, paddingBottom: 48}}>
+                        contentContainerStyle={{padding: 16, paddingBottom: scrollEnd}}>
                 <YStack backgroundColor={palette.surface} borderRadius="$5"
                         paddingHorizontal="$4" paddingTop="$3" paddingBottom="$2">
                     <Paragraph>

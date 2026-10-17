@@ -16,6 +16,7 @@ import {palette} from "@/constants/colors";
 import {LICENCES} from "@/constants/licences";
 import {useLiveBrew} from "@/hooks/useLiveBrew";
 import {useSetting} from "@/hooks/useSetting";
+import {useScrollEndPadding} from "@/hooks/useBottomInset";
 import type {Settings} from "@/library/Settings";
 
 type Props = {
@@ -96,6 +97,9 @@ const BUILD = Application.nativeBuildVersion ?? "unknown";
  * anywhere.
  */
 export default function AboutScreen({settings}: Props = {}) {
+    // The end of the scroll clears whatever is under the screen: the
+    // navigation bar on Android, the home indicator on iOS.
+    const scrollEnd = useScrollEndPadding(48);
     const [labsUnlocked, setLabsUnlocked] = useSetting("labsUnlocked", settings);
     const [taps, setTaps] = useState(0);
     const {ratingNoteOpen} = useLiveBrew();
@@ -138,7 +142,7 @@ export default function AboutScreen({settings}: Props = {}) {
                 accessibilityElementsHidden={ratingNoteOpen}
                 importantForAccessibility={ratingNoteOpen ? "no-hide-descendants" : "auto"}>
             <ScreenHeader title="About" onBack={() => router.back()}/>
-            <ScrollView contentContainerStyle={{padding: 16, paddingBottom: 48}}>
+            <ScrollView contentContainerStyle={{padding: 16, paddingBottom: scrollEnd}}>
                 {/* The mark, the wordmark and the ticker read as one object, so
                     they sit on a card of their own rather than floating on the
                     page above a stack of sections. */}

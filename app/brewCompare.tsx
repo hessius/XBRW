@@ -2,7 +2,6 @@ import {useLocalSearchParams} from "expo-router";
 import router from "@/hooks/steadyRouter";
 import React from "react";
 import {ScrollView, useWindowDimensions} from "react-native";
-import {useSafeAreaInsets} from "react-native-safe-area-context";
 import Svg, {Line, Path} from "react-native-svg";
 import {Button, Text, XStack, YStack} from "tamagui";
 
@@ -21,6 +20,7 @@ import {
 } from "@/constants/brewCopy";
 import {palette} from "@/constants/colors";
 import {SCREEN_PADDING} from "@/constants/layout";
+import {useBottomInset} from "@/hooks/useBottomInset";
 import {useBrewComparison} from "@/hooks/useBrewComparison";
 import type {StoredBrew} from "@/library/BrewDatabase";
 import {plannedSeconds, toPath} from "@/library/brew/brewShape";
@@ -224,7 +224,7 @@ function traceLaneLabel(kind: "This" | "That", drewRate: boolean, startedAt: num
 export default function BrewCompareScreen() {
     const {a, b} = useLocalSearchParams<{a?: string; b?: string}>();
     const {width} = useWindowDimensions();
-    const insets = useSafeAreaInsets();
+    const bottomInset = useBottomInset();
     const chartWidth = Math.max(1, width - SCREEN_PADDING * 2);
     const comparisonState = useBrewComparison({
         a,
@@ -286,7 +286,7 @@ export default function BrewCompareScreen() {
             {/* Plus the inset, so the end of the comparison scrolls clear of
                 the Android navigation bar and the iOS home indicator. */}
             <ScrollView testID="compare-scroll"
-                        contentContainerStyle={{paddingBottom: 24 + insets.bottom, gap: 12}}>
+                        contentContainerStyle={{paddingBottom: 24 + bottomInset, gap: 12}}>
                 <YStack paddingHorizontal={SCREEN_PADDING} gap="$3">
                     <Text color={palette.dim} fontSize={13} numberOfLines={1}>
                         {subject.record.recipeName}
