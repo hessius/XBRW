@@ -71,20 +71,37 @@ changed: Forget and Use this machine now are still refused while a brew owns
 the link. Not yet checked on a device: large text, TalkBack/VoiceOver reading
 of the expanded state, and the fold animation on a folding phone.
 
-## Brew screens clear the bottom inset (2026-10-18)
+## The whole app clears the bottom inset (2026-10-18)
 
-Android 15+ draws the app under the navigation bar, and the brew screen had no
-bottom inset, so with three-button navigation START BREWING, PAUSE, RESUME and
-CANCEL sat partly behind the bar. The brew screen now pads its bottom by the
-safe-area inset. The brew record, brew history and compare screens add the inset
-to the end of their scroll content, so their last rows scroll clear too. Every
-XbrwSheet frame adds the inset to its bottom padding as well, so a sheet whose
-content fills its height ends above the bar. On iOS the same inset keeps these
-controls off the home indicator, and the brew screen's keyboard offset takes it
-back out so the rating note sits where it did above the keys. Release checks:
-the brew screen and a full sheet on Android with three-button and gesture
-navigation, and on iOS; the brew rating note with the keyboard up, on iOS and
-Android.
+Android 15+ draws the app under the navigation bar. With three-button
+navigation that is a 48 dp bar the system paints opaque, and several surfaces
+sat partly behind it: the brew screen's START BREWING, PAUSE, RESUME and
+CANCEL, the editor's BREW, WRITE and SAVE, the last row of the recipe sheet
+(DELETE), and the bottom of Settings. Every surface that reaches the bottom of
+the display now clears the safe-area inset through one helper,
+`hooks/useBottomInset.ts`:
+
+- The brew screen pads its bottom by the inset. On iOS its keyboard offset takes
+  it back out, so the rating note sits where it did above the keys.
+- The editor's action bar takes the whole inset on Android. iOS keeps its
+  5 point sink into the home indicator.
+- Every XbrwSheet frame pads by the inset, and its snap point grows by the same
+  amount, so the content keeps the room it was tuned for and ends above the bar.
+- Settings, About, Licences, Machine and Network end their scroll content at
+  least 24 points above the inset. A gesture bar or the home indicator keeps
+  the 48 point end they had.
+- The brew record, history and compare screens, the library lists, the
+  catalogue screens, cloud import and Easy Mode pad their scroll ends and
+  pinned bars by the inset, as before. Easy Mode's slot list now does it too
+  while a write hides the actions panel.
+- While the live brew bar or the rating question is drawn it takes the inset
+  itself, so the screens above it get none and no longer show a doubled gap.
+
+Release checks: on Android with three-button and with gesture navigation, and on
+iOS: the brew screen, the editor action bar, the recipe sheet from the library
+and the editor, the bottom of Settings, the catalogue's save bar, and the same
+screens with the live brew bar showing; the brew rating note with the keyboard
+up, on iOS and Android.
 
 ## Rename sheet opens on the visible name (2026-10-17)
 

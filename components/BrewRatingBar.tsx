@@ -17,6 +17,7 @@ import {palette} from "@/constants/colors";
 import {DURATION} from "@/constants/motion";
 import {plannedSeconds} from "@/library/brew/brewShape";
 import type Pour from "@/library/Pour";
+import {useTakesBottomInset} from "@/hooks/useBottomInset";
 
 const TRACE_WIDTH = 86;
 const TRACE_HEIGHT = 34;
@@ -54,6 +55,9 @@ export default function BrewRatingBar({
     onDismiss: () => void;
 }) {
     const insets = useSafeAreaInsets();
+    // This bar pads itself by the inset, so the screen above it has none left
+    // to clear. See `hooks/useBottomInset.ts`.
+    useTakesBottomInset();
 
     return (
         <Animated.View

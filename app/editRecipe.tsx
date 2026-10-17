@@ -4,7 +4,6 @@ import {openEasyModeRecipe} from "@/hooks/useEasyModeSlots";
 import React, {useEffect, useRef, useState} from "react";
 import {Pressable, ScrollView, Share, View, useWindowDimensions} from "react-native";
 import Animated, {FadeIn, FadeOut, SlideInDown, SlideOutDown} from "react-native-reanimated";
-import {useSafeAreaInsets} from "react-native-safe-area-context";
 import {Text, XStack, YStack} from "tamagui";
 
 import AboutDeck from "@/components/AboutDeck";
@@ -35,6 +34,7 @@ import {notify} from "@/components/XbrwToast";
 import {palette} from "@/constants/colors";
 import {grindTooFine} from "@/constants/copy";
 import {DURATION, EASING, useReducedMotionState} from "@/constants/motion";
+import {pinnedBarPadding, useBottomInset} from "@/hooks/useBottomInset";
 import {useCardWriter} from "@/hooks/useCardWriter";
 import {useCollapsibleHeader} from "@/hooks/useCollapsibleHeader";
 import {useLiveBrew} from "@/hooks/useLiveBrew";
@@ -644,7 +644,7 @@ type ActionBarProps = {
  *
  * Module scope, so it is a stable component type across the screen's renders.
  */
-/** How far the bar sits into the home indicator's inset. */
+/** How far the bar sits into the home indicator's inset, on iOS only. */
 const ACTION_BAR_SINK = 5;
 
 type BarButtonProps = {
@@ -711,20 +711,23 @@ function ActionBar({
     accent, canBrewAtAll, canBrew, quickEditOpen, onBrew, onQuickEdit, canWrite, canSave,
     onWrite, onSave, onHeight
 }: ActionBarProps) {
-    const insets = useSafeAreaInsets();
+    const bottomInset = useBottomInset();
 
     return (
-        // The bottom padding is the home indicator's own height, less a few
-        // points. The inset is clearance for a gesture, not a margin, and the
-        // buttons are tall enough that overlapping its outer edge costs nothing
-        // -- on the phone this was tuned against, the full inset still read as
-        // the bar floating. The top padding is half the sides'. The bar is
+        // On iOS the bottom padding is the home indicator's own height, less a
+        // few points. The inset is clearance for a gesture, not a margin, and
+        // the buttons are tall enough that overlapping its outer edge costs
+        // nothing -- on the phone this was tuned against, the full inset still
+        // read as the bar floating. On Android it is the whole inset: with
+        // three-button navigation the inset is an opaque bar, and sinking into
+        // it hid the bottom of BREW, WRITE and SAVE. The top padding is half
+        // the sides'. The bar is
         // pinned over the deck, so every point above the buttons is a point
         // taken off the control being edited underneath it.
         <XStack testID="editor-actions"
                 position="absolute" bottom={0} left={0} right={0} gap="$2"
                 paddingHorizontal="$4" paddingTop="$2"
-                paddingBottom={Math.max(insets.bottom - ACTION_BAR_SINK, 0)}
+                paddingBottom={pinnedBarPadding(bottomInset, ACTION_BAR_SINK)}
                 backgroundColor={palette.base}
                 onLayout={(event) => onHeight(event.nativeEvent.layout.height)}>
             {/* The accent goes to the one act that runs the recipe. With no
