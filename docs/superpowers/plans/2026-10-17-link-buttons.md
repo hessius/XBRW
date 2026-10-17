@@ -89,20 +89,24 @@ for run in runs {
     let count = CTRunGetGlyphCount(run)
     var glyphs = [CGGlyph](repeating: 0, count: count)
     var positions = [CGPoint](repeating: .zero, count: count)
+    var indices = [CFIndex](repeating: 0, count: count)
     CTRunGetGlyphs(run, CFRange(location: 0, length: 0), &glyphs)
     CTRunGetPositions(run, CFRange(location: 0, length: 0), &positions)
+    CTRunGetStringIndices(run, CFRange(location: 0, length: 0), &indices)
     for index in 0..<count {
         if glyphs[index] == 0 { fatalError("Missing glyph") }
         guard let path = CTFontCreatePathForGlyph(font, glyphs[index], nil) else {
-            if glyphs[index] == CTFontGetGlyphWithName(font, "space" as CFString) { continue }
-            fatalError("Missing glyph outline")
+            let character = (CommandLine.arguments[2] as NSString).substring(with: NSRange(location: indices[index], length: 1))
+            if character.trimmingCharacters(in: .whitespaces).isEmpty { continue }
+            fatalError("Missing glyph outline for \(character)")
         }
         var d = ""
+        let origin = positions[index]
         path.applyWithBlock { pointer in
             let element = pointer.pointee
             func point(_ index: Int) -> String {
                 let p = element.points[index]
-                return "\(p.x + positions[index].x) \(-(p.y + positions[index].y))"
+                return "\(p.x + origin.x) \(-(p.y + origin.y))"
             }
             switch element.type {
             case .moveToPoint: d += "M\(point(0)) "
