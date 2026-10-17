@@ -23,7 +23,7 @@ import {createTestDatabase, type FakeSQLiteDatabase} from "@/test-utils/sqlite";
 let mockMachine: Machine;
 let mockBacking: FakeSQLiteDatabase;
 jest.mock("@/hooks/useMachine", () => ({
-    useMachine: () => ({machine: mockMachine, connect: async () => {}})
+    useMachine: () => ({machine: mockMachine, connect: async () => {}, remembered: "", machines: []})
 }));
 jest.mock("@/hooks/useSetting", () => ({
     useSetting: (key: string) => [key === "machineAutoStart", () => {}]
