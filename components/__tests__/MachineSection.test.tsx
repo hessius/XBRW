@@ -17,7 +17,7 @@ jest.mock("expo-router", () => ({router: {push: (...args: unknown[]) => mockPush
 
 const mockAsk = jest.fn().mockResolvedValue(true);
 const mockLink: {
-    machine: {info: null | object; askHowItIsDoing: jest.Mock; modelNumber?: string};
+    machine: {info: null | object; askHowItIsDoing: jest.Mock; modelNumber: string};
     status: import("@/hooks/useMachine").LinkStatus;
     error: string | null;
     remembered: string;
@@ -26,7 +26,7 @@ const mockLink: {
     canOpenSettings: boolean;
     openSettings: jest.Mock;
 } = {
-    machine: {info: null, askHowItIsDoing: mockAsk},
+    machine: {info: null, askHowItIsDoing: mockAsk, modelNumber: ""},
     status: "disconnected",
     error: null,
     remembered: "",
@@ -58,7 +58,7 @@ describe("the machine section", () => {
         mockAsk.mockClear();
         mockLink.status = "disconnected";
         mockLink.remembered = "";
-        mockLink.machine = {info: null, askHowItIsDoing: mockAsk};
+        mockLink.machine = {info: null, askHowItIsDoing: mockAsk, modelNumber: ""};
         mockLink.error = null;
         mockLink.canOpenSettings = false;
         mockLink.openSettings.mockClear();
@@ -314,7 +314,7 @@ describe("a Bluetooth permission only Settings can undo", () => {
     beforeEach(() => {
         mockLink.status = "failed";
         mockLink.remembered = "";
-        mockLink.machine = {info: null, askHowItIsDoing: mockAsk};
+        mockLink.machine = {info: null, askHowItIsDoing: mockAsk, modelNumber: ""};
         mockLink.error = "Bluetooth permission is off for XBRW++. Turn it on in Settings to reach the machine.";
         mockLink.canOpenSettings = true;
         mockLink.openSettings.mockClear();

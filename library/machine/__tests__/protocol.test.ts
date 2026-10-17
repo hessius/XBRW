@@ -106,33 +106,16 @@ describe("reading what the machine says", () => {
             0x00, 0x00, 0x00, 0x39, 0x34
         ]);
 
-        expect(parseNotification(captured)).toMatchObject({
-            kind: "info",
-            waterEnough: false,
-            waterFeed: "tap"
-        });
-    });
-
-    it("reads the captured frame's model bytes as blank, because they are 0xFF filler", () => {
-        // The same capture as above. Bytes 13-18 of its payload are six 0xFF,
-        // so a real Studio's blob names no model, and the settings row has to
-        // cope with that rather than draw an empty value.
-        const captured = Uint8Array.from([
-            0x58, 0x02, 0x07, 0x49, 0x9E, 0x4B, 0x00, 0x00, 0x00, 0xC1,
-            0x4A, 0x31, 0x35, 0x41, 0x30, 0x32, 0x41, 0x34, 0x35, 0x48,
-            0x30, 0x33, 0x38, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x56,
-            0x31, 0x32, 0x2E, 0x30, 0x44, 0x2E, 0x35, 0x30, 0x30, 0x80,
-            0x30, 0xBA, 0x47, 0x00, 0x00, 0x01, 0x01, 0x5A, 0x0F, 0x6E,
-            0x01, 0x01, 0x41, 0x36, 0x03, 0x00, 0x00, 0x00, 0x11, 0xDF,
-            0x42, 0x91, 0x32, 0x78, 0x56, 0xBC, 0x02, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x39, 0x34
-        ]);
-
+        // Bytes 13-18 of the payload are six 0xFF, so a real Studio's blob
+        // names no model, and the settings row has to cope with that rather
+        // than draw an empty value.
         expect(parseNotification(captured)).toMatchObject({
             kind: "info",
             serial: "J15A02A45H038",
             model: "",
-            firmware: "V12.0D.500"
+            firmware: "V12.0D.500",
+            waterEnough: false,
+            waterFeed: "tap"
         });
     });
 

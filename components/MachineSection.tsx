@@ -81,14 +81,6 @@ export default function MachineSection({settings}: {settings?: Settings}) {
     const [machineModel, setMachineModel] = useSetting("machineModel", settings);
     const [taps, setTaps] = useState(0);
     const info = machine.info;
-    // The info blob's model field (bytes 13-18) is the machine's own blank
-    // filler on real hardware: the captured plumbed-machine frame in
-    // `protocol.test.ts` carries six 0xFF there, which `readInfo` reads as "".
-    // The Device Information Service reading is the other place a model can
-    // come from. When neither says anything the row is left out, because a
-    // blank means "did not learn", and an empty row reads as a fault.
-    const model = info === null ? ""
-        : info.model !== "" ? info.model : machine.modelNumber;
     const ratingPromptHours = Math.round(RATING_PROMPT_WINDOW_MS / (60 * 60 * 1000));
     const ratingPromptDescription =
         `On, the last brew XBRW++ watched can ask how it was along the bottom for up to ${ratingPromptHours} hours. `
@@ -99,6 +91,15 @@ export default function MachineSection({settings}: {settings?: Settings}) {
         : remembered === "" ? "No machine paired"
             : status === "idle" ? `Not connected · ${remembered}`
                 : `Not in range · ${remembered}`;
+
+    // The info blob's model field (bytes 13-18) is the machine's own blank
+    // filler on real hardware: the captured plumbed-machine frame in
+    // `protocol.test.ts` carries six 0xFF there, which `readInfo` reads as "".
+    // The Device Information Service reading is the other place a model can
+    // come from. When neither says anything the row is left out, because a
+    // blank means "did not learn", and an empty row reads as a fault.
+    const model = info === null ? ""
+        : info.model !== "" ? info.model : machine.modelNumber;
 
     // The vitals are a snapshot taken at connect. Left alone, a tank refilled
     // since then still reads Low here, and only a relaunch clears it.
