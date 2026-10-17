@@ -57,6 +57,7 @@ describe("RenameSheet", () => {
         const view = await renderWithProviders(<RenameSheet {...props()}/>);
 
         await fireEvent.changeText(screen.getByTestId("rename-field"), "Abandoned");
+        await fireEvent.press(screen.getByLabelText("Close"));
         await view.rerender(<RenameSheet {...props({name: "Kenya Nyeri"})}/>);
 
         expect(screen.getByTestId("rename-field").props.value).toBe("Kenya Nyeri");
@@ -67,6 +68,9 @@ describe("RenameSheet", () => {
 
         expect(screen.getByText("Clear it to follow the pod name."))
             .toBeTruthy();
+        // Said to a screen reader on the field too, which is where focus lands.
+        expect(screen.getByTestId("rename-field").props.accessibilityHint)
+            .toBe("Clear it to follow the pod name.");
     });
 
     describe("a recipe following its pod", () => {
@@ -97,6 +101,75 @@ describe("RenameSheet", () => {
             await fireEvent.changeText(screen.getByTestId("rename-field"), " Kenya Nyeri ");
             await fireEvent.press(screen.getByTestId("rename-confirm"));
 
+            expect(onRename).toHaveBeenCalledWith("");
+        });
+
+        it("counts the borrowed name as unchanged in either Unicode form", async () => {
+            // A precomposed and a decomposed accent are the same name to a
+            // person. Case is not folded: recasing a name is a rename.
+            const onRename = jest.fn();
+            await renderWithProviders(<RenameSheet {...props({
+                name: "", borrowedName: "Caf\u00e9 Colombia", onRename
+            })}/>);
+
+            await fireEvent.changeText(screen.getByTestId("rename-field"), "Cafe\u0301 Colombia");
+            await fireEvent.press(screen.getByTestId("rename-confirm"));
+
+            expect(onRename).toHaveBeenCalledWith("");
+        });
+
+        it("keeps a recased borrowed name as a rename", async () => {
+            const onRename = jest.fn();
+            await renderWithProviders(<RenameSheet {...props({...following, onRename})}/>);
+
+            await fireEvent.changeText(screen.getByTestId("rename-field"), "KENYA NYERI");
+            await fireEvent.press(screen.getByTestId("rename-confirm"));
+
+            expect(onRename).toHaveBeenCalledWith("KENYA NYERI");
+        });
+
+        it("keeps what is being typed when the pod name lookup lands", async () => {
+            // The editor fetches the pod name on mount, so the answer can arrive
+            // with the sheet already open and the field already edited.
+            const onRename = jest.fn();
+            const view = await renderWithProviders(
+                <RenameSheet {...props({name: "", borrowedName: "", onRename})}/>
+            );
+
+            await fireEvent.changeText(screen.getByTestId("rename-field"), "My own");
+            await view.rerender(<RenameSheet {...props({...following, onRename})}/>);
+
+            expect(screen.getByTestId("rename-field").props.value).toBe("My own");
+            await fireEvent.press(screen.getByTestId("rename-confirm"));
+            expect(onRename).toHaveBeenCalledWith("My own");
+        });
+
+        it("moves an untouched field to the pod name when the lookup lands", async () => {
+            // And saving it then compares against the name that arrived.
+            const onRename = jest.fn();
+            const view = await renderWithProviders(
+                <RenameSheet {...props({name: "", borrowedName: "", onRename})}/>
+            );
+
+            await view.rerender(<RenameSheet {...props({...following, onRename})}/>);
+
+            expect(screen.getByTestId("rename-field").props.value).toBe("Kenya Nyeri");
+            await fireEvent.press(screen.getByTestId("rename-confirm"));
+            expect(onRename).toHaveBeenCalledWith("");
+        });
+
+        it("moves an untouched field from one pod name to a newer one", async () => {
+            const onRename = jest.fn();
+            const view = await renderWithProviders(
+                <RenameSheet {...props({...following, onRename})}/>
+            );
+
+            await view.rerender(<RenameSheet {...props({
+                name: "", borrowedName: "Kenya Nyeri AA", onRename
+            })}/>);
+
+            expect(screen.getByTestId("rename-field").props.value).toBe("Kenya Nyeri AA");
+            await fireEvent.press(screen.getByTestId("rename-confirm"));
             expect(onRename).toHaveBeenCalledWith("");
         });
 
@@ -160,9 +233,24 @@ describe("RenameSheet", () => {
         expect(onRename).toHaveBeenCalledWith("Sunday");
     });
 
-    it("opens empty when the recipe has no real name to borrow", async () => {
-        // The caller passes an empty borrowed name for a recipe whose title is
-        // only the generated placeholder.
+    it("keeps the pod name typed over a recipe's own name as its own", async () => {
+        // Only a recipe already following its pod is put back on it. Typing
+        // the pod name over your own name freezes that string; USE THIS NAME
+        // on ABOUT is the way back to following.
+        const onRename = jest.fn();
+        await renderWithProviders(
+            <RenameSheet {...props({name: "Sunday", borrowedName: "Kenya Nyeri", onRename})}/>
+        );
+
+        await fireEvent.changeText(screen.getByTestId("rename-field"), "Kenya Nyeri");
+        await fireEvent.press(screen.getByTestId("rename-confirm"));
+
+        expect(onRename).toHaveBeenCalledWith("Kenya Nyeri");
+    });
+
+    it("opens empty when the recipe has no pod name to borrow", async () => {
+        // The caller passes only `xbloomName`, so a recipe titled by its
+        // Recipe ID or the generated placeholder opens empty.
         await renderWithProviders(<RenameSheet {...props({name: "", borrowedName: ""})}/>);
 
         expect(screen.getByTestId("rename-field").props.value).toBe("");

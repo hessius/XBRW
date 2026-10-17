@@ -1159,6 +1159,18 @@ describe("renaming from the header", () => {
         expect(screen.getByTestId("rename-field").props.value).toBe("");
         jest.useRealTimers();
     });
+
+    it("opens empty for a recipe titled only by its Recipe ID", async () => {
+        // Only the pod name is offered. An ID is not a pod name, so the sheet's
+        // advice about following one would not fit a field that held it.
+        jest.useFakeTimers();
+        await renderEditor({name: "", xid: "CGL12", xbloomName: ""});
+
+        await openRename();
+
+        expect(screen.getByTestId("rename-field").props.value).toBe("");
+        jest.useRealTimers();
+    });
 });
 
 describe("the stages deck", () => {

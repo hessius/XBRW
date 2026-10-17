@@ -1508,18 +1508,18 @@ export default function EditRecipe(
                               profile={beanProfile}
                               accent={accent}/>
 
-            {/* The recipe's own name and, apart from it, the title it borrows
-                while that is empty. The sheet opens on whichever is on screen
-                and hands the borrowed one back as an empty name when it is
+            {/* The recipe's own name and, apart from it, the pod name it
+                borrows while that is empty. The sheet opens on whichever is on
+                screen and hands the pod name back as an empty name when it is
                 saved unchanged, so looking at the name never stops a recipe
-                following its pod. hasName() keeps the generated placeholder out
-                of the field. Committed through the same dispatch the Name row
+                following its pod. Only the pod name is offered: a recipe
+                titled by its Recipe ID or a placeholder opens empty, as it
+                always did. Committed through the same dispatch the Name row
                 uses, so a rename from the header and a rename from ABOUT are
                 one code path. */}
             <RenameSheet open={renameOpen} onOpenChange={setRenameOpen}
                          name={recipe.name}
-                         borrowedName={recipe.hasName() && recipe.name.trim().length === 0
-                             ? recipe.displayName() : ""}
+                         borrowedName={recipe.xbloomName}
                          onRename={(next) => dispatch(RECIPE_LABELS.TITLE, next)}/>
 
             <BypassWriteSheet open={bypassWriteOpen}
