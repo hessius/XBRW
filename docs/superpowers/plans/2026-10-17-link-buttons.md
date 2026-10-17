@@ -293,7 +293,7 @@ git status --short
 Expected: only integration assets and directly related documents. Do not edit
 the generated licences module or unrelated app files.
 
-- [ ] **Step 4: Preserve and hand off.**
+- [x] **Step 4: Preserve and hand off.**
 
 Commit the guide with the required Copilot trailer and push the task branch.
 Fetch `origin --no-prune`, then run `npm run worktrees:check`. Record base/head,
@@ -318,3 +318,6 @@ merge, deployment, release build or cleanup is authorised by this plan.
   characters through both encoding layers.
 - No app behaviour changed. Physical-device URL qualification remains a
   partner integration check, not a claim made from these artwork checks.
+- All 16 published raw download URLs returned byte-identical copies of the
+  inspected files. The task branch is pushed; its worktree remains owned by
+  this session for pending integration. No PR or merge was performed.
