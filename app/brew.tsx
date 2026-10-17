@@ -475,8 +475,13 @@ export default function Brew({historyStore}: {historyStore?: ExportStore} = {}) 
         // the editor's answer, only moves what is inside the scroll view, and
         // the judgement is deliberately outside it -- pinned under the summary
         // rather than scrolled away with it.
+        //
+        // The offset takes the bottom inset back out on iOS. The stack below
+        // pads by it, and the keyboard covers the home indicator, so without
+        // this the note sat the inset's height further above the keys.
         <KeyboardAvoidingView style={{flex: 1, backgroundColor: palette.base}}
-                              behavior={Platform.OS === "ios" ? "padding" : undefined}>
+                              behavior={Platform.OS === "ios" ? "padding" : undefined}
+                              keyboardVerticalOffset={Platform.OS === "ios" ? -insets.bottom : 0}>
         {/* Hidden from the reader while the bean sheet is up. XbrwSheet is
             not a modal, so on Android `accessibilityViewIsModal` on the sheet
             does not take the screen behind it out of the reader's path.

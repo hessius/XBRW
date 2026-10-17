@@ -486,6 +486,8 @@ describe("brew route", () => {
         await renderWithProviders(
             <SafeAreaProvider initialMetrics={threeButton}><Brew /></SafeAreaProvider>
         );
+        // Presence only: a test renderer has no navigation bar to hide
+        // behind. The padding is what keeps CANCEL above it on a phone.
         expect(screen.getByLabelText("Cancel")).toBeOnTheScreen();
         const style = StyleSheet.flatten(screen.getByTestId("brew-screen").props.style);
 
