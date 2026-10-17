@@ -5,6 +5,7 @@ import React, {useEffect, useState} from "react";
 import {KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, useWindowDimensions, View}
     from "react-native";
 import ViewShot from "react-native-view-shot";
+import {useSafeAreaInsets} from "react-native-safe-area-context";
 import {Text, XStack, YStack} from "tamagui";
 
 import BrewFigures from "@/components/BrewFigures";
@@ -211,6 +212,7 @@ export default function Brew({historyStore}: {historyStore?: ExportStore} = {}) 
     // screen would hand it a freshly deserialised recipe on every mount.
     const viewing = view === "1";
     const {width, height: windowHeight} = useWindowDimensions();
+    const insets = useSafeAreaInsets();
 
     // A local recipe from the route params. Used for the first render (before
     // RunOwner in the provider has its first tick) and for `total` below.
@@ -477,8 +479,16 @@ export default function Brew({historyStore}: {historyStore?: ExportStore} = {}) 
                               behavior={Platform.OS === "ios" ? "padding" : undefined}>
         {/* Hidden from the reader while the bean sheet is up. XbrwSheet is
             not a modal, so on Android `accessibilityViewIsModal` on the sheet
-            does not take the screen behind it out of the reader's path. */}
-        <YStack flex={1} backgroundColor={palette.base} padding="$4" gap="$3"
+            does not take the screen behind it out of the reader's path.
+
+            The bottom padding carries the inset. The root of the app is a
+            plain view rather than a SafeAreaView, so this screen reaches the
+            bottom of the display, and on Android 15+ that is behind the
+            navigation bar: with three-button navigation CANCEL and START
+            BREWING sat half under it. The mini bar, which clears the inset on
+            other screens, is not drawn on this one. */}
+        <YStack testID="brew-screen" flex={1} backgroundColor={palette.base}
+                padding="$4" paddingBottom={SCREEN_PADDING + insets.bottom} gap="$3"
                 accessibilityElementsHidden={namingBean || ratingNoteOpen}
                 importantForAccessibility={namingBean || ratingNoteOpen
                     ? "no-hide-descendants"
