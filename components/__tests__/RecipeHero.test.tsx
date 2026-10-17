@@ -1,8 +1,12 @@
 import React from "react";
-import {StyleSheet} from "react-native";
+import {Dimensions, StyleSheet} from "react-native";
 import {fireEvent, screen} from "@testing-library/react-native";
 
-import RecipeHero, {HERO_NAME_LONG, heroNameStyle} from "@/components/RecipeHero";
+import RecipeHero, {
+    estimateLines, HERO_NAME_LONG, HERO_NAME_LONGER, HERO_PROFILE_RESERVE,
+    heroFoldAway, heroNameLayout, heroNameStyle
+} from "@/components/RecipeHero";
+import {COLLAPSE_SHRINK} from "@/hooks/useCollapsibleHeader";
 import {onAccent} from "@/constants/colors";
 import Pour from "@/library/Pour";
 import {renderWithProviders, TEST_INSETS} from "@/test-utils/render";
@@ -29,6 +33,27 @@ const BASE = {
 const LONG_NAME =
     "Colombia | Las Flores | Jhoan Vergara | Chiroso Natural Signature Series - 18g";
 
+/** The name from the device report: 77 characters, cut off after "Sidra". */
+const VINKA =
+    "Ecuador | Vinka Farm | Carlos & Maria Fernanda | 2025 Sidra Natural Anaerobic";
+
+/** About as long as a roaster's names run: 91 characters. */
+const LONGEST =
+    "Colombia | Finca El Paraiso | Diego Samuel Bermudez | Lychee Double Anaerobic Thermal Shock";
+
+/** A name between the two step-downs: 44 characters. */
+const MEDIUM_NAME = "Kenya | Gichathaini AA | Washed SL28 and SL34";
+
+/** Phones the name has to fit, in points: narrow, the Fold cover, the Fold inner. */
+const NARROW = 360;
+const COVER = 412;
+const INNER = 900;
+
+function setWindow(width: number, fontScale = 1): void {
+    const window = {width, height: 900, scale: 2.6, fontScale};
+    Dimensions.set({window, screen: window});
+}
+
 type Node = ReturnType<typeof screen.getByTestId>;
 
 /** How many nodes at or under this one respond to a touch. */
@@ -41,6 +66,10 @@ function touchables(node: Node): number {
 }
 
 describe("RecipeHero", () => {
+    beforeEach(() => {
+        setWindow(COVER);
+    });
+
     it("makes the name a rename button, with a pencil beside it", async () => {
         // Nothing hidden: a title that merely happens to be tappable is a
         // feature nobody finds. The name announces itself as a button and says
@@ -195,21 +224,66 @@ describe("RecipeHero", () => {
             .toEqual(expect.objectContaining({fontSize: 26, lineHeight: 31}));
     });
 
-    it("lets a long name wrap to three lines, one size down", async () => {
+    it("sets the device report's name at 18 over as many lines as it needs", async () => {
         // A roaster's import names the origin, the farm, the producer and the
-        // lot. Two lines at 26 cut that off after the farm.
-        await renderWithProviders(<RecipeHero {...BASE} name={LONG_NAME}/>);
+        // lot. At 22 over three lines the Fold's cover screen cut this one off
+        // after "Sidra".
+        await renderWithProviders(<RecipeHero {...BASE} name={VINKA}/>);
 
         const title = screen.getByTestId("hero-name");
-        expect(title.props.numberOfLines).toBe(3);
+        expect(title.props.numberOfLines).toBe(4);
         expect(StyleSheet.flatten(title.props.style))
-            .toEqual(expect.objectContaining({fontSize: 22, lineHeight: 27}));
+            .toEqual(expect.objectContaining({fontSize: 18, lineHeight: 23}));
         // Never a shrink-to-fit: the size is a step on the scale, not
         // whatever the text engine settles on.
         expect(title.props.adjustsFontSizeToFit).toBeFalsy();
         // The whole name is still the button's label, however much is drawn.
-        expect(screen.getByTestId("hero-rename").props.accessibilityLabel).toBe(LONG_NAME);
-        expect(screen.getByText(LONG_NAME)).toBeTruthy();
+        expect(screen.getByTestId("hero-rename").props.accessibilityLabel).toBe(VINKA);
+        expect(screen.getByText(VINKA)).toBeTruthy();
+    });
+
+    it("keeps a long name off the watermark on a phone by leaving room under it", async () => {
+        // The column beside the pour profile is about 150 points on the cover
+        // screen, far too narrow, so the name takes the full width and the
+        // profile gets a band of its own underneath.
+        await renderWithProviders(<RecipeHero {...BASE} name={VINKA}/>);
+
+        expect(screen.getByTestId("hero-profile-reserve").props.style)
+            .toEqual(expect.objectContaining({height: HERO_PROFILE_RESERVE}));
+        expect(StyleSheet.flatten(screen.getByTestId("hero-name").props.style))
+            .toEqual(expect.objectContaining({maxWidth: COVER - 36 - 23}));
+    });
+
+    it("puts a long name beside the watermark where the screen is wide enough", async () => {
+        setWindow(INNER);
+        await renderWithProviders(<RecipeHero {...BASE} name={VINKA}/>);
+
+        expect(screen.queryByTestId("hero-profile-reserve")).toBeNull();
+        const maxWidth = StyleSheet.flatten(screen.getByTestId("hero-name").props.style).maxWidth;
+        // Ends before the watermark's 189 points of the slab's right edge.
+        expect(maxWidth).toBeLessThanOrEqual(INNER - 18 - 189 - 23);
+    });
+
+    it("breaks lines the simple way the estimate counts them", async () => {
+        await renderWithProviders(<RecipeHero {...BASE} name={VINKA}/>);
+
+        expect(screen.getByTestId("hero-name").props.textBreakStrategy).toBe("simple");
+    });
+
+    it("closes up the gap under the chrome row only for the four-line step", async () => {
+        await renderWithProviders(<RecipeHero {...BASE} name={VINKA}/>);
+        expect(StyleSheet.flatten(screen.getByTestId("hero-name").props.style).marginTop)
+            .toBeLessThan(7);
+        // COFFEE stays.
+        expect(screen.getByText("COFFEE")).toBeTruthy();
+    });
+
+    it("keeps a short name's slab exactly as it was, with no reserve", async () => {
+        await renderWithProviders(<RecipeHero {...BASE}/>);
+
+        expect(screen.queryByTestId("hero-profile-reserve")).toBeNull();
+        expect(StyleSheet.flatten(screen.getByTestId("hero-name").props.style))
+            .toEqual(expect.objectContaining({maxWidth: "72%", marginTop: 7}));
     });
 
     it("gives the folded bar's name a second line", async () => {
@@ -221,11 +295,71 @@ describe("RecipeHero", () => {
             .toEqual(expect.objectContaining({fontSize: 15}));
     });
 
-    it("steps the size down only past the long-name threshold", () => {
+    it("steps the size down at each threshold", () => {
         expect(heroNameStyle("x".repeat(HERO_NAME_LONG)))
             .toEqual({fontSize: 26, lineHeight: 31, lines: 2});
         expect(heroNameStyle("x".repeat(HERO_NAME_LONG + 1)))
             .toEqual({fontSize: 22, lineHeight: 27, lines: 3});
+        expect(heroNameStyle("x".repeat(HERO_NAME_LONGER)))
+            .toEqual({fontSize: 22, lineHeight: 27, lines: 3});
+        expect(heroNameStyle("x".repeat(HERO_NAME_LONGER + 1)))
+            .toEqual({fontSize: 18, lineHeight: 23, lines: 4});
+    });
+
+    it("fits the long names in full on 360 to 412 point phones", () => {
+        // The estimate, not the device: 0.5 em a character, rounded up from the
+        // 0.48 read off the cover-screen screenshot. At the default text size
+        // and at the cover screen's own (about 1.15).
+        for (const width of [NARROW, COVER]) {
+            for (const fontScale of [1, 1.15]) {
+                for (const name of [VINKA, LONGEST]) {
+                    const layout = heroNameLayout(name, width, fontScale);
+                    const needed = estimateLines(
+                        name, layout.maxWidth as number, layout.fontSize * fontScale
+                    );
+                    expect(needed).toBeLessThanOrEqual(layout.lines);
+                }
+            }
+        }
+        expect(estimateLines(VINKA, NARROW - 59, 18)).toBe(3);
+        expect(estimateLines(VINKA, COVER - 59, 18)).toBe(2);
+        expect(estimateLines(LONGEST, NARROW - 59, 18)).toBe(3);
+        expect(estimateLines(LONGEST, COVER - 59, 18)).toBe(3);
+    });
+
+    it("never leaves a three- or four-line name across the watermark", () => {
+        // Either the column stops short of the watermark, or the band under
+        // the name holds it. Checked across the widths the app runs at.
+        for (const name of [MEDIUM_NAME, LONG_NAME, VINKA, LONGEST]) {
+            for (const width of [NARROW, COVER, 600, INNER]) {
+                for (const fontScale of [1, 1.15, 1.4]) {
+                    const layout = heroNameLayout(name, width, fontScale);
+                    const beside = (layout.maxWidth as number) <= width - 18 - 189 - 23;
+                    expect(beside || layout.reserve === HERO_PROFILE_RESERVE).toBe(true);
+                }
+            }
+        }
+        // The band clears the watermark: 74 + stroke - overhang above the
+        // slab's bottom edge, less the 13 of padding under the name.
+        expect(HERO_PROFILE_RESERVE).toBeGreaterThanOrEqual(74 + 1.6 - 0.8 - 2 - 13);
+    });
+
+    it("counts a word too long for a line as several", () => {
+        expect(estimateLines("x".repeat(25), 100, 20)).toBe(3);
+        expect(estimateLines("ab cd", 100, 20)).toBe(1);
+        expect(estimateLines("abcdefg hij", 100, 20)).toBe(2);
+    });
+
+    it("tells the editor how much a collapse folds away, more for a longer name", () => {
+        const short = heroFoldAway("Ethiopia Guji");
+        const medium = heroFoldAway(MEDIUM_NAME);
+        const long = heroFoldAway(LONGEST);
+        expect(short).toBeLessThan(medium);
+        expect(medium).toBeLessThan(long);
+        // Four 23 pt lines at the largest text size, the beverage row and the
+        // band under the name: well past the home screen's figure.
+        expect(long).toBeGreaterThanOrEqual(4 * 23 * 1.4 + HERO_PROFILE_RESERVE + 24);
+        expect(long).toBeGreaterThan(COLLAPSE_SHRINK);
     });
 
     it("carries no EXPLAIN toggle", async () => {
