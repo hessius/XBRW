@@ -48,9 +48,9 @@ export default function RenameSheet({open, onOpenChange, name, borrowedName, onR
      */
     name: string;
     /**
-     * The real title the recipe shows while its own name is empty: the pod
-     * name, or failing that the Recipe ID. Empty when there is none, so the
-     * generated placeholder is never offered as a name somebody chose.
+     * The pod name the recipe borrows while its own name is empty, its
+     * `xbloomName`. Empty when it has none: a recipe titled only by its
+     * Recipe ID or by the generated placeholder opens on an empty field.
      */
     borrowedName: string;
     onRename: (name: string) => void;
@@ -62,17 +62,24 @@ export default function RenameSheet({open, onOpenChange, name, borrowedName, onR
     // user with the name the recipe has now. Reading it at render against the
     // value it was opened with is the house alternative to an effect, which the
     // compiler forbids: `useTraceAnimation` does the same with its phase.
+    //
+    // Only an untouched draft follows a new seed. The editor looks the pod name
+    // up on mount, and that answer can land while the sheet is open; it must
+    // not replace what somebody is typing.
     const [seededFor, setSeededFor] = useState(seed);
     if (seededFor !== seed) {
         setSeededFor(seed);
-        setDraft(seed);
+        if (draft === seededFor) setDraft(seed);
     }
 
     function submit() {
         const next = draft.trim();
         // The borrowed title saved untouched keeps the recipe on its pod, so a
-        // later change to the pod name still reaches it.
-        const unchanged = following && next === borrowedName.trim();
+        // later change to the pod name still reaches it. Compared after Unicode
+        // normalisation, so the same name typed with a different keyboard's
+        // accents still counts, but not case-folded: a recased name is a rename.
+        const unchanged = following
+            && next.normalize() === borrowedName.trim().normalize();
         onRename(unchanged ? "" : next);
         // Saving a following recipe as empty leaves its name, and so the seed,
         // where they were. Without this the next opening would offer back the
@@ -96,6 +103,7 @@ export default function RenameSheet({open, onOpenChange, name, borrowedName, onR
                 <TextInput
                     testID="rename-field"
                     accessibilityLabel="Recipe name"
+                    accessibilityHint="Clear it to follow the pod name."
                     value={draft}
                     onChangeText={setDraft}
                     maxLength={MAX_LENGTH}
