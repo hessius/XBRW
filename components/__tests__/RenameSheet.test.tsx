@@ -36,6 +36,57 @@ describe("RenameSheet", () => {
         expect(onOpenChange).toHaveBeenCalledWith(false);
     });
 
+    describe("a long name", () => {
+        // Pre-filled, a long name is common. Single line, Android scrolled it to
+        // its end and cut the first visible letter at the field's edge.
+        it("wraps, with its padding on the field itself", async () => {
+            await renderWithProviders(<RenameSheet {...props()}/>);
+
+            const field = screen.getByTestId("rename-field");
+            expect(field.props.multiline).toBe(true);
+            const style = Object.assign({}, ...[field.props.style].flat());
+            expect(style.paddingHorizontal).toBeGreaterThan(0);
+            expect(style.maxHeight).toBeGreaterThan(style.lineHeight * 2);
+        });
+
+        it("saves on return rather than breaking the line", async () => {
+            const onRename = jest.fn();
+            const onOpenChange = jest.fn();
+            await renderWithProviders(<RenameSheet {...props({onRename, onOpenChange})}/>);
+
+            const field = screen.getByTestId("rename-field");
+            expect(field.props.submitBehavior).toBe("blurAndSubmit");
+            await fireEvent.changeText(field, "Kenya");
+            await fireEvent(field, "submitEditing", {nativeEvent: {text: "Kenya"}});
+
+            expect(onRename).toHaveBeenCalledWith("Kenya");
+            expect(onOpenChange).toHaveBeenCalledWith(false);
+        });
+
+        it("drops a pasted line break, joining the lines with a space", async () => {
+            const onRename = jest.fn();
+            await renderWithProviders(<RenameSheet {...props({onRename})}/>);
+
+            await fireEvent.changeText(screen.getByTestId("rename-field"),
+                                       "Ecuador | Vinka Farm\r\n  Anaerobic\n");
+            await fireEvent.press(screen.getByTestId("rename-confirm"));
+
+            expect(onRename).toHaveBeenCalledWith("Ecuador | Vinka Farm Anaerobic");
+        });
+
+        it("still counts a pod name pasted with a line break as unchanged", async () => {
+            const onRename = jest.fn();
+            await renderWithProviders(<RenameSheet {...props({
+                name: "", borrowedName: "Kenya Nyeri", onRename
+            })}/>);
+
+            await fireEvent.changeText(screen.getByTestId("rename-field"), "Kenya\nNyeri");
+            await fireEvent.press(screen.getByTestId("rename-confirm"));
+
+            expect(onRename).toHaveBeenCalledWith("");
+        });
+    });
+
     it("accepts an emptied name, which means follow the pod", async () => {
         // Not a missing value. `displayName()` falls back to the pod name when
         // yours is empty, so clearing the field is how a renamed recipe is put
