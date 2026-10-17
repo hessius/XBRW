@@ -1,3 +1,4 @@
+import {MAX_NAME} from "@/library/Recipe";
 import {LEGACY_NAMES, PodCoffee, httpsUrl, podCoffeeFromStored} from "@/library/podCoffee";
 
 /**
@@ -101,6 +102,17 @@ export type BrewMindLink = {
      * through xBloom. https only, on the same reasoning as an image.
      */
     recipeUrl?: string;
+    /**
+     * `recipe.name`: what the producer calls this recipe.
+     *
+     * A roaster's xBloom recipe is usually named for the person who keyed it
+     * into xBloom ("col chiroso -18g") rather than for the coffee, and the
+     * share link can only carry that name. This lets the page that sent the
+     * link name it properly. It lands on the recipe's own `name`, the one a
+     * rename writes, so `xbloomName` keeps what xBloom said and USE THIS NAME
+     * still has something to go back to.
+     */
+    recipeName?: string;
 };
 
 /**
@@ -150,6 +162,24 @@ export function parseBrewMindLink(link: string): BrewMindLink | null {
     if (recipeUrl !== undefined && recipeUrl.length <= MAX_URL) {
         const checked = httpsUrl(recipeUrl);
         if (checked !== undefined) result.recipeUrl = checked;
+    }
+
+    // Capped at the rename sheet's ceiling rather than at `SHORT_TEXT`. This
+    // is a recipe name, not a bean field, and a link that could set a name the
+    // sheet would refuse to hold would leave the user unable to edit what they
+    // were given. Over-length drops it, as everywhere else in this file: a
+    // name cut mid-word is a confident wrong name, and the recipe still has
+    // xBloom's own to fall back on.
+    //
+    // Runs of whitespace fold to one space first, and the cap is measured
+    // after. A name is a one-line title in the header and on the card, and a
+    // line break, a tab or a U+2028 sent in the link would split it there. JS
+    // `\s` already covers the Unicode separators, so one rule is enough. This
+    // is folding, not truncating: no character the sender meant to be read is
+    // lost.
+    const recipeName = params.get("recipe.name")?.replace(/\s+/g, " ").trim();
+    if (recipeName !== undefined && recipeName !== "" && recipeName.length <= MAX_NAME) {
+        result.recipeName = recipeName;
     }
     return result;
 }

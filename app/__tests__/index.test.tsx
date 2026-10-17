@@ -3004,7 +3004,9 @@ describe("the import deep link", () => {
             "bean.name":       "Finca La Esperanza",
             "bean.roaster":    "Some Roastery",
             "bean.processing": "Washed",
-            "recipe.url":      "https://brewmind.coffee/recipe/esperanza"
+            "recipe.url":      "https://brewmind.coffee/recipe/esperanza",
+            "recipe.name":     "Colombia | La Esperanza | Washed - 15g",
+            "bean.image":      "https://brewmind.coffee/bag.png"
         });
 
         await renderWithProviders(
@@ -3022,6 +3024,11 @@ describe("the import deep link", () => {
         expect(fetched.source).toBe("brewmind");
         // The producer's own page, which the editor offers a way back to.
         expect(fetched.recipeUrl).toBe("https://brewmind.coffee/recipe/esperanza");
+        // The producer's name for it, on the recipe's own name.
+        expect(fetched.name).toBe("Colombia | La Esperanza | Washed - 15g");
+        // The fetched recipe was made without a pod, so it has no artwork and
+        // the bag shot becomes the picture.
+        expect(fetched.imageURL).toBe("https://brewmind.coffee/bag.png");
     });
 
     it("imports once, however many times the screen renders", async () => {
