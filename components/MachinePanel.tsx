@@ -31,6 +31,13 @@ type Props = {
     onRefreshWater: () => Promise<boolean>;
     onConnect: () => void;
     onEasyMode?: () => void;
+    /**
+     * The active machine's name, with two or more saved. Absent with one or
+     * none, and the panel then looks exactly as it did before the list.
+     */
+    machineLabel?: string;
+    /** Opens the machine picker. Drawn only alongside `machineLabel`. */
+    onChooseMachine?: () => void;
 };
 
 /** `4 MIN AGO`. Minutes only: seconds would change while it was being read. */
@@ -49,6 +56,40 @@ function Row({label, children}: {label: string; children: React.ReactNode}) {
             </DotMatrixText>
             <XStack alignItems="center" gap="$2">{children}</XStack>
         </XStack>
+    );
+}
+
+/**
+ * Which machine the readings below belong to, and the door to another.
+ *
+ * At the top of the panel, because every reading under it is about one
+ * machine, and with several saved "WATER OK" means nothing until it says
+ * whose. This is the home screen's machine menu growing a picker, which is
+ * where the maintainer suggested selection should live.
+ */
+function MachineChoiceRow({label, onPress}: {label: string; onPress: () => void}) {
+    return (
+        <Pressable accessibilityRole="button"
+                   accessibilityLabel={`Machine, ${label}`}
+                   accessibilityHint="Choose another saved machine"
+                   onPress={onPress}
+                   style={({pressed}) => ({opacity: pressed ? 0.7 : 1})}>
+            <XStack testID="machine-choice" minHeight={44} alignItems="center"
+                    justifyContent="space-between" marginBottom="$2">
+                <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.6}
+                               color={palette.dim}>
+                    MACHINE
+                </DotMatrixText>
+                <XStack alignItems="center" gap="$2" flexShrink={1}>
+                    <DotMatrixText testID="machine-choice-label" fontSize={13} weight="bold"
+                                   letterSpacing={1.4} color={palette.text} numberOfLines={1}
+                                   style={{flexShrink: 1}}>
+                        {label.toUpperCase()}
+                    </DotMatrixText>
+                    <DotIcon name="chevron-right" size={12} color={palette.dim}/>
+                </XStack>
+            </XStack>
+        </Pressable>
     );
 }
 
@@ -116,7 +157,8 @@ function RefreshButton({accent, onRefresh}: {
  * the control that closes it: the panel needs no dismiss affordance of its own.
  */
 export default function MachinePanel({
-    open, status, accent, vitals, now, onRefreshWater, onConnect, onEasyMode
+    open, status, accent, vitals, now, onRefreshWater, onConnect, onEasyMode,
+    machineLabel, onChooseMachine
 }: Props) {
     let body: React.ReactNode;
 
@@ -240,6 +282,9 @@ export default function MachinePanel({
                     // flush against the edge of the header and made the panel
                     // read as clipped rather than finished.
                     paddingBottom="$4">
+                {machineLabel !== undefined && onChooseMachine !== undefined && (
+                    <MachineChoiceRow label={machineLabel} onPress={onChooseMachine}/>
+                )}
                 {body}
                 {onEasyMode !== undefined && (
                     <Pressable accessibilityRole="button" accessibilityLabel="Easy Mode slots"

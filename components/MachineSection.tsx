@@ -3,6 +3,8 @@ import {Pressable} from "react-native";
 import router from "@/hooks/steadyRouter";
 import {Text, XStack, YStack} from "tamagui";
 
+import DotIcon from "@/components/DotIcon";
+import {MODEL_NAMES} from "@/components/MachinePickerSheet";
 import SettingsActionRow from "@/components/SettingsActionRow";
 import SettingsChoiceRow from "@/components/SettingsChoiceRow";
 import SettingsSection from "@/components/SettingsSection";
@@ -14,6 +16,7 @@ import {useSetting} from "@/hooks/useSetting";
 import {RATING_PROMPT_WINDOW_MS} from "@/library/brew/ratingPrompt";
 import type {Settings} from "@/library/Settings";
 import {MACHINE_MODELS, isMachineModel, type MachineModel} from "@/library/machine/machineModel";
+import {machineLabel, machineTag, type SavedMachine} from "@/library/machine/savedMachines";
 
 /** How many taps on the firmware row open the console. */
 const CONSOLE_TAPS = 7;
@@ -54,6 +57,48 @@ function Vital({label, value}: {label: string; value: string}) {
 }
 
 /**
+ * One saved machine in the list, which opens its detail sheet.
+ *
+ * Name, model, place and link on one row, so the order can be read without
+ * opening anything. The star is the default's mark; the words say it too, for
+ * a screen reader and for anybody who does not read stars as "default".
+ */
+function SavedMachineRow({machine, index, active, connected, onPress}: {
+    machine: SavedMachine;
+    index: number;
+    active: boolean;
+    connected: boolean;
+    onPress: () => void;
+}) {
+    const parts = [MODEL_NAMES[machine.model], index === 0 ? "Default" : `Choice ${index + 1}`,
+                   machineTag(machine)];
+    if (active) parts.push(connected ? "Connected" : "In use");
+    const detail = parts.join(" · ");
+    const name = machineLabel(machine, index);
+    return (
+        <Pressable accessibilityRole="button" accessibilityLabel={`${name}, ${detail}`}
+                   onPress={onPress}
+                   style={({pressed}) => ({opacity: pressed ? 0.7 : 1})}>
+            <XStack testID={`saved-machine-${machine.id}`} alignItems="center" gap="$3"
+                    minHeight={44} paddingVertical="$3" paddingHorizontal="$4">
+                <YStack width={14} alignItems="center">
+                    {index === 0 && <DotIcon name="favourite" size={14} color={palette.dim}/>}
+                </YStack>
+                <YStack flex={1} gap="$1">
+                    <Text fontSize={16} color={palette.text} numberOfLines={1}>{name}</Text>
+                    <Text fontSize={13} color={active && connected ? palette.success : palette.dim}>
+                        {detail}
+                    </Text>
+                </YStack>
+                <XStack style={{transform: [{rotate: "180deg"}]}}>
+                    <DotIcon name="back" size={14} color={palette.muted}/>
+                </XStack>
+            </XStack>
+        </Pressable>
+    );
+}
+
+/**
  * Settings → Machine.
  *
  * Always rendered, paired or not. The editor only grows a BREW action once a
@@ -67,13 +112,27 @@ function Vital({label, value}: {label: string; value: string}) {
  * the only place a failed connection can be read about, and the firmware row is
  * not rendered when there is no connection to report the firmware of.
  */
-export default function MachineSection({settings}: {settings?: Settings}) {
+export default function MachineSection({settings, onOpenMachine, onAddMachine}: {
+    settings?: Settings;
+    /**
+     * Open one saved machine's detail sheet. The screen owns the sheet,
+     * because a sheet inside this section's scroll view would have no height.
+     */
+    onOpenMachine?: (id: string) => void;
+    /** Open the add-a-machine sheet, which the screen owns for the same reason. */
+    onAddMachine?: () => void;
+}) {
     // The injected store matters: the link writes `machineModel` through it
     // when it recognises a Studio, and a test that injected a store while the
     // hook wrote to the shared one would watch the correction land somewhere
     // this row cannot see.
-    const {machine, status, error, remembered, connect, forget, canOpenSettings, openSettings}
+    const {machine, status, error, remembered, connect, forget, canOpenSettings, openSettings,
+           machines}
         = useMachine(undefined, {settings});
+    // With one machine the section keeps its model row and its Forget row as
+    // they always were. The list row above them is new, so that one machine
+    // can be named before a second arrives.
+    const several = machines.length >= 2;
     const [autoStart, setAutoStart] = useSetting("machineAutoStart", settings);
     const [animateBrewChart, setAnimateBrewChart] = useSetting("animateBrewChart", settings);
     const [askForRatings, setAskForRatings] = useSetting("askForRatings", settings);
@@ -112,7 +171,17 @@ export default function MachineSection({settings}: {settings?: Settings}) {
 
     return (
         <SettingsSection title="Machine">
-            <SettingsChoiceRow
+            {machines.map((entry, index) => (
+                <SavedMachineRow key={entry.id} machine={entry} index={index}
+                                 active={entry.id === remembered}
+                                 connected={status === "connected"}
+                                 onPress={() => onOpenMachine?.(entry.id)}/>
+            ))}
+
+            {/* The model is per machine once there are several, and set in
+                each machine's sheet. One row here would only ever describe
+                whichever happened to be in use. */}
+            {!several && <SettingsChoiceRow
                 label="Your xBloom"
                 description="The two machines grind on different scales, so a recipe written for one is wrong on the other. Pick yours and the app asks xBloom for the right version. Recipes already saved keep the numbers they were written with."
                 value={machineModel}
@@ -122,7 +191,7 @@ export default function MachineSection({settings}: {settings?: Settings}) {
                     // not a model is a bug in this file rather than a stale
                     // preference to coerce. Hence the guard and not a fallback.
                     if (isMachineModel(value)) setMachineModel(value);
-                }}/>
+                }}/>}
 
             {status !== "connected" && (
                 <Pressable accessibilityRole="text"
@@ -213,7 +282,14 @@ export default function MachineSection({settings}: {settings?: Settings}) {
                 options={BUDGET_OPTIONS}
                 onChange={(v) => setBrewTraceBudgetMB(Number(v))}/>
 
-            {remembered !== "" && (
+            {machines.length >= 1 && (
+                <SettingsActionRow
+                    label="Add another machine"
+                    detail="Switch the new one on and keep it nearby. Machines already saved are skipped."
+                    onPress={() => onAddMachine?.()}/>
+            )}
+
+            {remembered !== "" && !several && (
                 <SettingsActionRow label="Forget this machine" tone="danger"
                                    detail="XBRW++ will scan again next time."
                                    onPress={() => void forget()}/>
