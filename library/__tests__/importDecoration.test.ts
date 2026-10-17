@@ -99,6 +99,47 @@ describe("decorateImport", () => {
             .toBe("col chiroso -18g");
     });
 
+    describe("the picture", () => {
+        const BAG = "https://example.com/bag.png";
+
+        it("comes from the link's coffee when the recipe has none", () => {
+            // A share-link import: no pod, so no artwork of its own.
+            const decorated = decorateImport(recipe(), {coffee: {name: "X", imageUrl: BAG}});
+
+            expect(decorated.imageURL).toBe(BAG);
+        });
+
+        it("does not replace pod artwork the recipe already has", () => {
+            const fetched = recipe();
+            fetched.imageURL = "https://example.com/pod.png";
+
+            expect(decorateImport(fetched, {coffee: {name: "X", imageUrl: BAG}}).imageURL)
+                .toBe("https://example.com/pod.png");
+        });
+
+        it("fills an empty string the same as a missing one", () => {
+            const fetched = recipe();
+            fetched.imageURL = "";
+
+            expect(decorateImport(fetched, {coffee: {name: "X", imageUrl: BAG}}).imageURL)
+                .toBe(BAG);
+        });
+
+        it("ignores a picture that is not https", () => {
+            // The coffee normally arrives already checked, but this is a
+            // second door into `imageURL`, so it applies the rule itself.
+            const decorated = decorateImport(recipe(), {
+                coffee: {name: "X", imageUrl: "http://example.com/bag.png"}
+            });
+
+            expect(decorated.imageURL).toBeUndefined();
+        });
+
+        it("is left alone when the coffee has no picture", () => {
+            expect(decorateImport(recipe(), {coffee: {name: "X"}}).imageURL).toBeUndefined();
+        });
+    });
+
     it("changes nothing when there is nothing to apply", () => {
         const plain = recipe();
         const before = plain.source;
@@ -109,5 +150,6 @@ describe("decorateImport", () => {
         expect(decorated.tags).toEqual([]);
         expect(decorated.source).toBe(before);
         expect(decorated.name).toBe("");
+        expect(decorated.imageURL).toBeUndefined();
     });
 });

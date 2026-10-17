@@ -3005,7 +3005,8 @@ describe("the import deep link", () => {
             "bean.roaster":    "Some Roastery",
             "bean.processing": "Washed",
             "recipe.url":      "https://brewmind.coffee/recipe/esperanza",
-            "recipe.name":     "Colombia | La Esperanza | Washed - 15g"
+            "recipe.name":     "Colombia | La Esperanza | Washed - 15g",
+            "bean.image":      "https://brewmind.coffee/bag.png"
         });
 
         await renderWithProviders(
@@ -3025,6 +3026,8 @@ describe("the import deep link", () => {
         expect(fetched.recipeUrl).toBe("https://brewmind.coffee/recipe/esperanza");
         // The producer's name for it, on the recipe's own name.
         expect(fetched.name).toBe("Colombia | La Esperanza | Washed - 15g");
+        // No pod artwork on a share link, so the bag shot becomes the picture.
+        expect(fetched.imageURL).toBe("https://brewmind.coffee/bag.png");
     });
 
     it("imports once, however many times the screen renders", async () => {

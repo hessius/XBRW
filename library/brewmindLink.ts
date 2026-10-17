@@ -170,7 +170,14 @@ export function parseBrewMindLink(link: string): BrewMindLink | null {
     // were given. Over-length drops it, as everywhere else in this file: a
     // name cut mid-word is a confident wrong name, and the recipe still has
     // xBloom's own to fall back on.
-    const recipeName = params.get("recipe.name")?.trim();
+    //
+    // Runs of whitespace fold to one space first, and the cap is measured
+    // after. A name is a one-line title in the header and on the card, and a
+    // line break, a tab or a U+2028 sent in the link would split it there. JS
+    // `\s` already covers the Unicode separators, so one rule is enough. This
+    // is folding, not truncating: no character the sender meant to be read is
+    // lost.
+    const recipeName = params.get("recipe.name")?.replace(/\s+/g, " ").trim();
     if (recipeName !== undefined && recipeName !== "" && recipeName.length <= MAX_NAME) {
         result.recipeName = recipeName;
     }

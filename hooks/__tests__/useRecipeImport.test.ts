@@ -392,25 +392,50 @@ describe("a recipe already in the library", () => {
         expect(onOpenRecipe.mock.calls[0][1]).toBe(true);
     });
 
-    it("keeps the name it already has when a link names it differently", async () => {
+    it("keeps its own name and picture when a link offers others", async () => {
         // The decoration lands on the candidate, before de-duplication, so
-        // the stored recipe wins and keeps its own name. A link must not
-        // rename a recipe the user may have renamed themselves.
+        // the stored recipe wins and keeps what it had. A link must not
+        // rename a recipe the user may have renamed themselves, or give a
+        // picture to one that has none. "shared" is the intent an import link
+        // resolves with (`openImportLink` in `app/index.tsx`).
         const existing = importedRecipe();
         existing.name = "My Ethiopia";
         const {onOpenRecipe, stored} = setup([existing]);
         const {result} = await renderHook(() => useRecipeImport({stored, onOpenRecipe}));
 
         await act(async () => {
-            result.current.resolveNow(
-                {kind: "xid", xid: "ETH120"}, "atomic", {recipeName: "Ethiopia Guji - 15g"}
-            );
+            result.current.resolveNow({kind: "xid", xid: "ETH120"}, "shared", {
+                recipeName: "Ethiopia Guji - 15g",
+                coffee: {name: "Ethiopia Guji", imageUrl: "https://example.com/bag.png"}
+            });
         });
 
         await waitFor(() => expect(onOpenRecipe).toHaveBeenCalledTimes(1));
         expect(onOpenRecipe.mock.calls[0][0]).toBe(existing);
         expect(onOpenRecipe.mock.calls[0][1]).toBe(true);
         expect(existing.name).toBe("My Ethiopia");
+        expect(existing.imageURL).toBeUndefined();
+        expect(existing.coffee).toBeUndefined();
+    });
+
+    it("gives a new share-link import the link's name and picture", async () => {
+        // The other half of the rule above: nothing held, so the candidate
+        // is what opens, decorated.
+        const {onOpenRecipe, stored} = setup([]);
+        const {result} = await renderHook(() => useRecipeImport({stored, onOpenRecipe}));
+
+        await act(async () => {
+            result.current.resolveNow({kind: "xid", xid: "ETH120"}, "shared", {
+                recipeName: "Ethiopia Guji - 15g",
+                coffee: {name: "Ethiopia Guji", imageUrl: "https://example.com/bag.png"}
+            });
+        });
+
+        await waitFor(() => expect(onOpenRecipe).toHaveBeenCalledTimes(1));
+        const opened = onOpenRecipe.mock.calls[0][0] as Recipe;
+        expect(onOpenRecipe.mock.calls[0][1]).toBe(false);
+        expect(opened.name).toBe("Ethiopia Guji - 15g");
+        expect(opened.imageURL).toBe("https://example.com/bag.png");
     });
 
     it("brings in a bypass recipe rather than opening its plain twin", async () => {

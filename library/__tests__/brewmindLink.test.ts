@@ -207,6 +207,21 @@ describe("parseBrewMindLink", () => {
                 .toBe("Chiroso - 18g");
         });
 
+        it("folds line breaks and tabs into single spaces", () => {
+            // A name is a one-line title. A break sent in the link would split
+            // it in the header, U+2028 included.
+            expect(parseBrewMindLink(valid({
+                "recipe.name": "Colombia\n|\tLas Flores\u2028|  Chiroso\r\nNatural"
+            }))?.recipeName).toBe("Colombia | Las Flores | Chiroso Natural");
+        });
+
+        it("measures the cap after folding", () => {
+            // 100 characters once folded, 101 as sent.
+            const name = "N".repeat(49) + "  " + "N".repeat(50);
+            expect(parseBrewMindLink(valid({"recipe.name": name}))?.recipeName)
+                .toHaveLength(MAX_NAME);
+        });
+
         it("drops a name that is only whitespace", () => {
             // An empty `name` means follow the pod, so setting one would be
             // harmless. Leaving the key off keeps the parsed link honest about

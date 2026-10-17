@@ -183,7 +183,12 @@ class Recipe {
     public uid: number[] = [];
     /** Opt-in retained-water protection for the Other dripper. Never reaches the card. */
     public overflowProtection?: OverflowProtection;
-    /** The name the user chose. Empty until they rename something. */
+    /**
+     * The name the user chose. Empty until they rename something, or until a
+     * new import arrives through a link carrying `recipe.name`, which writes
+     * the producer's name here (`decorateImport`). Either way it is a name
+     * somebody chose for this recipe, as opposed to `xbloomName` below.
+     */
     public name: string = "";
     /**
      * The name xBloom publishes for this recipe's XID, cached.

@@ -148,7 +148,8 @@ arrived named for the keying rather than for the coffee.
 not touch `xbloomName`: that stays what xBloom published, so `displayName()`
 shows the producer's name while USE THIS NAME still has xBloom's to go back to.
 
-It is trimmed, and dropped when empty. It is capped at `MAX_NAME` (100), the
+Runs of whitespace, line breaks and U+2028 included, fold to one space, so a
+link cannot split a one-line title. It is then trimmed, and dropped when empty. It is capped at `MAX_NAME` (100), the
 rename sheet's ceiling, which now lives on `Recipe` so both read one constant.
 Not the 120 of the bean's short text: a link should not be able to set a name
 the rename sheet would then refuse to hold whole. Over-length drops the name
@@ -158,6 +159,26 @@ to xBloom's.
 Like the rest of the decoration it applies only to a new import. A recipe
 already in the library keeps its stored name; see "How the coffee reaches the
 recipe" below.
+
+### `bean.image` as the recipe's picture
+
+`bean.image` was stored on the coffee as `imageUrl` and sent on to
+Beanconqueror, but never became the recipe's own `imageURL`. `XBloomRecipe`
+sets `imageURL` from the pod's coffee or artwork, and it does so before the
+link's coffee is applied, so a share-link import, which has no pod, arrived
+with no picture.
+
+`decorateImport` now sets `imageURL` from the decorated coffee's `imageUrl`,
+through `podImageUrl` (https only, the rule backup restore applies to
+`imageURL`), but only when the recipe has no picture of its own. Pod artwork
+wins where there is any. A recipe already in the library keeps whatever it had,
+picture or none, by the same before-de-duplication rule.
+
+The picture is drawn in one place: the XPOD section on ABOUT, beside the
+xBloom name, and only while `showRecipeAvatars` is on. That setting defaults to
+off, so most users will not see it until they turn it on. The import preview
+panel is not involved: a link resolves as `"shared"`, which opens the editor
+without drawing that panel.
 
 ### Why the pod output does not change
 
@@ -255,8 +276,9 @@ Applied to the *candidate*, before `resolveOnOpen`. The consequence is
 deliberate: when the link points at a recipe already in the library, the stored
 recipe wins and its own coffee is kept. A link should not silently rewrite the
 coffee on a recipe the user has already edited, and "already in your library"
-is what the sheet says in that case. The same holds for `recipe.url` and
-`recipe.name`: a stored recipe keeps its own page and its own name.
+is what the sheet says in that case. The same holds for `recipe.url`,
+`recipe.name` and the picture: a stored recipe keeps its own page, name and
+artwork.
 
 ### Provenance
 
