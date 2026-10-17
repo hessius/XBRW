@@ -18,6 +18,7 @@ import DotMatrixText from "@/components/DotMatrixText";
 import {isActiveBrewPhase} from "@/library/machine/Machine";
 import {unavailableSlotPort} from "@/library/slots/slotWriter";
 import {unwrittenSlotCount} from "@/library/slots/slotModel";
+import {STABLE_HOST} from "@/constants/views";
 
 export default function EasyModeScreen() {
     const {recipeJSON} = useLocalSearchParams<{recipeJSON?: string | string[]}>();
@@ -116,10 +117,10 @@ export default function EasyModeScreen() {
     }
 
     return (
-        <YStack flex={1} backgroundColor={palette.base}
+        <YStack {...STABLE_HOST} flex={1} backgroundColor={palette.base}
                 accessibilityElementsHidden={ratingNoteOpen}
                 importantForAccessibility={ratingNoteOpen ? "no-hide-descendants" : "auto"}>
-            <YStack testID="easy-mode-screen" flex={1}
+            <YStack {...STABLE_HOST} testID="easy-mode-screen" flex={1}
                 accessibilityElementsHidden={departureOpen || ratingNoteOpen}
                 importantForAccessibility={departureOpen || ratingNoteOpen ? "no-hide-descendants" : "auto"}
                 pointerEvents={departureOpen ? "none" : "auto"}>
@@ -147,7 +148,7 @@ export default function EasyModeScreen() {
             </YStack>
             <XbrwSheet open={departureOpen} onOpenChange={open => { if (!open) stay(); }}
                 title="BEFORE YOU LEAVE" heightPercent={60}>
-                <ScrollView contentContainerStyle={{gap: 16}}
+                <ScrollView {...STABLE_HOST} contentContainerStyle={{gap: 16}}
                     accessibilityElementsHidden={!departureOpen}
                     importantForAccessibility={departureOpen ? "auto" : "no-hide-descendants"}
                     pointerEvents={departureOpen ? "auto" : "none"}>

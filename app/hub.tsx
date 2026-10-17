@@ -23,6 +23,7 @@ import {HUB_SORTS, type HubFacet, type HubSort} from "@/library/hub/hubQuery";
 import type {HubCriteria} from "@/library/hub/hubApi";
 import type {HubRecipe} from "@/library/hub/hubRow";
 import {UNCLIPPED_LIST} from "@/constants/lists";
+import {STABLE_HOST} from "@/constants/views";
 
 const FACETS: readonly HubFacet[] = ["origins", "processes", "varietals", "flavours"];
 
@@ -473,7 +474,7 @@ export default function HubScreen() {
 
     return (
         <>
-            <YStack flex={1} backgroundColor={palette.base}
+            <YStack {...STABLE_HOST} flex={1} backgroundColor={palette.base}
                     accessibilityElementsHidden={screenCovered}
                     importantForAccessibility={screenCovered ? "no-hide-descendants" : "auto"}>
                 <ScreenHeader title="CATALOGUE" count={rows.length}

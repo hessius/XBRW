@@ -3,6 +3,18 @@
 This is the source for the full release-testing checklist, not a claim that
 device testing is complete. Update it whenever release scope or behaviour changes.
 
+## Android crash after Duplicate in the editor (2026-10-18)
+
+Closing a sheet no longer moves the screen behind it between native parents.
+The wrappers that hide a screen from TalkBack while a sheet is up were stacking
+contexts only while hidden, so Fabric lifted their children into the parent on
+every close. On the editor's More > Duplicate that move failed on Android
+(`addViewAt ... View already has a parent`) and closed the app. These wrappers,
+and the sheet body, now always keep their own native view
+(`constants/views.ts`). No card, brew or storage behaviour changes. Needs an
+Android device check: open and close each sheet in the editor, then More >
+Duplicate and More > Delete.
+
 ## Brew history trace storage (2026-10-15)
 
 Brew traces are compressed and managed under a configurable storage budget. When
