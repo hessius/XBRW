@@ -5,8 +5,9 @@ device testing is complete. Update it whenever release scope or behaviour change
 
 ## Settings order and machine cards (2026-10-18)
 
-Settings now opens on Machines: one card per saved machine, closed until
-tapped. An open card holds the link status and Connect (or Use this machine
+Settings now opens on Machines: one card per saved machine. The card of the
+machine in use starts open; the others start closed until tapped. Its summary
+line turns red while the link has an error. An open card holds the link status and Connect (or Use this machine
 now), the model, a row to the machine's existing name-and-order sheet, a
 Details fold with serial, firmware, water, grind size and mode, and Forget.
 Add another machine sits under the cards. With no machine saved, the section

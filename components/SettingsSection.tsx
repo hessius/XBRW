@@ -11,6 +11,21 @@ type Props = {
 };
 
 /**
+ * A section heading on its own, for a group that draws its own cards.
+ *
+ * Settings → Machines is one card per machine rather than rows in one card,
+ * and it still needs the same heading as every other section.
+ */
+export function SettingsSectionTitle({title}: {title: string}) {
+    return (
+        <DotMatrixText testID="settings-section-title" fontSize={11}
+                       weight="bold" letterSpacing={1.6} color={palette.dim}>
+            {title.toUpperCase()}
+        </DotMatrixText>
+    );
+}
+
+/**
  * A group of settings rows under a heading.
  *
  * The heading is Doto because it is a machine label rather than prose — the same
@@ -31,21 +46,6 @@ type Props = {
  * same BREW-deck card's, so a user crossing from the editor to settings meets
  * the same corner.
  */
-/**
- * A section heading on its own, for a group that draws its own cards.
- *
- * Settings → Machines is one card per machine rather than rows in one card,
- * and it still needs the same heading as every other section.
- */
-export function SettingsSectionTitle({title}: {title: string}) {
-    return (
-        <DotMatrixText testID="settings-section-title" fontSize={11}
-                       weight="bold" letterSpacing={1.6} color={palette.dim}>
-            {title.toUpperCase()}
-        </DotMatrixText>
-    );
-}
-
 export default function SettingsSection({title, children}: Props) {
     // The divider lives here rather than on each row so that the first row has
     // nothing above it and the last nothing below it — the rounded corners stay

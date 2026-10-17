@@ -45,6 +45,13 @@ type Props = {
     isDefault: boolean;
     /** The summary turns green while this machine is the one connected. */
     connected: boolean;
+    /** The summary turns red while the link has an error to show. Wins over `connected`. */
+    failed?: boolean;
+    /**
+     * Start open. The machine in use does, so its status, any error and the
+     * way to fix it are on screen without a tap, as they were before cards.
+     */
+    initiallyOpen?: boolean;
     testID: string;
     /** Status, connect and model: what somebody opened the card for. */
     children: React.ReactNode;
@@ -56,6 +63,10 @@ type Props = {
 
 /**
  * One saved machine in Settings, which opens in place.
+ *
+ * The machine in use starts open and the others start closed. Its status line,
+ * any error and the Android settings row would otherwise be a tap away, and
+ * Connect a tap deeper than it was before there were cards.
  *
  * In place rather than in a sheet because almost everything in it is a tap
  * and a glance: is it connected, connect it, which model is it. A sheet would
@@ -72,13 +83,15 @@ type Props = {
  * parent would clip the details in the middle of their animation.
  */
 export default function MachineCard({
-    title, summary, isDefault, connected, testID, children, details, footer
+    title, summary, isDefault, connected, failed = false, initiallyOpen = false, testID,
+    children, details, footer
 }: Props) {
-    const [open, setOpen] = useState(false);
+    const [open, setOpen] = useState(initiallyOpen);
     const [detailsOpen, setDetailsOpen] = useState(false);
 
     return (
-        <YStack backgroundColor={palette.surface} borderRadius="$5" overflow="hidden">
+        <YStack testID={`${testID}-card`} backgroundColor={palette.surface} borderRadius="$5"
+                overflow="hidden">
             <Pressable accessibilityRole="button"
                        accessibilityLabel={`${title}, ${summary}`}
                        accessibilityState={{expanded: open}}
@@ -91,7 +104,8 @@ export default function MachineCard({
                     </YStack>
                     <YStack flex={1} gap="$1">
                         <Text fontSize={16} color={palette.text} numberOfLines={1}>{title}</Text>
-                        <Text fontSize={13} color={connected ? palette.success : palette.dim}>
+                        <Text testID={`${testID}-summary`} fontSize={13}
+                              color={failed ? palette.danger : connected ? palette.success : palette.dim}>
                             {summary}
                         </Text>
                     </YStack>

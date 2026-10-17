@@ -931,7 +931,8 @@ machine card's error line).
 
 ### Machine cards (`components/MachineSection.tsx`, `components/MachineCard.tsx`)
 
-First on the Settings screen. One card per saved machine, closed until tapped.
+First on the Settings screen. One card per saved machine. The card of the
+machine in use starts open; the others start closed until tapped.
 An open card shows the link, the model, a row to name it, a Details fold with
 the machine's readings, and Forget. With no machine saved, the section is one
 plain card with the model choice and Connect.
@@ -970,15 +971,15 @@ plain card with the model choice and Connect.
 | `machine.section.connect.connect` | `components/MachineSection.tsx:96` | Row label when not connected. | `Connect to my machine` |
 | `machine.section.connected.desc` | `components/MachineSection.tsx:98` | Sub-note when connected. | `The link is held while XBRW++ is open.` |
 | `machine.section.disconnected.desc` | `components/MachineSection.tsx:99` | Sub-note when not connected. | `Your xBloom Studio has to be switched on and nearby.` |
-| `machine.section.vital.serial` | `components/MachineSection.tsx:108` | Vital label. | `Serial` |
-| `machine.section.vital.model` | `components/MachineSection.tsx:109` | Vital label. | `Model` |
-| `machine.section.vital.firmware.a11y` | `components/MachineSection.tsx:111` (a11y) | (a11y) Firmware vital. `${...}` is the firmware string. | `Firmware, ${info.firmware}` |
-| `machine.section.vital.firmware` | `components/MachineSection.tsx:113` | Vital label. | `Firmware` |
-| `machine.section.vital.water` | `components/MachineSection.tsx:115` | Vital label; value is OK/Low. | `Water` |
-| `machine.section.vital.water.ok` | `components/MachineSection.tsx:115` | Vital value when the tank is fine. | `OK` |
-| `machine.section.vital.water.low` | `components/MachineSection.tsx:115` | Vital value when the tank is low. | `Low` |
-| `machine.section.vital.grind` | `components/MachineSection.tsx:116` | Vital label. | `Grind size` |
-| `machine.section.vital.mode` | `components/MachineSection.tsx:117` | Vital label; value is the machine mode (PRO/EASY). | `Mode` |
+| `machine.section.vital.serial` | `components/MachineSection.tsx` | Vital label. Inside the Details fold of the connected machine's card. | `Serial` |
+| `machine.section.vital.model` | `components/MachineSection.tsx` | Vital label. Inside the Details fold of the connected machine's card. | `Model` |
+| `machine.section.vital.firmware.a11y` | `components/MachineSection.tsx` (a11y) | (a11y) Firmware vital. `${...}` is the firmware string. Inside the Details fold of the connected machine's card. | `Firmware, ${info.firmware}` |
+| `machine.section.vital.firmware` | `components/MachineSection.tsx` | Vital label. Inside the Details fold of the connected machine's card. | `Firmware` |
+| `machine.section.vital.water` | `components/MachineSection.tsx` | Vital label; value is OK/Low. Inside the Details fold of the connected machine's card. | `Water` |
+| `machine.section.vital.water.ok` | `components/MachineSection.tsx` | Vital value when the tank is fine. Inside the Details fold of the connected machine's card. | `OK` |
+| `machine.section.vital.water.low` | `components/MachineSection.tsx` | Vital value when the tank is low. Inside the Details fold of the connected machine's card. | `Low` |
+| `machine.section.vital.grind` | `components/MachineSection.tsx` | Vital label. Inside the Details fold of the connected machine's card. | `Grind size` |
+| `machine.section.vital.mode` | `components/MachineSection.tsx` | Vital label; value is the machine mode (PRO/EASY). Inside the Details fold of the connected machine's card. | `Mode` |
 | `machine.section.forget.label` | `components/MachineSection.tsx:141` | Action row label. | `Forget this machine` |
 | `machine.section.forget.detail` | `components/MachineSection.tsx` | Action row detail, one machine saved. Replaced by the brew blocker's message while a brew owns the link. | `XBRW++ will scan again next time.` |
 | `machine.section.forget.detailSeveral` | `components/MachineSection.tsx` | The same, two or more saved. | `Takes it off the list. Add it again to get it back.` |

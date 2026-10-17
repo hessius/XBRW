@@ -83,7 +83,8 @@ function machineSummary(machine: SavedMachine, index: number, active: boolean, c
  * pairing is possible — and a dead BREW button on every recipe, for the users
  * who will never own a J15, is the worse trade.
  *
- * One card per saved machine, closed until tapped (see `MachineCard`). With
+ * One card per saved machine (see `MachineCard`). The machine in use starts
+ * open, so its status and any error need no tap; the others start closed. With
  * none saved there is nothing to fold, so the model choice and Connect sit in
  * a plain card the way they always did.
  *
@@ -242,6 +243,8 @@ export default function MachineSection({settings, onOpenMachine, onAddMachine}: 
                         summary={machineSummary(entry, index, active, status === "connected")}
                         isDefault={index === 0}
                         connected={linked}
+                        failed={active && error !== null}
+                        initiallyOpen={active}
                         details={active && info !== null ? (
                             <>
                                 <Vital label="Serial" value={info.serial}/>

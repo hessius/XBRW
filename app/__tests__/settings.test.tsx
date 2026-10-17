@@ -1084,12 +1084,24 @@ describe("SettingsScreen", () => {
             expect(screen.queryByRole("button", {name: /^Machine console/})).toBeNull();
         });
 
+        it("puts card diagnostics last, after Labs", async () => {
+            const settings = new Settings(memoryStorage());
+            settings.set("labsUnlocked", true);
+            settings.set("machineConsoleAcknowledged", true);
+            const rendered = await renderWithProviders(<SettingsScreen settings={settings}/>);
+            const order = renderOrder(rendered.toJSON());
+
+            expect(order.indexOf("CARD DIAGNOSTICS")).toBeGreaterThan(order.indexOf("Hide Labs"));
+            expect(order.indexOf("LABS")).toBeGreaterThan(order.indexOf(SUPPORT_TITLE));
+        });
+
         it("offers the machine console from Labs, still behind its own gate", async () => {
             const settings = new Settings(memoryStorage());
             settings.set("labsUnlocked", true);
             const rendered = await renderWithProviders(<SettingsScreen settings={settings}/>);
             const order = renderOrder(rendered.toJSON());
             expect(order.indexOf("Machine console")).toBeGreaterThan(order.indexOf("LABS"));
+            expect(order.indexOf("LABS")).toBeGreaterThan(order.indexOf("About XBRW++"));
 
             await fireEvent.press(screen.getByRole("button", {name: /^Machine console/}));
 
