@@ -15,7 +15,13 @@ import {useSavedMachines} from "@/hooks/useSavedMachines";
 import {useSetting} from "@/hooks/useSetting";
 import type {Settings} from "@/library/Settings";
 import {MACHINE_MODELS, isMachineModel, modelFromSerial, type MachineModel} from "@/library/machine/machineModel";
-import {machineLabel, machineTag, type SavedMachine} from "@/library/machine/savedMachines";
+import {
+    machineColourOf,
+    machineLabel,
+    machineOrderWord,
+    machineTag,
+    type SavedMachine
+} from "@/library/machine/savedMachines";
 
 /** How many taps on the firmware row open the console. */
 const CONSOLE_TAPS = 7;
@@ -74,11 +80,17 @@ function Card({children}: {children: React.ReactNode}) {
 /**
  * Model, place in the order and link, as one line under a machine's name.
  *
- * The star is the default's mark; the words say it too, for a screen reader
- * and for anybody who does not read stars as "default".
+ * The star marks the machine tried first; the words say it too ("Tried
+ * 1st"), for a screen reader and for anybody who does not read a star that
+ * way. Neither is drawn with one machine saved: there is no order. "Default"
+ * used to stand here, and beside "Connected" on another card it read as a
+ * second machine in use.
  */
-function machineSummary(machine: SavedMachine, index: number, active: boolean, connected: boolean): string {
-    const parts = [MODEL_NAMES[machine.model], index === 0 ? "Default" : `Choice ${index + 1}`,
+function machineSummary(
+    machine: SavedMachine, index: number, count: number, active: boolean, connected: boolean
+): string {
+    const order = machineOrderWord(index, count);
+    const parts = [MODEL_NAMES[machine.model], ...(order === null ? [] : [order]),
                    machineTag(machine)];
     // "Selected", not "In use": this phone has no way to tell that another
     // phone holds the machine (it simply stops answering), and "In use" was
@@ -276,8 +288,12 @@ export default function MachineSection({settings, onOpenMachine, onAddMachine}: 
                         key={entry.id}
                         testID={`saved-machine-${entry.id}`}
                         title={name}
-                        summary={machineSummary(entry, index, active, status === "connected")}
-                        isDefault={index === 0}
+                        summary={machineSummary(entry, index, machines.length, active,
+                                                status === "connected")}
+                        isDefault={several && index === 0}
+                        // With one machine there is nothing to tell apart, so
+                        // one machine's card looks as it always has.
+                        colour={several ? machineColourOf(entry).ink : undefined}
                         connected={linked}
                         failed={active && error !== null}
                         initiallyOpen={active}
@@ -341,9 +357,9 @@ export default function MachineSection({settings, onOpenMachine, onAddMachine}: 
                                 if (isMachineModel(value)) setModel(entry.id, value);
                             }}/>}
                         <SettingsActionRow
-                            label={several ? "Name and order" : "Name"}
+                            label={several ? "Name, colour and order" : "Name"}
                             detail={several
-                                ? "Rename it, make it the default or change its place in the list."
+                                ? "Rename it, pick its colour, try it first or change its place in the list."
                                 : "Give it a name, like Home or Work."}
                             onPress={() => onOpenMachine?.(entry.id)}/>
                     </MachineCard>

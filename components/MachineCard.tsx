@@ -4,6 +4,7 @@ import {Text, XStack, YStack} from "tamagui";
 
 import Collapsible from "@/components/Collapsible";
 import DotIcon from "@/components/DotIcon";
+import MachineColourDot from "@/components/MachineColourDot";
 import {palette} from "@/constants/colors";
 
 /**
@@ -41,8 +42,13 @@ type Props = {
     title: string;
     /** Model, place in the order and link, joined with interpuncts. */
     summary: string;
-    /** The default gets the star. The summary says "Default" too. */
+    /**
+     * The first machine in the connect order gets the star, with two or more
+     * saved. The summary says "Tried 1st" too.
+     */
     isDefault: boolean;
+    /** The machine's colour ink, as a dot beside its name. Absent with one machine. */
+    colour?: string;
     /** The summary turns green while this machine is the one connected. */
     connected: boolean;
     /** The summary turns red while the link has an error to show. Wins over `connected`. */
@@ -83,7 +89,7 @@ type Props = {
  * parent would clip the details in the middle of their animation.
  */
 export default function MachineCard({
-    title, summary, isDefault, connected, failed = false, initiallyOpen = false, testID,
+    title, summary, isDefault, colour, connected, failed = false, initiallyOpen = false, testID,
     children, details, footer
 }: Props) {
     const [open, setOpen] = useState(initiallyOpen);
@@ -103,7 +109,13 @@ export default function MachineCard({
                         {isDefault && <DotIcon name="favourite" size={14} color={palette.dim}/>}
                     </YStack>
                     <YStack flex={1} gap="$1">
-                        <Text fontSize={16} color={palette.text} numberOfLines={1}>{title}</Text>
+                        <XStack alignItems="center" gap="$2">
+                            {colour !== undefined && (
+                                <MachineColourDot testID={`${testID}-colour`} colour={colour}/>
+                            )}
+                            <Text fontSize={16} color={palette.text} numberOfLines={1}
+                                  flexShrink={1}>{title}</Text>
+                        </XStack>
                         <Text testID={`${testID}-summary`} fontSize={13}
                               color={failed ? palette.danger : connected ? palette.success : palette.dim}>
                             {summary}

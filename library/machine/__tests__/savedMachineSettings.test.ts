@@ -44,7 +44,7 @@ describe("an existing user upgrading", () => {
     it("keeps their machine as the default without anything being written", () => {
         const {settings, writes} = upgradedPhone();
         expect(loadSavedMachines(settings)).toEqual([entry("HOME", {
-            modelString: "J15", advertisedName: "XBLOOM HOME"
+            modelString: "J15", advertisedName: "XBLOOM HOME", colour: 0
         })]);
         expect(writes).toEqual([]);
         expect(settings.get("machineDeviceId")).toBe("HOME");
@@ -66,7 +66,7 @@ describe("pairing the first machine", () => {
         const {storage} = fakeStorage({machineModel: "original"});
         const settings = new Settings(storage);
         rememberMachine(settings, "FIRST");
-        expect(loadSavedMachines(settings)).toEqual([entry("FIRST", {model: "original"})]);
+        expect(loadSavedMachines(settings)).toEqual([entry("FIRST", {model: "original", colour: 0})]);
         expect(settings.get("machineDeviceId")).toBe("FIRST");
         expect(settings.get("machineModel")).toBe("original");
     });
@@ -219,5 +219,38 @@ describe("the model a serial names", () => {
         const {settings} = setToOriginal();
         recordSerial(settings, "HOME", "S1");
         expect(settings.get("machineModel")).toBe("original");
+    });
+});
+
+describe("machine colours in the store", () => {
+    it("writes the upgraded machine's green the first time the list is saved", () => {
+        const {settings} = upgradedPhone();
+        saveSavedMachines(settings, loadSavedMachines(settings));
+        expect(JSON.parse(settings.get("savedMachines"))[0].colour).toBe(0);
+    });
+
+    it("keeps a colour somebody chose across a switch and a reload", () => {
+        const {storage} = fakeStorage({
+            machineDeviceId: "HOME",
+            savedMachines: JSON.stringify([entry("HOME", {colour: 0}), entry("WORK", {colour: 1})])
+        });
+        const settings = new Settings(storage);
+        saveSavedMachines(settings, updateSavedMachine(loadSavedMachines(settings), "WORK", {colour: 3}));
+        activateSavedMachine(settings, "WORK");
+
+        const reloaded = new Settings(storage);
+        expect(loadSavedMachines(reloaded).map((machine) => [machine.id, machine.colour]))
+            .toEqual([["HOME", 0], ["WORK", 3]]);
+    });
+
+    it("gives a second machine the next colour, and a third the one a forgotten machine left", () => {
+        const {settings} = upgradedPhone();
+        addAndActivateMachine(settings, entry("WORK"));
+        expect(loadSavedMachines(settings).map((machine) => machine.colour)).toEqual([0, 1]);
+
+        forgetSavedMachine(settings, "HOME");
+        addAndActivateMachine(settings, entry("CAFE"));
+        expect(loadSavedMachines(settings).map((machine) => [machine.id, machine.colour]))
+            .toEqual([["WORK", 1], ["CAFE", 0]]);
     });
 });

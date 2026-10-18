@@ -4,11 +4,14 @@ import {Text, XStack, YStack} from "tamagui";
 
 import DotIcon from "@/components/DotIcon";
 import DotMatrixText from "@/components/DotMatrixText";
+import MachineColourDot from "@/components/MachineColourDot";
 import XbrwSheet from "@/components/XbrwSheet";
 import {palette} from "@/constants/colors";
 import type {MachineModel} from "@/library/machine/machineModel";
 import {
+    machineColourOf,
     machineLabel,
+    machineOrderWord,
     machineTag,
     splitByRange,
     type SavedMachine
@@ -52,16 +55,18 @@ const ROW_WORDS: Record<RowKind, string> = {
 };
 
 /** One saved machine. At module scope, so a repaint does not remount it. */
-function MachineRow({machine, index, kind, selectable, onChoose}: {
+function MachineRow({machine, index, count, kind, selectable, onChoose}: {
     machine: SavedMachine;
     index: number;
+    count: number;
     kind: RowKind;
     selectable: boolean;
     onChoose: (id: string) => void;
 }) {
     const name = machineLabel(machine, index);
-    const role = index === 0 ? "Default" : `Choice ${index + 1}`;
-    const detail = `${MODEL_NAMES[machine.model]} · ${role} · ${machineTag(machine)}`;
+    const order = machineOrderWord(index, count);
+    const detail = [MODEL_NAMES[machine.model], order, machineTag(machine)]
+        .filter((part) => part !== null).join(" · ");
     const words = ROW_WORDS[kind];
     const ink = kind === "connected" ? palette.success : kind === "nearby" ? palette.text : palette.muted;
 
@@ -85,13 +90,17 @@ function MachineRow({machine, index, kind, selectable, onChoose}: {
                     borderWidth={1}
                     borderColor={kind === "connected" ? palette.success : palette.line}
                     backgroundColor={palette.raised}>
-                {/* Decorative: the row's label already says "Default". */}
+                {/* Decorative: the row's label already says "Tried 1st". */}
                 <YStack width={16} alignItems="center">
                     {index === 0 && <DotIcon name="favourite" size={14} color={palette.dim}/>}
                 </YStack>
                 <YStack flex={1} gap="$1">
-                    <Text fontSize={16} color={kind === "away" ? palette.dim : palette.text}
-                          numberOfLines={1}>{name}</Text>
+                    <XStack alignItems="center" gap="$2">
+                        <MachineColourDot testID={`machine-pick-colour-${machine.id}`}
+                                          colour={machineColourOf(machine).ink}/>
+                        <Text fontSize={16} color={kind === "away" ? palette.dim : palette.text}
+                              numberOfLines={1} flexShrink={1}>{name}</Text>
+                    </XStack>
                     <Text fontSize={13} color={palette.dim} numberOfLines={1}>{detail}</Text>
                 </YStack>
                 <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.6} color={ink}>
@@ -162,13 +171,15 @@ export default function MachinePickerSheet({
 
                 {current.length > 0 && <Heading group="connected">CONNECTED</Heading>}
                 {current.map(({machine, index}) => (
-                    <MachineRow key={machine.id} machine={machine} index={index} kind="connected"
+                    <MachineRow key={machine.id} machine={machine} index={index}
+                                count={machines.length} kind="connected"
                                 selectable={false} onChoose={choose}/>
                 ))}
 
                 {nearby.length > 0 && <Heading group="nearby">NEARBY</Heading>}
                 {nearby.map(({machine, index}) => (
-                    <MachineRow key={machine.id} machine={machine} index={index} kind="nearby"
+                    <MachineRow key={machine.id} machine={machine} index={index}
+                                count={machines.length} kind="nearby"
                                 selectable={!locked} onChoose={choose}/>
                 ))}
 
@@ -178,7 +189,8 @@ export default function MachinePickerSheet({
                     </Heading>
                 )}
                 {away.map(({machine, index}) => (
-                    <MachineRow key={machine.id} machine={machine} index={index} kind="away"
+                    <MachineRow key={machine.id} machine={machine} index={index}
+                                count={machines.length} kind="away"
                                 selectable={false} onChoose={choose}/>
                 ))}
 

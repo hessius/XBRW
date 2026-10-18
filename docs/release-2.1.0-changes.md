@@ -148,6 +148,37 @@ changed: Forget and Use this machine now are still refused while a brew owns
 the link. Not yet checked on a device: large text, TalkBack/VoiceOver reading
 of the expanded state, and the fold animation on a folding phone.
 
+## Switching machines from home, the order word and machine colours (2026-10-18)
+
+With two or more machines saved, the home screen's machine panel opens with a
+switcher row (name, model, CONNECTED or SELECTED, and a chevron) that opens
+the existing machine picker. Holding the home link glyph opens the same picker
+directly. Both go through the picker's existing selection path, so a pick is
+refused while a brew, a lost-contact brew or an Easy Mode slot operation owns
+the link, and no look-around scan runs then. With one machine a hold does what
+a tap does. The glyph carries a hint and a named "Switch machine" action for
+screen readers.
+
+"Default" is gone from machine rows. It meant only "first in the connect
+order" (tried first when no machine was picked this session and the machine
+in use is not heard), and beside "Connected" on another row it read as a
+second machine in use. Rows now say "Tried 1st", "Tried 2nd" and so on, and
+only with two or more saved. "Make default" is "Try this one first".
+
+Each saved machine has a colour (Green, Blue, Violet, Cyan), chosen in its
+sheet under the name and shown as a dot on picker rows, the panel switcher
+and the Settings rows. The home link glyph draws in the connected machine's
+colour. The first machine keeps the old connected green and new machines take
+the next unused colour; nothing changes with one machine saved. Connected or
+not is still carried by the glyph's shape, and the label says "Connected to
+Home" or "Not connected". The colour is stored in the saved-machine list,
+which stays out of backups.
+
+Not yet checked on a device: the hold on the glyph with TalkBack and
+VoiceOver, and the four colours on the Fold's cover and inner screens. On
+the Settings cards the colour dot sits beside the machine's name in the card
+header, the star and order word only with two or more saved.
+
 ## The whole app clears the bottom inset (2026-10-18)
 
 Android 15+ draws the app under the navigation bar. With three-button
