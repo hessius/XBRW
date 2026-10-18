@@ -63,7 +63,12 @@ export async function fetchCoffeeRecipe(
     // Through the import link's own decoration, so the coffee, its tags and
     // anything that path learns to do later (the picture, in #223) arrive the
     // same way here.
-    decorateImport(recipe, {coffee: coffee.coffee, source: "import", tags: coffee.tags});
+    // The feed keeps its flavours beside the coffee block; the recipe keeps
+    // them on its coffee, where ABOUT reads them.
+    const withFlavours = coffee.flavours.length > 0
+        ? {...coffee.coffee, flavours: coffee.flavours}
+        : coffee.coffee;
+    decorateImport(recipe, {coffee: withFlavours, source: "import", tags: coffee.tags});
     recipe.name = recipeName(coffee, chosen.size);
     return {recipe, size: chosen.size};
 }

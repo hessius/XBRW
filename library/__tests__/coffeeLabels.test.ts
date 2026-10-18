@@ -3,7 +3,10 @@ import {MAX_LABELS, readLabels} from "@/library/coffeeLabels";
 import {decorateImport} from "@/library/importDecoration";
 import Recipe from "@/library/Recipe";
 import {parseRoasterFeed} from "@/library/roasterFeed";
-import {feedJson} from "@/test-utils/roasterFeed";
+import handoffBean from "@/library/brew/handoff/handoffBean";
+import {podCoffeeFromStored} from "@/library/podCoffee";
+import {fetchCoffeeRecipe} from "@/library/roasterRecipes";
+import {feed, feedJson, memoryLibrary} from "@/test-utils/roasterFeed";
 
 describe("readLabels", () => {
     it("reads an array or a comma separated string, trimmed and de-duplicated", () => {
@@ -27,8 +30,26 @@ describe("flavours and tags at both doors", () => {
         )!;
         expect(link.flavours).toEqual(["Cacao", "Blueberry"]);
         expect(link.tags).toEqual(["Berry", "Filter"]);
-        // Not in the coffee block, which is Beanconqueror's contract.
-        expect(link.coffee).not.toHaveProperty("flavours");
+        // Kept on the coffee too, for ABOUT's FLAVOUR row.
+        expect(link.coffee?.flavours).toEqual(["Cacao", "Blueberry"]);
+    });
+
+    it("keeps a coffee's flavours through storage and never hands them to Beanconqueror", () => {
+        const recipe = new Recipe();
+        recipe.coffee = {name: "Peru", aromatics: "Long notes.", flavours: ["Cacao", "Blueberry"]};
+        const back = new Recipe(undefined, JSON.stringify(recipe));
+        expect(back.coffee?.flavours).toEqual(["Cacao", "Blueberry"]);
+        expect(handoffBean(back.coffee!)).not.toHaveProperty("flavours");
+        expect(podCoffeeFromStored({name: "Peru", flavours: "not, a, list, ok"})?.flavours)
+            .toEqual(["not", "a", "list", "ok"]);
+        expect(podCoffeeFromStored({name: "Peru", flavours: [7]})).not.toHaveProperty("flavours");
+    });
+
+    it("stores a feed coffee's flavours on the recipe the catalogue fetches", async () => {
+        const [coffee] = feed([{id: "a"}]).coffees;
+        const {recipe} = await fetchCoffeeRecipe({...coffee, flavours: ["Dark Chocolate", "Vanilla"]},
+                                                 undefined, memoryLibrary().deps);
+        expect(recipe.coffee?.flavours).toEqual(["Dark Chocolate", "Vanilla"]);
     });
 
     it("reads them from a feed coffee's bean block", () => {

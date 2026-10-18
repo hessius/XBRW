@@ -29,8 +29,19 @@ describe("FromSection", () => {
         await renderWithProviders(<FromSection {...props({recipe})}/>);
 
         expect(screen.getByTestId("from-roaster").props.children).toBe("From Central Coast Coffee");
-        expect(screen.getByText("Shared on xBloom by rhys")).toBeTruthy();
-        expect(screen.queryByText("Arrived from rhys")).toBeNull();
+        // The sharer's xBloom account is not where the recipe is from, so it
+        // is not named at all, not even in small print.
+        expect(screen.queryByTestId("from-sharer")).toBeNull();
+        expect(screen.queryByText(/rhys/)).toBeNull();
+    });
+
+    it("names the sharer of a recipe from a link that named no roaster", async () => {
+        const recipe = recipeWith({sharedBy: "rhys", source: "import"});
+        recipe.coffee = {name: "Peru"};
+        await renderWithProviders(<FromSection {...props({recipe})}/>);
+
+        expect(screen.getByText("Arrived from rhys")).toBeTruthy();
+        expect(screen.queryByTestId("from-roaster")).toBeNull();
     });
 
     it("keeps the sharer for a recipe whose coffee names no roaster, or a pod", async () => {

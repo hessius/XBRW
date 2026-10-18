@@ -101,7 +101,7 @@ object instead of the theme template, so a feed must never be fetched that way.
 | `coffees[].bag_sizes_g` | no | Up to 10 whole numbers of grams, 1 to 5,000. Used when there are no `variants`. |
 | `coffees[].variants` | no | Up to 10 bags, each `{id, grams, price, currency, available, url}`, every field optional. `id` is text or a whole number (up to 100 characters). `grams` as for `bag_sizes_g`. `price` is a number (or numeric text) from 0 to 100,000. `currency` is a three-letter ISO 4217 code. `available` must be `true` to be bought. `url` is an https link to buy exactly this bag and wins over `add_to_cart`. A variant with none of `id`, `grams`, `price` or `url` is skipped. |
 | `coffees[].bean` | no | The same fields as the link's `bean.*` parameters, under the same length caps. Numbers and booleans may be sent as JSON values or strings. |
-| `coffees[].bean.flavours` | no | A short list of tasting notes, as an array (or comma separated text). Up to 12, each up to 32 characters. Drawn as the coffee's chips in the catalogue; without it, `aromatics` becomes chips only when it is a short list. |
+| `coffees[].bean.flavours` | no | A short list of tasting notes, as an array (or comma separated text). Up to 12, each up to 32 characters. Drawn as the coffee's chips in the catalogue, and kept on the recipe's coffee so ABOUT can show them as its flavour (with `aromatics` under them); without it, `aromatics` becomes chips only when it is a short list. |
 | `coffees[].bean.tags` | no | Labels such as "Berry" or "Filter", same limits. Shown quietly under the flavours, searchable, and added to the recipe's tags when it is added to the library (after the person's own tags, never replacing one). |
 
 ### Selling bags from any shop
@@ -163,9 +163,9 @@ link tags the recipe it imports.
 - **Opening a coffee** fetches its recipe from xBloom at that moment, so it shows
   the roaster's latest. From there the person can:
   - **Brew now**: the recipe opens in the editor without being saved.
-  - **Add to library**: saved through the normal import path.
-  - **Add to shelf**: added to the library if needed, then put on a shelf they pick
-    or make.
+  - **Add to shelf**: saved to the library through the normal import path (or
+    matched to the copy already there), then put on a shelf they pick or make.
+    There is no separate Add to library; shelving does that.
   - **Buy** a bag: when the coffee lists `variants`, each bag's size and price is
     shown with a BUY button (or SOLD OUT) that opens its buy link in the
     browser. Without `variants` the plain `bag_sizes_g` list is shown.

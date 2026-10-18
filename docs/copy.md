@@ -431,14 +431,14 @@ is `docs/roaster-feed.md`.
 | `roaster.coffees.search` | `app/roaster.tsx` (`CoffeeRail`) | The rail's search square and field, the library's own (`components/RailSearch.tsx`). Matches name, country, farm, farmer, variety, process and tasting notes. | `SEARCH` |
 | `roaster.coffees.filters` | `app/roaster.tsx` (`FACET_COPY`) | Doto rail chips, drawn only when the feed has two or more values. IN STOCK is on by default and hides sold-out coffees. a11y: `In stock only`, `Roast filter`, `Country filter`, `Process filter`, `Decaf only`. | `IN STOCK` / `ROAST` / `COUNTRY` / `PROCESS` / `DECAF` |
 | `roaster.coffees.sheet` | `app/roaster.tsx` (`HubFilterSheet`) | Facet sheet title is `Roast`, `Country` or `Process`; rows read `${value}` and `${n} coffees`. | `Options are counted from this roaster's coffees.` |
-| `roaster.coffees.count` | `library/roasterFilters.ts` (`countLabel`) | Header superscript while a search or filter narrows the list. | `${shown} OF ${total}` |
+| `roaster.coffees.count` | `library/roasterFilters.ts` (`countLabel`) | Subtitle line under the roaster's name (`ScreenHeader` `subtitle`), never beside it, so a long name cannot clip it. "of" only while a search or filter narrows the list; singular at one. The "Updated" meta sits at the end of the same line. | `${shown} of ${total} coffees` / `${shown} coffees` / `1 coffee` |
 | `roaster.coffees.noMatches` | `app/roaster.tsx` | Nothing matches; Doto title, body, then a button. | `NO MATCHES` / `No coffees match.` / `Clear filters` |
 | `roaster.row.soldOut` | `components/RoasterCoffeeRow.tsx` | Doto line on a sold-out coffee; also spoken. | `SOLD OUT` |
 | `roaster.coffee.roast` | `app/roasterCoffee.tsx` | Doto roast level. | `${level} ROAST` |
 | `roaster.coffee.notes` | `library/roasterCatalogue.ts` (`noteChips`) | Tasting notes. Doto chips only for 2 to 8 parts of at most 20 characters split on commas or a spaced pipe, with no full stop or brackets; otherwise the roaster's own sentence in Inter. List rows show the same notes on one line. | (feed text) |
 | `roaster.coffee.tags` | `app/roasterCoffee.tsx` | The feed's `bean.tags`, quiet, under the flavour chips. | `${tag} · ${tag}` |
-| `from.roaster` | `components/FromSection.tsx` | FROM, for a recipe a link or catalogue named a roaster for (`roasterOf`). | `From ${roaster}` |
-| `from.roaster.sharer` | `components/FromSection.tsx` | Small line under it when xBloom names the account that shared it. | `Shared on xBloom by ${sharedBy}` |
+| `from.roaster` | `components/FromSection.tsx` | FROM, for a recipe a link or catalogue named a roaster for (`roasterOf`). The xBloom account that shared it is not named. | `From ${roaster}` |
+| `pod.roaster.label` | `components/PodSection.tsx` | XPOD, small caption over xBloom's own recipe title on a recipe from a roaster (`roasterOf`). The title is drawn smaller and dimmer, and USE THIS NAME is not offered. | `xBloom profile name` |
 | `roaster.coffee.advice` | `library/roasterCatalogue.ts` (`roastAdvice`) | Roast timing; parts appear as stated. | `Rest ${n} days, peak day ${n}, best by day ${n}` |
 | `roaster.coffee.bags` | `app/roasterCoffee.tsx` | Bag sizes, when the feed lists no `variants`. | `Bags: 320 g · 160 g` |
 | `roaster.coffee.buy` | `components/CatalogueParts.tsx` (`BuySection`) | Doto heading over one row per bag; rows read `${size} · ${price}` (`library/roasterBuy.ts`, `formatPrice`: narrow currency symbol, `$28 AUD` when the runtime cannot format it). | `BUY` |
@@ -449,9 +449,7 @@ is `docs/roaster-feed.md`.
 | `roaster.coffee.loading` | `app/roasterCoffee.tsx` | While the recipe is fetched. | `Loading the recipe from xBloom.` |
 | `roaster.coffee.failed` | `app/roasterCoffee.tsx` | Fetch failed; beside TRY AGAIN. | `Couldn't load the recipe from xBloom.` |
 | `roaster.coffee.brew` | `app/roasterCoffee.tsx` | Doto primary action. | `BREW NOW` |
-| `roaster.coffee.add` | `app/roasterCoffee.tsx` | Doto action. | `ADD TO LIBRARY` |
-| `roaster.coffee.shelf` | `app/roasterCoffee.tsx` | Doto action. | `ADD TO SHELF` |
-| `roaster.toast.added` | `app/roasterCoffee.tsx` | After ADD TO LIBRARY. | `Added to your library.` |
+| `roaster.coffee.shelf` | `app/roasterCoffee.tsx` | Doto action, the only other action beside BREW NOW: saves the recipe to the library, then puts it on the shelf picked. There is no separate ADD TO LIBRARY. | `ADD TO SHELF` |
 | `roaster.toast.shelved` | `app/roasterCoffee.tsx` | After choosing a shelf. | `Added to ${shelf}.` |
 | `roaster.shelfChoice.title` | `components/ShelfChoiceSheet.tsx` | Sheet title; rows are the user's shelves, then `NEW SHELF`. | `Add to shelf` |
 | `import.newer.title` | `components/NewerVersionPrompt.tsx` | Re-import of an edited recipe whose author changed it. | `The roaster has a newer version` |

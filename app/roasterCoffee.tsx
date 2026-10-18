@@ -15,7 +15,6 @@ import ScreenHeader from "@/components/ScreenHeader";
 import ShelfChoiceSheet from "@/components/ShelfChoiceSheet";
 import {notify} from "@/components/XbrwToast";
 import {onAccent, palette} from "@/constants/colors";
-import {ALREADY_IN_LIBRARY, UPDATED_TO_LATEST} from "@/constants/copy";
 import {SCREEN_PADDING} from "@/constants/layout";
 import router from "@/hooks/steadyRouter";
 import {sharedSettings, useSetting} from "@/hooks/useSetting";
@@ -43,7 +42,7 @@ const LADDER_RUNG_GAP = 12;
 type Loaded = {request: string; fetched: FetchedCoffee | null; failed: boolean};
 /** What the screen is waiting on after an add, if anything. */
 type Pending =
-    | {kind: "ask"; held: Recipe; latest: Recipe; then: "library" | "shelf"}
+    | {kind: "ask"; held: Recipe; latest: Recipe}
     | {kind: "shelf"; recipe: Recipe};
 
 /**
@@ -196,13 +195,12 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
         return fetchCoffeeRecipe(coffee as FeedCoffee, chosen?.size, deps);
     }
 
-    function report(outcome: AddOutcome) {
-        if (outcome.kind === "added") notify({tone: "success", message: "Added to your library."});
-        if (outcome.kind === "already") notify({tone: "info", message: ALREADY_IN_LIBRARY});
-        if (outcome.kind === "updated") notify({tone: "info", message: UPDATED_TO_LATEST});
-    }
-
-    async function add(then: "library" | "shelf") {
+    /**
+     * ADD TO SHELF: saved to the library first (or matched to the copy already
+     * there), then put on a shelf the person picks. There is no separate ADD
+     * TO LIBRARY; shelving already does that.
+     */
+    async function add() {
         let outcome: AddOutcome;
         try {
             outcome = addToLibrary(await latest(), deps, store);
@@ -211,11 +209,10 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
             return;
         }
         if (outcome.kind === "ask") {
-            setPending({kind: "ask", held: outcome.held, latest: outcome.latest, then});
+            setPending({kind: "ask", held: outcome.held, latest: outcome.latest});
             return;
         }
-        if (then === "library") report(outcome);
-        else setPending({kind: "shelf", recipe: outcome.recipe});
+        setPending({kind: "shelf", recipe: outcome.recipe});
     }
 
     function answer(takeLatest: boolean) {
@@ -223,12 +220,7 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
         const kept = takeLatest
             ? takeRoasterLatest(pending.held, pending.latest, deps, store)
             : pending.held;
-        if (pending.then === "shelf") {
-            setPending({kind: "shelf", recipe: kept});
-            return;
-        }
-        setPending(null);
-        notify({tone: "info", message: takeLatest ? UPDATED_TO_LATEST : ALREADY_IN_LIBRARY});
+        setPending({kind: "shelf", recipe: kept});
     }
 
     function shelve(shelf: string): boolean {
@@ -424,12 +416,9 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
                             <YStack gap="$2">
                                 <Action label="BREW NOW" spoken="Brew now" testID="roaster-coffee-brew"
                                         primary disabled={recipe === null} onPress={() => void brewNow()}/>
-                                <Action label="ADD TO LIBRARY" spoken="Add to library"
-                                        testID="roaster-coffee-add" disabled={recipe === null}
-                                        onPress={() => void add("library")}/>
                                 <Action label="ADD TO SHELF" spoken="Add to shelf"
                                         testID="roaster-coffee-shelf" disabled={recipe === null}
-                                        onPress={() => void add("shelf")}/>
+                                        onPress={() => void add()}/>
                             </YStack>
                         )}
                     </YStack>
