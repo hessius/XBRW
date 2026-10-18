@@ -454,7 +454,7 @@ screen (`app/subscriptions.tsx`, `components/UnsubscribeSheet.tsx`,
 | `import.newer.latest` | `components/NewerVersionPrompt.tsx` | Doto primary button. | `USE THE ROASTER'S LATEST` |
 | `import.newer.keep` | `components/NewerVersionPrompt.tsx` | Doto secondary button. | `KEEP MINE` |
 | `import.toast.updated` | `constants/copy.ts` (`UPDATED_TO_LATEST`) | Re-import refreshed an untouched copy, or the user took the latest. | `Already in your library. Updated to the latest version.` |
-| `roaster.settings.row` | `app/settings.tsx` | Library section row. Detail is `None yet.`, `1 roaster.` or `${n} roasters.` | `Roaster subscriptions` |
+| `roaster.settings.row` | `app/settings.tsx` | Library section row, shown only with a subscription or a "don't ask again" to undo. Detail is `None. Roasters you said no to are listed here.`, `1 roaster.` or `${n} roasters.` | `Roaster subscriptions` |
 | `roaster.screen.title` | `app/subscriptions.tsx` | Screen header. | `Subscriptions` |
 | `roaster.screen.empty` | `app/subscriptions.tsx` | Empty state. | `Subscriptions appear here when you open a roaster's import link.` |
 | `roaster.screen.count` | `app/subscriptions.tsx` (`countLine`) | Per subscription. | `${n} coffees · ${m} sold out` |

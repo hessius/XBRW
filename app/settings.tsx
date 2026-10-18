@@ -29,6 +29,7 @@ import {isMachineModel} from "@/library/machine/machineModel";
 import {isSortAxis, isSortDirection} from "@/library/librarySort";
 import {isHistorySort, isHistorySortDirection} from "@/library/brew/historyQuery";
 import {isLibraryView} from "@/library/libraryView";
+import {parseFeedOptOut} from "@/library/roasterFeed";
 import {parseSubscriptions} from "@/library/roasterSubscription";
 import {asTemperatureUnit} from "@/library/units";
 
@@ -169,6 +170,12 @@ export default function SettingsScreen({settings}: Props) {
     const [roasterSubscriptions, setRoasterSubscriptions] =
         useSetting("roasterSubscriptions", settings);
     const subscriptionCount = parseSubscriptions(roasterSubscriptions).length;
+    // The row only exists once there is something to manage: a subscription,
+    // or a "don't ask again" to take back. Most people never meet a roaster
+    // feed, and a "None yet." row would advertise a feature they can't start
+    // from here (a feed only arrives through a roaster's import link).
+    const optOutCount = parseFeedOptOut(roasterFeedOptOut).length;
+    const showSubscriptions = subscriptionCount > 0 || optOutCount > 0;
     const [importFingerprints, setImportFingerprints] = useSetting("importFingerprints", settings);
 
     // Deliberately given no query: this screen's questions are all about the
@@ -576,16 +583,18 @@ export default function SettingsScreen({settings}: Props) {
                 </SettingsSection>
 
                 <SettingsSection title="Library">
-                    {/* Where roaster subscriptions are managed. Always
-                        shown, even with none, because the screen is also
-                        where a "don't ask again" is taken back. */}
-                    <SettingsActionRow label="Roaster subscriptions"
-                                       detail={subscriptionCount === 0
-                                           ? "None yet."
-                                           : subscriptionCount === 1
-                                               ? "1 roaster."
-                                               : `${subscriptionCount} roasters.`}
-                                       onPress={() => router.push("/subscriptions")}/>
+                    {/* Where roaster subscriptions are managed. Hidden until
+                        there is a subscription or a "don't ask again" to take
+                        back (`showSubscriptions`). */}
+                    {showSubscriptions && (
+                        <SettingsActionRow label="Roaster subscriptions"
+                                           detail={subscriptionCount === 0
+                                               ? "None. Roasters you said no to are listed here."
+                                               : subscriptionCount === 1
+                                                   ? "1 roaster."
+                                                   : `${subscriptionCount} roasters.`}
+                                           onPress={() => router.push("/subscriptions")}/>
+                    )}
                     {unreadableCount > 0 && (
                         // Bought off here: `queryRecipes` skips a blob it cannot
                         // read so the library still opens (#124), and this is
