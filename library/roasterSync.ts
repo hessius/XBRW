@@ -3,8 +3,11 @@ import {parseImportInput} from "@/library/importInput";
 import {tagFilterId} from "@/library/libraryFilters";
 import {asMachineModel} from "@/library/machine/machineModel";
 import RecipeDatabase from "@/library/RecipeDatabase";
+import {dropAlerts, recordSubscribed, recordSync} from "@/library/roasterAlerts";
 import {dropCatalogue, writeCatalogue} from "@/library/roasterCatalogue";
-import {fetchRoasterFeedBody, RoasterFeedError, type RoasterFeed} from "@/library/roasterFeed";
+import {
+    fetchRoasterFeedBody, RoasterFeedError, type FeedCoffee, type RoasterFeed
+} from "@/library/roasterFeed";
 import type {LibraryDeps} from "@/library/roasterRecipes";
 import {
     isDue, parseSubscriptions, serialiseSubscriptions, subscriptionFor, withSubscription,
@@ -21,10 +24,10 @@ import {XBloomRecipe} from "@/library/XBloomRecipe";
  * to, and REFRESH NOW. One module and one lock means two of them can never
  * sync the same feed at once.
  *
- * A sync reads the roaster's feed and refreshes the cached catalogue, and
- * that is all. It never asks xBloom for anything and never touches the
- * library: recipes are fetched when the user opens a coffee, imports, adds
- * or brews it.
+ * A sync reads the roaster's feed, refreshes the cached catalogue and notes
+ * what is new or back in it (`library/roasterAlerts.ts`), and that is all.
+ * It never asks xBloom for anything and never touches the library: recipes
+ * are fetched when the user opens a coffee, imports, adds or brews it.
  *
  * Settings are read fresh before every write. A sync takes seconds, and the
  * user can pause or unsubscribe in the meantime.
@@ -37,7 +40,11 @@ export type SyncDeps = {
 };
 
 export type SyncResult =
-    | {ok: true; feed: RoasterFeed; subscription: RoasterSubscription}
+    | {
+        ok: true; feed: RoasterFeed; subscription: RoasterSubscription;
+        /** Watched coffees this sync found back on sale, to be announced once. */
+        back: FeedCoffee[];
+    }
     | {ok: false; reason: "busy" | "notDue" | "missing" | "paused" | SyncError};
 
 let running = false;
@@ -98,6 +105,9 @@ export function subscribe(
     if (feed.roaster.url !== undefined) sub.roasterUrl = feed.roaster.url;
     writeSubscription(settings, sub);
     writeCatalogue(settings, feedUrl, body, now);
+    // Everything listed now counts as seen: a roaster's whole range is not
+    // thirty new coffees.
+    recordSubscribed(settings, feedUrl, feed);
     return sub;
 }
 
@@ -142,6 +152,7 @@ export async function syncSubscription(
             return {ok: false, reason: "missing"};
         }
         writeCatalogue(settings, sub.feed, fetched.body, stamp);
+        const back = recordSync(settings, sub.feed, fetched.feed);
 
         const saved = updateSubscription(settings, sub.feed, (current) => {
             const next: RoasterSubscription = {
@@ -151,7 +162,7 @@ export async function syncSubscription(
             if (fetched.feed.roaster.url !== undefined) next.roasterUrl = fetched.feed.roaster.url;
             return next;
         });
-        return {ok: true, feed: fetched.feed, subscription: saved ?? sub};
+        return {ok: true, feed: fetched.feed, subscription: saved ?? sub, back};
     } finally {
         running = false;
     }
@@ -176,6 +187,7 @@ export function unsubscribe(settings: Settings, feedUrl: string): void {
     settings.set("roasterSubscriptions",
         serialiseSubscriptions(withoutSubscription(readSubscriptions(settings), feedUrl)));
     dropCatalogue(settings, feedUrl);
+    dropAlerts(settings, feedUrl);
 }
 
 export function setPaused(settings: Settings, feedUrl: string, paused: boolean): void {

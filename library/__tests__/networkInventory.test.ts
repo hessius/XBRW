@@ -147,8 +147,10 @@ const EXPECTED_CALLS: Record<string, number> = {
     // inventory entry carries that caveat in words.
     "components/BrewMindBrowser.tsx": 1,
     // The detail photo, lifted out of app/hubRecipe.tsx so the hub and a
-    // roaster's catalogue share it, and the roaster list's row photo.
-    "components/CatalogueParts.tsx": 1,
+    // roaster's catalogue share it, and the roaster list's row photo. Two
+    // sites in CatalogueParts: the hub's banner and the roaster's whole photo,
+    // the same picture drawn in two shapes.
+    "components/CatalogueParts.tsx": 2,
     "components/FromSection.tsx":  1,
     "components/HubRow.tsx":       1,
     "components/ImportResult.tsx": 1,

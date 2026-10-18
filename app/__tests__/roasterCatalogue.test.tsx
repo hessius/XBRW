@@ -197,7 +197,10 @@ describe("buying a bag", () => {
         // The plain size list steps aside for the priced one.
         expect(screen.queryByTestId("roaster-coffee-bags")).toBeNull();
 
-        expect(screen.getByTestId("buy-11-sold-out")).toBeTruthy();
+        // Sold out while the coffee is on sale: it says so, and offers to
+        // say when this size is back.
+        expect(screen.getByText("SOLD OUT")).toBeTruthy();
+        expect(screen.getByTestId("buy-11-watch")).toBeTruthy();
         expect(screen.queryByTestId("buy-11-link")).toBeNull();
         await fireEvent.press(screen.getByTestId("buy-22-link"));
         expect(open).toHaveBeenCalledWith("https://roaster.example/cart/add?id=22&quantity=1");
