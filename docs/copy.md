@@ -300,6 +300,24 @@ come from `hooks/useRecipeEditor.ts`.
 | `editor.toast.restored.xid` | `hooks/useRecipeEditor.ts:259` | Success toast after re-fetching by recipe ID. | `Recipe restored from the XID.` |
 | `editor.toast.restored.share` | `hooks/useRecipeEditor.ts:272` | Success toast after re-fetching from the share link. | `Recipe restored from the share link.` |
 
+### Quick edit dose presets (`components/QuickEditPanel.tsx`, `library/quickEdit.ts`)
+
+The chips sit under the dose stepper in the quick-edit panel, in the editor
+and on the home sheet. `${value}` and `${dose}` are grams; `${volume}` and
+`${cup}` are millilitres.
+
+| ID | Source | Context — when the user sees this | Current text |
+|----|--------|-----------------------------------|--------------|
+| `quickEdit.dosePreset.label` | `components/QuickEditPanel.tsx:157` | Doto label on a dose chip. | `${value} G` |
+| `quickEdit.dosePreset.a11y` | `components/QuickEditPanel.tsx:159` (a11y) | (a11y) A dose chip other than the recipe's own. | `Brew at ${value} grams` |
+| `quickEdit.dosePreset.own.a11y` | `components/QuickEditPanel.tsx:158` (a11y) | (a11y) The chip for the recipe's saved dose. | `Brew at ${value} grams, the recipe's dose` |
+| `quickEdit.saveDose.label` | `components/QuickEditPanel.tsx:300` | Button under the explainer once the dose has moved and still brews. | `SAVE AS ${saveDose} G` |
+| `quickEdit.saveDose.a11y` | `components/QuickEditPanel.tsx:297` (a11y) | (a11y) The same button. | `Save the recipe at ${saveDose} grams` |
+| `quickEdit.explainer.bypass` | `library/quickEdit.ts:298` | Added to the stage-volume explainer when the dose moves and the recipe has bypass water. | `Bypass water rescales to ${volume} ml, so the cup gets ${cup} ml.` |
+| `quickEdit.explainer.bypassClipped` | `library/quickEdit.ts:296` | The same, when the scaled bypass hits its limit. `${edge}` is `the most` or `the least`. | `Bypass water stops at ${volume} ml, ${edge} it can be, so the cup gets ${cup} ml.` |
+| `quickEdit.toast.savedDose` | `app/editRecipe.tsx:1215`, `app/index.tsx:1243` | Success toast after SAVE AS writes the recipe. | `Saved at ${dose} g.` |
+| `quickEdit.toast.doseForSave` | `app/editRecipe.tsx:1210` | Info toast in the editor when other edits are pending, or the recipe is not in the library yet, so SAVE has to keep the new dose. | `Dose set to ${dose} g. Press SAVE to keep it.` |
+
 ### Help sheet / field help (`components/HelpSheet.tsx`, `constants/recipeHelp.ts`)
 
 The help sheet is titled `Help`. Its body and every field label/hint come from

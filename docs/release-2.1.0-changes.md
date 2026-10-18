@@ -3,6 +3,29 @@
 This is the source for the full release-testing checklist, not a claim that
 device testing is complete. Update it whenever release scope or behaviour changes.
 
+## Quick edit dose presets (2026-10-18)
+
+Roasters publish one coffee at 15 g and again at 18 g, so libraries filled
+with "- 15g" / "- 18g" pairs. Quick edit now shows one-tap dose chips under
+the dose stepper: 15, 18 and 20 g plus the recipe's own dose. Tea gets none.
+A new dose keeps the ratio. Every stage scales and rounds to whole millilitres
+that add up to dose times ratio. Temperatures, pauses and patterns stay as
+they were. A live bypass now scales with the dose too, held at 1-500 ml, and
+the explainer gives the bypass and the whole cup. A ratio change leaves the
+bypass alone. A stage pushed past 240 ml is refused with the existing
+CANNOT BREW message, and BREW goes dead.
+
+SAVE AS N G makes the adjusted dose the recipe's own. It is offered only when
+the dose alone brews. Other adjustments stay one-brew changes. From the home
+sheet it writes a scaled copy to the library. In the editor it writes at once
+only when nothing else is waiting for SAVE; otherwise the dose joins the
+pending edits and a toast says to press SAVE. No card bytes or BLE frames
+change; a brew still sends the adjusted `recipeJSON`.
+
+Not done: offering "you already have the 18g version" during import. Pastes
+and shares hand off straight to the editor without the found panel, so the
+offer would need a new step in the import flow.
+
 ## Brew history trace storage (2026-10-15)
 
 Brew traces are compressed and managed under a configurable storage budget. When
