@@ -4,7 +4,7 @@ import {Text, XStack, YStack} from "tamagui";
 
 import DotMatrixText from "@/components/DotMatrixText";
 import {palette} from "@/constants/colors";
-import {bagLine} from "@/library/roasterCatalogue";
+import {bagLine, notesLine} from "@/library/roasterCatalogue";
 import type {FeedCoffee} from "@/library/roasterFeed";
 
 /** The hub row's measurements, so a roaster's list reads as the same catalogue. */
@@ -31,7 +31,7 @@ export default function RoasterCoffeeRow({coffee, onPress, testID}: {
     const [failed, setFailed] = useState(false);
     const image = coffee.image ?? null;
     const roast = coffee.roast?.level;
-    const notes = coffee.coffee.aromatics;
+    const notes = notesLine(coffee.coffee.aromatics);
     const bags = bagLine(coffee);
     const spoken = [
         coffee.name,
@@ -77,7 +77,7 @@ export default function RoasterCoffeeRow({coffee, onPress, testID}: {
                     )}
                     {bags !== null && (
                         <DotMatrixText testID="roaster-row-bags" fontSize={11} weight="bold"
-                                       letterSpacing={1.2} color={palette.muted} numberOfLines={1}>
+                                       letterSpacing={1.2} color={palette.dim} numberOfLines={1}>
                             {bags.toUpperCase()}
                         </DotMatrixText>
                     )}

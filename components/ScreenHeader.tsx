@@ -17,7 +17,7 @@ type Props = {
      * A machine-counted superscript beside the title, e.g. how many brews the
      * list below holds. Hidden when absent or zero, which `ScreenTitle` decides.
      */
-    count?: number;
+    count?: number | string;
     /**
      * A machine-derived line about this particular screen — the brew record
      * uses the date and time of the brew — set flush right on the title's own
@@ -33,6 +33,12 @@ type Props = {
      * which `ScreenTitle` explains.
      */
     titleLines?: number;
+    /**
+     * The title's size, when the screen's own default is too big for it. A
+     * catalogue coffee's name can run to sixty characters, and at the full
+     * size three lines of it fill the top of a cover screen.
+     */
+    titleSize?: number;
     onBack: () => void;
 };
 
@@ -53,7 +59,7 @@ type Props = {
  * it, a screen reader arriving on a pushed screen has nothing for the rotor to
  * land on and no announcement saying where it landed.
  */
-export default function ScreenHeader({title, count, meta, titleLines, onBack}: Props) {
+export default function ScreenHeader({title, count, meta, titleLines, titleSize, onBack}: Props) {
     const insets = useSafeAreaInsets();
 
     return (
@@ -68,7 +74,8 @@ export default function ScreenHeader({title, count, meta, titleLines, onBack}: P
                         <DotIcon name="back" size={16} color={palette.text}/>
                     </YStack>
                 </Pressable>
-                <ScreenTitle title={title} count={count} heading lines={titleLines}/>
+                <ScreenTitle title={title} count={count} heading lines={titleLines}
+                             fontSize={titleSize}/>
                 {meta !== undefined && (
                     <DotMatrixText testID="screen-header-meta" fontSize={11}
                                    weight="bold" letterSpacing={1.2}

@@ -1,9 +1,11 @@
 import React from "react";
+import {StyleSheet} from "react-native";
 import {fireEvent, screen} from "@testing-library/react-native";
 
 import NewerVersionPrompt from "@/components/NewerVersionPrompt";
 import RoasterCoffeeRow from "@/components/RoasterCoffeeRow";
-import RoasterOfferSheet from "@/components/RoasterOfferSheet";
+import RoasterOfferSheet, {ROASTER_OFFER_BODY} from "@/components/RoasterOfferSheet";
+import {palette} from "@/constants/colors";
 import ShelfChoiceSheet from "@/components/ShelfChoiceSheet";
 import {renderWithProviders} from "@/test-utils/render";
 import {feed} from "@/test-utils/roasterFeed";
@@ -15,9 +17,33 @@ describe("RoasterOfferSheet", () => {
                                onAccept={jest.fn()} onDecline={jest.fn()}/>
         );
         expect(screen.getByText("Subscribe to Test Roaster?")).toBeTruthy();
-        expect(screen.getByText("Browse all 30 coffees and their recipes in XBRW++. " +
-            "New coffees appear as they're released.")).toBeTruthy();
+        expect(screen.getByTestId("roaster-offer-body").props.children).toBe(
+            "Browse all their coffees and recipes. New coffees appear as they're released."
+        );
         expect(screen.getByRole("checkbox", {name: "Don't ask again for this roaster"})).toBeTruthy();
+    });
+
+    it("names neither a count nor the app, whatever the feed holds", async () => {
+        await renderWithProviders(
+            <RoasterOfferSheet state={{phase: "offer", roaster: "Test Roaster", count: 1}}
+                               onAccept={jest.fn()} onDecline={jest.fn()}/>
+        );
+        const body = screen.getByTestId("roaster-offer-body").props.children as string;
+        expect(body).toBe(ROASTER_OFFER_BODY);
+        expect(body).not.toMatch(/\d/);
+        expect(body).not.toContain("XBRW");
+    });
+
+    it("lets a long roaster name wrap beside CLOSE instead of pushing it off", async () => {
+        await renderWithProviders(
+            <RoasterOfferSheet state={{phase: "offer", roaster: "Central Coast Coffee", count: 30}}
+                               onAccept={jest.fn()} onDecline={jest.fn()}/>
+        );
+        const title = screen.getByTestId("sheet-title");
+        expect(title.props.children).toBe("Subscribe to Central Coast Coffee?");
+        expect(title.props.numberOfLines).toBeUndefined();
+        expect(StyleSheet.flatten(title.props.style).flexShrink).toBe(1);
+        expect(screen.getByRole("button", {name: "Close"})).toBeTruthy();
     });
 
     it("passes the tick with the answer, then clears it", async () => {
@@ -46,6 +72,9 @@ describe("RoasterCoffeeRow", () => {
         expect(screen.getByTestId("roaster-row-sold-out")).toBeTruthy();
         expect(screen.getByText("LIGHT")).toBeTruthy();
         expect(screen.getByText("320 G · 160 G")).toBeTruthy();
+        // The secondary text colour the notes use, not the faint one.
+        expect(StyleSheet.flatten(screen.getByTestId("roaster-row-bags").props.style).color)
+            .toBe(palette.dim);
         expect(screen.getByLabelText(/Coffee a, sold out, Light roast/)).toBeTruthy();
     });
 });

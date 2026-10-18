@@ -1,5 +1,6 @@
 import React, {useState} from "react";
 import {Pressable, ScrollView} from "react-native";
+import {useSafeAreaInsets} from "react-native-safe-area-context";
 import {Text, XStack, YStack} from "tamagui";
 
 import {CatalogueStatus} from "@/components/CatalogueParts";
@@ -9,7 +10,7 @@ import ScreenHeader from "@/components/ScreenHeader";
 import {palette} from "@/constants/colors";
 import router from "@/hooks/steadyRouter";
 import {sharedSettings, useSetting} from "@/hooks/useSetting";
-import {readCatalogue, updatedAgo} from "@/library/roasterCatalogue";
+import {readCatalogue, scrollEndPadding, updatedAgo} from "@/library/roasterCatalogue";
 import {parseSubscriptions} from "@/library/roasterSubscription";
 import type {Settings} from "@/library/Settings";
 
@@ -30,6 +31,7 @@ export default function RoastersScreen({settings, now}: {
     // Subscribed so the counts follow a sync that lands while this is open.
     useSetting("roasterCatalogue", store);
     const [at] = useState(() => (now ?? Date.now)());
+    const insets = useSafeAreaInsets();
     const subscriptions = parseSubscriptions(stored);
 
     return (
@@ -39,7 +41,8 @@ export default function RoastersScreen({settings, now}: {
                 <CatalogueStatus testID="roasters-empty" title="NO ROASTERS YET"
                                  body="Roasters appear here when you subscribe from a roaster's import link."/>
             ) : (
-                <ScrollView contentContainerStyle={{paddingVertical: 8, paddingBottom: 48}}>
+                <ScrollView testID="roasters-scroll"
+                            contentContainerStyle={{paddingTop: 8, paddingBottom: scrollEndPadding(48, insets.bottom)}}>
                     {subscriptions.map((sub) => {
                         const cached = readCatalogue(store, sub.feed);
                         const count = cached?.feed.coffees.length ?? 0;

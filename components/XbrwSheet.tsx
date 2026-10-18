@@ -187,16 +187,22 @@ export default function XbrwSheet({
     // Doto here, and Inter for whatever the caller puts inside. This is the
     // sheet's own chrome — the same register as the deck switch and the toast —
     // rather than copy about the recipe.
+    //
+    // A long title wraps rather than pushing CLOSE off the edge. Doto is wide,
+    // and "Subscribe to Central Coast Coffee?" alone overran a 360 pt cover
+    // screen with CLOSE cut in half. The title shrinks and wraps; CLOSE keeps
+    // its width and stays level with the title's first line.
     const heading = (
-        <XStack alignItems="center" justifyContent={showTitle ? "space-between" : "flex-end"}
+        <XStack alignItems="flex-start" justifyContent={showTitle ? "space-between" : "flex-end"}
                 gap="$3">
             {showTitle && (
-                <DotMatrixText fontSize={11} weight="bold" letterSpacing={2}
-                               color={palette.dim}>
+                <DotMatrixText testID="sheet-title" fontSize={11} weight="bold" letterSpacing={2}
+                               color={palette.dim} style={{flexShrink: 1}}>
                     {title}
                 </DotMatrixText>
             )}
             <Pressable accessibilityRole="button" accessibilityLabel="Close"
+                       style={{flexShrink: 0}}
                        onPress={() => onOpenChange(false)} hitSlop={12}>
                 <DotMatrixText fontSize={11} weight="bold" letterSpacing={2}
                                color={palette.dim}>

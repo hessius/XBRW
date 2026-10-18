@@ -138,3 +138,120 @@ export function updatedAgo(at: number, now: number): string {
     if (elapsed < DAY) return `Updated ${Math.floor(elapsed / HOUR)} h ago`;
     return `Updated ${Math.floor(elapsed / DAY)} d ago`;
 }
+
+/** One label and value under a coffee, as ABOUT's XPOD block draws them. */
+export type BeanFact = {label: string; value: string};
+
+/**
+ * Whole metres with thousands grouped: `1,750 m`.
+ *
+ * The same rule as the XPOD block on ABOUT, grouped by hand so the result does
+ * not depend on the Intl data Hermes was built with.
+ */
+export function formatElevation(metres: number): string {
+    const whole = String(Math.round(metres));
+    return `${whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",")} m`;
+}
+
+/** A cupping score as ABOUT writes it: `90 points`, `86.25 points`. */
+export function formatScore(points: number): string {
+    return `${String(Number(points.toFixed(2)))} points`;
+}
+
+/**
+ * The bean facts a bag would print, in ABOUT's order and with ABOUT's words.
+ *
+ * The same coffee can be opened here and, once added, on the recipe's ABOUT
+ * deck, so the two must not disagree about what a field is called or how a
+ * number is written. FARMER rather than producer, because elsewhere in this
+ * app the producer is whoever made the recipe; VARIETAL because that is the
+ * catalogue's word. The roaster and the flavours are left out: the screen is
+ * the roaster's, and the flavours are drawn as chips above.
+ */
+export function beanFacts(coffee: FeedCoffee): BeanFact[] {
+    const bean = coffee.coffee;
+    const facts: [string, string | undefined][] = [
+        ["ORIGIN", bean.country === undefined ? bean.origin : undefined],
+        ["COUNTRY", bean.country],
+        ["REGION", bean.region],
+        ["FARM", bean.farm],
+        ["FARMER", bean.farmer],
+        ["ELEVATION", typeof bean.elevation === "number" && bean.elevation > 0
+            ? formatElevation(bean.elevation) : undefined],
+        ["PROCESS", bean.processing],
+        ["FERMENT", bean.fermentation],
+        ["VARIETAL", bean.variety],
+        ["SCORE", typeof bean.cupping_points === "number" && bean.cupping_points > 0
+            ? formatScore(bean.cupping_points) : undefined]
+    ];
+    return facts
+        .map(([label, value]) => ({label, value: value?.trim() ?? ""}))
+        .filter((fact) => fact.value !== "");
+}
+
+/** A name longer than this is drawn a step smaller in the detail header. */
+export const LONG_TITLE = 32;
+/** The step down, between the 28 of a screen title and the 18 of a collapsed one. */
+export const LONG_TITLE_SIZE = 22;
+/** Lines the detail header may take before the name is cut short. */
+export const DETAIL_TITLE_LINES = 3;
+
+/**
+ * How the coffee detail header draws a coffee's name.
+ *
+ * A roaster's names run long ("Colombia | Las Flores | Jhoan Vergara | Java
+ * Hydrohoney"), and one line of it at full size said only "Colombia | Las
+ * Flores | ." on a cover screen. Three lines, and a step smaller once it is
+ * long enough to need them.
+ */
+export function detailTitle(name: string): {lines: number; size?: number} {
+    return name.length > LONG_TITLE
+        ? {lines: DETAIL_TITLE_LINES, size: LONG_TITLE_SIZE}
+        : {lines: DETAIL_TITLE_LINES};
+}
+
+/**
+ * Bottom padding for the end of a catalogue screen's scroll view, in points.
+ *
+ * The last row scrolls to `clearance` points above whatever the system draws
+ * at the bottom (Android's three-button bar is an opaque 48 points), and
+ * never to less than the `minimum` the screen was laid out with.
+ */
+export function scrollEndPadding(minimum: number, bottomInset: number, clearance = 24): number {
+    return Math.max(minimum, bottomInset + clearance);
+}
+
+/** Most chips a coffee's notes are drawn as; more reads as a paragraph. */
+export const MAX_NOTE_CHIPS = 8;
+/** Longest single chip, in characters. */
+export const MAX_NOTE_CHIP = 20;
+
+/**
+ * A roaster's tasting notes as chips, or null to draw them as a sentence.
+ *
+ * Roasters write notes two ways. A short list ("Cherry, Passionfruit" or
+ * "Caramel | brown sugar | lemongrass") reads well as chips. Prose ("Clean
+ * and well-structured, with a buttery mouthfeel.") does not: split on its
+ * commas and upper-cased in Doto it becomes a row of half-sentences. So chips
+ * only for 2 to 8 short parts with no full stop and no brackets; anything
+ * else, including a bracketed aside such as "(2024 Harvest)", stays prose.
+ */
+export function noteChips(notes: string | undefined): string[] | null {
+    if (notes === undefined) return null;
+    if (/[.()[\]{}]/.test(notes)) return null;
+    const parts = notes.split(/,|\s\|\s/).map((part) => part.trim()).filter(Boolean);
+    if (parts.length < 2 || parts.length > MAX_NOTE_CHIPS) return null;
+    if (parts.some((part) => part.length > MAX_NOTE_CHIP)) return null;
+    return parts;
+}
+
+/**
+ * The notes as one line for a list row: a chip list joined with commas, so a
+ * roaster's "a | b | c" reads like everyone else's, and prose as written.
+ */
+export function notesLine(notes: string | undefined): string | undefined {
+    const chips = noteChips(notes);
+    if (chips !== null) return chips.join(", ");
+    const prose = notes?.trim() ?? "";
+    return prose === "" ? undefined : prose;
+}

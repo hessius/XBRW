@@ -1,12 +1,12 @@
 import React from "react";
-import {Linking} from "react-native";
+import {Linking, StyleSheet} from "react-native";
 import {fireEvent, screen, waitFor} from "@testing-library/react-native";
 import {router} from "expo-router";
 
 import SubscriptionsScreen, {countLine, statusLine} from "@/app/subscriptions";
 import {readCatalogue} from "@/library/roasterCatalogue";
 import {readSubscriptions, resetSyncLockForTests, subscribe, updateSubscription} from "@/library/roasterSync";
-import {renderWithProviders, SHEET_PRESS_TIMEOUT} from "@/test-utils/render";
+import {renderWithProviders, SHEET_PRESS_TIMEOUT, TEST_INSETS} from "@/test-utils/render";
 import {FEED_URL, feedBody, memorySettings} from "@/test-utils/roasterFeed";
 
 jest.mock("expo-router", () => ({router: {push: jest.fn(), back: jest.fn()}}));
@@ -47,6 +47,12 @@ describe("SubscriptionsScreen", () => {
         await draw();
         expect(screen.getByText("Subscriptions appear here when you open a roaster's import link."))
             .toBeTruthy();
+    });
+
+    it("ends its scroll clear of the bottom bar", async () => {
+        await draw(subscribed());
+        const style = StyleSheet.flatten(screen.getByTestId("subscriptions-scroll").props.contentContainerStyle);
+        expect(style.paddingBottom).toBe(Math.max(48, TEST_INSETS.bottom + 24));
     });
 
     it("shows each subscription's coffees and how fresh it is", async () => {

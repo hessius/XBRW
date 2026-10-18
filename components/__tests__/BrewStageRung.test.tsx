@@ -88,6 +88,16 @@ describe("BrewStageRung", () => {
         );
     });
 
+    it("draws a plan at full strength, numbered in the accent like the editor's tiles", async () => {
+        const {getByTestId, getByText} = await draw({testID: "rung", plan: true});
+
+        expect(getByTestId("rung").props.style).toEqual(
+            expect.objectContaining({opacity: 1})
+        );
+        expect(StyleSheet.flatten(getByText("01").props.style).color).toBe(ACCENT);
+        expect(StyleSheet.flatten(getByText("70 ml").props.style).color).toBe(palette.text);
+    });
+
     it("fills the water segment by millilitres, not by time", async () => {
         const {getByTestId} = await draw({state: "active", delivered: 35});
 

@@ -8,6 +8,9 @@ import {onAccent, palette} from "@/constants/colors";
 import type {RoasterOfferState} from "@/hooks/useRoasterOffer";
 
 const BUTTON_HEIGHT = 48;
+
+export const ROASTER_OFFER_BODY =
+    "Browse all their coffees and recipes. New coffees appear as they're released.";
 const BOX = 20;
 
 /**
@@ -29,11 +32,9 @@ export default function RoasterOfferSheet({state, onAccept, onDecline}: {
     const [dontAsk, setDontAsk] = useState(false);
     const open = state.phase === "offer";
     // Kept while the sheet animates away, so it has something to draw.
-    const [last, setLast] = useState({roaster: "", count: 0});
-    if (state.phase === "offer" && (state.roaster !== last.roaster || state.count !== last.count)) {
-        setLast({roaster: state.roaster, count: state.count});
-    }
-    const {roaster, count} = state.phase === "offer" ? state : last;
+    const [last, setLast] = useState("");
+    if (state.phase === "offer" && state.roaster !== last) setLast(state.roaster);
+    const roaster = state.phase === "offer" ? state.roaster : last;
 
     function answer(accepted: boolean) {
         const choice = dontAsk;
@@ -49,11 +50,11 @@ export default function RoasterOfferSheet({state, onAccept, onDecline}: {
                        if (!next && state.phase === "offer") answer(false);
                    }}>
             <YStack gap="$3" paddingHorizontal="$4" paddingBottom="$4">
-                <Text fontSize={13} color={palette.dim}>
-                    {(count === 1
-                        ? "Browse this coffee and its recipes in XBRW++. "
-                        : `Browse all ${count} coffees and their recipes in XBRW++. `)
-                        + "New coffees appear as they're released."}
+                {/* No count and no app name. The count is whatever the feed
+                    held today and changes as coffees sell out, and the app's
+                    name broke across a line between its two plus signs. */}
+                <Text testID="roaster-offer-body" fontSize={13} color={palette.dim}>
+                    {ROASTER_OFFER_BODY}
                 </Text>
 
                 <Pressable accessibilityRole="checkbox"

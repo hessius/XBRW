@@ -1,5 +1,6 @@
 import {
-    bagLine, chooseRecipe, coffeeRef, findCoffee, readCatalogue, roastAdvice, updatedAgo,
+    bagLine, beanFacts, chooseRecipe, coffeeRef, detailTitle, findCoffee, formatElevation,
+    formatScore, LONG_TITLE_SIZE, noteChips, notesLine, readCatalogue, roastAdvice, scrollEndPadding, updatedAgo,
     writeCatalogue, dropCatalogue
 } from "@/library/roasterCatalogue";
 import {FEED_URL, feed, feedJson, memorySettings} from "@/test-utils/roasterFeed";
@@ -51,5 +52,87 @@ describe("what a coffee says", () => {
     it("says how fresh it is", () => {
         expect(updatedAgo(0, 30_000)).toBe("Updated just now");
         expect(updatedAgo(0, 2 * HOUR)).toBe("Updated 2 h ago");
+    });
+});
+
+describe("bean facts, in ABOUT's words", () => {
+    it("labels and writes the fields as the XPOD block does", () => {
+        const [base] = feed([{id: "a"}]).coffees;
+        const coffee = {...base, coffee: {
+            ...base.coffee, region: "Huila, Acevedo", farm: "Las Flores", farmer: "Jhoan Vergara",
+            variety: "Java", processing: "Hydrohoney", elevation: 1750, cupping_points: 90
+        }};
+        expect(beanFacts(coffee)).toEqual([
+            {label: "COUNTRY", value: "Peru"},
+            {label: "REGION", value: "Huila, Acevedo"},
+            {label: "FARM", value: "Las Flores"},
+            {label: "FARMER", value: "Jhoan Vergara"},
+            {label: "ELEVATION", value: "1,750 m"},
+            {label: "PROCESS", value: "Hydrohoney"},
+            {label: "VARIETAL", value: "Java"},
+            {label: "SCORE", value: "90 points"}
+        ]);
+    });
+
+    it("falls back to the one-line origin only without a country, and drops blanks", () => {
+        const [base] = feed([{id: "a"}]).coffees;
+        const coffee = {...base, coffee: {name: "x", origin: "Peru, Cajamarca", farm: "  "}};
+        expect(beanFacts(coffee)).toEqual([{label: "ORIGIN", value: "Peru, Cajamarca"}]);
+    });
+
+    it("groups thousands and keeps a quarter point", () => {
+        expect(formatElevation(950)).toBe("950 m");
+        expect(formatElevation(12345)).toBe("12,345 m");
+        expect(formatScore(86.25)).toBe("86.25 points");
+        expect(formatScore(88.0)).toBe("88 points");
+    });
+});
+
+describe("catalogue layout", () => {
+    it("lets a coffee's name take three lines, a step smaller once it is long", () => {
+        expect(detailTitle("Short name")).toEqual({lines: 3});
+        expect(detailTitle("Colombia | Las Flores | Jhoan Vergara | Java Hydrohoney"))
+            .toEqual({lines: 3, size: LONG_TITLE_SIZE});
+    });
+
+    it("ends a scroll view clear of the bottom bar, never short of its own minimum", () => {
+        // Android three-button navigation: an opaque 48 pt bar.
+        expect(scrollEndPadding(24, 48)).toBe(72);
+        // Gesture navigation's small inset keeps the screen's own end.
+        expect(scrollEndPadding(48, 16)).toBe(48);
+        expect(scrollEndPadding(8, 0)).toBe(24);
+    });
+});
+
+describe("tasting notes", () => {
+    // Four shapes from Central Coast Coffee's live feed.
+    const PROSE = "Clean and well-structured, with a buttery mouthfeel. " +
+        "Stewed apple, fresh cream and sweet almond.";
+    const BRACKETED = "Cherry, Passionfruit, Turkish Delight, Mango (Java Duo Cherry Velvet)";
+    const PIPED = "Caramel | brown sugar | lemongrass";
+    const HARVEST = "Raspberry Mandarin Floral (2024 Harvest)";
+
+    it("draws a short list as chips, split on commas or pipes", () => {
+        expect(noteChips(PIPED)).toEqual(["Caramel", "brown sugar", "lemongrass"]);
+        expect(noteChips("Floral, Apricot, Lime")).toEqual(["Floral", "Apricot", "Lime"]);
+    });
+
+    it("keeps prose, brackets and single phrases as a sentence", () => {
+        expect(noteChips(PROSE)).toBeNull();
+        expect(noteChips(BRACKETED)).toBeNull();
+        expect(noteChips(HARVEST)).toBeNull();
+        expect(noteChips("Lime")).toBeNull();
+        expect(noteChips(undefined)).toBeNull();
+    });
+
+    it("refuses chips that are too many or too long", () => {
+        expect(noteChips("a, b, c, d, e, f, g, h, i")).toBeNull();
+        expect(noteChips("Cacao, a very long tasting note indeed")).toBeNull();
+    });
+
+    it("gives a list row one line in either case", () => {
+        expect(notesLine(PIPED)).toBe("Caramel, brown sugar, lemongrass");
+        expect(notesLine(HARVEST)).toBe(HARVEST);
+        expect(notesLine("  ")).toBeUndefined();
     });
 });
