@@ -1117,6 +1117,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
         else roasterOffer.disarm();
         importer.resolveNow(source, "shared", {
             coffee: link.coffee,
+            tags: link.tags,
             recipeUrl: link.recipeUrl,
             recipeName: link.recipeName,
             // Only a stated `brewmind` source earns the provenance. Anything

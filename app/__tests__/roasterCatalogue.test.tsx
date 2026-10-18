@@ -1,5 +1,5 @@
 import React from "react";
-import {StyleSheet} from "react-native";
+import {Linking, StyleSheet} from "react-native";
 import {act, fireEvent, screen, waitFor} from "@testing-library/react-native";
 import {router} from "expo-router";
 
@@ -172,6 +172,48 @@ describe("searching and filtering a roaster's coffees", () => {
     });
 });
 
+describe("buying a bag", () => {
+    function shop() {
+        const parsed = JSON.parse(feedJson([{id: "b"}]));
+        parsed.roaster.add_to_cart = "https://roaster.example/cart/add?id={variant_id}&quantity=1";
+        parsed.coffees[0].variants = [
+            {id: 11, grams: 320, price: 53, currency: "AUD", available: false},
+            {id: 22, grams: 160, price: 28, currency: "AUD", available: true}
+        ];
+        const text = JSON.stringify(parsed);
+        const settings = memorySettings();
+        subscribe(settings, FEED_URL, parseRoasterFeed(text)!, text, 1000);
+        return settings;
+    }
+
+    it("lists each bag with its price, buys one in the browser and says sold out", async () => {
+        const open = jest.spyOn(Linking, "openURL").mockResolvedValue(true);
+        await renderWithProviders(
+            <RoasterCoffeeScreen settings={shop()} feedUrl={FEED_URL} coffeeId="b"
+                                 library={memoryLibrary().deps} shelves={() => []}/>
+        );
+        expect(screen.getByText("320 g · $53")).toBeTruthy();
+        expect(screen.getByText("160 g · $28")).toBeTruthy();
+        // The plain size list steps aside for the priced one.
+        expect(screen.queryByTestId("roaster-coffee-bags")).toBeNull();
+
+        expect(screen.getByTestId("buy-11-sold-out")).toBeTruthy();
+        expect(screen.queryByTestId("buy-11-link")).toBeNull();
+        await fireEvent.press(screen.getByTestId("buy-22-link"));
+        expect(open).toHaveBeenCalledWith("https://roaster.example/cart/add?id=22&quantity=1");
+        open.mockRestore();
+    });
+
+    it("keeps the plain size list when the feed sells nothing", async () => {
+        await renderWithProviders(
+            <RoasterCoffeeScreen settings={subscribed()} feedUrl={FEED_URL} coffeeId="b"
+                                 library={memoryLibrary().deps} shelves={() => []}/>
+        );
+        expect(screen.queryByTestId("roaster-coffee-buy")).toBeNull();
+        expect(screen.getByTestId("roaster-coffee-bags")).toBeTruthy();
+    });
+});
+
 describe("tasting notes on a coffee", () => {
     async function openWith(aromatics: string) {
         const settings = subscribedTo([{id: "b"}], {b: {aromatics}});
@@ -247,6 +289,56 @@ describe("one coffee", () => {
         expect(call.pathname).toBe("/editRecipe");
         expect(JSON.parse(call.params.recipeJSON).name).toBe("Coffee b - 18g");
         expect(library.all()).toEqual([]);
+    });
+
+    it("names a copy that followed xBloom's own name when it is added again", async () => {
+        const settings = subscribed();
+        const library = memoryLibrary();
+        await open(settings, library);
+        await fireEvent.press(screen.getByTestId("roaster-coffee-add"));
+        await waitFor(() => expect(library.all()).toHaveLength(1));
+        // The copy an earlier link left, following xBloom's name.
+        const held = library.find("b-18g")!;
+        held.name = "";
+        library.deps.save(held);
+
+        await fireEvent.press(screen.getByTestId("roaster-coffee-add"));
+        await waitFor(() => expect(library.find("b-18g")?.name).toBe("Coffee b - 18g"));
+        expect(library.all()).toHaveLength(1);
+    });
+
+    it("never renames a copy the user named", async () => {
+        const settings = subscribed();
+        const library = memoryLibrary();
+        await open(settings, library);
+        await fireEvent.press(screen.getByTestId("roaster-coffee-add"));
+        await waitFor(() => expect(library.all()).toHaveLength(1));
+        const held = library.find("b-18g")!;
+        held.name = "Saturday Peru";
+        library.deps.save(held);
+
+        await fireEvent.press(screen.getByTestId("roaster-coffee-add"));
+        await waitFor(() => expect(mockNotify).toHaveBeenCalledTimes(2));
+        expect(library.find("b-18g")?.name).toBe("Saturday Peru");
+    });
+
+    it("tags the recipe with the roaster's tags and draws its flavours", async () => {
+        const settings = subscribedTo([{id: "b"}], {b: {
+            flavours: ["Dark Chocolate", "Vanilla"], tags: ["Berry", "Filter"]
+        }});
+        const library = memoryLibrary();
+        await renderWithProviders(
+            <RoasterCoffeeScreen settings={settings} feedUrl={FEED_URL} coffeeId="b"
+                                 library={library.deps} shelves={() => []}/>
+        );
+        await waitFor(() => expect(screen.queryByTestId("roaster-coffee-loading")).toBeNull());
+        expect(screen.getByText("DARK CHOCOLATE")).toBeTruthy();
+        expect(screen.getByTestId("roaster-coffee-tags").props.children).toBe("Berry · Filter");
+
+        await fireEvent.press(screen.getByTestId("roaster-coffee-add"));
+        await waitFor(() => expect(library.all()).toHaveLength(1));
+        expect(library.find("b-18g")?.tags).toEqual(expect.arrayContaining(["Berry", "Filter"]));
+        expect(library.find("b-18g")?.name).toBe("Coffee b - 18g");
     });
 
     it("adds it to the library", async () => {

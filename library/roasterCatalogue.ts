@@ -226,6 +226,27 @@ export function noteChips(notes: string | undefined): string[] | null {
 }
 
 /**
+ * What the coffee screen draws for a coffee's taste: chips, the roaster's
+ * prose, and the quieter tags.
+ *
+ * The feed's `flavours` are the chips when it sends them, because they were
+ * written to be chips. The tasting notes are then shown only when they are
+ * prose, so a list that repeats the flavours is not drawn twice. Without
+ * `flavours` the notes rule (`noteChips`) decides.
+ */
+export function tasteOf(coffee: FeedCoffee): {chips: string[]; prose?: string; tags: string[]} {
+    const notes = coffee.coffee.aromatics?.trim() || undefined;
+    const listed = noteChips(notes);
+    if (coffee.flavours.length > 0) {
+        return listed === null && notes !== undefined
+            ? {chips: coffee.flavours, prose: notes, tags: coffee.tags}
+            : {chips: coffee.flavours, tags: coffee.tags};
+    }
+    if (listed !== null) return {chips: listed, tags: coffee.tags};
+    return notes === undefined ? {chips: [], tags: coffee.tags} : {chips: [], prose: notes, tags: coffee.tags};
+}
+
+/**
  * The notes as one line for a list row: a chip list joined with commas, so a
  * roaster's "a | b | c" reads like everyone else's, and prose as written.
  */

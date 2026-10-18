@@ -19,6 +19,12 @@ export type ImportDecoration = {
      * never to `xbloomName`, which stays what xBloom published.
      */
     recipeName?: string;
+    /**
+     * Labels the producer tags the coffee with (`bean.tags`). Added to the
+     * recipe's tags through `setTags`, so they are normalised and capped and
+     * the recipe's own tags come first and are never removed.
+     */
+    tags?: readonly string[];
 };
 
 /**
@@ -64,13 +70,14 @@ function tagsFrom(coffee: Partial<PodCoffee>): string[] {
  * the link carries in the places it has nothing, and only there.
  */
 export function decorateImport(recipe: Recipe, decoration: ImportDecoration): Recipe {
-    const {coffee, source, recipeUrl, recipeName} = decoration;
+    const {coffee, source, recipeUrl, recipeName, tags} = decoration;
     if (source !== undefined) recipe.source = source;
     if (recipeUrl !== undefined) recipe.recipeUrl = recipeUrl;
     // `name`, not `xbloomName`. `displayName()` already prefers `name`, so the
     // recipe reads as the producer called it, while xBloom's own title stays
     // cached underneath for USE THIS NAME to restore.
     if (recipeName !== undefined) recipe.name = recipeName;
+    if (tags !== undefined && tags.length > 0) recipe.setTags([...recipe.tags, ...tags]);
     if (coffee === undefined) return recipe;
 
     recipe.coffee = coffee;

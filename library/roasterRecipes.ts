@@ -58,11 +58,12 @@ export async function fetchCoffeeRecipe(
     if (recipe.shareId.trim() === "") recipe.shareId = shareIdOf(chosen.share) ?? "";
     // Through the import link's own decoration, so the coffee, its tags and
     // anything that path learns to do later (the picture, in #223) arrive the
-    // same way here. The roaster's rest and peak days ride on the coffee, so
-    // the bag sheet shows them instead of asking (`startingFigures`).
+    // same way here, the name included. The roaster's rest and peak days ride
+    // on the coffee, so the bag sheet shows them instead of asking
+    // (`startingFigures`).
     decorateImport(recipe, {coffee: withRoastAdvice(coffee.coffee, coffee.roast ?? {}),
-                            source: "import"});
-    recipe.name = recipeName(coffee, chosen.size);
+                            source: "import", tags: coffee.tags,
+                            recipeName: recipeName(coffee, chosen.size)});
     return {recipe, size: chosen.size};
 }
 
@@ -87,9 +88,11 @@ export function addToLibrary(
     const plan = planReimport(stored, fetched.recipe, readPrints(settings));
     switch (plan.kind) {
         case "same":
+            if (adoptName(plan.recipe, fetched.recipe)) deps.save(plan.recipe);
             return {kind: "already", recipe: plan.recipe};
         case "replace": {
             const recipe = takeLatest(plan.held, fetched.recipe);
+            adoptName(recipe, fetched.recipe);
             deps.save(recipe);
             rememberPrint(settings, recipe);
             return {kind: "updated", recipe};
@@ -106,11 +109,27 @@ export function addToLibrary(
     }
 }
 
+/**
+ * Give a library copy the catalogue's name when it has none of its own.
+ *
+ * An empty name follows xBloom's, which for a roaster's recipe is whatever
+ * the roaster's account typed ("col Java hydrohoney -18g"). A copy that
+ * arrived before the catalogue named it, or through a link that did not, kept
+ * that. Taking it from the catalogue is an action the user asked for, and a
+ * name they typed is never replaced.
+ */
+export function adoptName(held: Recipe, fetched: Recipe): boolean {
+    if (held.name.trim() !== "" || fetched.name.trim() === "") return false;
+    held.name = fetched.name;
+    return true;
+}
+
 /** "Use the roaster's latest" on an edited copy. Their name, notes and brews stay. */
 export function takeRoasterLatest(
     held: Recipe, latest: Recipe, deps: Pick<LibraryDeps, "save">, settings: Settings
 ): Recipe {
     const recipe = takeLatest(held, latest);
+    adoptName(recipe, latest);
     deps.save(recipe);
     rememberPrint(settings, recipe);
     return recipe;
@@ -119,7 +138,9 @@ export function takeRoasterLatest(
 /**
  * Where the bag feature will attach what was bought: the bag size and its
  * roast date, against the recipe it was shelved with. Not built here; the
- * shelf action returns this so a bag store has one place to hook in.
+ * shelf action returns this so a bag store has one place to hook in. The
+ * sizes and prices to offer come from `bagChoices` and `variantForGrams` in
+ * `library/roasterBuy.ts`, which are feed-only and need no bag store.
  *
  * The roaster's rest and peak advice already arrives: `fetchCoffeeRecipe`
  * lays the feed's `roast` days onto `recipe.coffee`, and the bag sheet reads

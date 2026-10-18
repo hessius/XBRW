@@ -6,6 +6,7 @@ import DotIcon from "@/components/DotIcon";
 import DotMatrixText from "@/components/DotMatrixText";
 import {openLink} from "@/components/openLink";
 import {onAccent, palette} from "@/constants/colors";
+import type {BuyOption} from "@/library/roasterBuy";
 
 const PHOTO_HEIGHT = 260;
 const PHOTO_RADIUS = 12;
@@ -91,6 +92,56 @@ export function CatalogueStatus({title, body, testID, action, onAction}: {
                     {action}
                 </Button>
             )}
+        </YStack>
+    );
+}
+
+/**
+ * BUY: each bag the roaster sells, its size and price, and a button that
+ * opens the shop at that bag in the browser.
+ *
+ * Compact on purpose: one line per bag. A bag with no link shows its price
+ * and nothing to tap; a sold-out one says so and cannot be pressed.
+ */
+export function BuySection({options}: {options: readonly BuyOption[]}) {
+    return (
+        <YStack testID="roaster-coffee-buy" gap="$2">
+            <DotMatrixText fontSize={12} weight="bold" letterSpacing={1.5} color={palette.dim}>
+                BUY
+            </DotMatrixText>
+            {options.map((option) => (
+                <XStack key={option.key} testID={`buy-${option.key}`} alignItems="center"
+                        gap="$3" minHeight={44}>
+                    <Text flex={1} fontSize={15} color={palette.text}>{option.label}</Text>
+                    {!option.available ? (
+                        <XStack accessible accessibilityRole="button"
+                                accessibilityLabel={`${option.label}, sold out`}
+                                accessibilityState={{disabled: true}}
+                                testID={`buy-${option.key}-sold-out`}
+                                height={36} paddingHorizontal="$3" alignItems="center"
+                                borderRadius="$4" borderWidth={1} borderColor={palette.line}
+                                opacity={0.5}>
+                            <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.4}
+                                           color={palette.dim}>
+                                SOLD OUT
+                            </DotMatrixText>
+                        </XStack>
+                    ) : option.url !== undefined && (
+                        <Pressable accessibilityRole="link"
+                                   accessibilityLabel={`Buy ${option.label}. Opens in your browser.`}
+                                   testID={`buy-${option.key}-link`}
+                                   onPress={() => openLink(option.url as string)}>
+                            <XStack height={36} paddingHorizontal="$3" alignItems="center"
+                                    borderRadius="$4" backgroundColor={palette.text}>
+                                <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.4}
+                                               color={onAccent.text}>
+                                    BUY
+                                </DotMatrixText>
+                            </XStack>
+                        </Pressable>
+                    )}
+                </XStack>
+            ))}
         </YStack>
     );
 }
