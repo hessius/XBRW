@@ -200,6 +200,15 @@ would buy nothing.
 `share` goes through `parseImportInput`, unchanged, so the recipe half needs no
 new code and the deep link cannot drift from the paste field.
 
+### Amendment: `feed` (2026-10-18)
+
+A link may also carry `feed=<https URL>`, the address of a roaster feed: one
+JSON file listing every coffee that roaster has a recipe for. It is optional,
+https only and capped at 2,000 characters like every other URL here; a bad
+value is dropped and the recipe imports as before. Nothing is fetched until the
+link's own recipe has imported. The format, the subscription it offers and how
+often an app may poll it are in `docs/roaster-feed.md`.
+
 ### Where it attaches
 
 `app/+native-intent.tsx` returns `null` for an import link, exactly as it does

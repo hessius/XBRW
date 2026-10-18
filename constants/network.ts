@@ -84,7 +84,7 @@ export const OUTBOUND_CALLS: OutboundCall[] = [
     {
         id:      "import",
         title:   "Look up a shared recipe",
-        trigger: "You paste an xBloom link or a pod code, or share a link into the app.",
+        trigger: "You paste an xBloom link or a pod code, or share a link into the app, or a roaster shelf you subscribed to adds a coffee.",
         host:    "client-api.xbloom.com",
         hostPinned: true,
         owner:   "xBloom",
@@ -95,6 +95,21 @@ export const OUTBOUND_CALLS: OutboundCall[] = [
             "Nothing about you, and nothing from your library."
         ],
         source:  ["library/XBloomRecipe.ts", "library/importInput.ts"]
+    },
+    {
+        id:      "roasterFeed",
+        title:   "Check a roaster's list of coffees",
+        trigger: "You open a roaster's import link that names a list of its coffees. If you subscribe, the app checks that list again when you open it, at most once every 12 hours, and whenever you tap Refresh. Pausing or ending the subscription stops it.",
+        host:    "whichever roaster the import link named",
+        hostPinned: false,
+        owner:   "The roaster who made the link",
+        carries: [
+            "Nothing but the request itself: your IP address, and the address of the list.",
+            "No recipe, no account and nothing from your library. XBRW++ drops any address that is not https.",
+            "Only while the app is open. There is no background fetch, and a phone in a pocket asks nobody for anything.",
+            "Each new coffee on the list is then looked up on xBloom the way a pasted share link is. That is the Look up a shared recipe entry, and its picture is the Load a photo entry."
+        ],
+        source:  ["library/roasterFeed.ts", "library/roasterSync.ts", "hooks/useRoasterShelf.ts"]
     },
     {
         id:      "brewMind",
@@ -203,6 +218,7 @@ export const OUTBOUND_CALLS: OutboundCall[] = [
             "Nothing but the request itself: your IP address, and the address of the picture.",
             "No recipe, no account and nothing you have typed.",
             "The address comes from xBloom's reply rather than from this app, so it is not a fixed one. XBRW++ drops any address that is not https, and sends it nothing.",
+            "A roaster's list of coffees can name a picture for each coffee too, under the same https rule.",
             "This is the one request that can happen while you are only looking at your own library, because a recipe imported from xBloom remembers the photo that came with it."
         ],
         source:  [

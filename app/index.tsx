@@ -1,5 +1,5 @@
 import React, {useEffect, useRef, useState} from "react";
-import {BackHandler, Platform, Share} from "react-native";
+import {AppState, BackHandler, Platform, Share} from "react-native";
 // gesture-handler's FlatList, not React Native's: it keeps the list scroll
 // gesture and each row's swipe gesture from fighting each other on Android.
 import {FlatList} from "react-native-gesture-handler";
@@ -41,7 +41,7 @@ import {useLibraryQuery} from "@/hooks/useLibraryQuery";
 import {useRecipeImport} from "@/hooks/useRecipeImport";
 import {useRecipeLibrary, type RecipeStore, type ShelfWriteOutcome}
     from "@/hooks/useRecipeLibrary";
-import {useSetting} from "@/hooks/useSetting";
+import {sharedSettings, useSetting} from "@/hooks/useSetting";
 import {useDrawerHint} from "@/hooks/useDrawerHint";
 import {forgetLastMove, useSteadyRouter} from "@/hooks/steadyRouter";
 import {SHARE_FAILURE_MESSAGE, useShareRecipe} from "@/hooks/useShareRecipe";
@@ -54,6 +54,7 @@ import {blankRecipe} from "@/library/newRecipe";
 import {assignAccent, resolveAccent} from "@/library/accent";
 import NameShelfSheet from "@/components/NameShelfSheet";
 import RemoveShelfSheet from "@/components/RemoveShelfSheet";
+import RoasterShelfSheet from "@/components/RoasterShelfSheet";
 import SelectableRecipeRow from "@/components/SelectableRecipeRow";
 import ShelfGrid from "@/components/ShelfGrid";
 import ShelfOverflowSheet from "@/components/ShelfOverflowSheet";
@@ -65,6 +66,9 @@ import {resolveOnOpen} from "@/library/duplicates";
 import {BREWMIND_SOURCE, type BrewMindLink} from "@/library/brewmindLink";
 import {useBrewMindCreate} from "@/hooks/useBrewMindCreate";
 import {useImportLink} from "@/hooks/useImportLink";
+import {useRoasterShelf} from "@/hooks/useRoasterShelf";
+import {useRoasterSubscriptions} from "@/hooks/useRoasterSubscriptions";
+import {renameSubscribedShelf, subscriptionForShelf, unsubscribe} from "@/library/roasterSync";
 
 import {parseImportInput} from "@/library/importInput";
 import {
@@ -700,6 +704,11 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
         // both shelves standing: the new name is marked only if it exists, and
         // the old marker is kept while its own shelf still has members. Moving
         // it unconditionally demoted a shelf that was still on the screen.
+        // A subscription follows its shelf's new name, or the next sync would
+        // file new coffees under the old one.
+        if (outcome.members > 0) {
+            renameSubscribedShelf(settings ?? sharedSettings(), renamingShelf, name);
+        }
         const was = canonicalShelfId(tagFilterId(renamingShelf));
         const stored = parseHidden(myShelves);
         if (stored.includes(was)) {
@@ -757,6 +766,9 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
         // shelf, and clearing the marker there would drop a shelf the user can
         // still see out of YOUR SHELVES and into FROM TAGS.
         if (outcome.members === 0) {
+            // A shelf that is gone has nothing left to keep up to date.
+            const sub = subscriptionForShelf(subscriptions, tag);
+            if (sub !== undefined) unsubscribe(settings ?? sharedSettings(), sub.feed);
             const id = canonicalShelfId(tagFilterId(tag));
             setMyShelves(serialiseHidden(
                 parseHidden(myShelves).filter((stored) => stored !== id)
@@ -883,10 +895,42 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
     // caught nothing. `+native-intent` stops that pair from forming; this is
     // what holds if anything ever mounts a second one again.
 
+    // The offer that follows an import link naming a roaster feed. Asked only
+    // while this screen is in front: the link's own recipe opens in the
+    // editor first, and the question waits for the user to come back.
+    const roasterShelf = useRoasterShelf({
+        stored:    () => library.allRecipes(),
+        canAsk:    () => navigation.isFocused(),
+        // The sync marks the shelf as the user's own in `myShelves` itself,
+        // so the screen only has to re-read what changed under it.
+        onChanged: () => library.refresh(),
+        settings
+    });
+    const roasterSubs = useRoasterSubscriptions({settings, onChanged: () => library.refresh()});
+    const subscriptions = roasterSubs.subscriptions;
+
+    // Subscribed shelves stay fresh while the app is in use and no longer:
+    // once on open, then each time the app comes back to the foreground. The
+    // twelve hour limit is applied inside, so this can fire freely. No
+    // background fetch: a phone in a pocket asks nobody for anything.
+    useEffect(() => {
+        roasterShelf.syncDue();
+        const sub = AppState.addEventListener("change", (next) => {
+            if (next === "active") roasterShelf.syncDue();
+        });
+        return () => sub.remove();
+        // Subscribed once. The hook reads everything through refs and the
+        // settings store, so the first render's handle stays correct.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     const importer = useRecipeImport({
         stored:       () => library.allRecipes(),
         onOpenRecipe: (recipe, isExisting) => {
             setImportOpen(false);
+            // The import worked, so a roaster feed the link named can now be
+            // fetched. Whatever the push below decides, the recipe arrived.
+            roasterShelf.imported();
             // Ask to navigate first: a recipe that arrives while an editor is
             // already opening is dropped whole, and a dropped arrival must not
             // announce itself either.
@@ -947,6 +991,9 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
             // the share guard is forgotten -- an explicit return by the user,
             // not the absence of an intent, which we cause ourselves.
             handledShareUrl.current = null;
+            // Back from the recipe an import link opened: if that link named a
+            // roaster feed and it has loaded, this is when to ask about it.
+            roasterShelf.ask();
             // Refreshing on focus is how a recipe saved in the editor appears
             // here. `library` is rebuilt every render, so depending on it would
             // re-run this on every render instead of on every focus.
@@ -1032,6 +1079,10 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
         // in the app they came from. That is the same situation, so it gets
         // the same answer.
         setImportOpen(true);
+        // Before the lookup starts, so its success can find it. A link with no
+        // feed clears one left by an earlier link.
+        if (link.feed !== undefined) roasterShelf.arm(link.feed);
+        else roasterShelf.disarm();
         importer.resolveNow(source, "shared", {
             coffee: link.coffee,
             recipeUrl: link.recipeUrl,
@@ -1065,10 +1116,14 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
         // its own.
         if (importStatus === "error") {
             handledShareUrl.current = null;
+            // A failed import has nothing to offer a shelf after.
+            roasterShelf.disarm();
             // An import link needs nothing here: each delivery is an event, so
             // opening the same link again after a failure is heard again on
             // its own. See `useImportLink`.
         }
+        // `roasterShelf` is rebuilt every render, and `disarm` only clears a ref.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [importStatus]);
 
     async function progressCallback(progress: number): Promise<string | undefined> {
@@ -1296,7 +1351,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
         || namingShelf || renamingShelf !== null || shelfActions !== null
         || deletingShelf !== null || beanFilterOpen
         || removingShelf !== null || overflowRecipe !== null || quickEdit !== null
-        || ratingNoteOpen;
+        || ratingNoteOpen || roasterShelf.state.phase !== "idle";
 
     // The sheet's own row, reachable without the long press that opens it. A
     // reader cannot make that gesture, so every verb the sheet offers is also an
@@ -1334,6 +1389,16 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
     // shelf's library-wide tally: the two agree except in the instant a delete
     // is settling, and what is on screen is the honest answer.
     const openShelf = shelves.find((shelf) => shelf.id === libraryQuery.openShelfId);
+    // The sold-out coffees on the open shelf, if a roaster subscription keeps
+    // it. By share id, the identity the subscription tracks, mapped to the
+    // recipes the room is drawing.
+    const openSubscription = openShelf !== undefined && openShelf.kind !== "auto"
+        ? subscriptionForShelf(subscriptions, openShelf.label)
+        : undefined;
+    const soldOutShares = new Set(openSubscription?.soldOut ?? []);
+    const soldOutOnOpenShelf = new Set(library.recipes
+        .filter((recipe) => soldOutShares.has(recipe.shareId.trim()))
+        .map((recipe) => recipe.uuid));
 
     return (
         <>
@@ -1488,6 +1553,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                         label={openShelf?.label ?? filterLabel(libraryQuery.openShelfId ?? "")}
                         namedByUser={openShelf !== undefined && openShelf.kind !== "auto"}
                         recipes={library.recipes}
+                        soldOut={soldOutOnOpenShelf}
                         onBack={libraryQuery.closeShelf}
                         onScroll={onScroll}
                         actionsFor={roomActionsFor}
@@ -1641,6 +1707,11 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                                   stopPicking();
                               }}/>
 
+            <RoasterShelfSheet state={roasterShelf.state}
+                               onAccept={roasterShelf.accept}
+                               onDecline={roasterShelf.decline}
+                               onCancel={roasterShelf.cancel}/>
+
             <NameShelfSheet open={namingShelf} count={picker.count}
                             onOpenChange={setNamingShelf}
                             onName={nameShelf}/>
@@ -1691,6 +1762,18 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                 onPromote={() => {
                     if (shelfActions !== null) promoteShelf(shelfActions);
                 }}
+                // Only on a shelf a roaster subscription keeps.
+                onRefresh={shelfActions !== null
+                    && subscriptionForShelf(subscriptions, shelfActions) !== undefined
+                    ? () => {
+                        const sub = subscriptionForShelf(subscriptions, shelfActions);
+                        if (sub !== undefined) void roasterSubs.refresh(sub);
+                    }
+                    : undefined}
+                onManageSubscription={shelfActions !== null
+                    && subscriptionForShelf(subscriptions, shelfActions) !== undefined
+                    ? () => router.push("/subscriptions")
+                    : undefined}
                 onDemote={() => {
                     if (shelfActions !== null) demoteShelf(shelfActions);
                 }}/>

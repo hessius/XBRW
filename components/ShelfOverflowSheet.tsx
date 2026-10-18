@@ -51,7 +51,7 @@ export function shelfOverflowHeight(mine: boolean, moves: number): number {
  */
 export default function ShelfOverflowSheet({
     open, shelf, count, mine, onOpenChange, onEdit, onMoveUp, onMoveDown,
-    onRename, onDuplicate, onDelete, onPromote, onDemote
+    onRename, onDuplicate, onDelete, onPromote, onDemote, onRefresh, onManageSubscription
 }: {
     open: boolean;
     /** The shelf's name, as the user spelled it. */
@@ -84,6 +84,10 @@ export default function ShelfOverflowSheet({
     onPromote: () => void;
     /** Put it back to being an ordinary tag. */
     onDemote: () => void;
+    /** Check the roaster's feed now. Only on a shelf a subscription keeps. */
+    onRefresh?: () => void;
+    /** Open the subscriptions screen. Only on a shelf a subscription keeps. */
+    onManageSubscription?: () => void;
 }) {
     function pick(action: () => void) {
         onOpenChange(false);
@@ -114,7 +118,8 @@ export default function ShelfOverflowSheet({
     );
 
     const recipes = count === 1 ? "1 recipe" : `${count} recipes`;
-    const moves = (onMoveUp ? 1 : 0) + (onMoveDown ? 1 : 0);
+    const moves = (onMoveUp ? 1 : 0) + (onMoveDown ? 1 : 0)
+        + (onRefresh ? 1 : 0) + (onManageSubscription ? 1 : 0);
 
     return (
         <XbrwSheet open={open} onOpenChange={onOpenChange} title={shelf}
@@ -125,6 +130,12 @@ export default function ShelfOverflowSheet({
                     all rewrite an assembled shelf; offering them here would
                     turn ordinary tagging into shelf management without the
                     user's consent. Promotion is the explicit hand-off. */}
+                {onRefresh && row("Check the roaster for new coffees", "refresh", onRefresh, {
+                    caption: "Refresh",
+                    testID:  "shelf-overflow-refresh"
+                })}
+                {onManageSubscription && row("Manage subscription", "settings",
+                    onManageSubscription, {testID: "shelf-overflow-subscription"})}
                 {mine && onEdit && row("Choose what is on this shelf", "edit", onEdit, {
                     caption: "Edit members",
                     testID:  "shelf-overflow-edit"
