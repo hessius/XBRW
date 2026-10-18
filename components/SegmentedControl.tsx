@@ -3,7 +3,7 @@ import {Pressable} from "react-native";
 import {Text, XStack} from "tamagui";
 
 import DotIcon from "@/components/DotIcon";
-import {palette} from "@/constants/colors";
+import {palette, primary} from "@/constants/colors";
 import type {DotIconName} from "@/constants/dotIcons";
 
 export type SegmentOption = {
@@ -68,7 +68,7 @@ export default function SegmentedControl({
                             <XStack paddingHorizontal="$2.5" paddingVertical="$2"
                                     borderRadius="$2"
                                     backgroundColor={
-                                        selected ? (accent ?? palette.text) : palette.none
+                                        selected ? (accent ?? primary.fill) : palette.none
                                     }>
                                 <DotIcon name={option.icon} size={ICON_SIZE}
                                          color={selected ? palette.base : palette.dim}/>
@@ -78,7 +78,7 @@ export default function SegmentedControl({
                                   paddingHorizontal="$2.5" paddingVertical="$1.5"
                                   borderRadius="$2"
                                   backgroundColor={
-                                      selected ? (accent ?? palette.text) : palette.none
+                                      selected ? (accent ?? primary.fill) : palette.none
                                   }
                                   color={selected ? palette.base : palette.dim}>
                                 {option.label}

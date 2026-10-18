@@ -2,7 +2,7 @@ import React from "react";
 import {fireEvent, screen} from "@testing-library/react-native";
 
 import RailChip, {CHIP_HEIGHT} from "@/components/RailChip";
-import {onAccent, palette} from "@/constants/colors";
+import {onAccent, palette, primary} from "@/constants/colors";
 import {renderWithProviders} from "@/test-utils/render";
 
 const TOUCH = {
@@ -71,8 +71,8 @@ describe("RailChip", () => {
             <RailChip active label="TEA" accessibilityLabel="Tea" onPress={jest.fn()}/>
         );
         const style = styleOf("Tea");
-        expect(style.backgroundColor).toBe(palette.text);
-        expect(style.borderTopColor).toBe(palette.text);
+        expect(style.backgroundColor).toBe(primary.fill);
+        expect(style.borderTopColor).toBe(primary.fill);
     });
 
     it("is an outline with no fill when inactive", async () => {

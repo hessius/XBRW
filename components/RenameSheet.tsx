@@ -4,7 +4,7 @@ import {Text, XStack, YStack} from "tamagui";
 
 import DotMatrixText from "@/components/DotMatrixText";
 import XbrwSheet from "@/components/XbrwSheet";
-import {onAccent, palette} from "@/constants/colors";
+import {palette, primary} from "@/constants/colors";
 
 /**
  * The same ceiling the Name row carried on the brew deck.
@@ -101,9 +101,9 @@ export default function RenameSheet({open, onOpenChange, name, onRename}: {
                     onPress={submit}
                     height={48} alignItems="center" justifyContent="center"
                     borderRadius="$4"
-                    backgroundColor={palette.text}>
+                    backgroundColor={primary.fill}>
                     <DotMatrixText fontSize={13} weight="bold" letterSpacing={1.5}
-                                   color={onAccent.text}>
+                                   color={primary.ink}>
                         SAVE NAME
                     </DotMatrixText>
                 </XStack>

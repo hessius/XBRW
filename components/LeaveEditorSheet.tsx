@@ -2,7 +2,7 @@ import React from "react";
 import {Button, Text, YStack} from "tamagui";
 
 import XbrwSheet from "@/components/XbrwSheet";
-import {onAccent, palette} from "@/constants/colors";
+import {palette, primary} from "@/constants/colors";
 
 /**
  * What the user was trying to do when the unsaved work was noticed.
@@ -63,11 +63,11 @@ export default function LeaveEditorSheet({
                     {words.body}
                 </Text>
 
-                {/* `palette.text` as the primary fill, matching RenameSheet's
+                {/* `primary.fill` as the primary fill, matching RenameSheet's
                     SAVE NAME. Not the recipe's accent: the accent marks the act
                     that runs the recipe, and this is a question about storage. */}
                 <Button accessibilityRole="button" accessibilityLabel={words.save}
-                        backgroundColor={palette.text} color={onAccent.text}
+                        backgroundColor={primary.fill} color={primary.ink}
                         onPress={onSave}>
                     {words.save}
                 </Button>

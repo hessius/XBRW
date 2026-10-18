@@ -29,7 +29,7 @@ import {notify} from "@/components/XbrwToast";
 import type {MachineVitals} from "@/components/MachinePanel";
 import {OVER} from "@/constants/brewCopy";
 import {ALREADY_IN_LIBRARY, CARD_READ_FAILED, HOLD_CARD} from "@/constants/copy";
-import {onAccent, palette, type AccentGroup} from "@/constants/colors";
+import {onAccent, palette, primary, type AccentGroup} from "@/constants/colors";
 import {useCollapsibleHeader} from "@/hooks/useCollapsibleHeader";
 import {useShelfPicker} from "@/hooks/useShelfPicker";
 import {useCardWriter} from "@/hooks/useCardWriter";
@@ -201,8 +201,8 @@ function EmptyQuery({
                 )}
             </YStack>
             <Button accessibilityLabel="Clear search and filters"
-                    backgroundColor={palette.text}
-                    color={onAccent.text}
+                    backgroundColor={primary.fill}
+                    color={primary.ink}
                     borderRadius="$4"
                     onPress={onClear}>
                 CLEAR SEARCH AND FILTERS

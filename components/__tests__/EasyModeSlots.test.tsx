@@ -12,7 +12,7 @@ import Pour from "@/library/Pour";
 import {createTestDatabase} from "@/test-utils/sqlite";
 import {SlotDatabase} from "@/library/slots/SlotDatabase";
 import {useEasyModeSlots} from "@/hooks/useEasyModeSlots";
-import {onAccent, palette} from "@/constants/colors";
+import {palette, primary} from "@/constants/colors";
 import {resolveAccent} from "@/library/accent";
 import * as motion from "@/constants/motion";
 import {restoreTeaSlotOriginal, writeTeaSlotProbe} from "@/library/slots/teaSlotProbe";
@@ -280,7 +280,7 @@ it("uses accent slabs with a measured full-width profile band and wrapping share
     expect(profile.props.height).toBe(45 + 2 * PROFILE_BLEED);
     expect(screen.getByRole("button", {name: "About Easy Mode"})).toHaveStyle({backgroundColor: palette.none});
     expect(screen.getByRole("button", {name: "Write all three slots"})).toHaveStyle({
-        backgroundColor: palette.text, color: onAccent.text
+        backgroundColor: primary.fill, color: primary.ink
     });
 });
 
@@ -290,7 +290,7 @@ it("gives interruption its own scrollable recovery stage instead of stacking it 
     const recovery = within(screen.getByTestId("easy-mode-recovery"));
     expect(recovery.getByText("Writing stopped at B.")).toBeOnTheScreen();
     expect(recovery.getByText("A: received")).toBeOnTheScreen();
-    expect(recovery.getByRole("button", {name: "Retry slot write"})).toHaveStyle({backgroundColor: palette.text});
+    expect(recovery.getByRole("button", {name: "Retry slot write"})).toHaveStyle({backgroundColor: primary.fill});
     expect(recovery.getByRole("button", {name: "Cancel slot write"})).toHaveStyle({backgroundColor: palette.raised});
     expect(recovery.getByText(/Your recipes are kept.*saving animation usually clears/)).toBeOnTheScreen();
 });

@@ -3,7 +3,7 @@ import {TextInput} from "react-native";
 import {Text, XStack, YStack} from "tamagui";
 
 import XbrwSheet from "@/components/XbrwSheet";
-import {onAccent, palette} from "@/constants/colors";
+import {palette, primary} from "@/constants/colors";
 import DotMatrixText, {dotMatrixTextProps} from "@/components/DotMatrixText";
 
 /**
@@ -127,12 +127,11 @@ export default function NameShelfSheet({
                     accessibilityState={{disabled: trimmed.length === 0}}
                     testID="shelf-name-confirm"
                     onPress={trimmed.length === 0 ? undefined : submit}
-                    opacity={trimmed.length === 0 ? 0.35 : 1}
                     height={48} alignItems="center" justifyContent="center"
                     borderRadius="$4"
-                    backgroundColor={palette.text}>
+                    backgroundColor={trimmed.length === 0 ? primary.disabledFill : primary.fill}>
                     <DotMatrixText fontSize={13} weight="bold" letterSpacing={1.5}
-                                   color={onAccent.text}>
+                                   color={trimmed.length === 0 ? primary.disabledInk : primary.ink}>
                         {renaming ? "RENAME SHELF" : "CREATE SHELF"}
                     </DotMatrixText>
                 </XStack>

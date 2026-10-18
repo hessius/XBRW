@@ -14,7 +14,7 @@ import DotIcon from "@/components/DotIcon";
 import DotMatrixText from "@/components/DotMatrixText";
 import XbrwSheet from "@/components/XbrwSheet";
 import {notify} from "@/components/XbrwToast";
-import {onAccent, palette} from "@/constants/colors";
+import {palette, primary} from "@/constants/colors";
 import router from "@/hooks/steadyRouter";
 import {useHubBrowse} from "@/hooks/useHubBrowse";
 import {useHubSave} from "@/hooks/useHubSave";
@@ -276,8 +276,8 @@ function HubStatus({
             {action !== undefined && onAction !== undefined && (
                 <Button accessibilityRole="button"
                         accessibilityLabel={action}
-                        backgroundColor={palette.text}
-                        color={onAccent.text}
+                        backgroundColor={primary.fill}
+                        color={primary.ink}
                         borderRadius="$4"
                         onPress={onAction}>
                     {action}
@@ -326,8 +326,8 @@ function HubFooter({
                 <Button accessibilityRole="button"
                         accessibilityLabel="Try again"
                         size="$3"
-                        backgroundColor={palette.text}
-                        color={onAccent.text}
+                        backgroundColor={primary.fill}
+                        color={primary.ink}
                         onPress={onRetry}>
                     Try again
                 </Button>

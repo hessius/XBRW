@@ -8,7 +8,7 @@ import BrewStageLadder from "@/components/BrewStageLadder";
 import DotMatrixText from "@/components/DotMatrixText";
 import ScreenHeader from "@/components/ScreenHeader";
 import {notify} from "@/components/XbrwToast";
-import {onAccent, palette} from "@/constants/colors";
+import {palette, primary} from "@/constants/colors";
 import {SCREEN_PADDING} from "@/constants/layout";
 import router from "@/hooks/steadyRouter";
 import {useHubSave} from "@/hooks/useHubSave";
@@ -119,9 +119,9 @@ function ErrorState({
                            onPress={onRetry}>
                     <XStack height={44} paddingHorizontal="$4" borderRadius="$4"
                             alignItems="center" justifyContent="center"
-                            backgroundColor={palette.text}>
+                            backgroundColor={primary.fill}>
                         <DotMatrixText fontSize={12} weight="bold" letterSpacing={1.5}
-                                       color={onAccent.text}>
+                                       color={primary.ink}>
                             TRY AGAIN
                         </DotMatrixText>
                     </XStack>
@@ -279,10 +279,10 @@ function RecipeDetail({
                            accessibilityState={{disabled: saving}}
                            onPress={saving ? undefined : onSave}>
                     <XStack height={48} alignItems="center" justifyContent="center"
-                            borderRadius="$4" backgroundColor={palette.text}
-                            opacity={saving ? 0.35 : 1}>
+                            borderRadius="$4"
+                            backgroundColor={saving ? primary.disabledFill : primary.fill}>
                         <DotMatrixText fontSize={12} weight="bold" letterSpacing={1.6}
-                                       color={onAccent.text}>
+                                       color={saving ? primary.disabledInk : primary.ink}>
                             {saving ? "SAVING" : "SAVE"}
                         </DotMatrixText>
                     </XStack>

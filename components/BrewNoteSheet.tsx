@@ -6,7 +6,7 @@ import BrewJudgement from "@/components/BrewJudgement";
 import DotMatrixText from "@/components/DotMatrixText";
 import XbrwSheet from "@/components/XbrwSheet";
 import {RATING_SHEET_DONE, RATING_SHEET_TITLE} from "@/constants/brewCopy";
-import {onAccent, palette} from "@/constants/colors";
+import {palette, primary} from "@/constants/colors";
 
 /**
  * Somewhere to say more, once the stars have already been given.
@@ -78,9 +78,9 @@ export default function BrewNoteSheet({
                     onPress={close}
                     height={48} alignItems="center" justifyContent="center"
                     borderRadius="$4"
-                    backgroundColor={palette.text}>
+                    backgroundColor={primary.fill}>
                     <DotMatrixText fontSize={13} weight="bold" letterSpacing={1.5}
-                                   color={onAccent.text}>
+                                   color={primary.ink}>
                         {RATING_SHEET_DONE}
                     </DotMatrixText>
                 </XStack>
