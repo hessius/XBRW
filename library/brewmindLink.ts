@@ -1,3 +1,4 @@
+import {readLabels} from "@/library/coffeeLabels";
 import {LEGACY_NAMES, PodCoffee, httpsUrl, podCoffeeFromStored} from "@/library/podCoffee";
 
 /**
@@ -115,6 +116,14 @@ export type BrewMindLink = {
      * recipe exactly as before.
      */
     feed?: string;
+    /**
+     * `bean.flavours`: a short list of tasting notes, comma separated, for
+     * the catalogue's chips. Kept out of the coffee block, which is the
+     * Beanconqueror contract and has no such field.
+     */
+    flavours?: string[];
+    /** `bean.tags`: labels the recipe is tagged with on import, comma separated. */
+    tags?: string[];
 };
 
 /**
@@ -165,6 +174,11 @@ export function parseBrewMindLink(link: string): BrewMindLink | null {
         const checked = httpsUrl(recipeUrl);
         if (checked !== undefined) result.recipeUrl = checked;
     }
+
+    const flavours = readLabels(params.get("bean.flavours") ?? "");
+    if (flavours.length > 0) result.flavours = flavours;
+    const tags = readLabels(params.get("bean.tags") ?? "");
+    if (tags.length > 0) result.tags = tags;
 
     const feed = params.get("feed")?.trim();
     if (feed !== undefined && feed.length <= MAX_URL) {

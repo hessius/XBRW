@@ -1,6 +1,6 @@
 import {
     bagLine, beanFacts, chooseRecipe, coffeeRef, detailTitle, findCoffee, formatElevation,
-    formatScore, LONG_TITLE_SIZE, noteChips, notesLine, readCatalogue, roastAdvice, scrollEndPadding, updatedAgo,
+    formatScore, LONG_TITLE_SIZE, noteChips, notesLine, readCatalogue, tasteOf, roastAdvice, scrollEndPadding, updatedAgo,
     writeCatalogue, dropCatalogue
 } from "@/library/roasterCatalogue";
 import {FEED_URL, feed, feedJson, memorySettings} from "@/test-utils/roasterFeed";
@@ -101,6 +101,25 @@ describe("catalogue layout", () => {
         // Gesture navigation's small inset keeps the screen's own end.
         expect(scrollEndPadding(48, 16)).toBe(48);
         expect(scrollEndPadding(8, 0)).toBe(24);
+    });
+});
+
+describe("a coffee's taste", () => {
+    function coffeeWith(flavours: string[], aromatics?: string, tags: string[] = []) {
+        const [base] = feed([{id: "a"}]).coffees;
+        return {...base, flavours, tags, coffee: {...base.coffee, aromatics}};
+    }
+
+    it("uses the roaster's flavours for chips when it lists them", () => {
+        expect(tasteOf(coffeeWith(["Dark Chocolate", "Blueberry"], "Cacao, blueberry", ["Berry"])))
+            .toEqual({chips: ["Dark Chocolate", "Blueberry"], tags: ["Berry"]});
+    });
+
+    it("still shows prose notes beside the flavours, and falls back to the notes rule", () => {
+        const prose = "Clean and well-structured, with a buttery mouthfeel.";
+        expect(tasteOf(coffeeWith(["Apple"], prose)).prose).toBe(prose);
+        expect(tasteOf(coffeeWith([], "Caramel | brown sugar")).chips).toEqual(["Caramel", "brown sugar"]);
+        expect(tasteOf(coffeeWith([], prose))).toEqual({chips: [], prose, tags: []});
     });
 });
 

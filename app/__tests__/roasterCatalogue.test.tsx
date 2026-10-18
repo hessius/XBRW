@@ -291,6 +291,56 @@ describe("one coffee", () => {
         expect(library.all()).toEqual([]);
     });
 
+    it("names a copy that followed xBloom's own name when it is added again", async () => {
+        const settings = subscribed();
+        const library = memoryLibrary();
+        await open(settings, library);
+        await fireEvent.press(screen.getByTestId("roaster-coffee-add"));
+        await waitFor(() => expect(library.all()).toHaveLength(1));
+        // The copy an earlier link left, following xBloom's name.
+        const held = library.find("b-18g")!;
+        held.name = "";
+        library.deps.save(held);
+
+        await fireEvent.press(screen.getByTestId("roaster-coffee-add"));
+        await waitFor(() => expect(library.find("b-18g")?.name).toBe("Coffee b - 18g"));
+        expect(library.all()).toHaveLength(1);
+    });
+
+    it("never renames a copy the user named", async () => {
+        const settings = subscribed();
+        const library = memoryLibrary();
+        await open(settings, library);
+        await fireEvent.press(screen.getByTestId("roaster-coffee-add"));
+        await waitFor(() => expect(library.all()).toHaveLength(1));
+        const held = library.find("b-18g")!;
+        held.name = "Saturday Peru";
+        library.deps.save(held);
+
+        await fireEvent.press(screen.getByTestId("roaster-coffee-add"));
+        await waitFor(() => expect(mockNotify).toHaveBeenCalledTimes(2));
+        expect(library.find("b-18g")?.name).toBe("Saturday Peru");
+    });
+
+    it("tags the recipe with the roaster's tags and draws its flavours", async () => {
+        const settings = subscribedTo([{id: "b"}], {b: {
+            flavours: ["Dark Chocolate", "Vanilla"], tags: ["Berry", "Filter"]
+        }});
+        const library = memoryLibrary();
+        await renderWithProviders(
+            <RoasterCoffeeScreen settings={settings} feedUrl={FEED_URL} coffeeId="b"
+                                 library={library.deps} shelves={() => []}/>
+        );
+        await waitFor(() => expect(screen.queryByTestId("roaster-coffee-loading")).toBeNull());
+        expect(screen.getByText("DARK CHOCOLATE")).toBeTruthy();
+        expect(screen.getByTestId("roaster-coffee-tags").props.children).toBe("Berry · Filter");
+
+        await fireEvent.press(screen.getByTestId("roaster-coffee-add"));
+        await waitFor(() => expect(library.all()).toHaveLength(1));
+        expect(library.find("b-18g")?.tags).toEqual(expect.arrayContaining(["Berry", "Filter"]));
+        expect(library.find("b-18g")?.name).toBe("Coffee b - 18g");
+    });
+
     it("adds it to the library", async () => {
         const {library} = await open();
         await fireEvent.press(screen.getByTestId("roaster-coffee-add"));

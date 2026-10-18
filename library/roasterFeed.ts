@@ -1,4 +1,5 @@
 import {MAX_URL, SHORT_TEXT, coffeeFromFields} from "@/library/brewmindLink";
+import {readLabels} from "@/library/coffeeLabels";
 import {parseImportInput} from "@/library/importInput";
 import {httpsUrl, type PodCoffee} from "@/library/podCoffee";
 
@@ -131,6 +132,10 @@ export type FeedCoffee = {
     bagSizes: number[];
     /** The bags on sale, with prices and buy links. Empty when the feed sent none. */
     variants: FeedVariant[];
+    /** `bean.flavours`: short tasting notes, drawn as chips. Empty when absent. */
+    flavours: string[];
+    /** `bean.tags`: labels such as "Berry" or "Filter", added as recipe tags. */
+    tags: string[];
 };
 
 export type RoasterFeed = {
@@ -274,7 +279,9 @@ function feedCoffee(value: unknown): FeedCoffee | null {
     // link cannot disagree about a field's name, its cap or its type. The
     // coffee's name, page and picture are added last so a `bean` block
     // cannot replace them.
-    const fields: [string, unknown][] = Object.entries(record(entry.bean) ?? {});
+    const bean = record(entry.bean) ?? {};
+    const fields: [string, unknown][] = Object.entries(bean)
+        .filter(([key]) => key !== "flavours" && key !== "tags");
     fields.push(["name", name]);
     if (url !== undefined) fields.push(["url", url]);
     if (image !== undefined) fields.push(["imageUrl", image]);
@@ -287,7 +294,9 @@ function feedCoffee(value: unknown): FeedCoffee | null {
         recipes,
         coffee,
         bagSizes: bagSizes(entry.bag_sizes_g),
-        variants: variants(entry.variants)
+        variants: variants(entry.variants),
+        flavours: readLabels(bean.flavours),
+        tags: readLabels(bean.tags)
     };
     const read = roast(entry.roast);
     if (read !== undefined) result.roast = read;

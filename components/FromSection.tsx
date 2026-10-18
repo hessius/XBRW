@@ -1,6 +1,6 @@
 import React, {useState} from "react";
 import {Image, Pressable} from "react-native";
-import {Text, View, XStack} from "tamagui";
+import {Text, View, XStack, YStack} from "tamagui";
 
 import DeckSection from "@/components/DeckSection";
 import DotIcon from "@/components/DotIcon";
@@ -23,6 +23,21 @@ function pageLabel(recipe: Recipe): string {
     return recipe.source === "brewmind"
         ? "View on BrewMind"
         : "View the recipe page";
+}
+
+/**
+ * The roaster a recipe came from, when a link or a roaster's catalogue said.
+ *
+ * Only for a recipe that arrived through an import link or a catalogue
+ * (`source` import or brewmind), and only when its coffee names a roaster. A
+ * roaster's recipes are shared from somebody's personal xBloom account, so
+ * "Arrived from rhys" named the person who pressed share rather than the
+ * roaster whose recipe it is. Nothing here knows any one roaster.
+ */
+export function roasterOf(recipe: Recipe): string | undefined {
+    if (recipe.source !== "import" && recipe.source !== "brewmind") return undefined;
+    const roaster = recipe.coffee?.roaster?.trim() ?? "";
+    return roaster === "" ? undefined : roaster;
 }
 
 /**
@@ -54,11 +69,17 @@ export default function FromSection({recipe, accent, showAvatar}: {
 
     const sharedBy = recipe.sharedBy?.trim() ?? "";
     const fromXbloom = recipe.xid.trim().length > 0;
-    const avatar = recipe.sharedByAvatar ?? "";
+    const roaster = roasterOf(recipe);
+    // A roaster's mark is its coffee's photo; a sharer's is their avatar.
+    const avatar = roaster !== undefined
+        ? recipe.coffee?.imageUrl ?? ""
+        : recipe.sharedByAvatar ?? "";
     const drawAvatar = showAvatar && avatar.length > 0 && !failed;
     const recipeUrl = recipe.recipeUrl ?? "";
 
-    if (sharedBy.length === 0 && !fromXbloom && recipeUrl.length === 0) return null;
+    if (sharedBy.length === 0 && !fromXbloom && recipeUrl.length === 0 && roaster === undefined) {
+        return null;
+    }
 
     return (
         <DeckSection title="FROM" testID="about-from">
@@ -78,12 +99,27 @@ export default function FromSection({recipe, accent, showAvatar}: {
                           backgroundColor={accent}/>
                 )}
 
-                <Text flex={1} fontSize={sharedBy.length > 0 ? 16 : 13}
-                      color={sharedBy.length > 0 ? palette.text : palette.dim}>
-                    {sharedBy.length > 0
-                        ? `Arrived from ${sharedBy}`
-                        : "An xBloom recipe. Nobody is named as the sharer."}
-                </Text>
+                {roaster !== undefined ? (
+                    <YStack flex={1} gap="$1">
+                        <Text testID="from-roaster" fontSize={16} color={palette.text}>
+                            {`From ${roaster}`}
+                        </Text>
+                        {/* The xBloom account it was shared from, kept small:
+                            true, but not who the recipe is from. */}
+                        {sharedBy.length > 0 && (
+                            <Text testID="from-sharer" fontSize={12} color={palette.dim}>
+                                {`Shared on xBloom by ${sharedBy}`}
+                            </Text>
+                        )}
+                    </YStack>
+                ) : (
+                    <Text flex={1} fontSize={sharedBy.length > 0 ? 16 : 13}
+                          color={sharedBy.length > 0 ? palette.text : palette.dim}>
+                        {sharedBy.length > 0
+                            ? `Arrived from ${sharedBy}`
+                            : "An xBloom recipe. Nobody is named as the sharer."}
+                    </Text>
+                )}
             </XStack>
 
             {recipeUrl.length > 0 ? (

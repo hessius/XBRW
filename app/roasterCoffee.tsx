@@ -20,8 +20,8 @@ import {sharedSettings, useSetting} from "@/hooks/useSetting";
 import {assignAccent, resolveAccent} from "@/library/accent";
 import type Recipe from "@/library/Recipe";
 import {
-    bagLine, beanFacts, chooseRecipe, detailTitle, findCoffee, noteChips, readCatalogue,
-    roastAdvice, scrollEndPadding
+    bagLine, beanFacts, chooseRecipe, detailTitle, findCoffee, readCatalogue,
+    roastAdvice, scrollEndPadding, tasteOf
 } from "@/library/roasterCatalogue";
 import {buyOptions} from "@/library/roasterBuy";
 import type {FeedCoffee} from "@/library/roasterFeed";
@@ -161,8 +161,7 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
     const facts = beanFacts(coffee);
     const buying = buyOptions(cached.feed.roaster, coffee);
     const title = detailTitle(coffee.name);
-    const notes = coffee.coffee.aromatics?.trim() || undefined;
-    const chips = noteChips(notes);
+    const taste = tasteOf(coffee);
     const covered = naming || (pending !== null && pending.kind === "shelf");
 
     /** A fresh copy each time, so one action never mutates what another uses. */
@@ -261,14 +260,22 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
                                 {advice}
                             </Text>
                         )}
-                        {chips !== null ? (
+                        {taste.chips.length > 0 && (
                             <XStack testID="roaster-coffee-note-chips" flexWrap="wrap" gap="$2">
-                                {chips.map((note) => <Chip key={note} label={note}/>)}
+                                {taste.chips.map((note) => <Chip key={note} label={note}/>)}
                             </XStack>
-                        ) : notes !== undefined && (
+                        )}
+                        {taste.prose !== undefined && (
                             <Text testID="roaster-coffee-notes" fontSize={15} lineHeight={22}
                                   color={palette.dim}>
-                                {notes}
+                                {taste.prose}
+                            </Text>
+                        )}
+                        {/* Quieter than the flavours: these say what kind of
+                            coffee it is, and they become the recipe's tags. */}
+                        {taste.tags.length > 0 && (
+                            <Text testID="roaster-coffee-tags" fontSize={13} color={palette.muted}>
+                                {taste.tags.join(" · ")}
                             </Text>
                         )}
                         {facts.length > 0 && (

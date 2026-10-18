@@ -433,6 +433,9 @@ screen (`app/subscriptions.tsx`, `components/UnsubscribeSheet.tsx`,
 | `roaster.row.soldOut` | `components/RoasterCoffeeRow.tsx` | Doto line on a sold-out coffee; also spoken. | `SOLD OUT` |
 | `roaster.coffee.roast` | `app/roasterCoffee.tsx` | Doto roast level. | `${level} ROAST` |
 | `roaster.coffee.notes` | `library/roasterCatalogue.ts` (`noteChips`) | Tasting notes. Doto chips only for 2 to 8 parts of at most 20 characters split on commas or a spaced pipe, with no full stop or brackets; otherwise the roaster's own sentence in Inter. List rows show the same notes on one line. | (feed text) |
+| `roaster.coffee.tags` | `app/roasterCoffee.tsx` | The feed's `bean.tags`, quiet, under the flavour chips. | `${tag} · ${tag}` |
+| `from.roaster` | `components/FromSection.tsx` | FROM, for a recipe a link or catalogue named a roaster for (`roasterOf`). | `From ${roaster}` |
+| `from.roaster.sharer` | `components/FromSection.tsx` | Small line under it when xBloom names the account that shared it. | `Shared on xBloom by ${sharedBy}` |
 | `roaster.coffee.advice` | `library/roasterCatalogue.ts` (`roastAdvice`) | Roast timing; parts appear as stated. | `Rest ${n} days, peak day ${n}, best by day ${n}` |
 | `roaster.coffee.bags` | `app/roasterCoffee.tsx` | Bag sizes, when the feed lists no `variants`. | `Bags: 320 g · 160 g` |
 | `roaster.coffee.buy` | `components/CatalogueParts.tsx` (`BuySection`) | Doto heading over one row per bag; rows read `${size} · ${price}` (`library/roasterBuy.ts`, `formatPrice`: narrow currency symbol, `$28 AUD` when the runtime cannot format it). | `BUY` |
