@@ -58,7 +58,7 @@ export async function fetchCoffeeRecipe(
     // Through the import link's own decoration, so the coffee, its tags and
     // anything that path learns to do later (the picture, in #223) arrive the
     // same way here.
-    decorateImport(recipe, {coffee: coffee.coffee, source: "import"});
+    decorateImport(recipe, {coffee: coffee.coffee, source: "import", tags: coffee.tags});
     recipe.name = recipeName(coffee, chosen.size);
     return {recipe, size: chosen.size};
 }
@@ -84,9 +84,11 @@ export function addToLibrary(
     const plan = planReimport(stored, fetched.recipe, readPrints(settings));
     switch (plan.kind) {
         case "same":
+            if (adoptName(plan.recipe, fetched.recipe)) deps.save(plan.recipe);
             return {kind: "already", recipe: plan.recipe};
         case "replace": {
             const recipe = takeLatest(plan.held, fetched.recipe);
+            adoptName(recipe, fetched.recipe);
             deps.save(recipe);
             rememberPrint(settings, recipe);
             return {kind: "updated", recipe};
@@ -103,11 +105,27 @@ export function addToLibrary(
     }
 }
 
+/**
+ * Give a library copy the catalogue's name when it has none of its own.
+ *
+ * An empty name follows xBloom's, which for a roaster's recipe is whatever
+ * the roaster's account typed ("col Java hydrohoney -18g"). A copy that
+ * arrived before the catalogue named it, or through a link that did not, kept
+ * that. Taking it from the catalogue is an action the user asked for, and a
+ * name they typed is never replaced.
+ */
+export function adoptName(held: Recipe, fetched: Recipe): boolean {
+    if (held.name.trim() !== "" || fetched.name.trim() === "") return false;
+    held.name = fetched.name;
+    return true;
+}
+
 /** "Use the roaster's latest" on an edited copy. Their name, notes and brews stay. */
 export function takeRoasterLatest(
     held: Recipe, latest: Recipe, deps: Pick<LibraryDeps, "save">, settings: Settings
 ): Recipe {
     const recipe = takeLatest(held, latest);
+    adoptName(recipe, latest);
     deps.save(recipe);
     rememberPrint(settings, recipe);
     return recipe;

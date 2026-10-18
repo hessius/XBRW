@@ -108,7 +108,7 @@ function haystack(coffee: FeedCoffee): string {
     const bean = coffee.coffee;
     return [
         coffee.name, bean.country, bean.origin, bean.farm, bean.farmer,
-        bean.variety, bean.processing, bean.aromatics
+        bean.variety, bean.processing, bean.aromatics, ...coffee.flavours, ...coffee.tags
     ].filter((part): part is string => typeof part === "string").map(folded).join("\n");
 }
 

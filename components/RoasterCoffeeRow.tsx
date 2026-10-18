@@ -31,7 +31,10 @@ export default function RoasterCoffeeRow({coffee, onPress, testID}: {
     const [failed, setFailed] = useState(false);
     const image = coffee.image ?? null;
     const roast = coffee.roast?.level;
-    const notes = notesLine(coffee.coffee.aromatics);
+    // The flavours when the roaster lists them, which is what they are for.
+    const notes = coffee.flavours.length > 0
+        ? coffee.flavours.join(", ")
+        : notesLine(coffee.coffee.aromatics);
     const bags = bagLine(coffee);
     const spoken = [
         coffee.name,

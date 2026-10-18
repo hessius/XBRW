@@ -14,6 +14,12 @@ export type ImportDecoration = {
     source?: RecipeSource;
     /** `recipe.url`: the producer's own page for this recipe. */
     recipeUrl?: string;
+    /**
+     * Labels the producer tags the coffee with (`bean.tags`). Added to the
+     * recipe's tags through `setTags`, so they are normalised and capped and
+     * the recipe's own tags come first and are never removed.
+     */
+    tags?: readonly string[];
 };
 
 /**
@@ -58,9 +64,10 @@ function tagsFrom(coffee: PodCoffee): string[] {
  * recipe the user has already edited.
  */
 export function decorateImport(recipe: Recipe, decoration: ImportDecoration): Recipe {
-    const {coffee, source, recipeUrl} = decoration;
+    const {coffee, source, recipeUrl, tags} = decoration;
     if (source !== undefined) recipe.source = source;
     if (recipeUrl !== undefined) recipe.recipeUrl = recipeUrl;
+    if (tags !== undefined && tags.length > 0) recipe.setTags([...recipe.tags, ...tags]);
     if (coffee === undefined) return recipe;
 
     recipe.coffee = coffee;

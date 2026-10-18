@@ -23,6 +23,25 @@ function props(over: Partial<React.ComponentProps<typeof FromSection>> = {}) {
 }
 
 describe("FromSection", () => {
+    it("names the roaster for a recipe a link or catalogue named one for", async () => {
+        const recipe = recipeWith({sharedBy: "rhys", source: "import"});
+        recipe.coffee = {name: "Peru", roaster: "Central Coast Coffee"};
+        await renderWithProviders(<FromSection {...props({recipe})}/>);
+
+        expect(screen.getByTestId("from-roaster").props.children).toBe("From Central Coast Coffee");
+        expect(screen.getByText("Shared on xBloom by rhys")).toBeTruthy();
+        expect(screen.queryByText("Arrived from rhys")).toBeNull();
+    });
+
+    it("keeps the sharer for a recipe whose coffee names no roaster, or a pod", async () => {
+        const pod = recipeWith({sharedBy: "Ana", source: "read"});
+        pod.coffee = {name: "Pod", roaster: "Someone"};
+        await renderWithProviders(<FromSection {...props({recipe: pod})}/>);
+        expect(screen.getByText("Arrived from Ana")).toBeTruthy();
+        expect(screen.queryByTestId("from-roaster")).toBeNull();
+    });
+
+
     it("names who a recipe arrived from, as a claim rather than an identity", async () => {
         // "arrived from", never "by": the name is whatever the person sharing
         // it had typed into xBloom, and nothing here can check it.
