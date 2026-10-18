@@ -297,7 +297,10 @@ export default function MachineSection({settings, onOpenMachine, onAddMachine}: 
                         colour={several ? machineColourOf(entry).ink : undefined}
                         connected={linked}
                         failed={active && error !== null}
-                        initiallyOpen={active}
+                        // Closed by default: Settings is visited for many things, and an open
+                        // card pushed everything else down every time. A machine
+                        // in use that has a problem still opens, so the fix is in view.
+                        initiallyOpen={active && error !== null}
                         details={active && info !== null ? (
                             <>
                                 <Vital label="Serial" value={info.serial}/>
