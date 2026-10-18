@@ -109,8 +109,6 @@ type Props = {
     editing?: boolean;
     slotMarker?: SlotMarkerValue;
     onEasyMode?: () => void;
-    /** The roaster no longer sells this coffee. Drawn as a badge, never hidden. */
-    soldOut?: boolean;
 };
 
 /**
@@ -130,7 +128,7 @@ type Props = {
 export default function RecipeShelfTile({
     recipe, onPress, onLongPress, showCoffeeMarker = true, dottedProfile = false,
     evidence, onBrew, onShare, onWrite, onDuplicate, onDelete, onToggleFavourite,
-    onHistory, editing = false, slotMarker, onEasyMode, soldOut = false
+    onHistory, editing = false, slotMarker, onEasyMode
 }: Props) {
     const accent = resolveAccent(recipe);
     const isTea = accentGroupFor(recipe) === "tea";
@@ -146,7 +144,6 @@ export default function RecipeShelfTile({
         recipe.displayName(),
         marker.toLowerCase(),
         recipe.favourite ? "starred" : undefined,
-        soldOut ? "sold out" : undefined,
         slotMarker?.label,
         // Spoken in words rather than as the drawn line: "12G · 1:16 · 22" is a
         // glance's shorthand and reads as noise when it is read aloud.
@@ -248,13 +245,6 @@ export default function RecipeShelfTile({
                         </DotMatrixText>
                     )}
                     <XStack flex={1}/>
-                    {soldOut && (
-                        <DotMatrixText testID="recipe-tile-sold-out" fontSize={10}
-                                       weight="bold" letterSpacing={1.1}
-                                       numberOfLines={1} color={onAccent.marker}>
-                            SOLD OUT
-                        </DotMatrixText>
-                    )}
                     {editing && (
                         // Opens the sheet the long press opens, so edit mode
                         // adds a way in rather than a second list of acts that

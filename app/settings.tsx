@@ -177,6 +177,7 @@ export default function SettingsScreen({settings}: Props) {
     const [roasterSubscriptions, setRoasterSubscriptions] =
         useSetting("roasterSubscriptions", settings);
     const subscriptionCount = parseSubscriptions(roasterSubscriptions).length;
+    const [importFingerprints, setImportFingerprints] = useSetting("importFingerprints", settings);
 
     // Deliberately given no query: this screen's questions are all about the
     // whole library, never about a view of it. That is what lets the restore
@@ -218,7 +219,7 @@ export default function SettingsScreen({settings}: Props) {
             brewHistorySort, brewHistorySortDirection,
             librarySort, librarySortDirection, libraryFavouritesFirst,
             libraryView, invertAutoShelves, hiddenShelves, myShelves,
-            roasterFeedOptOut, roasterSubscriptions
+            roasterFeedOptOut, roasterSubscriptions, importFingerprints
         };
     }
 
@@ -375,6 +376,10 @@ export default function SettingsScreen({settings}: Props) {
         // dropped there rather than here, the same as every other reader.
         if (typeof incoming.roasterSubscriptions === "string") {
             setRoasterSubscriptions(incoming.roasterSubscriptions);
+        }
+        // Validated on read by `parsePrints`.
+        if (typeof incoming.importFingerprints === "string") {
+            setImportFingerprints(incoming.importFingerprints);
         }
     }
 
@@ -596,9 +601,9 @@ export default function SettingsScreen({settings}: Props) {
                 </SettingsSection>
 
                 <SettingsSection title="Library">
-                    {/* Where a roaster shelf is managed. Always shown, even
-                        with none, because the screen is also where a "don't
-                        ask again" is taken back. */}
+                    {/* Where roaster subscriptions are managed. Always
+                        shown, even with none, because the screen is also
+                        where a "don't ask again" is taken back. */}
                     <SettingsActionRow label="Roaster subscriptions"
                                        detail={subscriptionCount === 0
                                            ? "None yet."

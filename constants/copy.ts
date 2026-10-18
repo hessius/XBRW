@@ -21,6 +21,13 @@ import {Platform} from "react-native";
 export const ALREADY_IN_LIBRARY = "Already in your library";
 
 /**
+ * A re-import found the user's copy untouched and the author's version newer,
+ * so the copy took the latest brewing content (`library/importRefresh.ts`).
+ * Said as a fact, not a question: nothing the user made was lost.
+ */
+export const UPDATED_TO_LATEST = "Already in your library. Updated to the latest version.";
+
+/**
  * The same fact when the saved copy has a name worth quoting back.
  *
  * Two forms, deliberately: the drawn line quotes the name so it does not run

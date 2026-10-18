@@ -8,6 +8,7 @@ import type {ColorTokens} from "tamagui";
 import DotIcon from "@/components/DotIcon";
 import DotMatrixText from "@/components/DotMatrixText";
 import ImportResult from "@/components/ImportResult";
+import NewerVersionPrompt from "@/components/NewerVersionPrompt";
 import PasteOverlay from "@/components/PasteOverlay";
 import XbrwSheet from "@/components/XbrwSheet";
 import {palette} from "@/constants/colors";
@@ -379,6 +380,12 @@ export default function ImportSheet({open, onOpenChange, importer}: Props) {
 
                 {state.status === "found" && (
                     <ImportResult preview={state.preview} onOpen={openFound}/>
+                )}
+
+                {state.status === "newer" && (
+                    <NewerVersionPrompt name={state.held.displayName()}
+                                        onLatest={importer.acceptLatest}
+                                        onKeep={importer.keepMine}/>
                 )}
             </YStack>
         </XbrwSheet>

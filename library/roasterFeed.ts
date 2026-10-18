@@ -6,10 +6,10 @@ import {httpsUrl, type PodCoffee} from "@/library/podCoffee";
  * A roaster's feed: every coffee it has published a recipe for, in one file.
  *
  * An import link may carry `feed=<https URL>` (see `brewmindLink.ts`). After
- * that link's own recipe has imported, the app offers to add the roaster's
- * other coffees as a shelf, and this module is the only place that reads the
- * file it points at. The format is documented for roasters in
- * `docs/roaster-feed.md`.
+ * that link's own recipe has imported, the app offers to subscribe to the
+ * roaster, which adds its coffees to a catalogue the user can browse. This
+ * module is the only place that reads the file. The format is documented for
+ * roasters in `docs/roaster-feed.md`.
  *
  * Everything in a feed is untrusted. It is a file from the open internet,
  * served by whoever minted the link, so it is read the way a backup is: sizes
@@ -26,10 +26,10 @@ export const ROASTER_FEED_VERSION = 1;
 /**
  * The most coffees read from one feed.
  *
- * A roaster with more than this is publishing a catalogue rather than a
- * shelf, and every coffee is a request to xBloom when it is added. The rest
- * are ignored rather than refusing the feed, so a large roaster still gets
- * the first part of its list.
+ * A roaster with more than this is publishing a wholesale list rather than a
+ * range, and the catalogue is drawn on a phone. The rest are ignored rather
+ * than refusing the feed, so a large roaster still gets the first part of
+ * its list.
  */
 export const MAX_FEED_COFFEES = 200;
 
@@ -59,6 +59,30 @@ export type FeedRecipe = {
     share: string;
 };
 
+/**
+ * How the roaster says to treat the roast, in days since the roast date.
+ *
+ * Every field is optional and checked on its own, so one bad number costs
+ * that number and not the block.
+ */
+export type FeedRoast = {
+    /** The roaster's own name for the level, e.g. "Nordic Ultra-light". */
+    level?: string;
+    /** Days to rest before it is ready. */
+    restDays?: number;
+    /** The day it is at its best. */
+    peakDay?: number;
+    /** The last day the roaster recommends it. */
+    bestUntilDay?: number;
+};
+
+/** Days a roast field may name. A year and a half is past any coffee's life. */
+const MAX_ROAST_DAY = 540;
+/** Bag sizes listed per coffee. */
+const MAX_BAG_SIZES = 10;
+/** The largest bag, in grams. Five kilos covers a wholesale bag. */
+const MAX_BAG_GRAMS = 5000;
+
 export type FeedCoffee = {
     id?: string;
     name: string;
@@ -71,6 +95,10 @@ export type FeedCoffee = {
     recipes: FeedRecipe[];
     /** The coffee as the rest of the app stores it, name, link and picture included. */
     coffee: PodCoffee;
+    /** Absent when the feed sent none, or nothing in it was usable. */
+    roast?: FeedRoast;
+    /** Bag sizes on sale, in grams, as the roaster listed them. */
+    bagSizes: number[];
 };
 
 export type RoasterFeed = {
@@ -110,6 +138,36 @@ function feedRecipe(value: unknown): FeedRecipe | null {
     return {size, share};
 }
 
+/** A whole number of days within range, or undefined. Zero is a real day here. */
+function day(value: unknown): number | undefined {
+    return typeof value === "number" && Number.isInteger(value)
+        && value >= 0 && value <= MAX_ROAST_DAY ? value : undefined;
+}
+
+function roast(value: unknown): FeedRoast | undefined {
+    const entry = record(value);
+    if (entry === null) return undefined;
+    const result: FeedRoast = {};
+    const level = capped(entry.level, SHORT_TEXT);
+    if (level !== undefined) result.level = level;
+    const restDays = day(entry.rest_days);
+    if (restDays !== undefined) result.restDays = restDays;
+    const peakDay = day(entry.peak_day);
+    if (peakDay !== undefined) result.peakDay = peakDay;
+    const bestUntilDay = day(entry.best_until_day);
+    if (bestUntilDay !== undefined) result.bestUntilDay = bestUntilDay;
+    return Object.keys(result).length > 0 ? result : undefined;
+}
+
+function bagSizes(value: unknown): number[] {
+    if (!Array.isArray(value)) return [];
+    const sizes = value
+        .slice(0, MAX_BAG_SIZES)
+        .filter((grams): grams is number => typeof grams === "number"
+            && Number.isInteger(grams) && grams > 0 && grams <= MAX_BAG_GRAMS);
+    return [...new Set(sizes)];
+}
+
 function feedCoffee(value: unknown): FeedCoffee | null {
     const entry = record(value);
     if (entry === null) return null;
@@ -141,8 +199,11 @@ function feedCoffee(value: unknown): FeedCoffee | null {
         name,
         available: entry.available === true,
         recipes,
-        coffee
+        coffee,
+        bagSizes: bagSizes(entry.bag_sizes_g)
     };
+    const read = roast(entry.roast);
+    if (read !== undefined) result.roast = read;
     const id = capped(entry.id, MAX_COFFEE_ID);
     if (id !== undefined) result.id = id;
     if (url !== undefined) result.url = url;
@@ -260,6 +321,18 @@ export async function fetchRoasterFeed(
     feedUrl: string,
     options: {signal?: AbortSignal; fetchImpl?: FetchLike; timeoutMs?: number} = {}
 ): Promise<RoasterFeed> {
+    return (await fetchRoasterFeedBody(feedUrl, options)).feed;
+}
+
+/**
+ * The same, with the body it was read from, which is what the catalogue
+ * cache keeps: the text is re-read through `parseRoasterFeed` whenever it is
+ * loaded, so a cached feed is validated exactly as a fresh one is.
+ */
+export async function fetchRoasterFeedBody(
+    feedUrl: string,
+    options: {signal?: AbortSignal; fetchImpl?: FetchLike; timeoutMs?: number} = {}
+): Promise<{feed: RoasterFeed; body: string}> {
     const {signal, fetchImpl = defaultFetch, timeoutMs = FEED_TIMEOUT_MS} = options;
     const url = feedUrl.length <= MAX_URL ? httpsUrl(feedUrl) : undefined;
     if (url === undefined) {
@@ -304,5 +377,5 @@ export async function fetchRoasterFeed(
     if (feed === null) {
         throw new RoasterFeedError("unreadable", "The roaster feed could not be read.");
     }
-    return feed;
+    return {feed, body: text};
 }
