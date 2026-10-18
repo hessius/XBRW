@@ -50,7 +50,7 @@ export const MAX_ACCENT_DISTANCE = 0.06;
  */
 export const MIN_ACCENT_CHROMA = 0.02;
 
-type Lab = {L: number; a: number; b: number};
+export type Lab = {L: number; a: number; b: number};
 
 function parseHex(value: string | null | undefined): [number, number, number] | null {
     // Typed loosely on purpose. `theColor` arrives over the network, where a
@@ -73,7 +73,7 @@ function toLinear(channel: number): number {
     return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
 }
 
-function toOklab(hex: string | null | undefined): Lab | null {
+export function toOklab(hex: string | null | undefined): Lab | null {
     const rgb = parseHex(hex);
     if (!rgb) return null;
     const [r, g, b] = rgb.map(toLinear);

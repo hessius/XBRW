@@ -1,6 +1,8 @@
 import Recipe, {type RecipeSource} from "@/library/Recipe";
+import {accentGroupFor} from "@/library/accent";
 import {fermentationFrom, processFrom, roastFrom} from "@/library/brew/beanTags";
 import type {PodCoffee} from "@/library/podCoffee";
+import {roasterAccent} from "@/library/roasterColour";
 
 /**
  * What an import link adds to the recipe it points at (issue #159).
@@ -14,6 +16,12 @@ export type ImportDecoration = {
     source?: RecipeSource;
     /** `recipe.url`: the producer's own page for this recipe. */
     recipeUrl?: string;
+    /**
+     * The roaster's own colour for the coffee, `#RRGGBB`. Becomes the card
+     * accent through `roasterAccent`, and is never stored as a hex: see
+     * `library/roasterColour.ts`.
+     */
+    colour?: string;
 };
 
 /**
@@ -47,6 +55,23 @@ function tagsFrom(coffee: PodCoffee): string[] {
 }
 
 /**
+ * Give the recipe the accent nearest the roaster's colour, if it has none yet.
+ *
+ * Only an unset accent is filled. A recipe that already holds one keeps it,
+ * so a colour can never move an accent under the user; and since the caller
+ * decorates the fetched candidate before de-duplication, a re-import of a
+ * recipe already in the library keeps the stored recipe and its accent.
+ *
+ * No answer leaves the accent unset, and the library assigns one on save as
+ * it does for any new recipe.
+ */
+function applyRoasterColour(recipe: Recipe, colour: string | undefined): void {
+    if (colour === undefined || recipe.accentIndex !== undefined) return;
+    const index = roasterAccent(colour, accentGroupFor(recipe));
+    if (index !== null) recipe.accentIndex = index;
+}
+
+/**
  * Apply an import link's decoration to the recipe it fetched.
  *
  * Mutates, in keeping with the way a `Recipe` is handled everywhere else in
@@ -58,9 +83,10 @@ function tagsFrom(coffee: PodCoffee): string[] {
  * recipe the user has already edited.
  */
 export function decorateImport(recipe: Recipe, decoration: ImportDecoration): Recipe {
-    const {coffee, source, recipeUrl} = decoration;
+    const {coffee, source, recipeUrl, colour} = decoration;
     if (source !== undefined) recipe.source = source;
     if (recipeUrl !== undefined) recipe.recipeUrl = recipeUrl;
+    applyRoasterColour(recipe, colour);
     if (coffee === undefined) return recipe;
 
     recipe.coffee = coffee;
