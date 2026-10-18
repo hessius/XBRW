@@ -15,6 +15,7 @@ import Recipe from "@/library/Recipe";
 import RecipeDatabase from "@/library/RecipeDatabase";
 import {canonicalShelfId} from "@/library/hiddenShelves";
 import {tagKey} from "@/library/tagKey";
+import type {StoredBagReading} from "@/library/CoffeeBagDatabase";
 
 /**
  * The part of `RecipeDatabase` this hook uses.
@@ -59,6 +60,13 @@ export type RecipeStore = {
      * that does not shout.
      */
     brewEvidence?: () => Record<string, RecipeEvidence>;
+    /**
+     * Each recipe's open bag and the grams its brews have used.
+     *
+     * Optional like `brewEvidence`, and for the same reason: a store that
+     * cannot answer costs the cards their bag badge and nothing else.
+     */
+    coffeeBags?: () => Record<string, StoredBagReading>;
     /**
      * A few members of each shelf, for the art on its tile.
      *
@@ -208,6 +216,8 @@ export type RecipeLibrary = {
     authorCounts: {author: string; count: number}[];
     /** What each recipe's brews add up to, keyed by uuid. Absent means none. */
     evidence: Record<string, RecipeEvidence>;
+    /** Each recipe's open bag, keyed by uuid. Absent means no bag. */
+    bags: Record<string, StoredBagReading>;
     /** The art each shelf's tile draws, keyed by shelf id. */
     shelfMarks: Record<string, ShelfMarkMembers>;
     allRecipes: () => Recipe[];
@@ -267,6 +277,7 @@ export function useRecipeLibrary(
     const tagCounts = readTagCounts(store, revision);
     const authorCounts = readAuthorCounts(store, revision);
     const evidence = readEvidence(store, revision);
+    const bags = readBags(store, revision);
     // Keyed by every shelf that could be drawn rather than by the ones the grid
     // actually draws, because suppression depends on which filters are applied
     // and the art does not: the same shelf shows the same members whether the
@@ -560,6 +571,7 @@ export function useRecipeLibrary(
         tagCounts,
         authorCounts,
         evidence,
+        bags,
         shelfMarks,
         allRecipes,
         refresh: reload,
@@ -650,6 +662,17 @@ function readEvidence(
 ): Record<string, RecipeEvidence> {
     void revision;
     return db.brewEvidence?.() ?? {};
+}
+
+/**
+ * Each open bag and what its brews used, on the same revision counter as
+ * evidence, so a brew and a return to the library moves the badge with it.
+ */
+function readBags(
+    db: RecipeStore, revision: number
+): Record<string, StoredBagReading> {
+    void revision;
+    return db.coffeeBags?.() ?? {};
 }
 
 /**

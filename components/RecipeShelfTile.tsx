@@ -13,6 +13,8 @@ import {canWriteToCard} from "@/library/cardLimits";
 import type {RecipeEvidence} from "@/library/libraryQuery";
 import type {SlotMarkerValue} from "@/library/slots/slotModel";
 import {evidenceLine, isSet, spokenEvidence} from "@/library/recipeEvidence";
+import {bagBadge, readBag, spokenBag} from "@/library/coffeeBag";
+import type {StoredBagReading} from "@/library/CoffeeBagDatabase";
 import {onAccent} from "@/constants/colors";
 
 /**
@@ -75,6 +77,8 @@ type Props = {
      * to one answer about it.
      */
     evidence?: RecipeEvidence;
+    /** The open bag, as on the card: a badge in the corner row, no new row. */
+    bag?: StoredBagReading;
     /**
      * The recipe's own actions, mirrored from the overflow sheet the long press
      * opens. Each is optional for the same reason its row in the sheet is: brew
@@ -127,7 +131,7 @@ type Props = {
  */
 export default function RecipeShelfTile({
     recipe, onPress, onLongPress, showCoffeeMarker = true, dottedProfile = false,
-    evidence, onBrew, onShare, onWrite, onDuplicate, onDelete, onToggleFavourite,
+    evidence, bag, onBrew, onShare, onWrite, onDuplicate, onDelete, onToggleFavourite,
     onHistory, editing = false, slotMarker, onEasyMode
 }: Props) {
     const accent = resolveAccent(recipe);
@@ -140,6 +144,7 @@ export default function RecipeShelfTile({
     // screen reader as the accent colour alone.
     const figures = figuresLine(recipe, isTea);
     const shownEvidence = evidenceLine(evidence);
+    const bagReading = bag === undefined ? undefined : readBag(bag.bag, bag.usedGrams, recipe.dosage);
     const summary = [
         recipe.displayName(),
         marker.toLowerCase(),
@@ -155,7 +160,8 @@ export default function RecipeShelfTile({
         !isTea && recipe.grinder && isSet(recipe.grindSize)
             ? `grind ${recipe.grindSize}`
             : undefined,
-        ...spokenEvidence(evidence)
+        ...spokenEvidence(evidence),
+        bagReading !== undefined ? spokenBag(bagReading) : undefined
     ].filter((part) => part !== undefined).join(", ");
 
     // The long press is unreachable by a screen reader, so the acts it opens are
@@ -275,6 +281,13 @@ export default function RecipeShelfTile({
                         </Pressable>
                     )}
                     <SlotMarker marker={slotMarker}/>
+                    {bagReading !== undefined && (
+                        <DotMatrixText testID="recipe-tile-bag" fontSize={10}
+                                       weight="bold" letterSpacing={1.1}
+                                       numberOfLines={1} color={onAccent.marker}>
+                            {bagBadge(bagReading)}
+                        </DotMatrixText>
+                    )}
                     {recipe.favourite && (
                         <DotIcon testID="recipe-tile-favourite" name="favourite"
                                  size={12} color={onAccent.marker}/>

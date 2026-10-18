@@ -1,10 +1,11 @@
 import React from "react";
-import {Share, StyleSheet, TextInput} from "react-native";
+import {Linking, Share, StyleSheet, TextInput} from "react-native";
 import {act, fireEvent, screen, waitFor, within} from "@testing-library/react-native";
 
 import EditRecipe, {PROFILE_HEIGHT, stageScrollTarget} from "@/app/editRecipe";
 import {renderWithProviders, SHEET_PRESS_TIMEOUT} from "@/test-utils/render";
 import {sharedSlotDatabase} from "@/hooks/useEasyModeSlots";
+import {sharedBagDatabase} from "@/library/CoffeeBagDatabase";
 
 import Pour, {POUR_PATTERN} from "@/library/Pour";
 import Recipe, {CUP_TYPE} from "@/library/Recipe";
@@ -1730,5 +1731,52 @@ describe("custom overflow protection", () => {
         const params = mockPush.mock.calls[0][0].params;
         expect(params.quickEditAdjustments).toBeDefined();
         expect(JSON.parse(params.recipeJSON).overflowProtection).toEqual(config);
+    });
+});
+
+describe("the bag on the about deck", () => {
+    function uuidInHand(): string {
+        return (JSON.parse(mockRecipeJSON) as {uuid: string}).uuid;
+    }
+
+    async function addBagFromSection(): Promise<void> {
+        await openAbout();
+        await fireEvent.press(screen.getByLabelText("I bought a bag"));
+        await waitFor(async () => {
+            if (sharedBagDatabase().openFor(uuidInHand()) === null) {
+                await fireEvent.press(screen.getByTestId("bag-save"));
+            }
+            expect(sharedBagDatabase().openFor(uuidInHand())).not.toBeNull();
+        }, {timeout: SHEET_PRESS_TIMEOUT});
+    }
+
+    it("offers a bag from the recipe menu", async () => {
+        await renderEditor();
+        await fireEvent.press(screen.getByLabelText("More"));
+        expect(screen.getByLabelText("I bought a bag")).toBeTruthy();
+    });
+
+    it("counts a bag down here when this app tracks bags", async () => {
+        mockSettings = {};
+        await renderEditor();
+        await addBagFromSection();
+        const bag = sharedBagDatabase().openFor(uuidInHand())!.bag;
+        expect(bag.sizeGrams).toBe(250);
+        expect(bag.beanName).toBeUndefined();
+        expect(screen.getByTestId("bag-remaining")).toHaveTextContent("250 g left, about 13 brews.");
+    });
+
+    it("hands a new bag to Beanconqueror when Beanconqueror tracks bags", async () => {
+        mockSettings = {bagTracker: "beanconqueror"};
+        const openURL = jest.spyOn(Linking, "openURL").mockResolvedValue(true);
+        await renderEditor({name: "Ethiopia Guji - Drop"});
+        await addBagFromSection();
+
+        const bag = sharedBagDatabase().openFor(uuidInHand())!.bag;
+        expect(bag.beanName).toBe("Ethiopia Guji");
+        expect(openURL).toHaveBeenCalledWith(expect.stringMatching(/^beanconqueror:\/\/ADD_USER_BEAN\?shareUserBean0=/));
+        expect(screen.getByTestId("bag-elsewhere")).toHaveTextContent("Bag tracked in Beanconqueror.");
+        expect(screen.queryByTestId("bag-remaining")).toBeNull();
+        openURL.mockRestore();
     });
 });
