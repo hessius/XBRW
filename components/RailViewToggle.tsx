@@ -3,7 +3,7 @@ import {XStack} from "tamagui";
 
 import DotIcon from "@/components/DotIcon";
 import {CHIP_HEIGHT} from "@/components/RailChip";
-import {onAccent, palette} from "@/constants/colors";
+import {palette, primary} from "@/constants/colors";
 import type {DotIconName} from "@/constants/dotIcons";
 
 /** The glyph size inside a segment, matching the chips beside it. */
@@ -37,7 +37,7 @@ type Props<T extends string> = {
  * restyled two screens that did not ask to be. Matching here cannot.
  *
  * Every value it draws with comes from `RailChip`: the same `CHIP_HEIGHT`, the
- * same `$4` radius and 1 pt border, the same accent fill and `onAccent` ink. The
+ * same `$4` radius and 1 pt border, the same `primary` fill and ink. The
  * pair is one bordered shape rather than two, because two chips side by side
  * would read as two independent buttons, which is exactly the reading the design
  * rejected when it chose a pair over a toggling icon.
@@ -68,10 +68,10 @@ export default function RailViewToggle<T extends string>({
                             onPress={() => onChange(option.value)}
                             width={SEGMENT_WIDTH} height="100%"
                             alignItems="center" justifyContent="center"
-                            backgroundColor={selected ? palette.text : palette.none}
+                            backgroundColor={selected ? primary.fill : palette.none}
                             pressStyle={{opacity: 0.7}}>
                         <DotIcon name={option.icon} size={ICON_SIZE}
-                                 color={selected ? onAccent.text : palette.dim}/>
+                                 color={selected ? primary.ink : palette.dim}/>
                     </XStack>
                 );
             })}

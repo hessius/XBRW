@@ -1,4 +1,4 @@
-import {accents, machineColours, mix, onAccent, onBrand, palette, switchColours} from "@/constants/colors";
+import {accents, machineColours, mix, onAccent, onBrand, palette, primary, switchColours} from "@/constants/colors";
 import {contrast, over} from "@/test-utils/contrast";
 
 const everyAccent = [...accents.coffee, ...accents.tea];
@@ -99,6 +99,53 @@ describe("the support tile, filled with the deepened brand magenta", () => {
     // The chevron is a graphic, not text, so 3:1 is its floor.
     it("carries the chevron", () => {
         expect(contrast(onBrand.marker, palette.brandFill)).toBeGreaterThanOrEqual(3);
+    });
+});
+
+describe("the primary action fill", () => {
+    // The owner asked for the white primary buttons in the brand colour. It is
+    // pinned to `brand` so the switch's on track and the buttons are one pink.
+    it("is the brand magenta", () => {
+        expect(primary.fill).toBe(palette.brand);
+    });
+
+    it("carries button labels and glyphs at AA", () => {
+        expect(contrast(primary.ink, primary.fill)).toBeGreaterThanOrEqual(4.5);
+    });
+
+    // SegmentedControl and DeckSwitch draw their selected label in `base`
+    // rather than `primary.ink`, and fall back to this fill without an accent.
+    it("carries a selected segment's black label at AA", () => {
+        expect(contrast(palette.base, primary.fill)).toBeGreaterThanOrEqual(4.5);
+    });
+
+    // A button's edge is a graphic, so 3:1 against whatever it sits on.
+    it.each([
+        ["base", palette.base],
+        ["surface", palette.surface],
+        ["raised", palette.raised]
+    ])("stands out from %s", (_name, ground) => {
+        expect(contrast(primary.fill, ground)).toBeGreaterThanOrEqual(3);
+    });
+
+    // The revert is one line: put `fill` back to white. That only stays one
+    // line while the ink still reads on white, so pin it.
+    it("keeps an ink that would still read if the fill went back to white", () => {
+        expect(contrast(primary.ink, palette.text)).toBeGreaterThanOrEqual(4.5);
+    });
+
+    // Disabled must read as unavailable, not as a dimmer pink.
+    it("is grey when disabled, with no magenta in it", () => {
+        const [r, g, b] = [1, 3, 5].map((at) => primary.disabledFill.slice(at, at + 2));
+        expect(r).toBe(g);
+        expect(g).toBe(b);
+        expect(contrast(primary.disabledFill, primary.fill)).toBeGreaterThanOrEqual(3);
+    });
+
+    it("keeps a disabled label visible but below the live one", () => {
+        const disabled = contrast(primary.disabledInk, primary.disabledFill);
+        expect(disabled).toBeGreaterThan(1.5);
+        expect(disabled).toBeLessThan(contrast(primary.ink, primary.fill));
     });
 });
 

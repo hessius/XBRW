@@ -13,7 +13,7 @@ import EasyModeSlots, {slotWriteAvailability} from "@/components/EasyModeSlots";
 import {slotOverlayVisible} from "@/components/EasyModeWriteOverlay";
 import XbrwSheet from "@/components/XbrwSheet";
 import ScreenHeader from "@/components/ScreenHeader";
-import {onAccent, palette} from "@/constants/colors";
+import {palette, primary} from "@/constants/colors";
 import DotMatrixText from "@/components/DotMatrixText";
 import {isActiveBrewPhase} from "@/library/machine/Machine";
 import {unavailableSlotPort} from "@/library/slots/slotWriter";
@@ -158,10 +158,11 @@ export default function EasyModeScreen() {
                     </Text>
                     {availability !== null && <Text color={palette.dim}>{availability}</Text>}
                     <Button height="auto" minHeight="$4" paddingVertical="$3"
-                        backgroundColor={palette.text} color={onAccent.text}
-                        disabledStyle={{backgroundColor: palette.text, opacity: 0.45}}
+                        backgroundColor={primary.fill} color={primary.ink}
+                        disabledStyle={{backgroundColor: primary.disabledFill}}
                         disabled={availability !== null} onPress={write}>
-                        <DotMatrixText fontSize={12} weight="bold" color={onAccent.text}>WRITE TO MACHINE</DotMatrixText>
+                        <DotMatrixText fontSize={12} weight="bold"
+                            color={availability !== null ? primary.disabledInk : primary.ink}>WRITE TO MACHINE</DotMatrixText>
                     </Button>
                     <Button height="auto" minHeight="$4" paddingVertical="$3"
                         backgroundColor={palette.raised} color={palette.text} borderWidth={1} borderColor={palette.line}

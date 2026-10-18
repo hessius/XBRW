@@ -3,6 +3,18 @@
 This is the source for the full release-testing checklist, not a claim that
 device testing is complete. Update it whenever release scope or behaviour changes.
 
+## Primary buttons in the brand colour (2026-10-18, proposal)
+
+Primary buttons that do not run a recipe (SAVE NAME, CREATE SHELF, SEND, DONE,
+WRITE TO MACHINE, TRY AGAIN, SAVE in the hub) and selected states with no recipe
+accent (segmented controls, the list/grid toggle, active rail chips including
+the history edit pencil) now fill with the brand magenta instead of white. All
+of them read one new token, `primary` in `constants/colors.ts`. Dark ink is
+5.18:1 on the magenta. Disabled buttons turn grey rather than a faded magenta.
+Recipe accents still win where a recipe is on screen. Reverting is one line:
+set `primary.fill` back to `palette.text`. Checkboxes, filter-sheet rows and
+the switch track are unchanged. No card, BLE or storage behaviour changes.
+
 ## Ready to brew card (2026-10-18)
 
 Builds on the bag tracker and rest and peak. While any recipe has an open bag,
