@@ -1,6 +1,6 @@
 import {
     bagLine, beanFacts, chooseRecipe, coffeeRef, detailTitle, findCoffee, formatElevation,
-    formatScore, LONG_TITLE_SIZE, readCatalogue, roastAdvice, scrollEndPadding, updatedAgo,
+    formatScore, LONG_TITLE_SIZE, noteChips, notesLine, readCatalogue, roastAdvice, scrollEndPadding, updatedAgo,
     writeCatalogue, dropCatalogue
 } from "@/library/roasterCatalogue";
 import {FEED_URL, feed, feedJson, memorySettings} from "@/test-utils/roasterFeed";
@@ -101,5 +101,38 @@ describe("catalogue layout", () => {
         // Gesture navigation's small inset keeps the screen's own end.
         expect(scrollEndPadding(48, 16)).toBe(48);
         expect(scrollEndPadding(8, 0)).toBe(24);
+    });
+});
+
+describe("tasting notes", () => {
+    // Four shapes from Central Coast Coffee's live feed.
+    const PROSE = "Clean and well-structured, with a buttery mouthfeel. " +
+        "Stewed apple, fresh cream and sweet almond.";
+    const BRACKETED = "Cherry, Passionfruit, Turkish Delight, Mango (Java Duo Cherry Velvet)";
+    const PIPED = "Caramel | brown sugar | lemongrass";
+    const HARVEST = "Raspberry Mandarin Floral (2024 Harvest)";
+
+    it("draws a short list as chips, split on commas or pipes", () => {
+        expect(noteChips(PIPED)).toEqual(["Caramel", "brown sugar", "lemongrass"]);
+        expect(noteChips("Floral, Apricot, Lime")).toEqual(["Floral", "Apricot", "Lime"]);
+    });
+
+    it("keeps prose, brackets and single phrases as a sentence", () => {
+        expect(noteChips(PROSE)).toBeNull();
+        expect(noteChips(BRACKETED)).toBeNull();
+        expect(noteChips(HARVEST)).toBeNull();
+        expect(noteChips("Lime")).toBeNull();
+        expect(noteChips(undefined)).toBeNull();
+    });
+
+    it("refuses chips that are too many or too long", () => {
+        expect(noteChips("a, b, c, d, e, f, g, h, i")).toBeNull();
+        expect(noteChips("Cacao, a very long tasting note indeed")).toBeNull();
+    });
+
+    it("gives a list row one line in either case", () => {
+        expect(notesLine(PIPED)).toBe("Caramel, brown sugar, lemongrass");
+        expect(notesLine(HARVEST)).toBe(HARVEST);
+        expect(notesLine("  ")).toBeUndefined();
     });
 });

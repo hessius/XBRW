@@ -20,8 +20,8 @@ import {sharedSettings, useSetting} from "@/hooks/useSetting";
 import {assignAccent, resolveAccent} from "@/library/accent";
 import type Recipe from "@/library/Recipe";
 import {
-    bagLine, beanFacts, chooseRecipe, detailTitle, findCoffee, readCatalogue, roastAdvice,
-    scrollEndPadding
+    bagLine, beanFacts, chooseRecipe, detailTitle, findCoffee, noteChips, readCatalogue,
+    roastAdvice, scrollEndPadding
 } from "@/library/roasterCatalogue";
 import type {FeedCoffee} from "@/library/roasterFeed";
 import {
@@ -159,7 +159,8 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
     const bags = bagLine(coffee);
     const facts = beanFacts(coffee);
     const title = detailTitle(coffee.name);
-    const notes = coffee.coffee.aromatics;
+    const notes = coffee.coffee.aromatics?.trim() || undefined;
+    const chips = noteChips(notes);
     const covered = naming || (pending !== null && pending.kind === "shelf");
 
     /** A fresh copy each time, so one action never mutates what another uses. */
@@ -258,11 +259,15 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
                                 {advice}
                             </Text>
                         )}
-                        {notes !== undefined && (
-                            <XStack flexWrap="wrap" gap="$2">
-                                {notes.split(",").map((note) => note.trim()).filter(Boolean)
-                                    .map((note) => <Chip key={note} label={note}/>)}
+                        {chips !== null ? (
+                            <XStack testID="roaster-coffee-note-chips" flexWrap="wrap" gap="$2">
+                                {chips.map((note) => <Chip key={note} label={note}/>)}
                             </XStack>
+                        ) : notes !== undefined && (
+                            <Text testID="roaster-coffee-notes" fontSize={15} lineHeight={22}
+                                  color={palette.dim}>
+                                {notes}
+                            </Text>
                         )}
                         {facts.length > 0 && (
                             <YStack gap="$2">

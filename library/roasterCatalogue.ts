@@ -220,3 +220,38 @@ export function detailTitle(name: string): {lines: number; size?: number} {
 export function scrollEndPadding(minimum: number, bottomInset: number, clearance = 24): number {
     return Math.max(minimum, bottomInset + clearance);
 }
+
+/** Most chips a coffee's notes are drawn as; more reads as a paragraph. */
+export const MAX_NOTE_CHIPS = 8;
+/** Longest single chip, in characters. */
+export const MAX_NOTE_CHIP = 20;
+
+/**
+ * A roaster's tasting notes as chips, or null to draw them as a sentence.
+ *
+ * Roasters write notes two ways. A short list ("Cherry, Passionfruit" or
+ * "Caramel | brown sugar | lemongrass") reads well as chips. Prose ("Clean
+ * and well-structured, with a buttery mouthfeel.") does not: split on its
+ * commas and upper-cased in Doto it becomes a row of half-sentences. So chips
+ * only for 2 to 8 short parts with no full stop and no brackets; anything
+ * else, including a bracketed aside such as "(2024 Harvest)", stays prose.
+ */
+export function noteChips(notes: string | undefined): string[] | null {
+    if (notes === undefined) return null;
+    if (/[.()[\]{}]/.test(notes)) return null;
+    const parts = notes.split(/,|\s\|\s/).map((part) => part.trim()).filter(Boolean);
+    if (parts.length < 2 || parts.length > MAX_NOTE_CHIPS) return null;
+    if (parts.some((part) => part.length > MAX_NOTE_CHIP)) return null;
+    return parts;
+}
+
+/**
+ * The notes as one line for a list row: a chip list joined with commas, so a
+ * roaster's "a | b | c" reads like everyone else's, and prose as written.
+ */
+export function notesLine(notes: string | undefined): string | undefined {
+    const chips = noteChips(notes);
+    if (chips !== null) return chips.join(", ");
+    const prose = notes?.trim() ?? "";
+    return prose === "" ? undefined : prose;
+}
