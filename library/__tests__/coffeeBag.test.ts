@@ -10,6 +10,8 @@ import {
     resolveBagTracker,
     reviveBag,
     roastDayFromCoffee,
+    roastDayLabel,
+    roastDayRange,
     roastedOnDate,
     spokenBag,
     withGramsLeft,
@@ -167,5 +169,24 @@ describe("reviving a stored bag", () => {
     it("drops a malformed optional field and keeps the bag", () => {
         const revived = reviveBag({...bag(), roastedOn: "last week", price: "lots", extra: 1});
         expect(revived).toEqual(bag());
+    });
+});
+
+describe("the roast-day picker's words and limits", () => {
+    it("names today and yesterday, and dates anything older in full", () => {
+        expect(roastDayLabel("2026-10-18", "2026-10-18")).toBe("Today, 18 Oct");
+        expect(roastDayLabel("2026-10-17", "2026-10-18")).toBe("Yesterday, 17 Oct");
+        expect(roastDayLabel("2026-10-16", "2026-10-18")).toBe("Fri 16 Oct 2026");
+        expect(roastDayLabel("2025-12-31", "2026-01-01")).toBe("Yesterday, 31 Dec");
+        expect(roastDayLabel("2026-10-16", "2026-10-18", true)).toBe("Friday 16 October 2026");
+    });
+
+    it("runs from a year back to today", () => {
+        expect(roastDayRange("2026-10-18")).toEqual({min: "2025-10-18", max: "2026-10-18"});
+    });
+
+    it("widens the start for an older stored day but never passes today", () => {
+        expect(roastDayRange("2026-10-18", "2025-01-02")).toEqual({min: "2025-01-02", max: "2026-10-18"});
+        expect(roastDayRange("2026-10-18", "2026-12-01")).toEqual({min: "2025-10-18", max: "2026-10-18"});
     });
 });

@@ -189,3 +189,19 @@ jest.mock("react-native-webview", () => {
     }
     return {__esModule: true, WebView, default: WebView};
 });
+
+/**
+ * `@react-native-community/datetimepicker` is native on both platforms. The
+ * iOS picker renders as an inert view that keeps its props, so a test can read
+ * its limits and call `onValueChange` as the calendar would. Android's dialog
+ * is an imperative `open`; the mock records each call for the same purpose.
+ */
+jest.mock("@react-native-community/datetimepicker", () => {
+    const React = require("react");
+    const {View} = require("react-native");
+    function DateTimePicker(props) {
+        return React.createElement(View, {...props, testID: props.testID ?? "datetimepicker"});
+    }
+    const DateTimePickerAndroid = {open: jest.fn(), dismiss: jest.fn(async () => true)};
+    return {__esModule: true, default: DateTimePicker, DateTimePickerAndroid};
+});
