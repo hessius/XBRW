@@ -84,6 +84,13 @@ showing xBloom's own name. Roasters get `docs/roaster-guide.md` and
 feed change, back-in-stock toast after a restock, TalkBack on the dot rows and
 the TELL ME switch, the square photo on the Fold inner screen.
 
+Roaster recipes in ABOUT (2026-10-18): for a recipe whose link or catalogue
+named a roaster, FROM reads "From {roaster}" alone (the "Shared on xBloom by"
+line is gone), and XPOD labels xBloom's title "xBloom profile name", drawn
+quietly, with no USE THIS NAME. Pod recipes and links without a roaster keep
+"Arrived from {sharer}" and the button. Device check: a CCC link recipe's ABOUT
+on the cover screen.
+
 ## Recipe picture in the header, on list cards and on shelf tiles (2026-10-18)
 
 With Show recipe pictures on, a recipe's `imageURL` (pod artwork, or a coffee
