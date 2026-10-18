@@ -1,5 +1,5 @@
 import {useLocalSearchParams} from "expo-router";
-import React, {useState} from "react";
+import React, {useEffect, useRef, useState} from "react";
 import {ScrollView} from "react-native";
 import {FlatList} from "react-native-gesture-handler";
 import {useSafeAreaInsets} from "react-native-safe-area-context";
@@ -16,6 +16,7 @@ import {UNCLIPPED_LIST} from "@/constants/lists";
 import router from "@/hooks/steadyRouter";
 import {useRailSearch, type RailSearch} from "@/hooks/useRailSearch";
 import {sharedSettings, useSetting} from "@/hooks/useSetting";
+import {coffeeBadge, readAlerts, recordListViewed} from "@/library/roasterAlerts";
 import {coffeeRef, readCatalogue, scrollEndPadding, updatedAgo} from "@/library/roasterCatalogue";
 import type {FeedCoffee} from "@/library/roasterFeed";
 import {
@@ -124,9 +125,25 @@ export default function RoasterScreen({settings, feedUrl, now}: {
     const store = settings ?? sharedSettings();
     // Subscribed so a refresh that lands while this is open redraws it.
     useSetting("roasterCatalogue", store);
+    // And to the alerts, so a coffee opened from here loses its tag on return.
+    useSetting("roasterAlerts", store);
     const [at] = useState(() => (now ?? Date.now)());
     const insets = useSafeAreaInsets();
     const cached = readCatalogue(store, feed);
+    const alerts = readAlerts(store, feed);
+
+    // One visit to the list. NEW tags from the last visit go now, and the
+    // ones flagged since are shown with their tag and stop counting towards
+    // the dot. Once per mount: the ref holds when an effect is run twice.
+    const visited = useRef(false);
+    useEffect(() => {
+        if (visited.current) return;
+        visited.current = true;
+        const listed = readCatalogue(store, feed);
+        if (listed !== null) recordListViewed(store, feed, listed.feed.coffees);
+        // Once per visit, by design; see the ref above.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
     // Remembered per roaster for the session, without the search term: the
     // field's own text starts empty, and a term with no field showing it
     // would narrow the list with nothing on screen to say so.
@@ -187,6 +204,7 @@ export default function RoasterScreen({settings, feedUrl, now}: {
                         renderItem={({item}) => (
                             <RoasterCoffeeRow
                                 coffee={item}
+                                badge={coffeeBadge(alerts, item)}
                                 testID={`roaster-coffee-${ref(item)}`}
                                 onPress={() => router.push({
                                     pathname: "/roasterCoffee",

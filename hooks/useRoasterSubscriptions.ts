@@ -10,6 +10,7 @@ import {useState} from "react";
 
 import {notify} from "@/components/XbrwToast";
 import {sharedSettings, useSetting} from "@/hooks/useSetting";
+import {backInStockMessage} from "@/library/roasterAlerts";
 import {parseFeedOptOut, serialiseFeedOptOut, type RoasterFeed} from "@/library/roasterFeed";
 import {parseSubscriptions, type RoasterSubscription} from "@/library/roasterSubscription";
 import {
@@ -38,6 +39,19 @@ export function refreshMessage(result: SyncResult, roaster: string): {
             message: count === 1 ? `${roaster}: 1 coffee.` : `${roaster}: ${count} coffees.`};
 }
 
+/**
+ * The one toast for watched coffees a sync found back on sale.
+ *
+ * Once per coffee, because the sync stops watching what it announces. Every
+ * sync is a foreground one, so this is the whole of "telling" somebody: there
+ * are no push notifications.
+ */
+export function announceBack(result: SyncResult): void {
+    if (!result.ok) return;
+    const message = backInStockMessage(result.feed.roaster.name, result.back);
+    if (message !== null) notify({tone: "success", message});
+}
+
 type Options = {
     settings?: Settings;
     /** Injected by tests. */
@@ -63,6 +77,7 @@ export function useRoasterSubscriptions({settings, fetchBody, now}: Options = {}
                                               {force: true, ignorePause: true});
         setRefreshing(null);
         notify(refreshMessage(result, sub.roaster));
+        announceBack(result);
         return result;
     }
 

@@ -483,6 +483,13 @@ screen (`app/subscriptions.tsx`, `components/UnsubscribeSheet.tsx`,
 | `roaster.refresh.network` | `hooks/useRoasterSubscriptions.ts` | Refresh could not reach the feed. | `Couldn't reach ${roaster}. Check your connection.` |
 | `roaster.refresh.unreadable` | `hooks/useRoasterSubscriptions.ts` | Refresh got something that was not a feed. | `${roaster}'s list of coffees couldn't be read.` |
 | `roaster.unsubscribed` | `hooks/useRoasterSubscriptions.ts` | After unsubscribing. | `Unsubscribed from ${roaster}.` |
+| `roaster.alerts.dot` | `components/CatalogueParts.tsx` (`AlertDot`) | Small count on the ROASTERS entry and on each roaster's row: NEW coffees not yet shown in the list plus coffees back in stock. Hidden at zero; decorative to a reader, whose label gains `${n} new, ${m} back in stock` (`library/roasterAlerts.ts`, `alertSummary`). | `${n}` (`99+` above 99) |
+| `roaster.alerts.new` | `components/CatalogueParts.tsx` (`CoffeeBadgeTag`) | Doto tag above a coffee's name in the list and on its page, for one visit to the list after a sync brought it, or until opened. Spoken as `new`. | `NEW` |
+| `roaster.alerts.back` | `components/CatalogueParts.tsx` (`CoffeeBadgeTag`) | Doto tag on a watched coffee a sync found on sale, until opened or the watch is switched off. Spoken as `back in stock`. | `BACK IN STOCK` |
+| `roaster.alerts.watch` | `components/CatalogueParts.tsx` (`WatchToggle`) | Switch on a sold-out coffee's page, with a detail line. a11y: `Tell me when it's back`. | `Tell me when it's back` / `Shown here and in the list when the roaster has it again.` |
+| `roaster.alerts.watchBag` | `components/CatalogueParts.tsx` (`BagWatch`) | Beside SOLD OUT on a sold-out bag of a coffee that is on sale. a11y: `${row}, sold out. Tell me when it's back` (switch). | `TELL ME` / `WATCHING` |
+| `roaster.alerts.toast` | `library/roasterAlerts.ts` (`backInStockMessage`) | One toast per sync, per roaster, for watched coffees that came back. | `${coffee} is back at ${roaster}.` / `${n} coffees you asked about are back at ${roaster}.` |
+| `roaster.recipe.name` | `library/fitName.ts` (`fitName`) | A catalogue recipe's name, `${coffee} - ${size}`, fitted under the 100-character name ceiling: trailing bracketed groups go first, then whole words, with `…` before the size. | `${coffee}… - ${size}` |
 
 ---
 

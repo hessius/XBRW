@@ -23,6 +23,26 @@ retest, settings visual acceptance and existing native/external-app release
 gates remain open. The earlier truncated tea recording is still unexplained.
 The new CI runtime/cache benefit also awaits an actual Actions run.
 
+NEW and back in stock (2026-10-18): the app remembers which catalogue coffees
+were seen (shown in the list or opened). A sync that brings an unseen coffee
+tags it NEW in the list and on its page, and a dot with a count appears on
+Catalogue > Roasters and on the roaster's row. The tag lasts one visit to the
+list (the dot clears on that visit) or until the coffee is opened; the first
+sync after subscribing marks everything seen. A sold-out coffee's page has
+"Tell me when it's back"; a sold-out bag of a coffee on sale has TELL ME. A
+later sync that finds it on sale tags it BACK IN STOCK, dots the roaster and
+shows one toast "{coffee} is back at {roaster}."; opening it or switching the
+watch off clears it. All of it lives in the `roasterAlerts` setting, held out
+of backups. Foreground sync only, no push, no background fetch, no xBloom
+calls. The coffee page photo is now drawn whole (square until loaded, then its
+own shape between 4:5 and 16:9, up to 420 wide and centred) instead of a
+cropped banner. Long catalogue names are fitted under the 100-character name
+ceiling (`library/fitName.ts`), and re-adding a coffee renames a copy still
+showing xBloom's own name. Roasters get `docs/roaster-guide.md` and
+`npm run check-feed -- <url or file>`. Device checks: NEW and dot after a real
+feed change, back-in-stock toast after a restock, TalkBack on the dot rows and
+the TELL ME switch, the square photo on the Fold inner screen.
+
 ## Brew history trace storage (2026-10-15)
 
 Brew traces are compressed and managed under a configurable storage budget. When

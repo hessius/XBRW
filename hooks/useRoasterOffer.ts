@@ -20,6 +20,7 @@
 import {useEffect, useRef, useState} from "react";
 
 import {notify} from "@/components/XbrwToast";
+import {announceBack} from "@/hooks/useRoasterSubscriptions";
 import {sharedSettings} from "@/hooks/useSetting";
 import {
     feedKey, fetchRoasterFeedBody, parseFeedOptOut, serialiseFeedOptOut,
@@ -120,7 +121,7 @@ export function useRoasterOffer({
         // Already subscribed: no question, just a quiet refresh of the
         // catalogue, which reads the feed and nothing else.
         if (subscribed(url)) {
-            void syncSubscription(url, syncDeps(), {force: true});
+            void syncSubscription(url, syncDeps(), {force: true}).then(announceBack);
             return;
         }
         if (optedOut(url)) return;
@@ -182,7 +183,7 @@ export function useRoasterOffer({
     }
 
     function runDue() {
-        void syncDue(syncDeps());
+        void syncDue(syncDeps()).then((results) => results.forEach(announceBack));
     }
 
     return {state, arm, disarm, imported, ask, accept, decline, syncDue: runDue};
