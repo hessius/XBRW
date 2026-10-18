@@ -9,6 +9,8 @@ import SettingsScreen from "@/app/settings";
 import {SUPPORT_TITLE} from "@/components/SupportTile";
 import {palette} from "@/constants/colors";
 import Recipe from "@/library/Recipe";
+import {feedKey, serialiseFeedOptOut} from "@/library/roasterFeed";
+import {serialiseSubscriptions} from "@/library/roasterSubscription";
 import {DEFAULTS, NOT_IN_BACKUP, Settings, type SettingKey, type SettingsStorage} from "@/library/Settings";
 import {
     renderWithProviders, SHEET_PRESS_TIMEOUT, THREE_BUTTON_METRICS
@@ -353,6 +355,30 @@ describe("SettingsScreen", () => {
     it("says what the unit changes and what it does not", async () => {
         await renderWithProviders(<SettingsScreen settings={new Settings(memoryStorage())}/>);
         expect(screen.getByText(/card always stores/i)).toBeTruthy();
+    });
+
+    it("hides roaster subscriptions until there is something to manage", async () => {
+        await renderWithProviders(<SettingsScreen settings={new Settings(memoryStorage())}/>);
+        expect(screen.queryByText("Roaster subscriptions")).toBeNull();
+    });
+
+    it("shows roaster subscriptions once there is a subscription", async () => {
+        const settings = new Settings(memoryStorage());
+        settings.set("roasterSubscriptions", serialiseSubscriptions([{
+            feed: "https://roaster.example/feed.json", roaster: "Example Roasters",
+            lastSync: 0, lastAttempt: 0, paused: false
+        }]));
+        await renderWithProviders(<SettingsScreen settings={settings}/>);
+        expect(screen.getByText("Roaster subscriptions")).toBeTruthy();
+        expect(screen.getByText("1 roaster.")).toBeTruthy();
+    });
+
+    it("shows roaster subscriptions when only a don't-ask-again is left to undo", async () => {
+        const settings = new Settings(memoryStorage());
+        settings.set("roasterFeedOptOut", serialiseFeedOptOut([feedKey("https://roaster.example/feed.json") ?? ""]));
+        await renderWithProviders(<SettingsScreen settings={settings}/>);
+        expect(screen.getByText("Roaster subscriptions")).toBeTruthy();
+        expect(screen.getByText("None. Roasters you said no to are listed here.")).toBeTruthy();
     });
 
     it("offers backup and restore", async () => {
