@@ -157,6 +157,12 @@ name. Logic in `library/roasterHome.ts`. Device checks: the strip at
 360 dp and with large text, the strip folding on scroll, TalkBack on the strip
 rows and the search results.
 
+Roaster colour (2026-10-19): a feed coffee may carry `bean.colour` (or
+`bean.color`), a strict `#RRGGBB` for the roaster's own colour coding, e.g. by
+origin. A recipe added from the catalogue takes the palette accent nearest its
+hue (`library/roasterColour.ts`); greys and far hues get the usual accent, and
+a copy already in the library keeps its accent. The hex is never stored.
+
 Roaster recipes in ABOUT (2026-10-18): for a recipe whose link or catalogue
 named a roaster, FROM reads "From {roaster}" alone (the "Shared on xBloom by"
 line is gone), and XPOD labels xBloom's title "xBloom profile name", drawn

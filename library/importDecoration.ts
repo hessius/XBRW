@@ -1,6 +1,8 @@
 import Recipe, {type RecipeSource} from "@/library/Recipe";
+import {accentGroupFor} from "@/library/accent";
 import {fermentationFrom, processFrom, roastFrom} from "@/library/brew/beanTags";
 import {podImageUrl, type PodCoffee} from "@/library/podCoffee";
+import {roasterAccent} from "@/library/roasterColour";
 
 /**
  * What an import link adds to the recipe it points at (issue #159).
@@ -25,6 +27,12 @@ export type ImportDecoration = {
      * the recipe's own tags come first and are never removed.
      */
     tags?: readonly string[];
+    /**
+     * The roaster's own colour for the coffee, `#RRGGBB`. Becomes the card
+     * accent through `roasterAccent`, and is never stored as a hex: see
+     * `library/roasterColour.ts`.
+     */
+    colour?: string;
 };
 
 /**
@@ -58,6 +66,23 @@ function tagsFrom(coffee: Partial<PodCoffee>): string[] {
 }
 
 /**
+ * Give the recipe the accent nearest the roaster's colour, if it has none yet.
+ *
+ * Only an unset accent is filled. A recipe that already holds one keeps it,
+ * so a colour can never move an accent under the user; and since the caller
+ * decorates the fetched candidate before de-duplication, a re-import of a
+ * recipe already in the library keeps the stored recipe and its accent.
+ *
+ * No answer leaves the accent unset, and the library assigns one on save as
+ * it does for any new recipe.
+ */
+function applyRoasterColour(recipe: Recipe, colour: string | undefined): void {
+    if (colour === undefined || recipe.accentIndex !== undefined) return;
+    const index = roasterAccent(colour, accentGroupFor(recipe));
+    if (index !== null) recipe.accentIndex = index;
+}
+
+/**
  * Apply an import link's decoration to the recipe it fetched.
  *
  * Mutates, in keeping with the way a `Recipe` is handled everywhere else in
@@ -70,7 +95,7 @@ function tagsFrom(coffee: Partial<PodCoffee>): string[] {
  * the link carries in the places it has nothing, and only there.
  */
 export function decorateImport(recipe: Recipe, decoration: ImportDecoration): Recipe {
-    const {coffee, source, recipeUrl, recipeName, tags} = decoration;
+    const {coffee, source, recipeUrl, recipeName, tags, colour} = decoration;
     if (source !== undefined) recipe.source = source;
     if (recipeUrl !== undefined) recipe.recipeUrl = recipeUrl;
     // `name`, not `xbloomName`. `displayName()` already prefers `name`, so the
@@ -78,6 +103,7 @@ export function decorateImport(recipe: Recipe, decoration: ImportDecoration): Re
     // cached underneath for USE THIS NAME to restore.
     if (recipeName !== undefined) recipe.name = recipeName;
     if (tags !== undefined && tags.length > 0) recipe.setTags([...recipe.tags, ...tags]);
+    applyRoasterColour(recipe, colour);
     if (coffee === undefined) return recipe;
 
     recipe.coffee = coffee;

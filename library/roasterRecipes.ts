@@ -71,7 +71,7 @@ export async function fetchCoffeeRecipe(
         ? {...coffee.coffee, flavours: coffee.flavours}
         : coffee.coffee;
     decorateImport(recipe, {coffee: withRoastAdvice(withFlavours, coffee.roast ?? {}),
-                            source: "import", tags: coffee.tags,
+                            source: "import", tags: coffee.tags, colour: coffee.colour,
                             recipeName: recipeName(coffee, chosen.size)});
     return {recipe, size: chosen.size};
 }
