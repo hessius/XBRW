@@ -108,10 +108,12 @@ describe("roaster filters", () => {
     });
 
     it("writes the header count as shown of total while filtered", () => {
-        expect(countLabel(30, 30, false)).toBe("30");
-        expect(countLabel(27, 30, false)).toBe("27");
-        expect(countLabel(12, 30, true)).toBe("12 OF 30");
-        expect(countLabel(30, 30, true)).toBe("30");
+        expect(countLabel(30, 30, false)).toBe("30 coffees");
+        expect(countLabel(27, 30, false)).toBe("27 coffees");
+        expect(countLabel(12, 30, true)).toBe("12 of 30 coffees");
+        expect(countLabel(30, 30, true)).toBe("30 coffees");
+        expect(countLabel(1, 1, false)).toBe("1 coffee");
+        expect(countLabel(0, 30, true)).toBe("0 of 30 coffees");
     });
 
     it("remembers a roaster's query for the session", () => {

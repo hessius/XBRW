@@ -83,7 +83,9 @@ describe("a roaster's coffees", () => {
         const library = memoryLibrary();
         await renderWithProviders(<RoasterScreen settings={subscribed()} feedUrl={FEED_URL}/>);
         expect(rowIds()).toEqual(["roaster-coffee-b"]);
-        expect(screen.getByTestId("screen-title-count").props.children).toBe("1");
+        expect(screen.getByTestId("screen-header-subtitle").props.children).toBe("1 coffee");
+        // The count is a line of its own, not a superscript a long name clips.
+        expect(screen.queryByTestId("screen-title-count")).toBeNull();
 
         await fireEvent.press(screen.getByTestId("roaster-filter-in-stock"));
         expect(rowIds()).toEqual(["roaster-coffee-b", "roaster-coffee-a"]);
@@ -135,8 +137,30 @@ describe("searching and filtering a roaster's coffees", () => {
             if (!row.props.accessibilityState?.selected) await fireEvent.press(row);
             expect(rowIds()).toEqual(["roaster-coffee-b"]);
         }, {timeout: SHEET_PRESS_TIMEOUT});
-        expect(screen.getByTestId("screen-title-count", {includeHiddenElements: true})
-            .props.children).toBe("1 OF 3");
+        expect(screen.getByTestId("screen-header-subtitle", {includeHiddenElements: true})
+            .props.children).toBe("1 of 3 coffees");
+    });
+
+    it("keeps the first chip clear of the edge and fades whichever end is cut off", async () => {
+        await renderWithProviders(<RoasterScreen settings={shelf()} feedUrl={FEED_URL}/>);
+        const rail = screen.getByTestId("roaster-rail");
+        expect(StyleSheet.flatten(rail.props.contentContainerStyle).paddingHorizontal).toBe(13);
+        // At rest with everything showing, no fade.
+        expect(screen.queryByTestId("rail-fade-start")).toBeNull();
+        expect(screen.queryByTestId("rail-fade-end")).toBeNull();
+
+        await fireEvent(rail, "layout", {nativeEvent: {layout: {x: 0, y: 0, width: 360, height: 48}}});
+        await fireEvent(rail, "contentSizeChange", 600, 48);
+        expect(screen.queryByTestId("rail-fade-start")).toBeNull();
+        expect(screen.getByTestId("rail-fade-end")).toBeTruthy();
+
+        await fireEvent.scroll(rail, {nativeEvent: {contentOffset: {x: 120, y: 0}}});
+        expect(screen.getByTestId("rail-fade-start")).toBeTruthy();
+        expect(screen.getByTestId("rail-fade-end")).toBeTruthy();
+
+        await fireEvent.scroll(rail, {nativeEvent: {contentOffset: {x: 240, y: 0}}});
+        expect(screen.getByTestId("rail-fade-start")).toBeTruthy();
+        expect(screen.queryByTestId("rail-fade-end")).toBeNull();
     });
 
     it("toggles decaf", async () => {
@@ -352,6 +376,22 @@ describe("one coffee", () => {
         return {settings, library};
     }
 
+    /**
+     * ADD TO SHELF onto Pantry, the one way a coffee is saved from here: it
+     * goes to the library first, then onto the shelf.
+     */
+    async function shelve(): Promise<void> {
+        const before = mockNotify.mock.calls.length;
+        await fireEvent.press(screen.getByTestId("roaster-coffee-shelf"));
+        await waitFor(async () => {
+            if (mockNotify.mock.calls.length === before) {
+                await fireEvent.press(screen.getByTestId("shelf-choice-Pantry"));
+            }
+            expect(mockNotify).toHaveBeenLastCalledWith({tone: "success", message: "Added to Pantry."});
+            expect(mockNotify.mock.calls.length).toBeGreaterThan(before);
+        }, {timeout: SHEET_PRESS_TIMEOUT});
+    }
+
     it("shows the bag's details and fetches the recipe from xBloom on opening", async () => {
         const {library} = await open();
         expect(screen.getByText("LIGHT ROAST")).toBeTruthy();
@@ -399,15 +439,15 @@ describe("one coffee", () => {
         const settings = subscribed();
         const library = memoryLibrary();
         await open(settings, library);
-        await fireEvent.press(screen.getByTestId("roaster-coffee-add"));
-        await waitFor(() => expect(library.all()).toHaveLength(1));
+        await shelve();
+        expect(library.all()).toHaveLength(1);
         // The copy an earlier link left, following xBloom's name.
         const held = library.find("b-18g")!;
         held.name = "";
         library.deps.save(held);
 
-        await fireEvent.press(screen.getByTestId("roaster-coffee-add"));
-        await waitFor(() => expect(library.find("b-18g")?.name).toBe("Coffee b - 18g"));
+        await shelve();
+        expect(library.find("b-18g")?.name).toBe("Coffee b - 18g");
         expect(library.all()).toHaveLength(1);
     });
 
@@ -415,14 +455,14 @@ describe("one coffee", () => {
         const settings = subscribed();
         const library = memoryLibrary();
         await open(settings, library);
-        await fireEvent.press(screen.getByTestId("roaster-coffee-add"));
-        await waitFor(() => expect(library.all()).toHaveLength(1));
+        await shelve();
+        expect(library.all()).toHaveLength(1);
         const held = library.find("b-18g")!;
         held.name = "Saturday Peru";
         library.deps.save(held);
 
-        await fireEvent.press(screen.getByTestId("roaster-coffee-add"));
-        await waitFor(() => expect(mockNotify).toHaveBeenCalledTimes(2));
+        await shelve();
+        expect(mockNotify).toHaveBeenCalledTimes(2);
         expect(library.find("b-18g")?.name).toBe("Saturday Peru");
     });
 
@@ -433,24 +473,24 @@ describe("one coffee", () => {
         const library = memoryLibrary();
         await renderWithProviders(
             <RoasterCoffeeScreen settings={settings} feedUrl={FEED_URL} coffeeId="b"
-                                 library={library.deps} shelves={() => []}/>
+                                 library={library.deps} shelves={() => ["Pantry"]}/>
         );
         await waitFor(() => expect(screen.queryByTestId("roaster-coffee-loading")).toBeNull());
         expect(screen.getByText("DARK CHOCOLATE")).toBeTruthy();
         expect(screen.getByTestId("roaster-coffee-tags").props.children).toBe("Berry · Filter");
 
-        await fireEvent.press(screen.getByTestId("roaster-coffee-add"));
-        await waitFor(() => expect(library.all()).toHaveLength(1));
+        await shelve();
+        expect(library.all()).toHaveLength(1);
         expect(library.find("b-18g")?.tags).toEqual(expect.arrayContaining(["Berry", "Filter"]));
         expect(library.find("b-18g")?.name).toBe("Coffee b - 18g");
     });
 
-    it("adds it to the library", async () => {
-        const {library} = await open();
-        await fireEvent.press(screen.getByTestId("roaster-coffee-add"));
-        await waitFor(() => expect(library.all()).toHaveLength(1));
-        expect(library.find("b-18g")?.name).toBe("Coffee b - 18g");
-        expect(mockNotify).toHaveBeenCalledWith({tone: "success", message: "Added to your library."});
+    it("offers BREW NOW and ADD TO SHELF, and no separate ADD TO LIBRARY", async () => {
+        await open();
+        expect(screen.getByTestId("roaster-coffee-brew")).toBeTruthy();
+        expect(screen.getByTestId("roaster-coffee-shelf")).toBeTruthy();
+        expect(screen.queryByTestId("roaster-coffee-add")).toBeNull();
+        expect(screen.queryByText("ADD TO LIBRARY")).toBeNull();
     });
 
     it("asks before replacing an edited copy, and KEEP MINE leaves it", async () => {
@@ -459,15 +499,15 @@ describe("one coffee", () => {
         // The user's earlier copy, since edited.
         const first = await (async () => {
             await open(settings, library);
-            await fireEvent.press(screen.getByTestId("roaster-coffee-add"));
-            await waitFor(() => expect(library.all()).toHaveLength(1));
+            await shelve();
+            expect(library.all()).toHaveLength(1);
             return library.find("b-18g")!;
         })();
         first.dosage = 20;
         library.deps.save(first);
         library.serve("b-18g", 61);
 
-        await fireEvent.press(screen.getByTestId("roaster-coffee-add"));
+        await fireEvent.press(screen.getByTestId("roaster-coffee-shelf"));
         await waitFor(() => expect(screen.getByTestId("newer-version")).toBeTruthy());
         await fireEvent.press(screen.getByTestId("newer-version-keep"));
 
@@ -479,8 +519,8 @@ describe("one coffee", () => {
         const settings = subscribed();
         const library = memoryLibrary();
         await open(settings, library);
-        await fireEvent.press(screen.getByTestId("roaster-coffee-add"));
-        await waitFor(() => expect(library.all()).toHaveLength(1));
+        await shelve();
+        expect(library.all()).toHaveLength(1);
         const mine = library.find("b-18g")!;
         mine.dosage = 20;
         mine.name = "Mine";
@@ -488,7 +528,7 @@ describe("one coffee", () => {
         expect(JSON.parse(settings.get("importFingerprints"))[mine.uuid]).not.toBe(contentPrint(mine));
         library.serve("b-18g", 61);
 
-        await fireEvent.press(screen.getByTestId("roaster-coffee-add"));
+        await fireEvent.press(screen.getByTestId("roaster-coffee-shelf"));
         await waitFor(() => expect(screen.getByTestId("newer-version")).toBeTruthy());
         await fireEvent.press(screen.getByTestId("newer-version-latest"));
 

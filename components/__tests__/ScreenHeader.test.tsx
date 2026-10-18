@@ -21,6 +21,16 @@ describe("ScreenHeader", () => {
         expect(screen.getByTestId("screen-title-text").props.numberOfLines).toBe(2);
     });
 
+    it("draws a subtitle under the title, and moves the meta onto it", async () => {
+        await renderWithProviders(
+            <ScreenHeader title="Central Coast Coffee" subtitle="2 of 44 coffees"
+                          meta="Updated 3 h ago" onBack={jest.fn()}/>
+        );
+        expect(screen.getByTestId("screen-header-subtitle")).toHaveTextContent("2 of 44 coffees");
+        expect(screen.getByTestId("screen-header-meta")).toHaveTextContent("Updated 3 h ago");
+        expect(screen.queryByTestId("screen-title-count")).toBeNull();
+    });
+
     it("goes back when the key is pressed", async () => {
         const onBack = jest.fn();
         await renderWithProviders(<ScreenHeader title="About" onBack={onBack}/>);

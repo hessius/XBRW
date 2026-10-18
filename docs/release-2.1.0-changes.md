@@ -79,9 +79,10 @@ Subscribing adds the roaster to the catalogue and imports nothing.
 Catalogue > Roasters lists subscribed roasters; each opens a list of coffees
 (photo, roast level, tasting notes, bag sizes, SOLD OUT) drawn from the cached
 feed. Opening a coffee fetches its recipe from xBloom and shows roast advice,
-bean details, sizes and the roaster's page, with Brew now (editor, unsaved),
-Add to library and Add to shelf (pick or make a shelf; a TODO marks where bags
-will attach). Feed sync runs on open and foreground at most every 12 hours and
+bean details, sizes and the roaster's page, with two actions: Brew now
+(editor, unsaved) and Add to shelf, which saves the recipe to the library and
+then puts it on a shelf the person picks or makes. There is no separate Add to
+library (owner decision, 2026-10-18). A TODO marks where bags will attach. Feed sync runs on open and foreground at most every 12 hours and
 on Refresh, reads only the feed, and never touches the library or xBloom.
 
 Re-importing a share link the library holds now follows the author: an
@@ -93,6 +94,15 @@ Roaster subscriptions manages subscriptions (Browse, Refresh now, Pause/Resume,
 Open roaster's site, Unsubscribe) and "Don't ask again" answers. Device checks:
 cold-start link with feed, foreground refresh, large text on the catalogue
 screens, TalkBack on SOLD OUT and the re-import question.
+
+Third device pass (2026-10-18): a coffee page has two actions, Brew now and
+Add to shelf (Add to library removed). The roaster's coffee list puts its count
+on a line under the name ("2 of 44 coffees", "44 coffees") instead of a
+superscript a long name clipped. The filter rail starts clear of the screen
+edge and fades whichever end has more chips. A coffee's flavours (link
+`bean.flavours`, feed `flavours`) are now stored on the recipe's coffee for
+ABOUT; they are never sent to Beanconqueror. Device check: the fade on a long
+rail and the count with a long roaster name on the cover screen.
 
 NEW and back in stock (2026-10-18): the app remembers which catalogue coffees
 were seen (shown in the list or opened). A sync that brings an unseen coffee

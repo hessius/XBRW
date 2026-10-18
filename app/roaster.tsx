@@ -1,10 +1,10 @@
 import {useLocalSearchParams} from "expo-router";
 import React, {useEffect, useRef, useState} from "react";
-import {ScrollView} from "react-native";
 import {FlatList} from "react-native-gesture-handler";
 import {XStack, YStack} from "tamagui";
 
 import {CatalogueStatus} from "@/components/CatalogueParts";
+import FadingRail from "@/components/FadingRail";
 import HubFilterSheet from "@/components/HubFilterSheet";
 import RailChip from "@/components/RailChip";
 import {RailSearchChip, RailSearchField} from "@/components/RailSearch";
@@ -35,6 +35,9 @@ const FACET_COPY: Record<CoffeeFacet, {label: string; title: string; spoken: str
 
 const COFFEES: readonly [string, string] = ["coffee", "coffees"];
 
+/** The rail's space before its first chip: Tamagui's `$3`, which it used as padding. */
+const RAIL_INSET = 13;
+
 function searchState(text: string): string {
     const term = text.trim();
     return term.length === 0 ? "no search term" : `term ${term} active`;
@@ -57,11 +60,10 @@ function CoffeeRail({search, query, offered, openFacet, onFacetOpen, onChange}: 
     const state = searchState(search.text);
     return (
         <YStack borderBottomWidth={1} borderColor={palette.line} backgroundColor={palette.base}>
-            <XStack minHeight={64} alignItems="center" paddingHorizontal="$3" paddingVertical="$2">
-                <ScrollView testID="roaster-rail" horizontal showsHorizontalScrollIndicator={false}
-                            keyboardShouldPersistTaps="handled"
-                            style={{flexGrow: 0, flexShrink: 1}}
-                            contentContainerStyle={{gap: 8, alignItems: "center"}}>
+            <XStack minHeight={64} alignItems="center" paddingVertical="$2">
+                {/* Edge to edge, with the inset inside the scroll, so the first
+                    chip is clear of the edge at rest and a clipped end fades. */}
+                <FadingRail testID="roaster-rail" inset={RAIL_INSET} gap={8}>
                     {!search.expanded && <RailSearchChip state={state} onPress={search.onExpand}/>}
                     {offered.inStock && (
                         <RailChip testID="roaster-filter-in-stock" active={query.inStock}
@@ -87,7 +89,7 @@ function CoffeeRail({search, query, offered, openFacet, onFacetOpen, onChange}: 
                                   accessibilityLabel="Decaf only"
                                   onPress={() => onChange({...query, decaf: !query.decaf})}/>
                     )}
-                </ScrollView>
+                </FadingRail>
                 {search.expanded && (
                     <XStack position="absolute" top={0} left={0} right={0} bottom={0}
                             alignItems="center" paddingHorizontal="$3">
@@ -185,7 +187,7 @@ export default function RoasterScreen({settings, feedUrl, now}: {
                     accessibilityElementsHidden={covered}
                     importantForAccessibility={covered ? "no-hide-descendants" : "auto"}>
                 <ScreenHeader title={catalogue.roaster.name}
-                              count={countLabel(coffees.length, all.length, filtered)}
+                              subtitle={countLabel(coffees.length, all.length, filtered)}
                               meta={updatedAgo(cached.fetchedAt, at)}
                               onBack={() => router.back()}/>
                 <CoffeeRail search={search} query={query} offered={offered} openFacet={openFacet}

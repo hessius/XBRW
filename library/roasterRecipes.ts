@@ -65,8 +65,12 @@ export async function fetchCoffeeRecipe(
     // anything that path learns to do later (the picture, in #223) arrive the
     // same way here, the name included. The roaster's rest and peak days ride
     // on the coffee, so the bag sheet shows them instead of asking
-    // (`startingFigures`).
-    decorateImport(recipe, {coffee: withRoastAdvice(coffee.coffee, coffee.roast ?? {}),
+    // (`startingFigures`). The feed keeps its flavours beside the coffee
+    // block; the recipe keeps them on its coffee, where ABOUT reads them.
+    const withFlavours = coffee.flavours.length > 0
+        ? {...coffee.coffee, flavours: coffee.flavours}
+        : coffee.coffee;
+    decorateImport(recipe, {coffee: withRoastAdvice(withFlavours, coffee.roast ?? {}),
                             source: "import", tags: coffee.tags,
                             recipeName: recipeName(coffee, chosen.size)});
     return {recipe, size: chosen.size};
