@@ -1,6 +1,6 @@
 import React from "react";
 import {StyleSheet} from "react-native";
-import {fireEvent, screen, waitFor} from "@testing-library/react-native";
+import {act, fireEvent, screen, waitFor} from "@testing-library/react-native";
 import {router} from "expo-router";
 
 import RoasterScreen from "@/app/roaster";
@@ -8,9 +8,11 @@ import RoasterCoffeeScreen from "@/app/roasterCoffee";
 import RoastersScreen from "@/app/roasters";
 import {parseHidden} from "@/library/hiddenShelves";
 import {contentPrint} from "@/library/importRefresh";
+import {parseRoasterFeed} from "@/library/roasterFeed";
+import {forgetQueriesForTests} from "@/library/roasterFilters";
 import {subscribe} from "@/library/roasterSync";
 import {renderWithProviders, SHEET_PRESS_TIMEOUT, TEST_INSETS} from "@/test-utils/render";
-import {FEED_URL, feedBody, memoryLibrary, memorySettings} from "@/test-utils/roasterFeed";
+import {FEED_URL, feedBody, feedJson, memoryLibrary, memorySettings} from "@/test-utils/roasterFeed";
 
 jest.mock("expo-router", () => ({
     router: {push: jest.fn(), back: jest.fn()},
@@ -30,7 +32,32 @@ function subscribed() {
     return settings;
 }
 
+/**
+ * A feed whose coffees carry the beans given, keyed by coffee id, so a test
+ * can say what each one's country, roast or notes are.
+ */
+function subscribedTo(
+    coffees: {id: string; available?: boolean}[],
+    beans: Record<string, Record<string, unknown>> = {},
+    roasts: Record<string, string> = {}
+) {
+    const parsed = JSON.parse(feedJson(coffees));
+    for (const entry of parsed.coffees) {
+        entry.bean = {...entry.bean, ...(beans[entry.id] ?? {})};
+        if (roasts[entry.id] !== undefined) entry.roast = {...entry.roast, level: roasts[entry.id]};
+    }
+    const body = JSON.stringify(parsed);
+    const settings = memorySettings();
+    subscribe(settings, FEED_URL, parseRoasterFeed(body)!, body, 1000);
+    return settings;
+}
+
+// Hidden elements too: the list is hidden from a screen reader while a sheet is up.
+const rowIds = () => screen.queryAllByTestId(/^roaster-coffee-/, {includeHiddenElements: true})
+    .map((node) => node.props.testID);
+
 beforeEach(() => {
+    forgetQueriesForTests();
     mockNotify.mockReset();
     (router.push as jest.Mock).mockReset();
 });
@@ -50,11 +77,14 @@ describe("the roaster list", () => {
 });
 
 describe("a roaster's coffees", () => {
-    it("lists coffees on sale first and sold out after, from the cache alone", async () => {
+    it("hides sold-out coffees until IN STOCK is turned off, from the cache alone", async () => {
         const library = memoryLibrary();
         await renderWithProviders(<RoasterScreen settings={subscribed()} feedUrl={FEED_URL}/>);
-        const rows = screen.getAllByTestId(/^roaster-coffee-/).map((node) => node.props.testID);
-        expect(rows).toEqual(["roaster-coffee-b", "roaster-coffee-a"]);
+        expect(rowIds()).toEqual(["roaster-coffee-b"]);
+        expect(screen.getByTestId("screen-title-count").props.children).toBe("1");
+
+        await fireEvent.press(screen.getByTestId("roaster-filter-in-stock"));
+        expect(rowIds()).toEqual(["roaster-coffee-b", "roaster-coffee-a"]);
         expect(screen.getAllByTestId("roaster-row-sold-out")).toHaveLength(1);
         expect(library.fetched).toEqual([]);
 
@@ -67,6 +97,102 @@ describe("a roaster's coffees", () => {
     it("says so when the roaster is not in the catalogue", async () => {
         await renderWithProviders(<RoasterScreen settings={memorySettings()} feedUrl={FEED_URL}/>);
         expect(screen.getByTestId("roaster-missing")).toBeTruthy();
+    });
+});
+
+describe("searching and filtering a roaster's coffees", () => {
+    function shelf() {
+        return subscribedTo(
+            [{id: "a"}, {id: "b"}, {id: "c"}],
+            {
+                a: {country: "Colombia", farmer: "Jhoan Vergara"},
+                b: {country: "Peru", decaffeinated: true},
+                c: {country: "Colombia"}
+            },
+            {b: "Decaf"}
+        );
+    }
+
+    it("offers only the filters the feed has two values for", async () => {
+        await renderWithProviders(<RoasterScreen settings={shelf()} feedUrl={FEED_URL}/>);
+        expect(screen.getByTestId("roaster-filter-countries")).toBeTruthy();
+        expect(screen.getByTestId("roaster-filter-roasts")).toBeTruthy();
+        expect(screen.getByTestId("roaster-filter-decaf")).toBeTruthy();
+        // Every coffee is Washed and on sale.
+        expect(screen.queryByTestId("roaster-filter-processes")).toBeNull();
+        expect(screen.queryByTestId("roaster-filter-in-stock")).toBeNull();
+    });
+
+    it("filters by a value from the sheet and counts what is shown of the whole", async () => {
+        await renderWithProviders(<RoasterScreen settings={shelf()} feedUrl={FEED_URL}/>);
+        await fireEvent.press(screen.getByTestId("roaster-filter-countries"));
+        await waitFor(async () => {
+            // Pressed until it lands, and never twice: a second press would
+            // take the value off again.
+            const row = screen.getByLabelText("Peru, 1 coffee");
+            if (!row.props.accessibilityState?.selected) await fireEvent.press(row);
+            expect(rowIds()).toEqual(["roaster-coffee-b"]);
+        }, {timeout: SHEET_PRESS_TIMEOUT});
+        expect(screen.getByTestId("screen-title-count", {includeHiddenElements: true})
+            .props.children).toBe("1 OF 3");
+    });
+
+    it("toggles decaf", async () => {
+        await renderWithProviders(<RoasterScreen settings={shelf()} feedUrl={FEED_URL}/>);
+        await fireEvent.press(screen.getByTestId("roaster-filter-decaf"));
+        expect(rowIds()).toEqual(["roaster-coffee-b"]);
+    });
+
+    it("searches the producer and says when nothing matches, with a way out", async () => {
+        jest.useFakeTimers();
+        try {
+            await renderWithProviders(<RoasterScreen settings={shelf()} feedUrl={FEED_URL}/>);
+            await fireEvent.press(screen.getByTestId("rail-search"));
+            await fireEvent.changeText(screen.getByTestId("rail-search-input"), "vergara");
+            await act(async () => { jest.runAllTimers(); });
+            expect(rowIds()).toEqual(["roaster-coffee-a"]);
+
+            await fireEvent.changeText(screen.getByTestId("rail-search-input"), "nothing like it");
+            await act(async () => { jest.runAllTimers(); });
+            expect(screen.getByText("No coffees match.")).toBeTruthy();
+            await fireEvent.press(screen.getByTestId("roaster-no-matches-action"));
+            expect(rowIds()).toEqual(["roaster-coffee-a", "roaster-coffee-b", "roaster-coffee-c"]);
+        } finally {
+            jest.useRealTimers();
+        }
+    });
+
+    it("remembers a roaster's filters when the list is opened again", async () => {
+        const settings = shelf();
+        const first = await renderWithProviders(<RoasterScreen settings={settings} feedUrl={FEED_URL}/>);
+        await fireEvent.press(screen.getByTestId("roaster-filter-decaf"));
+        await first.unmount();
+        await renderWithProviders(<RoasterScreen settings={settings} feedUrl={FEED_URL}/>);
+        expect(rowIds()).toEqual(["roaster-coffee-b"]);
+    });
+});
+
+describe("tasting notes on a coffee", () => {
+    async function openWith(aromatics: string) {
+        const settings = subscribedTo([{id: "b"}], {b: {aromatics}});
+        await renderWithProviders(
+            <RoasterCoffeeScreen settings={settings} feedUrl={FEED_URL} coffeeId="b"
+                                 library={memoryLibrary().deps} shelves={() => []}/>
+        );
+        await waitFor(() => expect(screen.queryByTestId("roaster-coffee-loading")).toBeNull());
+    }
+
+    it("draws a short list as chips", async () => {
+        await openWith("Caramel | brown sugar | lemongrass");
+        expect(screen.getByTestId("roaster-coffee-note-chips")).toBeTruthy();
+        expect(screen.getByText("BROWN SUGAR")).toBeTruthy();
+    });
+
+    it("draws prose as a sentence, brackets and all", async () => {
+        const notes = "Raspberry Mandarin Floral (2024 Harvest)";
+        await openWith(notes);
+        expect(screen.queryByTestId("roaster-coffee-note-chips")).toBeNull();
+        expect(screen.getByTestId("roaster-coffee-notes").props.children).toBe(notes);
     });
 });
 

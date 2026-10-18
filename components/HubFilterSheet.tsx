@@ -18,7 +18,13 @@ type Props = {
     options: readonly HubFilterOption[];
     selected: readonly string[];
     onChange(values: string[]): void;
+    /** The line above the options. The community catalogue's by default. */
+    note?: string;
+    /** What a count counts, singular and plural. Recipes by default. */
+    noun?: readonly [string, string];
 };
+
+const RECIPES: readonly [string, string] = ["recipe", "recipes"];
 
 /**
  * How many rows the sheet will draw at once.
@@ -36,8 +42,8 @@ function key(value: string): string {
     return value.trim().toLowerCase();
 }
 
-function countLabel(count: number): string {
-    return count === 1 ? "1 recipe" : `${count} recipes`;
+function countLabel(count: number, [one, many]: readonly [string, string]): string {
+    return count === 1 ? `1 ${one}` : `${count} ${many}`;
 }
 
 function matching(options: readonly HubFilterOption[], term: string): readonly HubFilterOption[] {
@@ -58,15 +64,17 @@ function emptyLabel(title: string): string {
 function HubFilterRow({
     option,
     selected,
-    onChange
+    onChange,
+    noun
 }: {
     option: HubFilterOption;
     selected: readonly string[];
     onChange(values: string[]): void;
+    noun: readonly [string, string];
 }) {
     const optionKey = key(option.value);
     const active = selected.some((value) => key(value) === optionKey);
-    const recipes = countLabel(option.count);
+    const recipes = countLabel(option.count, noun);
     const label = `${option.value}, ${recipes}`;
 
     function press() {
@@ -111,7 +119,9 @@ export default function HubFilterSheet({
     title,
     options,
     selected,
-    onChange
+    onChange,
+    note = "Options are counted from recipes already loaded.",
+    noun = RECIPES
 }: Props) {
     const [term, setTerm] = useState("");
     const found = matching(options, term);
@@ -132,7 +142,7 @@ export default function HubFilterSheet({
                 <XStack alignItems="center" justifyContent="space-between" gap="$3"
                         minHeight={44} paddingHorizontal="$2">
                     <Text flex={1} fontSize={13} color={palette.dim}>
-                        Options are counted from recipes already loaded.
+                        {note}
                     </Text>
                     <XStack accessible
                             accessibilityRole="button"
@@ -184,6 +194,7 @@ export default function HubFilterSheet({
                                     option={option}
                                     selected={selected}
                                     onChange={onChange}
+                                    noun={noun}
                                 />
                             ))}
                             {rest > 0 && (

@@ -17,7 +17,7 @@ type Props = {
      * A machine-counted superscript beside the title, e.g. how many brews the
      * list below holds. Hidden when absent or zero, which `ScreenTitle` decides.
      */
-    count?: number;
+    count?: number | string;
     /**
      * A machine-derived line about this particular screen — the brew record
      * uses the date and time of the brew — set flush right on the title's own

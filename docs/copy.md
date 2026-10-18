@@ -425,8 +425,14 @@ screen (`app/subscriptions.tsx`, `components/UnsubscribeSheet.tsx`,
 | `roaster.list.row` | `app/roasters.tsx` | Detail under a roaster. | `${n} coffees · ${m} sold out · Updated 2 h ago` |
 | `roaster.list.manage` | `app/roasters.tsx` | Doto link to the subscriptions screen. | `MANAGE SUBSCRIPTIONS` |
 | `roaster.coffees.missing` | `app/roaster.tsx` | Roaster not in the catalogue. | `NOT IN THE CATALOGUE` / `This roaster's coffees are not in the catalogue. Subscribe from one of its import links.` |
+| `roaster.coffees.search` | `app/roaster.tsx` (`CoffeeRail`) | The rail's search square and field, the library's own (`components/RailSearch.tsx`). Matches name, country, farm, farmer, variety, process and tasting notes. | `SEARCH` |
+| `roaster.coffees.filters` | `app/roaster.tsx` (`FACET_COPY`) | Doto rail chips, drawn only when the feed has two or more values. IN STOCK is on by default and hides sold-out coffees. a11y: `In stock only`, `Roast filter`, `Country filter`, `Process filter`, `Decaf only`. | `IN STOCK` / `ROAST` / `COUNTRY` / `PROCESS` / `DECAF` |
+| `roaster.coffees.sheet` | `app/roaster.tsx` (`HubFilterSheet`) | Facet sheet title is `Roast`, `Country` or `Process`; rows read `${value}` and `${n} coffees`. | `Options are counted from this roaster's coffees.` |
+| `roaster.coffees.count` | `library/roasterFilters.ts` (`countLabel`) | Header superscript while a search or filter narrows the list. | `${shown} OF ${total}` |
+| `roaster.coffees.noMatches` | `app/roaster.tsx` | Nothing matches; Doto title, body, then a button. | `NO MATCHES` / `No coffees match.` / `Clear filters` |
 | `roaster.row.soldOut` | `components/RoasterCoffeeRow.tsx` | Doto line on a sold-out coffee; also spoken. | `SOLD OUT` |
 | `roaster.coffee.roast` | `app/roasterCoffee.tsx` | Doto roast level. | `${level} ROAST` |
+| `roaster.coffee.notes` | `library/roasterCatalogue.ts` (`noteChips`) | Tasting notes. Doto chips only for 2 to 8 parts of at most 20 characters split on commas or a spaced pipe, with no full stop or brackets; otherwise the roaster's own sentence in Inter. List rows show the same notes on one line. | (feed text) |
 | `roaster.coffee.advice` | `library/roasterCatalogue.ts` (`roastAdvice`) | Roast timing; parts appear as stated. | `Rest ${n} days, peak day ${n}, best by day ${n}` |
 | `roaster.coffee.bags` | `app/roasterCoffee.tsx` | Bag sizes. | `Bags: 320 g · 160 g` |
 | `roaster.coffee.facts` | `library/roasterCatalogue.ts` (`beanFacts`) | Doto captions beside the bean facts, ABOUT's words and formats: `1,750 m`, `90 points`. | `ORIGIN` / `COUNTRY` / `REGION` / `FARM` / `FARMER` / `ELEVATION` / `PROCESS` / `FERMENT` / `VARIETAL` / `SCORE` |
