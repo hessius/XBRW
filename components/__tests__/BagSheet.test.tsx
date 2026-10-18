@@ -1,5 +1,7 @@
 import React from "react";
-import {fireEvent, screen} from "@testing-library/react-native";
+import {Platform} from "react-native";
+import {DateTimePickerAndroid} from "@react-native-community/datetimepicker";
+import {act, fireEvent, screen} from "@testing-library/react-native";
 
 import BagSheet from "@/components/BagSheet";
 import {newBag, type BagTracker, type CoffeeBag} from "@/library/coffeeBag";
@@ -7,6 +9,46 @@ import type {AdvisedCoffee} from "@/library/restPeak";
 import {renderWithProviders} from "@/test-utils/render";
 
 function noop() {}
+
+/** 18 Oct 2026, mid-afternoon local time: "today" for every test here. */
+const NOW = new Date(2026, 9, 18, 15, 30).getTime();
+const TODAY = "2026-10-18";
+/** No roast level known: the medium defaults. */
+const MEDIUM = {restDays: 7, peakDay: 18, bestUntilDay: 27};
+
+beforeEach(() => {
+    // Only the date is faked, and it keeps moving, so sheet animations still
+    // finish: a frozen Date.now leaves them settling outside act().
+    jest.useFakeTimers({
+        now: NOW,
+        advanceTimers: true,
+        doNotFake: ["nextTick", "setImmediate", "clearImmediate", "setTimeout", "clearTimeout",
+            "setInterval", "clearInterval", "queueMicrotask", "hrtime", "performance",
+            "requestAnimationFrame", "cancelAnimationFrame", "requestIdleCallback", "cancelIdleCallback"]
+    });
+    (DateTimePickerAndroid.open as jest.Mock).mockClear();
+});
+
+afterEach(() => {
+    jest.useRealTimers();
+});
+
+/** Where this run's platform shows the calendar, opened from the row. */
+async function openCalendar(): Promise<{
+    value: Date; minimumDate: Date; maximumDate: Date; pick: (date: Date) => void;
+}> {
+    await fireEvent.press(screen.getByTestId("bag-roasted-field"));
+    if (Platform.OS === "android") {
+        const calls = (DateTimePickerAndroid.open as jest.Mock).mock.calls;
+        const args = calls[calls.length - 1][0];
+        return {...args, pick: (date: Date) => args.onValueChange({nativeEvent: {}}, date)};
+    }
+    const props = screen.getByTestId("bag-roasted-calendar").props as {
+        value: Date; minimumDate: Date; maximumDate: Date;
+        onValueChange: (event: unknown, date: Date) => void;
+    };
+    return {...props, pick: (date: Date) => props.onValueChange({nativeEvent: {}}, date)};
+}
 
 const BAG = {...newBag("r1", {sizeGrams: 250, roastedOn: "2026-10-12"}, 1_760_000_000_000), id: "bag-1"};
 
@@ -34,12 +76,61 @@ describe("BagSheet", () => {
         const onSave = jest.fn();
         await open({onSave, suggestedRoastedOn: "2026-10-01"});
         await fireEvent.press(screen.getByTestId("bag-size-320"));
-        expect(screen.getByTestId("bag-roasted-field").props.value).toBe("2026-10-01");
-        await fireEvent.changeText(screen.getByTestId("bag-roasted-field"), "2026-10-12");
+        expect(screen.getByTestId("bag-roasted-value")).toHaveTextContent("Thu 1 Oct 2026");
+        const calendar = await openCalendar();
+        await act(() => calendar.pick(new Date(2026, 9, 12, 9, 0)));
         await fireEvent.press(screen.getByTestId("bag-save"));
         expect(onSave).toHaveBeenCalledWith({sizeGrams: 320, roastedOn: "2026-10-12",
             // No roast level known, so the medium defaults.
             figures: {restDays: 7, peakDay: 18, bestUntilDay: 27}});
+    });
+
+    it("starts a new bag on today", async () => {
+        const onSave = jest.fn();
+        await open({onSave});
+        expect(screen.getByTestId("bag-roasted-value")).toHaveTextContent("Today, 18 Oct");
+        await fireEvent.press(screen.getByTestId("bag-save"));
+        expect(onSave).toHaveBeenCalledWith({sizeGrams: 250, roastedOn: TODAY, figures: MEDIUM});
+    });
+
+    it("shows an edited bag's own roast day", async () => {
+        await open({bag: BAG, gramsLeft: 200});
+        expect(screen.getByTestId("bag-roasted-value")).toHaveTextContent("Mon 12 Oct 2026");
+    });
+
+    it("shows no roast day on an edited bag that has none", async () => {
+        await open({bag: {...BAG, roastedOn: undefined}, gramsLeft: 200});
+        expect(screen.getByTestId("bag-roasted-value")).toHaveTextContent("Not set");
+        expect(screen.queryByTestId("bag-roasted-clear")).toBeNull();
+    });
+
+    it("offers days from a year back up to today, never later", async () => {
+        await open();
+        const calendar = await openCalendar();
+        expect(calendar.maximumDate).toEqual(new Date(2026, 9, 18));
+        expect(calendar.minimumDate).toEqual(new Date(2025, 9, 18));
+        expect(calendar.value).toEqual(new Date(2026, 9, 18));
+    });
+
+    it("saves the local day picked, whatever the hour", async () => {
+        const onSave = jest.fn();
+        await open({onSave});
+        const calendar = await openCalendar();
+        // Just before midnight: a UTC reading would be the next day east of
+        // Greenwich and the day before west of it.
+        await act(() => calendar.pick(new Date(2026, 9, 16, 23, 59)));
+        expect(screen.getByTestId("bag-roasted-value")).toHaveTextContent("Fri 16 Oct 2026");
+        await fireEvent.press(screen.getByTestId("bag-save"));
+        expect(onSave).toHaveBeenCalledWith({sizeGrams: 250, roastedOn: "2026-10-16", figures: MEDIUM});
+    });
+
+    it("clears the roast day, which stays optional", async () => {
+        const onSave = jest.fn();
+        await open({onSave});
+        await fireEvent.press(screen.getByTestId("bag-roasted-clear"));
+        expect(screen.getByTestId("bag-roasted-value")).toHaveTextContent("Not set");
+        await fireEvent.press(screen.getByTestId("bag-save"));
+        expect(onSave).toHaveBeenCalledWith({sizeGrams: 250});
     });
 
     it("takes a custom size and refuses one that is not whole grams", async () => {
@@ -52,15 +143,7 @@ describe("BagSheet", () => {
         expect(onSave).not.toHaveBeenCalled();
         await fireEvent.changeText(screen.getByTestId("bag-size-field"), "750");
         await fireEvent.press(screen.getByTestId("bag-save"));
-        expect(onSave).toHaveBeenCalledWith({sizeGrams: 750});
-    });
-
-    it("refuses a roast day that is not a day", async () => {
-        const onSave = jest.fn();
-        await open({onSave});
-        await fireEvent.changeText(screen.getByTestId("bag-roasted-field"), "2026-02-31");
-        await fireEvent.press(screen.getByTestId("bag-save"));
-        expect(onSave).not.toHaveBeenCalled();
+        expect(onSave).toHaveBeenCalledWith({sizeGrams: 750, roastedOn: TODAY, figures: MEDIUM});
     });
 
     it("lets the grams left be corrected while editing", async () => {
@@ -92,7 +175,7 @@ describe("BagSheet", () => {
         await fireEvent.changeText(screen.getByTestId("bag-price-field"), "24,50");
         await fireEvent.press(screen.getByTestId("bag-save"));
         expect(onSave).toHaveBeenCalledWith({
-            sizeGrams: 250, price: 24.5, beanName: "Ethiopia Guji"
+            sizeGrams: 250, roastedOn: TODAY, price: 24.5, beanName: "Ethiopia Guji", figures: MEDIUM
         });
     });
 
@@ -105,8 +188,11 @@ describe("BagSheet", () => {
     describe("rest and peak", () => {
         it("asks only once there is a roast day", async () => {
             await open();
+            expect(screen.getByTestId("bag-rest-peak")).toBeTruthy();
+            await fireEvent.press(screen.getByTestId("bag-roasted-clear"));
             expect(screen.queryByTestId("bag-rest-peak")).toBeNull();
-            await fireEvent.changeText(screen.getByTestId("bag-roasted-field"), "2026-10-12");
+            const calendar = await openCalendar();
+            await act(() => calendar.pick(new Date(2026, 9, 12)));
             expect(screen.getByTestId("bag-rest-peak")).toBeTruthy();
         });
 
