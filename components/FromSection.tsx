@@ -1,6 +1,6 @@
 import React, {useState} from "react";
 import {Image, Pressable} from "react-native";
-import {Text, View, XStack, YStack} from "tamagui";
+import {Text, View, XStack} from "tamagui";
 
 import DeckSection from "@/components/DeckSection";
 import DotIcon from "@/components/DotIcon";
@@ -32,7 +32,8 @@ function pageLabel(recipe: Recipe): string {
  * (`source` import or brewmind), and only when its coffee names a roaster. A
  * roaster's recipes are shared from somebody's personal xBloom account, so
  * "Arrived from rhys" named the person who pressed share rather than the
- * roaster whose recipe it is. Nothing here knows any one roaster.
+ * roaster whose recipe it is. Nothing here knows any one roaster. The pod
+ * section reads it too, to drop USE THIS NAME for the same recipes.
  */
 export function roasterOf(recipe: Recipe): string | undefined {
     if (recipe.source !== "import" && recipe.source !== "brewmind") return undefined;
@@ -99,19 +100,13 @@ export default function FromSection({recipe, accent, showAvatar}: {
                           backgroundColor={accent}/>
                 )}
 
+                {/* The roaster alone. The xBloom account that pressed share
+                    is somebody's personal login, not where the recipe is from,
+                    so it is not named at all. */}
                 {roaster !== undefined ? (
-                    <YStack flex={1} gap="$1">
-                        <Text testID="from-roaster" fontSize={16} color={palette.text}>
-                            {`From ${roaster}`}
-                        </Text>
-                        {/* The xBloom account it was shared from, kept small:
-                            true, but not who the recipe is from. */}
-                        {sharedBy.length > 0 && (
-                            <Text testID="from-sharer" fontSize={12} color={palette.dim}>
-                                {`Shared on xBloom by ${sharedBy}`}
-                            </Text>
-                        )}
-                    </YStack>
+                    <Text testID="from-roaster" flex={1} fontSize={16} color={palette.text}>
+                        {`From ${roaster}`}
+                    </Text>
                 ) : (
                     <Text flex={1} fontSize={sharedBy.length > 0 ? 16 : 13}
                           color={sharedBy.length > 0 ? palette.text : palette.dim}>

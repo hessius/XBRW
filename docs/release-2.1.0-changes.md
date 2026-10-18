@@ -114,6 +114,13 @@ showing xBloom's own name. Roasters get `docs/roaster-guide.md` and
 feed change, back-in-stock toast after a restock, TalkBack on the dot rows and
 the TELL ME switch, the square photo on the Fold inner screen.
 
+Roaster recipes in ABOUT (2026-10-18): for a recipe whose link or catalogue
+named a roaster, FROM reads "From {roaster}" alone (the "Shared on xBloom by"
+line is gone), and XPOD labels xBloom's title "xBloom profile name", drawn
+quietly, with no USE THIS NAME. Pod recipes and links without a roaster keep
+"Arrived from {sharer}" and the button. Device check: a CCC link recipe's ABOUT
+on the cover screen.
+
 ## Recipe picture in the header, on list cards and on shelf tiles (2026-10-18)
 
 With Show recipe pictures on, a recipe's `imageURL` (pod artwork, or a coffee
@@ -302,12 +309,19 @@ the display now clears the safe-area inset through one helper,
   while a write hides the actions panel.
 - While the live brew bar or the rating question is drawn it takes the inset
   itself, so the screens above it get none and no longer show a doubled gap.
+- The three-button bar is no longer a light grey scrim over the dark app. A
+  config plugin (`plugins/withDarkNavigationBar.js`) sets the app theme's
+  `android:enforceNavigationBarContrast` and `android:windowLightNavigationBar`
+  to false, so the bar is transparent over the app's black with light buttons.
+  Native (theme) change: needs a new build, not an update.
 
 Release checks: on Android with three-button and with gesture navigation, and on
 iOS: the brew screen, the editor action bar, the recipe sheet from the library
 and the editor, the bottom of Settings, the catalogue's save bar, and the same
 screens with the live brew bar showing; the brew rating note with the keyboard
-up, on iOS and Android.
+up, on iOS and Android; the navigation bar dark with light buttons on
+three-button navigation, with the phone in light and in dark mode, and the
+gesture handle still visible.
 
 ## Rename sheet opens on the visible name (2026-10-17)
 
