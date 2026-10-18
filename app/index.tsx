@@ -1495,6 +1495,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                         evidence={library.evidence}
                         showCoffeeMarker={showCoffeeMarker}
                         dottedProfile={dottedProfile}
+                        showPicture={showRecipeAvatars}
                         editing={editing}
                         paddingBottom={insets.bottom + 8}/>
                 ) : libraryQuery.view === "shelves" && !picker.active ? (

@@ -195,7 +195,7 @@ export const OUTBOUND_CALLS: OutboundCall[] = [
     {
         id:      "images",
         title:   "Load a photo",
-        trigger: "You open the hub, an import preview, or a saved recipe that carries a pod photo or the avatar of whoever shared it. With Show recipe pictures on, also your library list.",
+        trigger: "You open the hub, an import preview, or a saved recipe that carries a pod photo or the avatar of whoever shared it. With Show recipe pictures on, also your library list and shelf rooms.",
         host:    "whichever host xBloom named in its own reply",
         hostPinned: false,
         owner:   "xBloom, or whoever xBloom points at",
