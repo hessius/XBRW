@@ -1035,6 +1035,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
         importer.resolveNow(source, "shared", {
             coffee: link.coffee,
             recipeUrl: link.recipeUrl,
+            colour: link.colour,
             // Only a stated `brewmind` source earns the provenance. Anything
             // else still imports and reads as an ordinary import, because the
             // link is useful to anyone who can mint one.
