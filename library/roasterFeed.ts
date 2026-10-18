@@ -2,6 +2,7 @@ import {MAX_URL, SHORT_TEXT, coffeeFromFields} from "@/library/brewmindLink";
 import {readLabels} from "@/library/coffeeLabels";
 import {parseImportInput} from "@/library/importInput";
 import {httpsUrl, type PodCoffee} from "@/library/podCoffee";
+import {readRoasterColour} from "@/library/roasterColour";
 
 /**
  * A roaster's feed: every coffee it has published a recipe for, in one file.
@@ -136,6 +137,12 @@ export type FeedCoffee = {
     flavours: string[];
     /** `bean.tags`: labels such as "Berry" or "Filter", added as recipe tags. */
     tags: string[];
+    /**
+     * `bean.colour` (or `bean.color`): the roaster's own colour for the
+     * coffee, strictly `#RRGGBB`. Kept beside the coffee block, like the
+     * link's, and only used to pick the recipe's card accent on import.
+     */
+    colour?: string;
 };
 
 export type RoasterFeed = {
@@ -259,6 +266,9 @@ function cartTemplate(value: unknown): string | undefined {
     return httpsUrl(raw.split(VARIANT_PLACEHOLDER).join("0")) === undefined ? undefined : raw;
 }
 
+/** `bean` keys read into `FeedCoffee` itself rather than the coffee block. */
+const BESIDE_THE_COFFEE: ReadonlySet<string> = new Set(["flavours", "tags", "colour", "color"]);
+
 function feedCoffee(value: unknown): FeedCoffee | null {
     const entry = record(value);
     if (entry === null) return null;
@@ -281,7 +291,7 @@ function feedCoffee(value: unknown): FeedCoffee | null {
     // cannot replace them.
     const bean = record(entry.bean) ?? {};
     const fields: [string, unknown][] = Object.entries(bean)
-        .filter(([key]) => key !== "flavours" && key !== "tags");
+        .filter(([key]) => !BESIDE_THE_COFFEE.has(key));
     fields.push(["name", name]);
     if (url !== undefined) fields.push(["url", url]);
     if (image !== undefined) fields.push(["imageUrl", image]);
@@ -300,6 +310,10 @@ function feedCoffee(value: unknown): FeedCoffee | null {
     };
     const read = roast(entry.roast);
     if (read !== undefined) result.roast = read;
+    // British spelling first, as on a link. A value that is not a strict
+    // `#RRGGBB` is dropped like any other field that breaks its rule.
+    const colour = readRoasterColour(bean.colour ?? bean.color);
+    if (colour !== undefined) result.colour = colour;
     const id = capped(entry.id, MAX_COFFEE_ID);
     if (id !== undefined) result.id = id;
     if (url !== undefined) result.url = url;

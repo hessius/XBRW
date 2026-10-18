@@ -59,6 +59,12 @@ showing xBloom's own name. Roasters get `docs/roaster-guide.md` and
 feed change, back-in-stock toast after a restock, TalkBack on the dot rows and
 the TELL ME switch, the square photo on the Fold inner screen.
 
+Roaster colour (2026-10-19): a feed coffee may carry `bean.colour` (or
+`bean.color`), a strict `#RRGGBB` for the roaster's own colour coding, e.g. by
+origin. A recipe added from the catalogue takes the palette accent nearest its
+hue (`library/roasterColour.ts`); greys and far hues get the usual accent, and
+a copy already in the library keeps its accent. The hex is never stored.
+
 Roaster recipes in ABOUT (2026-10-18): for a recipe whose link or catalogue
 named a roaster, FROM reads "From {roaster}" alone (the "Shared on xBloom by"
 line is gone), and XPOD labels xBloom's title "xBloom profile name", drawn

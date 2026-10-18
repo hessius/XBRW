@@ -386,6 +386,7 @@ out, shows the coffee as sold out.
         "aromatics": "Blackcurrant, grapefruit and a long, sweet finish.",
         "flavours": ["Blackcurrant", "Grapefruit", "Brown Sugar"],
         "tags": ["Fruity", "Filter"],
+        "colour": "#1F6F78",
         "cupping_points": "87.5",
         "decaffeinated": false
       }

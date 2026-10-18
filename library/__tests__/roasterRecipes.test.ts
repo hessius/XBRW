@@ -135,3 +135,50 @@ describe("addToShelf", () => {
         expect(bag).toEqual({recipeUuid: added.recipe.uuid, shelf: "Pantry"});
     });
 });
+
+describe("a roaster colour from the catalogue", () => {
+    // Sky is the coffee accent nearest a mid blue; see `roasterColour.test.ts`.
+    const SKY = 0;
+    const [blue] = feed([{id: "a", colour: "#1D5F96"}]).coffees;
+
+    it("gives a newly added recipe the accent nearest the roaster's colour", async () => {
+        const settings = memorySettings();
+        const library = memoryLibrary();
+        addToLibrary(await fetchCoffeeRecipe(blue, undefined, library.deps), library.deps, settings);
+        expect(library.find("a-18g")?.accentIndex).toBe(SKY);
+    });
+
+    it("keeps the accent a held copy already has when the roaster's recipe changes", async () => {
+        const settings = memorySettings();
+        const library = memoryLibrary();
+        addToLibrary(await fetchCoffeeRecipe(blue, undefined, library.deps), library.deps, settings);
+        const held = library.find("a-18g")!;
+        held.accentIndex = 3;
+        library.deps.save(held);
+        library.serve("a-18g", 62);
+
+        const again = addToLibrary(await fetchCoffeeRecipe(blue, undefined, library.deps),
+                                   library.deps, settings);
+
+        expect(again.kind).toBe("updated");
+        expect(library.find("a-18g")).toMatchObject({grindSize: 62, accentIndex: 3});
+    });
+
+    it("keeps the held accent when the user takes the roaster's latest over an edit", async () => {
+        const settings = memorySettings();
+        const library = memoryLibrary();
+        addToLibrary(await fetchCoffeeRecipe(blue, undefined, library.deps), library.deps, settings);
+        const mine = library.find("a-18g")!;
+        mine.accentIndex = 5;
+        mine.dosage = 20;
+        library.deps.save(mine);
+        library.serve("a-18g", 62);
+
+        const again = addToLibrary(await fetchCoffeeRecipe(blue, undefined, library.deps),
+                                   library.deps, settings);
+        expect(again.kind).toBe("ask");
+        if (again.kind !== "ask") return;
+        takeRoasterLatest(again.held, again.latest, library.deps, settings);
+        expect(library.find("a-18g")).toMatchObject({grindSize: 62, accentIndex: 5});
+    });
+});
