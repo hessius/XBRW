@@ -21,11 +21,12 @@ const PROFILE_OVERHANG = 2;
  * corner, under the HELP and menu wells.
  *
  * That corner is the one stretch of the slab nothing else uses. The name's row
- * stops `HERO_PHOTO_RESERVE` short of it (and `heroNameLayout` sizes a long name
- * for that narrower row) and the pour profile owns the bottom right, so the
- * picture neither covers the name nor pushes the watermark down. It is drawn
- * out of the flow, so a picture that fails to load leaves the slab exactly as
- * tall as it was with nothing to draw.
+ * stops `HERO_PHOTO_RESERVE` short of it, or for a long name only the lines
+ * that start beside it do (`heroNameLayout`), and the pour profile owns the
+ * bottom right, so the picture neither covers the name nor pushes the
+ * watermark down. It is drawn out of the flow, so a picture that fails to load
+ * leaves the slab exactly as tall as it was with nothing to draw. Beside a
+ * long name it may be drawn smaller (`HERO_PHOTO_SIZES`).
  */
 export const HERO_PHOTO_SIZE = 56;
 
@@ -36,6 +37,43 @@ export const HERO_PHOTO_SIZE = 56;
  * the picture arrived would rewrap the name a moment after the screen opened.
  */
 export const HERO_PHOTO_RESERVE = HERO_PHOTO_SIZE + 8;
+
+/**
+ * The picture's sizes beside a long name, largest first.
+ *
+ * Only the lines that start above the picture's foot are narrowed for it, and
+ * the rest of the name runs the slab's full width under it. At 56 the picture
+ * reaches past the top of the name's second line, so a 98 character name on a
+ * 360 point phone gets two narrowed lines and still needs 15 pt. At 40 it
+ * clears the second line and the same name fits at 18. So the slab takes the
+ * largest name size any of these allows, then the largest picture that keeps
+ * it.
+ */
+export const HERO_PHOTO_SIZES = [HERO_PHOTO_SIZE, 48, 40] as const;
+
+/** The space between the name's row and the picture. */
+const HERO_PHOTO_GAP = 8;
+
+/** The picture's top, under the chrome row, in the band layout and otherwise. */
+const HERO_PHOTO_TOP_TIGHT = 3;
+const HERO_PHOTO_TOP = 8;
+
+/**
+ * Where the name's first line starts in the band layout, below the top of the
+ * open slab's content: the beverage row and its margins.
+ *
+ * Measured on the Fold's cover screen at 1x text (19.3 points). The beverage
+ * row only grows with the text size, so this is the earliest the name starts,
+ * and the picture is never estimated to clear a line it reaches.
+ */
+const HERO_NAME_TOP = 19;
+
+/**
+ * How far a line's box may start above the picture's foot and still count as
+ * clear of it: the box's top is half leading, and the glyphs start a few
+ * points lower.
+ */
+const HERO_PHOTO_OVERLAP = 2;
 
 /** The watermark's drawing size, before its stroke. */
 const PROFILE_WIDTH = 190;
@@ -177,25 +215,38 @@ function textEm(text: string): number {
  * `textBreakStrategy="simple"` so Android wraps the same greedy way.
  */
 export function wrapLines(text: string, width: number, fontSize: number): number[] {
+    return breakLines(text, width, fontSize).map(line => line.width);
+}
+
+/**
+ * `wrapLines`, with how many words have ended by the end of each line. A word
+ * split across lines ends on the last of them.
+ */
+function breakLines(
+    text: string, width: number, fontSize: number
+): {width: number; words: number}[] {
     const space = glyphEm(" ") * fontSize;
-    const lines: number[] = [];
+    const lines: {width: number; words: number}[] = [];
     let used = -1;
+    let ended = 0;
     for (const word of text.split(" ").filter(Boolean)) {
         let wordWidth = textEm(word) * fontSize;
         if (used >= 0 && used + space + wordWidth <= width) {
             used += space + wordWidth;
+            ended++;
             continue;
         }
         if (used >= 0) {
-            lines.push(used);
+            lines.push({width: used, words: ended});
         }
         while (wordWidth > width) {
-            lines.push(width);
+            lines.push({width, words: ended});
             wordWidth -= width;
         }
         used = wordWidth;
+        ended++;
     }
-    lines.push(Math.max(used, 0));
+    lines.push({width: Math.max(used, 0), words: ended});
     return lines;
 }
 
@@ -217,6 +268,15 @@ export type HeroNameLayout = {
     profileHeight: number;
     /** Closes up the space under the chrome row when the band is used. */
     tight: boolean;
+    /** The picture's size, when the slab draws one, else 0. */
+    photoSize: number;
+    /**
+     * A long name beside a picture, set as two pieces: `head`, the words on
+     * the lines that start beside the picture, in a column `headWidth` wide
+     * that stops short of it, then `tail`, the rest, `maxWidth` wide under it.
+     * `headLines` is how many lines `head` was estimated to take.
+     */
+    split?: {head: string; headLines: number; headWidth: number; tail: string};
 };
 
 /**
@@ -245,52 +305,107 @@ export type HeroNameLayout = {
  * than a step on the type scale, and the band and the header's collapse both
  * need the size before the first layout.
  *
- * `photoReserve` is the room the recipe's picture keeps on the right of the
- * name's row (`HERO_PHOTO_RESERVE` when one is due, else 0). The full-width
- * column is that much narrower, so a long name is never estimated under the
- * picture. The column beside the watermark is not: it already ends left of
- * the watermark, which starts well before the picture's corner. A short name
- * that would not fit its two lines at 26 in the narrower row is laid out as a
- * long one.
+ * `photo` is true when the slab draws the recipe's picture in its top right
+ * corner. A short name keeps its two lines at 26 in the row the picture leaves
+ * it (`HERO_PHOTO_RESERVE` narrower), or is laid out as a long one. The column
+ * beside the watermark is not narrowed: it ends left of the watermark, well
+ * before the picture's corner. In the band layout only the lines that start
+ * beside the picture are narrowed for it (`split`), and the rest of the name
+ * runs the slab's full width under it. The picture is 56 points tall and a
+ * three-line name is taller, so narrowing every line cost a size step or two
+ * and still cut the device report's name off. The picture also shrinks
+ * (`HERO_PHOTO_SIZES`) when that lets the name be larger.
  */
 export function heroNameLayout(
     name: string, windowWidth: number, fontScale = 1,
-    {pours, photoReserve = 0}: {pours?: Pour[]; photoReserve?: number} = {}
+    {pours, photo = false}: {pours?: Pour[]; photo?: boolean} = {}
 ): HeroNameLayout {
     const scale = Math.min(Math.max(fontScale, 1), DOTO_MAX_FONT_SCALE);
-    const row = windowWidth - 2 * SLAB_PADDING_X - photoReserve;
+    const content = windowWidth - 2 * SLAB_PADDING_X;
+    const photoSize = photo ? HERO_PHOTO_SIZE : 0;
     if (name.length <= HERO_NAME_LONG && (
-        photoReserve === 0
-        || estimateLines(name, 0.72 * row - FIT_SLACK, 26 * scale) <= 2
+        !photo
+        || estimateLines(name, 0.72 * (content - HERO_PHOTO_RESERVE) - FIT_SLACK, 26 * scale) <= 2
     )) {
         return {
             fontSize: 26, lineHeight: 31, lines: 2, maxWidth: "72%",
-            reserve: 0, profileHeight: PROFILE_HEIGHT, tight: false
+            reserve: 0, profileHeight: PROFILE_HEIGHT, tight: false, photoSize
         };
     }
-    const beside = Math.floor(
-        windowWidth - 2 * SLAB_PADDING_X - PENCIL_WIDTH - PROFILE_VISIBLE_WIDTH - PROFILE_GAP
-    );
-    const full = Math.floor(row - PENCIL_WIDTH);
+    const beside = Math.floor(content - PENCIL_WIDTH - PROFILE_VISIBLE_WIDTH - PROFILE_GAP);
+    const full = Math.floor(content - PENCIL_WIDTH);
+
+    // The band layout with no picture: one column, the pencil beside it.
+    const plain = (step: typeof HERO_NAME_STEPS[number], last: boolean): HeroNameLayout | null => {
+        const wrapped = wrapLines(name, full - FIT_SLACK, step.fontSize * scale);
+        if (wrapped.length > HERO_NAME_MAX_LINES && !last) {
+            return null;
+        }
+        const drawn = wrapped.slice(0, HERO_NAME_MAX_LINES);
+        const box = Math.min(full, Math.max(...drawn) + FIT_SLACK);
+        return {
+            ...step, lines: HERO_NAME_MAX_LINES, maxWidth: full,
+            reserve: bandReserve(drawn, step.lineHeight * scale, box, windowWidth, pours),
+            profileHeight: PROFILE_BAND_HEIGHT, tight: true, photoSize: 0
+        };
+    };
+
+    // The band layout with a picture `size` points square in the corner: the
+    // lines that start beside it narrowed for it and the pencil, the rest the
+    // slab's full width.
+    const pictured = (
+        step: typeof HERO_NAME_STEPS[number], size: number, last: boolean
+    ): HeroNameLayout | null => {
+        const fontSize = step.fontSize * scale;
+        const lineHeight = step.lineHeight * scale;
+        const foot = HERO_PHOTO_TOP_TIGHT + size - HERO_NAME_TOP;
+        let narrowed = 1;
+        while (narrowed < HERO_NAME_MAX_LINES
+               && narrowed * lineHeight < foot - HERO_PHOTO_OVERLAP) {
+            narrowed++;
+        }
+        const headWidth = Math.floor(content - size - HERO_PHOTO_GAP - PENCIL_WIDTH);
+        const wide = Math.floor(content);
+        const headBreaks = breakLines(name, headWidth - FIT_SLACK, fontSize).slice(0, narrowed);
+        const words = name.split(" ").filter(Boolean);
+        const headCount = headBreaks[headBreaks.length - 1].words;
+        const head = words.slice(0, headCount).join(" ");
+        const tail = words.slice(headCount).join(" ");
+        // A word too long for the narrowed column ends on a later line than it
+        // starts, and goes whole to `tail`.
+        const headDrawn = headBreaks.filter(line => line.words > 0).map(line => line.width);
+        const tailDrawn = tail === "" ? [] : wrapLines(tail, wide - FIT_SLACK, fontSize);
+        if (headDrawn.length + tailDrawn.length > HERO_NAME_MAX_LINES && !last) {
+            return null;
+        }
+        const drawn = [...headDrawn, ...tailDrawn].slice(0, HERO_NAME_MAX_LINES);
+        const box = Math.min(headWidth, Math.max(0, ...headDrawn) + FIT_SLACK);
+        return {
+            ...step, lines: HERO_NAME_MAX_LINES, maxWidth: wide,
+            reserve: bandReserve(drawn, lineHeight, box, windowWidth, pours, foot),
+            profileHeight: PROFILE_BAND_HEIGHT, tight: true, photoSize: size,
+            split: {head, headLines: headDrawn.length, headWidth, tail}
+        };
+    };
 
     const fitted = (step: typeof HERO_NAME_STEPS[number], last: boolean): HeroNameLayout | null => {
         const size = step.fontSize * scale;
         if (beside > 0 && estimateLines(name, beside - FIT_SLACK, size) <= HERO_NAME_MAX_LINES) {
             return {
                 ...step, lines: HERO_NAME_MAX_LINES, maxWidth: beside, reserve: 0,
-                profileHeight: PROFILE_HEIGHT, tight: false
+                profileHeight: PROFILE_HEIGHT, tight: false, photoSize
             };
         }
-        const wrapped = wrapLines(name, full - FIT_SLACK, size);
-        if (wrapped.length > HERO_NAME_MAX_LINES && !last) {
-            return null;
+        if (!photo) {
+            return plain(step, last);
         }
-        const drawn = wrapped.slice(0, HERO_NAME_MAX_LINES);
-        return {
-            ...step, lines: HERO_NAME_MAX_LINES, maxWidth: full,
-            reserve: bandReserve(drawn, step.lineHeight * scale, full, windowWidth, pours),
-            profileHeight: PROFILE_BAND_HEIGHT, tight: true
-        };
+        for (const picture of HERO_PHOTO_SIZES) {
+            const layout = pictured(step, picture, false);
+            if (layout !== null) {
+                return layout;
+            }
+        }
+        return last ? pictured(step, HERO_PHOTO_SIZES[HERO_PHOTO_SIZES.length - 1], true) : null;
     };
 
     for (let i = 0; i < HERO_NAME_STEPS.length; i++) {
@@ -306,15 +421,21 @@ export function heroNameLayout(
  * The band kept under a long name so the watermark clears it.
  *
  * `drawn` is the estimated width of each line, top to bottom, all starting at
- * the name's left edge, `column` the most the name's box may take. For each
- * line, and the pencil beside the first, this asks how high the watermark
- * stands at the point where it ends (plus `PROFILE_GAP` across and
+ * the name's left edge, and `box` the width of the first line's box, which the
+ * pencil follows. For each line, and the pencil, this asks how high the
+ * watermark stands at the point where it ends (plus `PROFILE_GAP` across and
  * `PROFILE_AIR` above) and how far above the slab's bottom edge it already is
  * without a band. The band is the largest shortfall. The watermark only climbs,
  * so its height where a line ends is the highest it gets under that line.
+ *
+ * `photoFoot` is how far below the top of the name's first line the picture
+ * ends, when there is one. The picture sits over the watermark's high end, so
+ * the band keeps the watermark under it too: whichever ends lower, the name or
+ * the picture, decides.
  */
 function bandReserve(
-    drawn: number[], lineHeight: number, column: number, windowWidth: number, pours?: Pour[]
+    drawn: number[], lineHeight: number, box: number, windowWidth: number, pours?: Pour[],
+    photoFoot?: number
 ): number {
     // How high the watermark's line stands above the slab's bottom edge, under
     // a point `x` points along from the name's left edge.
@@ -334,9 +455,14 @@ function bandReserve(
         const above = SLAB_PADDING_BOTTOM + (count - 1 - i) * lineHeight;
         reserve = Math.max(reserve, stand(width + FIT_SLACK) + PROFILE_AIR - above);
     });
-    const box = Math.min(column, Math.max(...drawn) + FIT_SLACK);
     const pencilAbove = SLAB_PADDING_BOTTOM + count * lineHeight - PENCIL_FOOT;
     reserve = Math.max(reserve, stand(box + PENCIL_WIDTH) + PROFILE_AIR - pencilAbove);
+    if (photoFoot !== undefined) {
+        const photoAbove = SLAB_PADDING_BOTTOM + count * lineHeight - photoFoot;
+        reserve = Math.max(
+            reserve, stand(windowWidth - 2 * SLAB_PADDING_X) + PROFILE_AIR - photoAbove
+        );
+    }
     return Math.max(0, Math.ceil(reserve));
 }
 
@@ -351,8 +477,9 @@ function bandReserve(
  *
  * `photo` is true when the header draws a picture. The name's row is narrower
  * then and even a short name may take the long layout, so it is counted as
- * one. The picture itself is out of the flow and never taller than the name
- * block, so it adds nothing here.
+ * one. The band also keeps the watermark under the picture, so the slab is at
+ * least the picture's foot plus the whole band. Three lines at the largest
+ * size are taller than that, so today that only matters if the sizes change.
  */
 export function heroFoldAway(name: string, photo = false): number {
     const beverageRow = 7 + 24;
@@ -360,7 +487,8 @@ export function heroFoldAway(name: string, photo = false): number {
         return Math.ceil(beverageRow + 7 + 2 * 31 * DOTO_MAX_FONT_SCALE);
     }
     const nameBlock = 7 + HERO_NAME_MAX_LINES * HERO_NAME_STEPS[0].lineHeight * DOTO_MAX_FONT_SCALE;
-    return Math.ceil(beverageRow + nameBlock + HERO_PROFILE_RESERVE);
+    const pictureFoot = photo ? HERO_PHOTO_TOP + HERO_PHOTO_SIZE : 0;
+    return Math.ceil(Math.max(beverageRow + nameBlock, pictureFoot) + HERO_PROFILE_RESERVE);
 }
 
 /** A control in the header's chrome row, drawn in a well cut out of the accent. */
@@ -443,9 +571,8 @@ export default function RecipeHero({
     const picture = showPicture ? imageURL ?? "" : "";
     // The name is sized for the row the picture leaves it, so a long name is
     // never estimated into the corner the picture covers.
-    const nameLayout = heroNameLayout(name, width, fontScale, {
-        pours, photoReserve: picture.length > 0 ? HERO_PHOTO_RESERVE : 0
-    });
+    const nameLayout = heroNameLayout(name, width, fontScale, {pours, photo: picture.length > 0});
+    const split = nameLayout.split;
 
     // `pours` is the recipe's own array, mutated in place, and the watermark
     // reads each pour through a getter rather than a property — so there is
@@ -532,9 +659,12 @@ export default function RecipeHero({
                     name closes up that gap. */}
                 {picture.length > 0 && (
                     <View pointerEvents="none"
-                          style={{position: "absolute", top: nameLayout.tight ? 3 : 8, right: 0}}>
+                          style={{
+                              position: "absolute", right: 0,
+                              top: nameLayout.tight ? HERO_PHOTO_TOP_TIGHT : HERO_PHOTO_TOP
+                          }}>
                         <RecipePhoto testID="hero-photo" uri={picture}
-                                     size={HERO_PHOTO_SIZE} radius={10}/>
+                                     size={nameLayout.photoSize} radius={10}/>
                     </View>
                 )}
 
@@ -567,27 +697,50 @@ export default function RecipeHero({
                 <Pressable accessibilityRole="button" accessibilityLabel={name}
                            accessibilityHint="Opens a sheet to rename this recipe"
                            testID="hero-rename"
-                           style={{
-                               flexDirection: "row", alignItems: "flex-start", gap: 8,
-                               marginRight: picture.length > 0 ? HERO_PHOTO_RESERVE : 0
-                           }}
                            onPress={onRename} hitSlop={8}>
-                    {/* Never across the watermark: `heroNameLayout` puts a
-                        long name beside it or above it. `simple` breaks lines
-                        the greedy way `estimateLines` counts them, which the
-                        balanced default on Android does not. */}
-                    <Text testID="hero-name" fontSize={nameLayout.fontSize}
-                          fontWeight="700" lineHeight={nameLayout.lineHeight}
-                          marginTop={nameLayout.tight ? "$1.5" : "$2"}
-                          maxFontSizeMultiplier={DOTO_MAX_FONT_SCALE}
-                          textBreakStrategy="simple"
-                          color={named ? onAccent.text : onAccent.label}
-                          numberOfLines={nameLayout.lines} maxWidth={nameLayout.maxWidth}>
-                        {name}
-                    </Text>
-                    <YStack marginTop="$3">
-                        <DotIcon name="edit" size={15} color={onAccent.label}/>
-                    </YStack>
+                    {/* Clear of the picture: the row stops short of it, and a
+                        long name beside it is set as two pieces, the lines that
+                        start beside the picture in this row and the rest under
+                        it at the slab's full width. */}
+                    <View testID="hero-name-row"
+                          style={{
+                              flexDirection: "row", alignItems: "flex-start", gap: 8,
+                              marginRight: picture.length > 0
+                                  ? nameLayout.photoSize + HERO_PHOTO_GAP
+                                  : 0
+                          }}>
+                        {/* Never across the watermark: `heroNameLayout` puts a
+                            long name beside it or above it. `simple` breaks
+                            lines the greedy way `estimateLines` counts them,
+                            which the balanced default on Android does not. */}
+                        <Text testID="hero-name" fontSize={nameLayout.fontSize}
+                              fontWeight="700" lineHeight={nameLayout.lineHeight}
+                              marginTop={nameLayout.tight ? "$1.5" : "$2"}
+                              maxFontSizeMultiplier={DOTO_MAX_FONT_SCALE}
+                              textBreakStrategy="simple"
+                              color={named ? onAccent.text : onAccent.label}
+                              numberOfLines={split ? split.headLines + 1 : nameLayout.lines}
+                              maxWidth={split ? split.headWidth : nameLayout.maxWidth}>
+                            {split ? split.head : name}
+                        </Text>
+                        <YStack marginTop="$3">
+                            <DotIcon name="edit" size={15} color={onAccent.label}/>
+                        </YStack>
+                    </View>
+                    {/* One line of slack on the head above: a head the phone
+                        wraps a line later than estimated pushes this down
+                        rather than cutting a word off mid-name. */}
+                    {split && split.tail !== "" && (
+                        <Text testID="hero-name-rest" fontSize={nameLayout.fontSize}
+                              fontWeight="700" lineHeight={nameLayout.lineHeight}
+                              maxFontSizeMultiplier={DOTO_MAX_FONT_SCALE}
+                              textBreakStrategy="simple"
+                              color={named ? onAccent.text : onAccent.label}
+                              numberOfLines={Math.max(1, nameLayout.lines - split.headLines)}
+                              maxWidth={nameLayout.maxWidth}>
+                            {split.tail}
+                        </Text>
+                    )}
                 </Pressable>
                 {nameLayout.reserve > 0 && (
                     <View testID="hero-profile-reserve" pointerEvents="none"

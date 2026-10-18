@@ -4,6 +4,7 @@ import {fireEvent, screen} from "@testing-library/react-native";
 
 import RecipeHero, {
     estimateLines, HERO_NAME_LONG, HERO_NAME_MAX_LINES, HERO_PHOTO_RESERVE, HERO_PHOTO_SIZE,
+    HERO_PHOTO_SIZES,
     HERO_PROFILE_RESERVE, heroFoldAway, heroNameLayout, PROFILE_BAND_HEIGHT, wrapLines
 } from "@/components/RecipeHero";
 import {COLLAPSE_SHRINK} from "@/hooks/useCollapsibleHeader";
@@ -506,7 +507,7 @@ describe("RecipeHero's picture", () => {
 
     /** The room the name's row leaves on its right for the picture. */
     function nameReserve(): number {
-        const style = StyleSheet.flatten(screen.getByTestId("hero-rename").props.style);
+        const style = StyleSheet.flatten(screen.getByTestId("hero-name-row").props.style);
         return (style?.marginRight as number | undefined) ?? 0;
     }
 
@@ -560,65 +561,152 @@ describe("RecipeHero's picture", () => {
         expect(screen.getByText("Ethiopia Guji")).toBeTruthy();
     });
 
-    it("sizes a long name for the row the picture leaves it", async () => {
-        // The full-width column is 64 points narrower with a picture due, so
-        // the size and line estimate never put the name under the picture.
-        await renderWithProviders(
-            <RecipeHero {...BASE} name={AWARD} imageURL={PHOTO} showPicture/>
-        );
+    /** Where the picture ends, below the top of the name's first line. */
+    function foot(size: number): number {
+        return 3 + size - 19;
+    }
 
-        const style = StyleSheet.flatten(screen.getByTestId("hero-name").props.style);
-        expect(style.maxWidth).toBe(COVER - 36 - 23 - HERO_PHOTO_RESERVE);
-        expect(nameReserve()).toBe(HERO_PHOTO_RESERVE);
-        const without = heroNameLayout(AWARD, COVER, 1);
-        const withPhoto = heroNameLayout(
-            AWARD, COVER, 1, {pours: BASE.pours, photoReserve: HERO_PHOTO_RESERVE}
-        );
-        expect(withPhoto.maxWidth).toBe((without.maxWidth as number) - HERO_PHOTO_RESERVE);
-        expect(style.fontSize).toBe(withPhoto.fontSize);
-        expect(withPhoto.fontSize).toBeLessThanOrEqual(without.fontSize);
-        // Still in the band layout, with the watermark below the name.
-        expect(withPhoto.tight).toBe(true);
-        expect(screen.getByTestId("hero-profile-reserve").props.style.height)
-            .toBe(withPhoto.reserve);
+    it("fits the device report's 98 character name in three lines beside the picture", () => {
+        // The Fold's cover screen, 360 points. Narrowing every line for the
+        // picture left 233 points, where this name takes four lines even at
+        // 15 and was cut off after "**AWARD WIN".
+        expect(estimateLines(AWARD, NARROW - 36 - 23 - HERO_PHOTO_RESERVE - 4, 15))
+            .toBeGreaterThan(HERO_NAME_MAX_LINES);
+        for (const [fontScale, size] of [[1, 18], [1.15, 16]]) {
+            const layout = heroNameLayout(AWARD, NARROW, fontScale, {photo: true});
+            expect(layout.fontSize).toBe(size);
+            expect(layout.photoSize).toBe(40);
+            const split = layout.split!;
+            expect(`${split.head} ${split.tail}`).toBe(AWARD);
+            const fontSize = layout.fontSize * fontScale;
+            const tailLines = estimateLines(split.tail, (layout.maxWidth as number) - 4, fontSize);
+            expect(split.headLines + tailLines).toBeLessThanOrEqual(HERO_NAME_MAX_LINES);
+        }
     });
 
     it("never runs a long name under the picture", () => {
         for (const name of [MEDIUM_NAME, LONG_NAME, VINKA, LONGEST, AWARD]) {
             for (const width of [NARROW, COVER, 600, INNER]) {
                 for (const fontScale of [1, 1.15, 1.4]) {
-                    const layout = heroNameLayout(name, width, fontScale, {photoReserve: HERO_PHOTO_RESERVE});
-                    const column = layout.maxWidth as number;
-                    // Name and pencil end before the picture's reserve.
-                    expect(column + 23).toBeLessThanOrEqual(width - 36 - HERO_PHOTO_RESERVE);
+                    const layout = heroNameLayout(name, width, fontScale, {photo: true});
+                    const lineHeight = layout.lineHeight * Math.min(fontScale, 1.4);
+                    const fontSize = layout.fontSize * Math.min(fontScale, 1.4);
+                    expect(HERO_PHOTO_SIZES).toContain(layout.photoSize);
+                    if (layout.split === undefined) {
+                        // Beside the watermark: that column ends well before
+                        // the picture's corner.
+                        expect(layout.tight).toBe(false);
+                        expect((layout.maxWidth as number) + 23)
+                            .toBeLessThanOrEqual(width - 36 - HERO_PHOTO_RESERVE);
+                        continue;
+                    }
+                    const {head, headLines, headWidth, tail} = layout.split;
+                    // The head and the pencil stop short of the picture.
+                    expect(headWidth + 23 + layout.photoSize + 8).toBeLessThanOrEqual(width - 36);
+                    expect(estimateLines(head, headWidth - 4, fontSize)).toBe(headLines);
+                    // The full-width lines start below the picture's foot,
+                    // give or take the line box's top leading.
+                    expect(headLines * lineHeight).toBeGreaterThanOrEqual(foot(layout.photoSize) - 2);
+                    // And the lines over the picture are all the head needs.
+                    expect((headLines - 1) * lineHeight).toBeLessThan(foot(layout.photoSize));
+                    const tailLines = tail === ""
+                        ? 0
+                        : estimateLines(tail, (layout.maxWidth as number) - 4, fontSize);
                     if (layout.fontSize > 15) {
-                        expect(estimateLines(name, column - 4, layout.fontSize * Math.min(fontScale, 1.4)))
-                            .toBeLessThanOrEqual(HERO_NAME_MAX_LINES);
+                        expect(headLines + tailLines).toBeLessThanOrEqual(HERO_NAME_MAX_LINES);
                     }
                 }
             }
         }
     });
 
+    it("keeps the watermark under the picture as well as under the name", () => {
+        for (const name of [MEDIUM_NAME, LONG_NAME, VINKA, LONGEST, AWARD]) {
+            for (const width of [NARROW, COVER]) {
+                for (const fontScale of [1, 1.15, 1.4]) {
+                    const layout = heroNameLayout(name, width, fontScale, {photo: true});
+                    if (layout.split === undefined) {
+                        continue;
+                    }
+                    const lineHeight = layout.lineHeight * Math.min(fontScale, 1.4);
+                    // How far above the slab's bottom edge the picture ends:
+                    // above the watermark's highest point, plus air.
+                    const block = Math.min(HERO_NAME_MAX_LINES,
+                        layout.split.headLines + estimateLines(
+                            layout.split.tail, (layout.maxWidth as number) - 4,
+                            layout.fontSize * Math.min(fontScale, 1.4)
+                        ));
+                    const above = 13 + layout.reserve + block * lineHeight - foot(layout.photoSize);
+                    expect(above).toBeGreaterThanOrEqual(PROFILE_BAND_HEIGHT - 1.2 + 4);
+                }
+            }
+        }
+    });
+
+    it("draws the head beside the picture and the rest of the name under it", async () => {
+        setWindow(NARROW);
+        await renderWithProviders(
+            <RecipeHero {...BASE} name={AWARD} imageURL={PHOTO} showPicture/>
+        );
+        const layout = heroNameLayout(AWARD, NARROW, 1, {pours: BASE.pours, photo: true});
+        const split = layout.split!;
+
+        const head = screen.getByTestId("hero-name");
+        const rest = screen.getByTestId("hero-name-rest");
+        expect(head.props.children).toBe(split.head);
+        expect(rest.props.children).toBe(split.tail);
+        expect(StyleSheet.flatten(head.props.style))
+            .toEqual(expect.objectContaining({fontSize: 18, maxWidth: split.headWidth}));
+        expect(StyleSheet.flatten(rest.props.style))
+            .toEqual(expect.objectContaining({fontSize: 18, maxWidth: NARROW - 36}));
+        expect(rest.props.numberOfLines).toBe(HERO_NAME_MAX_LINES - split.headLines);
+        expect(nameReserve()).toBe(40 + 8);
+        const style = StyleSheet.flatten(photo()?.props.style);
+        expect(style.width).toBe(40);
+        expect(screen.getByTestId("hero-profile-reserve").props.style.height)
+            .toBe(layout.reserve);
+        // One button, read as the whole name.
+        expect(screen.getByLabelText(AWARD)).toBeTruthy();
+    });
+
+    it("keeps the full-size picture beside a name that fits at the largest step", () => {
+        const layout = heroNameLayout(MEDIUM_NAME, COVER, 1, {photo: true});
+        expect(layout.fontSize).toBe(22);
+        expect(layout.photoSize).toBe(HERO_PHOTO_SIZE);
+    });
+
     it("keeps the wide screen's column beside the watermark as it was", () => {
         // That column ends left of the watermark, well before the picture's
         // corner, so the picture takes nothing from it.
-        expect(heroNameLayout(VINKA, INNER, 1, {photoReserve: HERO_PHOTO_RESERVE}))
-            .toEqual(heroNameLayout(VINKA, INNER, 1));
+        expect(heroNameLayout(VINKA, INNER, 1, {photo: true}))
+            .toEqual({...heroNameLayout(VINKA, INNER, 1), photoSize: HERO_PHOTO_SIZE});
     });
 
     it("moves a short name that no longer fits two lines to the long layout", () => {
         const name = "Ethiopia Guji Hambela Wamena";
         expect(name.length).toBeLessThanOrEqual(HERO_NAME_LONG);
         expect(heroNameLayout(name, NARROW, 1).fontSize).toBe(26);
-        const layout = heroNameLayout(name, NARROW, 1, {photoReserve: HERO_PHOTO_RESERVE});
+        const layout = heroNameLayout(name, NARROW, 1, {photo: true});
         expect(layout.fontSize).toBeLessThan(26);
         expect(layout.lines).toBe(HERO_NAME_MAX_LINES);
         // A short name that still fits keeps its 26 pt, two-line column.
-        expect(heroNameLayout("Ethiopia Guji", NARROW, 1, {photoReserve: HERO_PHOTO_RESERVE}))
-            .toEqual(expect.objectContaining({fontSize: 26, lines: 2, maxWidth: "72%"}));
+        expect(heroNameLayout("Ethiopia Guji", NARROW, 1, {photo: true}))
+            .toEqual(expect.objectContaining({
+                fontSize: 26, lines: 2, maxWidth: "72%", photoSize: HERO_PHOTO_SIZE
+            }));
         // The collapse counts any name as long while a picture is drawn.
         expect(heroFoldAway("Ethiopia Guji", true)).toBe(heroFoldAway(AWARD));
         expect(heroFoldAway("Ethiopia Guji", true)).toBeGreaterThan(heroFoldAway("Ethiopia Guji"));
+    });
+
+    it("never folds away less than the slab holds with a picture", () => {
+        for (const name of [LONG_NAME, VINKA, LONGEST, AWARD]) {
+            for (const width of [NARROW, COVER]) {
+                const layout = heroNameLayout(name, width, 1.4, {photo: true});
+                const block = 19 + HERO_NAME_MAX_LINES * layout.lineHeight * 1.4;
+                const slab = Math.max(block, 3 + layout.photoSize) + layout.reserve;
+                expect(heroFoldAway(name, true)).toBeGreaterThanOrEqual(slab);
+            }
+        }
     });
 });
