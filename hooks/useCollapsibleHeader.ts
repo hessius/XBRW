@@ -35,9 +35,9 @@ export const EXPAND_AT = 24;
  * fold-away on both screens stays well under 140, so the overestimate stands.
  *
  * The editor is the exception, and passes its own figure instead: its slab
- * folds away a name that can run to four lines plus the room reserved under it
- * for the pour-profile watermark, which at the largest text size is well over
- * 200. Raising this constant to cover that cost the home screen scroll it never
+ * folds away a name that can run to three lines plus the room reserved under it
+ * for the pour-profile watermark. At the largest text size that is about 190,
+ * and about 250 with the stage curve. Raising this constant to cover that cost the home screen scroll it never
  * needed, so the editor's number lives with the slab (`heroFoldAway`) and this
  * one stays the home screen's.
  */

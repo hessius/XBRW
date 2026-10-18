@@ -99,7 +99,7 @@ describe("nextCollapsed", () => {
 
     it("judges a screen by its own fold-away when it passes one", () => {
         // The editor folds away far more than the home screen when a recipe
-        // has a four-line name. A page with room for the home screen's
+        // has a three-line name. A page with room for the home screen's
         // collapse but not for the editor's must not collapse the editor.
         const shrink = COLLAPSE_SHRINK + 150;
         const extent = COLLAPSE_SHRINK + EXPAND_AT + 100;
