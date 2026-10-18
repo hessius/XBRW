@@ -949,7 +949,7 @@ only: there are no notifications (no notification dependency in the app).
 | `bag.freshness.past` | `library/restPeak.ts` (`freshnessLine`) | After the best-until day. | `Past its best, still fine to brew.` |
 | `bag.freshness.badge` | `library/restPeak.ts` (`freshnessBadge`) | Doto badge beside the bag badge on cards and tiles. | `REST` / `READY` / `PEAK` / `PAST` |
 | `bag.freshness.a11y` | `library/restPeak.ts` (`spokenFreshness`) | (a11y) Part of the card's label. | `coffee resting` / `coffee ready to brew` / `coffee at its peak` / `coffee past its best` |
-| `bag.sheet.restPeak` | `components/BagSheet.tsx` | Doto label, shown once a valid roast day is typed. | `REST AND PEAK` |
+| `bag.sheet.restPeak` | `components/BagSheet.tsx` | Doto label, shown while a roast day is set (a new bag starts on today). | `REST AND PEAK` |
 | `bag.sheet.restPeak.roaster` | `components/BagSheet.tsx` | In place of the fields when the coffee states a rest and a peak (BrewMind link or roaster catalogue). | `From the roaster: rest 14 days, peak on day 35.` |
 | `bag.sheet.restPeak.levels` | `components/BagSheet.tsx` | Roast chips that fill the two fields. Spoken "Nordic ultra-light", "Light", and so on. | `NORDIC` `LIGHT` `MEDIUM` `DARK` `DECAF` |
 | `bag.sheet.restPeak.fields` | `components/BagSheet.tsx` | Doto labels on the two number fields. | `REST DAYS` · `PEAK DAY` |
