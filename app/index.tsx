@@ -57,6 +57,8 @@ import {assignAccent, resolveAccent} from "@/library/accent";
 import NameShelfSheet from "@/components/NameShelfSheet";
 import RemoveShelfSheet from "@/components/RemoveShelfSheet";
 import RoasterOfferSheet from "@/components/RoasterOfferSheet";
+import RoasterSearchRow from "@/components/RoasterSearchRow";
+import RoasterStrip from "@/components/RoasterStrip";
 import SelectableRecipeRow from "@/components/SelectableRecipeRow";
 import ShelfGrid from "@/components/ShelfGrid";
 import ShelfOverflowSheet from "@/components/ShelfOverflowSheet";
@@ -70,6 +72,8 @@ import {BREWMIND_SOURCE, type BrewMindLink} from "@/library/brewmindLink";
 import {useBrewMindCreate} from "@/hooks/useBrewMindCreate";
 import {useImportLink} from "@/hooks/useImportLink";
 import {useRoasterOffer} from "@/hooks/useRoasterOffer";
+import {useHomeRoasters} from "@/hooks/useHomeRoasters";
+import {browseLabel, type RoasterMatch} from "@/library/roasterHome";
 
 import {parseImportInput} from "@/library/importInput";
 import {
@@ -168,7 +172,8 @@ let lastEditorPushAt = 0;
 
 type RecipeListItem =
     | {kind: "heading"; id: string; label: string}
-    | {kind: "recipe"; recipe: Recipe; recipeIndex: number};
+    | {kind: "recipe"; recipe: Recipe; recipeIndex: number}
+    | {kind: "roaster"; match: RoasterMatch};
 
 type HomeQuickEditState = {
     recipe: Recipe;
@@ -319,6 +324,9 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
     const [myShelves, setMyShelves] = useSetting("myShelves", settings);
     const library = useRecipeLibrary(db, libraryQuery.query, parseHidden(myShelves));
     const {collapsed, onScroll} = useCollapsibleHeader();
+    // The roasters the user subscribed to, from their cached feeds. Everything
+    // it adds to this screen is drawn only while there is a subscription.
+    const homeRoasters = useHomeRoasters(settings);
     // The picker's selection lives apart from the library's query, which is
     // what lets a ticked recipe survive a change of lens: filter to tea, tick
     // three, clear the filter, and the three are still ticked.
@@ -844,7 +852,18 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
         setShelfActions(null);
     }
 
-    const listItems: RecipeListItem[] = drawSections
+    // A subscribed roaster's coffees that answer the search, after the
+    // library's own: the library is what the user has, the roasters what they
+    // could add. Not while picking, because a roaster's coffee cannot be ticked
+    // onto a shelf until it is in the library.
+    const roasterMatches = picker.active
+        ? []
+        : homeRoasters.search(libraryQuery.query.search);
+    const roasterItems: RecipeListItem[] = roasterMatches.length === 0 ? [] : [
+        {kind: "heading", id: "roasters", label: "FROM YOUR ROASTERS"},
+        ...roasterMatches.map((match) => ({kind: "roaster" as const, match}))
+    ];
+    const libraryItems: RecipeListItem[] = drawSections
         ? [
             {kind: "heading", id: "favourites", label: "STARRED"},
             ...favouriteRecipes.map((recipe, recipeIndex) => (
@@ -858,6 +877,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
         : shownRecipes.map((recipe, recipeIndex) => (
             {kind: "recipe" as const, recipe, recipeIndex}
         ));
+    const listItems: RecipeListItem[] = [...libraryItems, ...roasterItems];
     // The empty branch gates on what the list actually draws, not on the
     // query's count. While picking with SELECTED on, the rows come from the
     // whole table rather than the query, so `library.recipes.length` and the
@@ -1583,6 +1603,16 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                                  accessibilityLabel="Create a recipe"
                                  onPress={() => setNewOpen(true)}/>
                     </XStack>
+                    {/* Inside the tiles' row so it folds away with them as the
+                        list scrolls. Draws nothing without a subscription. */}
+                    <RoasterStrip rows={homeRoasters.strip}
+                                  // A roaster with no cached feed yet has an
+                                  // empty list to open, so its row goes where
+                                  // the sync status and REFRESH NOW are.
+                                  onOpen={(row) => row.cached
+                                      ? router.push({pathname: "/roaster", params: {feed: row.feedUrl}})
+                                      : router.push("/subscriptions")}
+                                  onAll={() => router.push("/roasters")}/>
                 </Collapsible>
 
                 {!wholeLibraryEmpty && (
@@ -1656,7 +1686,15 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                 )}
 
                 {wholeLibraryEmpty ? (
-                    <EmptyLibrary/>
+                    // Only with a roaster whose coffees are cached: a button
+                    // onto a list still loading would open an empty screen.
+                    <EmptyLibrary browse={homeRoasters.browsable.length > 0 ? {
+                        label:   browseLabel(homeRoasters.browsable),
+                        onPress: () => homeRoasters.browsable.length === 1
+                            ? router.push({pathname: "/roaster",
+                                           params: {feed: homeRoasters.browsable[0].feed}})
+                            : router.push("/roasters")
+                    } : undefined}/>
                 ) : inShelfRoom && !picker.active ? (
                     // A shelf opened into itself, ahead of the grid branch it
                     // replaces: same view, same rail, but the squares now carry
@@ -1724,7 +1762,9 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                         keyExtractor={(item: RecipeListItem) =>
                             item.kind === "heading"
                                 ? `heading:${item.id}`
-                                : `recipe:${item.recipe.key}`}
+                                : item.kind === "roaster"
+                                    ? `roaster:${item.match.feedUrl}#${item.match.ref}`
+                                    : `recipe:${item.recipe.key}`}
                         onScroll={onScroll}
                         scrollEventThrottle={16}
                         showsVerticalScrollIndicator={false}
@@ -1737,6 +1777,13 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                         }}
                         renderItem={({item}: {item: RecipeListItem}) => item.kind === "heading" ? (
                             <SectionHeading id={item.id} label={item.label}/>
+                        ) : item.kind === "roaster" ? (
+                            <RoasterSearchRow
+                                match={item.match}
+                                onPress={() => router.push({
+                                    pathname: "/roasterCoffee",
+                                    params:   {feed: item.match.feedUrl, coffee: item.match.ref}
+                                })}/>
                         ) : picker.active ? (
                             <SelectableRecipeRow
                                 recipe={item.recipe}
@@ -1996,6 +2043,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
             <ImportSheet
                 open={importOpen}
                 importer={importer}
+                hasRoasters={homeRoasters.subscribed}
                 onOpenChange={(open) => {
                     setImportOpen(open);
                     if (!open) {
