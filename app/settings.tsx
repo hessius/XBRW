@@ -177,6 +177,9 @@ export default function SettingsScreen({settings}: Props) {
         useSetting("roasterFeedOptOut", settings);
     const [roasterSubscriptions, setRoasterSubscriptions] =
         useSetting("roasterSubscriptions", settings);
+    // A row on the Roaster feeds screen, read here for the backup.
+    const [showRoastersOnHome, setShowRoastersOnHome] =
+        useSetting("showRoastersOnHome", settings);
     const subscriptionCount = parseSubscriptions(roasterSubscriptions).length;
     // The row only exists once there is something to manage: a subscription,
     // or a "don't ask again" to take back. Most people never meet a roaster
@@ -226,7 +229,7 @@ export default function SettingsScreen({settings}: Props) {
             brewHistorySort, brewHistorySortDirection,
             librarySort, librarySortDirection, libraryFavouritesFirst,
             libraryView, invertAutoShelves, hiddenShelves, myShelves,
-            roasterFeedOptOut, roasterSubscriptions, importFingerprints
+            roasterFeedOptOut, roasterSubscriptions, showRoastersOnHome, importFingerprints
         };
     }
 
@@ -378,6 +381,9 @@ export default function SettingsScreen({settings}: Props) {
         // more.
         if (typeof incoming.roasterFeedOptOut === "string") {
             setRoasterFeedOptOut(incoming.roasterFeedOptOut);
+        }
+        if (typeof incoming.showRoastersOnHome === "boolean") {
+            setShowRoastersOnHome(incoming.showRoastersOnHome);
         }
         // The catalogue cache is not backed up, so its sync timestamps cannot
         // suppress the first fetch after restore. Paused subscriptions stay paused.

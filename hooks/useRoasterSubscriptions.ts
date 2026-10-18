@@ -14,7 +14,7 @@ import {backInStockMessage} from "@/library/roasterAlerts";
 import {parseFeedOptOut, serialiseFeedOptOut, type RoasterFeed} from "@/library/roasterFeed";
 import {parseSubscriptions, type RoasterSubscription} from "@/library/roasterSubscription";
 import {
-    setPaused, syncSubscription, unsubscribe, type SyncResult
+    setPaused, setPinned, syncSubscription, unsubscribe, type SyncResult
 } from "@/library/roasterSync";
 import type {Settings} from "@/library/Settings";
 
@@ -133,6 +133,9 @@ export function useRoasterSubscriptions({settings, fetchBody, now}: Options = {}
         refreshAll,
         pause:  (sub: RoasterSubscription) => setPaused(store, sub.feed, true),
         resume: (sub: RoasterSubscription) => setPaused(store, sub.feed, false),
+        /** Pin to the home screen, or unpin. */
+        pin: (sub: RoasterSubscription, pinned: boolean) =>
+            setPinned(store, sub.feed, pinned, (now ?? Date.now)()),
         unsubscribe: (sub: RoasterSubscription) => {
             unsubscribe(store, sub.feed);
             notify({tone: "success", message: `Unsubscribed from ${sub.roaster}.`});

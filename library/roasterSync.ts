@@ -194,6 +194,16 @@ export function setPaused(settings: Settings, feedUrl: string, paused: boolean):
     updateSubscription(settings, feedUrl, (sub) => ({...sub, paused}));
 }
 
+/** Pin a roaster to the home screen, or take the pin away. */
+export function setPinned(settings: Settings, feedUrl: string, pinned: boolean, now: number): void {
+    updateSubscription(settings, feedUrl, (sub) => {
+        const next: RoasterSubscription = {...sub};
+        if (pinned) next.pinnedAt = sub.pinnedAt ?? now;
+        else delete next.pinnedAt;
+        return next;
+    });
+}
+
 /** Test hook: release the lock a test left held. */
 export function resetSyncLockForTests(): void {
     running = false;

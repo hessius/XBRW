@@ -5,7 +5,9 @@ import {Text, XStack, YStack} from "tamagui";
 import DotIcon from "@/components/DotIcon";
 import DotMatrixText from "@/components/DotMatrixText";
 import {palette} from "@/constants/colors";
-import {STRIP_MAX_ROWS, stripRowLabel, type StripRow} from "@/library/roasterHome";
+import {
+    stripRowLabel, stripSummaryLabel, type HomeStrip, type StripRow
+} from "@/library/roasterHome";
 
 const PHOTO = 28;
 const PHOTO_OVERLAP = 10;
@@ -48,42 +50,50 @@ function Count({testID, label, color}: {testID: string; label: string; color: st
     );
 }
 
+/** The pin mark: the favourite star, small, so a pinned roaster reads as chosen. */
+function PinMark({testID}: {testID: string}) {
+    return (
+        <XStack testID={testID} accessibilityElementsHidden
+                importantForAccessibility="no-hide-descendants">
+            <DotIcon name="favourite" size={12} color={palette.muted}/>
+        </XStack>
+    );
+}
+
+function Chevron() {
+    return (
+        <XStack style={{transform: [{rotate: "180deg"}]}}>
+            <DotIcon name="back" size={12} color={palette.muted}/>
+        </XStack>
+    );
+}
+
 /**
  * The roasters on the home screen, under the three tiles.
  *
- * One short row per subscribed roaster, so a coffee from one is a tap away
- * rather than four screens into Settings. Every subscription has a row,
- * paused and still-loading ones included; the line under the name says which
- * (`stripDetail` in `library/roasterHome.ts`). Two rows at most; with more, ALL
- * ROASTERS opens the full list. Nothing at all with no subscriptions, so the
- * home screen of somebody who never subscribed does not move.
+ * Following hessius's suggestion: with up to three subscriptions every
+ * roaster has a short row of its own, pinned ones first. With more, only the
+ * pinned roasters keep a row, and one `Roasters · {n}` row opens the full list
+ * with the NEW and back-in-stock counts of all of them. Which rows those are
+ * is `homeStrip` in `library/roasterHome.ts`. Nothing at all with no
+ * subscriptions, or with "Show roasters on the home screen" off, so the home
+ * screen of somebody who never subscribed does not move.
  */
-export default function RoasterStrip({rows, onOpen, onAll}: {
-    rows: readonly StripRow[];
+export default function RoasterStrip({strip, onOpen, onAll}: {
+    strip: HomeStrip;
     onOpen: (row: StripRow) => void;
     onAll: () => void;
 }) {
-    if (rows.length === 0) return null;
-    const shown = rows.slice(0, STRIP_MAX_ROWS);
+    const {rows, summary} = strip;
+    if (rows.length === 0 && summary === null) return null;
     return (
         <YStack testID="roaster-strip" paddingHorizontal="$3" paddingBottom="$2">
-            <XStack alignItems="center" justifyContent="space-between" minHeight={24}>
+            <XStack alignItems="center" minHeight={24}>
                 <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.6} color={palette.dim}>
                     YOUR ROASTERS
                 </DotMatrixText>
-                {rows.length > STRIP_MAX_ROWS && (
-                    <Pressable testID="roaster-strip-all" accessibilityRole="button"
-                               accessibilityLabel={`All roasters, ${rows.length}`}
-                               hitSlop={{top: 10, bottom: 10, left: 8, right: 8}}
-                               onPress={onAll}>
-                        <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.6}
-                                       color={palette.text}>
-                            ALL ROASTERS
-                        </DotMatrixText>
-                    </Pressable>
-                )}
             </XStack>
-            {shown.map((row) => (
+            {rows.map((row) => (
                 <Pressable key={row.feedUrl} testID={`roaster-strip-${row.roaster}`}
                            accessibilityRole="button"
                            accessibilityLabel={stripRowLabel(row)}
@@ -92,10 +102,13 @@ export default function RoasterStrip({rows, onOpen, onAll}: {
                     <XStack alignItems="center" gap="$3" minHeight={48} paddingVertical="$1">
                         <PhotoStack photos={row.photos}/>
                         <YStack flex={1} minWidth={0}>
-                            <Text fontSize={15} fontWeight="700" color={palette.text}
-                                  numberOfLines={1}>
-                                {row.roaster}
-                            </Text>
+                            <XStack alignItems="center" gap="$2">
+                                <Text fontSize={15} fontWeight="700" color={palette.text}
+                                      numberOfLines={1} flexShrink={1}>
+                                    {row.roaster}
+                                </Text>
+                                {row.pinned && <PinMark testID={`roaster-strip-${row.roaster}-pinned`}/>}
+                            </XStack>
                             <Text testID={`roaster-strip-${row.roaster}-detail`}
                                   fontSize={13} color={palette.dim} numberOfLines={1}>
                                 {row.detail}
@@ -113,12 +126,33 @@ export default function RoasterStrip({rows, onOpen, onAll}: {
                             <Count testID={`roaster-strip-${row.roaster}-new`}
                                    label={`${row.fresh} NEW`} color={palette.info}/>
                         )}
-                        <XStack style={{transform: [{rotate: "180deg"}]}}>
-                            <DotIcon name="back" size={12} color={palette.muted}/>
-                        </XStack>
+                        <Chevron/>
                     </XStack>
                 </Pressable>
             ))}
+            {summary !== null && (
+                <Pressable testID="roaster-strip-all" accessibilityRole="button"
+                           accessibilityLabel={stripSummaryLabel(summary)}
+                           onPress={onAll}
+                           style={({pressed}) => ({opacity: pressed ? 0.7 : 1})}>
+                    {/* Compact: one line, no photos, because it stands for a list. */}
+                    <XStack alignItems="center" gap="$3" minHeight={44} paddingVertical="$1">
+                        <Text flex={1} fontSize={15} fontWeight="700" color={palette.text}
+                              numberOfLines={1}>
+                            {`Roasters · ${summary.count}`}
+                        </Text>
+                        {summary.back > 0 && (
+                            <Count testID="roaster-strip-all-back"
+                                   label={`${summary.back} BACK`} color={palette.success}/>
+                        )}
+                        {summary.fresh > 0 && (
+                            <Count testID="roaster-strip-all-new"
+                                   label={`${summary.fresh} NEW`} color={palette.info}/>
+                        )}
+                        <Chevron/>
+                    </XStack>
+                </Pressable>
+            )}
         </YStack>
     );
 }

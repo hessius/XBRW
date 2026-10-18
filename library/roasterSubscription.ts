@@ -42,6 +42,13 @@ export type RoasterSubscription = {
     paused: boolean;
     /** Why the last attempt failed, or absent when it worked. */
     lastError?: SyncError;
+    /**
+     * Epoch ms the roaster was pinned to the home screen, or absent when it
+     * is not. A time rather than a flag so pins keep the order they were
+     * made in, most recent last. Lives on the subscription so a backup carries
+     * it and unsubscribing takes it away.
+     */
+    pinnedAt?: number;
 };
 
 function text(value: unknown, max: number): string | undefined {
@@ -77,6 +84,8 @@ function subscription(value: unknown): RoasterSubscription | null {
     if (SYNC_ERRORS.includes(entry.lastError as SyncError)) {
         result.lastError = entry.lastError as SyncError;
     }
+    const pinnedAt = time(entry.pinnedAt);
+    if (pinnedAt > 0) result.pinnedAt = pinnedAt;
     return result;
 }
 

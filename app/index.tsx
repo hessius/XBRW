@@ -1512,13 +1512,14 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                     </XStack>
                     {/* Inside the tiles' row so it folds away with them as the
                         list scrolls. Draws nothing without a subscription. */}
-                    <RoasterStrip rows={homeRoasters.strip}
+                    <RoasterStrip strip={homeRoasters.strip}
                                   // A roaster with no cached feed yet has an
-                                  // empty list to open, so its row goes where
-                                  // the sync status and REFRESH NOW are.
+                                  // empty list to open, so its row goes to its
+                                  // feed screen, where the sync status and
+                                  // REFRESH NOW are.
                                   onOpen={(row) => row.cached
                                       ? router.push({pathname: "/roaster", params: {feed: row.feedUrl}})
-                                      : router.push("/subscriptions")}
+                                      : router.push({pathname: "/subscription", params: {feed: row.feedUrl}})}
                                   onAll={() => router.push("/roasters")}/>
                 </Collapsible>
 
