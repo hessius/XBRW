@@ -645,7 +645,7 @@ export default function SettingsScreen({settings}: Props) {
                         there is a subscription or a "don't ask again" to take
                         back (`showSubscriptions`). */}
                     {showSubscriptions && (
-                        <SettingsActionRow label="Roaster subscriptions"
+                        <SettingsActionRow label="Roaster feeds"
                                            detail={subscriptionCount === 0
                                                ? "None. Roasters you said no to are listed here."
                                                : subscriptionCount === 1

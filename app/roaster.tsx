@@ -1,9 +1,11 @@
 import {useLocalSearchParams} from "expo-router";
 import React, {useEffect, useRef, useState} from "react";
+import {Pressable} from "react-native";
 import {FlatList} from "react-native-gesture-handler";
 import {XStack, YStack} from "tamagui";
 
 import {CatalogueStatus} from "@/components/CatalogueParts";
+import DotMatrixText from "@/components/DotMatrixText";
 import FadingRail from "@/components/FadingRail";
 import HubFilterSheet from "@/components/HubFilterSheet";
 import RailChip from "@/components/RailChip";
@@ -19,6 +21,7 @@ import {sharedSettings, useSetting} from "@/hooks/useSetting";
 import {coffeeBadge, readAlerts, recordListViewed} from "@/library/roasterAlerts";
 import {coffeeRef, readCatalogue, updatedAgo} from "@/library/roasterCatalogue";
 import type {FeedCoffee} from "@/library/roasterFeed";
+import {parseSubscriptions, subscriptionFor} from "@/library/roasterSubscription";
 import {
     availableFilters, countLabel, EMPTY_COFFEE_QUERY, FACETS, facetOptions, filterCoffees,
     isFiltered, rememberedQuery, rememberQuery, type CoffeeFacet, type CoffeeFilters,
@@ -104,6 +107,25 @@ function CoffeeRail({search, query, offered, openFacet, onFacetOpen, onChange}: 
 }
 
 /**
+ * The way from a roaster's coffees to its feed: refresh, pause,
+ * unsubscribe. At the end of the list, quiet, as the roasters list ends with
+ * MANAGE FEEDS, because it is not why anyone opened the list.
+ */
+function ManageSubscription({feed}: {feed: string}) {
+    return (
+        <Pressable accessibilityRole="button" accessibilityLabel="Manage feed"
+                   testID="roaster-manage"
+                   onPress={() => router.push({pathname: "/subscription", params: {feed}})}>
+            <XStack paddingHorizontal="$4" paddingVertical="$4">
+                <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.6} color={palette.dim}>
+                    MANAGE FEED
+                </DotMatrixText>
+            </XStack>
+        </Pressable>
+    );
+}
+
+/**
  * One roaster's coffees.
  *
  * The cached feed, drawn as the catalogue draws a list: photo, name, roast
@@ -129,6 +151,8 @@ export default function RoasterScreen({settings, feedUrl, now}: {
     useSetting("roasterCatalogue", store);
     // And to the alerts, so a coffee opened from here loses its tag on return.
     useSetting("roasterAlerts", store);
+    const [storedSubscriptions] = useSetting("roasterSubscriptions", store);
+    const subscribed = subscriptionFor(parseSubscriptions(storedSubscriptions), feed) !== undefined;
     const [at] = useState(() => (now ?? Date.now)());
     const listEnd = useScrollEndPadding(8);
     const cached = readCatalogue(store, feed);
@@ -203,6 +227,7 @@ export default function RoasterScreen({settings, feedUrl, now}: {
                         keyExtractor={ref}
                         keyboardShouldPersistTaps="handled"
                         contentContainerStyle={{paddingBottom: listEnd}}
+                        ListFooterComponent={subscribed ? <ManageSubscription feed={feed}/> : null}
                         renderItem={({item}) => (
                             <RoasterCoffeeRow
                                 coffee={item}
