@@ -1,3 +1,5 @@
+import {readLabels} from "@/library/coffeeLabels";
+
 /**
  * What we know about a coffee, and hand onwards.
  *
@@ -61,6 +63,13 @@ export type PodCoffee = {
     /** Link to the coffee. https only. */
     url?: string;
     imageUrl?: string;
+    /**
+     * Short tasting notes ("Papaya", "Raspberry"), from an import link's
+     * `bean.flavours` or a roaster feed's `flavours`. Not a Beanconqueror
+     * field: it is kept for ABOUT, which shows these as the flavour and the
+     * longer `aromatics` under them, and `handoffBean` never sends it.
+     */
+    flavours?: string[];
 };
 
 /** A trimmed string, or undefined when there was nothing worth carrying. */
@@ -407,5 +416,9 @@ export function podCoffeeFromStored(value: unknown): PodCoffee | null {
     if (elevation !== undefined) coffee.elevation = elevation;
     if (cuppingPoints !== undefined) coffee.cupping_points = cuppingPoints;
     if (decaffeinated !== undefined) coffee.decaffeinated = decaffeinated;
+    // A stored array or a link's comma separated string, through the one
+    // reader both doors use, so it is trimmed and capped the same way.
+    const flavours = readLabels(record.flavours);
+    if (flavours.length > 0) coffee.flavours = flavours;
     return coffee;
 }

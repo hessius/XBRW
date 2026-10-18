@@ -167,7 +167,10 @@ export function isFiltered(query: CoffeeQuery, offered: CoffeeFilters): boolean 
  * shown.
  */
 export function countLabel(shown: number, total: number, filtered: boolean): string {
-    return filtered && shown !== total ? `${shown} OF ${total}` : String(shown);
+    const noun = (n: number) => (n === 1 ? "coffee" : "coffees");
+    return filtered && shown !== total
+        ? `${shown} of ${total} ${noun(total)}`
+        : `${shown} ${noun(shown)}`;
 }
 
 /**
