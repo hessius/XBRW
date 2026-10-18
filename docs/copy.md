@@ -409,7 +409,10 @@ screens (`app/roasters.tsx`, `app/roaster.tsx`, `app/roasterCoffee.tsx`,
 `components/RoasterCoffeeRow.tsx`, `components/ShelfChoiceSheet.tsx`), the
 re-import question (`components/NewerVersionPrompt.tsx`), and the subscriptions
 screen (`app/subscriptions.tsx`, `components/UnsubscribeSheet.tsx`,
-`hooks/useRoasterSubscriptions.ts`). The feed format is `docs/roaster-feed.md`.
+`hooks/useRoasterSubscriptions.ts`), and the home screen's ways in
+(`components/RoasterStrip.tsx`, `components/RoasterSearchRow.tsx`,
+`components/EmptyLibrary.tsx`, `components/ImportSheet.tsx`). The feed format
+is `docs/roaster-feed.md`.
 
 | ID | Source | Context — when the user sees this | Current text |
 |----|--------|-----------------------------------|--------------|
@@ -487,6 +490,12 @@ screen (`app/subscriptions.tsx`, `components/UnsubscribeSheet.tsx`,
 | `roaster.alerts.watchBag` | `components/CatalogueParts.tsx` (`BagWatch`) | Beside SOLD OUT on a sold-out bag of a coffee that is on sale. a11y: `${row}, sold out. Tell me when it's back` (switch). | `TELL ME` / `WATCHING` |
 | `roaster.alerts.toast` | `library/roasterAlerts.ts` (`backInStockMessage`) | One toast per sync, per roaster, for watched coffees that came back. | `${coffee} is back at ${roaster}.` / `${n} coffees you asked about are back at ${roaster}.` |
 | `roaster.recipe.name` | `library/fitName.ts` (`fitName`) | A catalogue recipe's name, `${coffee} - ${size}`, fitted under the 100-character name ceiling: trailing bracketed groups go first, then whole words, with `…` before the size. | `${coffee}… - ${size}` |
+| `roaster.home.strip` | `components/RoasterStrip.tsx` | Home, under the three tiles, only with a subscription. Doto heading, then at most two roasters: those with something NEW or back first, then by name. Each row: roaster name, a detail line (`roaster.home.detail`), then Doto `PAUSED` (muted), `${b} BACK` (success) and `${k} NEW` (info) when they apply. a11y: `${roaster}, ${detail}, updates paused, ${k} new, ${b} back in stock`. | `YOUR ROASTERS` |
+| `roaster.home.detail` | `library/roasterHome.ts` (`stripDetail`) | The line under a strip row's name. No cached feed: loading or the last attempt failed (the row then opens Subscriptions). Nothing on sale, or no coffees. Otherwise the count; a failing feed with a cache adds its age. | `Loading coffees` / `Couldn't update` / `No coffees on sale right now` / `${n} coffees` / `${n} coffees · Updated 3 d ago` |
+| `roaster.home.all` | `components/RoasterStrip.tsx` | Doto link beside the heading when there are more than two roasters. a11y: `All roasters, ${n}`. | `ALL ROASTERS` |
+| `roaster.home.search` | `app/index.tsx` | Section heading after the library's own results while searching, only when a subscribed roaster's cached coffees on sale match (paused roasters included, sold-out and not-yet-loaded ones left out). Rows show the coffee, the roaster and the roast level (`components/RoasterSearchRow.tsx`). a11y: `${coffee}, from ${roaster}, ${level} roast` (plus `sold out`). | `FROM YOUR ROASTERS` |
+| `roaster.home.empty` | `components/EmptyLibrary.tsx` | Primary button under NO RECIPES YET, only with a subscription whose cached feed lists at least one coffee. One roaster by name, several together (`library/roasterHome.ts`, `browseLabel`). | `BROWSE ${ROASTER}` / `BROWSE YOUR ROASTERS` |
+| `roaster.import.row` | `components/ImportSheet.tsx` | Import sheet row above BROWSE THE CATALOGUE, only with a subscription and while idle. Hidden, not a hint, without one: most roasters publish no feed yet, so a hint would promise something most people cannot do, and a row in that list without a chevron reads as broken. Doto label and caption; opens the roasters list. | `YOUR ROASTERS` / `Coffees from the roasters you subscribe to.` |
 
 ---
 

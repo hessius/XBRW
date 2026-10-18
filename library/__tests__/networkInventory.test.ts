@@ -156,6 +156,10 @@ const EXPECTED_CALLS: Record<string, number> = {
     "components/ImportResult.tsx": 1,
     "components/PodSection.tsx":   1,
     "components/RoasterCoffeeRow.tsx": 1,
+    // The home screen's roaster strip and search results: the same cached
+    // feed's coffee photos, drawn only while somebody subscribes.
+    "components/RoasterSearchRow.tsx": 1,
+    "components/RoasterStrip.tsx": 1,
     "hooks/useShareRecipe.ts":     1,
     "library/XBloomRecipe.ts":     1,
     "library/cloud/transport.ts":  1,

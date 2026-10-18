@@ -210,7 +210,7 @@ export const OUTBOUND_CALLS: OutboundCall[] = [
     {
         id:      "images",
         title:   "Load a photo",
-        trigger: "You open the hub, a roaster's catalogue, an import preview, or a saved recipe that carries a pod photo or the avatar of whoever shared it.",
+        trigger: "You open the hub, a roaster's catalogue, an import preview, or a saved recipe that carries a pod photo or the avatar of whoever shared it, or the home screen while you subscribe to a roaster.",
         host:    "whichever host xBloom named in its own reply",
         hostPinned: false,
         owner:   "xBloom, or whoever xBloom points at",
@@ -219,7 +219,8 @@ export const OUTBOUND_CALLS: OutboundCall[] = [
             "No recipe, no account and nothing you have typed.",
             "The address comes from xBloom's reply rather than from this app, so it is not a fixed one. XBRW++ drops any address that is not https, and sends it nothing.",
             "A roaster's list of coffees names a picture for each coffee too, under the same https rule, and the catalogue shows it.",
-            "This is the one request that can happen while you are only looking at your own library, because a recipe imported from xBloom remembers the photo that came with it."
+            "This is the one request that can happen while you are only looking at your own library, because a recipe imported from xBloom remembers the photo that came with it.",
+            "If you subscribe to a roaster, the home screen also shows a few of its coffee photos beside its name, and its coffees' photos in a search. They come from the roaster's cached list, so the list itself is not fetched again."
         ],
         source:  [
             "library/podCoffee.ts",
@@ -229,7 +230,9 @@ export const OUTBOUND_CALLS: OutboundCall[] = [
             "components/HubRow.tsx",
             "components/ImportResult.tsx",
             "components/CatalogueParts.tsx",
-            "components/RoasterCoffeeRow.tsx"
+            "components/RoasterCoffeeRow.tsx",
+            "components/RoasterStrip.tsx",
+            "components/RoasterSearchRow.tsx"
         ]
     }
 ];

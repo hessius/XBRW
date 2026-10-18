@@ -20,7 +20,10 @@ import type {Settings} from "@/library/Settings";
 type Entry = {body: string; fetchedAt: number};
 
 function readAll(settings: Settings): Record<string, Entry> {
-    const stored = settings.get("roasterCatalogue");
+    return readEntries(settings.get("roasterCatalogue"));
+}
+
+function readEntries(stored: string): Record<string, Entry> {
     if (stored.trim() === "") return {};
     try {
         const parsed: unknown = JSON.parse(stored);
@@ -43,9 +46,17 @@ export type CachedCatalogue = {feed: RoasterFeed; fetchedAt: number};
 
 /** The cached feed for a subscription, or null when there is none or it no longer reads. */
 export function readCatalogue(settings: Settings, feedUrl: string): CachedCatalogue | null {
+    return readCatalogueFrom(settings.get("roasterCatalogue"), feedUrl);
+}
+
+/**
+ * The same, from the setting's stored value: for a screen that already holds
+ * it through `useSetting` and redraws when it changes.
+ */
+export function readCatalogueFrom(stored: string, feedUrl: string): CachedCatalogue | null {
     const key = feedKey(feedUrl);
     if (key === null) return null;
-    const entry = readAll(settings)[key];
+    const entry = readEntries(stored)[key];
     if (entry === undefined) return null;
     const feed = parseRoasterFeed(entry.body);
     return feed === null ? null : {feed, fetchedAt: entry.fetchedAt};
