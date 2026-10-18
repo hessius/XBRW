@@ -60,6 +60,19 @@ type Props = {
     beanNameFixed: boolean;
     /** Bumped by the caller on each open, so the fields start fresh. */
     epoch: number;
+    /**
+     * The sizes to offer in place of the usual presets, e.g. the bags a
+     * roaster's catalogue sells. Empty or absent keeps `BAG_PRESETS`.
+     */
+    sizes?: readonly number[];
+    /** The size picked when adding, in place of 250 g. */
+    suggestedSize?: number;
+    /**
+     * What a bag of this size costs, from the roaster's catalogue. Given, the
+     * price is asked for in both tracker modes and filled in from the chosen
+     * size until the person types their own.
+     */
+    priceFor?: (grams: number) => number | undefined;
     onSave: (result: BagSheetResult) => void;
     onFinish: () => void;
     onRemove: () => void;
@@ -140,16 +153,21 @@ function priceNumber(text: string): number | undefined {
  */
 function BagForm({
     tracker, bag, gramsLeft, suggestedRoastedOn, coffee, beanName, beanNameFixed,
-    onSave, onFinish, onRemove
+    onSave, onFinish, onRemove, sizes, suggestedSize, priceFor
 }: Omit<Props, "open" | "onOpenChange" | "epoch">) {
     const advised = startingFigures(coffee);
     const startRest = bag?.restDays ?? advised.figures.restDays;
     const startPeak = bag?.peakDay ?? advised.figures.peakDay;
-    const startSize = bag?.sizeGrams ?? 250;
+    const presets = sizes !== undefined && sizes.length > 0 ? sizes : BAG_PRESETS;
+    const startSize = bag?.sizeGrams ?? suggestedSize ?? 250;
+    const startPrice = bag?.price ?? (bag === null ? priceFor?.(startSize) : undefined);
     const [size, setSize] = useState(String(startSize));
-    const [custom, setCustom] = useState(!BAG_PRESETS.includes(startSize));
+    const [custom, setCustom] = useState(!presets.includes(startSize));
     const [roasted, setRoasted] = useState(bag?.roastedOn ?? suggestedRoastedOn ?? "");
-    const [price, setPrice] = useState(bag?.price !== undefined ? String(bag.price) : "");
+    const [price, setPrice] = useState(startPrice !== undefined ? String(startPrice) : "");
+    // Follows the chosen size until the person types a price of their own.
+    const [priceTyped, setPriceTyped] = useState(false);
+    const askPrice = tracker === "beanconqueror" || priceFor !== undefined;
     const [name, setName] = useState(bag?.beanName ?? beanName);
     const [left, setLeft] = useState(gramsLeft !== null ? String(gramsLeft) : "");
     const [level, setLevel] = useState<RoastLevelKey | null>(
@@ -213,13 +231,15 @@ function BagForm({
                     <Label>BAG SIZE</Label>
                     <XStack gap="$2" flexWrap="wrap" accessibilityRole="radiogroup"
                             accessibilityLabel="Bag size">
-                        {BAG_PRESETS.map((grams) => (
+                        {presets.map((grams) => (
                             <Chip key={grams} label={`${grams}G`} spoken={`${grams} grams`}
                                   testID={`bag-size-${grams}`}
                                   selected={!custom && sizeGrams === grams}
                                   onPress={() => {
                                       setCustom(false);
                                       setSize(String(grams));
+                                      const known = priceFor?.(grams);
+                                      if (!priceTyped && known !== undefined) setPrice(String(known));
                                   }}/>
                         ))}
                         <Chip label="OTHER" spoken="Other size" testID="bag-size-other"
@@ -336,20 +356,27 @@ function BagForm({
                                     : "Give the bean a name."}
                             </Text>
                         </YStack>
-                        <YStack gap="$2">
-                            <Label>PRICE</Label>
-                            <TextInput testID="bag-price-field" accessibilityLabel="Price"
-                                       value={price} onChangeText={setPrice}
-                                       keyboardType="decimal-pad" placeholder="Optional"
-                                       placeholderTextColor={palette.placeholder}
-                                       style={fieldStyle}/>
-                            {!priceOk && (
-                                <Text fontSize={12} color={palette.danger}>
-                                    Enter a price like 24.50.
-                                </Text>
-                            )}
-                        </YStack>
                     </>
+                )}
+
+                {askPrice && (
+                    <YStack gap="$2">
+                        <Label>PRICE</Label>
+                        <TextInput testID="bag-price-field" accessibilityLabel="Price"
+                                   value={price}
+                                   onChangeText={(text) => {
+                                       setPrice(text);
+                                       setPriceTyped(true);
+                                   }}
+                                   keyboardType="decimal-pad" placeholder="Optional"
+                                   placeholderTextColor={palette.placeholder}
+                                   style={fieldStyle}/>
+                        {!priceOk && (
+                            <Text fontSize={12} color={palette.danger}>
+                                Enter a price like 24.50.
+                            </Text>
+                        )}
+                    </YStack>
                 )}
 
                 <ActionButton label={sending ? "SEND TO BEANCONQUEROR" : "SAVE"}

@@ -49,7 +49,7 @@ import {
     type BeanProfileStore,
     type RecipeRatingStore
 } from "@/hooks/useBrewHistory";
-import {useSetting} from "@/hooks/useSetting";
+import {sharedSettings, useSetting} from "@/hooks/useSetting";
 import {useCoffeeBag} from "@/hooks/useCoffeeBag";
 import {useNow} from "@/hooks/useNow";
 import {freshnessOf} from "@/library/restPeak";
@@ -66,6 +66,7 @@ import {
 } from "@/library/coffeeBag";
 import {bagBeanName, bagBeanNameFixed, bagShareBean} from "@/library/brew/handoff/bagBean";
 import {beanLink} from "@/library/brew/handoff/beanLink";
+import {reorderLink} from "@/library/roasterBuy";
 import {resolveAccent} from "@/library/accent";
 import {CARD_GRIND_MIN, grindBand} from "@/library/grindBands";
 import {parseCapture} from "@/library/cardDiagnostics";
@@ -101,6 +102,18 @@ const AUTOSAVED_LABELS: string[] = [RECIPE_LABELS.TITLE, RECIPE_LABELS.NOTE];
  * this is trying to save the user from.
  */
 const FALLBACK_MAX_STAGES = 10;
+
+/**
+ * The catalogue's buy link for the same bag, or undefined. A settings store
+ * that cannot be read costs the reorder its catalogue link and nothing else.
+ */
+function catalogueReorder(coffeeUrl: string | undefined, grams: number | undefined): string | undefined {
+    try {
+        return reorderLink(sharedSettings(), coffeeUrl, grams);
+    } catch {
+        return undefined;
+    }
+}
 
 function maxStagesFromLastCard(lastCardRead: string): number {
     const info = parseCapture(lastCardRead)?.systemInfo;
@@ -1108,7 +1121,10 @@ export default function EditRecipe(
     // Grams are this app's estimate only while this app is the tracker.
     const bagReading = openBag !== null && bagTracker === "xbrw"
         ? readBag(openBag.bag, openBag.usedGrams, recipe.dosage) : null;
-    const bagReorderUrl = reorderUrl(recipe);
+    // The same bag again from the roaster's catalogue when it still sells
+    // that size, otherwise the coffee's page.
+    const bagReorderUrl = catalogueReorder(recipe.coffee?.url, openBag?.bag.sizeGrams)
+        ?? reorderUrl(recipe);
     // Freshness is the roast day's, so it is drawn in both tracker modes.
     const bagFreshness = openBag === null ? null : freshnessOf(openBag.bag, now);
 

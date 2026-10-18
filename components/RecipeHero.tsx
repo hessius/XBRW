@@ -147,6 +147,9 @@ export const HERO_NAME_MAX_LINES = 3;
  * point phone at 1.15x text. A name that does not fit even at 15 (only at the
  * largest text sizes) is cut after three lines with an ellipsis.
  */
+/** A short name's own size, which a pictured short name tries first. */
+export const HERO_NAME_SHORT_STEP = {fontSize: 26, lineHeight: 31} as const;
+
 export const HERO_NAME_STEPS = [
     {fontSize: 22, lineHeight: 27},
     {fontSize: 20, lineHeight: 25},
@@ -251,6 +254,11 @@ function breakLines(
 }
 
 /** How many lines `text` takes; see `wrapLines`. */
+/** Whether every word of `text` fits `width` whole, so wrapping never splits one. */
+export function wordsFit(text: string, width: number, fontSize: number): boolean {
+    return text.split(" ").filter(Boolean).every((word) => textEm(word) * fontSize <= width);
+}
+
 export function estimateLines(text: string, width: number, fontSize: number): number {
     return wrapLines(text, width, fontSize).length;
 }
@@ -323,10 +331,13 @@ export function heroNameLayout(
     const scale = Math.min(Math.max(fontScale, 1), DOTO_MAX_FONT_SCALE);
     const content = windowWidth - 2 * SLAB_PADDING_X;
     const photoSize = photo ? HERO_PHOTO_SIZE : 0;
-    if (name.length <= HERO_NAME_LONG && (
-        !photo
-        || estimateLines(name, 0.72 * (content - HERO_PHOTO_RESERVE) - FIT_SLACK, 26 * scale) <= 2
-    )) {
+    // The short-name column is a share of the slab, set aside for the picture
+    // and the pencil as well. With a picture that left "col Java hydrohoney
+    // -18g" a column too narrow for "hydrohoney", which Android then broke
+    // mid-word. So a named recipe with a picture always takes the measured,
+    // word-wrapped path below, which gives the name the full width under the
+    // picture and steps the size down rather than splitting a word.
+    if (name.length <= HERO_NAME_LONG && !photo) {
         return {
             fontSize: 26, lineHeight: 31, lines: 2, maxWidth: "72%",
             reserve: 0, profileHeight: PROFILE_HEIGHT, tight: false, photoSize
@@ -354,7 +365,7 @@ export function heroNameLayout(
     // lines that start beside it narrowed for it and the pencil, the rest the
     // slab's full width.
     const pictured = (
-        step: typeof HERO_NAME_STEPS[number], size: number, last: boolean
+        step: {readonly fontSize: number; readonly lineHeight: number}, size: number, last: boolean
     ): HeroNameLayout | null => {
         const fontSize = step.fontSize * scale;
         const lineHeight = step.lineHeight * scale;
@@ -390,7 +401,11 @@ export function heroNameLayout(
 
     const fitted = (step: typeof HERO_NAME_STEPS[number], last: boolean): HeroNameLayout | null => {
         const size = step.fontSize * scale;
-        if (beside > 0 && estimateLines(name, beside - FIT_SLACK, size) <= HERO_NAME_MAX_LINES) {
+        // Beside the watermark only when no word has to be split to get
+        // there. A column that cannot hold "hydrohoney" whole is one Android
+        // breaks mid-word, which is the device report this rule answers.
+        if (beside > 0 && estimateLines(name, beside - FIT_SLACK, size) <= HERO_NAME_MAX_LINES
+            && wordsFit(name, beside - FIT_SLACK, size)) {
             return {
                 ...step, lines: HERO_NAME_MAX_LINES, maxWidth: beside, reserve: 0,
                 profileHeight: PROFILE_HEIGHT, tight: false, photoSize
@@ -407,6 +422,17 @@ export function heroNameLayout(
         }
         return last ? pictured(step, HERO_PHOTO_SIZES[HERO_PHOTO_SIZES.length - 1], true) : null;
     };
+
+    // A short name with a picture first tries its own 26 pt beside the
+    // picture and under it, whole words only, before stepping down.
+    if (photo && name.length <= HERO_NAME_LONG) {
+        for (const picture of HERO_PHOTO_SIZES) {
+            const layout = pictured(HERO_NAME_SHORT_STEP, picture, false);
+            // A word too wide for the column beside the picture goes whole to
+            // the full-width lines under it, so no word is split here.
+            if (layout !== null) return layout;
+        }
+    }
 
     for (let i = 0; i < HERO_NAME_STEPS.length; i++) {
         const layout = fitted(HERO_NAME_STEPS[i], i === HERO_NAME_STEPS.length - 1);

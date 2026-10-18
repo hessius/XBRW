@@ -5,7 +5,7 @@ import {fireEvent, screen} from "@testing-library/react-native";
 import RecipeHero, {
     estimateLines, HERO_NAME_LONG, HERO_NAME_MAX_LINES, HERO_PHOTO_RESERVE, HERO_PHOTO_SIZE,
     HERO_PHOTO_SIZES,
-    HERO_PROFILE_RESERVE, heroFoldAway, heroNameLayout, PROFILE_BAND_HEIGHT, wrapLines
+    HERO_PROFILE_RESERVE, heroFoldAway, heroNameLayout, PROFILE_BAND_HEIGHT, wordsFit, wrapLines
 } from "@/components/RecipeHero";
 import {COLLAPSE_SHRINK} from "@/hooks/useCollapsibleHeader";
 import {onAccent} from "@/constants/colors";
@@ -687,16 +687,39 @@ describe("RecipeHero's picture", () => {
         expect(name.length).toBeLessThanOrEqual(HERO_NAME_LONG);
         expect(heroNameLayout(name, NARROW, 1).fontSize).toBe(26);
         const layout = heroNameLayout(name, NARROW, 1, {photo: true});
-        expect(layout.fontSize).toBeLessThan(26);
+        // Beside and under the picture, in the long layout's three lines.
+        expect(layout.fontSize).toBeLessThanOrEqual(26);
         expect(layout.lines).toBe(HERO_NAME_MAX_LINES);
-        // A short name that still fits keeps its 26 pt, two-line column.
+        expect(layout.split).toBeDefined();
+        // A short name keeps its 26 pt, but beside and under the picture
+        // rather than in a share of the slab the picture also narrows.
         expect(heroNameLayout("Ethiopia Guji", NARROW, 1, {photo: true}))
-            .toEqual(expect.objectContaining({
-                fontSize: 26, lines: 2, maxWidth: "72%", photoSize: HERO_PHOTO_SIZE
-            }));
+            .toEqual(expect.objectContaining({fontSize: 26, photoSize: HERO_PHOTO_SIZE}));
+        expect(heroNameLayout("Ethiopia Guji", NARROW, 1, {photo: true}).split?.head)
+            .toBe("Ethiopia Guji");
         // The collapse counts any name as long while a picture is drawn.
         expect(heroFoldAway("Ethiopia Guji", true)).toBe(heroFoldAway(AWARD));
         expect(heroFoldAway("Ethiopia Guji", true)).toBeGreaterThan(heroFoldAway("Ethiopia Guji"));
+    });
+
+    it("never splits a word of a short name beside the picture (device report)", () => {
+        // The Fold cover screen drew "col Java / hydrohon / ey -18g".
+        const name = "col Java hydrohoney -18g";
+        for (const width of [NARROW, COVER]) {
+            for (const scale of [1, 1.15, 1.3]) {
+                const layout = heroNameLayout(name, width, scale, {photo: true});
+                const size = layout.fontSize * scale;
+                if (layout.split !== undefined) {
+                    expect(wordsFit(layout.split.head, layout.split.headWidth, size)).toBe(true);
+                    expect(wordsFit(layout.split.tail, width - 32, size)).toBe(true);
+                } else {
+                    expect(typeof layout.maxWidth).toBe("number");
+                    expect(wordsFit(name, layout.maxWidth as number, size)).toBe(true);
+                }
+            }
+        }
+        // And on the slab's widest screens the name still gets 26 pt.
+        expect(heroNameLayout(name, COVER, 1, {photo: true}).fontSize).toBe(26);
     });
 
     it("never folds away less than the slab holds with a picture", () => {

@@ -1,8 +1,9 @@
 import {useLocalSearchParams} from "expo-router";
 import React, {useEffect, useState} from "react";
-import {Pressable, ScrollView} from "react-native";
+import {Linking, Pressable, ScrollView} from "react-native";
 import {Text, XStack, YStack} from "tamagui";
 
+import BagSheet, {type BagSheetResult} from "@/components/BagSheet";
 import BrewStageLadder from "@/components/BrewStageLadder";
 import {BuySection, CatalogueStatus, Chip, DetailPhoto, PageLinkRow} from "@/components/CatalogueParts";
 import DotMatrixText from "@/components/DotMatrixText";
@@ -17,7 +18,13 @@ import {SCREEN_PADDING} from "@/constants/layout";
 import router from "@/hooks/steadyRouter";
 import {useScrollEndPadding} from "@/hooks/useBottomInset";
 import {sharedSettings, useSetting} from "@/hooks/useSetting";
+import type {BagStore} from "@/hooks/useCoffeeBag";
 import {assignAccent, resolveAccent} from "@/library/accent";
+import {bagBeanName} from "@/library/brew/handoff/bagBean";
+import {sharedBagDatabase} from "@/library/CoffeeBagDatabase";
+import {resolveBagTracker} from "@/library/coffeeBag";
+import {withRoastAdvice} from "@/library/restPeak";
+import {bagFormFor, beanconquerorBagLink, catalogueBag} from "@/library/roasterBag";
 import type Recipe from "@/library/Recipe";
 import {
     bagLine, beanFacts, chooseRecipe, detailTitle, findCoffee, readCatalogue,
@@ -95,13 +102,14 @@ function Action({label, spoken, testID, primary = false, disabled = false, onPre
  * latest. Three actions, because a catalogue is for deciding: brew it now
  * without keeping it, add it to the library, or put it on a shelf.
  */
-export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, library, shelves}: {
+export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, library, shelves, bagStore}: {
     /** Injected by tests; production reads the route and the real stores. */
     settings?: Settings;
     feedUrl?: string;
     coffeeId?: string;
     library?: LibraryDeps;
     shelves?: () => string[];
+    bagStore?: Pick<BagStore, "save">;
 } = {}) {
     const params = useLocalSearchParams<{feed: string; coffee: string}>();
     const feed = feedUrl ?? params.feed ?? "";
@@ -118,6 +126,14 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
     const [loaded, setLoaded] = useState<Loaded | null>(null);
     const [pending, setPending] = useState<Pending | null>(null);
     const [naming, setNaming] = useState(false);
+    // ADD TO SHELF asks about the bag first, then the shelf. The answer waits
+    // here until the shelf is chosen, so a cancelled shelf makes no bag.
+    const [bagOpen, setBagOpen] = useState(false);
+    const [bagEpoch, setBagEpoch] = useState(0);
+    const [bagInput, setBagInput] = useState<BagSheetResult | null>(null);
+    const [bagTrackerSetting] = useSetting("bagTracker", store);
+    const [beanconquerorHandoff] = useSetting("beanconquerorHandoff", store);
+    const tracker = resolveBagTracker(bagTrackerSetting, beanconquerorHandoff);
     const chosen = coffee === undefined ? undefined : chooseRecipe(coffee, size);
     const request = `${chosen?.share ?? ""}:${retry}`;
 
@@ -209,8 +225,36 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
         addToShelf(pending.recipe, shelf, deps, store);
         setPending(null);
         setNaming(false);
+        if (bagInput !== null) startBag(pending.recipe, bagInput);
+        setBagInput(null);
         notify({tone: "success", message: `Added to ${shelf}.`});
         return true;
+    }
+
+    /**
+     * The bag, made as the editor makes one. In Beanconqueror mode it is also
+     * handed over there, and a Beanconqueror that will not open costs nothing
+     * here: the bag is already saved.
+     */
+    function startBag(shelved: Recipe, input: BagSheetResult) {
+        const bag = catalogueBag(shelved, input, tracker);
+        try {
+            (bagStore ?? sharedBagDatabase()).save(bag);
+        } catch {
+            notify({tone: "error", message: "The bag could not be saved."});
+            return;
+        }
+        if (tracker === "beanconqueror") {
+            Linking.openURL(beanconquerorBagLink(shelved, bag)).catch(() => notify({
+                tone:    "error",
+                message: "The bag is saved here, but Beanconqueror could not be opened. Make sure it is installed."
+            }));
+        }
+    }
+
+    function askBag() {
+        setBagEpoch((epoch) => epoch + 1);
+        setBagOpen(true);
     }
 
     async function brewNow() {
@@ -393,13 +437,30 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
                                         onPress={() => void add("library")}/>
                                 <Action label="ADD TO SHELF" spoken="Add to shelf"
                                         testID="roaster-coffee-shelf" disabled={recipe === null}
-                                        onPress={() => void add("shelf")}/>
+                                        onPress={askBag}/>
                             </YStack>
                         )}
                     </YStack>
                 </ScrollView>
             </YStack>
 
+            <BagSheet open={bagOpen}
+                      onOpenChange={(next) => {
+                          if (!next) setBagOpen(false);
+                      }}
+                      tracker={tracker} bag={null} gramsLeft={null}
+                      coffee={withRoastAdvice(coffee.coffee, coffee.roast ?? {})}
+                      beanName={recipe === null ? coffee.name : bagBeanName(recipe)}
+                      beanNameFixed={false}
+                      epoch={bagEpoch}
+                      {...bagFormFor(coffee)}
+                      onSave={(result) => {
+                          setBagOpen(false);
+                          setBagInput(result);
+                          void add("shelf");
+                      }}
+                      onFinish={() => setBagOpen(false)}
+                      onRemove={() => setBagOpen(false)}/>
             <ShelfChoiceSheet open={pending?.kind === "shelf" && !naming}
                               shelves={pending?.kind === "shelf" ? (shelves ?? (() => realUserShelves(store)))() : []}
                               onOpenChange={(next) => {
