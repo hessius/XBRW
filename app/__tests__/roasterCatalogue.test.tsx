@@ -1,5 +1,6 @@
 import React from "react";
-import {Linking, StyleSheet} from "react-native";
+import {Linking, Platform, StyleSheet} from "react-native";
+import {DateTimePickerAndroid} from "@react-native-community/datetimepicker";
 import {act, fireEvent, screen, waitFor} from "@testing-library/react-native";
 import {router} from "expo-router";
 
@@ -260,7 +261,13 @@ describe("adding to a shelf with a bag", () => {
         expect(screen.getByTestId("bag-price-field").props.value).toBe("53");
         await pressUntil("bag-size-160",
                          () => expect(screen.getByTestId("bag-price-field").props.value).toBe("28"));
-        await fireEvent.changeText(screen.getByTestId("bag-roasted-field"), "2026-10-12");
+        // The same calendar as the editor's sheet, starting on today.
+        expect(screen.getByTestId("bag-roasted-value")).toHaveTextContent(/^Today, \d+ \w+$/);
+        await fireEvent.press(screen.getByTestId("bag-roasted-field"));
+        const pick = Platform.OS === "android"
+            ? (DateTimePickerAndroid.open as jest.Mock).mock.calls.at(-1)[0].onValueChange
+            : screen.getByTestId("bag-roasted-calendar").props.onValueChange;
+        await act(() => pick({nativeEvent: {}}, new Date(2026, 9, 12, 21, 30)));
         await pressUntil("bag-save", shelfOffered);
 
         await waitFor(async () => {
