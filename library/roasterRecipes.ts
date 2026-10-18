@@ -1,4 +1,5 @@
 import {assignAccent} from "@/library/accent";
+import {fitName} from "@/library/fitName";
 import {parseHidden, serialiseHidden} from "@/library/hiddenShelves";
 import {decorateImport} from "@/library/importDecoration";
 import {parseImportInput} from "@/library/importInput";
@@ -31,9 +32,13 @@ function shareIdOf(share: string): string | null {
     return source?.kind === "share" ? source.id : null;
 }
 
-/** "{coffee} - {size}", the name a roaster's own import links use. */
+/**
+ * "{coffee} - {size}", the name a roaster's own import links use, fitted under
+ * the name ceiling (`fitName`): a long name loses its trailing bracketed
+ * asides, then whole words, and always keeps the size.
+ */
 export function recipeName(coffee: FeedCoffee, size: string): string {
-    return `${coffee.name} - ${size}`;
+    return fitName(coffee.name, ` - ${size}`);
 }
 
 export type FetchedCoffee = {recipe: Recipe; size: string};
@@ -112,10 +117,16 @@ export function addToLibrary(
  * the roaster's account typed ("col Java hydrohoney -18g"). A copy that
  * arrived before the catalogue named it, or through a link that did not, kept
  * that. Taking it from the catalogue is an action the user asked for, and a
- * name they typed is never replaced.
+ * name they typed is never replaced. A name equal to xBloom's own counts as
+ * none: it is how such a copy reads, and nobody typed it.
  */
 export function adoptName(held: Recipe, fetched: Recipe): boolean {
-    if (held.name.trim() !== "" || fetched.name.trim() === "") return false;
+    const name = held.name.trim();
+    // Still following xBloom: empty, or exactly xBloom's own name, which is
+    // what a copy holds when an earlier build or a too-long link name left it
+    // there. Either way it is not a name the user chose.
+    const followsXBloom = name === "" || (held.xbloomName.trim() !== "" && name === held.xbloomName.trim());
+    if (!followsXBloom || fetched.name.trim() === "" || fetched.name === held.name) return false;
     held.name = fetched.name;
     return true;
 }
