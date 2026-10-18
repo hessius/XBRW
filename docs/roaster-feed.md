@@ -30,6 +30,9 @@ xbrw://import?v=1&source=<your name>&feed=<https URL of the feed, percent-encode
 
 Serve it over https. Any content type works: the body is parsed as JSON whatever
 the response says it is, because some shop platforms can only serve `text/html`.
+The app asks with `Accept: application/json, text/plain, */*`. Shopify negotiates
+on that header: a request accepting only JSON gets Shopify's built-in collection
+object instead of the theme template, so a feed must never be fetched that way.
 
 ```json
 {
