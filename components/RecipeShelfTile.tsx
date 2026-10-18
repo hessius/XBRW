@@ -276,7 +276,8 @@ export default function RecipeShelfTile({
                         <View pointerEvents="none"
                               style={{position: "absolute", left: 0, top: 0}}>
                             <RecipePhoto testID="recipe-tile-photo" uri={picture}
-                                         size={photoSize} radius={8}/>
+                                         size={photoSize} radius={8}
+                                         backing={onAccent.key}/>
                         </View>
                     )}
                     {/* How it has gone leads the row, the way it takes the

@@ -1,4 +1,4 @@
-import React from "react";
+import React, {useState} from "react";
 import {Pressable, View} from "react-native";
 import {useSafeAreaInsets} from "react-native-safe-area-context";
 import {Text, XStack, YStack} from "tamagui";
@@ -6,6 +6,7 @@ import {Text, XStack, YStack} from "tamagui";
 import Collapsible from "@/components/Collapsible";
 import DotIcon from "@/components/DotIcon";
 import DotMatrixText, {DOTO_MAX_FONT_SCALE} from "@/components/DotMatrixText";
+import PhotoViewer from "@/components/PhotoViewer";
 import PourProfile, {PROFILE_BLEED} from "@/components/PourProfile";
 import RecipePhoto from "@/components/RecipePhoto";
 import {onAccent} from "@/constants/colors";
@@ -111,6 +112,7 @@ export default function RecipeHero({
     // above a coloured card.
     const insets = useSafeAreaInsets();
     const picture = showPicture ? imageURL ?? "" : "";
+    const [viewing, setViewing] = useState(false);
 
     // `pours` is the recipe's own array, mutated in place, and the watermark
     // reads each pour through a getter rather than a property — so there is
@@ -188,14 +190,6 @@ export default function RecipeHero({
                     and a thumbnail there would be one more thing to squeeze the
                     name against. Top aligned with the beverage row, which is
                     where the content starts. */}
-                {picture.length > 0 && (
-                    <View pointerEvents="none"
-                          style={{position: "absolute", top: 8, right: 0}}>
-                        <RecipePhoto testID="hero-photo" uri={picture}
-                                     size={HERO_PHOTO_SIZE} radius={10}/>
-                    </View>
-                )}
-
                 <XStack alignItems="center" gap="$2" marginTop="$2">
                     <DotMatrixText fontSize={11} weight="bold" letterSpacing={2}
                                    color={onAccent.label}>
@@ -237,7 +231,22 @@ export default function RecipeHero({
                         <DotIcon name="edit" size={15} color={onAccent.label}/>
                     </YStack>
                 </Pressable>
+
+                {/* Its own button, opening the photo full screen. Drawn after
+                    the name so it sits above the rename button's hit slop, and
+                    the name's row already keeps HERO_PHOTO_RESERVE clear of it:
+                    a tap on the photo never renames. Drawn whole, not cropped,
+                    on the dark key the header buttons use. */}
+                {picture.length > 0 && (
+                    <View style={{position: "absolute", top: 8, right: 0}}>
+                        <RecipePhoto testID="hero-photo" uri={picture}
+                                     size={HERO_PHOTO_SIZE} radius={10}
+                                     backing={onAccent.key}
+                                     onPress={() => setViewing(true)}/>
+                    </View>
+                )}
             </Collapsible>
+            <PhotoViewer uri={picture} visible={viewing} onClose={() => setViewing(false)}/>
         </YStack>
     );
 }

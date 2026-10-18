@@ -401,7 +401,8 @@ export default function RecipeCard({
                         the picture, so nothing below it moves. */}
                     {picture.length > 0 && (
                         <RecipePhoto testID="recipe-card-photo" uri={picture}
-                                     size={CARD_PHOTO_SIZE} radius={8}/>
+                                     size={CARD_PHOTO_SIZE} radius={8}
+                                     backing={onAccent.key}/>
                     )}
                     <YStack testID="recipe-card-prose" flex={1} gap="$1">
                         <Text fontSize={17} fontWeight="700"

@@ -183,6 +183,8 @@ from `library/Recipe.ts`.
 | `editor.hero.help` | `components/RecipeHero.tsx:124` (a11y) | (a11y) Help button in the editor header. | `Help` |
 | `editor.hero.help.visible` | `components/RecipeHero.tsx:130` | Doto label on the help button. | `HELP` |
 | `editor.hero.more` | `components/RecipeHero.tsx:135` (a11y) | (a11y) Overflow ("More") button in the editor header. | `More` |
+| `editor.hero.photo` | `components/RecipePhoto.tsx` (a11y) | (a11y) The header's recipe picture, its own button; hint "Opens the photo full screen". Never the rename button. | `Coffee photo` |
+| `photoViewer.close` | `components/PhotoViewer.tsx` | Doto button top right of the full-screen photo; the backdrop is also a button. Both spoken "Close". The image is spoken "Coffee photo". | `CLOSE` |
 | `recipe.name.read` | `library/Recipe.ts:311` (`read`) | Placeholder display name for a card-read recipe with no name, joined with a date (e.g. `Read 5 Jan`). | `Read` |
 | `recipe.name.import` | `library/Recipe.ts:312` (`import`) | Placeholder display name for an imported recipe with no name, joined with a date. | `Imported Recipe` |
 | `recipe.name.duplicate` | `library/Recipe.ts:313` (`duplicate`) | Placeholder display name for a duplicated recipe. | `Copy` |

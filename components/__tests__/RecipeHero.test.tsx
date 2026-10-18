@@ -226,14 +226,50 @@ describe("RecipeHero's picture", () => {
         expect(nameReserve()).toBe(HERO_PHOTO_RESERVE);
     });
 
-    it("keeps the picture out of what a screen reader hears", async () => {
-        // The name is already announced by the rename button. A photo of a bag
-        // adds nothing a listener needs.
+    it("is one button, Coffee photo, with the image itself kept quiet", async () => {
         await renderWithProviders(<RecipeHero {...BASE} imageURL={PHOTO} showPicture/>);
 
         expect(photo()?.props.accessible).toBe(false);
         expect(photo()?.props.importantForAccessibility).toBe("no");
-        expect(screen.queryByTestId("hero-photo")).toBeNull();
+        expect(screen.getByRole("imagebutton", {name: "Coffee photo"})).toBeTruthy();
+    });
+
+    it("draws the whole picture rather than cropping it", async () => {
+        await renderWithProviders(<RecipeHero {...BASE} imageURL={PHOTO} showPicture/>);
+        expect(photo()?.props.resizeMode).toBe("contain");
+    });
+
+    it("opens the photo full screen, not the rename sheet, and closes it", async () => {
+        const onRename = jest.fn();
+        await renderWithProviders(
+            <RecipeHero {...BASE} imageURL={PHOTO} showPicture onRename={onRename}/>
+        );
+        expect(screen.queryByTestId("photo-viewer")).toBeNull();
+
+        await fireEvent.press(screen.getByRole("imagebutton", {name: "Coffee photo"}));
+
+        expect(onRename).not.toHaveBeenCalled();
+        expect(screen.getByTestId("photo-viewer-image").props.source).toEqual({uri: PHOTO});
+        expect(screen.getByTestId("photo-viewer-image").props.resizeMode).toBe("contain");
+
+        await fireEvent.press(screen.getByTestId("photo-viewer-close"));
+        expect(screen.queryByTestId("photo-viewer")).toBeNull();
+
+        // A tap on the backdrop closes it too.
+        await fireEvent.press(screen.getByRole("imagebutton", {name: "Coffee photo"}));
+        await fireEvent.press(screen.getByTestId("photo-viewer-backdrop"));
+        expect(screen.queryByTestId("photo-viewer")).toBeNull();
+        expect(onRename).not.toHaveBeenCalled();
+    });
+
+    it("still renames from the name and the pencil when there is a photo", async () => {
+        const onRename = jest.fn();
+        await renderWithProviders(
+            <RecipeHero {...BASE} imageURL={PHOTO} showPicture onRename={onRename}/>
+        );
+        await fireEvent.press(screen.getByTestId("hero-rename"));
+        expect(onRename).toHaveBeenCalledTimes(1);
+        expect(screen.queryByTestId("photo-viewer")).toBeNull();
     });
 
     it("draws no picture and keeps no room while the setting is off", async () => {
