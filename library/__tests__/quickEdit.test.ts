@@ -3,7 +3,14 @@ import Recipe, {CUP_TYPE, GRINDER_OFF_VALUE} from "@/library/Recipe";
 import {DOSE, BLE_GRIND_SIZE, RATIO, TEMPERATURE} from "@/library/cardLimits";
 import {
     applyQuickEdit,
+    canSaveDose,
     cloneRecipe,
+    DOSE_PRESETS,
+    dosePresets,
+    recipeAtDose,
+    rescaleDose,
+    scaledBypassVolume,
+    withoutDose,
     describeAdjustment,
     describeKnobBaseline,
     describeTemperatureBaseline,
@@ -360,5 +367,174 @@ describe("describeTemperatureBaseline", () => {
     it("formats the baseline at the display boundary in Fahrenheit", () => {
         expect(describeTemperatureBaseline(coffeeRecipe([80, 80, 80], [88, 90, 92]), 1.3, "F"))
             .toBe("recipe 190, 194, 198 °F");
+    });
+});
+
+describe("dose switch", () => {
+    function withBypass(volume: number, recipe: Recipe = coffeeRecipe()): Recipe {
+        recipe.bypassEnabled = true;
+        recipe.bypassVolume = volume;
+        recipe.bypassTemp = 80;
+        return recipe;
+    }
+
+    describe("dosePresets", () => {
+        it("offers the common sizes plus the recipe's own dose, in order", () => {
+            expect(DOSE_PRESETS).toEqual([15, 18, 20]);
+            expect(dosePresets(coffeeRecipe({dosage: 15}))).toEqual([15, 18, 20]);
+            expect(dosePresets(coffeeRecipe({dosage: 12}))).toEqual([12, 15, 18, 20]);
+            expect(dosePresets(coffeeRecipe({dosage: 25}))).toEqual([15, 18, 20, 25]);
+        });
+
+        it("offers none for tea, whose water does not follow the dose", () => {
+            expect(dosePresets(teaRecipe())).toEqual([]);
+        });
+    });
+
+    describe("scaledBypassVolume", () => {
+        it("scales in proportion and rounds to whole millilitres", () => {
+            expect(scaledBypassVolume(30, 15, 18)).toEqual({volume: 36, clipped: false});
+            expect(scaledBypassVolume(25, 18, 15)).toEqual({volume: 21, clipped: false});
+            expect(scaledBypassVolume(4, 20, 5)).toEqual({volume: 1, clipped: false});
+        });
+
+        it("holds the volume at the bypass limits and says it was clipped", () => {
+            expect(scaledBypassVolume(450, 15, 20)).toEqual({volume: 500, clipped: true});
+            expect(scaledBypassVolume(2, 31, 1)).toEqual({volume: 1, clipped: true});
+        });
+
+        it("leaves the volume alone when the old dose cannot be divided by", () => {
+            expect(scaledBypassVolume(30, 0, 18)).toEqual({volume: 30, clipped: false});
+        });
+    });
+
+    describe("applyQuickEdit with a new dose", () => {
+        it("scales every stage at a fixed ratio and keeps temperatures, pauses and patterns", () => {
+            const saved = coffeeRecipe({volumes: [30, 105, 105], dosage: 15});
+            saved.pours[1].pauseTime = 20;
+
+            const edited = applyQuickEdit(saved, {dose: 18});
+
+            expect(edited.ratio).toBe(16);
+            expect(edited.pours.map((pour) => pour.volume)).toEqual([36, 126, 126]);
+            expect(edited.getPourTotalVolume()).toBe(18 * 16);
+            expect(edited.pours.map((pour) => pour.temperature)).toEqual([92, 90, 88]);
+            expect(edited.pours.map((pour) => pour.pauseTime)).toEqual([0, 20, 0]);
+            expect(edited.pours.map((pour) => pour.pourPattern))
+                .toEqual(saved.pours.map((pour) => pour.pourPattern));
+        });
+
+        it("rounds uneven stages to whole millilitres that still add up", () => {
+            const saved = coffeeRecipe({volumes: [45, 95, 100], dosage: 15});
+
+            const edited = applyQuickEdit(saved, {dose: 20});
+
+            for (const pour of edited.pours) {
+                expect(Number.isInteger(pour.volume)).toBe(true);
+            }
+            expect(edited.getPourTotalVolume()).toBe(320);
+        });
+
+        it("scales the bypass with the dose and keeps its temperature", () => {
+            const saved = withBypass(30, coffeeRecipe({dosage: 15}));
+
+            const edited = applyQuickEdit(saved, {dose: 18});
+
+            expect(edited.bypassVolume).toBe(36);
+            expect(edited.bypassTemp).toBe(80);
+            expect(saved.bypassVolume).toBe(30);
+        });
+
+        it("leaves the bypass alone when only the ratio moves", () => {
+            const edited = applyQuickEdit(withBypass(30), {ratio: 17});
+
+            expect(edited.bypassVolume).toBe(30);
+        });
+
+        it("leaves a switched-off bypass volume alone", () => {
+            const saved = coffeeRecipe({dosage: 15});
+            saved.bypassVolume = 30;
+
+            expect(applyQuickEdit(saved, {dose: 18}).bypassVolume).toBe(30);
+        });
+
+        it("refuses a dose that pushes a stage past the machine's per-stage limit", () => {
+            const saved = coffeeRecipe({volumes: [40, 200], dosage: 15});
+
+            expect(quickEditProblems(saved, {dose: 20}))
+                .toContain("Stage 2 pours 267 ml. The most is 240 ml.");
+            expect(quickEditProblems(saved, {dose: 18})).toEqual([]);
+        });
+    });
+
+    describe("describeAdjustment with a bypass", () => {
+        it("gives the bypass and the whole cup once the dose moves", () => {
+            const saved = withBypass(30, coffeeRecipe({dosage: 15}));
+
+            expect(describeAdjustment(saved, {dose: 18})).toBe(
+                "Stage volumes rescale to 288 ml to match the new dose. " +
+                "Bypass water rescales to 36 ml, so the cup gets 324 ml."
+            );
+        });
+
+        it("says when the bypass was held at its limit", () => {
+            const saved = withBypass(450, coffeeRecipe({dosage: 15}));
+
+            expect(describeAdjustment(saved, {dose: 20})).toBe(
+                "Stage volumes rescale to 320 ml to match the new dose. " +
+                "Bypass water stops at 500 ml, the most it can be, so the cup gets 820 ml."
+            );
+        });
+
+        it("says nothing about the bypass for a ratio change", () => {
+            expect(describeAdjustment(withBypass(30), {ratio: 17}))
+                .toBe("Stage volumes rescale to 255 ml to match the new ratio.");
+        });
+    });
+
+    describe("saving a dose", () => {
+        it("rescaleDose changes the recipe in place the way a quick edit would", () => {
+            const recipe = withBypass(30, coffeeRecipe({dosage: 15}));
+            const quick = applyQuickEdit(recipe, {dose: 18});
+
+            rescaleDose(recipe, 18);
+
+            expect(recipe.dosage).toBe(18);
+            expect(recipe.pours.map((pour) => pour.volume))
+                .toEqual(quick.pours.map((pour) => pour.volume));
+            expect(recipe.bypassVolume).toBe(36);
+        });
+
+        it("recipeAtDose returns a scaled copy and leaves the original unchanged", () => {
+            const original = coffeeRecipe({dosage: 15});
+
+            const scaled = recipeAtDose(original, 18);
+
+            expect(scaled).not.toBe(original);
+            expect(scaled.uuid).toBe(original.uuid);
+            expect(scaled.dosage).toBe(18);
+            expect(original.dosage).toBe(15);
+            expect(original.pours.map((pour) => pour.volume)).toEqual([30, 105, 105]);
+            expect(scaled.backup).toEqual(original.backup);
+        });
+
+        it("canSaveDose needs a changed, brewable dose on coffee", () => {
+            const saved = coffeeRecipe({volumes: [40, 200], dosage: 15});
+
+            expect(canSaveDose(saved, {})).toBe(false);
+            expect(canSaveDose(saved, {dose: 15})).toBe(false);
+            expect(canSaveDose(saved, {dose: 18})).toBe(true);
+            expect(canSaveDose(saved, {dose: 20})).toBe(false);
+            expect(canSaveDose(teaRecipe(), {dose: 7})).toBe(false);
+        });
+
+        it("judges only the dose, not the other one-brew changes", () => {
+            expect(canSaveDose(coffeeRecipe({dosage: 15}), {dose: 18, ratio: 100})).toBe(true);
+        });
+
+        it("withoutDose keeps every other adjustment", () => {
+            expect(withoutDose({dose: 18, ratio: 17, tempOffset: -2}))
+                .toEqual({ratio: 17, tempOffset: -2});
+        });
     });
 });

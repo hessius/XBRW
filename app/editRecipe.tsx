@@ -55,6 +55,8 @@ import type Pour from "@/library/Pour";
 import {
     applyQuickEdit,
     quickEditProblems,
+    rescaleDose,
+    withoutDose,
     type QuickEditAdjustments
 } from "@/library/quickEdit";
 import type {OverflowProtection} from "@/library/brew/overflowConfig";
@@ -743,13 +745,15 @@ type QuickEditLayerProps = {
     temperatureUnit: TemperatureUnit;
     actionBarHeight: number;
     onChange: (adjustments: QuickEditAdjustments) => void;
+    onSaveDose: (dose: number) => void;
     onClose: () => void;
 };
 
 const QUICK_EDIT_HORIZONTAL_PADDING = 16;
 
 function QuickEditLayer({
-    open, recipe, adjustments, accent, temperatureUnit, actionBarHeight, onChange, onClose
+    open, recipe, adjustments, accent, temperatureUnit, actionBarHeight, onChange,
+    onSaveDose, onClose
 }: QuickEditLayerProps) {
     const {reduced, resolved} = useReducedMotionState();
     if (!open) return null;
@@ -804,7 +808,8 @@ function QuickEditLayer({
                                 adjustments={adjustments}
                                 accent={accent}
                                 temperatureUnit={temperatureUnit}
-                                onChange={onChange}/>
+                                onChange={onChange}
+                                onSaveDose={onSaveDose}/>
             </Animated.View>
         </View>
     );
@@ -1176,6 +1181,36 @@ export default function EditRecipe(
         brewWith(edited, adjustments);
     }
 
+    /**
+     * "Save as this dose" from the quick-edit panel.
+     *
+     * The dose goes into the recipe on the bench, with the stages and bypass
+     * rescaled, and the panel keeps whatever else was adjusted for this brew.
+     * It writes straight away only when nothing else is waiting for SAVE:
+     * saving the bench would otherwise also save edits the user never chose
+     * to keep. In that case, and for a recipe not yet in the library, the
+     * change joins the others and SAVE owns it, which the toast says.
+     */
+    async function onSaveQuickEditDose(dose: number) {
+        const currentRecipe = recipe;
+        if (!currentRecipe) return;
+        await flushDrafts();
+        const writesNow = !hasPendingEdits() && recipeInLibrary();
+        rescaleDose(currentRecipe, dose);
+        bumpKey();
+        setQuickEditAdjustments((current) => withoutDose(current));
+        if (!writesNow) {
+            notify({tone: "info", message: `Dose set to ${dose} g. Press SAVE to keep it.`});
+            return;
+        }
+        try {
+            persistRecipe();
+            notify({tone: "success", message: `Saved at ${dose} g.`});
+        } catch {
+            notify({tone: "error", message: "Could not save the recipe."});
+        }
+    }
+
     function brewWith(brewing: Recipe, adjustments?: QuickEditAdjustments) {
         // A brew record points back at its recipe by uuid, and the record
         // screen draws its stage ladder from that row. So a recipe with no row
@@ -1474,6 +1509,7 @@ export default function EditRecipe(
                             temperatureUnit={temperatureUnit}
                             actionBarHeight={actionBarHeight}
                             onChange={setQuickEditAdjustments}
+                            onSaveDose={(dose) => void onSaveQuickEditDose(dose)}
                             onClose={closeQuickEdit}/>
 
             <RecipeOverflowSheet open={overflowOpen} canRefreshName={recipe.xid.trim().length > 0}

@@ -1425,6 +1425,44 @@ describe("HomeScreen, opening one editor at a time", () => {
         expect(db.updateRecipe).not.toHaveBeenCalled();
     });
 
+    it("saves a preset dose from the quick edit sheet, then brews the saved recipe", async () => {
+        mockRemembered = "machine-device-id";
+        const original = writable("Ethiopia");
+        // Two stages, so 18 g keeps every stage under the 240 ml limit.
+        original.pours = [
+            new Pour(1, 100, 93, 30, 0, POUR_PATTERN.CIRCULAR, 0),
+            new Pour(2, 125, 93, 30, 0, POUR_PATTERN.CIRCULAR, 0)
+        ];
+        const db = store([original]);
+        await renderWithProviders(<HomeScreen db={db} settings={new Settings(memoryStorage())}/>);
+        await screen.findByText("Ethiopia");
+
+        await fireEvent.press(screen.getByLabelText("Quick edit Ethiopia", {
+            includeHiddenElements: true
+        }));
+        await settleSheet();
+        await waitFor(
+            async () => {
+                await fireEvent.press(screen.getByLabelText("Brew at 18 grams"));
+                await fireEvent.press(screen.getByLabelText("Save the recipe at 18 grams"));
+                expect(db.updateRecipe).toHaveBeenCalledTimes(1);
+            },
+            {timeout: SHEET_PRESS_TIMEOUT}
+        );
+
+        const [uuid, saved] = (db.updateRecipe as jest.Mock).mock.calls[0];
+        expect(uuid).toBe(original.uuid);
+        expect(saved.dosage).toBe(18);
+        expect(saved.getPourTotalVolume()).toBe(saved.getTotalVolume());
+        // The row the list held is not edited in place: the store's copy is.
+        expect(original.dosage).toBe(15);
+        expect(screen.getByLabelText("Brew at 18 grams, the recipe's dose")).toBeTruthy();
+
+        await fireEvent.press(screen.getByTestId("home-quick-edit-brew"));
+        const pushed = JSON.parse(mockPush.mock.calls[0][0].params.recipeJSON);
+        expect(pushed.dosage).toBe(18);
+    });
+
     it("adds the brew tile to the action tray once a machine is paired", async () => {
         mockRemembered = "machine-device-id";
         await renderHome({recipes: [named("Ethiopia")]});
