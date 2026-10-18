@@ -88,7 +88,7 @@ object instead of the theme template, so a feed must never be fetched that way.
 |---|---|---|
 | `version` | yes | The number `1`. Any other value and the whole feed is refused. |
 | `roaster.name` | yes | Up to 120 characters. |
-| `roaster.url` | no | https. Shown as "Open roaster's site". |
+| `roaster.url` | no | https. Shown as "Open {roaster}'s site". |
 | `roaster.feed` | no | Informational. The app uses the address from the link. |
 | `roaster.add_to_cart` | no | An https link containing `{variant_id}`, which the app replaces with a variant's URL-encoded `id` to make that bag's buy link. A Shopify store's is `https://{store}/cart/add?id={variant_id}&quantity=1`. Refused if it is not https or has no `{variant_id}`. |
 | `coffees` | yes | An array. Only the first 200 entries are read. |

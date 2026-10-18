@@ -20,7 +20,7 @@ import type {Settings} from "@/library/Settings";
  *
  * Reached from the catalogue screen. Drawn entirely from the cached feeds, so
  * opening it costs no request; the feeds are refreshed by the sync on app
- * open and by REFRESH NOW on the subscriptions screen, which this links to.
+ * open and by REFRESH NOW on the Roaster feeds screen, which this links to.
  */
 export default function RoastersScreen({settings, now}: {
     /** Injected by tests. */
@@ -81,13 +81,13 @@ export default function RoastersScreen({settings, now}: {
                             </Pressable>
                         );
                     })}
-                    <Pressable accessibilityRole="button" accessibilityLabel="Manage subscriptions"
+                    <Pressable accessibilityRole="button" accessibilityLabel="Manage feeds"
                                testID="roasters-manage"
                                onPress={() => router.push("/subscriptions")}>
                         <XStack paddingHorizontal="$4" paddingVertical="$4">
                             <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.6}
                                            color={palette.dim}>
-                                MANAGE SUBSCRIPTIONS
+                                MANAGE FEEDS
                             </DotMatrixText>
                         </XStack>
                     </Pressable>

@@ -408,8 +408,9 @@ The offer after an import link that names a roaster feed
 screens (`app/roasters.tsx`, `app/roaster.tsx`, `app/roasterCoffee.tsx`,
 `components/RoasterCoffeeRow.tsx`, `components/ShelfChoiceSheet.tsx`), the
 re-import question (`components/NewerVersionPrompt.tsx`), and the subscriptions
-screen (`app/subscriptions.tsx`, `components/UnsubscribeSheet.tsx`,
-`hooks/useRoasterSubscriptions.ts`). The feed format is `docs/roaster-feed.md`.
+list and each roaster's subscription (`app/subscriptions.tsx`,
+`app/subscription.tsx`, `components/UnsubscribeSheet.tsx`,
+`hooks/useRoasterSubscriptions.ts`, `library/subscriptionStatus.ts`). The feed format is `docs/roaster-feed.md`.
 
 | ID | Source | Context — when the user sees this | Current text |
 |----|--------|-----------------------------------|--------------|
@@ -423,7 +424,8 @@ screen (`app/subscriptions.tsx`, `components/UnsubscribeSheet.tsx`,
 | `roaster.list.title` | `app/roasters.tsx` | Screen header. | `ROASTERS` |
 | `roaster.list.empty` | `app/roasters.tsx` | Empty state, Doto title then body. | `NO ROASTERS YET` / `Roasters appear here when you subscribe from a roaster's import link.` |
 | `roaster.list.row` | `app/roasters.tsx` | Detail under a roaster. | `${n} coffees · ${m} sold out · Updated 2 h ago` |
-| `roaster.list.manage` | `app/roasters.tsx` | Doto link to the subscriptions screen. | `MANAGE SUBSCRIPTIONS` |
+| `roaster.list.manage` | `app/roasters.tsx` | Doto link to the Roaster feeds list. a11y: `Manage feeds`. | `MANAGE FEEDS` |
+| `roaster.coffees.manage` | `app/roaster.tsx` (`ManageSubscription`) | Doto link at the end of a roaster's coffee list, only while subscribed. Opens that roaster's feed screen directly. a11y: `Manage feed`. | `MANAGE FEED` |
 | `roaster.coffees.missing` | `app/roaster.tsx` | Roaster not in the catalogue. | `NOT IN THE CATALOGUE` / `This roaster's coffees are not in the catalogue. Subscribe from one of its import links.` |
 | `roaster.coffees.search` | `app/roaster.tsx` (`CoffeeRail`) | The rail's search square and field, the library's own (`components/RailSearch.tsx`). Matches name, country, farm, farmer, variety, process and tasting notes. | `SEARCH` |
 | `roaster.coffees.filters` | `app/roaster.tsx` (`FACET_COPY`) | Doto rail chips, drawn only when the feed has two or more values. IN STOCK is on by default and hides sold-out coffees. a11y: `In stock only`, `Roast filter`, `Country filter`, `Process filter`, `Decaf only`. | `IN STOCK` / `ROAST` / `COUNTRY` / `PROCESS` / `DECAF` |
@@ -454,22 +456,28 @@ screen (`app/subscriptions.tsx`, `components/UnsubscribeSheet.tsx`,
 | `import.newer.latest` | `components/NewerVersionPrompt.tsx` | Doto primary button. | `USE THE ROASTER'S LATEST` |
 | `import.newer.keep` | `components/NewerVersionPrompt.tsx` | Doto secondary button. | `KEEP MINE` |
 | `import.toast.updated` | `constants/copy.ts` (`UPDATED_TO_LATEST`) | Re-import refreshed an untouched copy, or the user took the latest. | `Already in your library. Updated to the latest version.` |
-| `roaster.settings.row` | `app/settings.tsx` | Library section row, shown only with a subscription or a "don't ask again" to undo. Detail is `None. Roasters you said no to are listed here.`, `1 roaster.` or `${n} roasters.` | `Roaster subscriptions` |
-| `roaster.screen.title` | `app/subscriptions.tsx` | Screen header. | `Subscriptions` |
-| `roaster.screen.empty` | `app/subscriptions.tsx` | Empty state. | `Subscriptions appear here when you open a roaster's import link.` |
-| `roaster.screen.count` | `app/subscriptions.tsx` (`countLine`) | Per subscription. | `${n} coffees · ${m} sold out` |
-| `roaster.screen.updated` | `library/roasterCatalogue.ts` (`updatedAgo`) | Freshness. Units: just now, min, h, d. | `Updated ${n} h ago.` |
-| `roaster.screen.never` | `app/subscriptions.tsx` | Before the first update. | `Not updated yet.` |
-| `roaster.screen.paused` | `app/subscriptions.tsx` | While paused. | `Updates paused.` |
-| `roaster.screen.error.network` | `app/subscriptions.tsx` | Last update did not arrive. | `Couldn't update: no connection to the roaster.` |
-| `roaster.screen.error.unreadable` | `app/subscriptions.tsx` | Last update was not a feed. | `Couldn't update: the roaster's list could not be read.` |
-| `roaster.screen.browse` | `app/subscriptions.tsx` | Row. | `Browse coffees` |
-| `roaster.screen.refresh` | `app/subscriptions.tsx` | Row, with detail `Checks ${roaster} for new and sold-out coffees.` | `Refresh now` |
-| `roaster.screen.pause` | `app/subscriptions.tsx` | Row, with detail `The catalogue stays as it is until you resume.` | `Pause updates` |
-| `roaster.screen.resume` | `app/subscriptions.tsx` | Row while paused. | `Resume updates` |
-| `roaster.screen.site` | `app/subscriptions.tsx` | Row; detail is the site without `https://`. | `Open roaster's site` |
-| `roaster.screen.unsubscribe` | `app/subscriptions.tsx` | Danger row, with detail `Recipes in your library stay.` | `Unsubscribe` |
-| `roaster.screen.optOuts` | `app/subscriptions.tsx` | Section over "Don't ask again" answers; each row's detail is `Ask again`. | `Not asked about` |
+| `roaster.settings.row` | `app/settings.tsx` | Library section row, shown only with a subscription or a "don't ask again" to undo. Opens the Roaster feeds list. Detail is `None. Roasters you said no to are listed here.`, `1 roaster.` or `${n} roasters.` | `Roaster feeds` |
+| `roaster.screen.title` | `app/subscriptions.tsx` | Screen header of the list, matching the Settings row. Subscribe and Unsubscribe stay the verbs elsewhere. | `Roaster feeds` |
+| `roaster.screen.empty` | `app/subscriptions.tsx` | Empty state, the roasters list's own words. | `Roasters appear here when you subscribe from a roaster's import link.` |
+| `roaster.screen.roasters` | `app/subscriptions.tsx` | Section over one row per subscription. Each row is the roaster's name with a chevron and opens its subscription. | `Your roasters` |
+| `roaster.screen.row` | `library/subscriptionStatus.ts` (`rowLine`) | Detail under a roaster's name on the list, one line. `Updating…` while a refresh runs. With no cached feed: `Loading coffees`, or `Couldn't update` after a failed attempt. | `${n} coffees · Updated 2 h ago` / `${n} coffees · Paused` / `${n} coffees · Couldn't update` / `${n} coffees · Not updated yet` |
+| `roaster.screen.refreshAll` | `app/subscriptions.tsx` | Row under the roasters, only while at least one is not paused. Detail `Checks every roaster for new and sold-out coffees.`, or `Checks every roaster that isn't paused.` while some are paused. | `Refresh all` |
+| `roaster.refreshAll.result` | `hooks/useRoasterSubscriptions.ts` (`refreshAllMessage`) | One toast after Refresh all. A single roaster reads as `roaster.refresh.result` and its errors. | `${n} roasters updated.` / `Couldn't update ${roaster}, ${roaster}.` / `Couldn't update your roasters. Check your connection.` |
+| `roaster.screen.optOuts` | `app/subscriptions.tsx` | Section over "Don't ask again" answers; each row's detail is `Ask again`. | `Asked not to` |
+| `roaster.subscription.title` | `app/subscription.tsx` | Screen header: the roaster's name, up to two lines. | `${roaster}` |
+| `roaster.subscription.missing` | `app/subscription.tsx` | The roaster is no longer subscribed. Header `Roaster feed`, Doto title, then body. | `NOT SUBSCRIBED` / `Roasters appear here when you subscribe from a roaster's import link.` |
+| `roaster.screen.count` | `library/subscriptionStatus.ts` (`countLine`) | First status line on a roaster's subscription. | `${n} coffees · ${m} sold out` |
+| `roaster.screen.updated` | `library/roasterCatalogue.ts` (`updatedAgo`) | Second status line: freshness. Units: just now, min, h, d. `Updating…` while a refresh runs. | `Updated ${n} h ago.` |
+| `roaster.screen.never` | `library/subscriptionStatus.ts` (`statusLine`) | Before the first update. | `Not updated yet.` |
+| `roaster.screen.paused` | `library/subscriptionStatus.ts` (`statusLine`) | While paused. | `Updates paused.` |
+| `roaster.screen.error.network` | `library/subscriptionStatus.ts` (`statusLine`) | Last update did not arrive. | `Couldn't update: no connection to the roaster.` |
+| `roaster.screen.error.unreadable` | `library/subscriptionStatus.ts` (`statusLine`) | Last update was not a feed. | `Couldn't update: the roaster's list could not be read.` |
+| `roaster.screen.browse` | `app/subscription.tsx` | Row. | `Browse coffees` |
+| `roaster.screen.site` | `app/subscription.tsx` | Row, only when the feed names the roaster's site; detail is the site without `https://`. | `Open ${roaster}'s site` |
+| `roaster.screen.refresh` | `app/subscription.tsx` | Row, with detail `Checks ${roaster} for new and sold-out coffees.` | `Refresh now` |
+| `roaster.screen.pause` | `app/subscription.tsx` | Row, with detail `The catalogue stays as it is until you resume.` | `Pause updates` |
+| `roaster.screen.resume` | `app/subscription.tsx` | Row while paused. | `Resume updates` |
+| `roaster.screen.unsubscribe` | `app/subscription.tsx` | Danger row, with detail `Recipes in your library stay.` After confirming, the Roaster feeds list shows. | `Unsubscribe` |
 | `roaster.unsubscribe.title` | `components/UnsubscribeSheet.tsx` | Confirm sheet title. | `Unsubscribe from ${roaster}?` |
 | `roaster.unsubscribe.body` | `components/UnsubscribeSheet.tsx` | Confirm sheet body. | `${roaster}'s coffees leave the catalogue. Recipes in your library stay.` |
 | `roaster.unsubscribe.confirm` | `components/UnsubscribeSheet.tsx` | Doto danger button. | `UNSUBSCRIBE` |

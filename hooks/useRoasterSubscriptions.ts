@@ -40,6 +40,25 @@ export function refreshMessage(result: SyncResult, roaster: string): {
 }
 
 /**
+ * What REFRESH ALL reports: one toast for the whole run, not one per roaster.
+ *
+ * A single roaster reads exactly as its own REFRESH NOW would. Otherwise the
+ * failures are named, since "2 of 3 updated" does not say which one to check.
+ */
+export function refreshAllMessage(results: {roaster: string; result: SyncResult}[]): {
+    tone: "success" | "error" | "info"; message: string;
+} | null {
+    if (results.length === 0) return null;
+    if (results.length === 1) return refreshMessage(results[0].result, results[0].roaster);
+    const failed = results.filter(({result}) => !result.ok).map(({roaster}) => roaster);
+    if (failed.length === 0) return {tone: "success", message: `${results.length} roasters updated.`};
+    if (failed.length === results.length) {
+        return {tone: "error", message: "Couldn't update your roasters. Check your connection."};
+    }
+    return {tone: "error", message: `Couldn't update ${failed.join(", ")}.`};
+}
+
+/**
  * The one toast for watched coffees a sync found back on sale.
  *
  * Once per coffee, because the sync stops watching what it announces. Every
@@ -81,6 +100,29 @@ export function useRoasterSubscriptions({settings, fetchBody, now}: Options = {}
         return result;
     }
 
+    /**
+     * Every subscription that is not paused, one after another, as REFRESH
+     * NOW would sync each: past the twelve hour limit, through the same lock.
+     * Paused ones stay as they are, which is what pausing promised.
+     */
+    async function refreshAll(): Promise<void> {
+        const due = parseSubscriptions(store.get("roasterSubscriptions"))
+            .filter((sub) => !sub.paused);
+        const results: {roaster: string; result: SyncResult}[] = [];
+        for (const sub of due) {
+            setRefreshing(sub.feed);
+            const result = await syncSubscription(sub.feed, {settings: store, fetchBody, now},
+                                                  {force: true});
+            // Unsubscribed or paused while the run was under way: nothing to say.
+            if (!result.ok && (result.reason === "missing" || result.reason === "paused")) continue;
+            results.push({roaster: sub.roaster, result});
+            announceBack(result);
+        }
+        setRefreshing(null);
+        const message = refreshAllMessage(results);
+        if (message !== null) notify(message);
+    }
+
     return {
         subscriptions,
         optOuts,
@@ -88,6 +130,7 @@ export function useRoasterSubscriptions({settings, fetchBody, now}: Options = {}
         /** Changes whenever the cached catalogue does. */
         catalogueVersion: catalogue,
         refresh,
+        refreshAll,
         pause:  (sub: RoasterSubscription) => setPaused(store, sub.feed, true),
         resume: (sub: RoasterSubscription) => setPaused(store, sub.feed, false),
         unsubscribe: (sub: RoasterSubscription) => {
