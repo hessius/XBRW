@@ -74,6 +74,12 @@ describe("the roaster list", () => {
         await fireEvent.press(screen.getByTestId("roaster-Test Roaster"));
         expect(router.push).toHaveBeenCalledWith({pathname: "/roaster", params: {feed: FEED_URL}});
     });
+
+    it("manages every subscription from the end of the list", async () => {
+        await renderWithProviders(<RoastersScreen settings={subscribed()} now={() => 1000}/>);
+        await fireEvent.press(screen.getByTestId("roasters-manage"));
+        expect(router.push).toHaveBeenCalledWith("/subscriptions");
+    });
 });
 
 describe("a roaster's coffees", () => {
@@ -94,6 +100,12 @@ describe("a roaster's coffees", () => {
         expect(router.push).toHaveBeenCalledWith({
             pathname: "/roasterCoffee", params: {feed: FEED_URL, coffee: "b"}
         });
+    });
+
+    it("ends with a way to this roaster's own subscription", async () => {
+        await renderWithProviders(<RoasterScreen settings={subscribed()} feedUrl={FEED_URL}/>);
+        await fireEvent.press(screen.getByLabelText("Manage feed"));
+        expect(router.push).toHaveBeenCalledWith({pathname: "/subscription", params: {feed: FEED_URL}});
     });
 
     it("says so when the roaster is not in the catalogue", async () => {

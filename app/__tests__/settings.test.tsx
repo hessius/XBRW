@@ -327,7 +327,7 @@ describe("SettingsScreen", () => {
 
     it("hides roaster subscriptions until there is something to manage", async () => {
         await renderWithProviders(<SettingsScreen settings={new Settings(memoryStorage())}/>);
-        expect(screen.queryByText("Roaster subscriptions")).toBeNull();
+        expect(screen.queryByText("Roaster feeds")).toBeNull();
     });
 
     it("shows roaster subscriptions once there is a subscription", async () => {
@@ -337,7 +337,7 @@ describe("SettingsScreen", () => {
             lastSync: 0, lastAttempt: 0, paused: false
         }]));
         await renderWithProviders(<SettingsScreen settings={settings}/>);
-        expect(screen.getByText("Roaster subscriptions")).toBeTruthy();
+        expect(screen.getByText("Roaster feeds")).toBeTruthy();
         expect(screen.getByText("1 roaster.")).toBeTruthy();
     });
 
@@ -345,7 +345,7 @@ describe("SettingsScreen", () => {
         const settings = new Settings(memoryStorage());
         settings.set("roasterFeedOptOut", serialiseFeedOptOut([feedKey("https://roaster.example/feed.json") ?? ""]));
         await renderWithProviders(<SettingsScreen settings={settings}/>);
-        expect(screen.getByText("Roaster subscriptions")).toBeTruthy();
+        expect(screen.getByText("Roaster feeds")).toBeTruthy();
         expect(screen.getByText("None. Roasters you said no to are listed here.")).toBeTruthy();
     });
 
