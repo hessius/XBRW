@@ -3,6 +3,7 @@ import {fireEvent, screen} from "@testing-library/react-native";
 
 import BagSheet from "@/components/BagSheet";
 import {newBag, type BagTracker, type CoffeeBag} from "@/library/coffeeBag";
+import type {AdvisedCoffee} from "@/library/restPeak";
 import {renderWithProviders} from "@/test-utils/render";
 
 function noop() {}
@@ -12,7 +13,7 @@ const BAG = {...newBag("r1", {sizeGrams: 250, roastedOn: "2026-10-12"}, 1_760_00
 async function open(over: {
     tracker?: BagTracker; bag?: CoffeeBag | null; gramsLeft?: number | null;
     onSave?: jest.Mock; onFinish?: jest.Mock; onRemove?: jest.Mock;
-    beanNameFixed?: boolean; suggestedRoastedOn?: string;
+    beanNameFixed?: boolean; suggestedRoastedOn?: string; coffee?: AdvisedCoffee;
 } = {}) {
     await renderWithProviders(
         <BagSheet open onOpenChange={noop} epoch={1}
@@ -20,6 +21,7 @@ async function open(over: {
                   bag={over.bag === undefined ? null : over.bag}
                   gramsLeft={over.gramsLeft ?? null}
                   suggestedRoastedOn={over.suggestedRoastedOn}
+                  coffee={over.coffee}
                   beanName="Ethiopia Guji" beanNameFixed={over.beanNameFixed ?? false}
                   onSave={over.onSave ?? jest.fn()}
                   onFinish={over.onFinish ?? jest.fn()}
@@ -35,7 +37,9 @@ describe("BagSheet", () => {
         expect(screen.getByTestId("bag-roasted-field").props.value).toBe("2026-10-01");
         await fireEvent.changeText(screen.getByTestId("bag-roasted-field"), "2026-10-12");
         await fireEvent.press(screen.getByTestId("bag-save"));
-        expect(onSave).toHaveBeenCalledWith({sizeGrams: 320, roastedOn: "2026-10-12"});
+        expect(onSave).toHaveBeenCalledWith({sizeGrams: 320, roastedOn: "2026-10-12",
+            // No roast level known, so the medium defaults.
+            figures: {restDays: 7, peakDay: 18, bestUntilDay: 27}});
     });
 
     it("takes a custom size and refuses one that is not whole grams", async () => {
@@ -65,7 +69,8 @@ describe("BagSheet", () => {
         expect(screen.getByTestId("bag-left-field").props.value).toBe("212");
         await fireEvent.changeText(screen.getByTestId("bag-left-field"), "150");
         await fireEvent.press(screen.getByTestId("bag-save"));
-        expect(onSave).toHaveBeenCalledWith({sizeGrams: 250, roastedOn: "2026-10-12", gramsLeft: 150});
+        expect(onSave).toHaveBeenCalledWith({sizeGrams: 250, roastedOn: "2026-10-12", gramsLeft: 150,
+            figures: {restDays: 7, peakDay: 18, bestUntilDay: 27}});
     });
 
     it("finishes or removes an open bag", async () => {
@@ -95,5 +100,71 @@ describe("BagSheet", () => {
         await open({tracker: "beanconqueror", beanNameFixed: true});
         expect(screen.getByTestId("bag-bean-name")).toHaveTextContent("Ethiopia Guji");
         expect(screen.queryByTestId("bag-bean-name-field")).toBeNull();
+    });
+
+    describe("rest and peak", () => {
+        it("asks only once there is a roast day", async () => {
+            await open();
+            expect(screen.queryByTestId("bag-rest-peak")).toBeNull();
+            await fireEvent.changeText(screen.getByTestId("bag-roasted-field"), "2026-10-12");
+            expect(screen.getByTestId("bag-rest-peak")).toBeTruthy();
+        });
+
+        it("starts from the coffee's roast level and fills defaults from a picked level", async () => {
+            const onSave = jest.fn();
+            await open({onSave, suggestedRoastedOn: "2026-10-12", coffee: {roast: "Nordic Ultra-light"}});
+            expect(screen.getByTestId("bag-roast-nordic").props.accessibilityState).toEqual({checked: true});
+            expect(screen.getByTestId("bag-rest-field").props.value).toBe("14");
+            expect(screen.getByTestId("bag-peak-field").props.value).toBe("35");
+            await fireEvent.press(screen.getByTestId("bag-roast-dark"));
+            expect(screen.getByTestId("bag-rest-field").props.value).toBe("4");
+            await fireEvent.press(screen.getByTestId("bag-save"));
+            expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
+                figures: {restDays: 4, peakDay: 10, bestUntilDay: 15}
+            }));
+        });
+
+        it("takes typed figures, moving best-until with the peak", async () => {
+            const onSave = jest.fn();
+            await open({onSave, suggestedRoastedOn: "2026-10-12", coffee: {roast: "Light"}});
+            await fireEvent.changeText(screen.getByTestId("bag-rest-field"), "10");
+            await fireEvent.changeText(screen.getByTestId("bag-peak-field"), "30");
+            await fireEvent.press(screen.getByTestId("bag-save"));
+            // Light keeps its best 14 days after the peak.
+            expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
+                figures: {restDays: 10, peakDay: 30, bestUntilDay: 44}
+            }));
+        });
+
+        it("refuses a peak before the rest ends", async () => {
+            const onSave = jest.fn();
+            await open({onSave, suggestedRoastedOn: "2026-10-12"});
+            await fireEvent.changeText(screen.getByTestId("bag-rest-field"), "20");
+            await fireEvent.changeText(screen.getByTestId("bag-peak-field"), "10");
+            expect(screen.getByTestId("bag-rest-peak-note"))
+                .toHaveTextContent("The peak day is on or after the rest ends.");
+            await fireEvent.press(screen.getByTestId("bag-save"));
+            expect(onSave).not.toHaveBeenCalled();
+        });
+
+        it("shows the roaster's advice rather than asking", async () => {
+            const onSave = jest.fn();
+            await open({onSave, suggestedRoastedOn: "2026-10-12",
+                        coffee: {restDays: 12, peakDay: 30, bestUntilDay: 45}});
+            expect(screen.getByTestId("bag-rest-peak-roaster"))
+                .toHaveTextContent("From the roaster: rest 12 days, peak on day 30.");
+            expect(screen.queryByTestId("bag-rest-field")).toBeNull();
+            await fireEvent.press(screen.getByTestId("bag-save"));
+            expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
+                figures: {restDays: 12, peakDay: 30, bestUntilDay: 45}
+            }));
+        });
+
+        it("edits a bag from its own stored figures", async () => {
+            const bag = {...BAG, restDays: 9, peakDay: 21, bestUntilDay: 30};
+            await open({bag, gramsLeft: 200});
+            expect(screen.getByTestId("bag-rest-field").props.value).toBe("9");
+            expect(screen.getByTestId("bag-peak-field").props.value).toBe("21");
+        });
     });
 });

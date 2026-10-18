@@ -8,6 +8,7 @@ import type Recipe from "@/library/Recipe";
 import {chooseRecipe} from "@/library/roasterCatalogue";
 import type {FeedCoffee} from "@/library/roasterFeed";
 import type {Settings} from "@/library/Settings";
+import {withRoastAdvice} from "@/library/restPeak";
 
 /**
  * Putting a roaster catalogue coffee into the library.
@@ -57,8 +58,10 @@ export async function fetchCoffeeRecipe(
     if (recipe.shareId.trim() === "") recipe.shareId = shareIdOf(chosen.share) ?? "";
     // Through the import link's own decoration, so the coffee, its tags and
     // anything that path learns to do later (the picture, in #223) arrive the
-    // same way here.
-    decorateImport(recipe, {coffee: coffee.coffee, source: "import"});
+    // same way here. The roaster's rest and peak days ride on the coffee, so
+    // the bag sheet shows them instead of asking (`startingFigures`).
+    decorateImport(recipe, {coffee: withRoastAdvice(coffee.coffee, coffee.roast ?? {}),
+                            source: "import"});
     recipe.name = recipeName(coffee, chosen.size);
     return {recipe, size: chosen.size};
 }
@@ -117,11 +120,15 @@ export function takeRoasterLatest(
  * Where the bag feature will attach what was bought: the bag size and its
  * roast date, against the recipe it was shelved with. Not built here; the
  * shelf action returns this so a bag store has one place to hook in.
+ *
+ * The roaster's rest and peak advice already arrives: `fetchCoffeeRecipe`
+ * lays the feed's `roast` days onto `recipe.coffee`, and the bag sheet reads
+ * them from there when the person adds a bag.
  */
 export type BagAttachment = {
     recipeUuid: string;
     shelf: string;
-    // TODO(bags): bagGrams and roastDate arrive with the bag feature.
+    // TODO(bags): bagGrams and roastDate, to add the bag at shelving time.
 };
 
 /**

@@ -100,6 +100,8 @@ import {tagKey} from "@/library/tagKey";
 import {shareBlockReason} from "@/library/shareLink";
 import {type Settings} from "@/library/Settings";
 import {resolveBagTracker} from "@/library/coffeeBag";
+import {freshnessOf, type Freshness} from "@/library/restPeak";
+import {useNow} from "@/hooks/useNow";
 import type {StoredBagReading} from "@/library/CoffeeBagDatabase";
 import {UNCLIPPED_LIST} from "@/constants/lists";
 import {STABLE_HOST} from "@/constants/views";
@@ -331,6 +333,13 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
     // drifting answer, so the cards draw none.
     const shownBags = resolveBagTracker(bagTrackerSetting, beanconquerorHandoff) === "xbrw"
         ? library.bags : NO_BAGS;
+    // Freshness is the roast day's, not a count, so it shows in both modes.
+    const now = useNow();
+    const bagFreshness: Record<string, Freshness> = {};
+    for (const [uuid, stored] of Object.entries(library.bags)) {
+        const reading = freshnessOf(stored.bag, now);
+        if (reading !== null) bagFreshness[uuid] = reading.state;
+    }
     const [dottedProfile] = useSetting("dotMatrixProfile", settings);
     const [showRecipeAvatars] = useSetting("showRecipeAvatars", settings);
     const [invertAutoShelves] = useSetting("invertAutoShelves", settings);
@@ -1598,6 +1607,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                         actionsFor={roomActionsFor}
                         evidence={library.evidence}
                         bags={shownBags}
+                        freshness={bagFreshness}
                         showCoffeeMarker={showCoffeeMarker}
                         dottedProfile={dottedProfile}
                         editing={editing}
@@ -1678,6 +1688,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                                 showPicture={showRecipeAvatars}
                                 evidence={library.evidence[item.recipe.uuid]}
                                 bag={shownBags[item.recipe.uuid]}
+                                freshness={bagFreshness[item.recipe.uuid]}
                                 slotMarker={slotMarkers(slotRecord, item.recipe)}
                                 onEasyMode={remembered !== ""
                                     ? () => openEasyModeRecipe(item.recipe, remembered) : undefined}

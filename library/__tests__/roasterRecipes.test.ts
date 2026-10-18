@@ -18,6 +18,16 @@ describe("fetchCoffeeRecipe", () => {
         expect(recipe.source).toBe("import");
     });
 
+    it("carries the roaster's rest and peak days on the coffee for the bag sheet", async () => {
+        const library = memoryLibrary();
+        const {recipe} = await fetchCoffeeRecipe(coffees[0], undefined, library.deps);
+        expect(recipe.coffee).toEqual(expect.objectContaining({
+            restDays: 11, peakDay: 28, bestUntilDay: 42
+        }));
+        // The level stays the feed's to show; it is not written into the coffee.
+        expect(recipe.coffee?.roast).toBeUndefined();
+    });
+
     it("fetches the size asked for, and falls back to the first", async () => {
         const library = memoryLibrary();
         expect((await fetchCoffeeRecipe(coffees[0], "15g", library.deps)).size).toBe("15g");

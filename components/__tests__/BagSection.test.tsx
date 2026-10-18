@@ -3,6 +3,7 @@ import {fireEvent, screen} from "@testing-library/react-native";
 
 import BagSection, {type BagSectionProps} from "@/components/BagSection";
 import {newBag, readBag} from "@/library/coffeeBag";
+import {freshnessOf} from "@/library/restPeak";
 import {renderWithProviders} from "@/test-utils/render";
 
 const NOW = new Date(2026, 9, 18, 9).getTime();
@@ -77,5 +78,18 @@ describe("BagSection", () => {
         expect(screen.queryByTestId("bag-remaining")).toBeNull();
         expect(screen.queryByTestId("bag-low")).toBeNull();
         expect(screen.getByTestId("bag-reorder")).toBeTruthy();
+    });
+
+    it("says how fresh the bag is, in either tracker mode", async () => {
+        const freshness = freshnessOf({roastedOn: "2026-10-12", restDays: 11, peakDay: 28}, NOW);
+        await renderWithProviders(<BagSection {...props({freshness})}/>);
+        expect(screen.getByTestId("bag-freshness")).toHaveTextContent("Resting, ready from 23 Oct.");
+        await renderWithProviders(<BagSection {...props({tracker: "beanconqueror", reading: null, freshness})}/>);
+        expect(screen.getByTestId("bag-freshness")).toHaveTextContent("Resting, ready from 23 Oct.");
+    });
+
+    it("draws no freshness line without one", async () => {
+        await renderWithProviders(<BagSection {...props({freshness: null})}/>);
+        expect(screen.queryByTestId("bag-freshness")).toBeNull();
     });
 });

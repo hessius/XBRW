@@ -277,6 +277,35 @@ machine's own row says Connected.
 
 Not yet checked on a device: the model correction on a Studio previously set
 to Original, and the wording with a second phone holding the machine.
+
+## Rest and peak freshness (2026-10-18)
+
+Builds on the bag tracker's roast day. A bag with a roast day now says how
+fresh it is: resting ("Resting, ready from 23 Oct"), ready, at its peak (within
+3 days of the peak day) or past its best ("Past its best, still fine to brew").
+The line is in the ABOUT deck's BAG section, and a short REST / READY / PEAK /
+PAST badge sits beside the bag badge on list cards and shelf tiles, in the same
+row so nothing changes height. Both tracker modes show it.
+
+Each bag stores `restDays`, `peakDay` and `bestUntilDay` (whole days since
+roasting, 0 to 540, each checked on its own, same as the roaster feed). The bag
+sheet asks for them under REST AND PEAK once a roast day is typed, prefilled by
+roast level: Nordic 14/35/52, Light 11/28/42, Medium 7/18/27 (used when no
+level is known), Dark 4/10/15, Decaf 5/14/21. When the coffee states a rest and
+a peak itself, the sheet shows the roaster's figures instead of asking. A coffee
+gets them from a BrewMind link's optional `bean.rest_days`, `bean.peak_day` and
+`bean.best_until_day`, or from the roaster catalogue's `roast` block
+(`roastAdviceFromFeed`). They are never sent to Beanconqueror.
+
+No notifications: the app has no notification dependency, and adding a native
+one was out of scope, so freshness is in-app only.
+
+Release checks: on both platforms, add a bag with a roast day a few days ago
+and confirm the resting line and REST badge; change the roast day so it is past
+the rest and near the peak and confirm READY and PEAK; open a BrewMind link with
+`bean.rest_days` and confirm the sheet shows the roaster's figures; switch the
+tracker to Beanconqueror and confirm the line and badge stay.
+
 ## Bag tracker and reorder (2026-10-18)
 
 A recipe can carry the bag of coffee it is brewed from: size (160, 250, 320,
