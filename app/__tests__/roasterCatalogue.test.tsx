@@ -1,5 +1,5 @@
 import React from "react";
-import {StyleSheet} from "react-native";
+import {Linking, StyleSheet} from "react-native";
 import {act, fireEvent, screen, waitFor} from "@testing-library/react-native";
 import {router} from "expo-router";
 
@@ -169,6 +169,48 @@ describe("searching and filtering a roaster's coffees", () => {
         await first.unmount();
         await renderWithProviders(<RoasterScreen settings={settings} feedUrl={FEED_URL}/>);
         expect(rowIds()).toEqual(["roaster-coffee-b"]);
+    });
+});
+
+describe("buying a bag", () => {
+    function shop() {
+        const parsed = JSON.parse(feedJson([{id: "b"}]));
+        parsed.roaster.add_to_cart = "https://roaster.example/cart/add?id={variant_id}&quantity=1";
+        parsed.coffees[0].variants = [
+            {id: 11, grams: 320, price: 53, currency: "AUD", available: false},
+            {id: 22, grams: 160, price: 28, currency: "AUD", available: true}
+        ];
+        const text = JSON.stringify(parsed);
+        const settings = memorySettings();
+        subscribe(settings, FEED_URL, parseRoasterFeed(text)!, text, 1000);
+        return settings;
+    }
+
+    it("lists each bag with its price, buys one in the browser and says sold out", async () => {
+        const open = jest.spyOn(Linking, "openURL").mockResolvedValue(true);
+        await renderWithProviders(
+            <RoasterCoffeeScreen settings={shop()} feedUrl={FEED_URL} coffeeId="b"
+                                 library={memoryLibrary().deps} shelves={() => []}/>
+        );
+        expect(screen.getByText("320 g · $53")).toBeTruthy();
+        expect(screen.getByText("160 g · $28")).toBeTruthy();
+        // The plain size list steps aside for the priced one.
+        expect(screen.queryByTestId("roaster-coffee-bags")).toBeNull();
+
+        expect(screen.getByTestId("buy-11-sold-out")).toBeTruthy();
+        expect(screen.queryByTestId("buy-11-link")).toBeNull();
+        await fireEvent.press(screen.getByTestId("buy-22-link"));
+        expect(open).toHaveBeenCalledWith("https://roaster.example/cart/add?id=22&quantity=1");
+        open.mockRestore();
+    });
+
+    it("keeps the plain size list when the feed sells nothing", async () => {
+        await renderWithProviders(
+            <RoasterCoffeeScreen settings={subscribed()} feedUrl={FEED_URL} coffeeId="b"
+                                 library={memoryLibrary().deps} shelves={() => []}/>
+        );
+        expect(screen.queryByTestId("roaster-coffee-buy")).toBeNull();
+        expect(screen.getByTestId("roaster-coffee-bags")).toBeTruthy();
     });
 });
 

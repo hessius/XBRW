@@ -5,7 +5,7 @@ import {useSafeAreaInsets} from "react-native-safe-area-context";
 import {Text, XStack, YStack} from "tamagui";
 
 import BrewStageLadder from "@/components/BrewStageLadder";
-import {CatalogueStatus, Chip, DetailPhoto, PageLinkRow} from "@/components/CatalogueParts";
+import {BuySection, CatalogueStatus, Chip, DetailPhoto, PageLinkRow} from "@/components/CatalogueParts";
 import DotMatrixText from "@/components/DotMatrixText";
 import NameShelfSheet from "@/components/NameShelfSheet";
 import NewerVersionPrompt from "@/components/NewerVersionPrompt";
@@ -23,6 +23,7 @@ import {
     bagLine, beanFacts, chooseRecipe, detailTitle, findCoffee, noteChips, readCatalogue,
     roastAdvice, scrollEndPadding
 } from "@/library/roasterCatalogue";
+import {buyOptions} from "@/library/roasterBuy";
 import type {FeedCoffee} from "@/library/roasterFeed";
 import {
     addToLibrary, addToShelf, fetchCoffeeRecipe, takeRoasterLatest,
@@ -158,6 +159,7 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
     const advice = roastAdvice(coffee);
     const bags = bagLine(coffee);
     const facts = beanFacts(coffee);
+    const buying = buyOptions(cached.feed.roaster, coffee);
     const title = detailTitle(coffee.name);
     const notes = coffee.coffee.aromatics?.trim() || undefined;
     const chips = noteChips(notes);
@@ -288,7 +290,11 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
                                 ))}
                             </YStack>
                         )}
-                        {bags !== null && (
+                        {/* The bags with their prices replace the plain size
+                            list when the roaster publishes them. */}
+                        {buying.length > 0 ? (
+                            <BuySection options={buying}/>
+                        ) : bags !== null && (
                             <Text testID="roaster-coffee-bags" fontSize={14} color={palette.dim}>
                                 {`Bags: ${bags}`}
                             </Text>

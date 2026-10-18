@@ -83,6 +83,36 @@ const MAX_BAG_SIZES = 10;
 /** The largest bag, in grams. Five kilos covers a wholesale bag. */
 const MAX_BAG_GRAMS = 5000;
 
+/** Variants read per coffee: one per bag size, so a handful. */
+export const MAX_FEED_VARIANTS = 10;
+/** A variant id is opaque, only ever substituted into a link. */
+const MAX_VARIANT_ID = 100;
+/** The highest price read. A typo or a wholesale sack, not a bag. */
+const MAX_PRICE = 100_000;
+/** What an add-to-cart template must contain for a variant to be put in it. */
+export const VARIANT_PLACEHOLDER = "{variant_id}";
+
+/**
+ * One bag a coffee is sold in.
+ *
+ * Every field is optional, because roasters sell through every kind of shop.
+ * A Shopify store sends an `id` and the roaster's `add_to_cart` template turns
+ * it into a cart link; a shop with no such template sends the bag's own `url`.
+ * A variant with neither still shows its size and price, with nothing to tap.
+ */
+export type FeedVariant = {
+    /** The shop's id for this bag, substituted into `add_to_cart`. */
+    id?: string;
+    grams?: number;
+    price?: number;
+    /** ISO 4217, upper case, e.g. `AUD`. */
+    currency?: string;
+    /** False unless the feed said `true`, like a coffee's own flag. */
+    available: boolean;
+    /** A page or cart link for exactly this bag. https. Wins over the template. */
+    url?: string;
+};
+
 export type FeedCoffee = {
     id?: string;
     name: string;
@@ -99,11 +129,21 @@ export type FeedCoffee = {
     roast?: FeedRoast;
     /** Bag sizes on sale, in grams, as the roaster listed them. */
     bagSizes: number[];
+    /** The bags on sale, with prices and buy links. Empty when the feed sent none. */
+    variants: FeedVariant[];
 };
 
 export type RoasterFeed = {
     version: typeof ROASTER_FEED_VERSION;
-    roaster: {name: string; url?: string};
+    roaster: {
+        name: string;
+        url?: string;
+        /**
+         * A cart link with `{variant_id}` in it, e.g. a Shopify store's
+         * `https://shop.example/cart/add?id={variant_id}&quantity=1`.
+         */
+        addToCart?: string;
+    };
     coffees: FeedCoffee[];
 };
 
@@ -168,6 +208,52 @@ function bagSizes(value: unknown): number[] {
     return [...new Set(sizes)];
 }
 
+/** An id the shop wrote as a number or as text. */
+function variantId(value: unknown): string | undefined {
+    if (typeof value === "number") {
+        return Number.isSafeInteger(value) && value >= 0 ? String(value) : undefined;
+    }
+    return capped(value, MAX_VARIANT_ID);
+}
+
+function feedVariant(value: unknown): FeedVariant | null {
+    const entry = record(value);
+    if (entry === null) return null;
+    const result: FeedVariant = {available: entry.available === true};
+    const id = variantId(entry.id);
+    if (id !== undefined) result.id = id;
+    const grams = entry.grams;
+    if (typeof grams === "number" && Number.isInteger(grams) && grams > 0 && grams <= MAX_BAG_GRAMS) {
+        result.grams = grams;
+    }
+    const price = typeof entry.price === "string" ? Number(entry.price) : entry.price;
+    if (typeof price === "number" && Number.isFinite(price) && price >= 0 && price <= MAX_PRICE) {
+        result.price = Math.round(price * 100) / 100;
+    }
+    if (typeof entry.currency === "string" && /^[A-Za-z]{3}$/.test(entry.currency.trim())) {
+        result.currency = entry.currency.trim().toUpperCase();
+    }
+    const url = cappedUrl(entry.url);
+    if (url !== undefined) result.url = url;
+    // A bag with nothing to say about itself is not a bag.
+    return result.id === undefined && result.grams === undefined
+        && result.price === undefined && result.url === undefined ? null : result;
+}
+
+function variants(value: unknown): FeedVariant[] {
+    if (!Array.isArray(value)) return [];
+    return value.slice(0, MAX_FEED_VARIANTS)
+        .map(feedVariant)
+        .filter((variant): variant is FeedVariant => variant !== null);
+}
+
+/** An https cart template that has somewhere to put the variant, or undefined. */
+function cartTemplate(value: unknown): string | undefined {
+    const raw = capped(value, MAX_URL);
+    if (raw === undefined || !raw.includes(VARIANT_PLACEHOLDER)) return undefined;
+    return httpsUrl(raw.split(VARIANT_PLACEHOLDER).join("0")) === undefined ? undefined : raw;
+}
+
 function feedCoffee(value: unknown): FeedCoffee | null {
     const entry = record(value);
     if (entry === null) return null;
@@ -200,7 +286,8 @@ function feedCoffee(value: unknown): FeedCoffee | null {
         available: entry.available === true,
         recipes,
         coffee,
-        bagSizes: bagSizes(entry.bag_sizes_g)
+        bagSizes: bagSizes(entry.bag_sizes_g),
+        variants: variants(entry.variants)
     };
     const read = roast(entry.roast);
     if (read !== undefined) result.roast = read;
@@ -245,6 +332,8 @@ export function parseRoasterFeed(text: string): RoasterFeed | null {
     const result: RoasterFeed = {version: ROASTER_FEED_VERSION, roaster: {name}, coffees};
     const url = cappedUrl(roaster.url);
     if (url !== undefined) result.roaster.url = url;
+    const addToCart = cartTemplate(roaster.add_to_cart);
+    if (addToCart !== undefined) result.roaster.addToCart = addToCart;
     return result;
 }
 
