@@ -3,6 +3,25 @@
 This is the source for the full release-testing checklist, not a claim that
 device testing is complete. Update it whenever release scope or behaviour changes.
 
+## Import link name, picture and fill-blanks (2026-10-18)
+
+An import link can now name the recipe with `recipe.name`. It lands on the
+recipe's own name (the one a rename writes), whitespace folded, capped at the
+rename sheet's 100 characters; `xbloomName` stays, so USE THIS NAME still goes
+back to xBloom's. The link's `bean.image` becomes the recipe's picture when the
+recipe has none of its own; pod artwork wins. The picture is drawn only with
+"Show recipe pictures" on.
+
+A link that points at a recipe already in the library opens the stored recipe
+as before, and now fills its blanks: the picture when it has none, the coffee
+when it has none, and missing fields of an existing coffee. Nothing with a
+value is replaced. The name and the source are never touched, and derived tags
+are added only to a recipe with no tags, from fields just filled. The recipe is
+saved only when something changed. So a recipe imported before links carried
+`bean.image` gets its photo on the next import. The found panel shows the
+recipe's own picture before the pod's. No card, BLE or backup format change.
+Not yet checked on a device.
+
 ## Brew history trace storage (2026-10-15)
 
 Brew traces are compressed and managed under a configurable storage budget. When
