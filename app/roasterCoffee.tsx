@@ -14,7 +14,7 @@ import NewerVersionPrompt from "@/components/NewerVersionPrompt";
 import ScreenHeader from "@/components/ScreenHeader";
 import ShelfChoiceSheet from "@/components/ShelfChoiceSheet";
 import {notify} from "@/components/XbrwToast";
-import {onAccent, palette} from "@/constants/colors";
+import {palette, primary as primaryButton} from "@/constants/colors";
 import {SCREEN_PADDING} from "@/constants/layout";
 import router from "@/hooks/steadyRouter";
 import {useScrollEndPadding} from "@/hooks/useBottomInset";
@@ -85,11 +85,13 @@ function Action({label, spoken, testID, primary = false, disabled = false, onPre
                    accessibilityState={{disabled}} testID={testID}
                    onPress={disabled ? undefined : onPress}>
             <XStack height={48} alignItems="center" justifyContent="center" borderRadius="$4"
-                    opacity={disabled ? 0.35 : 1}
-                    backgroundColor={primary ? palette.text : palette.none}
+                    opacity={disabled && !primary ? 0.35 : 1}
+                    backgroundColor={!primary ? palette.none
+                        : disabled ? primaryButton.disabledFill : primaryButton.fill}
                     borderWidth={primary ? 0 : 1} borderColor={palette.line}>
                 <DotMatrixText fontSize={12} weight="bold" letterSpacing={1.6}
-                               color={primary ? onAccent.text : palette.text}>
+                               color={!primary ? palette.text
+                                   : disabled ? primaryButton.disabledInk : primaryButton.ink}>
                     {label}
                 </DotMatrixText>
             </XStack>
@@ -400,10 +402,10 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
                                                        onPress={() => setSize(entry.size)}>
                                                 <XStack height={36} paddingHorizontal="$3"
                                                         alignItems="center" borderRadius="$4"
-                                                        backgroundColor={on ? palette.text : palette.raised}>
+                                                        backgroundColor={on ? primaryButton.fill : palette.raised}>
                                                     <DotMatrixText fontSize={12} weight="bold"
                                                                    letterSpacing={1.4}
-                                                                   color={on ? onAccent.text : palette.dim}>
+                                                                   color={on ? primaryButton.ink : palette.dim}>
                                                         {entry.size.toUpperCase()}
                                                     </DotMatrixText>
                                                 </XStack>

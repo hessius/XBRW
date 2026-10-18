@@ -4,7 +4,7 @@ import {Text, XStack, YStack} from "tamagui";
 
 import DotMatrixText from "@/components/DotMatrixText";
 import XbrwSheet from "@/components/XbrwSheet";
-import {onAccent, palette} from "@/constants/colors";
+import {palette, primary} from "@/constants/colors";
 import type {RoasterOfferState} from "@/hooks/useRoasterOffer";
 
 const BUTTON_HEIGHT = 48;
@@ -83,9 +83,9 @@ export default function RoasterOfferSheet({state, onAccept, onDecline}: {
                            testID="roaster-offer-subscribe"
                            onPress={() => answer(true)}>
                     <XStack height={BUTTON_HEIGHT} alignItems="center" justifyContent="center"
-                            borderRadius="$4" backgroundColor={palette.text}>
+                            borderRadius="$4" backgroundColor={primary.fill}>
                         <DotMatrixText fontSize={13} weight="bold" letterSpacing={1.5}
-                                       color={onAccent.text}>
+                                       color={primary.ink}>
                             SUBSCRIBE
                         </DotMatrixText>
                     </XStack>

@@ -5,7 +5,7 @@ import {Button, Switch, Text, XStack, YStack} from "tamagui";
 import DotIcon from "@/components/DotIcon";
 import DotMatrixText from "@/components/DotMatrixText";
 import {openLink} from "@/components/openLink";
-import {onAccent, palette} from "@/constants/colors";
+import {onAccent, palette, primary} from "@/constants/colors";
 import type {CoffeeBadge} from "@/library/roasterAlerts";
 import type {BuyOption} from "@/library/roasterBuy";
 
@@ -140,8 +140,8 @@ export function CatalogueStatus({title, body, testID, action, onAction}: {
                 <Button accessibilityRole="button"
                         accessibilityLabel={action}
                         testID={testID === undefined ? undefined : `${testID}-action`}
-                        backgroundColor={palette.text}
-                        color={onAccent.text}
+                        backgroundColor={primary.fill}
+                        color={primary.ink}
                         borderRadius="$4"
                         onPress={onAction}>
                     {action}
@@ -231,9 +231,9 @@ export function BuySection({options, watching, onWatch}: {
                                    testID={`buy-${option.key}-link`}
                                    onPress={() => openLink(option.url as string)}>
                             <XStack height={36} paddingHorizontal="$3" alignItems="center"
-                                    borderRadius="$4" backgroundColor={palette.text}>
+                                    borderRadius="$4" backgroundColor={primary.fill}>
                                 <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.4}
-                                               color={onAccent.text}>
+                                               color={primary.ink}>
                                     BUY
                                 </DotMatrixText>
                             </XStack>

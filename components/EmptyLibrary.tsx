@@ -4,7 +4,7 @@ import {Button, Text, YStack} from "tamagui";
 
 import DotBloom from "@/components/DotBloom";
 import DotMatrixText from "@/components/DotMatrixText";
-import {onAccent, palette} from "@/constants/colors";
+import {palette, primary} from "@/constants/colors";
 
 const MARK_SIZE = 96;
 const MARK_DOT_SIZE = 5;
@@ -53,8 +53,8 @@ export default function EmptyLibrary({browse}: {
                 <Button testID="empty-library-browse"
                         accessibilityRole="button"
                         accessibilityLabel={browse.label}
-                        backgroundColor={palette.text}
-                        color={onAccent.text}
+                        backgroundColor={primary.fill}
+                        color={primary.ink}
                         borderRadius="$4"
                         minHeight={44}
                         onPress={browse.onPress}>
