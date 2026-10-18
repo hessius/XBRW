@@ -74,7 +74,7 @@ export type RoomRecipeActions = {
  * mounted behind the room, not to replay a saved offset here.
  */
 export default function ShelfRoom({
-    label, recipes, onBack, actionsFor, evidence = {}, namedByUser = false,
+    label, recipes, soldOut, onBack, actionsFor, evidence = {}, namedByUser = false,
     showCoffeeMarker = true, dottedProfile = false, onScroll, paddingBottom = 0,
     editing = false
 }: {
@@ -89,6 +89,12 @@ export default function ShelfRoom({
      * worse than no heading at all.
      */
     recipes: readonly Recipe[];
+    /**
+     * Recipes a roaster subscription says are sold out, by uuid. They are
+     * badged and moved to the end of the room, never hidden: the user may
+     * have brews, notes or edits on them, and a coffee can come back.
+     */
+    soldOut?: ReadonlySet<string>;
     /** Leave the room, back to the grid. */
     onBack: () => void;
     /** Show each tile's actions as a visible control rather than a long press. */
@@ -121,9 +127,15 @@ export default function ShelfRoom({
     onScroll?: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
     paddingBottom?: number;
 }) {
+    // A stable split rather than a sort, so each half keeps the order the
+    // library query gave it.
+    const ordered = soldOut === undefined || soldOut.size === 0
+        ? recipes
+        : [...recipes.filter((recipe) => !soldOut.has(recipe.uuid)),
+           ...recipes.filter((recipe) => soldOut.has(recipe.uuid))];
     const rows: Recipe[][] = [];
-    for (let i = 0; i < recipes.length; i += COLUMNS) {
-        rows.push(recipes.slice(i, i + COLUMNS) as Recipe[]);
+    for (let i = 0; i < ordered.length; i += COLUMNS) {
+        rows.push(ordered.slice(i, i + COLUMNS) as Recipe[]);
     }
 
     const recipeCount = recipes.length === 1 ? "1 recipe" : `${recipes.length} recipes`;
@@ -187,6 +199,7 @@ export default function ShelfRoom({
                                 <RecipeShelfTile
                                     key={recipe.uuid}
                                     recipe={recipe}
+                                    soldOut={soldOut?.has(recipe.uuid) ?? false}
                                     onPress={acts.onOpen}
                                     onLongPress={acts.onLongPress}
                                     showCoffeeMarker={showCoffeeMarker}

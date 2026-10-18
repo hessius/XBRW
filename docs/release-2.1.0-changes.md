@@ -3,6 +3,27 @@
 This is the source for the full release-testing checklist, not a claim that
 device testing is complete. Update it whenever release scope or behaviour changes.
 
+## Roaster subscriptions (2026-10-18)
+
+An import link may carry `feed=<https URL>` naming a roaster feed
+(`docs/roaster-feed.md`). After that link's recipe imports and the person is back
+in the library, the app offers "Subscribe to {roaster}?" unless every available
+coffee is already held, they already subscribe, or they ticked "Don't ask again".
+Subscribing imports each available coffee's 18 g recipe (or its first) onto a
+shelf named after the roaster, two lookups at a time, with progress and STOP.
+
+Subscribed shelves resync on app open and foreground, at most every 12 hours, and
+on Refresh. New coffees are added; unavailable or vanished ones are badged SOLD
+OUT and moved to the end of the room, never deleted, and unmarked when back. A
+coffee the subscription has handled is never re-added, so deletions stick. Recipe
+changes on xBloom are not followed yet. Settings > Library > Roaster
+subscriptions lists each subscription with counts, freshness, Refresh now,
+Pause/Resume, Open roaster's site and Unsubscribe (confirmed; shelf and recipes
+stay), plus any "Don't ask again" answers with Ask again. Subscriptions and
+opt-outs are carried in backups and validated on restore. Network inventory gains
+the feed request. Device checks: cold-start link with feed, foreground resync,
+large text on the sheet and screen, TalkBack on the sold-out badge.
+
 ## Recipe picture in the header and on list cards (2026-10-18)
 
 With Show recipe pictures on, a recipe's `imageURL` (pod artwork, or a coffee
