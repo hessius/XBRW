@@ -923,7 +923,10 @@ estimate.
 | `bag.sheet.intro.xbrw` | `components/BagSheet.tsx` | Top line, XBRW++ tracking. | `Each brew of this recipe takes its dose from the bag.` |
 | `bag.sheet.intro.bq` | `components/BagSheet.tsx` | Top line, Beanconqueror tracking. | `The bag goes to Beanconqueror, which takes each brew you send it from the bag.` |
 | `bag.sheet.size` | `components/BagSheet.tsx` | Doto field label, preset chips `160G` `250G` `320G` `480G` `1000G` `OTHER`. Error under it. | `BAG SIZE` · `Enter a size in whole grams.` |
-| `bag.sheet.roasted` | `components/BagSheet.tsx` | Doto field label, placeholder `YYYY-MM-DD`, note and error. | `ROASTED ON` · `Optional. The date on the bag.` · `Use the form 2026-10-12.` |
+| `bag.sheet.roasted` | `components/BagSheet.tsx` | Doto field label and the note under the date row. A new bag starts on today (or the pod's roast day); an edited bag shows its own day or none. | `ROASTED ON` · `Optional. The date on the bag.` |
+| `bag.sheet.roasted.value` | `components/RoastDayField.tsx` (words from `library/coffeeBag.ts` `roastDayLabel`) | The date row; tapping it opens the system calendar (Android dialog, iOS inline calendar). `Not set` when cleared. | `Today, 18 Oct` / `Yesterday, 17 Oct` / `Thu 16 Oct 2026` / `Not set` |
+| `bag.sheet.roasted.a11y` | `components/RoastDayField.tsx` | (a11y) Label and hint on the date row; months and weekdays spelled out. | `Roasted on, Thursday 16 October 2026` / `Roasted on, not set` · hint `Opens a calendar to pick the day.` |
+| `bag.sheet.roasted.clear` | `components/RoastDayField.tsx` | Doto button beside the row, only with a day set. Spoken "Clear the roast date". | `CLEAR` |
 | `bag.sheet.left` | `components/BagSheet.tsx` | Editing, XBRW++ only: manual correction. | `GRAMS LEFT` · `Correct this if you used some another way. Brews count down from here.` · `Enter what is left in whole grams.` |
 | `bag.sheet.beanName` | `components/BagSheet.tsx` | Beanconqueror only. Prefilled with the name the brew handoff sends; read-only for a pod. | `BEAN NAME` · `Brews you send from this recipe go to the bean with this name.` · `Give the bean a name.` |
 | `bag.sheet.price` | `components/BagSheet.tsx` | Beanconqueror only, optional. | `PRICE` · `Enter a price like 24.50.` |

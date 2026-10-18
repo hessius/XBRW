@@ -417,7 +417,17 @@ It follows the Beanconqueror handoff switch until set.
   the one the brew handoff sends for that recipe, and the brew and record
   screens' bean sheet now offers the bag's name, so brews land on that bean.
 
-Release checks: on both platforms, add a bag in each mode; brew and confirm the
+The roast day is picked from the platform's own calendar
+(`@react-native-community/datetimepicker`, the Expo SDK 57 version): the
+Android date dialog, or an inline calendar on iOS. A new bag starts on today
+(or the pod's roast day), an edited bag shows its own day or none, days run
+from a year back to today, and CLEAR leaves it empty. It is still stored as a
+local `YYYY-MM-DD` day. This is a new native module, so it needs a fresh
+native build rather than an OTA update.
+
+Release checks: on both platforms, add a bag in each mode; pick a roast day
+from the calendar, confirm a future day cannot be chosen, and confirm the
+saved day is the one picked late at night; brew and confirm the
 count drops by the dose (XBRW++) and that a cancelled brew does not; confirm
 Beanconqueror opens its add-bean screen prefilled with the right name, weight
 and dates, and that a later brew handed over is linked to that bean; restore a
