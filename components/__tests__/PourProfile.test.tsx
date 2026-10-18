@@ -1,7 +1,7 @@
 import React from "react";
 import {screen, within} from "@testing-library/react-native";
 
-import PourProfile, {buildProfilePath} from "@/components/PourProfile";
+import PourProfile, {buildProfilePath, profileHeightAt} from "@/components/PourProfile";
 import Pour from "@/library/Pour";
 import {renderWithProviders} from "@/test-utils/render";
 
@@ -69,6 +69,34 @@ describe("buildProfilePath", () => {
 
     it("returns an empty path for no pours", () => {
         expect(buildProfilePath([], 100, 40)).toBe("");
+    });
+});
+
+describe("profileHeightAt", () => {
+    it("stands at each plateau's height, the same points the path draws", () => {
+        const even = pours([100, 100, 100]);
+        expect(profileHeightAt(even, 90, 60, 0)).toBe(0);
+        expect(profileHeightAt(even, 90, 60, 25)).toBeCloseTo(20);
+        expect(profileHeightAt(even, 90, 60, 55)).toBeCloseTo(40);
+        expect(profileHeightAt(even, 90, 60, 90)).toBeCloseTo(60);
+        expect(profileHeightAt(even, 90, 60, 200)).toBe(60);
+    });
+
+    it("climbs along each rise and never falls", () => {
+        const bloom = pours([40, 120, 140]);
+        let last = 0;
+        for (let x = 0; x <= 100; x += 0.5) {
+            const height = profileHeightAt(bloom, 100, 50, x);
+            expect(height).toBeGreaterThanOrEqual(last);
+            last = height;
+        }
+        // Halfway up the first rise, half the bloom's share.
+        expect(profileHeightAt(bloom, 100, 50, (0.62 / 3) * 100 / 2)).toBeCloseTo(50 * 40 / 300 / 2);
+    });
+
+    it("is flat for no pours and for pours that are all zero", () => {
+        expect(profileHeightAt([], 100, 50, 80)).toBe(0);
+        expect(profileHeightAt(pours([0, 0]), 100, 50, 80)).toBe(0);
     });
 });
 
