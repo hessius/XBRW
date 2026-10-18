@@ -30,7 +30,10 @@
  * `roastedOn` is kept in both modes. It is the one field another feature
  * (rest and peak reminders) is expected to build on, so it has a fixed format
  * and two helpers below rather than being left for each reader to parse.
+ * The rest and peak figures it is read against (`restDays`, `peakDay`,
+ * `bestUntilDay`) are stored on the bag too; `restPeak.ts` owns what they mean.
  */
+import {reviveRoastAdvice, type RoastAdvice} from "@/library/roastAdvice";
 
 /** Where a bag is counted. */
 export type BagTracker = "xbrw" | "beanconqueror";
@@ -91,7 +94,7 @@ export type CoffeeBag = {
     gramsAtCount: number;
     /** Epoch ms the bag was marked finished. Absent while it is open. */
     finishedAt?: number;
-};
+} & RoastAdvice;
 
 /** Sizes a roaster commonly sells, offered as one-tap choices. */
 export const BAG_PRESETS: readonly number[] = [160, 250, 320, 480, 1000];
@@ -247,7 +250,7 @@ export type BagInput = {
     roastedOn?: string;
     price?: number;
     beanName?: string;
-};
+} & RoastAdvice;
 
 /** A fresh, open bag, counted from now. */
 export function newBag(recipeUuid: string, input: BagInput, now: number = Date.now()): CoffeeBag {
@@ -259,6 +262,7 @@ export function newBag(recipeUuid: string, input: BagInput, now: number = Date.n
         boughtOn: dayOf(now),
         ...(input.price !== undefined ? {price: input.price} : {}),
         ...(input.beanName !== undefined && input.beanName !== "" ? {beanName: input.beanName} : {}),
+        ...reviveRoastAdvice(input),
         addedAt: now,
         countedFrom: now,
         gramsAtCount: input.sizeGrams
@@ -321,6 +325,7 @@ export function reviveBag(entry: unknown): CoffeeBag | null {
         boughtOn: bought,
         ...(isBagPrice(entry.price) ? {price: entry.price} : {}),
         ...(beanName !== "" ? {beanName} : {}),
+        ...reviveRoastAdvice(entry),
         addedAt,
         countedFrom,
         gramsAtCount,

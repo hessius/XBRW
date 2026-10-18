@@ -316,4 +316,14 @@ describe("RecipeShelfTile bag badge", () => {
         await renderWithProviders(<RecipeShelfTile recipe={writable("Guji")} {...HANDLERS}/>);
         expect(screen.queryByTestId("recipe-tile-bag")).toBeNull();
     });
+
+    it("shows the bag's freshness beside the grams", async () => {
+        await renderWithProviders(
+            <RecipeShelfTile recipe={writable("Guji")} {...HANDLERS}
+                             bag={{bag, usedGrams: 30}} freshness="resting"/>
+        );
+        expect(screen.getByTestId("recipe-tile-bag")).toHaveTextContent("220G");
+        expect(screen.getByTestId("recipe-tile-freshness")).toHaveTextContent("REST");
+        expect(screen.getByLabelText(/coffee resting/)).toBeTruthy();
+    });
 });

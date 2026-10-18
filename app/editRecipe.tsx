@@ -48,6 +48,8 @@ import {
 } from "@/hooks/useBrewHistory";
 import {useSetting} from "@/hooks/useSetting";
 import {useCoffeeBag} from "@/hooks/useCoffeeBag";
+import {useNow} from "@/hooks/useNow";
+import {freshnessOf} from "@/library/restPeak";
 import {openLink} from "@/components/openLink";
 import {
     newBag,
@@ -1053,6 +1055,7 @@ export default function EditRecipe(
     const [subscribeFocus] = useState(() =>
         (listener: () => void) => navigation.addListener("focus", listener));
     const coffeeBag = useCoffeeBag(recipe?.uuid ?? "", subscribeFocus);
+    const now = useNow();
 
     if (!recipe) return null;
 
@@ -1079,6 +1082,8 @@ export default function EditRecipe(
     const bagReading = openBag !== null && bagTracker === "xbrw"
         ? readBag(openBag.bag, openBag.usedGrams, recipe.dosage) : null;
     const bagReorderUrl = reorderUrl(recipe);
+    // Freshness is the roast day's, so it is drawn in both tracker modes.
+    const bagFreshness = openBag === null ? null : freshnessOf(openBag.bag, now);
 
     function openBagSheet() {
         setBagSheetEpoch((epoch) => epoch + 1);
@@ -1099,7 +1104,7 @@ export default function EditRecipe(
         const existing = openBag?.bag ?? null;
         if (existing !== null) {
             let next: CoffeeBag = withSize(existing, result.sizeGrams);
-            next = {...next, roastedOn: result.roastedOn, price: result.price};
+            next = {...next, roastedOn: result.roastedOn, price: result.price, ...result.figures};
             if (result.roastedOn === undefined) delete next.roastedOn;
             if (result.price === undefined) delete next.price;
             if (result.beanName !== undefined) next.beanName = result.beanName;
@@ -1114,6 +1119,7 @@ export default function EditRecipe(
             sizeGrams: result.sizeGrams,
             roastedOn: result.roastedOn,
             price: result.price,
+            ...result.figures,
             beanName: bagTracker === "beanconqueror"
                 ? (result.beanName ?? bagBeanName(recipe)) : undefined
         });
@@ -1501,6 +1507,7 @@ export default function EditRecipe(
                                    tracker:     bagTracker,
                                    bag:         openBag?.bag ?? null,
                                    reading:     bagReading,
+                                   freshness:   bagFreshness,
                                    reorderUrl:  bagReorderUrl,
                                    onOpenSheet: openBagSheet,
                                    onFinish:    coffeeBag.finish,
@@ -1599,6 +1606,7 @@ export default function EditRecipe(
                       bag={openBag?.bag ?? null}
                       gramsLeft={bagReading?.remainingGrams ?? null}
                       suggestedRoastedOn={roastDayFromCoffee(recipe.coffee?.roastingDate)}
+                      coffee={recipe.coffee}
                       beanName={bagBeanName(recipe)}
                       beanNameFixed={bagBeanNameFixed(recipe)}
                       onSave={saveBag}

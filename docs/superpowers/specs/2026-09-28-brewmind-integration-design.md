@@ -93,6 +93,9 @@ their names and meanings, so nothing already emitted changes shape.
 | `decaffeinated` | `bean.decaffeinated` | boolean, from `1`/`0` | BrewMind |
 | `url` | `bean.url` | string, https only | BrewMind |
 | `imageUrl` | `bean.image` | string, https only | pod + BrewMind |
+| `restDays` | `bean.rest_days` | whole days 0 to 540 (added with rest and peak, 2026-10-18) | BrewMind, roaster catalogue |
+| `peakDay` | `bean.peak_day` | whole days 0 to 540 | BrewMind, roaster catalogue |
+| `bestUntilDay` | `bean.best_until_day` | whole days 0 to 540 | BrewMind, roaster catalogue |
 
 Two entries need explaining because the names do not line up.
 

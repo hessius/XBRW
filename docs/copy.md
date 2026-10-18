@@ -802,6 +802,28 @@ estimate.
 | `bag.sheet.finish` / `bag.sheet.remove` | `components/BagSheet.tsx` | Editing an open bag. | `FINISHED` / `REMOVE` |
 | `bag.toast.bqFailed` | `app/editRecipe.tsx` (`saveBag`) | Error toast when the bag saved but Beanconqueror would not open. | `The bag is saved here, but Beanconqueror could not be opened. Make sure it is installed.` |
 
+### Rest and peak
+
+Words from `library/restPeak.ts`, drawn by `components/BagSection.tsx`,
+`components/BagSheet.tsx` and the card/tile badge corner. Shown in both tracker
+modes, because freshness comes from the roast day and not from a count. In-app
+only: there are no notifications (no notification dependency in the app).
+
+| ID | Source | Context — when the user sees this | Current text |
+|----|--------|-----------------------------------|--------------|
+| `bag.freshness.resting` | `library/restPeak.ts` (`freshnessLine`) | BAG section, before the rest ends. Day and short month, not the phone's locale. | `Resting, ready from 23 Oct.` |
+| `bag.freshness.ready` | `library/restPeak.ts` (`freshnessLine`) | Ready; the first form while the peak is still ahead. | `Ready to brew, peak around 29 Oct.` / `Ready to brew.` |
+| `bag.freshness.peak` | `library/restPeak.ts` (`freshnessLine`) | Within 3 days of the peak day. | `At its peak.` |
+| `bag.freshness.past` | `library/restPeak.ts` (`freshnessLine`) | After the best-until day. | `Past its best, still fine to brew.` |
+| `bag.freshness.badge` | `library/restPeak.ts` (`freshnessBadge`) | Doto badge beside the bag badge on cards and tiles. | `REST` / `READY` / `PEAK` / `PAST` |
+| `bag.freshness.a11y` | `library/restPeak.ts` (`spokenFreshness`) | (a11y) Part of the card's label. | `coffee resting` / `coffee ready to brew` / `coffee at its peak` / `coffee past its best` |
+| `bag.sheet.restPeak` | `components/BagSheet.tsx` | Doto label, shown once a valid roast day is typed. | `REST AND PEAK` |
+| `bag.sheet.restPeak.roaster` | `components/BagSheet.tsx` | In place of the fields when the coffee states a rest and a peak (BrewMind link or roaster catalogue). | `From the roaster: rest 14 days, peak on day 35.` |
+| `bag.sheet.restPeak.levels` | `components/BagSheet.tsx` | Roast chips that fill the two fields. Spoken "Nordic ultra-light", "Light", and so on. | `NORDIC` `LIGHT` `MEDIUM` `DARK` `DECAF` |
+| `bag.sheet.restPeak.fields` | `components/BagSheet.tsx` | Doto labels on the two number fields. | `REST DAYS` · `PEAK DAY` |
+| `bag.sheet.restPeak.note` | `components/BagSheet.tsx` | Note under the fields. | `Days after the roast date. Pick a roast to fill them in, or type your own.` |
+| `bag.sheet.restPeak.errors` | `library/restPeak.ts` (`figuresProblem`) | Replaces the note when the fields do not make sense. | `Enter whole days, 0 to 540.` / `The peak day is on or after the rest ends.` |
+
 ## Brew history
 
 `app/brewHistory.tsx`, `components/BrewHistoryControls.tsx` and `components/BrewHistoryRow.tsx`.

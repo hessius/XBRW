@@ -10,6 +10,7 @@ import {
     type BagTracker,
     type CoffeeBag
 } from "@/library/coffeeBag";
+import {freshnessLine, type FreshnessReading} from "@/library/restPeak";
 
 export type BagSectionProps = {
     tracker: BagTracker;
@@ -17,6 +18,11 @@ export type BagSectionProps = {
     bag: CoffeeBag | null;
     /** What is left, in `xbrw` mode only. Null in `beanconqueror` mode. */
     reading: BagReading | null;
+    /**
+     * How fresh the bag is today, in both tracker modes, or null without a
+     * roast day and rest figures. Optional so older callers draw nothing.
+     */
+    freshness?: FreshnessReading | null;
     /** Where to buy it again, or undefined to draw no REORDER. */
     reorderUrl?: string;
     /** Opens the bag sheet: add when there is no bag, edit when there is. */
@@ -68,7 +74,7 @@ function roastLine(bag: CoffeeBag): string | null {
  * here knows the bag is low.
  */
 export default function BagSection({
-    tracker, bag, reading, reorderUrl, onOpenSheet, onFinish, onReorder
+    tracker, bag, reading, freshness, reorderUrl, onOpenSheet, onFinish, onReorder
 }: BagSectionProps) {
     if (bag === null) {
         return (
@@ -105,6 +111,13 @@ export default function BagSection({
                 <Text testID="bag-facts" fontSize={12} color={palette.dim}>
                     {[`${bag.sizeGrams} g bag.`, roast].filter((part) => part !== null).join(" ")}
                 </Text>
+                {freshness !== undefined && freshness !== null && (
+                    <Text testID="bag-freshness" fontSize={13}
+                          color={freshness.state === "resting" || freshness.state === "past"
+                              ? palette.dim : palette.text}>
+                        {freshnessLine(freshness)}
+                    </Text>
+                )}
                 {tracker === "xbrw" && reading?.low === true && !reading.empty && (
                     <Text testID="bag-low" fontSize={13} color={palette.warn}>
                         Running low.

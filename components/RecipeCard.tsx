@@ -10,6 +10,7 @@ import SlotMarker from "@/components/SlotMarker";
 import Recipe from "@/library/Recipe";
 import {evidenceLine, isSet, spokenEvidence} from "@/library/recipeEvidence";
 import {bagBadge, readBag, spokenBag} from "@/library/coffeeBag";
+import {freshnessBadge, spokenFreshness, type Freshness} from "@/library/restPeak";
 import type {StoredBagReading} from "@/library/CoffeeBagDatabase";
 import type {RecipeEvidence} from "@/library/libraryQuery";
 import type {SlotMarkerValue} from "@/library/slots/slotModel";
@@ -183,6 +184,12 @@ type Props = {
      * its own and the card keeps its height. Absent draws nothing.
      */
     bag?: StoredBagReading;
+    /**
+     * How fresh the open bag is today: resting, ready, at its peak or past
+     * its best. Drawn beside the bag badge in both tracker modes, in the same
+     * row, so the card keeps its height. Absent draws nothing.
+     */
+    freshness?: Freshness;
     slotMarker?: SlotMarkerValue;
     onEasyMode?: () => void;
 };
@@ -200,6 +207,7 @@ export default function RecipeCard({
     editing = false,
     evidence,
     bag,
+    freshness,
     onDuplicate,
     onDelete,
     showCoffeeMarker = true,
@@ -245,7 +253,8 @@ export default function RecipeCard({
         // alone. Kept out of the editing case for the same reason the drawn
         // line is: it is not on screen then.
         ...(editing ? [] : spokenEvidence(evidence)),
-        bagReading !== undefined ? spokenBag(bagReading) : undefined
+        bagReading !== undefined ? spokenBag(bagReading) : undefined,
+        freshness !== undefined ? spokenFreshness(freshness) : undefined
     ].filter((part) => part !== undefined).join(", ");
 
     // The row actions are nested inside that same group, so VoiceOver cannot
@@ -425,6 +434,13 @@ export default function RecipeCard({
                                            weight="bold" letterSpacing={1.4}
                                            color={onAccent.marker}>
                                 {bagBadge(bagReading)}
+                            </DotMatrixText>
+                        )}
+                        {freshness !== undefined && (
+                            <DotMatrixText testID="recipe-card-freshness" fontSize={11}
+                                           weight="bold" letterSpacing={1.4}
+                                           color={onAccent.marker}>
+                                {freshnessBadge(freshness)}
                             </DotMatrixText>
                         )}
                         {recipe.favourite && (

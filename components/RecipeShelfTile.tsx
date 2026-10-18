@@ -14,6 +14,7 @@ import type {RecipeEvidence} from "@/library/libraryQuery";
 import type {SlotMarkerValue} from "@/library/slots/slotModel";
 import {evidenceLine, isSet, spokenEvidence} from "@/library/recipeEvidence";
 import {bagBadge, readBag, spokenBag} from "@/library/coffeeBag";
+import {freshnessBadge, spokenFreshness, type Freshness} from "@/library/restPeak";
 import type {StoredBagReading} from "@/library/CoffeeBagDatabase";
 import {onAccent} from "@/constants/colors";
 
@@ -79,6 +80,8 @@ type Props = {
     evidence?: RecipeEvidence;
     /** The open bag, as on the card: a badge in the corner row, no new row. */
     bag?: StoredBagReading;
+    /** How fresh the open bag is, as on the card: beside the bag badge, no new row. */
+    freshness?: Freshness;
     /**
      * The recipe's own actions, mirrored from the overflow sheet the long press
      * opens. Each is optional for the same reason its row in the sheet is: brew
@@ -131,7 +134,7 @@ type Props = {
  */
 export default function RecipeShelfTile({
     recipe, onPress, onLongPress, showCoffeeMarker = true, dottedProfile = false,
-    evidence, bag, onBrew, onShare, onWrite, onDuplicate, onDelete, onToggleFavourite,
+    evidence, bag, freshness, onBrew, onShare, onWrite, onDuplicate, onDelete, onToggleFavourite,
     onHistory, editing = false, slotMarker, onEasyMode
 }: Props) {
     const accent = resolveAccent(recipe);
@@ -161,7 +164,8 @@ export default function RecipeShelfTile({
             ? `grind ${recipe.grindSize}`
             : undefined,
         ...spokenEvidence(evidence),
-        bagReading !== undefined ? spokenBag(bagReading) : undefined
+        bagReading !== undefined ? spokenBag(bagReading) : undefined,
+        freshness !== undefined ? spokenFreshness(freshness) : undefined
     ].filter((part) => part !== undefined).join(", ");
 
     // The long press is unreachable by a screen reader, so the acts it opens are
@@ -286,6 +290,13 @@ export default function RecipeShelfTile({
                                        weight="bold" letterSpacing={1.1}
                                        numberOfLines={1} color={onAccent.marker}>
                             {bagBadge(bagReading)}
+                        </DotMatrixText>
+                    )}
+                    {freshness !== undefined && (
+                        <DotMatrixText testID="recipe-tile-freshness" fontSize={10}
+                                       weight="bold" letterSpacing={1.1}
+                                       numberOfLines={1} color={onAccent.marker}>
+                            {freshnessBadge(freshness)}
                         </DotMatrixText>
                     )}
                     {recipe.favourite && (
