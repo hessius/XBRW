@@ -3,7 +3,7 @@ import {StyleSheet} from "react-native";
 import {fireEvent} from "@testing-library/react-native";
 
 import MachinePanel from "@/components/MachinePanel";
-import {palette} from "@/constants/colors";
+import {machineColours, palette} from "@/constants/colors";
 import {renderWithProviders} from "@/test-utils/render";
 
 const vitals = {
@@ -240,8 +240,34 @@ describe("MachinePanel with several machines saved", () => {
         const r = await draw({machineLabel: "Work", onChooseMachine});
 
         expect(r.getByTestId("machine-choice-label").props.children).toBe("WORK");
-        await fireEvent.press(r.getByLabelText("Machine, Work"));
+        await fireEvent.press(r.getByLabelText(/^Machine, Work/));
         expect(onChooseMachine).toHaveBeenCalled();
+    });
+
+    it("names the machine, its model and whether it is linked, before anybody taps", async () => {
+        const r = await draw({machineLabel: "Work", machineModel: "Original",
+                              onChooseMachine: jest.fn()});
+
+        expect(r.getByTestId("machine-choice-detail").props.children).toBe("ORIGINAL · CONNECTED");
+        expect(r.getByLabelText("Machine, Work, original · connected")).toBeTruthy();
+        expect(r.getByLabelText("Machine, Work, original · connected").props.accessibilityHint)
+            .toBe("Choose another saved machine");
+    });
+
+    it("says Selected, not Connected, while the machine it names has no link", async () => {
+        const r = await draw({status: "disconnected", vitals: null,
+                              machineLabel: "Work", machineModel: "Studio",
+                              onChooseMachine: jest.fn()});
+
+        expect(r.getByTestId("machine-choice-detail").props.children).toBe("STUDIO · SELECTED");
+    });
+
+    it("draws the machine's colour beside its name", async () => {
+        const r = await draw({machineLabel: "Work", machineColour: machineColours[1].ink,
+                              onChooseMachine: jest.fn()});
+
+        const dot = r.getByTestId("machine-choice-colour", {includeHiddenElements: true});
+        expect(StyleSheet.flatten(dot.props.style).backgroundColor).toBe(machineColours[1].ink);
     });
 
     it("draws no machine row with only one machine, so nothing changes for that user", async () => {

@@ -1,6 +1,6 @@
 import {useState} from "react";
 
-import type {MachineSurveyState} from "@/components/MachinePickerSheet";
+import {MODEL_NAMES, type MachineSurveyState} from "@/components/MachinePickerSheet";
 import {notify} from "@/components/XbrwToast";
 import {
     chooseMachine,
@@ -11,7 +11,8 @@ import {
 } from "@/hooks/useMachine";
 import {useSavedMachines} from "@/hooks/useSavedMachines";
 import {sharedSettings} from "@/hooks/useSetting";
-import {machineLabel, type SavedMachine} from "@/library/machine/savedMachines";
+import type {MachineColour} from "@/constants/colors";
+import {machineColourOf, machineLabel, type SavedMachine} from "@/library/machine/savedMachines";
 import type {Settings} from "@/library/Settings";
 
 /** How old a survey may be and still be shown while a fresh one runs. */
@@ -22,6 +23,10 @@ export type MachinePicker = {
     available: boolean;
     /** What the active machine is called, for the chip and the panel row. */
     label: string;
+    /** The active machine's model as it is said on screen, or "" with none. */
+    model: string;
+    /** The active machine's colour. Green with none, which is what one machine draws. */
+    colour: MachineColour;
     open: boolean;
     setOpen: (open: boolean) => void;
     /** Open the sheet and look around. */
@@ -108,6 +113,8 @@ export function useMachinePicker(settings?: Settings): MachinePicker {
     return {
         available: machines.length >= 2,
         label: activeIndex < 0 ? "" : machineLabel(machines[activeIndex], activeIndex),
+        model: activeIndex < 0 ? "" : MODEL_NAMES[machines[activeIndex].model],
+        colour: machineColourOf(activeIndex < 0 ? {} : machines[activeIndex]),
         open, setOpen, show,
         rescan: () => { if (blocker === null) look(); },
         machines, activeId, connected, survey, blocker, choose

@@ -1,8 +1,10 @@
 import React from "react";
+import {StyleSheet} from "react-native";
 import {fireEvent, screen} from "@testing-library/react-native";
 
 import MachineChip from "@/components/MachineChip";
 import MachinePickerSheet from "@/components/MachinePickerSheet";
+import {machineColours} from "@/constants/colors";
 import type {SavedMachine} from "@/library/machine/savedMachines";
 import {renderWithProviders} from "@/test-utils/render";
 
@@ -149,5 +151,27 @@ describe("the machine picker for a screen reader", () => {
         const state = screen.getByLabelText(/^BAR-2, /).props.accessibilityState;
         expect(state).toMatchObject({selected: true});
         expect(state.disabled).toBeFalsy();
+    });
+});
+
+describe("the machine picker's rows", () => {
+    it("say each machine's place in the order, and never Default", async () => {
+        await renderWithProviders(<MachinePickerSheet {...props()}/>);
+
+        expect(screen.getByLabelText(/^BAR-1, Studio · Tried 1st · /)).toBeTruthy();
+        expect(screen.getByLabelText(/^SPARE, Studio · Tried 5th · /)).toBeTruthy();
+        expect(screen.queryByLabelText(/Default|Choice \d/)).toBeNull();
+    });
+
+    it("mark each machine with its colour, green for one saved before colours", async () => {
+        await renderWithProviders(<MachinePickerSheet {...props({
+            machines: [entry("home"), entry("work", {colour: 1}), entry("cafe", {colour: 3})]
+        })}/>);
+
+        const dot = (id: string) => StyleSheet.flatten(screen.getByTestId(
+            `machine-pick-colour-${id}`, {includeHiddenElements: true}).props.style).backgroundColor;
+        expect(dot("home")).toBe(machineColours[0].ink);
+        expect(dot("work")).toBe(machineColours[1].ink);
+        expect(dot("cafe")).toBe(machineColours[3].ink);
     });
 });

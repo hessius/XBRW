@@ -258,6 +258,44 @@ export const accents: Readonly<Record<AccentGroup, readonly string[]>> = {
     ]
 };
 
+/** One machine colour: its ink, its stepped-back twin, and what it is called. */
+export type MachineColour = {
+    /** Said by a screen reader on the colour choice. */
+    name: string;
+    /** The dot, and the home link glyph while that machine is connected. */
+    ink: string;
+    /**
+     * The ink with its OKLCH chroma multiplied by 0.45 and lightness and hue
+     * held, the rule `successMuted` follows, for the header as it collapses.
+     */
+    muted: string;
+};
+
+/**
+ * Which saved xBloom is which, with several saved.
+ *
+ * The first is today's connected green, exactly, so a phone with one machine
+ * draws what it always drew. The others sit in the same lightness band as that
+ * green (OKLCH L 0.76 to 0.80) at hues kept well away from the three that
+ * already mean something: amber is the machine stopped or connecting, red is
+ * a fault or a machine not answering, and magenta is `brand`, which never
+ * marks a state. A colour here only says "this machine", and connected or not
+ * is carried by the link glyph's shape, never by the colour alone.
+ *
+ * Every ink clears 8.5:1 on `base`, `surface` and `raised`, and so does every
+ * muted twin; the colour tests hold both. The app is dark only, so there is
+ * no light theme to check against.
+ *
+ * Order matters: a new machine takes the first colour no other machine has,
+ * and the order puts the hues furthest from green first.
+ */
+export const machineColours: readonly MachineColour[] = [
+    {name: "Green",  ink: palette.success, muted: palette.successMuted},
+    {name: "Blue",   ink: palette.info,    muted: "#9CB4D5"},
+    {name: "Violet", ink: "#C4A4FE",       muted: "#BDB0D8"},
+    {name: "Cyan",   ink: "#44D4E2",       muted: "#95C9CE"}
+];
+
 /**
  * Blend two hex colours.
  *

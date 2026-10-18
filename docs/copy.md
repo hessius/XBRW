@@ -942,8 +942,7 @@ plain card with the model choice and Connect.
 | `machine.section.title` | `components/MachineSection.tsx` | Section title, first on the screen. | `Machines` |
 | `machine.section.model.label` | `components/MachineSection.tsx` | Model choice label before any machine is saved. | `Your xBloom` |
 | `machine.section.model.description` | `components/MachineSection.tsx` (`MODEL_DESCRIPTION`) | Full-width explanation above the model selector, both before pairing and inside each machine's card. | `Choose your model for matching imports. Grind scales differ. Saved recipes stay unchanged.` |
-| `machine.card.summary.default` | `components/MachineSection.tsx` (`machineSummary`) | Part of the line under a machine's name: the first machine in the order. | `Default` |
-| `machine.card.summary.choice` | `components/MachineSection.tsx` (`machineSummary`) | Part of the same line for the others. `${index + 1}` is its place. | `Choice ${index + 1}` |
+| `machine.card.summary.order` | `components/MachineSection.tsx` (`machineSummary`, `machineOrderWord`) | Part of the line under a machine's name: its place in the connect order, only with two or more saved. Replaces `Default` / `Choice N`, which read as a second machine in use. See `machine.order.word`. | `Tried ${n}` (1st, 2nd, 3rd...) |
 | `machine.card.summary.connected` | `components/MachineSection.tsx` (`machineSummary`) | Part of the same line: the machine in use, linked. | `Connected` |
 | `machine.card.summary.inUse` | `components/MachineSection.tsx` (`machineSummary`) | Part of the same line: the machine this phone has selected, not linked. Not "In use", which read as another phone using it, and the app cannot know that. | `Selected` |
 | `machine.card.header.a11y` | `components/MachineCard.tsx` (a11y) | (a11y) The card's header button, with its expanded state. | `${title}, ${summary}` |
@@ -955,8 +954,8 @@ plain card with the model choice and Connect.
 | `machine.card.useNow.failed` | `components/MachineSection.tsx` (`switchTo`) | Error toast after the link's own message. | `Check it is switched on and nearby, then try again.` |
 | `machine.card.name.label` | `components/MachineSection.tsx` | Opens the machine's sheet, one machine saved. | `Name` |
 | `machine.card.name.detail` | `components/MachineSection.tsx` | Its detail. | `Give it a name, like Home or Work.` |
-| `machine.card.nameOrder.label` | `components/MachineSection.tsx` | Opens the machine's sheet, two or more saved. | `Name and order` |
-| `machine.card.nameOrder.detail` | `components/MachineSection.tsx` | Its detail. | `Rename it, make it the default or change its place in the list.` |
+| `machine.card.nameOrder.label` | `components/MachineSection.tsx` | Opens the machine's sheet, two or more saved. | `Name, colour and order` |
+| `machine.card.nameOrder.detail` | `components/MachineSection.tsx` | Its detail. | `Rename it, pick its colour, try it first or change its place in the list.` |
 | `machine.card.details.label` | `components/MachineCard.tsx` | Row that opens the readings fold. | `Details` |
 | `machine.card.details.detail` | `components/MachineCard.tsx` | Its detail. | `Serial, firmware, water and grind size.` |
 | `machine.card.details.a11y` | `components/MachineCard.tsx` (a11y) | (a11y) The same row, with its expanded state. | `Details, Serial, firmware, water and grind size` |
@@ -1012,6 +1011,27 @@ text, so a crash on an unusual card can be diagnosed from a phone with no consol
 | `machine.dot.idle.a11y` | `components/MachineDot.tsx:33` (a11y, `idle`) | (a11y) Header dot when no connection attempt has been made. | `Machine not connected` |
 | `machine.dot.disconnected.a11y` | `components/MachineDot.tsx:34` (a11y, `disconnected`) | (a11y) Header dot when out of range. | `Machine not in range` |
 | `machine.dot.failed.a11y` | `components/MachineDot.tsx:35` (a11y, `failed`) | (a11y) Header dot after a failed link. | `Machine not in range` |
+| `machine.dot.several.connected.a11y` | `components/MachineDot.tsx` (`labelFor`) | (a11y) Header dot when connected, with two or more machines saved. `${name}` is the machine's name. One machine keeps the labels above. | `Connected to ${name}` |
+| `machine.dot.several.connecting.a11y` | `components/MachineDot.tsx` (`labelFor`) | (a11y) Header dot while connecting, with two or more saved. | `Connecting to ${name}` |
+| `machine.dot.several.idle.a11y` | `components/MachineDot.tsx` (`labelFor`) | (a11y) Header dot when no attempt has been made, with two or more saved. | `Not connected` |
+| `machine.dot.several.away.a11y` | `components/MachineDot.tsx` (`labelFor`) | (a11y) Header dot when the machine in use did not answer, with two or more saved. | `Not connected. ${name} is not in range` |
+| `machine.dot.several.hint` | `components/HomeHeader.tsx` (a11y hint) | (a11y) Hint on the header dot with two or more saved. | `Shows the machine panel. Hold to switch machines.` |
+| `machine.dot.several.action` | `components/HomeHeader.tsx` (a11y action) | (a11y) Named action on the header dot with two or more saved; opens the machine picker, as a hold does. | `Switch machine` |
+
+### Saved machines (`components/MachinePanel.tsx`, `MachinePickerSheet.tsx`, `MachineSection.tsx`, `MachineDetailSheet.tsx`)
+
+| ID | Source | Context — when the user sees this | Current text |
+|----|--------|-----------------------------------|--------------|
+| `machine.order.word` | `library/machine/savedMachines.ts` (`machineOrderWord`) | A machine's place in the connect order, on its Settings row and picker row, only with two or more saved. Replaces `Default` / `Choice N`: the first machine is only first in the order, and could be away while another is the one connected. `${n}` is 1st, 2nd, 3rd and so on. | `Tried ${n}` |
+| `machine.detail.order.first` | `components/MachineDetailSheet.tsx` | A machine's sheet, for the first in the order when it is not the one in use. Was `Your default. Tried first.` | `Tried first.` |
+| `machine.detail.order.later` | `components/MachineDetailSheet.tsx` | A machine's sheet, for any other machine not in use. | `Tried after ${index} other(s).` |
+| `machine.detail.makeFirst.label` | `components/MachineDetailSheet.tsx` | Action row that moves a machine to the top of the order. Was `Make default`. | `Try this one first` |
+| `machine.detail.makeFirst.detail` | `components/MachineDetailSheet.tsx` | Its detail. | `Moves it to the top. When the app connects by itself, it takes the highest machine nearby.` |
+| `machine.detail.colour.desc` | `components/MachineDetailSheet.tsx` | Above the colour swatches, under the name field, only with two or more saved. | `Colour. The link glyph on the home screen takes it while this machine is connected.` |
+| `machine.detail.colour.group.a11y` | `components/MachineDetailSheet.tsx` (a11y) | (a11y) The swatch group. | `Colour` |
+| `machine.colour.names` | `constants/colors.ts` (`machineColours`) | (a11y) Each swatch, read as a radio button. | `Green`, `Blue`, `Violet`, `Cyan` |
+| `machine.panel.choice.state` | `components/MachinePanel.tsx` (`MachineChoiceRow`) | Doto line under the machine's name in the panel's switcher, with two or more saved. `${MODEL}` is STUDIO or ORIGINAL. | `${MODEL} · CONNECTED` / `${MODEL} · SELECTED` |
+| `machine.panel.choice.hint` | `components/MachinePanel.tsx` (a11y hint) | (a11y) Hint on the switcher row. | `Choose another saved machine` |
 
 ### The machine panel (`components/MachinePanel.tsx`)
 

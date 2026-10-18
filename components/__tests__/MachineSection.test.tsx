@@ -1,7 +1,9 @@
 import React from "react";
+import {StyleSheet} from "react-native";
 import {fireEvent, screen, waitFor, within} from "@testing-library/react-native";
 
 import MachineSection from "@/components/MachineSection";
+import {machineColours} from "@/constants/colors";
 import {renderWithProviders} from "@/test-utils/render";
 import {palette} from "@/constants/colors";
 import {notify} from "@/components/XbrwToast";
@@ -337,12 +339,32 @@ describe("one card per saved machine", () => {
         mockLink.machines = [entry("HOME", "Home", "studio", "J15A01D48H051"), entry("WORK", "Work", "original")];
     });
 
-    it("lists them in order, default marked, with the one in use", async () => {
+    it("lists them in order, each with its place in the order, and the one in use", async () => {
         await renderWithProviders(<MachineSection/>);
 
-        expect(screen.getByRole("button", {name: /^Home, Studio · Default · #H051$/})).toBeTruthy();
-        expect(screen.getByRole("button", {name: /^Work, Original · Choice 2 · ID WORK · Connected$/}))
+        expect(screen.getByRole("button", {name: /^Home, Studio · Tried 1st · #H051$/})).toBeTruthy();
+        expect(screen.getByRole("button", {name: /^Work, Original · Tried 2nd · ID WORK · Connected$/}))
             .toBeTruthy();
+    });
+
+    it("never says Default, which read as a third word for the machine in use", async () => {
+        // The first machine is only first in the connect order. It can be away
+        // while the second is the one connected, and "Default · ... ·
+        // Connected" on two different cards said two machines were in use.
+        await renderWithProviders(<MachineSection/>);
+
+        expect(screen.queryByRole("button", {name: /Default/})).toBeNull();
+        expect(screen.queryByRole("button", {name: /Choice \d/})).toBeNull();
+    });
+
+    it("marks each machine's card with its colour, beside the name", async () => {
+        mockLink.machines = [{...mockLink.machines[0], colour: 2}, {...mockLink.machines[1], colour: 0}];
+        await renderWithProviders(<MachineSection/>);
+
+        const dot = (id: string) => StyleSheet.flatten(screen.getByTestId(
+            `saved-machine-${id}-colour`, {includeHiddenElements: true}).props.style);
+        expect(dot("HOME").backgroundColor).toBe(machineColours[2].ink);
+        expect(dot("WORK").backgroundColor).toBe(machineColours[0].ink);
     });
 
     it("keeps every card closed until it is tapped, and says so to a screen reader", async () => {
@@ -381,7 +403,7 @@ describe("one card per saved machine", () => {
         expect(screen.getByRole("button", {name: /^Home, /}).props.accessibilityState)
             .toEqual(expect.objectContaining({expanded: false}));
         // The machine in use's own rows are there without a tap.
-        expect(card("WORK").getByRole("button", {name: /^Name and order, /})).toBeTruthy();
+        expect(card("WORK").getByRole("button", {name: /^Name, colour and order, /})).toBeTruthy();
         expect(screen.queryByText("Use this machine now")).toBeNull();
     });
 
@@ -400,7 +422,7 @@ describe("one card per saved machine", () => {
         mockLink.status = "failed";
         await renderWithProviders(<MachineSection/>);
 
-        expect(screen.getByRole("button", {name: /^Work, Original · Choice 2 · ID WORK · Selected$/}))
+        expect(screen.getByRole("button", {name: /^Work, Original · Tried 2nd · ID WORK · Selected$/}))
             .toBeTruthy();
         expect(screen.queryByText(/In use/)).toBeNull();
     });
@@ -496,7 +518,7 @@ describe("one card per saved machine", () => {
         await renderWithProviders(<MachineSection onOpenMachine={onOpenMachine}/>);
         await openCard(/^Home, /);
 
-        await fireEvent.press(card("HOME").getByRole("button", {name: /^Name and order/}));
+        await fireEvent.press(card("HOME").getByRole("button", {name: /^Name, colour and order/}));
 
         expect(onOpenMachine).toHaveBeenCalledWith("HOME");
     });
@@ -553,8 +575,12 @@ describe("a single saved machine", () => {
     it("gets a clean card of its own, with a way to add a second", async () => {
         await renderWithProviders(<MachineSection/>);
 
-        expect(screen.getByRole("button", {name: /^xBloom 1, Studio · Default · ID AABB · Connected$/}))
+        // No order word, no star and no colour: with one machine there is no
+        // order and nothing to tell apart.
+        expect(screen.getByRole("button", {name: /^xBloom 1, Studio · ID AABB · Connected$/}))
             .toBeTruthy();
+        expect(screen.queryByTestId("saved-machine-AA:BB-colour", {includeHiddenElements: true}))
+            .toBeNull();
         expect(screen.getByText("Add another machine")).toBeTruthy();
         expect(screen.queryByText("Your xBloom", {includeHiddenElements: true})).toBeNull();
 

@@ -3,7 +3,7 @@ import {StyleSheet, type StyleProp, type ViewStyle} from "react-native";
 import {fireEvent, screen, within} from "@testing-library/react-native";
 
 import MachineDot from "@/components/MachineDot";
-import {palette} from "@/constants/colors";
+import {machineColours, palette} from "@/constants/colors";
 import {DOT_ICONS, litCells} from "@/constants/dotIcons";
 import {renderWithProviders} from "@/test-utils/render";
 
@@ -185,6 +185,88 @@ describe("the low-tank warning", () => {
         );
 
         expect(drawn("machine-dot-alarm").colour).toBe(palette.warn);
+        expect(drawn("machine-dot-lit").colour).toBe(palette.success);
+    });
+});
+
+describe("with several machines saved", () => {
+    const work = {name: "Work", colour: machineColours[1]};
+
+    it("draws the connected machine in its own colour, and its stepped-back twin underneath", async () => {
+        await renderWithProviders(
+            <MachineDot status="connected" collapsed={false} machine={work} onPress={jest.fn()}/>
+        );
+        expect(drawn("machine-dot-lit"))
+            .toEqual({cells: litCells(DOT_ICONS["link-on"]).length, colour: machineColours[1].ink});
+        expect(drawn("machine-dot-dim").colour).toBe(machineColours[1].muted);
+    });
+
+    it.each([
+        ["connecting", "link-wait", palette.warn],
+        ["idle", "link-gone", palette.muted],
+        ["disconnected", "link-gone", palette.dangerFaint]
+    ] as const)("keeps %s in its state colour and shape, not the machine's", async (status, icon, colour) => {
+        // The colour says which machine; whether it is linked is said by the
+        // shape, filled or broken, so it never rests on hue.
+        await renderWithProviders(
+            <MachineDot status={status} collapsed={false} machine={work} onPress={jest.fn()}/>
+        );
+        expect(drawn("machine-dot-lit")).toEqual({cells: litCells(DOT_ICONS[icon]).length, colour});
+    });
+
+    it.each([
+        ["connected", "Connected to Work"],
+        ["connecting", "Connecting to Work"],
+        ["idle", "Not connected"],
+        ["disconnected", "Not connected. Work is not in range"],
+        ["failed", "Not connected. Work is not in range"]
+    ] as const)("says %s as \"%s\"", async (status, label) => {
+        await renderWithProviders(
+            <MachineDot status={status} collapsed={false} machine={work} onPress={jest.fn()}/>
+        );
+        expect(screen.getByLabelText(label)).toBeTruthy();
+    });
+
+    it("opens the picker on a hold, and the panel on a tap", async () => {
+        const onPress = jest.fn();
+        const onLongPress = jest.fn();
+        await renderWithProviders(
+            <MachineDot status="connected" collapsed={false} machine={work}
+                        onPress={onPress} onLongPress={onLongPress}/>
+        );
+        await fireEvent(screen.getByLabelText("Connected to Work"), "longPress");
+        expect(onLongPress).toHaveBeenCalledTimes(1);
+        expect(onPress).not.toHaveBeenCalled();
+        await fireEvent.press(screen.getByLabelText("Connected to Work"));
+        expect(onPress).toHaveBeenCalledTimes(1);
+    });
+
+    it("offers the hold to a screen reader as a named action, with a hint", async () => {
+        const onLongPress = jest.fn();
+        await renderWithProviders(
+            <MachineDot status="connected" collapsed={false} machine={work}
+                        onPress={jest.fn()} onLongPress={onLongPress}
+                        accessibilityHint="Hold to switch machines."
+                        longPressActionLabel="Switch machine"/>
+        );
+        const dot = screen.getByLabelText("Connected to Work");
+        expect(dot.props.accessibilityHint).toBe("Hold to switch machines.");
+        expect(dot.props.accessibilityActions).toEqual([{name: "longpress", label: "Switch machine"}]);
+        await fireEvent(dot, "accessibilityAction", {nativeEvent: {actionName: "longpress"}});
+        expect(onLongPress).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe("with one machine saved", () => {
+    it("does on a hold what it does on a tap, and offers no extra action", async () => {
+        const onPress = jest.fn();
+        await renderWithProviders(
+            <MachineDot status="connected" collapsed={false} onPress={onPress}/>
+        );
+        const dot = screen.getByLabelText("Machine connected");
+        await fireEvent(dot, "longPress");
+        expect(onPress).toHaveBeenCalledTimes(1);
+        expect(dot.props.accessibilityActions).toBeUndefined();
         expect(drawn("machine-dot-lit").colour).toBe(palette.success);
     });
 });
