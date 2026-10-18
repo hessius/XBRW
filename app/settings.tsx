@@ -29,6 +29,7 @@ import {isMachineModel} from "@/library/machine/machineModel";
 import {isSortAxis, isSortDirection} from "@/library/librarySort";
 import {isHistorySort, isHistorySortDirection} from "@/library/brew/historyQuery";
 import {isLibraryView} from "@/library/libraryView";
+import {parseSubscriptions} from "@/library/roasterSubscription";
 import {asTemperatureUnit} from "@/library/units";
 
 type Props = {
@@ -162,6 +163,12 @@ export default function SettingsScreen({settings}: Props) {
     // shelf is promoted from its own tile in the grid, which is where the user
     // is standing when they decide it is one.
     const [myShelves, setMyShelves] = useSetting("myShelves", settings);
+    // Not a row here either: it is answered on the roaster shelf prompt.
+    const [roasterFeedOptOut, setRoasterFeedOptOut] =
+        useSetting("roasterFeedOptOut", settings);
+    const [roasterSubscriptions, setRoasterSubscriptions] =
+        useSetting("roasterSubscriptions", settings);
+    const subscriptionCount = parseSubscriptions(roasterSubscriptions).length;
 
     // Deliberately given no query: this screen's questions are all about the
     // whole library, never about a view of it. That is what lets the restore
@@ -202,7 +209,8 @@ export default function SettingsScreen({settings}: Props) {
             brewTraceBudgetMB, storyCardHidden,
             brewHistorySort, brewHistorySortDirection,
             librarySort, librarySortDirection, libraryFavouritesFirst,
-            libraryView, invertAutoShelves, hiddenShelves, myShelves
+            libraryView, invertAutoShelves, hiddenShelves, myShelves,
+            roasterFeedOptOut, roasterSubscriptions
         };
     }
 
@@ -348,6 +356,17 @@ export default function SettingsScreen({settings}: Props) {
         // put it back would quietly demote every shelf they had made.
         if (typeof incoming.myShelves === "string") {
             setMyShelves(incoming.myShelves);
+        }
+        // Read back through `parseFeedOptOut` wherever it is used, which keeps
+        // only strings, so a malformed value costs a forgotten answer and no
+        // more.
+        if (typeof incoming.roasterFeedOptOut === "string") {
+            setRoasterFeedOptOut(incoming.roasterFeedOptOut);
+        }
+        // Validated on read by `parseSubscriptions`; an unreadable record is
+        // dropped there rather than here, the same as every other reader.
+        if (typeof incoming.roasterSubscriptions === "string") {
+            setRoasterSubscriptions(incoming.roasterSubscriptions);
         }
     }
 
@@ -552,6 +571,16 @@ export default function SettingsScreen({settings}: Props) {
                 </SettingsSection>
 
                 <SettingsSection title="Library">
+                    {/* Where a roaster shelf is managed. Always shown, even
+                        with none, because the screen is also where a "don't
+                        ask again" is taken back. */}
+                    <SettingsActionRow label="Roaster subscriptions"
+                                       detail={subscriptionCount === 0
+                                           ? "None yet."
+                                           : subscriptionCount === 1
+                                               ? "1 roaster."
+                                               : `${subscriptionCount} roasters.`}
+                                       onPress={() => router.push("/subscriptions")}/>
                     {unreadableCount > 0 && (
                         // Bought off here: `queryRecipes` skips a blob it cannot
                         // read so the library still opens (#124), and this is

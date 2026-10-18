@@ -154,7 +154,10 @@ const EXPECTED_CALLS: Record<string, number> = {
     "hooks/useShareRecipe.ts":     1,
     "library/XBloomRecipe.ts":     1,
     "library/cloud/transport.ts":  1,
-    "library/hub/hubApi.ts":       1
+    "library/hub/hubApi.ts":       1,
+    // The roaster feed: one GET of a JSON list, at an address the import link
+    // named. Its recipes then go through XBloomRecipe, counted above.
+    "library/roasterFeed.ts":      1
 };
 
 const listed = new Set(OUTBOUND_CALLS.flatMap((call) => call.source));

@@ -36,9 +36,12 @@ export const BREWMIND_SOURCE = "brewmind";
  * these caps are also what keeps the handoff working. Capped, the whole block
  * is roughly 3 kB before gzip against a 131 kB budget.
  */
-const SHORT_TEXT = 120;
-/** A URL's cap, shared by the coffee's link, its image, and `recipe.url`. */
-const MAX_URL = 2000;
+export const SHORT_TEXT = 120;
+/**
+ * A URL's cap, shared by the coffee's link, its image, `recipe.url`, and a
+ * roaster `feed`.
+ */
+export const MAX_URL = 2000;
 const CAPS: Readonly<Record<string, number>> = {
     name: SHORT_TEXT,
     roaster: SHORT_TEXT,
@@ -101,6 +104,17 @@ export type BrewMindLink = {
      * through xBloom. https only, on the same reasoning as an image.
      */
     recipeUrl?: string;
+    /**
+     * `feed`: where the roaster publishes every coffee it has a recipe for.
+     *
+     * Only an address. Nothing is fetched here, and nothing is fetched at all
+     * until the recipe this link carries has imported: the feed is an offer
+     * made after the fact, read by `library/roasterFeed.ts`. https only and
+     * capped like every other URL, so an older build that ignores the
+     * parameter and a newer one that refuses a bad value both import the
+     * recipe exactly as before.
+     */
+    feed?: string;
 };
 
 /**
@@ -151,6 +165,12 @@ export function parseBrewMindLink(link: string): BrewMindLink | null {
         const checked = httpsUrl(recipeUrl);
         if (checked !== undefined) result.recipeUrl = checked;
     }
+
+    const feed = params.get("feed")?.trim();
+    if (feed !== undefined && feed.length <= MAX_URL) {
+        const checked = httpsUrl(feed);
+        if (checked !== undefined) result.feed = checked;
+    }
     return result;
 }
 
@@ -165,14 +185,33 @@ export function parseBrewMindLink(link: string): BrewMindLink | null {
  * which is length.
  */
 function coffeeFrom(params: URLSearchParams): PodCoffee | null {
-    const record: Record<string, string> = {};
-    let sawAny = false;
-
+    const fields: [string, string][] = [];
     for (const [key, value] of params.entries()) {
-        if (!key.startsWith("bean.")) continue;
-        sawAny = true;
-        const param = key.slice("bean.".length);
+        if (key.startsWith("bean.")) fields.push([key.slice("bean.".length), value]);
+    }
+    if (fields.length === 0) return null;
+    return coffeeFromFields(fields);
+}
+
+/**
+ * Turn named coffee fields from outside the app into a validated coffee.
+ *
+ * Shared by the link's `bean.*` parameters and a roaster feed's `bean` block
+ * (`library/roasterFeed.ts`), so the two doors apply the same aliases and the
+ * same caps. A URL only ever carries strings; a feed is JSON and may send a
+ * number or a boolean, which is passed through for `podCoffeeFromStored` to
+ * judge exactly as it judges a stored one. Anything else is dropped.
+ */
+export function coffeeFromFields(fields: Iterable<[string, unknown]>): PodCoffee | null {
+    const record: Record<string, unknown> = {};
+
+    for (const [param, value] of fields) {
         const field = PARAM_ALIASES[param] ?? param;
+        if (typeof value === "number" || typeof value === "boolean") {
+            record[field] = value;
+            continue;
+        }
+        if (typeof value !== "string") continue;
         const trimmed = value.trim();
         if (trimmed === "") continue;
 
@@ -185,6 +224,5 @@ function coffeeFrom(params: URLSearchParams): PodCoffee | null {
         record[field] = trimmed;
     }
 
-    if (!sawAny) return null;
     return podCoffeeFromStored(record);
 }

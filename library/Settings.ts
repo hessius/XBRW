@@ -328,6 +328,24 @@ export const DEFAULTS = {
      */
     myShelves: "",
     /**
+     * Roaster feeds the user said not to be asked about again, as a JSON array
+     * of feed keys (origin and path, see `library/roasterFeed.ts`).
+     *
+     * Per feed rather than one switch, because saying no to one roaster's
+     * shelf is not saying no to every roaster's. Carried in a backup for the
+     * reason `hiddenShelves` is: it is an answer the user gave, and a restored
+     * phone that asked again would be asking a question already answered.
+     */
+    roasterFeedOptOut: "",
+    /**
+     * Roaster shelves the user subscribed to, as a JSON array of records
+     * (`library/roasterSubscription.ts`). Carried in a backup: a subscription
+     * is something the user set up, and the shelf it keeps is already in the
+     * backup as tags. Read back through `parseSubscriptions`, which validates
+     * every field, because a backup file is untrusted.
+     */
+    roasterSubscriptions: "",
+    /**
      * Draw an auto shelf's tile the other way round: the accent fills the card
      * and the glyph's square takes the quiet background.
      *
