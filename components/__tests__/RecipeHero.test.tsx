@@ -3,8 +3,8 @@ import {Dimensions, StyleSheet} from "react-native";
 import {fireEvent, screen} from "@testing-library/react-native";
 
 import RecipeHero, {
-    estimateLines, HERO_NAME_LONG, HERO_NAME_MAX_LINES, HERO_PROFILE_RESERVE,
-    heroFoldAway, heroNameLayout, PROFILE_BAND_HEIGHT, wrapLines
+    estimateLines, HERO_NAME_LONG, HERO_NAME_MAX_LINES, HERO_PHOTO_RESERVE, HERO_PHOTO_SIZE,
+    HERO_PROFILE_RESERVE, heroFoldAway, heroNameLayout, PROFILE_BAND_HEIGHT, wrapLines
 } from "@/components/RecipeHero";
 import {COLLAPSE_SHRINK} from "@/hooks/useCollapsibleHeader";
 import {onAccent} from "@/constants/colors";
@@ -431,5 +431,130 @@ describe("RecipeHero", () => {
         const style = screen.getByTestId("recipe-hero").props.style;
 
         expect(style.paddingTop).toBeGreaterThanOrEqual(TEST_INSETS.top);
+    });
+});
+
+
+describe("RecipeHero's picture", () => {
+    const PHOTO = "https://example.com/bag.jpg";
+
+    beforeEach(() => {
+        setWindow(COVER);
+    });
+
+    /** The room the name's row leaves on its right for the picture. */
+    function nameReserve(): number {
+        const style = StyleSheet.flatten(screen.getByTestId("hero-rename").props.style);
+        return (style?.marginRight as number | undefined) ?? 0;
+    }
+
+    function photo() {
+        return screen.queryByTestId("hero-photo", {includeHiddenElements: true});
+    }
+
+    it("draws the picture when the setting is on and the recipe has one", async () => {
+        await renderWithProviders(<RecipeHero {...BASE} imageURL={PHOTO} showPicture/>);
+
+        expect(photo()?.props.source).toEqual({uri: PHOTO});
+        const style = StyleSheet.flatten(photo()?.props.style);
+        expect(style.width).toBe(HERO_PHOTO_SIZE);
+        expect(style.height).toBe(HERO_PHOTO_SIZE);
+        expect(nameReserve()).toBe(HERO_PHOTO_RESERVE);
+    });
+
+    it("keeps the picture out of what a screen reader hears", async () => {
+        // The name is already announced by the rename button. A photo of a bag
+        // adds nothing a listener needs.
+        await renderWithProviders(<RecipeHero {...BASE} imageURL={PHOTO} showPicture/>);
+
+        expect(photo()?.props.accessible).toBe(false);
+        expect(photo()?.props.importantForAccessibility).toBe("no");
+        expect(screen.queryByTestId("hero-photo")).toBeNull();
+    });
+
+    it("draws no picture and keeps no room while the setting is off", async () => {
+        await renderWithProviders(<RecipeHero {...BASE} imageURL={PHOTO}/>);
+
+        expect(photo()).toBeNull();
+        expect(nameReserve()).toBe(0);
+    });
+
+    it("draws no picture for a recipe without one", async () => {
+        await renderWithProviders(<RecipeHero {...BASE} showPicture/>);
+
+        expect(photo()).toBeNull();
+        expect(nameReserve()).toBe(0);
+    });
+
+    it("drops a picture that will not load without moving the name", async () => {
+        // A failed load looks like no picture at all, but the room it was given
+        // stays: taking it back would rewrap the name after the screen opened.
+        await renderWithProviders(<RecipeHero {...BASE} imageURL={PHOTO} showPicture/>);
+
+        await fireEvent(photo()!, "error");
+
+        expect(photo()).toBeNull();
+        expect(nameReserve()).toBe(HERO_PHOTO_RESERVE);
+        expect(screen.getByText("Ethiopia Guji")).toBeTruthy();
+    });
+
+    it("sizes a long name for the row the picture leaves it", async () => {
+        // The full-width column is 64 points narrower with a picture due, so
+        // the size and line estimate never put the name under the picture.
+        await renderWithProviders(
+            <RecipeHero {...BASE} name={AWARD} imageURL={PHOTO} showPicture/>
+        );
+
+        const style = StyleSheet.flatten(screen.getByTestId("hero-name").props.style);
+        expect(style.maxWidth).toBe(COVER - 36 - 23 - HERO_PHOTO_RESERVE);
+        expect(nameReserve()).toBe(HERO_PHOTO_RESERVE);
+        const without = heroNameLayout(AWARD, COVER, 1);
+        const withPhoto = heroNameLayout(AWARD, COVER, 1, HERO_PHOTO_RESERVE);
+        expect(withPhoto.maxWidth).toBe((without.maxWidth as number) - HERO_PHOTO_RESERVE);
+        expect(style.fontSize).toBe(withPhoto.fontSize);
+        expect(withPhoto.fontSize).toBeLessThanOrEqual(without.fontSize);
+        // Still in the band layout, with the watermark below the name.
+        expect(withPhoto.tight).toBe(true);
+        expect(screen.getByTestId("hero-profile-reserve").props.style.height)
+            .toBe(withPhoto.reserve);
+    });
+
+    it("never runs a long name under the picture", () => {
+        for (const name of [MEDIUM_NAME, LONG_NAME, VINKA, LONGEST, AWARD]) {
+            for (const width of [NARROW, COVER, 600, INNER]) {
+                for (const fontScale of [1, 1.15, 1.4]) {
+                    const layout = heroNameLayout(name, width, fontScale, HERO_PHOTO_RESERVE);
+                    const column = layout.maxWidth as number;
+                    // Name and pencil end before the picture's reserve.
+                    expect(column + 23).toBeLessThanOrEqual(width - 36 - HERO_PHOTO_RESERVE);
+                    if (layout.fontSize > 15) {
+                        expect(estimateLines(name, column - 4, layout.fontSize * Math.min(fontScale, 1.4)))
+                            .toBeLessThanOrEqual(HERO_NAME_MAX_LINES);
+                    }
+                }
+            }
+        }
+    });
+
+    it("keeps the wide screen's column beside the watermark as it was", () => {
+        // That column ends left of the watermark, well before the picture's
+        // corner, so the picture takes nothing from it.
+        expect(heroNameLayout(VINKA, INNER, 1, HERO_PHOTO_RESERVE))
+            .toEqual(heroNameLayout(VINKA, INNER, 1));
+    });
+
+    it("moves a short name that no longer fits two lines to the long layout", () => {
+        const name = "Ethiopia Guji Hambela Wamena";
+        expect(name.length).toBeLessThanOrEqual(HERO_NAME_LONG);
+        expect(heroNameLayout(name, NARROW, 1).fontSize).toBe(26);
+        const layout = heroNameLayout(name, NARROW, 1, HERO_PHOTO_RESERVE);
+        expect(layout.fontSize).toBeLessThan(26);
+        expect(layout.lines).toBe(HERO_NAME_MAX_LINES);
+        // A short name that still fits keeps its 26 pt, two-line column.
+        expect(heroNameLayout("Ethiopia Guji", NARROW, 1, HERO_PHOTO_RESERVE))
+            .toEqual(expect.objectContaining({fontSize: 26, lines: 2, maxWidth: "72%"}));
+        // The collapse counts any name as long while a picture is drawn.
+        expect(heroFoldAway("Ethiopia Guji", true)).toBe(heroFoldAway(AWARD));
+        expect(heroFoldAway("Ethiopia Guji", true)).toBeGreaterThan(heroFoldAway("Ethiopia Guji"));
     });
 });

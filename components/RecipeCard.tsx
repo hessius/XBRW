@@ -6,6 +6,7 @@ import DigitRoll from "@/components/DigitRoll";
 import DotIcon from "@/components/DotIcon";
 import DotMatrixText, {DOTO_MAX_FONT_SCALE} from "@/components/DotMatrixText";
 import PourProfile, {PROFILE_BLEED} from "@/components/PourProfile";
+import RecipePhoto from "@/components/RecipePhoto";
 import SlotMarker from "@/components/SlotMarker";
 import Recipe from "@/library/Recipe";
 import {evidenceLine, isSet, spokenEvidence} from "@/library/recipeEvidence";
@@ -28,6 +29,14 @@ const CARD_HEIGHT = 116;
  */
 const PROFILE_OVERHANG = 2;
 const PROFILE_HEIGHT = 56;
+
+/**
+ * The picture beside the name.
+ *
+ * No taller than the two lines of 17 pt prose it sits beside, so a card with a
+ * picture is exactly as tall as one without and the list keeps its rhythm.
+ */
+export const CARD_PHOTO_SIZE = 40;
 
 /**
  * The smallest comfortable touch target, per the HIG. The action icons are 18px
@@ -125,6 +134,11 @@ type Props = {
     showCoffeeMarker?: boolean;
     /** Fill the pour profile with a dot screen. Owned by the settings screen. */
     dottedProfile?: boolean;
+    /**
+     * `showRecipeAvatars`. On, a recipe with an `imageURL` shows it as a small
+     * square beside its name.
+     */
+    showPicture?: boolean;
     /** Called by the accessibility action that mirrors the swipe tray's BREW tile. */
     onBrew?: () => void;
     /** Called by the accessibility action that mirrors the swipe tray's TUNE tile. */
@@ -194,6 +208,7 @@ export default function RecipeCard({
     onDelete,
     showCoffeeMarker = true,
     dottedProfile = false,
+    showPicture = false,
     onBrew,
     onQuickEdit,
     onShare,
@@ -208,6 +223,7 @@ export default function RecipeCard({
     const isTea = accentGroupFor(recipe) === "tea";
     const marker = isTea ? "TEA" : "COFFEE";
     const showMarker = isTea || showCoffeeMarker;
+    const picture = showPicture ? recipe.imageURL ?? "" : "";
 
     // `accessible` groups the whole subtree into one element on iOS, so nothing
     // inside is announced on its own. Everything the card shows has to be in
@@ -378,6 +394,15 @@ export default function RecipeCard({
                         A long title alongside a note truncates, deliberately: a
                         name that needs two lines and an explanation is a name
                         doing the note's job. */}
+                    {/* Leading, so the eye meets the bag before the name, and
+                        clear of the badge corner and the watermark. Dropped
+                        outright if it will not load: the name then takes the
+                        width back, but the card's height never depended on
+                        the picture, so nothing below it moves. */}
+                    {picture.length > 0 && (
+                        <RecipePhoto testID="recipe-card-photo" uri={picture}
+                                     size={CARD_PHOTO_SIZE} radius={8}/>
+                    )}
                     <YStack testID="recipe-card-prose" flex={1} gap="$1">
                         <Text fontSize={17} fontWeight="700"
                               numberOfLines={hasNote ? 1 : 2}

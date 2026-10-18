@@ -195,7 +195,7 @@ export const OUTBOUND_CALLS: OutboundCall[] = [
     {
         id:      "images",
         title:   "Load a photo",
-        trigger: "You open the hub, an import preview, or a saved recipe that carries a pod photo or the avatar of whoever shared it.",
+        trigger: "You open the hub, an import preview, or a saved recipe that carries a pod photo or the avatar of whoever shared it. With Show recipe pictures on, also your library list.",
         host:    "whichever host xBloom named in its own reply",
         hostPinned: false,
         owner:   "xBloom, or whoever xBloom points at",
@@ -209,6 +209,7 @@ export const OUTBOUND_CALLS: OutboundCall[] = [
             "library/podCoffee.ts",
             "library/hub/hubRow.ts",
             "components/PodSection.tsx",
+            "components/RecipePhoto.tsx",
             "components/FromSection.tsx",
             "components/HubRow.tsx",
             "components/ImportResult.tsx",
@@ -240,7 +241,7 @@ export const SILENT_CAPABILITIES: SilentCapability[] = [
     {
         id:     "library",
         title:  "Your library",
-        detail: "Recipes, tags, shelves and notes are stored in a database on this phone. There is no sync, no account of our own, and no server that holds a copy. The one exception is a photo: a recipe imported from xBloom remembers where its picture came from, and opening that recipe fetches it. The Load a photo entry below says what that carries."
+        detail: "Recipes, tags, shelves and notes are stored in a database on this phone. There is no sync, no account of our own, and no server that holds a copy. The one exception is a photo: a recipe imported from xBloom remembers where its picture came from, and opening that recipe, or seeing it in the list with Show recipe pictures on, fetches it. The Load a photo entry below says what that carries."
     },
     {
         id:     "brewing",

@@ -957,7 +957,7 @@ export default function EditRecipe(
     // one (40 of height, 9 of padding above, 6 inside it either side). The home
     // screen's 140 is short of a three-line name at a large text size.
     const {collapsed, onScroll} = useCollapsibleHeader(
-        heroFoldAway(recipe?.displayName() ?? "")
+        heroFoldAway(recipe?.displayName() ?? "", showRecipeAvatars && !!recipe?.imageURL)
         + PROFILE_HEIGHT.full - PROFILE_HEIGHT.compact + 9 + 12
     );
 
@@ -1323,7 +1323,8 @@ export default function EditRecipe(
                         onBack={async () => { await flushDrafts(); navigation.goBack(); }}
                         onMore={() => setOverflowOpen(true)}
                         onHelp={() => setHelpOpen(true)}
-                        onRename={() => setRenameOpen(true)}/>
+                        onRename={() => setRenameOpen(true)}
+                        imageURL={recipe.imageURL} showPicture={showRecipeAvatars}/>
 
             {/* `stickyHeaderIndices` only sticks *direct* children, and it
                 counts slots — so every slot below is always occupied, by an

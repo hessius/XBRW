@@ -7,11 +7,33 @@ import Collapsible from "@/components/Collapsible";
 import DotIcon from "@/components/DotIcon";
 import DotMatrixText, {DOTO_MAX_FONT_SCALE} from "@/components/DotMatrixText";
 import PourProfile, {PROFILE_BLEED, PROFILE_STROKE_WIDTH} from "@/components/PourProfile";
+import RecipePhoto from "@/components/RecipePhoto";
 import {onAccent} from "@/constants/colors";
 import type Pour from "@/library/Pour";
 
 /** How far the watermark runs past the slab before it is clipped. */
 const PROFILE_OVERHANG = 2;
+
+/**
+ * The recipe's picture in the open slab: a rounded square in the top right
+ * corner, under the HELP and menu wells.
+ *
+ * That corner is the one stretch of the slab nothing else uses. The name's row
+ * stops `HERO_PHOTO_RESERVE` short of it (and `heroNameLayout` sizes a long name
+ * for that narrower row) and the pour profile owns the bottom right, so the
+ * picture neither covers the name nor pushes the watermark down. It is drawn
+ * out of the flow, so a picture that fails to load leaves the slab exactly as
+ * tall as it was with nothing to draw.
+ */
+export const HERO_PHOTO_SIZE = 56;
+
+/**
+ * How much of the name's row the picture keeps for itself, picture and gap.
+ *
+ * Set aside whenever a picture is due, loaded or not. Reserving it only once
+ * the picture arrived would rewrap the name a moment after the screen opened.
+ */
+export const HERO_PHOTO_RESERVE = HERO_PHOTO_SIZE + 8;
 
 /** The watermark's drawing size, before its stroke. */
 const PROFILE_WIDTH = 190;
@@ -208,17 +230,33 @@ export type HeroNameLayout = {
  * `minimumFontScale` is honoured only on iOS), it shrinks to any size rather
  * than a step on the type scale, and the band and the header's collapse both
  * need the size before the first layout.
+ *
+ * `photoReserve` is the room the recipe's picture keeps on the right of the
+ * name's row (`HERO_PHOTO_RESERVE` when one is due, else 0). The full-width
+ * column is that much narrower, so a long name is never estimated under the
+ * picture. The column beside the watermark is not: it already ends left of
+ * the watermark, which starts well before the picture's corner. A short name
+ * that would not fit its two lines at 26 in the narrower row is laid out as a
+ * long one.
  */
-export function heroNameLayout(name: string, windowWidth: number, fontScale = 1): HeroNameLayout {
-    if (name.length <= HERO_NAME_LONG) {
+export function heroNameLayout(
+    name: string, windowWidth: number, fontScale = 1, photoReserve = 0
+): HeroNameLayout {
+    const scale = Math.min(Math.max(fontScale, 1), DOTO_MAX_FONT_SCALE);
+    const row = windowWidth - 2 * SLAB_PADDING_X - photoReserve;
+    if (name.length <= HERO_NAME_LONG && (
+        photoReserve === 0
+        || estimateLines(name, 0.72 * row - FIT_SLACK, 26 * scale) <= 2
+    )) {
         return {
             fontSize: 26, lineHeight: 31, lines: 2, maxWidth: "72%",
             reserve: 0, profileHeight: PROFILE_HEIGHT, tight: false
         };
     }
-    const scale = Math.min(Math.max(fontScale, 1), DOTO_MAX_FONT_SCALE);
-    const full = Math.floor(windowWidth - 2 * SLAB_PADDING_X - PENCIL_WIDTH);
-    const beside = Math.floor(full - PROFILE_VISIBLE_WIDTH - PROFILE_GAP);
+    const beside = Math.floor(
+        windowWidth - 2 * SLAB_PADDING_X - PENCIL_WIDTH - PROFILE_VISIBLE_WIDTH - PROFILE_GAP
+    );
+    const full = Math.floor(row - PENCIL_WIDTH);
     // Where the watermark begins, measured from the name's left edge.
     const profileStart = windowWidth - SLAB_PADDING_X - PROFILE_VISIBLE_WIDTH - PROFILE_GAP;
 
@@ -263,10 +301,15 @@ export function heroNameLayout(name: string, windowWidth: number, fontScale = 1)
  * the name and the band kept for the watermark. A deliberate overestimate, so
  * it assumes the largest text size, three lines at the largest step, the
  * untightened gaps and the whole band.
+ *
+ * `photo` is true when the header draws a picture. The name's row is narrower
+ * then and even a short name may take the long layout, so it is counted as
+ * one. The picture itself is out of the flow and never taller than the name
+ * block, so it adds nothing here.
  */
-export function heroFoldAway(name: string): number {
+export function heroFoldAway(name: string, photo = false): number {
     const beverageRow = 7 + 24;
-    if (name.length <= HERO_NAME_LONG) {
+    if (name.length <= HERO_NAME_LONG && !photo) {
         return Math.ceil(beverageRow + 7 + 2 * 31 * DOTO_MAX_FONT_SCALE);
     }
     const nameBlock = 7 + HERO_NAME_MAX_LINES * HERO_NAME_STEPS[0].lineHeight * DOTO_MAX_FONT_SCALE;
@@ -314,6 +357,10 @@ type Props = {
      * happens to be tappable is hidden.
      */
     onRename: () => void;
+    /** `recipe.imageURL`: pod artwork, or a photo an import link carried. */
+    imageURL?: string;
+    /** `showRecipeAvatars`. Off, no picture is drawn and no room is kept. */
+    showPicture?: boolean;
 };
 
 /**
@@ -337,7 +384,7 @@ type Props = {
  */
 export default function RecipeHero({
     name, named, xid, accent, beverage, pours, collapsed,
-    onBack, onMore, onHelp, onRename
+    onBack, onMore, onHelp, onRename, imageURL, showPicture = false
 }: Props) {
     "use no memo";
 
@@ -346,7 +393,12 @@ export default function RecipeHero({
     // above a coloured card.
     const insets = useSafeAreaInsets();
     const {width, fontScale} = useWindowDimensions();
-    const nameLayout = heroNameLayout(name, width, fontScale);
+    const picture = showPicture ? imageURL ?? "" : "";
+    // The name is sized for the row the picture leaves it, so a long name is
+    // never estimated into the corner the picture covers.
+    const nameLayout = heroNameLayout(
+        name, width, fontScale, picture.length > 0 ? HERO_PHOTO_RESERVE : 0
+    );
 
     // `pours` is the recipe's own array, mutated in place, and the watermark
     // reads each pour through a getter rather than a property — so there is
@@ -426,6 +478,19 @@ export default function RecipeHero({
             </XStack>
 
             <Collapsible open={!collapsed}>
+                {/* Only in the open slab. Folded, the chrome row is a title bar
+                    and a thumbnail there would be one more thing to squeeze the
+                    name against. Top aligned with the beverage row, which is
+                    where the content starts, and moves up with it when a long
+                    name closes up that gap. */}
+                {picture.length > 0 && (
+                    <View pointerEvents="none"
+                          style={{position: "absolute", top: nameLayout.tight ? 3 : 8, right: 0}}>
+                        <RecipePhoto testID="hero-photo" uri={picture}
+                                     size={HERO_PHOTO_SIZE} radius={10}/>
+                    </View>
+                )}
+
                 {/* A name with the watermark's band under it closes up the gap
                     under the chrome row, the one place the slab has room. */}
                 <XStack alignItems="center" gap="$2"
@@ -455,7 +520,10 @@ export default function RecipeHero({
                 <Pressable accessibilityRole="button" accessibilityLabel={name}
                            accessibilityHint="Opens a sheet to rename this recipe"
                            testID="hero-rename"
-                           style={{flexDirection: "row", alignItems: "flex-start", gap: 8}}
+                           style={{
+                               flexDirection: "row", alignItems: "flex-start", gap: 8,
+                               marginRight: picture.length > 0 ? HERO_PHOTO_RESERVE : 0
+                           }}
                            onPress={onRename} hitSlop={8}>
                     {/* Never across the watermark: `heroNameLayout` puts a
                         long name beside it or above it. `simple` breaks lines
