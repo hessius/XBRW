@@ -2028,12 +2028,8 @@ describe("the shelf grid", () => {
         const recipe = pictured("Ethiopia", "morning", 1);
         await openGrid([recipe], pictureSettings(true));
         await fireEvent.press(screen.getByTestId("shelf-tag:morning"));
-        await fireEvent(screen.getByTestId("recipe-tile-badges"), "layout", {
-            nativeEvent: {layout: {x: 0, y: 0, width: 136, height: 15}}
-        });
-        await fireEvent(screen.getByTestId("recipe-tile-free-room"), "layout", {
-            nativeEvent: {layout: {x: 0, y: 15, width: 136, height: 42}}
-        });
+        // On this branch the tile sets the name beside the picture at a fixed
+        // size, so nothing waits on layout before the picture is drawn.
         expect(screen.getByTestId("recipe-tile-photo", {includeHiddenElements: true})
             .props.source).toEqual({uri: "https://roaster.example/bag-1.jpg"});
     });

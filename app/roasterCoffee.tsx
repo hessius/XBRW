@@ -1,7 +1,6 @@
 import {useLocalSearchParams} from "expo-router";
 import React, {useEffect, useState} from "react";
 import {Pressable, ScrollView} from "react-native";
-import {useSafeAreaInsets} from "react-native-safe-area-context";
 import {Text, XStack, YStack} from "tamagui";
 
 import BrewStageLadder from "@/components/BrewStageLadder";
@@ -16,12 +15,13 @@ import {onAccent, palette} from "@/constants/colors";
 import {ALREADY_IN_LIBRARY, UPDATED_TO_LATEST} from "@/constants/copy";
 import {SCREEN_PADDING} from "@/constants/layout";
 import router from "@/hooks/steadyRouter";
+import {useScrollEndPadding} from "@/hooks/useBottomInset";
 import {sharedSettings, useSetting} from "@/hooks/useSetting";
 import {assignAccent, resolveAccent} from "@/library/accent";
 import type Recipe from "@/library/Recipe";
 import {
     bagLine, beanFacts, chooseRecipe, detailTitle, findCoffee, noteChips, readCatalogue,
-    roastAdvice, scrollEndPadding
+    roastAdvice
 } from "@/library/roasterCatalogue";
 import type {FeedCoffee} from "@/library/roasterFeed";
 import {
@@ -107,7 +107,7 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
     const ref = coffeeId ?? params.coffee ?? "";
     const store = settings ?? sharedSettings();
     useSetting("roasterCatalogue", store);
-    const insets = useSafeAreaInsets();
+    const scrollEnd = useScrollEndPadding(SCROLL_END);
     const [deps] = useState(() => library ?? realLibraryDeps(store));
     const cached = readCatalogue(store, feed);
     const coffee = cached === null ? undefined : findCoffee(cached.feed, ref);
@@ -237,7 +237,7 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
                     end is what lets the last action scroll clear of it. */}
                 <ScrollView testID="roaster-coffee-scroll" showsVerticalScrollIndicator={false}
                             contentContainerStyle={{
-                                paddingBottom: scrollEndPadding(SCROLL_END, insets.bottom),
+                                paddingBottom: scrollEnd,
                                 gap: 18
                             }}>
                     <DetailPhoto uri={coffee.image ?? null} testID="roaster-coffee-photo"/>

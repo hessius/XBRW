@@ -2,7 +2,6 @@ import {useLocalSearchParams} from "expo-router";
 import React, {useState} from "react";
 import {ScrollView} from "react-native";
 import {FlatList} from "react-native-gesture-handler";
-import {useSafeAreaInsets} from "react-native-safe-area-context";
 import {XStack, YStack} from "tamagui";
 
 import {CatalogueStatus} from "@/components/CatalogueParts";
@@ -14,9 +13,10 @@ import ScreenHeader from "@/components/ScreenHeader";
 import {palette} from "@/constants/colors";
 import {UNCLIPPED_LIST} from "@/constants/lists";
 import router from "@/hooks/steadyRouter";
+import {useScrollEndPadding} from "@/hooks/useBottomInset";
 import {useRailSearch, type RailSearch} from "@/hooks/useRailSearch";
 import {sharedSettings, useSetting} from "@/hooks/useSetting";
-import {coffeeRef, readCatalogue, scrollEndPadding, updatedAgo} from "@/library/roasterCatalogue";
+import {coffeeRef, readCatalogue, updatedAgo} from "@/library/roasterCatalogue";
 import type {FeedCoffee} from "@/library/roasterFeed";
 import {
     availableFilters, countLabel, EMPTY_COFFEE_QUERY, FACETS, facetOptions, filterCoffees,
@@ -125,7 +125,7 @@ export default function RoasterScreen({settings, feedUrl, now}: {
     // Subscribed so a refresh that lands while this is open redraws it.
     useSetting("roasterCatalogue", store);
     const [at] = useState(() => (now ?? Date.now)());
-    const insets = useSafeAreaInsets();
+    const listEnd = useScrollEndPadding(8);
     const cached = readCatalogue(store, feed);
     // Remembered per roaster for the session, without the search term: the
     // field's own text starts empty, and a term with no field showing it
@@ -183,7 +183,7 @@ export default function RoasterScreen({settings, feedUrl, now}: {
                         data={coffees}
                         keyExtractor={ref}
                         keyboardShouldPersistTaps="handled"
-                        contentContainerStyle={{paddingBottom: scrollEndPadding(8, insets.bottom)}}
+                        contentContainerStyle={{paddingBottom: listEnd}}
                         renderItem={({item}) => (
                             <RoasterCoffeeRow
                                 coffee={item}
