@@ -676,6 +676,77 @@ describe("the editor", () => {
         expect(mockPush).not.toHaveBeenCalled();
     });
 
+    describe("dose presets", () => {
+        function savedUpdates(): Recipe[] {
+            const RecipeDatabase = jest.requireMock("@/library/RecipeDatabase").default;
+            return RecipeDatabase.mock.instances.flatMap(
+                (instance: {updateRecipe: {mock: {calls: [string, Recipe][]}}}) =>
+                    instance.updateRecipe.mock.calls.map((call) => call[1])
+            );
+        }
+
+        afterEach(() => {
+            const RecipeDatabase = jest.requireMock("@/library/RecipeDatabase").default;
+            RecipeDatabase.prototype.getRecipe.mockReset();
+        });
+
+        it("brews the scaled recipe and leaves the saved one alone", async () => {
+            const RecipeDatabase = jest.requireMock("@/library/RecipeDatabase").default;
+            RecipeDatabase.prototype.getRecipe.mockReturnValue(fixture());
+            RecipeDatabase.mockClear();
+            await openTheQuickEditPanel();
+
+            await fireEvent.press(screen.getByLabelText("Brew at 15 grams"));
+            await fireEvent.press(screen.getByLabelText("Brew"));
+
+            const params = mockPush.mock.calls[0][0].params;
+            const brewed = JSON.parse(params.recipeJSON);
+            expect(JSON.parse(params.quickEditAdjustments)).toEqual({dose: 15});
+            expect(brewed.dosage).toBe(15);
+            expect(brewed.ratio).toBe(16);
+            expect(new Recipe(undefined, params.recipeJSON).getPourTotalVolume()).toBe(240);
+            expect(savedUpdates()).toEqual([]);
+        });
+
+        it("saves the dose straight away when nothing else is waiting for SAVE", async () => {
+            const RecipeDatabase = jest.requireMock("@/library/RecipeDatabase").default;
+            RecipeDatabase.prototype.getRecipe.mockReturnValue(fixture());
+            RecipeDatabase.mockClear();
+            await openTheQuickEditPanel();
+
+            await fireEvent.press(screen.getByLabelText("Brew at 15 grams"));
+            await fireEvent.press(screen.getByLabelText("Save the recipe at 15 grams"));
+
+            await waitFor(() => expect(savedUpdates()).toHaveLength(1));
+            const saved = savedUpdates()[0];
+            expect(saved.dosage).toBe(15);
+            expect(saved.getPourTotalVolume()).toBe(240);
+            expect(mockNotify).toHaveBeenCalledWith({tone: "success", message: "Saved at 15 g."});
+            // The panel stays open on the saved recipe, now at its new dose.
+            expect(screen.getByTestId("quick-edit-panel")).toBeTruthy();
+            expect(screen.getByLabelText("Brew at 15 grams, the recipe's dose")).toBeTruthy();
+            expect(screen.queryByTestId("quick-edit-save-dose")).toBeNull();
+            expect(mockGoBack).not.toHaveBeenCalled();
+        });
+
+        it("leaves the dose for SAVE when the recipe is not in the library yet", async () => {
+            const RecipeDatabase = jest.requireMock("@/library/RecipeDatabase").default;
+            RecipeDatabase.prototype.getRecipe.mockReturnValue(null);
+            RecipeDatabase.mockClear();
+            await openTheQuickEditPanel();
+
+            await fireEvent.press(screen.getByLabelText("Brew at 20 grams"));
+            await fireEvent.press(screen.getByLabelText("Save the recipe at 20 grams"));
+
+            await waitFor(() => expect(mockNotify).toHaveBeenCalledWith({
+                tone:    "info",
+                message: "Dose set to 20 g. Press SAVE to keep it."
+            }));
+            expect(savedUpdates()).toEqual([]);
+            expect(screen.getByLabelText("Brew at 20 grams, the recipe's dose")).toBeTruthy();
+        });
+    });
+
     it("stops writing a recipe the machine would reject, but still saves it", async () => {
         await renderEditor();
 

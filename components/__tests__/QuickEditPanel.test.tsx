@@ -313,4 +313,103 @@ describe("QuickEditPanel", () => {
 
         expect(onChange).toHaveBeenCalledWith({});
     });
+
+    describe("dose presets", () => {
+        function drawWithSave(
+            adjustments: QuickEditAdjustments,
+            recipe: Recipe = coffeeRecipe(),
+            onSaveDose = jest.fn()
+        ) {
+            return renderWithProviders(
+                <QuickEditPanel recipe={recipe} adjustments={adjustments}
+                                accent={palette.brand} temperatureUnit="C"
+                                onChange={jest.fn()} onSaveDose={onSaveDose}/>
+            ).then(() => onSaveDose);
+        }
+
+        it("offers 15, 18 and 20 g with the current dose lit", async () => {
+            await draw();
+
+            expect(screen.getByTestId("quick-edit-dose-presets")).toBeTruthy();
+            expect(screen.getByLabelText("Brew at 15 grams")).toBeTruthy();
+            expect(screen.getByLabelText("Brew at 18 grams")).toBeTruthy();
+            expect(screen.getByLabelText("Brew at 20 grams, the recipe's dose"))
+                .toHaveProp("accessibilityState", expect.objectContaining({selected: true}));
+            expect(screen.getByLabelText("Brew at 15 grams"))
+                .toHaveProp("accessibilityState", expect.objectContaining({selected: false}));
+        });
+
+        it("adds the recipe's own dose when it is not a preset", async () => {
+            await draw({}, coffeeRecipe({dosage: 12}));
+
+            expect(screen.getByLabelText("Brew at 12 grams, the recipe's dose")).toBeTruthy();
+            expect(screen.getByLabelText("Brew at 20 grams")).toBeTruthy();
+        });
+
+        it("sets the dose for this brew, and the recipe's chip takes it back", async () => {
+            const {onChange, rerender} = await draw();
+
+            await fireEvent.press(screen.getByLabelText("Brew at 15 grams"));
+            expect(onChange).toHaveBeenLastCalledWith({dose: 15});
+
+            await rerender(
+                <QuickEditPanel recipe={coffeeRecipe()} adjustments={{dose: 15, ratio: 17}}
+                                accent={palette.brand} temperatureUnit="C" onChange={onChange}/>
+            );
+            await fireEvent.press(screen.getByLabelText("Brew at 20 grams, the recipe's dose"));
+            expect(onChange).toHaveBeenLastCalledWith({ratio: 17});
+        });
+
+        it("draws no presets for tea", async () => {
+            await draw({}, teaRecipe());
+
+            expect(screen.queryByTestId("quick-edit-dose-presets")).toBeNull();
+        });
+
+        it("shows the bypass and the whole cup once the dose moves", async () => {
+            const recipe = coffeeRecipe();
+            recipe.bypassEnabled = true;
+            recipe.bypassVolume = 40;
+            await draw({dose: 15}, recipe);
+
+            expect(screen.getByTestId("quick-edit-explainer")).toHaveTextContent(
+                "Stage volumes rescale to 240 ml to match the new dose. " +
+                "Bypass water rescales to 30 ml, so the cup gets 270 ml."
+            );
+        });
+
+        it("offers no save when the host has not asked for one", async () => {
+            await draw({dose: 15});
+
+            expect(screen.queryByTestId("quick-edit-save-dose")).toBeNull();
+        });
+
+        it("offers no save until the dose has moved", async () => {
+            await drawWithSave({ratio: 17});
+
+            expect(screen.queryByTestId("quick-edit-save-dose")).toBeNull();
+        });
+
+        it("saves the adjusted dose through the host", async () => {
+            const onSaveDose = await drawWithSave({dose: 15});
+
+            expect(screen.getByTestId("quick-edit-save-dose")).toHaveTextContent("SAVE AS 15 G");
+            await fireEvent.press(screen.getByLabelText("Save the recipe at 15 grams"));
+
+            expect(onSaveDose).toHaveBeenCalledWith(15);
+        });
+
+        it("refuses to save, and says why, when a stage would pass the machine's limit", async () => {
+            const recipe = coffeeRecipe();
+            recipe.pours = [
+                new Pour(1, 40, 88, 30, 0, 0, 0),
+                new Pour(2, 280, 88, 30, 0, 0, 0)
+            ];
+            await drawWithSave({dose: 18}, recipe);
+
+            expect(screen.queryByTestId("quick-edit-save-dose")).toBeNull();
+            expect(screen.getByTestId("quick-edit-problems"))
+                .toHaveTextContent(/Stage 2 pours 252 ml\. The most is 240 ml\./);
+        });
+    });
 });
