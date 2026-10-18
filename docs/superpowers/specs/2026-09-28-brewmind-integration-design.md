@@ -153,9 +153,15 @@ link cannot split a one-line title. It is then trimmed, and dropped when
 empty. It is capped at `MAX_NAME` (100), the rename sheet's ceiling, which now
 lives on `Recipe` so both read one constant.
 Not the 120 of the bean's short text: a link should not be able to set a name
-the rename sheet would then refuse to hold whole. Over-length drops the name
-rather than truncating it, as with every other field, and the recipe falls back
-to xBloom's.
+the rename sheet would then refuse to hold whole. A longer name is fitted
+rather than dropped (`library/fitName.ts`): a trailing size suffix such as
+" - 18g" is kept whole, trailing bracketed groups are removed from the end one
+at a time, and only then is the name cut at the last whole word, with "…"
+before the suffix. Dropping it had left real roaster names (six of Central
+Coast Coffee's thirty, such as "Colombia | Las Flores | Jhoan Vergara | Java
+Hydrohoney (Duo Cherry Velvet) (Competition Coffee) - 18g") on xBloom's own
+name. Nothing is cut mid-word, so what remains is the sender's name, visibly
+shortened.
 
 Like the rest of the decoration it applies only to a new import. A recipe
 already in the library keeps its stored name, even an empty one; see "How the

@@ -6,8 +6,9 @@ device testing is complete. Update it whenever release scope or behaviour change
 ## Import link name, picture and fill-blanks (2026-10-18)
 
 An import link can now name the recipe with `recipe.name`. It lands on the
-recipe's own name (the one a rename writes), whitespace folded, capped at the
-rename sheet's 100 characters; `xbloomName` stays, so USE THIS NAME still goes
+recipe's own name (the one a rename writes), whitespace folded, fitted under the
+rename sheet's 100 characters (trailing bracketed groups first, then whole
+words with "…", always keeping a " - 18g" size suffix); `xbloomName` stays, so USE THIS NAME still goes
 back to xBloom's. The link's `bean.image` becomes the recipe's picture when the
 recipe has none of its own; pod artwork wins. The picture is drawn only with
 "Show recipe pictures" on.
