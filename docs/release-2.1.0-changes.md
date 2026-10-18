@@ -10,8 +10,9 @@ lines, with or without figures, then the figures, then the pour profile in the
 bottom corner. The profile used to be pinned to the corner over the name and the
 figures, which on a device drew its line through both and cut the name to one
 line. It now gets only the room the text leaves, measured at layout, at most
-30 pt tall and 4 pt clear of the figures, and is not drawn when that room is
-under 12 pt (the largest text sizes). Tile height, the grid and the badge row
+26 pt tall (about what a two-line name leaves at the default text size) and
+4 pt clear of the figures, and is not drawn when that room is under 12 pt (the
+largest text sizes). Tile height, the grid and the badge row
 are unchanged. Large-text and narrow-screen tiles need a device check.
 
 ## Brew history trace storage (2026-10-15)
