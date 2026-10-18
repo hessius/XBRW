@@ -134,6 +134,14 @@ describe("fetchRoasterFeed", () => {
         expect(feed.coffees).toHaveLength(1);
     });
 
+    it("accepts any type, so Shopify serves the feed template and not its own JSON", async () => {
+        const fetchImpl = jest.fn(respond(feedJson([{id: "a"}])));
+        await fetchRoasterFeed(FEED_URL, {fetchImpl});
+        const accept = (fetchImpl.mock.calls[0] as unknown as [string, {headers: Record<string, string>}])[1]
+            .headers.Accept;
+        expect(accept).toContain("*/*");
+    });
+
     it("refuses a non-https address without a request", async () => {
         const fetchImpl = jest.fn(respond("{}"));
         await expect(fetchRoasterFeed("http://roaster.example/feed", {fetchImpl}))

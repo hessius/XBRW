@@ -349,9 +349,14 @@ export async function fetchRoasterFeedBody(
     try {
         let response: Awaited<ReturnType<FetchLike>>;
         try {
+            // Never `application/json` alone. A Shopify store negotiates on
+            // Accept: asked for JSON only, it answers a collection URL with
+            // its own built-in collection object instead of the theme's feed
+            // template, and the feed silently fails to parse. Allowing any
+            // type gets the template, which is what the roaster published.
             response = await fetchImpl(url, {
                 signal: controller.signal,
-                headers: {Accept: "application/json"}
+                headers: {Accept: "application/json, text/plain, */*"}
             });
         } catch {
             throw new RoasterFeedError("network", "The roaster feed could not be reached.");
