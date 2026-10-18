@@ -305,7 +305,8 @@ export default function RecipeShelfTile({
                         gap={TILE_PHOTO_GAP}>
                     {picture.length > 0 && (
                         <RecipePhoto testID="recipe-tile-photo" uri={picture}
-                                     size={TILE_PHOTO_SIZE} radius={8}/>
+                                     size={TILE_PHOTO_SIZE} radius={8}
+                                     backing={onAccent.key}/>
                     )}
                     <YStack flex={1} gap="$1.5">
                         {/* Wraps rather than running off the tile: with the evidence,

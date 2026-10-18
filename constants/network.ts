@@ -227,6 +227,7 @@ export const OUTBOUND_CALLS: OutboundCall[] = [
             "components/PodSection.tsx",
             "components/RecipePhoto.tsx",
             "components/ShelfPhotoMark.tsx",
+            "components/PhotoViewer.tsx",
             "components/FromSection.tsx",
             "components/HubRow.tsx",
             "components/ImportResult.tsx",

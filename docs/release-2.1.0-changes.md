@@ -153,8 +153,15 @@ more make a 2x2 mosaic of the newest. User, tag and auto shelves all take a
 cover. If none of the pictures load, the shelf's own mark is drawn. The
 pictures are read newest first, and only from rows that carry one.
 
-The picture is decorative and hidden from screen readers, since the name is
-already announced. A picture that fails to load draws nothing. In the header the
+Every picture is drawn whole (`contain`) on a dark rounded backing rather than
+cropped to fill, so a bag shot keeps its label. In the editor header the picture
+is its own button, "Coffee photo": it opens the photo full screen on a dark
+backdrop (`components/PhotoViewer.tsx`), closed by CLOSE, a tap, or Android's
+back. It sits above the rename button and outside the name's row, so tapping it
+never opens the rename sheet; the name and pencil still do.
+
+Elsewhere the picture is decorative and hidden from screen readers, since the
+name is already announced. A picture that fails to load draws nothing. In the header the
 name keeps the room set aside for it, so a failure does not rewrap the title.
 With the setting off nothing is drawn and no room is kept. The network screen's
 Load a photo entry now says the library list, shelf rooms and shelf covers can

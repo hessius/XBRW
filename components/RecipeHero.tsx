@@ -1,4 +1,4 @@
-import React from "react";
+import React, {useState} from "react";
 import {Pressable, View, useWindowDimensions} from "react-native";
 import {useSafeAreaInsets} from "react-native-safe-area-context";
 import {Text, XStack, YStack} from "tamagui";
@@ -6,6 +6,7 @@ import {Text, XStack, YStack} from "tamagui";
 import Collapsible from "@/components/Collapsible";
 import DotIcon from "@/components/DotIcon";
 import DotMatrixText, {DOTO_MAX_FONT_SCALE} from "@/components/DotMatrixText";
+import PhotoViewer from "@/components/PhotoViewer";
 import PourProfile, {
     PROFILE_BLEED, PROFILE_STROKE_WIDTH, profileHeightAt
 } from "@/components/PourProfile";
@@ -599,6 +600,7 @@ export default function RecipeHero({
     // never estimated into the corner the picture covers.
     const nameLayout = heroNameLayout(name, width, fontScale, {pours, photo: picture.length > 0});
     const split = nameLayout.split;
+    const [viewing, setViewing] = useState(false);
 
     // `pours` is the recipe's own array, mutated in place, and the watermark
     // reads each pour through a getter rather than a property — so there is
@@ -678,22 +680,6 @@ export default function RecipeHero({
             </XStack>
 
             <Collapsible open={!collapsed}>
-                {/* Only in the open slab. Folded, the chrome row is a title bar
-                    and a thumbnail there would be one more thing to squeeze the
-                    name against. Top aligned with the beverage row, which is
-                    where the content starts, and moves up with it when a long
-                    name closes up that gap. */}
-                {picture.length > 0 && (
-                    <View pointerEvents="none"
-                          style={{
-                              position: "absolute", right: 0,
-                              top: nameLayout.tight ? HERO_PHOTO_TOP_TIGHT : HERO_PHOTO_TOP
-                          }}>
-                        <RecipePhoto testID="hero-photo" uri={picture}
-                                     size={nameLayout.photoSize} radius={10}/>
-                    </View>
-                )}
-
                 {/* A name with the watermark's band under it closes up the gap
                     under the chrome row, the one place the slab has room. */}
                 <XStack alignItems="center" gap="$2"
@@ -772,7 +758,27 @@ export default function RecipeHero({
                     <View testID="hero-profile-reserve" pointerEvents="none"
                           style={{height: nameLayout.reserve}}/>
                 )}
+
+                {/* Only in the open slab, top aligned with the beverage row and
+                    moving up with it when a long name closes that gap.
+                    Its own button, opening the photo full screen. Drawn after
+                    the name so it sits above the rename button (whose second
+                    piece runs full width under it) and its hit slop: a tap on
+                    the photo never renames. Drawn whole, not cropped, on the
+                    dark key the header buttons use. */}
+                {picture.length > 0 && (
+                    <View style={{
+                              position: "absolute", right: 0,
+                              top: nameLayout.tight ? HERO_PHOTO_TOP_TIGHT : HERO_PHOTO_TOP
+                          }}>
+                        <RecipePhoto testID="hero-photo" uri={picture}
+                                     size={nameLayout.photoSize} radius={10}
+                                     backing={onAccent.key}
+                                     onPress={() => setViewing(true)}/>
+                    </View>
+                )}
             </Collapsible>
+            <PhotoViewer uri={picture} visible={viewing} onClose={() => setViewing(false)}/>
         </YStack>
     );
 }
