@@ -1,4 +1,4 @@
-import React, {useState} from "react";
+import React from "react";
 import {Pressable, View} from "react-native";
 import {Text, XStack, YStack} from "tamagui";
 
@@ -92,22 +92,17 @@ function figuresLine(recipe: Recipe, isTea: boolean): string | null {
  * The recipe's picture on a tile: a rounded square in the top left corner,
  * level with the badge row.
  *
- * That corner was the tile's one empty space. The picture is drawn out of the
- * layout flow, so it can never make the tile taller or move the name, and the
- * badge row only gives up its leading end to it. It is as big as the room down
- * to the name allows, up to `TILE_PHOTO_SIZE`. At a text size that leaves less
- * than `TILE_PHOTO_MIN` it is left out: a thumbnail too small to tell two bags
- * apart is clutter, and the alternative is drawing it over the name.
+ * A 48 pt picture, a two-line name and the figures do not fit one above the
+ * other in a 120 pt tile, so the picture shares its height with the badges and
+ * the name instead: they sit in a column to its right, and the figures and the
+ * pour profile run the full width underneath. The top band is as tall as the
+ * taller of the two, which at the default text size is the badges and the name,
+ * so a tile with a picture puts its figures where a tile without one does and
+ * a row of tiles stays level. A picture that fails to load is dropped and the
+ * column takes the width back; the height never depended on it.
  */
 export const TILE_PHOTO_SIZE = 48;
-export const TILE_PHOTO_MIN = 40;
 export const TILE_PHOTO_GAP = 8;
-
-/** How big the picture can be, given the room from the badge row's top down to the name. */
-export function tilePhotoSize(room: number): number {
-    const size = Math.min(TILE_PHOTO_SIZE, Math.floor(room - TILE_PHOTO_GAP / 2));
-    return size >= TILE_PHOTO_MIN ? size : 0;
-}
 
 type Props = {
     recipe: Recipe;
@@ -195,7 +190,8 @@ type Props = {
  * shelf's own label; the marker is machine vocabulary and is Doto.
  *
  * Top to bottom: badges, the name on up to two lines, the figures, and the pour
- * profile in the bottom corner. The text is laid out first and the profile gets
+ * profile in the bottom corner. With a picture, the badges and the name sit in
+ * a column beside it (see `TILE_PHOTO_SIZE`). The text is laid out first and the profile gets
  * what it leaves, so the silhouette can never be drawn across the name or the
  * figures. That is the card's arrangement too: its profile shares the bottom
  * edge with the figures but sits beside them, not under them.
@@ -206,12 +202,7 @@ export default function RecipeShelfTile({
     onHistory, editing = false, slotMarker, onEasyMode, showPicture = false
 }: Props) {
     const accent = resolveAccent(recipe);
-    // Measured, both of them: the badge row and the free space under it add up
-    // to the room the picture has above the name at this text size.
-    const [badgeRow, setBadgeRow] = useState(0);
-    const [freeRoom, setFreeRoom] = useState(0);
     const picture = showPicture ? recipe.imageURL ?? "" : "";
-    const photoSize = picture.length > 0 ? tilePhotoSize(badgeRow + freeRoom) : 0;
     const isTea = accentGroupFor(recipe) === "tea";
     const marker = isTea ? "TEA" : "COFFEE";
     const showMarker = isTea || showCoffeeMarker;
@@ -310,107 +301,106 @@ export default function RecipeShelfTile({
                     padding={TILE_PADDING} borderRadius="$4"
                     style={{backgroundColor: accent}}>
 
-                <XStack testID="recipe-tile-badges" alignItems="center" gap="$1.5"
-                        onLayout={(event) => setBadgeRow(event.nativeEvent.layout.height)}
-                        paddingLeft={photoSize > 0 ? photoSize + TILE_PHOTO_GAP : 0}>
-                    {/* Hung from the row's top left, so it lines up with the
-                        badges. The row keeps the room even if the picture
-                        fails to load, so the badges do not jump. */}
-                    {photoSize > 0 && (
-                        <View pointerEvents="none"
-                              style={{position: "absolute", left: 0, top: 0}}>
-                            <RecipePhoto testID="recipe-tile-photo" uri={picture}
-                                         size={photoSize} radius={8}/>
-                        </View>
+                <XStack testID="recipe-tile-top" alignItems="flex-start"
+                        gap={TILE_PHOTO_GAP}>
+                    {picture.length > 0 && (
+                        <RecipePhoto testID="recipe-tile-photo" uri={picture}
+                                     size={TILE_PHOTO_SIZE} radius={8}/>
                     )}
-                    {/* How it has gone leads the row, the way it takes the
-                        leading end of the card's own figures row. */}
-                    {shownEvidence !== null && (
-                        <DotMatrixText testID="recipe-tile-evidence" fontSize={10}
-                                       weight="bold" letterSpacing={1.1}
-                                       numberOfLines={1} style={{flexShrink: 1}}
-                                       color={onAccent.label}>
-                            {shownEvidence}
-                        </DotMatrixText>
-                    )}
-                    <XStack flex={1}/>
-                    {editing && (
-                        // Opens the sheet the long press opens, so edit mode
-                        // adds a way in rather than a second list of acts that
-                        // could drift from the first.
-                        //
-                        // Hidden from the screen reader, and deliberately. The
-                        // tile is one accessibility element and already carries
-                        // every one of these acts as an `accessibilityAction`,
-                        // reachable from the rotor whether or not edit mode is
-                        // on -- so a screen reader user never needed the mode
-                        // in the first place. Announcing this glyph as well
-                        // would put a second door to the same room inside an
-                        // element that is already a door to it.
-                        //
-                        // The alternative the review suggested, lifting it out
-                        // to be a sibling of the accessible tile, would mean
-                        // absolutely positioning it over a row whose other
-                        // items vary in width, to gain a control that says
-                        // nothing new.
-                        <Pressable
-                            testID={`recipe-tile-actions-${recipe.uuid}`}
-                            accessibilityElementsHidden
-                            importantForAccessibility="no-hide-descendants"
-                            hitSlop={8}
-                            onPress={onLongPress}>
-                            <DotIcon testID="recipe-tile-actions" name="overflow"
-                                     size={12} color={onAccent.marker}/>
-                        </Pressable>
-                    )}
-                    <SlotMarker marker={slotMarker}/>
-                    {bagReading !== undefined && (
-                        <DotMatrixText testID="recipe-tile-bag" fontSize={10}
-                                       weight="bold" letterSpacing={1.1}
-                                       numberOfLines={1} color={onAccent.marker}>
-                            {bagBadge(bagReading)}
-                        </DotMatrixText>
-                    )}
-                    {freshness !== undefined && (
-                        <DotMatrixText testID="recipe-tile-freshness" fontSize={10}
-                                       weight="bold" letterSpacing={1.1}
-                                       numberOfLines={1} color={onAccent.marker}>
-                            {freshnessBadge(freshness)}
-                        </DotMatrixText>
-                    )}
-                    {recipe.favourite && (
-                        <DotIcon testID="recipe-tile-favourite" name="favourite"
-                                 size={12} color={onAccent.marker}/>
-                    )}
-                    {showMarker && (
-                        <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.4}
-                                       color={onAccent.marker}>
-                            {marker}
-                        </DotMatrixText>
-                    )}
-                </XStack>
-                <View testID="recipe-tile-free-room" style={{flex: 1}}
-                      onLayout={(event) => setFreeRoom(event.nativeEvent.layout.height)}/>
+                    <YStack flex={1} gap="$1.5">
+                        {/* Wraps rather than running off the tile: with the evidence,
+                            a bag, its freshness, a star and the marker a narrow tile
+                            has more badges than one row holds, and a picture beside
+                            them leaves less. A second row lands right-aligned. */}
+                        <XStack testID="recipe-tile-badges" alignItems="center" gap="$1.5"
+                                flexWrap="wrap" justifyContent="flex-end" rowGap={2}>
+                            {/* How it has gone leads the row, the way it takes the
+                                leading end of the card's own figures row. */}
+                            {shownEvidence !== null && (
+                                <DotMatrixText testID="recipe-tile-evidence" fontSize={10}
+                                               weight="bold" letterSpacing={1.1}
+                                               numberOfLines={1} style={{flexShrink: 1}}
+                                               color={onAccent.label}>
+                                    {shownEvidence}
+                                </DotMatrixText>
+                            )}
+                            <XStack flex={1}/>
+                            {editing && (
+                                // Opens the sheet the long press opens, so edit mode
+                                // adds a way in rather than a second list of acts that
+                                // could drift from the first.
+                                //
+                                // Hidden from the screen reader, and deliberately. The
+                                // tile is one accessibility element and already carries
+                                // every one of these acts as an `accessibilityAction`,
+                                // reachable from the rotor whether or not edit mode is
+                                // on -- so a screen reader user never needed the mode
+                                // in the first place. Announcing this glyph as well
+                                // would put a second door to the same room inside an
+                                // element that is already a door to it.
+                                //
+                                // The alternative the review suggested, lifting it out
+                                // to be a sibling of the accessible tile, would mean
+                                // absolutely positioning it over a row whose other
+                                // items vary in width, to gain a control that says
+                                // nothing new.
+                                <Pressable
+                                    testID={`recipe-tile-actions-${recipe.uuid}`}
+                                    accessibilityElementsHidden
+                                    importantForAccessibility="no-hide-descendants"
+                                    hitSlop={8}
+                                    onPress={onLongPress}>
+                                    <DotIcon testID="recipe-tile-actions" name="overflow"
+                                             size={12} color={onAccent.marker}/>
+                                </Pressable>
+                            )}
+                            <SlotMarker marker={slotMarker}/>
+                            {bagReading !== undefined && (
+                                <DotMatrixText testID="recipe-tile-bag" fontSize={10}
+                                               weight="bold" letterSpacing={1.1}
+                                               numberOfLines={1} color={onAccent.marker}>
+                                    {bagBadge(bagReading)}
+                                </DotMatrixText>
+                            )}
+                            {freshness !== undefined && (
+                                <DotMatrixText testID="recipe-tile-freshness" fontSize={10}
+                                               weight="bold" letterSpacing={1.1}
+                                               numberOfLines={1} color={onAccent.marker}>
+                                    {freshnessBadge(freshness)}
+                                </DotMatrixText>
+                            )}
+                            {recipe.favourite && (
+                                <DotIcon testID="recipe-tile-favourite" name="favourite"
+                                         size={12} color={onAccent.marker}/>
+                            )}
+                            {showMarker && (
+                                <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.4}
+                                               color={onAccent.marker}>
+                                    {marker}
+                                </DotMatrixText>
+                            )}
+                        </XStack>
 
-                <YStack gap="$1">
-                    {/* Two lines, figures or not: the name sits under the
-                        badges now, where the tile used to be empty, so it no
-                        longer has to share the bottom edge with the profile.
-                        Every tile keeps the grid's fixed height, and the
-                        profile below takes up whatever a long name uses. */}
-                    <Text fontSize={15} fontWeight="700"
-                          numberOfLines={2}
-                          color={recipe.hasName() ? onAccent.text : onAccent.label}>
-                        {recipe.displayName()}
-                    </Text>
-                    {figures !== null && (
-                        <DotMatrixText testID="recipe-tile-figures" fontSize={11}
-                                       weight="bold" letterSpacing={1.2}
-                                       numberOfLines={1} color={onAccent.label}>
-                            {figures}
-                        </DotMatrixText>
-                    )}
-                </YStack>
+                        {/* Two lines, figures or not, under the badges where the tile
+                            used to be empty. Beside a picture the column is narrower,
+                            so a long name wraps sooner; it still stops at two. */}
+                        <Text fontSize={15} fontWeight="700"
+                              numberOfLines={2}
+                              color={recipe.hasName() ? onAccent.text : onAccent.label}>
+                            {recipe.displayName()}
+                        </Text>
+                    </YStack>
+                </XStack>
+
+                {/* Full width under the picture: the line is up to 15
+                    characters of Doto, wider than the column beside it. */}
+                {figures !== null && (
+                    <DotMatrixText testID="recipe-tile-figures" fontSize={11}
+                                   weight="bold" letterSpacing={1.2}
+                                   numberOfLines={1} color={onAccent.label}>
+                        {figures}
+                    </DotMatrixText>
+                )}
 
                 {/* The corner the text left, down to the tile's bottom and
                     right edges. Measured rather than assumed, because the text

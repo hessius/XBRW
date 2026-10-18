@@ -73,10 +73,12 @@ top right corner, under HELP and the menu, clear of the name's column and
 folded away with the slab. Library cards draw a 40 pt square before the name,
 no taller than the two lines of prose, so card height and the name's line
 budget do not change. Shelf tiles draw it as a 48 pt rounded square in the top
-left corner, level with the badge row, which gives up its leading end to it.
-The square is drawn out of the layout flow and sized from the measured room down
-to the name, so tile height and the name never move. Larger text shrinks it,
-and below 40 pt it is left out rather than drawn over the name.
+left corner, level with the badge row. On preview/all, where tiles also carry
+the two-line name, the bag and freshness badges and the profile below the text,
+the badges and the name sit in a column beside the picture and the figures and
+profile run full width underneath, so nothing overlaps. Badges that do not fit
+one row wrap to a second, right-aligned. Tile height is unchanged; a failed
+picture is dropped and the column takes the width back.
 
 The picture is decorative and hidden from screen readers, since the name is
 already announced. A picture that fails to load draws nothing. In the header the

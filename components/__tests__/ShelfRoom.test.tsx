@@ -138,13 +138,6 @@ describe("ShelfRoom", () => {
             <ShelfRoom label="MORNINGS" recipes={[recipe]}
                        onBack={jest.fn()} actionsFor={actionsFor()} showPicture/>
         );
-        await fireEvent(screen.getByTestId("recipe-tile-badges"), "layout", {
-            nativeEvent: {layout: {x: 0, y: 0, width: 136, height: 15}}
-        });
-        await fireEvent(screen.getByTestId("recipe-tile-free-room"), "layout", {
-            nativeEvent: {layout: {x: 0, y: 15, width: 136, height: 42}}
-        });
-
         expect(screen.getByTestId("recipe-tile-photo", {includeHiddenElements: true})
             .props.source).toEqual({uri: "https://example.com/bag.jpg"});
     });
@@ -156,9 +149,6 @@ describe("ShelfRoom", () => {
             <ShelfRoom label="MORNINGS" recipes={[recipe]}
                        onBack={jest.fn()} actionsFor={actionsFor()}/>
         );
-        await fireEvent(screen.getByTestId("recipe-tile-free-room"), "layout", {
-            nativeEvent: {layout: {x: 0, y: 15, width: 136, height: 60}}
-        });
 
         expect(screen.queryByTestId("recipe-tile-photo", {includeHiddenElements: true}))
             .toBeNull();
