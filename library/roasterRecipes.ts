@@ -116,7 +116,9 @@ export function takeRoasterLatest(
 /**
  * Where the bag feature will attach what was bought: the bag size and its
  * roast date, against the recipe it was shelved with. Not built here; the
- * shelf action returns this so a bag store has one place to hook in.
+ * shelf action returns this so a bag store has one place to hook in. The
+ * sizes and prices to offer come from `bagChoices` and `variantForGrams` in
+ * `library/roasterBuy.ts`, which are feed-only and need no bag store.
  */
 export type BagAttachment = {
     recipeUuid: string;

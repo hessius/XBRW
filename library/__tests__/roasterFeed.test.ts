@@ -207,6 +207,12 @@ describe("a real feed", () => {
             expect(coffee.recipes.length).toBeGreaterThan(0);
             expect(coffee.roast?.level).toBeDefined();
             expect(coffee.bagSizes.length).toBeGreaterThan(0);
+            expect(coffee.variants.length).toBeGreaterThan(0);
         }
+        expect(feed.roaster.addToCart)
+            .toBe("https://www.centralcoastcoffee.com.au/cart/add?id={variant_id}&quantity=1");
+        expect(feed.coffees[0].variants[3]).toEqual({
+            id: "42227047268388", grams: 160, price: 28, currency: "AUD", available: true
+        });
     });
 });

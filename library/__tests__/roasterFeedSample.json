@@ -3,7 +3,8 @@
   "roaster": {
     "name": "Central Coast Coffee",
     "url": "https:\/\/www.centralcoastcoffee.com.au",
-    "feed": "https:\/\/www.centralcoastcoffee.com.au\/collections\/roasted-coffee-beans?view=xbrw"
+    "feed": "https:\/\/www.centralcoastcoffee.com.au\/collections\/roasted-coffee-beans?view=xbrw",
+    "add_to_cart": "https:\/\/www.centralcoastcoffee.com.au\/cart\/add?id={variant_id}\u0026quantity=1"
   },
   "coffees": [
     {
@@ -20,6 +21,12 @@
         "best_until_day": 52
       },
       "bag_sizes_g": [1000,480,320,160],
+      "variants": [
+        { "id": 42246212583460, "grams": 1000, "price": 146.0, "currency": "AUD", "available": true },
+        { "id": 42246212550692, "grams": 480, "price": 78.0, "currency": "AUD", "available": true },
+        { "id": 42227047301156, "grams": 320, "price": 53.0, "currency": "AUD", "available": true },
+        { "id": 42227047268388, "grams": 160, "price": 28.0, "currency": "AUD", "available": true }
+      ],
       "bean": {
         "roaster": "Central Coast Coffee",
         "country": "Peru",
@@ -48,6 +55,11 @@
         "best_until_day": 52
       },
       "bag_sizes_g": [480,320,160],
+      "variants": [
+        { "id": 41684777599012, "grams": 480, "price": 60.0, "currency": "AUD", "available": true },
+        { "id": 41684777566244, "grams": 320, "price": 41.0, "currency": "AUD", "available": false },
+        { "id": 41684777500708, "grams": 160, "price": 22.0, "currency": "AUD", "available": true }
+      ],
       "bean": {
         "roaster": "Central Coast Coffee",
         "country": "Colombia",
@@ -76,6 +88,11 @@
         "best_until_day": 21
       },
       "bag_sizes_g": [1000,480,320],
+      "variants": [
+        { "id": 42446094139428, "grams": 1000, "price": 68.0, "currency": "AUD", "available": true },
+        { "id": 42446094073892, "grams": 480, "price": 37.0, "currency": "AUD", "available": true },
+        { "id": 42446094106660, "grams": 320, "price": 26.0, "currency": "AUD", "available": true }
+      ],
       "bean": {
         "roaster": "Central Coast Coffee",
         "country": "Colombia",
@@ -104,6 +121,10 @@
         "best_until_day": 27
       },
       "bag_sizes_g": [320,160],
+      "variants": [
+        { "id": 42333212672036, "grams": 320, "price": 57.0, "currency": "AUD", "available": true },
+        { "id": 42333212639268, "grams": 160, "price": 30.0, "currency": "AUD", "available": true }
+      ],
       "bean": {
         "roaster": "Central Coast Coffee",
         "country": "Colombia",
@@ -132,6 +153,10 @@
         "best_until_day": 27
       },
       "bag_sizes_g": [320,160],
+      "variants": [
+        { "id": 42227050446884, "grams": 320, "price": 49.0, "currency": "AUD", "available": true },
+        { "id": 42227050414116, "grams": 160, "price": 27.0, "currency": "AUD", "available": true }
+      ],
       "bean": {
         "roaster": "Central Coast Coffee",
         "country": "Colombia",
@@ -160,6 +185,11 @@
         "best_until_day": 42
       },
       "bag_sizes_g": [480,320,160],
+      "variants": [
+        { "id": 41632601669668, "grams": 480, "price": 119.0, "currency": "AUD", "available": true },
+        { "id": 41632601636900, "grams": 320, "price": 82.0, "currency": "AUD", "available": true },
+        { "id": 41632601604132, "grams": 160, "price": 42.0, "currency": "AUD", "available": true }
+      ],
       "bean": {
         "roaster": "Central Coast Coffee",
         "country": "Colombia",
@@ -188,6 +218,11 @@
         "best_until_day": 42
       },
       "bag_sizes_g": [480,320,160],
+      "variants": [
+        { "id": 41632647020580, "grams": 480, "price": 90.0, "currency": "AUD", "available": false },
+        { "id": 41632646987812, "grams": 320, "price": 62.0, "currency": "AUD", "available": true },
+        { "id": 41632646955044, "grams": 160, "price": 32.0, "currency": "AUD", "available": true }
+      ],
       "bean": {
         "roaster": "Central Coast Coffee",
         "country": "Colombia",
@@ -216,6 +251,11 @@
         "best_until_day": 42
       },
       "bag_sizes_g": [480,320,160],
+      "variants": [
+        { "id": 42049003290660, "grams": 480, "price": 64.0, "currency": "AUD", "available": true },
+        { "id": 42049003257892, "grams": 320, "price": 44.0, "currency": "AUD", "available": false },
+        { "id": 42049003225124, "grams": 160, "price": 24.0, "currency": "AUD", "available": true }
+      ],
       "bean": {
         "roaster": "Central Coast Coffee",
         "country": "Ethiopia",
@@ -244,6 +284,10 @@
         "best_until_day": 42
       },
       "bag_sizes_g": [1000,320],
+      "variants": [
+        { "id": 43586759753764, "grams": 1000, "price": 109.0, "currency": "AUD", "available": true },
+        { "id": 42158470463524, "grams": 320, "price": 36.0, "currency": "AUD", "available": true }
+      ],
       "bean": {
         "roaster": "Central Coast Coffee",
         "country": "Bolivia",
@@ -272,6 +316,10 @@
         "best_until_day": 42
       },
       "bag_sizes_g": [320,160],
+      "variants": [
+        { "id": 41975977607204, "grams": 320, "price": 99.0, "currency": "AUD", "available": true },
+        { "id": 41975977574436, "grams": 160, "price": 55.0, "currency": "AUD", "available": true }
+      ],
       "bean": {
         "roaster": "Central Coast Coffee",
         "country": "Ecuador",
@@ -300,6 +348,11 @@
         "best_until_day": 42
       },
       "bag_sizes_g": [320,160,80],
+      "variants": [
+        { "id": 42728397864996, "grams": 320, "price": 169.0, "currency": "AUD", "available": false },
+        { "id": 42728397832228, "grams": 160, "price": 89.0, "currency": "AUD", "available": true },
+        { "id": 42728397799460, "grams": 80, "price": 49.0, "currency": "AUD", "available": true }
+      ],
       "bean": {
         "roaster": "Central Coast Coffee",
         "country": "Panama",
@@ -328,6 +381,11 @@
         "best_until_day": 42
       },
       "bag_sizes_g": [480,320,160],
+      "variants": [
+        { "id": 41911385260068, "grams": 480, "price": 199.0, "currency": "AUD", "available": true },
+        { "id": 41911385227300, "grams": 320, "price": 110.0, "currency": "AUD", "available": true },
+        { "id": 41911385194532, "grams": 160, "price": 60.0, "currency": "AUD", "available": true }
+      ],
       "bean": {
         "roaster": "Central Coast Coffee",
         "country": "Colombia",
@@ -356,6 +414,10 @@
         "best_until_day": 52
       },
       "bag_sizes_g": [320,160],
+      "variants": [
+        { "id": 42728244740132, "grams": 320, "price": 99.0, "currency": "AUD", "available": true },
+        { "id": 42728244707364, "grams": 160, "price": 50.0, "currency": "AUD", "available": true }
+      ],
       "bean": {
         "roaster": "Central Coast Coffee",
         "country": "Ecuador",
@@ -384,6 +446,9 @@
         "best_until_day": 27
       },
       "bag_sizes_g": [320],
+      "variants": [
+        { "id": 42027523440676, "grams": 320, "price": 42.0, "currency": "AUD", "available": true }
+      ],
       "bean": {
         "roaster": "Central Coast Coffee",
         "country": "Colombia",
@@ -412,6 +477,10 @@
         "best_until_day": 42
       },
       "bag_sizes_g": [160,80],
+      "variants": [
+        { "id": 42858326589476, "grams": 160, "price": 84.0, "currency": "AUD", "available": true },
+        { "id": 42858326556708, "grams": 80, "price": 55.0, "currency": "AUD", "available": true }
+      ],
       "bean": {
         "roaster": "Central Coast Coffee",
         "country": "Panama",
@@ -440,6 +509,9 @@
         "best_until_day": 42
       },
       "bag_sizes_g": [160],
+      "variants": [
+        { "id": 43115889360932, "grams": 160, "price": 79.0, "currency": "AUD", "available": true }
+      ],
       "bean": {
         "roaster": "Central Coast Coffee",
         "country": "Colombia",
@@ -468,6 +540,10 @@
         "best_until_day": 42
       },
       "bag_sizes_g": [320,160],
+      "variants": [
+        { "id": 42728461631524, "grams": 320, "price": 69.0, "currency": "AUD", "available": true },
+        { "id": 42728461598756, "grams": 160, "price": 39.0, "currency": "AUD", "available": true }
+      ],
       "bean": {
         "roaster": "Central Coast Coffee",
         "country": "Colombia",
@@ -496,6 +572,9 @@
         "best_until_day": 42
       },
       "bag_sizes_g": [160],
+      "variants": [
+        { "id": 43123998588964, "grams": 160, "price": 79.0, "currency": "AUD", "available": true }
+      ],
       "bean": {
         "roaster": "Central Coast Coffee",
         "country": "Colombia",
@@ -524,6 +603,10 @@
         "best_until_day": 42
       },
       "bag_sizes_g": [320,160],
+      "variants": [
+        { "id": 42945093435428, "grams": 320, "price": 44.0, "currency": "AUD", "available": true },
+        { "id": 42945093402660, "grams": 160, "price": 25.0, "currency": "AUD", "available": true }
+      ],
       "bean": {
         "roaster": "Central Coast Coffee",
         "country": "Colombia",
@@ -552,6 +635,10 @@
         "best_until_day": 52
       },
       "bag_sizes_g": [320,160],
+      "variants": [
+        { "id": 42728692940836, "grams": 320, "price": 119.0, "currency": "AUD", "available": true },
+        { "id": 42728692908068, "grams": 160, "price": 65.0, "currency": "AUD", "available": true }
+      ],
       "bean": {
         "roaster": "Central Coast Coffee",
         "country": "Ecuador",
@@ -580,6 +667,9 @@
         "best_until_day": 52
       },
       "bag_sizes_g": [320],
+      "variants": [
+        { "id": 42158501330980, "grams": 320, "price": 49.0, "currency": "AUD", "available": true }
+      ],
       "bean": {
         "roaster": "Central Coast Coffee",
         "country": "Bolivia",
@@ -608,6 +698,9 @@
         "best_until_day": 42
       },
       "bag_sizes_g": [160],
+      "variants": [
+        { "id": 43115889492004, "grams": 160, "price": 79.0, "currency": "AUD", "available": true }
+      ],
       "bean": {
         "roaster": "Central Coast Coffee",
         "country": "Colombia",
@@ -636,6 +729,9 @@
         "best_until_day": 42
       },
       "bag_sizes_g": [160],
+      "variants": [
+        { "id": 43115944214564, "grams": 160, "price": 89.0, "currency": "AUD", "available": true }
+      ],
       "bean": {
         "roaster": "Central Coast Coffee",
         "country": "Colombia",
@@ -664,6 +760,9 @@
         "best_until_day": 42
       },
       "bag_sizes_g": [160],
+      "variants": [
+        { "id": 43115908235300, "grams": 160, "price": 79.0, "currency": "AUD", "available": true }
+      ],
       "bean": {
         "roaster": "Central Coast Coffee",
         "country": "Colombia",
@@ -692,6 +791,10 @@
         "best_until_day": 52
       },
       "bag_sizes_g": [320,160],
+      "variants": [
+        { "id": 42728692678692, "grams": 320, "price": 89.0, "currency": "AUD", "available": true },
+        { "id": 42728692645924, "grams": 160, "price": 52.0, "currency": "AUD", "available": true }
+      ],
       "bean": {
         "roaster": "Central Coast Coffee",
         "country": "Ecuador",
@@ -720,6 +823,9 @@
         "best_until_day": 42
       },
       "bag_sizes_g": [160],
+      "variants": [
+        { "id": 43115889623076, "grams": 160, "price": 86.0, "currency": "AUD", "available": true }
+      ],
       "bean": {
         "roaster": "Central Coast Coffee",
         "country": "Colombia",
@@ -748,6 +854,9 @@
         "best_until_day": 27
       },
       "bag_sizes_g": [160],
+      "variants": [
+        { "id": 43115889754148, "grams": 160, "price": 79.0, "currency": "AUD", "available": true }
+      ],
       "bean": {
         "roaster": "Central Coast Coffee",
         "country": "Colombia",
@@ -776,6 +885,10 @@
         "best_until_day": 52
       },
       "bag_sizes_g": [320,160],
+      "variants": [
+        { "id": 42728692383780, "grams": 320, "price": 89.0, "currency": "AUD", "available": true },
+        { "id": 42728692351012, "grams": 160, "price": 52.0, "currency": "AUD", "available": true }
+      ],
       "bean": {
         "roaster": "Central Coast Coffee",
         "country": "Ecuador",
@@ -804,6 +917,10 @@
         "best_until_day": 42
       },
       "bag_sizes_g": [320,160],
+      "variants": [
+        { "id": 42728244346916, "grams": 320, "price": 79.0, "currency": "AUD", "available": true },
+        { "id": 42728244314148, "grams": 160, "price": 43.0, "currency": "AUD", "available": true }
+      ],
       "bean": {
         "roaster": "Central Coast Coffee",
         "country": "Ecuador",
@@ -832,6 +949,10 @@
         "best_until_day": 52
       },
       "bag_sizes_g": [320,160],
+      "variants": [
+        { "id": 42728244183076, "grams": 320, "price": 109.0, "currency": "AUD", "available": false },
+        { "id": 42728244150308, "grams": 160, "price": 57.0, "currency": "AUD", "available": true }
+      ],
       "bean": {
         "roaster": "Central Coast Coffee",
         "country": "Ecuador",
