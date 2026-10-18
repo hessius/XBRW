@@ -59,7 +59,12 @@ const CAPS: Readonly<Record<string, number>> = {
     aromatics: 500,
     note: 2000,
     url: MAX_URL,
-    imageUrl: MAX_URL
+    imageUrl: MAX_URL,
+    // Whole days, 0 to 540, read by `roastDays`. Four digits is room for any
+    // of them and nothing else.
+    restDays: 4,
+    peakDay: 4,
+    bestUntilDay: 4
 };
 
 /**
@@ -82,6 +87,10 @@ const CAPS: Readonly<Record<string, number>> = {
  */
 const PARAM_ALIASES: Readonly<Record<string, string>> = {
     image: "imageUrl",
+    // The roaster feed's spelling, so a roaster mints both with one set of names.
+    rest_days: "restDays",
+    peak_day: "peakDay",
+    best_until_day: "bestUntilDay",
     ...LEGACY_NAMES
 };
 

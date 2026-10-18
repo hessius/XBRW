@@ -1163,4 +1163,14 @@ describe("RecipeCard bag badge", () => {
         );
         expect(screen.getByTestId("recipe-card-bag")).toHaveTextContent("LOW");
     });
+
+    it("shows the bag's freshness in the same corner, with or without grams", async () => {
+        await renderWithProviders(
+            <RecipeCard recipe={guji()} onPress={jest.fn()} freshness="peak"/>
+        );
+        expect(within(screen.getByTestId("recipe-card-badges"))
+            .getByTestId("recipe-card-freshness")).toHaveTextContent("PEAK");
+        expect(screen.queryByTestId("recipe-card-bag")).toBeNull();
+        expect(screen.getByLabelText(/coffee at its peak/)).toBeTruthy();
+    });
 });

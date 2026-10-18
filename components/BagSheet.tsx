@@ -15,6 +15,17 @@ import {
     type BagTracker,
     type CoffeeBag
 } from "@/library/coffeeBag";
+import {
+    ROAST_LEVELS,
+    ROAST_LEVEL_DEFAULTS,
+    figuresFrom,
+    figuresProblem,
+    roastDays,
+    startingFigures,
+    type AdvisedCoffee,
+    type RoastFigures,
+    type RoastLevelKey
+} from "@/library/restPeak";
 
 /** What the sheet hands back. `gramsLeft` only when editing in `xbrw` mode. */
 export type BagSheetResult = {
@@ -23,6 +34,8 @@ export type BagSheetResult = {
     price?: number;
     beanName?: string;
     gramsLeft?: number;
+    /** Rest and peak, only with a roast day to count them from. */
+    figures?: RoastFigures;
 };
 
 type Props = {
@@ -35,6 +48,12 @@ type Props = {
     gramsLeft: number | null;
     /** A roast day to start from when adding, from the pod. */
     suggestedRoastedOn?: string;
+    /**
+     * The recipe's coffee, for its roast advice and roast level. When it
+     * states a rest and a peak (a BrewMind link, the roaster catalogue) the
+     * sheet shows them rather than asking.
+     */
+    coffee?: AdvisedCoffee;
     /** The name Beanconqueror will see on this recipe's brews. */
     beanName: string;
     /** True when a pod fixes the name, so it is shown but not editable. */
@@ -120,9 +139,12 @@ function priceNumber(text: string): number | undefined {
  * effect.
  */
 function BagForm({
-    tracker, bag, gramsLeft, suggestedRoastedOn, beanName, beanNameFixed,
+    tracker, bag, gramsLeft, suggestedRoastedOn, coffee, beanName, beanNameFixed,
     onSave, onFinish, onRemove
 }: Omit<Props, "open" | "onOpenChange" | "epoch">) {
+    const advised = startingFigures(coffee);
+    const startRest = bag?.restDays ?? advised.figures.restDays;
+    const startPeak = bag?.peakDay ?? advised.figures.peakDay;
     const startSize = bag?.sizeGrams ?? 250;
     const [size, setSize] = useState(String(startSize));
     const [custom, setCustom] = useState(!BAG_PRESETS.includes(startSize));
@@ -130,6 +152,10 @@ function BagForm({
     const [price, setPrice] = useState(bag?.price !== undefined ? String(bag.price) : "");
     const [name, setName] = useState(bag?.beanName ?? beanName);
     const [left, setLeft] = useState(gramsLeft !== null ? String(gramsLeft) : "");
+    const [level, setLevel] = useState<RoastLevelKey | null>(
+        bag?.restDays === undefined ? advised.level : null);
+    const [rest, setRest] = useState(String(startRest));
+    const [peak, setPeak] = useState(String(startPeak));
 
     const sizeGrams = wholeNumber(size);
     const sizeOk = isBagGrams(sizeGrams);
@@ -142,7 +168,23 @@ function BagForm({
     const leftOk = !editingLeft || isGramsLeft(leftValue);
     const nameValue = (beanNameFixed ? beanName : name).trim();
     const nameOk = tracker === "xbrw" || nameValue !== "";
-    const valid = sizeOk && roastOk && priceOk && leftOk && nameOk;
+    // The roaster's word is shown, not asked for; otherwise the person sets it.
+    const fromRoaster = advised.source === "coffee";
+    const restValue = roastDays(rest);
+    const peakValue = roastDays(peak);
+    const figuresError = fromRoaster ? null : figuresProblem(restValue, peakValue);
+    const figures: RoastFigures | undefined = roastedOn === undefined ? undefined
+        : fromRoaster ? advised.figures
+        : figuresError === null && restValue !== undefined && peakValue !== undefined
+            ? figuresFrom(restValue, peakValue, level ?? advised.level) : undefined;
+    const figuresOk = roastedOn === undefined || figures !== undefined;
+    const valid = sizeOk && roastOk && priceOk && leftOk && nameOk && figuresOk;
+
+    function pickLevel(key: RoastLevelKey) {
+        setLevel(key);
+        setRest(String(ROAST_LEVEL_DEFAULTS[key].restDays));
+        setPeak(String(ROAST_LEVEL_DEFAULTS[key].peakDay));
+    }
 
     function save() {
         if (!valid || sizeGrams === undefined) return;
@@ -151,7 +193,8 @@ function BagForm({
             ...(roastedOn !== undefined ? {roastedOn} : {}),
             ...(priceValue !== undefined ? {price: priceValue} : {}),
             ...(tracker === "beanconqueror" ? {beanName: nameValue} : {}),
-            ...(editingLeft && leftValue !== undefined ? {gramsLeft: leftValue} : {})
+            ...(editingLeft && leftValue !== undefined ? {gramsLeft: leftValue} : {}),
+            ...(figures !== undefined ? {figures} : {})
         });
     }
 
@@ -206,6 +249,57 @@ function BagForm({
                         {roastOk ? "Optional. The date on the bag." : "Use the form 2026-10-12."}
                     </Text>
                 </YStack>
+
+                {roastedOn !== undefined && (
+                    <YStack gap="$2" testID="bag-rest-peak">
+                        <Label>REST AND PEAK</Label>
+                        {fromRoaster ? (
+                            <Text testID="bag-rest-peak-roaster" fontSize={13} color={palette.text}>
+                                {`From the roaster: rest ${advised.figures.restDays} days, peak on day ${advised.figures.peakDay}.`}
+                            </Text>
+                        ) : (
+                            <>
+                                <XStack gap="$2" flexWrap="wrap" accessibilityRole="radiogroup"
+                                        accessibilityLabel="Roast">
+                                    {ROAST_LEVELS.map(({key, label, spoken}) => (
+                                        <Chip key={key} label={label} spoken={spoken}
+                                              testID={`bag-roast-${key}`}
+                                              selected={level === key}
+                                              onPress={() => pickLevel(key)}/>
+                                    ))}
+                                </XStack>
+                                <XStack gap="$2">
+                                    <YStack flex={1} gap="$1">
+                                        <Label>REST DAYS</Label>
+                                        <TextInput testID="bag-rest-field"
+                                                   accessibilityLabel="Rest days after roasting"
+                                                   value={rest} keyboardType="number-pad"
+                                                   onChangeText={(text) => {
+                                                       setRest(text);
+                                                       setLevel(null);
+                                                   }}
+                                                   style={fieldStyle}/>
+                                    </YStack>
+                                    <YStack flex={1} gap="$1">
+                                        <Label>PEAK DAY</Label>
+                                        <TextInput testID="bag-peak-field"
+                                                   accessibilityLabel="Peak day after roasting"
+                                                   value={peak} keyboardType="number-pad"
+                                                   onChangeText={(text) => {
+                                                       setPeak(text);
+                                                       setLevel(null);
+                                                   }}
+                                                   style={fieldStyle}/>
+                                    </YStack>
+                                </XStack>
+                                <Text testID="bag-rest-peak-note" fontSize={12}
+                                      color={figuresError === null ? palette.dim : palette.danger}>
+                                    {figuresError ?? "Days after the roast date. Pick a roast to fill them in, or type your own."}
+                                </Text>
+                            </>
+                        )}
+                    </YStack>
+                )}
 
                 {editingLeft && (
                     <YStack gap="$2">
