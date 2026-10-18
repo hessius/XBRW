@@ -282,6 +282,7 @@ export default function MachineSection({settings, onOpenMachine, onAddMachine}: 
                         summary={machineSummary(entry, index, machines.length, active,
                                                 status === "connected")}
                         isDefault={several && index === 0}
+                        ranked={several}
                         // With one machine there is nothing to tell apart, so
                         // one machine's card looks as it always has.
                         colour={several ? machineColourOf(entry).ink : undefined}
