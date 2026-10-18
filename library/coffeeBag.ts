@@ -190,6 +190,53 @@ export function daysSinceRoast(bag: Pick<CoffeeBag, "roastedOn">, now: number = 
     return Math.round((todayUtc - roastUtc) / 86_400_000);
 }
 
+/** A `YYYY-MM-DD` day as local midnight, or null for anything that is not a day. */
+export function dayDate(day: string): Date | null {
+    return roastedOnDate({roastedOn: day});
+}
+
+/** How far back the roast-day picker reaches. A bag older than this is a bin. */
+export const ROAST_DAY_LOOKBACK_YEARS = 1;
+
+/**
+ * The days the roast-day picker offers: up to today, and back a year.
+ *
+ * A stored day outside that (an old bag, or a future day typed before the
+ * picker existed) widens the start rather than being silently moved, so
+ * opening the picker never changes a bag the person did not touch. The end
+ * stays today: a roast day in the future is never a choice.
+ */
+export function roastDayRange(today: string, picked?: string): {min: string; max: string} {
+    const [y, m, d] = today.split("-").map(Number);
+    const yearBack = dayOf(new Date(y - ROAST_DAY_LOOKBACK_YEARS, m - 1, d).getTime());
+    const stored = calendarDay(picked);
+    return {min: stored !== undefined && stored < yearBack ? stored : yearBack, max: today};
+}
+
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const WEEKDAYS_SPOKEN = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const MONTHS_SPOKEN = ["January", "February", "March", "April", "May", "June", "July",
+    "August", "September", "October", "November", "December"];
+
+/**
+ * A roast day as a person reads it: `Today, 18 Oct`, `Yesterday, 17 Oct`, or
+ * `Thu 16 Oct 2026`. `today` is the local day it is counted from. Spelled out
+ * here rather than through `Intl` so the words match the app's English copy
+ * on every phone, whatever its locale.
+ */
+export function roastDayLabel(day: string, today: string, spoken = false): string {
+    const date = dayDate(day);
+    if (date === null) return day;
+    const weekdays = spoken ? WEEKDAYS_SPOKEN : WEEKDAYS;
+    const months = spoken ? MONTHS_SPOKEN : MONTHS;
+    const short = `${date.getDate()} ${months[date.getMonth()]}`;
+    const offset = daysSinceRoast({roastedOn: day}, dayDate(today)?.getTime() ?? Date.now());
+    if (offset === 0) return `Today, ${short}`;
+    if (offset === 1) return `Yesterday, ${short}`;
+    return `${weekdays[date.getDay()]} ${short} ${date.getFullYear()}`;
+}
+
 export function newBagId(): string {
     return `bag-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
 }

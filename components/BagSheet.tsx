@@ -3,12 +3,14 @@ import {ScrollView, TextInput} from "react-native";
 import {Text, XStack, YStack} from "tamagui";
 
 import DotMatrixText from "@/components/DotMatrixText";
+import RoastDayField from "@/components/RoastDayField";
 import XbrwSheet from "@/components/XbrwSheet";
 import {onAccent, palette} from "@/constants/colors";
 import {
     BAG_BEAN_NAME_MAX,
     BAG_PRESETS,
     calendarDay,
+    dayOf,
     isBagGrams,
     isBagPrice,
     isGramsLeft,
@@ -126,7 +128,13 @@ function BagForm({
     const startSize = bag?.sizeGrams ?? 250;
     const [size, setSize] = useState(String(startSize));
     const [custom, setCustom] = useState(!BAG_PRESETS.includes(startSize));
-    const [roasted, setRoasted] = useState(bag?.roastedOn ?? suggestedRoastedOn ?? "");
+    // Read once: the picker's limits and the new-bag default both hang off it.
+    const [today] = useState(() => dayOf(Date.now()));
+    // A new bag starts on today, the likeliest day for a bag opened on the
+    // spot, unless the pod names its own roast day. An edited bag keeps what
+    // it has, including nothing.
+    const [roasted, setRoasted] = useState(
+        bag !== null ? bag.roastedOn ?? "" : suggestedRoastedOn ?? today);
     const [price, setPrice] = useState(bag?.price !== undefined ? String(bag.price) : "");
     const [name, setName] = useState(bag?.beanName ?? beanName);
     const [left, setLeft] = useState(gramsLeft !== null ? String(gramsLeft) : "");
@@ -197,13 +205,9 @@ function BagForm({
 
                 <YStack gap="$2">
                     <Label>ROASTED ON</Label>
-                    <TextInput testID="bag-roasted-field" accessibilityLabel="Roasted on, year month day"
-                               value={roasted} onChangeText={setRoasted}
-                               placeholder="YYYY-MM-DD" placeholderTextColor={palette.placeholder}
-                               autoCorrect={false} keyboardType="numbers-and-punctuation"
-                               style={fieldStyle}/>
-                    <Text fontSize={12} color={roastOk ? palette.dim : palette.danger}>
-                        {roastOk ? "Optional. The date on the bag." : "Use the form 2026-10-12."}
+                    <RoastDayField value={roasted} today={today} onChange={setRoasted}/>
+                    <Text fontSize={12} color={palette.dim}>
+                        Optional. The date on the bag.
                     </Text>
                 </YStack>
 
