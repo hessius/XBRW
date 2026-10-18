@@ -195,7 +195,7 @@ export const OUTBOUND_CALLS: OutboundCall[] = [
     {
         id:      "images",
         title:   "Load a photo",
-        trigger: "You open the hub, an import preview, or a saved recipe that carries a pod photo or the avatar of whoever shared it.",
+        trigger: "You open the hub, an import preview, or a saved recipe that carries a pod photo or the avatar of whoever shared it, or the home screen's Ready to brew card shows a coffee with a pod photo.",
         host:    "whichever host xBloom named in its own reply",
         hostPinned: false,
         owner:   "xBloom, or whoever xBloom points at",
@@ -212,6 +212,7 @@ export const OUTBOUND_CALLS: OutboundCall[] = [
             "components/FromSection.tsx",
             "components/HubRow.tsx",
             "components/ImportResult.tsx",
+            "components/ReadyToBrewCard.tsx",
             "app/hubRecipe.tsx"
         ]
     }
