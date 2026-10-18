@@ -945,9 +945,9 @@ plain card with the model choice and Connect.
 | `machine.card.summary.default` | `components/MachineSection.tsx` (`machineSummary`) | Part of the line under a machine's name: the first machine in the order. | `Default` |
 | `machine.card.summary.choice` | `components/MachineSection.tsx` (`machineSummary`) | Part of the same line for the others. `${index + 1}` is its place. | `Choice ${index + 1}` |
 | `machine.card.summary.connected` | `components/MachineSection.tsx` (`machineSummary`) | Part of the same line: the machine in use, linked. | `Connected` |
-| `machine.card.summary.inUse` | `components/MachineSection.tsx` (`machineSummary`) | Part of the same line: the machine in use, not linked. | `In use` |
+| `machine.card.summary.inUse` | `components/MachineSection.tsx` (`machineSummary`) | Part of the same line: the machine this phone has selected, not linked. Not "In use", which read as another phone using it, and the app cannot know that. | `Selected` |
 | `machine.card.header.a11y` | `components/MachineCard.tsx` (a11y) | (a11y) The card's header button, with its expanded state. | `${title}, ${summary}` |
-| `machine.card.model.label` | `components/MachineSection.tsx` | Model choice label inside a machine's card. | `Model` |
+| `machine.card.model.label` | `components/MachineSection.tsx` | Model choice label inside a machine's card. Hidden once the machine's serial has named its model and the saved model agrees. | `Model` |
 | `machine.card.useNow.label` | `components/MachineSection.tsx` | Action row in the card of a machine that is not in use. | `Use this machine now` |
 | `machine.card.useNow.detail` | `components/MachineSection.tsx` | Its detail, unless a brew blocks the change (then the blocker's own message). | `Connects to it until the app is closed.` |
 | `machine.card.useNow.connecting` | `components/MachineSection.tsx` (`switchTo`) | Info toast. `${name}` is the machine's name. | `Connecting to ${name}…` |
@@ -965,14 +965,15 @@ plain card with the model choice and Connect.
 | `machine.card.add.detail` | `components/MachineSection.tsx` | Its detail. | `Switch the new one on and keep it nearby. Machines already saved are skipped.` |
 | `machine.section.idle.connecting` | `components/MachineSection.tsx:58` | Status while connecting. | `Connecting…` |
 | `machine.section.idle.none` | `components/MachineSection.tsx:59` | Status when no machine is paired. | `No machine paired` |
-| `machine.section.idle.notConnected` | `components/MachineSection.tsx:60` | Status when a machine is remembered but no connection attempt has been made. `${remembered}` is the machine name. | `Not connected · ${remembered}` |
-| `machine.section.idle.notInRange` | `components/MachineSection.tsx:61` | Status when a machine is remembered and a connection attempt was made but failed, or the link dropped. `${remembered}` is the machine name. | `Not in range · ${remembered}` |
+| `machine.section.idle.notConnected` | `components/MachineSection.tsx:60` | Status when a machine is remembered but no connection attempt has been made. The Bluetooth ID is in the card's Details, not here. | `Not connected` |
+| `machine.section.idle.notInRange` | `components/MachineSection.tsx:61` | Status when a machine is remembered and a connection attempt was made but failed, or the link dropped. Names every reason, because a machine held by another phone stops answering just like one that is off. | `Not found. It may be off, out of range or connected to another phone.` |
 | `machine.section.connect.connected` | `components/MachineSection.tsx:96` | Row label when connected. | `Connected` |
 | `machine.section.connect.connect` | `components/MachineSection.tsx:96` | Row label when not connected. | `Connect to my machine` |
-| `machine.section.connected.desc` | `components/MachineSection.tsx:98` | Sub-note when connected. | `The link is held while XBRW++ is open.` |
-| `machine.section.disconnected.desc` | `components/MachineSection.tsx:99` | Sub-note when not connected. | `Your xBloom Studio has to be switched on and nearby.` |
+| `machine.section.connected.desc` | `components/MachineSection.tsx:98` | Sub-note when connected. Only drawn before any machine is saved; a saved machine's card header already says Connected, so the row is hidden there. | `The link is held while XBRW++ is open.` |
+| `machine.section.disconnected.desc` | `components/MachineSection.tsx:99` | Sub-note when not connected. | `Your xBloom Studio has to be on and nearby. If another phone is connected to it, close XBRW++ or the xBloom app there.` |
 | `machine.section.vital.serial` | `components/MachineSection.tsx` | Vital label. Inside the Details fold of the connected machine's card. | `Serial` |
 | `machine.section.vital.model` | `components/MachineSection.tsx` | Vital label. Inside the Details fold of the connected machine's card. | `Model` |
+| `machine.section.vital.bluetooth` | `components/MachineSection.tsx` | Vital label; value is the saved Bluetooth identifier (a MAC address on Android, a UUID on iOS). Inside the Details fold of every machine's card. | `Bluetooth ID` |
 | `machine.section.vital.firmware.a11y` | `components/MachineSection.tsx` (a11y) | (a11y) Firmware vital. `${...}` is the firmware string. Inside the Details fold of the connected machine's card. | `Firmware, ${info.firmware}` |
 | `machine.section.vital.firmware` | `components/MachineSection.tsx` | Vital label. Inside the Details fold of the connected machine's card. | `Firmware` |
 | `machine.section.vital.water` | `components/MachineSection.tsx` | Vital label; value is OK/Low. Inside the Details fold of the connected machine's card. | `Water` |

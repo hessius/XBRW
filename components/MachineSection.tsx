@@ -14,7 +14,7 @@ import {useMachine} from "@/hooks/useMachine";
 import {useSavedMachines} from "@/hooks/useSavedMachines";
 import {useSetting} from "@/hooks/useSetting";
 import type {Settings} from "@/library/Settings";
-import {MACHINE_MODELS, isMachineModel, type MachineModel} from "@/library/machine/machineModel";
+import {MACHINE_MODELS, isMachineModel, modelFromSerial, type MachineModel} from "@/library/machine/machineModel";
 import {machineLabel, machineTag, type SavedMachine} from "@/library/machine/savedMachines";
 
 /** How many taps on the firmware row open the console. */
@@ -41,6 +41,16 @@ const MACHINE_MODEL_OPTIONS = MACHINE_MODELS.map(
 /** Why the model matters, short enough to sit inside a machine's card. */
 const MODEL_DESCRIPTION =
     "Choose your model for matching imports. Grind scales differ. Saved recipes stay unchanged.";
+
+/**
+ * What the Connect row asks of the machine. The other phone is named because
+ * the machine takes one phone at a time and this one cannot tell that apart
+ * from a machine that is off.
+ */
+const CONNECT_NEEDS_STUDIO =
+    "Your xBloom Studio has to be on and nearby. If another phone is connected to it, close XBRW++ or the xBloom app there.";
+const CONNECT_NEEDS_ORIGINAL =
+    "Your xBloom has to be on and nearby. If another phone is connected to it, close XBRW++ or the xBloom app there.";
 
 /** One label-and-value line of the machine's own vitals. */
 function Vital({label, value}: {label: string; value: string}) {
@@ -70,7 +80,10 @@ function Card({children}: {children: React.ReactNode}) {
 function machineSummary(machine: SavedMachine, index: number, active: boolean, connected: boolean): string {
     const parts = [MODEL_NAMES[machine.model], index === 0 ? "Default" : `Choice ${index + 1}`,
                    machineTag(machine)];
-    if (active) parts.push(connected ? "Connected" : "In use");
+    // "Selected", not "In use": this phone has no way to tell that another
+    // phone holds the machine (it simply stops answering), and "In use" was
+    // read as exactly that.
+    if (active) parts.push(connected ? "Connected" : "Selected");
     return parts.join(" · ");
 }
 
@@ -117,11 +130,20 @@ export default function MachineSection({settings, onOpenMachine, onAddMachine}: 
     const [taps, setTaps] = useState(0);
     const info = machine.info;
 
-    /** What the section says when there is no live link. */
+    /**
+     * What the section says when there is no live link.
+     *
+     * A failed connect is "Not found" with every reason it could have,
+     * because the radio cannot tell them apart: the machine takes one phone
+     * at a time and, held by another, it stops answering exactly as it does
+     * switched off or out of range (`ble-protocol.md`, "Single-Client
+     * Limit"). The Bluetooth identifier used to follow here; it is in the
+     * machine's Details now, where it is not noise.
+     */
     const idleStatus = status === "connecting" ? "Connecting…"
         : remembered === "" ? "No machine paired"
-            : status === "idle" ? `Not connected · ${remembered}`
-                : `Not in range · ${remembered}`;
+            : status === "idle" ? "Not connected"
+                : "Not found. It may be off, out of range or connected to another phone.";
 
     // The vitals are a snapshot taken at connect. Left alone, a tank refilled
     // since then still reads Low here, and only a relaunch clears it.
@@ -183,8 +205,8 @@ export default function MachineSection({settings, onOpenMachine, onAddMachine}: 
                 // Bluetooth protocol here is the Studio's throughout, and
                 // nobody has had an original in front of them to check.
                 : model === "original"
-                    ? "Your xBloom has to be switched on and nearby. Only the Studio has been tested."
-                    : "Your xBloom Studio has to be switched on and nearby."}
+                    ? `${CONNECT_NEEDS_ORIGINAL} Only the Studio has been tested.`
+                    : CONNECT_NEEDS_STUDIO}
             onPress={() => {
                 // The throw is for the brew path, which needs the reason.
                 // Here the reason is already on screen, in `error`.
@@ -235,6 +257,11 @@ export default function MachineSection({settings, onOpenMachine, onAddMachine}: 
                 const active = entry.id === remembered;
                 const linked = active && status === "connected";
                 const name = machineLabel(entry, index);
+                // The serial set the model on connect (`recordSerial`), so a
+                // choice could only point imports at the wrong grind scale.
+                // Offered again whenever the serial says nothing, or says
+                // something the saved model does not agree with yet.
+                const modelKnown = modelFromSerial(entry.serial) === entry.model;
                 return (
                     <MachineCard
                         key={entry.id}
@@ -249,6 +276,7 @@ export default function MachineSection({settings, onOpenMachine, onAddMachine}: 
                             <>
                                 <Vital label="Serial" value={info.serial}/>
                                 <Vital label="Model" value={info.model}/>
+                                <Vital label="Bluetooth ID" value={entry.id}/>
                                 <Pressable accessibilityRole="button"
                                            accessibilityLabel={`Firmware, ${info.firmware}`}
                                            onPress={onSecretPress}>
@@ -263,6 +291,7 @@ export default function MachineSection({settings, onOpenMachine, onAddMachine}: 
                         ) : (
                             <>
                                 {entry.serial !== "" && <Vital label="Serial" value={entry.serial}/>}
+                                <Vital label="Bluetooth ID" value={entry.id}/>
                                 <Text color={palette.dim} fontSize={13}
                                       paddingVertical="$2" paddingHorizontal="$4">
                                     Firmware, water, grind size and mode show here while this machine is connected.
@@ -284,13 +313,16 @@ export default function MachineSection({settings, onOpenMachine, onAddMachine}: 
                         )}>
                         {active && statusLine}
                         {active && openSettingsRow}
-                        {active ? connectRow(entry.model) : (
+                        {/* Not drawn while connected: the header already says
+                            Connected in green, and the row did nothing when
+                            pressed. Not connected, it is how to connect. */}
+                        {active ? !linked && connectRow(entry.model) : (
                             <SettingsActionRow
                                 label="Use this machine now"
                                 detail={changeBlocker ?? "Connects to it until the app is closed."}
                                 onPress={() => switchTo(entry, name)}/>
                         )}
-                        <SettingsChoiceRow
+                        {!modelKnown && <SettingsChoiceRow
                             label="Model"
                             description={MODEL_DESCRIPTION}
                             stacked
@@ -298,7 +330,7 @@ export default function MachineSection({settings, onOpenMachine, onAddMachine}: 
                             options={MACHINE_MODEL_OPTIONS}
                             onChange={(value) => {
                                 if (isMachineModel(value)) setModel(entry.id, value);
-                            }}/>
+                            }}/>}
                         <SettingsActionRow
                             label={several ? "Name and order" : "Name"}
                             detail={several

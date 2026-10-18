@@ -12,7 +12,7 @@ import {
     useMachine,
     __resetSharedMachine
 } from "@/hooks/useMachine";
-import {FakeTransport} from "@/library/machine/__tests__/FakeTransport";
+import {FakeTransport, machineInfoFrame} from "@/library/machine/__tests__/FakeTransport";
 import Machine from "@/library/machine/Machine";
 import {NoSavedMachineError} from "@/library/machine/errors";
 import {loadSavedMachines} from "@/library/machine/savedMachineSettings";
@@ -97,7 +97,10 @@ describe("several machines saved, one scan", () => {
 
     it("switches the model with the machine it found", async () => {
         const settings = cafe();
-        const {machine, store} = rig(settings, heard("bar-2"));
+        const {transport, machine, store} = rig(settings, heard("bar-2"));
+        // An Original reports an Original's serial; a Studio's would set the
+        // entry to the Studio, which is its own test in savedMachineSettings.
+        transport.infoReply = machineInfoFrame({serial: "J20ABC123456"});
 
         await openLink(machine, store, granted, instant);
 
@@ -195,6 +198,7 @@ describe("switching by hand", () => {
         const {transport, machine, store} = rig(settings, heard("bar-1", "bar-2"));
         await openLink(machine, store, granted, instant);
         expect(transport.connectedTo).toBe("bar-1");
+        transport.infoReply = machineInfoFrame({serial: "J20ABC123456"});
 
         await chooseMachine(machine, settings, "bar-2", granted, instant);
 
