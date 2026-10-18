@@ -158,8 +158,8 @@ rather than truncating it, as with every other field, and the recipe falls back
 to xBloom's.
 
 Like the rest of the decoration it applies only to a new import. A recipe
-already in the library keeps its stored name; see "How the coffee reaches the
-recipe" below.
+already in the library keeps its stored name, even an empty one; see "How the
+coffee reaches the recipe" below.
 
 ### `bean.image` as the recipe's picture
 
@@ -173,8 +173,8 @@ pod arrived with no picture. (A share link to a pod-made recipe carries
 `decorateImport` now sets `imageURL` from the decorated coffee's `imageUrl`,
 through `podImageUrl` (https only, the rule backup restore applies to
 `imageURL`), but only when the recipe has no picture of its own. Pod artwork
-wins where there is any. A recipe already in the library keeps whatever it had,
-picture or none, by the same before-de-duplication rule.
+wins where there is any. A recipe already in the library keeps a picture it
+has; one with no picture gets this one through the fill-blanks rule below.
 
 The picture is drawn in one place: the XPOD section on ABOUT, beside the
 xBloom name, and only while `showRecipeAvatars` is on. That setting defaults to
@@ -281,6 +281,18 @@ coffee on a recipe the user has already edited, and "already in your library"
 is what the sheet says in that case. The same holds for `recipe.url`,
 `recipe.name` and the picture: a stored recipe keeps its own page, name and
 artwork.
+
+The stored recipe is not frozen, though. After the match, `fillImportBlanks`
+gives it what the link carries in the places it has nothing: `imageURL` when it
+has no picture (through `podImageUrl`), `coffee` when it has none, each missing
+or blank field of an existing coffee, and `recipeUrl` when it has none. A value
+is never replaced. The name and the source are never touched, since an empty
+name means "follow the pod" and the source is history. Derived tags are added
+only to a recipe with no tags, and only from the coffee fields just filled, so
+a cleared tag list stays cleared. The hook saves the recipe through
+`onSaveExisting` only when something changed. Without this, a recipe first
+imported before links carried `bean.image` never got its photo, however often
+it was re-imported.
 
 ### Provenance
 

@@ -1,5 +1,5 @@
 import Recipe from "@/library/Recipe";
-import {decorateImport} from "@/library/importDecoration";
+import {decorateImport, fillImportBlanks} from "@/library/importDecoration";
 
 const recipe = () => new Recipe();
 
@@ -152,5 +152,136 @@ describe("decorateImport", () => {
         expect(decorated.source).toBe(before);
         expect(decorated.name).toBe("");
         expect(decorated.imageURL).toBeUndefined();
+    });
+});
+
+describe("fillImportBlanks", () => {
+    const BAG = "https://example.com/bag.png";
+
+    it("gives a recipe with no picture the link's coffee photo", () => {
+        // The case that made this exist: a recipe imported before links
+        // carried `bean.image`, re-imported from a link that does.
+        const held = recipe();
+
+        expect(fillImportBlanks(held, {coffee: {name: "X", imageUrl: BAG}})).toBe(true);
+        expect(held.imageURL).toBe(BAG);
+        expect(held.coffee).toEqual({name: "X", imageUrl: BAG});
+    });
+
+    it("keeps a picture the recipe already has", () => {
+        const held = recipe();
+        held.imageURL = "https://example.com/pod.png";
+        held.coffee = {name: "X", imageUrl: "https://example.com/pod.png"};
+
+        expect(fillImportBlanks(held, {coffee: {name: "X", imageUrl: BAG}})).toBe(false);
+        expect(held.imageURL).toBe("https://example.com/pod.png");
+    });
+
+    it("fills only the coffee fields that are missing or blank", () => {
+        const held = recipe();
+        held.coffee = {name: "My name for it", roaster: "", processing: "Natural"};
+
+        expect(fillImportBlanks(held, {
+            coffee: {
+                name: "Their name",
+                roaster: "Some Roastery",
+                processing: "Washed",
+                country: "Colombia"
+            }
+        })).toBe(true);
+
+        expect(held.coffee).toEqual({
+            name: "My name for it",
+            roaster: "Some Roastery",
+            processing: "Natural",
+            country: "Colombia"
+        });
+    });
+
+    it("never touches the recipe's name or where it came from", () => {
+        const held = recipe();
+        held.name = "Mine";
+        const source = held.source;
+
+        fillImportBlanks(held, {recipeName: "Theirs", source: "brewmind", coffee: {name: "X"}});
+
+        expect(held.name).toBe("Mine");
+        expect(held.source).toBe(source);
+    });
+
+    it("leaves an empty name empty, because empty means follow the pod", () => {
+        const held = recipe();
+
+        expect(fillImportBlanks(held, {recipeName: "Theirs"})).toBe(false);
+        expect(held.name).toBe("");
+    });
+
+    it("fills the recipe page only when there is none", () => {
+        const blank = recipe();
+        expect(fillImportBlanks(blank, {recipeUrl: "https://example.com/r"})).toBe(true);
+        expect(blank.recipeUrl).toBe("https://example.com/r");
+
+        const held = recipe();
+        held.recipeUrl = "https://example.com/mine";
+        expect(fillImportBlanks(held, {recipeUrl: "https://example.com/r"})).toBe(false);
+        expect(held.recipeUrl).toBe("https://example.com/mine");
+    });
+
+    it("tags an untagged recipe from what it just filled", () => {
+        const held = recipe();
+
+        fillImportBlanks(held, {coffee: {name: "X", roast: "Medium", processing: "Washed"}});
+
+        expect(held.tags).toEqual(["Medium", "Washed"]);
+    });
+
+    it("adds no tags to a recipe that has some", () => {
+        const held = recipe();
+        held.setTags(["Morning"]);
+
+        fillImportBlanks(held, {coffee: {name: "X", roast: "Medium"}});
+
+        expect(held.tags).toEqual(["Morning"]);
+    });
+
+    it("does not re-tag from coffee fields the recipe already had", () => {
+        // An untagged recipe whose coffee already says Washed had that tag
+        // taken off, or never wanted it. A re-import is no reason to put it
+        // back.
+        const held = recipe();
+        held.coffee = {name: "X", processing: "Washed"};
+
+        expect(fillImportBlanks(held, {coffee: {name: "X", processing: "Washed"}})).toBe(false);
+        expect(held.tags).toEqual([]);
+    });
+
+    it("reports no change when there is nothing to fill", () => {
+        const held = recipe();
+        held.imageURL = "https://example.com/pod.png";
+        held.recipeUrl = "https://example.com/r";
+        held.coffee = {name: "X", roaster: "R"};
+
+        expect(fillImportBlanks(held, {
+            coffee: {name: "Y", roaster: "Other", imageUrl: BAG},
+            recipeUrl: "https://example.com/other"
+        })).toBe(true);
+        // The coffee's picture was a blank on the coffee, so that one fills.
+        expect(held.coffee.imageUrl).toBe(BAG);
+        expect(held.coffee.roaster).toBe("R");
+        expect(held.imageURL).toBe("https://example.com/pod.png");
+
+        expect(fillImportBlanks(held, {
+            coffee: {name: "Y", roaster: "Other", imageUrl: BAG},
+            recipeUrl: "https://example.com/other"
+        })).toBe(false);
+        expect(fillImportBlanks(held, {})).toBe(false);
+    });
+
+    it("ignores a picture that is not https", () => {
+        const held = recipe();
+
+        fillImportBlanks(held, {coffee: {name: "X", imageUrl: "http://example.com/bag.png"}});
+
+        expect(held.imageURL).toBeUndefined();
     });
 });

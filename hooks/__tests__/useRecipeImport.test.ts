@@ -392,16 +392,18 @@ describe("a recipe already in the library", () => {
         expect(onOpenRecipe.mock.calls[0][1]).toBe(true);
     });
 
-    it("keeps its own name and picture when a link offers others", async () => {
-        // The decoration lands on the candidate, before de-duplication, so
-        // the stored recipe wins and keeps what it had. A link must not
-        // rename a recipe the user may have renamed themselves, or give a
-        // picture to one that has none. "shared" is the intent an import link
+    it("keeps its own name but gains a picture and coffee it never had", async () => {
+        // The stored recipe wins the match, so the link's name never lands:
+        // the user may have typed this one. But a recipe imported before the
+        // link carried a coffee photo has no picture and no coffee, and those
+        // blanks are filled and saved. "shared" is the intent an import link
         // resolves with (`openImportLink` in `app/index.tsx`).
         const existing = importedRecipe();
         existing.name = "My Ethiopia";
         const {onOpenRecipe, stored} = setup([existing]);
-        const {result} = await renderHook(() => useRecipeImport({stored, onOpenRecipe}));
+        const onSaveExisting = jest.fn();
+        const {result} = await renderHook(() =>
+            useRecipeImport({stored, onOpenRecipe, onSaveExisting}));
 
         await act(async () => {
             result.current.resolveNow({kind: "xid", xid: "ETH120"}, "shared", {
@@ -414,8 +416,119 @@ describe("a recipe already in the library", () => {
         expect(onOpenRecipe.mock.calls[0][0]).toBe(existing);
         expect(onOpenRecipe.mock.calls[0][1]).toBe(true);
         expect(existing.name).toBe("My Ethiopia");
-        expect(existing.imageURL).toBeUndefined();
+        expect(existing.imageURL).toBe("https://example.com/bag.png");
+        expect(existing.coffee?.name).toBe("Ethiopia Guji");
+        expect(onSaveExisting).toHaveBeenCalledTimes(1);
+        expect(onSaveExisting).toHaveBeenCalledWith(existing);
+    });
+
+    it("keeps a picture the stored recipe already has", async () => {
+        const existing = importedRecipe();
+        existing.imageURL = "https://example.com/pod.png";
+        const {onOpenRecipe, stored} = setup([existing]);
+        const onSaveExisting = jest.fn();
+        const {result} = await renderHook(() =>
+            useRecipeImport({stored, onOpenRecipe, onSaveExisting}));
+
+        await act(async () => {
+            result.current.resolveNow({kind: "xid", xid: "ETH120"}, "shared", {
+                coffee: {name: "Ethiopia Guji", imageUrl: "https://example.com/bag.png"}
+            });
+        });
+
+        await waitFor(() => expect(onOpenRecipe).toHaveBeenCalledTimes(1));
+        expect(existing.imageURL).toBe("https://example.com/pod.png");
+        // The coffee was a blank, so it is filled and saved; the picture is not.
+        expect(existing.coffee?.name).toBe("Ethiopia Guji");
+        expect(onSaveExisting).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not overwrite the stored coffee's own details", async () => {
+        const existing = importedRecipe();
+        existing.imageURL = "https://example.com/pod.png";
+        existing.coffee = {name: "My Guji", roaster: "Local Roaster", processing: "Natural"};
+        const {onOpenRecipe, stored} = setup([existing]);
+        const onSaveExisting = jest.fn();
+        const {result} = await renderHook(() =>
+            useRecipeImport({stored, onOpenRecipe, onSaveExisting}));
+
+        await act(async () => {
+            result.current.resolveNow({kind: "xid", xid: "ETH120"}, "shared", {
+                coffee: {
+                    name: "Ethiopia Guji",
+                    roaster: "Their Roaster",
+                    processing: "Washed",
+                    country: "Ethiopia"
+                }
+            });
+        });
+
+        await waitFor(() => expect(onOpenRecipe).toHaveBeenCalledTimes(1));
+        expect(existing.coffee).toEqual({
+            name: "My Guji",
+            roaster: "Local Roaster",
+            processing: "Natural",
+            country: "Ethiopia"
+        });
+        expect(onSaveExisting).toHaveBeenCalledTimes(1);
+    });
+
+    it("saves nothing when the stored recipe has no blanks to fill", async () => {
+        const existing = importedRecipe();
+        existing.imageURL = "https://example.com/pod.png";
+        existing.coffee = {name: "My Guji", imageUrl: "https://example.com/pod.png"};
+        const {onOpenRecipe, stored} = setup([existing]);
+        const onSaveExisting = jest.fn();
+        const {result} = await renderHook(() =>
+            useRecipeImport({stored, onOpenRecipe, onSaveExisting}));
+
+        await act(async () => {
+            result.current.resolveNow({kind: "xid", xid: "ETH120"}, "shared", {
+                coffee: {name: "Ethiopia Guji", imageUrl: "https://example.com/bag.png"}
+            });
+        });
+
+        await waitFor(() => expect(onOpenRecipe).toHaveBeenCalledTimes(1));
+        expect(onOpenRecipe.mock.calls[0][0]).toBe(existing);
+        expect(existing.coffee?.name).toBe("My Guji");
+        expect(onSaveExisting).not.toHaveBeenCalled();
+    });
+
+    it("saves nothing for a held recipe reached without a link", async () => {
+        // A plain code or share has no decoration, so there is nothing to fill.
+        const existing = importedRecipe();
+        const {onOpenRecipe, stored} = setup([existing]);
+        const onSaveExisting = jest.fn();
+        const {result} = await renderHook(() =>
+            useRecipeImport({stored, onOpenRecipe, onSaveExisting}));
+
+        await act(async () => {
+            result.current.resolveNow({kind: "xid", xid: "ETH120"}, "atomic");
+        });
+
+        await waitFor(() => expect(onOpenRecipe).toHaveBeenCalledTimes(1));
+        expect(onSaveExisting).not.toHaveBeenCalled();
         expect(existing.coffee).toBeUndefined();
+    });
+
+    it("shows the picture a held recipe was just given in the found panel", async () => {
+        // The tile shortcut degrades to the panel for a held recipe, so the
+        // panel draws the recipe's picture before the pod's.
+        const existing = importedRecipe();
+        const {onOpenRecipe, stored} = setup([existing]);
+        const {result} = await renderHook(() =>
+            useRecipeImport({stored, onOpenRecipe, onSaveExisting: jest.fn()}));
+
+        await act(async () => {
+            result.current.resolveNow({kind: "xid", xid: "ETH120"}, "shortcut", {
+                coffee: {name: "Ethiopia Guji", imageUrl: "https://example.com/bag.png"}
+            });
+        });
+
+        await waitFor(() => expect(result.current.state.status).toBe("found"));
+        const state = result.current.state;
+        if (state.status !== "found") throw new Error("not found");
+        expect(state.preview.imageURL).toBe("https://example.com/bag.png");
     });
 
     it("gives a new share-link import the link's name and picture", async () => {
@@ -436,6 +549,29 @@ describe("a recipe already in the library", () => {
         expect(onOpenRecipe.mock.calls[0][1]).toBe(false);
         expect(opened.name).toBe("Ethiopia Guji - 15g");
         expect(opened.imageURL).toBe("https://example.com/bag.png");
+    });
+
+    it("saves nothing itself for a fresh import", async () => {
+        // A new recipe is the editor's to save. The fill-blanks write is
+        // only for a recipe already held.
+        const onSaveExisting = jest.fn();
+        const {onOpenRecipe, stored} = setup([]);
+        const {result} = await renderHook(() =>
+            useRecipeImport({stored, onOpenRecipe, onSaveExisting}));
+
+        await act(async () => {
+            result.current.resolveNow({kind: "xid", xid: "ETH120"}, "shared", {
+                recipeName: "Ethiopia Guji - 15g",
+                coffee: {name: "Ethiopia Guji", imageUrl: "https://example.com/bag.png"}
+            });
+        });
+
+        await waitFor(() => expect(onOpenRecipe).toHaveBeenCalledTimes(1));
+        const opened = onOpenRecipe.mock.calls[0][0] as Recipe;
+        expect(onOpenRecipe.mock.calls[0][1]).toBe(false);
+        expect(opened.name).toBe("Ethiopia Guji - 15g");
+        expect(opened.imageURL).toBe("https://example.com/bag.png");
+        expect(onSaveExisting).not.toHaveBeenCalled();
     });
 
     it("brings in a bypass recipe rather than opening its plain twin", async () => {
