@@ -105,10 +105,14 @@ function SavedMachineRow({machine, index, count, active, connected, onPress}: {
                    style={({pressed}) => ({opacity: pressed ? 0.7 : 1})}>
             <XStack testID={`saved-machine-${machine.id}`} alignItems="center" gap="$3"
                     minHeight={44} paddingVertical="$3" paddingHorizontal="$4">
-                <YStack width={14} alignItems="center">
-                    {index === 0 && count > 1
-                        && <DotIcon name="favourite" size={14} color={palette.dim}/>}
-                </YStack>
+                {/* The star's column only exists to line the names up under a
+                    star, so with one machine (no star, no order) it goes too and
+                    the name starts at the row's edge like every other row. */}
+                {count > 1 && (
+                    <YStack testID={`saved-machine-star-${machine.id}`} width={14} alignItems="center">
+                        {index === 0 && <DotIcon name="favourite" size={14} color={palette.dim}/>}
+                    </YStack>
+                )}
                 <YStack flex={1} gap="$1">
                     <XStack alignItems="center" gap="$2">
                         {/* With one machine there is nothing to tell apart,

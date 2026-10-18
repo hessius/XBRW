@@ -424,6 +424,16 @@ describe("several saved machines", () => {
         expect(screen.getByLabelText(/^xBloom 1, Studio · ID WORK · Connected$/)).toBeTruthy();
         expect(screen.queryByTestId("saved-machine-colour-WORK", {includeHiddenElements: true}))
             .toBeNull();
+        // Nor the star's empty column, which left the name indented.
+        expect(screen.queryByTestId("saved-machine-star-WORK", {includeHiddenElements: true}))
+            .toBeNull();
+    });
+
+    it("keeps the star column on every row once there are two, so the names line up", async () => {
+        mockLink.machines = [entry("HOME", "Home"), entry("WORK", "Work")];
+        await renderWithProviders(<MachineSection/>);
+        expect(screen.getByTestId("saved-machine-star-HOME", {includeHiddenElements: true})).toBeTruthy();
+        expect(screen.getByTestId("saved-machine-star-WORK", {includeHiddenElements: true})).toBeTruthy();
     });
 
     it("drops the model choice once the machine's serial has named its model", async () => {
