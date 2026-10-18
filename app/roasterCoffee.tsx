@@ -1,11 +1,13 @@
 import {useLocalSearchParams} from "expo-router";
-import React, {useEffect, useState} from "react";
+import React, {useEffect, useRef, useState} from "react";
 import {Linking, Pressable, ScrollView} from "react-native";
 import {Text, XStack, YStack} from "tamagui";
 
 import BagSheet, {type BagSheetResult} from "@/components/BagSheet";
 import BrewStageLadder from "@/components/BrewStageLadder";
-import {BuySection, CatalogueStatus, Chip, DetailPhoto, PageLinkRow} from "@/components/CatalogueParts";
+import {
+    BuySection, CatalogueStatus, Chip, CoffeeBadgeTag, DetailPhoto, PageLinkRow, WatchToggle
+} from "@/components/CatalogueParts";
 import DotMatrixText from "@/components/DotMatrixText";
 import NameShelfSheet from "@/components/NameShelfSheet";
 import NewerVersionPrompt from "@/components/NewerVersionPrompt";
@@ -26,6 +28,9 @@ import {resolveBagTracker} from "@/library/coffeeBag";
 import {withRoastAdvice} from "@/library/restPeak";
 import {bagFormFor, beanconquerorBagLink, catalogueBag} from "@/library/roasterBag";
 import type Recipe from "@/library/Recipe";
+import {
+    bagWatchKey, coffeeBadge, coffeeKey, readAlerts, recordOpened, setWatch
+} from "@/library/roasterAlerts";
 import {
     bagLine, beanFacts, chooseRecipe, detailTitle, findCoffee, readCatalogue,
     roastAdvice, tasteOf
@@ -116,10 +121,26 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
     const ref = coffeeId ?? params.coffee ?? "";
     const store = settings ?? sharedSettings();
     useSetting("roasterCatalogue", store);
+    // So the watch switches redraw when they are pressed.
+    useSetting("roasterAlerts", store);
     const scrollEnd = useScrollEndPadding(SCROLL_END);
     const [deps] = useState(() => library ?? realLibraryDeps(store));
     const cached = readCatalogue(store, feed);
     const coffee = cached === null ? undefined : findCoffee(cached.feed, ref);
+    const alerts = readAlerts(store, feed);
+    // What the coffee was when it was opened: opening it clears the flag in
+    // the store at once, but this visit still says why it was worth opening.
+    const [badge] = useState(() => coffee === undefined ? undefined : coffeeBadge(alerts, coffee));
+
+    // Opened: seen, and no longer NEW or back. Once per mount.
+    const opened = useRef(false);
+    useEffect(() => {
+        if (opened.current || coffee === undefined) return;
+        opened.current = true;
+        recordOpened(store, feed, coffee);
+        // Once per visit, by design; see the ref above.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     const [size, setSize] = useState<string | undefined>(undefined);
     const [retry, setRetry] = useState(0);
@@ -179,6 +200,12 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
     const title = detailTitle(coffee.name);
     const taste = tasteOf(coffee);
     const covered = naming || (pending !== null && pending.kind === "shelf");
+    const watched = new Set(alerts?.watch ?? []);
+    const watchingCoffee = watched.has(coffeeKey(coffee));
+    // The bags being watched, by bag key, for the BUY section's switches.
+    const watchedBags = new Set(buying
+        .map((option) => option.bag)
+        .filter((bag): bag is string => bag !== undefined && watched.has(bagWatchKey(coffee, bag))));
 
     /** A fresh copy each time, so one action never mutates what another uses. */
     async function latest(): Promise<FetchedCoffee> {
@@ -285,13 +312,18 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
                                 paddingBottom: scrollEnd,
                                 gap: 18
                             }}>
-                    <DetailPhoto uri={coffee.image ?? null} testID="roaster-coffee-photo"/>
+                    <DetailPhoto uri={coffee.image ?? null} testID="roaster-coffee-photo" whole/>
                     <YStack paddingHorizontal={SCREEN_PADDING} gap="$4">
+                        <CoffeeBadgeTag badge={badge} testID="roaster-coffee-badge"/>
                         {!coffee.available && (
                             <DotMatrixText testID="roaster-coffee-sold-out" fontSize={12}
                                            weight="bold" letterSpacing={1.6} color={palette.text}>
                                 SOLD OUT
                             </DotMatrixText>
+                        )}
+                        {!coffee.available && (
+                            <WatchToggle on={watchingCoffee}
+                                         onChange={(on) => setWatch(store, feed, coffeeKey(coffee), on)}/>
                         )}
                         {coffee.roast?.level !== undefined && (
                             <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.4}
@@ -344,7 +376,11 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
                         {/* The bags with their prices replace the plain size
                             list when the roaster publishes them. */}
                         {buying.length > 0 ? (
-                            <BuySection options={buying}/>
+                            <BuySection options={buying}
+                                        watching={watchedBags}
+                                        onWatch={coffee.available
+                                            ? (bag, on) => setWatch(store, feed, bagWatchKey(coffee, bag), on)
+                                            : undefined}/>
                         ) : bags !== null && (
                             <Text testID="roaster-coffee-bags" fontSize={14} color={palette.dim}>
                                 {`Bags: ${bags}`}

@@ -385,6 +385,14 @@ export const DEFAULTS = {
      */
     roasterCatalogue: "",
     /**
+     * What is new and what has come back in each subscribed catalogue
+     * (`library/roasterAlerts.ts`): coffees seen, NEW flags, and the coffees
+     * and bags the user asked to hear about. Held out of backups below:
+     * it is bookkeeping about the cached feeds, and a restored phone starts it
+     * again from its first sync rather than flagging a whole list NEW.
+     */
+    roasterAlerts: "",
+    /**
      * What each imported recipe's brewing content was when it arrived, by
      * uuid (`library/importRefresh.ts`). It is how importing the same link
      * again tells an untouched copy, which takes the author's latest quietly,
@@ -454,7 +462,8 @@ export type SettingKey = keyof typeof DEFAULTS;
  * has already taught, and a restored phone has not seen or forgotten the same
  * lessons.
  *
- * `roasterCatalogue` is a cache of roasters' feeds, refetched on the next sync.
+ * `roasterCatalogue` is a cache of roasters' feeds, refetched on the next sync,
+ * and `roasterAlerts` is bookkeeping about that cache.
  *
  * Named here rather than simply omitted from the snapshot so that the
  * exhaustiveness test still holds every other key to account: a key is either
@@ -464,12 +473,12 @@ export type BackupExcluded =
     "machineDeviceId" | "savedMachines" | "lastCardRead" | "labsUnlocked" | "beanconquerorHandoff" | "bagTracker" |
     "machineModelString" | "machineName" | "ratingPromptDismissed" |
     "drawerHintLastShownAt" | "drawerHintShownCount" | "drawerHintManualOpens" |
-    "drawerHintSignature" | "drawerHintLastSeenAt" | "roasterCatalogue";
+    "drawerHintSignature" | "drawerHintLastSeenAt" | "roasterCatalogue" | "roasterAlerts";
 export const NOT_IN_BACKUP: readonly SettingKey[] = [
     "machineDeviceId", "savedMachines", "lastCardRead", "labsUnlocked", "beanconquerorHandoff", "bagTracker",
     "machineModelString", "machineName", "ratingPromptDismissed",
     "drawerHintLastShownAt", "drawerHintShownCount", "drawerHintManualOpens",
-    "drawerHintSignature", "drawerHintLastSeenAt", "roasterCatalogue"
+    "drawerHintSignature", "drawerHintLastSeenAt", "roasterCatalogue", "roasterAlerts"
 ];
 
 /**

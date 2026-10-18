@@ -2,7 +2,7 @@ import React, {useState} from "react";
 import {Pressable, ScrollView} from "react-native";
 import {Text, XStack, YStack} from "tamagui";
 
-import {CatalogueStatus} from "@/components/CatalogueParts";
+import {AlertDot, CatalogueStatus} from "@/components/CatalogueParts";
 import DotIcon from "@/components/DotIcon";
 import DotMatrixText from "@/components/DotMatrixText";
 import ScreenHeader from "@/components/ScreenHeader";
@@ -10,6 +10,7 @@ import {palette} from "@/constants/colors";
 import router from "@/hooks/steadyRouter";
 import {useScrollEndPadding} from "@/hooks/useBottomInset";
 import {sharedSettings, useSetting} from "@/hooks/useSetting";
+import {alertSummary, readAlerts} from "@/library/roasterAlerts";
 import {readCatalogue, updatedAgo} from "@/library/roasterCatalogue";
 import {parseSubscriptions} from "@/library/roasterSubscription";
 import type {Settings} from "@/library/Settings";
@@ -30,6 +31,8 @@ export default function RoastersScreen({settings, now}: {
     const [stored] = useSetting("roasterSubscriptions", store);
     // Subscribed so the counts follow a sync that lands while this is open.
     useSetting("roasterCatalogue", store);
+    // And so the dots follow a coffee being opened or a sync flagging one.
+    useSetting("roasterAlerts", store);
     const [at] = useState(() => (now ?? Date.now)());
     const scrollEnd = useScrollEndPadding(48);
     const subscriptions = parseSubscriptions(stored);
@@ -52,10 +55,14 @@ export default function RoastersScreen({settings, now}: {
                             onSale < count ? `${count - onSale} sold out` : undefined,
                             sub.lastSync > 0 ? updatedAgo(sub.lastSync, at) : undefined
                         ].filter((part) => part !== undefined).join(" · ");
+                        const alerts = alertSummary(readAlerts(store, sub.feed));
+                        const spoken = alerts.spoken === undefined
+                            ? `${sub.roaster}, ${detail}`
+                            : `${sub.roaster}, ${alerts.spoken}, ${detail}`;
                         return (
                             <Pressable key={sub.feed} testID={`roaster-${sub.roaster}`}
                                        accessibilityRole="button"
-                                       accessibilityLabel={`${sub.roaster}, ${detail}`}
+                                       accessibilityLabel={spoken}
                                        onPress={() => router.push({pathname: "/roaster",
                                                                    params: {feed: sub.feed}})}>
                                 <XStack alignItems="center" gap="$3" paddingHorizontal="$4"
@@ -66,6 +73,7 @@ export default function RoastersScreen({settings, now}: {
                                         </Text>
                                         <Text fontSize={13} color={palette.dim}>{detail}</Text>
                                     </YStack>
+                                    <AlertDot count={alerts.count} testID={`roaster-${sub.roaster}-dot`}/>
                                     <XStack style={{transform: [{rotate: "180deg"}]}}>
                                         <DotIcon name="back" size={14} color={palette.muted}/>
                                     </XStack>

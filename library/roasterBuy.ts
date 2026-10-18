@@ -1,4 +1,5 @@
 import {httpsUrl} from "@/library/podCoffee";
+import {bagKey} from "@/library/roasterAlerts";
 import {readCatalogue} from "@/library/roasterCatalogue";
 import {
     VARIANT_PLACEHOLDER, type FeedCoffee, type FeedVariant, type RoasterFeed
@@ -71,6 +72,8 @@ export type BuyOption = {
     url?: string;
     /** Sold out when the bag or the whole coffee is. */
     available: boolean;
+    /** How the bag is watched for coming back: its id or size. Absent with neither. */
+    bag?: string;
 };
 
 /** The coffee's bags as the BUY section lists them, in the feed's order. */
@@ -90,6 +93,8 @@ export function buyOptions(roaster: RoasterFeed["roaster"], coffee: FeedCoffee):
         if (variant.currency !== undefined) option.currency = variant.currency;
         const url = buyLink(roaster, variant);
         if (url !== undefined) option.url = url;
+        const bag = bagKey(variant);
+        if (bag !== undefined) option.bag = bag;
         return option;
     });
 }

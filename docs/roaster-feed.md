@@ -6,7 +6,11 @@ to subscribe to that roaster. Subscribing adds the roaster to the catalogue: the
 user can browse its coffees, open one, and brew it, add it to their library or
 put it on a shelf. Subscribing adds nothing to the library by itself.
 
-Any roaster can publish one. This page is the contract.
+Any roaster can publish one. This page is the contract. For a step-by-step
+setup written for roasters (a ready-made Shopify template, a product-page
+button, example files for any website and a test checklist), see
+[roaster-guide.md](roaster-guide.md). To check a feed with the app's own
+parser, run `npm run check-feed -- <feed URL or file>`.
 
 ## Pointing a link at it
 
@@ -165,6 +169,16 @@ link tags the recipe it imports.
   - **Buy** a bag: when the coffee lists `variants`, each bag's size and price is
     shown with a BUY button (or SOLD OUT) that opens its buy link in the
     browser. Without `variants` the plain `bag_sizes_g` list is shown.
+- **NEW and back in stock.** The app remembers which coffees the person has
+  seen. A coffee a refresh brings that they have not seen is tagged NEW in the
+  list and on its page, and counted in a dot on Catalogue > Roasters and on the
+  roaster's row, until they open it or look at the list a second time. The
+  first refresh after subscribing counts every coffee as seen. On a sold-out
+  coffee (or a sold-out bag of a coffee on sale) they can switch on "Tell me
+  when it's back"; a later refresh that finds it on sale tags it BACK IN STOCK,
+  dots the roaster and shows one message. Coffees are recognised by `id` (or
+  by `name` without one) and bags by variant `id` (or `grams`), so keep both
+  stable. All of this happens on the phone from the feed it already reads.
 - **Refreshing** happens when the app opens or comes back to the foreground, at
   most once every 12 hours, and whenever the person taps Refresh. It reads the
   feed and nothing else: new coffees appear, sold-out and removed ones update in

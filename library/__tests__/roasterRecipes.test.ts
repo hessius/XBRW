@@ -3,6 +3,7 @@ import {readPrints} from "@/library/importRefresh";
 import {
     addToLibrary, addToShelf, fetchCoffeeRecipe, takeRoasterLatest
 } from "@/library/roasterRecipes";
+import {FIT_NAME_MAX} from "@/library/fitName";
 import {feed, memoryLibrary, memorySettings} from "@/test-utils/roasterFeed";
 
 const coffees = feed([{id: "a"}, {id: "b", sizes: ["15g", "20g"]}]).coffees;
@@ -28,6 +29,16 @@ describe("fetchCoffeeRecipe", () => {
         expect(recipe.coffee?.roast).toBeUndefined();
     });
 
+    it("fits a long coffee name under the ceiling and keeps the size", async () => {
+        const name = "Colombia | El Diviso | Nestor Lasso | Aji Bourbon Natural " +
+                     "(Tropical Fruit Forward Lush) (Competition Coffee)";
+        const [long] = feed([{id: "x", name}]).coffees;
+        const {recipe} = await fetchCoffeeRecipe(long, undefined, memoryLibrary().deps);
+        expect(recipe.name).toBe("Colombia | El Diviso | Nestor Lasso | Aji Bourbon Natural " +
+                                 "(Tropical Fruit Forward Lush) - 18g");
+        expect(recipe.name.length).toBeLessThanOrEqual(FIT_NAME_MAX);
+    });
+
     it("fetches the size asked for, and falls back to the first", async () => {
         const library = memoryLibrary();
         expect((await fetchCoffeeRecipe(coffees[0], "15g", library.deps)).size).toBe("15g");
@@ -44,6 +55,33 @@ describe("addToLibrary", () => {
         expect(outcome.kind).toBe("added");
         expect(library.all()).toHaveLength(1);
         expect(Object.keys(readPrints(settings))).toEqual([library.all()[0].uuid]);
+    });
+
+    it("names a copy that still reads as xBloom's own name when it is added again", async () => {
+        const settings = memorySettings();
+        const library = memoryLibrary();
+        addToLibrary(await fetchCoffeeRecipe(coffees[0], undefined, library.deps), library.deps, settings);
+        const held = library.all()[0];
+        held.xbloomName = "col Java hydrohoney -18g";
+        held.name = "col Java hydrohoney -18g";
+        library.deps.save(held);
+
+        const again = addToLibrary(await fetchCoffeeRecipe(coffees[0], undefined, library.deps),
+                                   library.deps, settings);
+        expect(again.kind).toBe("already");
+        expect(library.find("a-18g")?.name).toBe("Coffee a - 18g");
+    });
+
+    it("never renames a copy the user named", async () => {
+        const settings = memorySettings();
+        const library = memoryLibrary();
+        addToLibrary(await fetchCoffeeRecipe(coffees[0], undefined, library.deps), library.deps, settings);
+        const held = library.all()[0];
+        held.xbloomName = "col Java hydrohoney -18g";
+        held.name = "My Java";
+        library.deps.save(held);
+        addToLibrary(await fetchCoffeeRecipe(coffees[0], undefined, library.deps), library.deps, settings);
+        expect(library.find("a-18g")?.name).toBe("My Java");
     });
 
     it("leaves an identical copy alone", async () => {
