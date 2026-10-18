@@ -1,4 +1,5 @@
 import {LEGACY_NAMES, PodCoffee, httpsUrl, podCoffeeFromStored} from "@/library/podCoffee";
+import {readRoasterColour} from "@/library/roasterColour";
 
 /**
  * The deep link a coffee app hands XBRW++ (issue #159).
@@ -101,6 +102,13 @@ export type BrewMindLink = {
      * through xBloom. https only, on the same reasoning as an image.
      */
     recipeUrl?: string;
+    /**
+     * `bean.colour` (or `bean.color`): the roaster's own colour for this
+     * coffee, strictly `#RRGGBB`. Kept beside the coffee rather than in it:
+     * the coffee block is the Beanconqueror contract and is stored whole, and
+     * the colour is only ever used to pick the card accent on import.
+     */
+    colour?: string;
 };
 
 /**
@@ -151,8 +159,16 @@ export function parseBrewMindLink(link: string): BrewMindLink | null {
         const checked = httpsUrl(recipeUrl);
         if (checked !== undefined) result.recipeUrl = checked;
     }
+
+    // British spelling first, then the American one. A value that is not a
+    // strict `#RRGGBB` is dropped and the recipe imports as before.
+    const colour = readRoasterColour(params.get("bean.colour") ?? params.get("bean.color"));
+    if (colour !== undefined) result.colour = colour;
     return result;
 }
+
+/** The colour's two spellings, which are not coffee fields. */
+const COLOUR_PARAMS: ReadonlySet<string> = new Set(["colour", "color"]);
 
 /**
  * Collect the `bean.*` parameters into a record and validate it.
@@ -170,8 +186,10 @@ function coffeeFrom(params: URLSearchParams): PodCoffee | null {
 
     for (const [key, value] of params.entries()) {
         if (!key.startsWith("bean.")) continue;
-        sawAny = true;
         const param = key.slice("bean.".length);
+        // Read by `parseBrewMindLink` and not part of the coffee block.
+        if (COLOUR_PARAMS.has(param)) continue;
+        sawAny = true;
         const field = PARAM_ALIASES[param] ?? param;
         const trimmed = value.trim();
         if (trimmed === "") continue;
