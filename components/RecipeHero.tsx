@@ -6,7 +6,9 @@ import {Text, XStack, YStack} from "tamagui";
 import Collapsible from "@/components/Collapsible";
 import DotIcon from "@/components/DotIcon";
 import DotMatrixText, {DOTO_MAX_FONT_SCALE} from "@/components/DotMatrixText";
-import PourProfile, {PROFILE_BLEED, PROFILE_STROKE_WIDTH} from "@/components/PourProfile";
+import PourProfile, {
+    PROFILE_BLEED, PROFILE_STROKE_WIDTH, profileHeightAt
+} from "@/components/PourProfile";
 import RecipePhoto from "@/components/RecipePhoto";
 import {onAccent} from "@/constants/colors";
 import type Pour from "@/library/Pour";
@@ -60,8 +62,17 @@ const PENCIL_WIDTH = 15 + 8;
  */
 const FIT_SLACK = 4;
 
-/** Clear space kept between the name and the watermark. */
+/** Clear space kept between the name and the watermark, across. */
 const PROFILE_GAP = 8;
+
+/** Clear space kept between the name and the watermark's line, above it. */
+const PROFILE_AIR = 4;
+
+/**
+ * How far below the top of the name's first line the pencil ends: its 12 pt
+ * margin and 15 pt height, less the name's 6 pt margin in the band layout.
+ */
+const PENCIL_FOOT = 12 + 15 - 6;
 
 /** How much of the slab's right edge the watermark covers. */
 const PROFILE_VISIBLE_WIDTH =
@@ -77,7 +88,7 @@ const PROFILE_VISIBLE_WIDTH =
  */
 export const HERO_PROFILE_RESERVE = Math.ceil(
     PROFILE_BAND_HEIGHT + PROFILE_STROKE_WIDTH - PROFILE_BLEED - PROFILE_OVERHANG
-    - SLAB_PADDING_BOTTOM + 4
+    - SLAB_PADDING_BOTTOM + PROFILE_AIR
 );
 
 /**
@@ -220,9 +231,12 @@ export type HeroNameLayout = {
  * moved into a band under it. That is the phone's case, where the column beside
  * the watermark is 100 to 150 points.
  *
- * The band is `HERO_PROFILE_RESERVE`, less any closing lines short enough to
- * end before the watermark starts: the watermark can rise beside a short last
- * line without touching it.
+ * The band is only as tall as it must be for the watermark to clear the name,
+ * line by line (`bandReserve`). The watermark only climbs, left to right, so a
+ * line that stops over its low end needs less room than one that runs on to
+ * its last plateau, and a short last line that ends before the watermark
+ * starts needs none. `pours` is what the watermark draws. Without it the band
+ * assumes the watermark's full height wherever it reaches.
  *
  * `fontScale` is the OS text size, bounded as the name's own is. A size picked
  * from the width and the character count, rather than `adjustsFontSizeToFit`,
@@ -240,7 +254,8 @@ export type HeroNameLayout = {
  * long one.
  */
 export function heroNameLayout(
-    name: string, windowWidth: number, fontScale = 1, photoReserve = 0
+    name: string, windowWidth: number, fontScale = 1,
+    {pours, photoReserve = 0}: {pours?: Pour[]; photoReserve?: number} = {}
 ): HeroNameLayout {
     const scale = Math.min(Math.max(fontScale, 1), DOTO_MAX_FONT_SCALE);
     const row = windowWidth - 2 * SLAB_PADDING_X - photoReserve;
@@ -257,8 +272,6 @@ export function heroNameLayout(
         windowWidth - 2 * SLAB_PADDING_X - PENCIL_WIDTH - PROFILE_VISIBLE_WIDTH - PROFILE_GAP
     );
     const full = Math.floor(row - PENCIL_WIDTH);
-    // Where the watermark begins, measured from the name's left edge.
-    const profileStart = windowWidth - SLAB_PADDING_X - PROFILE_VISIBLE_WIDTH - PROFILE_GAP;
 
     const fitted = (step: typeof HERO_NAME_STEPS[number], last: boolean): HeroNameLayout | null => {
         const size = step.fontSize * scale;
@@ -273,13 +286,9 @@ export function heroNameLayout(
             return null;
         }
         const drawn = wrapped.slice(0, HERO_NAME_MAX_LINES);
-        let reserve = HERO_PROFILE_RESERVE;
-        for (let i = drawn.length - 1; i > 0 && drawn[i] <= profileStart - FIT_SLACK; i--) {
-            reserve -= step.lineHeight * scale;
-        }
         return {
             ...step, lines: HERO_NAME_MAX_LINES, maxWidth: full,
-            reserve: Math.max(0, Math.ceil(reserve)),
+            reserve: bandReserve(drawn, step.lineHeight * scale, full, windowWidth, pours),
             profileHeight: PROFILE_BAND_HEIGHT, tight: true
         };
     };
@@ -291,6 +300,44 @@ export function heroNameLayout(
         }
     }
     throw new Error("unreachable: the last step always returns a layout");
+}
+
+/**
+ * The band kept under a long name so the watermark clears it.
+ *
+ * `drawn` is the estimated width of each line, top to bottom, all starting at
+ * the name's left edge, `column` the most the name's box may take. For each
+ * line, and the pencil beside the first, this asks how high the watermark
+ * stands at the point where it ends (plus `PROFILE_GAP` across and
+ * `PROFILE_AIR` above) and how far above the slab's bottom edge it already is
+ * without a band. The band is the largest shortfall. The watermark only climbs,
+ * so its height where a line ends is the highest it gets under that line.
+ */
+function bandReserve(
+    drawn: number[], lineHeight: number, column: number, windowWidth: number, pours?: Pour[]
+): number {
+    // How high the watermark's line stands above the slab's bottom edge, under
+    // a point `x` points along from the name's left edge.
+    const stand = (x: number): number => {
+        const along = SLAB_PADDING_X + x + PROFILE_GAP
+            - (windowWidth - PROFILE_VISIBLE_WIDTH) - PROFILE_BLEED;
+        const height = pours === undefined
+            ? (along > 0 ? PROFILE_BAND_HEIGHT : 0)
+            : profileHeightAt(pours, PROFILE_WIDTH, PROFILE_BAND_HEIGHT, along);
+        return height > 0
+            ? height + PROFILE_STROKE_WIDTH - PROFILE_BLEED - PROFILE_OVERHANG
+            : 0;
+    };
+    const count = drawn.length;
+    let reserve = 0;
+    drawn.forEach((width, i) => {
+        const above = SLAB_PADDING_BOTTOM + (count - 1 - i) * lineHeight;
+        reserve = Math.max(reserve, stand(width + FIT_SLACK) + PROFILE_AIR - above);
+    });
+    const box = Math.min(column, Math.max(...drawn) + FIT_SLACK);
+    const pencilAbove = SLAB_PADDING_BOTTOM + count * lineHeight - PENCIL_FOOT;
+    reserve = Math.max(reserve, stand(box + PENCIL_WIDTH) + PROFILE_AIR - pencilAbove);
+    return Math.max(0, Math.ceil(reserve));
 }
 
 /**
@@ -396,9 +443,9 @@ export default function RecipeHero({
     const picture = showPicture ? imageURL ?? "" : "";
     // The name is sized for the row the picture leaves it, so a long name is
     // never estimated into the corner the picture covers.
-    const nameLayout = heroNameLayout(
-        name, width, fontScale, picture.length > 0 ? HERO_PHOTO_RESERVE : 0
-    );
+    const nameLayout = heroNameLayout(name, width, fontScale, {
+        pours, photoReserve: picture.length > 0 ? HERO_PHOTO_RESERVE : 0
+    });
 
     // `pours` is the recipe's own array, mutated in place, and the watermark
     // reads each pour through a getter rather than a property — so there is
