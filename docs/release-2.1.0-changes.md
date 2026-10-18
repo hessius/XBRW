@@ -64,7 +64,7 @@ Open roaster's site, Unsubscribe) and "Don't ask again" answers. Device checks:
 cold-start link with feed, foreground refresh, large text on the catalogue
 screens, TalkBack on SOLD OUT and the re-import question.
 
-## Recipe picture in the header and on list cards (2026-10-18)
+## Recipe picture in the header, on list cards and on shelf tiles (2026-10-18)
 
 With Show recipe pictures on, a recipe's `imageURL` (pod artwork, or a coffee
 photo an import link carried) now appears where people look, not only in
@@ -72,19 +72,18 @@ ABOUT > XPOD. The open editor header draws it as a 56 pt rounded square in the
 top right corner, under HELP and the menu, clear of the name's column and
 folded away with the slab. Library cards draw a 40 pt square before the name,
 no taller than the two lines of prose, so card height and the name's line
-budget do not change. Shelf tiles are unchanged: their fixed-height grid has no
-spare corner.
+budget do not change. Shelf tiles draw it as a 48 pt rounded square in the top
+left corner, level with the badge row, which gives up its leading end to it.
+The square is drawn out of the layout flow and sized from the measured room down
+to the name, so tile height and the name never move. Larger text shrinks it,
+and below 40 pt it is left out rather than drawn over the name.
 
 The picture is decorative and hidden from screen readers, since the name is
 already announced. A picture that fails to load draws nothing. In the header the
 name keeps the room set aside for it, so a failure does not rewrap the title.
 With the setting off nothing is drawn and no room is kept. The network screen's
-Load a photo entry now says the library list can fetch a picture when the setting
-is on. With a picture due, a long name is sized for the row it leaves (64 pt
-narrower), so it never runs under the picture; a name of 28 characters or
-fewer that no longer fits two lines at 26 pt takes the long-name sizes, and
-the collapse counts it as long. The wide screen's column beside the watermark
-is unchanged. No recipe data,
+Load a photo entry now says the library list and shelf rooms can fetch a picture
+when the setting is on. No recipe data,
 backup or card bytes change. Device checks still to do: large text, a narrow
 cover screen, offline first view and a slow network.
 
