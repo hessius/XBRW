@@ -9,7 +9,7 @@ import Animated, {
 } from "react-native-reanimated";
 
 import DotIcon from "@/components/DotIcon";
-import {palette} from "@/constants/colors";
+import {palette, type MachineColour} from "@/constants/colors";
 import type {DotIconName} from "@/constants/dotIcons";
 import {DURATION, EASING, LOW_WATER_FLASH_MS, useReducedMotion} from "@/constants/motion";
 import type {LinkStatus} from "@/hooks/useMachine";
@@ -32,7 +32,26 @@ type Props = {
      * A plumbed machine never raises it: there is no tank to fill.
      */
     alarm?: boolean;
+    /**
+     * The machine in use, with two or more saved. Absent with one or none,
+     * and the dot then draws and speaks exactly as it always has.
+     *
+     * The colour replaces the connected green only. Connecting stays amber
+     * and not answering stays the faint red, because those are states; the
+     * colour says which machine, and the glyph's shape says whether it is
+     * linked (filled diamond, or the broken one), so neither rests on hue.
+     */
+    machine?: {name: string; colour: MachineColour};
     onPress: () => void;
+    /** Press and hold. Defaults to the same as a tap. */
+    onLongPress?: () => void;
+    /** Read after the label, to say what the press and the hold do. */
+    accessibilityHint?: string;
+    /**
+     * A named screen-reader action for the hold, such as "Switch machine",
+     * because a long press is not something a screen reader can discover.
+     */
+    longPressActionLabel?: string;
 };
 
 /**
@@ -104,9 +123,26 @@ const ALARM_FLASHES = Math.round(
     LOW_WATER_FLASH_MS / (DURATION.fast + DURATION.hold)
 );
 
-export default function MachineDot({status, collapsed, alarm = false, onPress}: Props) {
+/** What a screen reader says, naming the machine when there are several. */
+function labelFor(status: LinkStatus, name: string | undefined): string {
+    if (name === undefined) return LABELS[status];
+    switch (status) {
+        case "connected":  return `Connected to ${name}`;
+        case "connecting": return `Connecting to ${name}`;
+        case "idle":       return "Not connected";
+        default:           return `Not connected. ${name} is not in range`;
+    }
+}
+
+export default function MachineDot({
+    status, collapsed, alarm = false, machine, onPress, onLongPress, accessibilityHint,
+    longPressActionLabel
+}: Props) {
     const reduced = useReducedMotion();
-    const look = LOOKS[status];
+    const look = status === "connected" && machine !== undefined
+        ? {...LOOKS.connected, lit: machine.colour.ink, dim: machine.colour.muted}
+        : LOOKS[status];
+    const hold = onLongPress ?? onPress;
 
     /**
      * 1 is fully saturated. Collapsing carries it to 0, revealing the dim copy.
@@ -157,8 +193,16 @@ export default function MachineDot({status, collapsed, alarm = false, onPress}: 
     return (
         <Pressable
             accessibilityRole="button"
-            accessibilityLabel={LABELS[status]}
+            accessibilityLabel={labelFor(status, machine?.name)}
+            accessibilityHint={accessibilityHint}
+            accessibilityActions={longPressActionLabel === undefined
+                ? undefined
+                : [{name: "longpress", label: longPressActionLabel}]}
+            onAccessibilityAction={longPressActionLabel === undefined
+                ? undefined
+                : (event) => { if (event.nativeEvent.actionName === "longpress") hold(); }}
             onPress={onPress}
+            onLongPress={hold}
             style={{
                 width:          TOUCH_TARGET,
                 height:         TOUCH_TARGET,

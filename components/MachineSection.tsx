@@ -4,6 +4,7 @@ import router from "@/hooks/steadyRouter";
 import {Text, XStack, YStack} from "tamagui";
 
 import DotIcon from "@/components/DotIcon";
+import MachineColourDot from "@/components/MachineColourDot";
 import {MODEL_NAMES} from "@/components/MachinePickerSheet";
 import SettingsActionRow from "@/components/SettingsActionRow";
 import SettingsChoiceRow from "@/components/SettingsChoiceRow";
@@ -16,7 +17,13 @@ import {useSetting} from "@/hooks/useSetting";
 import {RATING_PROMPT_WINDOW_MS} from "@/library/brew/ratingPrompt";
 import type {Settings} from "@/library/Settings";
 import {MACHINE_MODELS, isMachineModel, modelFromSerial, type MachineModel} from "@/library/machine/machineModel";
-import {machineLabel, machineTag, type SavedMachine} from "@/library/machine/savedMachines";
+import {
+    machineColourOf,
+    machineLabel,
+    machineOrderWord,
+    machineTag,
+    type SavedMachine
+} from "@/library/machine/savedMachines";
 
 /** How many taps on the firmware row open the console. */
 const CONSOLE_TAPS = 7;
@@ -70,17 +77,21 @@ function Vital({label, value}: {label: string; value: string}) {
  * One saved machine in the list, which opens its detail sheet.
  *
  * Name, model, place and link on one row, so the order can be read without
- * opening anything. The star is the default's mark; the words say it too, for
- * a screen reader and for anybody who does not read stars as "default".
+ * opening anything. The star marks the machine tried first; the words say it
+ * too ("Tried 1st"), for a screen reader and for anybody who does not read a
+ * star that way. Neither is drawn with one machine saved: there is no order.
  */
-function SavedMachineRow({machine, index, active, connected, onPress}: {
+function SavedMachineRow({machine, index, count, active, connected, onPress}: {
     machine: SavedMachine;
     index: number;
+    /** How many are saved. The order word and the star need two or more. */
+    count: number;
     active: boolean;
     connected: boolean;
     onPress: () => void;
 }) {
-    const parts = [MODEL_NAMES[machine.model], index === 0 ? "Default" : `Choice ${index + 1}`,
+    const order = machineOrderWord(index, count);
+    const parts = [MODEL_NAMES[machine.model], ...(order === null ? [] : [order]),
                    machineTag(machine)];
     // "Selected", not "In use": this phone has no way to tell that another
     // phone holds the machine (it simply stops answering), and "In use" was
@@ -95,10 +106,20 @@ function SavedMachineRow({machine, index, active, connected, onPress}: {
             <XStack testID={`saved-machine-${machine.id}`} alignItems="center" gap="$3"
                     minHeight={44} paddingVertical="$3" paddingHorizontal="$4">
                 <YStack width={14} alignItems="center">
-                    {index === 0 && <DotIcon name="favourite" size={14} color={palette.dim}/>}
+                    {index === 0 && count > 1
+                        && <DotIcon name="favourite" size={14} color={palette.dim}/>}
                 </YStack>
                 <YStack flex={1} gap="$1">
-                    <Text fontSize={16} color={palette.text} numberOfLines={1}>{name}</Text>
+                    <XStack alignItems="center" gap="$2">
+                        {/* With one machine there is nothing to tell apart,
+                            so one machine looks as it always has. */}
+                        {count > 1 && (
+                            <MachineColourDot testID={`saved-machine-colour-${machine.id}`}
+                                              colour={machineColourOf(machine).ink}/>
+                        )}
+                        <Text fontSize={16} color={palette.text} numberOfLines={1}
+                              flexShrink={1}>{name}</Text>
+                    </XStack>
                     <Text fontSize={13} color={active && connected ? palette.success : palette.dim}>
                         {detail}
                     </Text>
@@ -201,6 +222,7 @@ export default function MachineSection({settings, onOpenMachine, onAddMachine}: 
         <SettingsSection title="Machine">
             {machines.map((entry, index) => (
                 <SavedMachineRow key={entry.id} machine={entry} index={index}
+                                 count={machines.length}
                                  active={entry.id === remembered}
                                  connected={status === "connected"}
                                  onPress={() => onOpenMachine?.(entry.id)}/>

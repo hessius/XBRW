@@ -1406,13 +1406,24 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                             onConnect={connectMachine}
                             onEasyMode={() => router.push("/easyMode")}
                             machineLabel={machinePicker.available ? machinePicker.label : undefined}
+                            machineModel={machinePicker.model}
+                            machineColour={machinePicker.colour.ink}
                             onChooseMachine={machinePicker.show}
                         />
                     )}
+                    // Only with two or more saved. One machine draws the
+                    // green it always has, and a hold does what a tap does.
+                    machine={machinePicker.available
+                        ? {name: machinePicker.label, colour: machinePicker.colour}
+                        : undefined}
                     onMachinePress={() => {
                         setPopoverNow(Date.now());
                         setPopoverOpen((open) => !open);
                     }}
+                    // Straight to the picker, past the panel: the switch is
+                    // the one thing the hold is for. The picker's own guard
+                    // locks its rows during a brew, so this needs none.
+                    onMachineLongPress={machinePicker.available ? machinePicker.show : undefined}
                     onMachineConnect={connectMachine}
                     onScan={readCard}
                     onImport={() => setImportOpen(true)}

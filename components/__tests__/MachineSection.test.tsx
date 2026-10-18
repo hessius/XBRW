@@ -1,7 +1,9 @@
 import React from "react";
+import {StyleSheet} from "react-native";
 import {fireEvent, screen, waitFor} from "@testing-library/react-native";
 
 import MachineSection from "@/components/MachineSection";
+import {machineColours} from "@/constants/colors";
 import {renderWithProviders} from "@/test-utils/render";
 import {notify} from "@/components/XbrwToast";
 import {SlotOperationError} from "@/library/machine/errors";
@@ -334,11 +336,31 @@ describe("several saved machines", () => {
         mockLink.machines = [entry("HOME", "Home"), entry("WORK", "Work", "original")];
     });
 
-    it("lists them in order, default marked, with the one in use", async () => {
+    it("lists them in order, each with its place in the order, and the one in use", async () => {
         await renderWithProviders(<MachineSection/>);
 
-        expect(screen.getByLabelText(/^Home, Studio · Default/)).toBeTruthy();
-        expect(screen.getByLabelText(/^Work, Original · Choice 2 · ID WORK · Connected$/)).toBeTruthy();
+        expect(screen.getByLabelText(/^Home, Studio · Tried 1st · ID HOME$/)).toBeTruthy();
+        expect(screen.getByLabelText(/^Work, Original · Tried 2nd · ID WORK · Connected$/)).toBeTruthy();
+    });
+
+    it("never says Default, which read as a third word for the machine in use", async () => {
+        // The first machine is only first in the connect order. It can be away
+        // while the second is the one connected, and "Default · ... ·
+        // Connected" on two different rows said two machines were in use.
+        await renderWithProviders(<MachineSection/>);
+
+        expect(screen.queryByLabelText(/Default/)).toBeNull();
+        expect(screen.queryByLabelText(/Choice \d/)).toBeNull();
+    });
+
+    it("marks each machine with its colour", async () => {
+        mockLink.machines = [{...entry("HOME", "Home"), colour: 2}, {...entry("WORK", "Work"), colour: 0}];
+        await renderWithProviders(<MachineSection/>);
+
+        const dot = (id: string) => StyleSheet.flatten(screen.getByTestId(
+            `saved-machine-colour-${id}`, {includeHiddenElements: true}).props.style);
+        expect(dot("HOME").backgroundColor).toBe(machineColours[2].ink);
+        expect(dot("WORK").backgroundColor).toBe(machineColours[0].ink);
     });
 
     it("calls the machine this phone uses Selected while it has no link to it", async () => {
@@ -347,7 +369,7 @@ describe("several saved machines", () => {
         mockLink.status = "failed";
         await renderWithProviders(<MachineSection/>);
 
-        expect(screen.getByLabelText(/^Work, Original · Choice 2 · ID WORK · Selected$/)).toBeTruthy();
+        expect(screen.getByLabelText(/^Work, Original · Tried 2nd · ID WORK · Selected$/)).toBeTruthy();
         expect(screen.queryByText(/In use/)).toBeNull();
     });
 
@@ -397,7 +419,11 @@ describe("several saved machines", () => {
         expect(screen.getByText("Your xBloom")).toBeTruthy();
         expect(screen.getByText("Forget this machine")).toBeTruthy();
         expect(screen.getByText("Add another machine")).toBeTruthy();
-        expect(screen.getByLabelText(/^xBloom 1, Studio · Default/)).toBeTruthy();
+        // No order word and no colour: with one machine there is no order and
+        // nothing to tell apart.
+        expect(screen.getByLabelText(/^xBloom 1, Studio · ID WORK · Connected$/)).toBeTruthy();
+        expect(screen.queryByTestId("saved-machine-colour-WORK", {includeHiddenElements: true}))
+            .toBeNull();
     });
 
     it("drops the model choice once the machine's serial has named its model", async () => {
@@ -407,7 +433,7 @@ describe("several saved machines", () => {
         await renderWithProviders(<MachineSection/>);
 
         expect(screen.queryByText("Your xBloom")).toBeNull();
-        expect(screen.getByLabelText(/^xBloom 1, Studio · Default · #H051/)).toBeTruthy();
+        expect(screen.getByLabelText(/^xBloom 1, Studio · #H051/)).toBeTruthy();
     });
 
     it("keeps the model choice when the serial names no model", async () => {
