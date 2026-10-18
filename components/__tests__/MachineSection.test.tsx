@@ -168,29 +168,37 @@ describe("the machine section", () => {
         mockLink.machines = [entry("AA:BB1122", "")];
         await renderWithProviders(<MachineSection/>);
         await openCard(/^xBloom 1, /);
-        expect(await screen.findByText(/AA:BB1122/)).toBeTruthy();
+        expect(await screen.findByText("Not connected")).toBeTruthy();
     });
 
-    it("says not connected when idle with a paired machine, not in range when out of range", async () => {
-        // "Not connected" = no attempt made; "Not in range" = attempt made but
-        // the machine was not reachable. Different facts, different words.
+    it("says not connected before an attempt, and every reason a failed one could have after", async () => {
+        // "Not connected" = no attempt made. After a failed attempt the radio
+        // cannot say why: a machine another phone is connected to stops
+        // answering exactly like one that is off. "Not in range" claimed one
+        // reason, and was wrong with the machine on the bench beside a phone
+        // that had it. The Bluetooth identifier is in Details, not here.
         mockLink.remembered = "MY:MACHINE";
         mockLink.machines = [entry("MY:MACHINE", "Home")];
+        const notFound = "Not found. It may be off, out of range or connected to another phone.";
 
         mockLink.status = "idle";
         await renderWithProviders(<MachineSection/>);
         await openCard(/^Home, /);
-        expect(await screen.findByText("Not connected · MY:MACHINE")).toBeTruthy();
+        expect(await screen.findByText("Not connected")).toBeTruthy();
 
         mockLink.status = "disconnected";
         await renderWithProviders(<MachineSection/>);
         await openCard(/^Home, /);
-        expect(await screen.findByText("Not in range · MY:MACHINE")).toBeTruthy();
+        expect(await screen.findByText(notFound)).toBeTruthy();
 
         mockLink.status = "failed";
         await renderWithProviders(<MachineSection/>);
         await openCard(/^Home, /);
-        expect(await screen.findByText("Not in range · MY:MACHINE")).toBeTruthy();
+        expect(await screen.findByText(notFound)).toBeTruthy();
+        expect(screen.queryByText(/MY:MACHINE/)).toBeNull();
+        expect(screen.queryByText(/Not in range/)).toBeNull();
+        // And how to get the machine back from the other phone.
+        expect(screen.getByText(/close XBRW\+\+ or the xBloom app there/)).toBeTruthy();
     });
 
     it("opens the console from the status line when there is no connection", async () => {
@@ -241,13 +249,13 @@ describe("the machine section", () => {
         // they do not have. It is also the one place worth admitting the link
         // has only ever been tried against a Studio.
         await renderWithProviders(<MachineSection/>);
-        expect(screen.getByText(/Your xBloom Studio has to be switched on/)).toBeTruthy();
+        expect(screen.getByText(/Your xBloom Studio has to be on/)).toBeTruthy();
 
         await fireEvent.press(screen.getByLabelText("Original"));
 
         await waitFor(() =>
             expect(screen.getByText(/Only the Studio has been tested/)).toBeTruthy());
-        expect(screen.queryByText(/Your xBloom Studio has to be switched on/)).toBeNull();
+        expect(screen.queryByText(/Your xBloom Studio has to be on/)).toBeNull();
     });
 
     it("leaves the brewing preferences to the Brewing section", async () => {
@@ -373,8 +381,38 @@ describe("one card per saved machine", () => {
         expect(screen.getByRole("button", {name: /^Home, /}).props.accessibilityState)
             .toEqual(expect.objectContaining({expanded: false}));
         // The machine in use's own rows are there without a tap.
-        expect(screen.getByText("Connected")).toBeTruthy();
+        expect(card("WORK").getByRole("button", {name: /^Name and order, /})).toBeTruthy();
         expect(screen.queryByText("Use this machine now")).toBeNull();
+    });
+
+    it("does not repeat Connected in a row of its own", async () => {
+        // The header already says Connected in green, and the row under it
+        // did nothing when pressed.
+        await renderWithProviders(<MachineSection/>);
+
+        expect(screen.queryByText("The link is held while XBRW++ is open.")).toBeNull();
+        expect(screen.queryByText("Connect to my machine")).toBeNull();
+    });
+
+    it("calls the machine this phone uses Selected while it has no link to it", async () => {
+        // "In use" read as "another phone is using it", which the app cannot
+        // know. Selected is all it does know.
+        mockLink.status = "failed";
+        await renderWithProviders(<MachineSection/>);
+
+        expect(screen.getByRole("button", {name: /^Work, Original · Choice 2 · ID WORK · Selected$/}))
+            .toBeTruthy();
+        expect(screen.queryByText(/In use/)).toBeNull();
+    });
+
+    it("drops the model choice from a card whose serial named the model", async () => {
+        // Home's serial is a Studio's and Home is saved as a Studio: the
+        // choice could only point imports at the wrong grind scale.
+        await renderWithProviders(<MachineSection/>);
+        await openCard(/^Home, /);
+
+        expect(card("HOME").queryByText("Model")).toBeNull();
+        expect(card("WORK").getByText("Model")).toBeTruthy();
     });
 
     it("shows the machine in use's error and the way out without a tap", async () => {
@@ -522,7 +560,6 @@ describe("a single saved machine", () => {
 
         await openCard(/^xBloom 1, /);
 
-        expect(screen.getByText("Connected")).toBeTruthy();
         expect(screen.getByRole("button", {name: /^Name, Give it a name/})).toBeTruthy();
         expect(screen.getByText("XBRW++ will scan again next time.")).toBeTruthy();
     });
@@ -534,6 +571,9 @@ describe("a single saved machine", () => {
 
         expect(screen.getByText("J15ABC123456")).toBeTruthy();
         expect(screen.getByText("V12.0D.500")).toBeTruthy();
+        // The Bluetooth identifier, moved here from the status line.
+        expect(screen.getByText("Bluetooth ID")).toBeTruthy();
+        expect(screen.getByText("AA:BB")).toBeTruthy();
     });
 
     it("names the model the info blob reports", async () => {

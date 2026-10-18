@@ -61,9 +61,15 @@ storage, backup, card or BLE change. Not yet checked on a device.
 
 Settings now opens on Machines: one card per saved machine. The card of the
 machine in use starts open; the others start closed until tapped. Its summary
-line turns red while the link has an error. An open card holds the link status and Connect (or Use this machine
-now), the model, a row to the machine's existing name-and-order sheet, a
-Details fold with serial, firmware, water, grind size and mode, and Forget.
+line turns red while the link has an error, green with "Connected" while this
+phone holds the link, and says "Selected" (formerly "In use") for the machine
+this phone uses when it has no link. An open card holds the link status and
+Connect (or Use this machine now), the model, a row to the machine's existing
+name-and-order sheet, a Details fold with serial, firmware, water, grind size,
+mode and the Bluetooth ID, and Forget. While connected the separate
+"Connected" row is not drawn, since the header says it. The model choice is
+left out once the machine's serial has named its model (see "Machine model
+from the serial" below).
 Add another machine sits under the cards. With no machine saved, the section
 is one plain card with the model choice and Connect.
 
@@ -124,6 +130,30 @@ Not yet checked on a device.
 
 `showRecipeAvatars` defaults to true; stored choices and restored backups are
 unchanged; no card, BLE or native changes.
+
+## Machine model from the serial, and link wording (2026-10-18)
+
+A saved machine's model is now set from its serial when the serial names one.
+The serial in the machine's 40521 info frame starts with xBloom's model code:
+`J15` is the Studio (read off two real Studios, and xBloom's catalogue uses
+the same code), and `J20` is the Original (xBloom's catalogue code only; no
+Original has been read). It is set on connect, through the saved list, so for
+the machine in use it lands in `machineModel`, the setting every importer
+reads. A serial that names neither leaves the user's choice alone. Settings
+stops offering the model choice once the serial and the saved model agree.
+
+The link copy now says only what the phone can know. The machine takes one
+phone at a time and, held by another, stops answering just as it does when
+off, so a failed connect says "Not found. It may be off, out of range or
+connected to another phone." (was "Not in range · <Bluetooth ID>") and the
+Connect row says to close XBRW++ or the xBloom app on the other phone. The
+machine this phone uses but has no link to is "Selected" (was "In use"). The
+Bluetooth ID moved from the status line to the machine's details. With a
+machine saved, the "Connected" row is hidden while connected, because the
+machine's own row says Connected.
+
+Not yet checked on a device: the model correction on a Studio previously set
+to Original, and the wording with a second phone holding the machine.
 
 ## Brew history trace storage (2026-10-15)
 

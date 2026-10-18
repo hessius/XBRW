@@ -69,4 +69,24 @@ describe("a saved machine's sheet", () => {
 
         expect(screen.getByTestId("machine-detail-id").props.children).toMatch(/J15A01D48H051/);
     });
+
+    it("says it is the selected machine, not that it is in use", async () => {
+        await renderWithProviders(<MachineDetailSheet machineId="HOME" onClose={jest.fn()}/>);
+
+        expect(screen.getByText("Selected and connected.")).toBeTruthy();
+    });
+
+    it("names the model its serial gave it instead of offering a choice", async () => {
+        await renderWithProviders(<MachineDetailSheet machineId="HOME" onClose={jest.fn()}/>);
+
+        expect(screen.getByTestId("machine-detail-model").props.children).toMatch(/^Studio, read from its serial/);
+        expect(screen.queryByLabelText("Model")).toBeNull();
+    });
+
+    it("offers the choice for a machine whose serial is not known yet", async () => {
+        await renderWithProviders(<MachineDetailSheet machineId="WORK" onClose={jest.fn()}/>);
+
+        expect(screen.getByLabelText("Model")).toBeTruthy();
+        expect(screen.queryByTestId("machine-detail-model")).toBeNull();
+    });
 });

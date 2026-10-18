@@ -10,13 +10,13 @@ import {notification} from "./protocolFixtures";
  * the only report of the water level.
  */
 export function machineInfoFrame(
-    overrides: {mode?: string; waterEnough?: number; waterFeed?: number} = {}
+    overrides: {mode?: string; waterEnough?: number; waterFeed?: number; serial?: string} = {}
 ): number[] {
     const payload = new Array(63).fill(0);
     const put = (at: number, textValue: string) => {
         for (let i = 0; i < textValue.length; i++) payload[at + i] = textValue.charCodeAt(i);
     };
-    put(0, "J15ABC123456");
+    put(0, overrides.serial ?? "J15ABC123456");
     put(13, "J15");
     put(19, "V12.0D.500");
     payload[33] = overrides.waterEnough ?? 1;
