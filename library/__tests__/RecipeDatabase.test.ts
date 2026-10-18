@@ -248,6 +248,38 @@ describe("RecipeDatabase.shelfMembers", () => {
     });
 });
 
+describe("RecipeDatabase.shelfPhotos", () => {
+    function pictured(name: string, at: number, url?: string): Recipe {
+        const recipe = recipeNamed(name);
+        recipe.cupType = CUP_TYPE.TEA;
+        recipe.createdAt = at;
+        if (url !== undefined) recipe.imageURL = url;
+        return recipe;
+    }
+
+    it("reads the newest members' pictures, skipping recipes without one", () => {
+        const db = freshDatabase();
+        db.insertRecipe(pictured("Old", 1, "https://example.com/old.jpg"));
+        db.insertRecipe(pictured("Bare", 5));
+        db.insertRecipe(pictured("New", 9, "https://example.com/new.jpg"));
+        db.insertRecipe(recipeNamed("Not tea"));
+
+        expect(db.shelfPhotos(["tea"], resolveLibraryFilter)).toEqual({
+            tea: ["https://example.com/new.jpg", "https://example.com/old.jpg"]
+        });
+    });
+
+    it("stops at the cap and leaves out a shelf with no pictures", () => {
+        const db = freshDatabase();
+        [1, 2, 3, 4, 5, 6].forEach((n) =>
+            db.insertRecipe(pictured(`T${n}`, n, `https://example.com/${n}.jpg`)));
+
+        const photos = db.shelfPhotos(["tea", "singlePour"], resolveLibraryFilter, 4);
+        expect(photos.tea).toEqual([6, 5, 4, 3].map((n) => `https://example.com/${n}.jpg`));
+        expect(photos.singlePour).toBeUndefined();
+    });
+});
+
 describe("RecipeDatabase.countRecipesByAuthor", () => {
     function from(name: string, author: string | undefined): Recipe {
         const recipe = recipeNamed(name);

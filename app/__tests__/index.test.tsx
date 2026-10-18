@@ -336,6 +336,17 @@ function store(recipes: Recipe[]) {
             return [...counts].map(([tag, count]) => ({tag, count}));
         }),
         beanVocabulary:       jest.fn(() => []),
+        // Newest first stands in for `createdAt DESC`: the fixtures are added
+        // in order, so the last one is the newest.
+        shelfPhotos: jest.fn((ids: readonly string[]) => Object.fromEntries(ids.map((id) => {
+            const tag = tagFromFilterId(id);
+            const members = tag !== null
+                ? recipes.filter((recipe) => (recipe.tags ?? []).includes(tag))
+                : id === "tea" ? recipes.filter((recipe) => recipe.isTea()) : recipes;
+            const photos = [...members].reverse()
+                .map((recipe) => recipe.imageURL ?? "").filter((url) => url.length > 0);
+            return [id, [...new Set(photos)].slice(0, 4)];
+        }).filter(([, photos]) => photos.length > 0))),
         deleteRecipe: jest.fn(),
         cloneRecipe:  jest.fn(),
         updateRecipe: jest.fn()
@@ -1973,6 +1984,60 @@ describe("the shelf grid", () => {
     // tester rejected it. A shelf now opens into a room: the same shelf view,
     // the same rail, but the squares carry this shelf's recipes as tiles under
     // its name. The list does not return, and no recipe card is drawn.
+    function pictured(name: string, tag: string, n: number): Recipe {
+        const recipe = named(name);
+        recipe.tags = [tag];
+        recipe.imageURL = `https://roaster.example/bag-${n}.jpg`;
+        return recipe;
+    }
+
+    function pictureSettings(on: boolean): Settings {
+        return new Settings(memoryStorage({
+            myShelves:         serialiseHidden([tagFilterId("morning")]),
+            showRecipeAvatars: on
+        }));
+    }
+
+    it("covers a shelf with its newest recipe's picture", async () => {
+        await openGrid([pictured("Ethiopia", "morning", 1)], pictureSettings(true));
+        const photos = screen.getAllByTestId("shelf-photo", {includeHiddenElements: true});
+        expect(photos.map((photo) => photo.props.source.uri))
+            .toContain("https://roaster.example/bag-1.jpg");
+    });
+
+    it("covers a shelf of several pictures with a 2x2 mosaic", async () => {
+        const recipes = [1, 2, 3].map((n) => pictured(`Coffee ${n}`, "morning", n));
+        await openGrid(recipes, pictureSettings(true));
+        const tile = screen.getByTestId("shelf-tag:morning");
+        const cells = within(tile).getAllByTestId("shelf-photo", {includeHiddenElements: true});
+        expect(cells.map((cell) => cell.props.source.uri)).toEqual([
+            "https://roaster.example/bag-3.jpg",
+            "https://roaster.example/bag-2.jpg",
+            "https://roaster.example/bag-1.jpg",
+            "https://roaster.example/bag-3.jpg"
+        ]);
+    });
+
+    it("keeps the shelf's own mark with recipe pictures off", async () => {
+        await openGrid([pictured("Ethiopia", "morning", 1)], pictureSettings(false));
+        expect(screen.queryAllByTestId("shelf-photo", {includeHiddenElements: true}))
+            .toHaveLength(0);
+    });
+
+    it("hands the picture to a tile in the shelf room", async () => {
+        const recipe = pictured("Ethiopia", "morning", 1);
+        await openGrid([recipe], pictureSettings(true));
+        await fireEvent.press(screen.getByTestId("shelf-tag:morning"));
+        await fireEvent(screen.getByTestId("recipe-tile-badges"), "layout", {
+            nativeEvent: {layout: {x: 0, y: 0, width: 136, height: 15}}
+        });
+        await fireEvent(screen.getByTestId("recipe-tile-free-room"), "layout", {
+            nativeEvent: {layout: {x: 0, y: 15, width: 136, height: 42}}
+        });
+        expect(screen.getByTestId("recipe-tile-photo", {includeHiddenElements: true})
+            .props.source).toEqual({uri: "https://roaster.example/bag-1.jpg"});
+    });
+
     it("opens the tapped shelf into a room, staying in the shelf view", async () => {
         await openGrid();
 

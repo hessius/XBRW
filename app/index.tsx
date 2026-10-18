@@ -60,6 +60,7 @@ import RoasterOfferSheet from "@/components/RoasterOfferSheet";
 import SelectableRecipeRow from "@/components/SelectableRecipeRow";
 import ShelfGrid from "@/components/ShelfGrid";
 import ShelfOverflowSheet from "@/components/ShelfOverflowSheet";
+import {withShelfPhotos} from "@/components/ShelfPhotoMark";
 import ShelfPickerHeader from "@/components/ShelfPickerHeader";
 import ShelfPickerBar, {PICKER_BAR_HEIGHT} from "@/components/ShelfPickerBar";
 import ShelfRoom, {type RoomRecipeActions} from "@/components/ShelfRoom";
@@ -1623,7 +1624,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                     // that showed NO MATCHES instead of the shelves would hide
                     // the control the user came to it for.
                     <ShelfGrid shelves={shelves}
-                               marks={library.shelfMarks}
+                               marks={withShelfPhotos(library.shelfMarks, showRecipeAvatars)}
                                invertAuto={invertAutoShelves}
                                hidden={parseHidden(hiddenShelves)}
                                onOpen={libraryQuery.openShelf}
