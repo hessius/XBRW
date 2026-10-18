@@ -3,6 +3,17 @@
 This is the source for the full release-testing checklist, not a claim that
 device testing is complete. Update it whenever release scope or behaviour changes.
 
+## Shelf tile name and pour profile (2026-10-18)
+
+A recipe tile in a shelf room now draws its name under the badges on up to two
+lines, with or without figures, then the figures, then the pour profile in the
+bottom corner. The profile used to be pinned to the corner over the name and the
+figures, which on a device drew its line through both and cut the name to one
+line. It now gets only the room the text leaves, measured at layout, at most
+30 pt tall and 4 pt clear of the figures, and is not drawn when that room is
+under 12 pt (the largest text sizes). Tile height, the grid and the badge row
+are unchanged. Large-text and narrow-screen tiles need a device check.
+
 ## Quick edit dose presets (2026-10-18)
 
 Roasters publish one coffee at 15 g and again at 18 g, so libraries filled
