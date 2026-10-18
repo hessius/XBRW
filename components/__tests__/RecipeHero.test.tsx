@@ -317,6 +317,68 @@ describe("RecipeHero", () => {
         }
     });
 
+    it("keeps the band only as tall as the watermark stands under the name", () => {
+        // The device report: a 98 character name over a profile that climbs
+        // from a small bloom. Its last line stops over the profile's low end,
+        // so the band need not be the watermark's full height.
+        const bloom = pours(40, 120, 128);
+        const plain = heroNameLayout(AWARD, NARROW, 1);
+        const shaped = heroNameLayout(AWARD, NARROW, 1, {pours: bloom});
+        expect(plain.reserve).toBe(HERO_PROFILE_RESERVE);
+        expect(shaped.fontSize).toBe(plain.fontSize);
+        expect(shaped.reserve).toBeLessThan(plain.reserve);
+        // Never below what the line over the profile's high end needs: a full
+        // width last line still gets the whole band.
+        const flat = heroNameLayout(AWARD, NARROW, 1, {pours: pours(0, 0, 288)});
+        expect(flat.reserve).toBeLessThanOrEqual(HERO_PROFILE_RESERVE);
+    });
+
+    it("keeps every line clear of the watermark it is drawn over", () => {
+        for (const name of [LONG_NAME, VINKA, LONGEST, AWARD]) {
+            for (const shape of [[96, 96, 96], [40, 120, 128], [150, 50, 50, 38], [288]]) {
+                const profile = pours(...shape);
+                const total = shape.reduce((sum, volume) => sum + volume, 0);
+                const layout = heroNameLayout(name, NARROW, 1, {pours: profile});
+                if (layout.reserve === 0 && !layout.tight) {
+                    continue;
+                }
+                const lines = wrapLines(name, (layout.maxWidth as number) - 4, layout.fontSize)
+                    .slice(0, HERO_NAME_MAX_LINES);
+                lines.forEach((width, i) => {
+                    // The watermark's drawing x under the line's end, its gap
+                    // included, and its height there.
+                    const along = 18 + width + 4 + 8 - (NARROW - 188.8) - 0.8;
+                    let height = 0;
+                    let before = 0;
+                    shape.forEach((volume, k) => {
+                        const after = before + volume / total;
+                        const start = (k / shape.length) * 190;
+                        const top = ((k + 0.62) / shape.length) * 190;
+                        if (along >= top) {
+                            height = after * PROFILE_BAND_HEIGHT;
+                        } else if (along > start) {
+                            height = Math.max(height, (before + (after - before)
+                                * (along - start) / (top - start)) * PROFILE_BAND_HEIGHT);
+                        }
+                        before = after;
+                    });
+                    const stands = height > 0 ? height - 1.2 : 0;
+                    const lineBottom = 13 + layout.reserve
+                        + (lines.length - 1 - i) * layout.lineHeight;
+                    expect(lineBottom).toBeGreaterThanOrEqual(stands + 4);
+                });
+            }
+        }
+    });
+
+    it("sizes the band for the recipe's own pours", async () => {
+        const bloom = pours(40, 120, 128);
+        await renderWithProviders(<RecipeHero {...BASE} name={AWARD} pours={bloom}/>);
+
+        expect(screen.getByTestId("hero-profile-reserve").props.style.height)
+            .toBe(heroNameLayout(AWARD, COVER, 1, {pours: bloom}).reserve);
+    });
+
     it("puts a long name beside the watermark where the screen is wide enough", async () => {
         setWindow(INNER);
         await renderWithProviders(<RecipeHero {...BASE} name={VINKA}/>);
