@@ -5,6 +5,7 @@ import {Text, XStack, YStack} from "tamagui";
 import DotIcon from "@/components/DotIcon";
 import DotMatrixText from "@/components/DotMatrixText";
 import ShelfMark from "@/components/ShelfMark";
+import ShelfPhotoMark from "@/components/ShelfPhotoMark";
 import {onAccent, palette} from "@/constants/colors";
 import {shelfGlyph} from "@/constants/shelfGlyphs";
 import type {ShelfMarkMembers} from "@/hooks/useRecipeLibrary";
@@ -136,10 +137,13 @@ export default function ShelfTile({
                     borderWidth={manual || inverted ? 0 : 1}
                     borderColor={palette.line}>
                 <XStack alignItems="flex-start" justifyContent="space-between">
-                    <ShelfMark kind={shelf.kind}
-                               glyph={shelfGlyph(shelf.id)}
-                               accents={members?.accents}
-                               inverted={inverted}/>
+                    <ShelfPhotoMark photos={members?.photos ?? []}
+                                    fallback={(
+                                        <ShelfMark kind={shelf.kind}
+                                                   glyph={shelfGlyph(shelf.id)}
+                                                   accents={members?.accents}
+                                                   inverted={inverted}/>
+                                    )}/>
                     {onActions && (
                         <Pressable accessibilityRole="button"
                                    accessibilityLabel={`Actions for the ${shelf.label} shelf`}

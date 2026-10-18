@@ -25,12 +25,18 @@ The square is drawn out of the layout flow and sized from the measured room down
 to the name, so tile height and the name never move. Larger text shrinks it,
 and below 40 pt it is left out rather than drawn over the name.
 
+In the shelf grid, a shelf whose recipes have pictures is covered with them in
+place of its glyph or accent mosaic: one picture fills the 44 pt square, two or
+more make a 2x2 mosaic of the newest. User, tag and auto shelves all take a
+cover. If none of the pictures load, the shelf's own mark is drawn. The
+pictures are read newest first, and only from rows that carry one.
+
 The picture is decorative and hidden from screen readers, since the name is
 already announced. A picture that fails to load draws nothing. In the header the
 name keeps the room set aside for it, so a failure does not rewrap the title.
 With the setting off nothing is drawn and no room is kept. The network screen's
-Load a photo entry now says the library list and shelf rooms can fetch a picture
-when the setting is on. No recipe data,
+Load a photo entry now says the library list, shelf rooms and shelf covers can
+fetch a picture when the setting is on. No recipe data,
 backup or card bytes change. Device checks still to do: large text, a narrow
 cover screen, offline first view and a slow network.
 
