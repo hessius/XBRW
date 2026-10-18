@@ -68,7 +68,9 @@ export async function fetchCoffeeRecipe(
     const withFlavours = coffee.flavours.length > 0
         ? {...coffee.coffee, flavours: coffee.flavours}
         : coffee.coffee;
-    decorateImport(recipe, {coffee: withFlavours, source: "import", tags: coffee.tags});
+    decorateImport(recipe, {
+        coffee: withFlavours, source: "import", tags: coffee.tags, colour: coffee.colour
+    });
     recipe.name = recipeName(coffee, chosen.size);
     return {recipe, size: chosen.size};
 }

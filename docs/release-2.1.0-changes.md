@@ -80,12 +80,32 @@ name. Logic in `library/roasterHome.ts`. Device checks: the strip at
 360 dp and with large text, the strip folding on scroll, TalkBack on the strip
 rows and the search results.
 
+Roaster colour (2026-10-19): a feed coffee may carry `bean.colour` (or
+`bean.color`), a strict `#RRGGBB` for the roaster's own colour coding, e.g. by
+origin. A recipe added from the catalogue takes the palette accent nearest its
+hue (`library/roasterColour.ts`); greys and far hues get the usual accent, and
+a copy already in the library keeps its accent. The hex is never stored.
+
 Roaster recipes in ABOUT (2026-10-18): for a recipe whose link or catalogue
 named a roaster, FROM reads "From {roaster}" alone (the "Shared on xBloom by"
 line is gone), and XPOD labels xBloom's title "xBloom profile name", drawn
 quietly, with no USE THIS NAME. Pod recipes and links without a roaster keep
 "Arrived from {sharer}" and the button. Device check: a CCC link recipe's ABOUT
 on the cover screen.
+
+Roaster feeds as list and detail (2026-10-19): the Settings > Library row is
+renamed "Roaster feeds" (owner decision) and opens a list of that name, "Your
+roasters", one row per roaster with "{n} coffees · Updated 2 h ago" (or Paused,
+Couldn't update, Loading coffees), plus Refresh all (every roaster that is not
+paused, one after another past the 12 hour limit, one toast) and the "Asked not
+to" opt-outs with Ask again. A row opens that roaster's own screen: its name,
+the coffee count and freshness, then Browse coffees, Open {roaster}'s site (when
+the feed names one), Refresh now, Pause/Resume updates and Unsubscribe, which
+confirms and then lands on the list. A roaster's coffee list ends with MANAGE
+FEED, which opens that roaster's screen directly, and the roasters list's link
+reads MANAGE FEEDS. Subscribe and Unsubscribe keep their names. Device checks:
+Back from a roaster's screen to the list, unsubscribing after arriving from the
+coffee list, and a long roaster name in the header on the cover screen.
 
 ## Brew history trace storage (2026-10-15)
 
