@@ -1,10 +1,10 @@
 import React from "react";
 import {View} from "react-native";
-import {Text, YStack} from "tamagui";
+import {Button, Text, YStack} from "tamagui";
 
 import DotBloom from "@/components/DotBloom";
 import DotMatrixText from "@/components/DotMatrixText";
-import {palette} from "@/constants/colors";
+import {onAccent, palette} from "@/constants/colors";
 
 const MARK_SIZE = 96;
 const MARK_DOT_SIZE = 5;
@@ -14,9 +14,16 @@ const MARK_DOT_SIZE = 5;
  *
  * It replaces the list only. The header and all three CTA tiles stay exactly
  * where they are, so the first thing a new user sees is the three things they
- * can do — which is also why there is no button in here.
+ * can do, which is also why there is normally no button in here.
+ *
+ * The one exception is `browse`: somebody who subscribed to a roaster from
+ * its import link has a fourth thing to do, and it is the likeliest one, so
+ * the empty library offers that roaster's coffees. Absent without a
+ * subscription, so a new user's first screen is unchanged.
  */
-export default function EmptyLibrary() {
+export default function EmptyLibrary({browse}: {
+    browse?: {label: string; onPress: () => void};
+} = {}) {
     return (
         <YStack flex={1} alignItems="center" justifyContent="center"
                 gap="$4" paddingHorizontal="$6" paddingVertical="$8">
@@ -41,6 +48,19 @@ export default function EmptyLibrary() {
                     the buttons above.
                 </Text>
             </YStack>
+
+            {browse !== undefined && (
+                <Button testID="empty-library-browse"
+                        accessibilityRole="button"
+                        accessibilityLabel={browse.label}
+                        backgroundColor={palette.text}
+                        color={onAccent.text}
+                        borderRadius="$4"
+                        minHeight={44}
+                        onPress={browse.onPress}>
+                    {browse.label.toUpperCase()}
+                </Button>
+            )}
         </YStack>
     );
 }
