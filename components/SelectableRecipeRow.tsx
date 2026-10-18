@@ -39,13 +39,14 @@ const ROW_PADDING  = 6;
  * distrust.
  */
 export default function SelectableRecipeRow({
-    recipe, selected, onToggle, showCoffeeMarker, dottedProfile, slotMarker
+    recipe, selected, onToggle, showCoffeeMarker, dottedProfile, showPicture, slotMarker
 }: {
     recipe: Recipe;
     selected: boolean;
     onToggle: () => void;
     showCoffeeMarker?: boolean;
     dottedProfile?: boolean;
+    showPicture?: boolean;
     slotMarker?: SlotMarkerValue;
 }) {
     return (
@@ -69,7 +70,8 @@ export default function SelectableRecipeRow({
                     <RecipeCard recipe={recipe} onPress={onToggle}
                                 showCoffeeMarker={showCoffeeMarker}
                                 slotMarker={slotMarker}
-                                dottedProfile={dottedProfile}/>
+                                dottedProfile={dottedProfile}
+                                showPicture={showPicture}/>
                 </YStack>
 
                 <YStack width={TICK_SIZE} height={TICK_SIZE}

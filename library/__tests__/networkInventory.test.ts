@@ -151,6 +151,7 @@ const EXPECTED_CALLS: Record<string, number> = {
     "components/HubRow.tsx":       1,
     "components/ImportResult.tsx": 1,
     "components/PodSection.tsx":   1,
+    "components/RecipePhoto.tsx":  1,
     "hooks/useShareRecipe.ts":     1,
     "library/XBloomRecipe.ts":     1,
     "library/cloud/transport.ts":  1,

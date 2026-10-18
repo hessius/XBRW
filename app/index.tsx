@@ -311,6 +311,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
     const [onlySelected, setOnlySelected] = useState(false);
     const [showCoffeeMarker] = useSetting("showCoffeeMarker", settings);
     const [dottedProfile] = useSetting("dotMatrixProfile", settings);
+    const [showRecipeAvatars] = useSetting("showRecipeAvatars", settings);
     const [invertAutoShelves] = useSetting("invertAutoShelves", settings);
     const [hiddenShelves, setHiddenShelves] = useSetting("hiddenShelves", settings);
     const [rawTemperatureUnit] = useSetting("temperatureUnit", settings);
@@ -1561,13 +1562,15 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                                 selected={picker.selected.has(item.recipe.uuid)}
                                 onToggle={() => picker.toggle(item.recipe.uuid)}
                                 showCoffeeMarker={showCoffeeMarker}
-                                dottedProfile={dottedProfile}/>
+                                dottedProfile={dottedProfile}
+                                showPicture={showRecipeAvatars}/>
                         ) : (
                             <SwipeableRecipeRow
                                 recipe={item.recipe}
                                 editing={editing}
                                 showCoffeeMarker={showCoffeeMarker}
                                 dottedProfile={dottedProfile}
+                                showPicture={showRecipeAvatars}
                                 evidence={library.evidence[item.recipe.uuid]}
                                 slotMarker={slotMarkers(slotRecord, item.recipe)}
                                 onEasyMode={remembered !== ""

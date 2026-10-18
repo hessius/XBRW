@@ -57,6 +57,8 @@ type Props = {
     showCoffeeMarker?: boolean;
     /** Forwarded to the card. Owned by the settings screen. */
     dottedProfile?: boolean;
+    /** Forwarded to the card: `showRecipeAvatars`. */
+    showPicture?: boolean;
     /** Forwarded to the card: what this recipe's brews add up to. */
     evidence?: RecipeEvidence;
     /** Brew this recipe. Present only when there is a machine to brew on. */
@@ -178,6 +180,7 @@ export default function SwipeableRecipeRow({
                                                editing = false,
                                                showCoffeeMarker = true,
                                                dottedProfile = false,
+                                               showPicture = false,
                                                evidence,
                                                onBrew,
                                                onQuickEdit,
@@ -445,6 +448,7 @@ export default function SwipeableRecipeRow({
                             evidence={evidence}
                             showCoffeeMarker={showCoffeeMarker}
                             dottedProfile={dottedProfile}
+                            showPicture={showPicture}
                             onBrew={onBrew}
                             onQuickEdit={onQuickEdit}
                             onShare={onShare} onWrite={onWrite}
