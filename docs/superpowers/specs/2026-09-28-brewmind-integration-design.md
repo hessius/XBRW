@@ -111,6 +111,24 @@ in the shipped envelope and in
 `docs/superpowers/specs/2026-09-20-beanconqueror-brew-export-design.md`, so
 renaming it would break the half of the contract that already works.
 
+### Amendment: `bean.colour` (2026-10-19)
+
+A link may carry `bean.colour=#RRGGBB` (`bean.color` is accepted too, and
+`bean.colour` wins when both are sent): the roaster's own colour for the
+coffee, such as the colour it uses for an origin on its bags and its site.
+It is optional and read strictly. Anything other than `#` and six hex digits
+(shorthand, alpha, a name, no `#`) is dropped and the recipe imports as before.
+
+It is **not** in the bean block. The bean block is the Beanconqueror contract
+and is stored whole, and the colour is used once, on import, to choose the
+recipe's card accent. `library/roasterColour.ts` snaps it to the nearest
+palette accent **by hue**, never keeping the hex: accents are stored as palette
+indices, every accent is a pale fill proven to carry the card's dark ink, and a
+roaster's label colour is mid to dark, so `matchAccent`'s distance test would
+refuse every one. A grey, or a hue more than 30 degrees from every accent in the
+recipe's half of the palette, gives no answer and the recipe takes an accent as
+any new recipe does. A recipe already in the library keeps its accent.
+
 ### `recipe.url`, the producer's own page
 
 Requested by BrewMind on #159 and accepted. It is the canonical page for the

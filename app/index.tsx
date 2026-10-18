@@ -1164,6 +1164,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
             tags: link.tags,
             recipeUrl: link.recipeUrl,
             recipeName: link.recipeName,
+            colour: link.colour,
             // Only a stated `brewmind` source earns the provenance. Anything
             // else still imports and reads as an ordinary import, because the
             // link is useful to anyone who can mint one.

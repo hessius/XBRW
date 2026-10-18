@@ -489,6 +489,15 @@ Beanconqueror opens its add-bean screen prefilled with the right name, weight
 and dates, and that a later brew handed over is linked to that bean; restore a
 backup with bags onto a clean install.
 
+## Roaster colour on import (2026-10-19)
+
+An import link may carry `bean.colour` (or `bean.color`), a strict `#RRGGBB`
+for a roaster's own colour coding, e.g. by origin. A newly imported recipe takes
+the palette accent nearest that colour's hue, so the card stays in the app's
+palette and keeps its dark ink at AA. Greys and hues far from every accent fall
+back to the usual accent assignment. A recipe already in the library keeps its
+accent on re-import. The colour itself is never stored. No card bytes change.
+
 ## Brew history trace storage (2026-10-15)
 
 Brew traces are compressed and managed under a configurable storage budget. When
