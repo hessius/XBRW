@@ -20,10 +20,12 @@ export type CoffeeSpec = {
     available?: boolean;
     sizes?: string[];
     name?: string;
+    /** Sent as `bean.colour` when given. */
+    colour?: string;
 };
 
 /** One coffee as a roaster would publish it. Share ids are `${id}-${size}`. */
-export function feedCoffee({id, available = true, sizes = ["18g", "15g"], name}: CoffeeSpec) {
+export function feedCoffee({id, available = true, sizes = ["18g", "15g"], name, colour}: CoffeeSpec) {
     return {
         id,
         name:      name ?? `Coffee ${id}`,
@@ -39,7 +41,8 @@ export function feedCoffee({id, available = true, sizes = ["18g", "15g"], name}:
             elevation:      "1590",
             processing:     "Washed",
             cupping_points: "88.0",
-            decaffeinated:  false
+            decaffeinated:  false,
+            ...(colour === undefined ? {} : {colour})
         }
     };
 }
