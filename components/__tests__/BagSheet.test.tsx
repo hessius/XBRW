@@ -13,6 +13,8 @@ function noop() {}
 /** 18 Oct 2026, mid-afternoon local time: "today" for every test here. */
 const NOW = new Date(2026, 9, 18, 15, 30).getTime();
 const TODAY = "2026-10-18";
+/** No roast level known: the medium defaults. */
+const MEDIUM = {restDays: 7, peakDay: 18, bestUntilDay: 27};
 
 beforeEach(() => {
     // Only the date is faked, and it keeps moving, so sheet animations still
@@ -88,7 +90,7 @@ describe("BagSheet", () => {
         await open({onSave});
         expect(screen.getByTestId("bag-roasted-value")).toHaveTextContent("Today, 18 Oct");
         await fireEvent.press(screen.getByTestId("bag-save"));
-        expect(onSave).toHaveBeenCalledWith({sizeGrams: 250, roastedOn: TODAY});
+        expect(onSave).toHaveBeenCalledWith({sizeGrams: 250, roastedOn: TODAY, figures: MEDIUM});
     });
 
     it("shows an edited bag's own roast day", async () => {
@@ -119,7 +121,7 @@ describe("BagSheet", () => {
         await act(() => calendar.pick(new Date(2026, 9, 16, 23, 59)));
         expect(screen.getByTestId("bag-roasted-value")).toHaveTextContent("Fri 16 Oct 2026");
         await fireEvent.press(screen.getByTestId("bag-save"));
-        expect(onSave).toHaveBeenCalledWith({sizeGrams: 250, roastedOn: "2026-10-16"});
+        expect(onSave).toHaveBeenCalledWith({sizeGrams: 250, roastedOn: "2026-10-16", figures: MEDIUM});
     });
 
     it("clears the roast day, which stays optional", async () => {
@@ -141,7 +143,7 @@ describe("BagSheet", () => {
         expect(onSave).not.toHaveBeenCalled();
         await fireEvent.changeText(screen.getByTestId("bag-size-field"), "750");
         await fireEvent.press(screen.getByTestId("bag-save"));
-        expect(onSave).toHaveBeenCalledWith({sizeGrams: 750, roastedOn: TODAY});
+        expect(onSave).toHaveBeenCalledWith({sizeGrams: 750, roastedOn: TODAY, figures: MEDIUM});
     });
 
     it("lets the grams left be corrected while editing", async () => {
@@ -173,7 +175,7 @@ describe("BagSheet", () => {
         await fireEvent.changeText(screen.getByTestId("bag-price-field"), "24,50");
         await fireEvent.press(screen.getByTestId("bag-save"));
         expect(onSave).toHaveBeenCalledWith({
-            sizeGrams: 250, roastedOn: TODAY, price: 24.5, beanName: "Ethiopia Guji"
+            sizeGrams: 250, roastedOn: TODAY, price: 24.5, beanName: "Ethiopia Guji", figures: MEDIUM
         });
     });
 
@@ -186,8 +188,11 @@ describe("BagSheet", () => {
     describe("rest and peak", () => {
         it("asks only once there is a roast day", async () => {
             await open();
+            expect(screen.getByTestId("bag-rest-peak")).toBeTruthy();
+            await fireEvent.press(screen.getByTestId("bag-roasted-clear"));
             expect(screen.queryByTestId("bag-rest-peak")).toBeNull();
-            await fireEvent.changeText(screen.getByTestId("bag-roasted-field"), "2026-10-12");
+            const calendar = await openCalendar();
+            await act(() => calendar.pick(new Date(2026, 9, 12)));
             expect(screen.getByTestId("bag-rest-peak")).toBeTruthy();
         });
 
