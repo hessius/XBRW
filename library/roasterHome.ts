@@ -39,7 +39,7 @@ export type StripRow = {
     roaster: string;
     /**
      * Whether a cached feed exists. Without one the roaster's list has
-     * nothing to show, so the row opens the subscriptions screen instead,
+     * nothing to show, so the row opens the roaster's feed screen instead,
      * where REFRESH NOW is.
      */
     cached: boolean;
@@ -58,10 +58,27 @@ export type StripRow = {
     back: number;
     /** Up to three coffee photos, on-sale coffees first. */
     photos: string[];
+    /** Pinned to the home screen from the roaster's feed screen. */
+    pinned: boolean;
 };
 
-/** The most roasters the strip lists before handing over to ALL ROASTERS. */
-export const STRIP_MAX_ROWS = 2;
+/**
+ * The one row that stands for every roaster once there are too many to list:
+ * `Roasters · {count}`, with what is waiting across all of them.
+ */
+export type StripSummary = {count: number; fresh: number; back: number};
+
+/** What the strip draws: roaster rows, then the summary row when there is one. */
+export type HomeStrip = {rows: StripRow[]; summary: StripSummary | null};
+
+/**
+ * Up to this many subscriptions, every roaster has a row of its own. Past it,
+ * the strip shows only the pinned ones and folds the rest into one row.
+ */
+export const STRIP_ALL_UP_TO = 3;
+
+/** The most pinned roasters the strip shows above the summary row. */
+export const STRIP_MAX_PINNED = 3;
 
 /** Photos in a row's stack. */
 export const STRIP_PHOTOS = 3;
@@ -154,15 +171,21 @@ function byName(a: StripRow, b: StripRow): number {
     return a.roaster.localeCompare(b.roaster, undefined, {sensitivity: "base"});
 }
 
+/** Pinned first, in the order they were pinned (most recent last); 0 is not pinned. */
+function byPin(a: number, b: number): number {
+    if (a > 0 && b > 0) return a - b;
+    return (b > 0 ? 1 : 0) - (a > 0 ? 1 : 0);
+}
+
 /**
  * The strip's rows: every subscription, paused and not yet loaded ones
  * included, so the strip always says what the person subscribed to.
  *
- * Ordered by what is waiting (NEW plus back in stock) and then by name.
- * Alphabetical rather than most recently updated: every sync would reshuffle
- * a by-update order every twelve hours, and the two rows on show are the ones
- * a thumb learns to find. With more than two, the ones with something new
- * still come up first.
+ * Pinned roasters first, in the order they were pinned. Then by what is
+ * waiting (NEW plus back in stock), then by name. Alphabetical rather than
+ * most recently updated: every sync would reshuffle a by-update order every
+ * twelve hours, and the rows on show are the ones a thumb learns to find.
+ * `homeStrip` decides which of these are drawn.
  */
 export function stripRows(
     catalogues: readonly HomeCatalogue[], alertsStored: string, now: number
@@ -172,7 +195,7 @@ export function stripRows(
         const {sub, feed} = entry;
         const key = feedKey(sub.feed);
         const counts = alertCounts(key === null ? undefined : alerts[key]);
-        return {
+        const row: StripRow = {
             feedUrl: sub.feed,
             roaster: feed?.roaster.name ?? sub.roaster,
             cached:  feed !== null,
@@ -181,10 +204,63 @@ export function stripRows(
             paused:  sub.paused,
             fresh:   counts.fresh,
             back:    counts.back,
-            photos:  photosOf(feed)
+            photos:  photosOf(feed),
+            pinned:  sub.pinnedAt !== undefined
         };
+        return {row, pinnedAt: sub.pinnedAt ?? 0};
     });
-    return rows.sort((a, b) => (b.fresh + b.back) - (a.fresh + a.back) || byName(a, b));
+    return rows
+        .sort((a, b) => byPin(a.pinnedAt, b.pinnedAt)
+            || (b.row.fresh + b.row.back) - (a.row.fresh + a.row.back) || byName(a.row, b.row))
+        .map((entry) => entry.row);
+}
+
+/**
+ * What the home strip draws, following hessius's suggestion: list a few
+ * roasters, fold many into a sub menu, and let favourites stay on top.
+ *
+ * - Up to `STRIP_ALL_UP_TO` subscriptions: every roaster has its own row,
+ *   pinned ones first. No summary row, since nothing is hidden.
+ * - More than that: only the pinned roasters (the first `STRIP_MAX_PINNED`
+ *   in pin order), then one `Roasters · {n}` row that opens the full list,
+ *   carrying the NEW and back-in-stock counts of every roaster. With none
+ *   pinned, that one row is the whole strip.
+ *
+ * `rows` must be `stripRows`'s answer, so pinned rows are already first.
+ */
+export function homeStrip(rows: readonly StripRow[]): HomeStrip {
+    if (rows.length === 0) return {rows: [], summary: null};
+    if (rows.length <= STRIP_ALL_UP_TO) return {rows: [...rows], summary: null};
+    return {
+        rows:    rows.filter((row) => row.pinned).slice(0, STRIP_MAX_PINNED),
+        summary: {
+            count: rows.length,
+            fresh: rows.reduce((total, row) => total + row.fresh, 0),
+            back:  rows.reduce((total, row) => total + row.back, 0)
+        }
+    };
+}
+
+/** What the summary row says to a screen reader. */
+export function stripSummaryLabel(summary: StripSummary): string {
+    return [
+        `All roasters, ${summary.count}`,
+        summary.fresh > 0 ? `${summary.fresh} new` : undefined,
+        summary.back > 0 ? `${summary.back} back in stock` : undefined
+    ].filter((part) => part !== undefined).join(", ");
+}
+
+/**
+ * The line under the "Pin to the home screen" switch on a roaster's feed
+ * screen, which depends on how many roasters there are and whether the
+ * home screen shows them at all.
+ */
+export function pinDescription(subscriptions: number, shownOnHome: boolean): string {
+    if (!shownOnHome) return "Roasters are hidden from the home screen. Turn them on in Roaster feeds.";
+    if (subscriptions <= STRIP_ALL_UP_TO) {
+        return `With ${STRIP_ALL_UP_TO} roasters or fewer, all of them show. Pinned ones come first.`;
+    }
+    return `With more than ${STRIP_ALL_UP_TO} roasters, only pinned ones show, up to ${STRIP_MAX_PINNED}.`;
 }
 
 /**
@@ -208,6 +284,7 @@ export function stripRowLabel(row: StripRow): string {
     return [
         row.roaster,
         row.detail.replace(/ · /g, ", "),
+        row.pinned ? "pinned" : undefined,
         row.paused ? "updates paused" : undefined,
         row.fresh > 0 ? `${row.fresh} new` : undefined,
         row.back > 0 ? `${row.back} back in stock` : undefined

@@ -2,7 +2,7 @@ import {useState} from "react";
 
 import {useSetting} from "@/hooks/useSetting";
 import {
-    browsable, homeCatalogues, searchRoasters, stripRows, type RoasterMatch
+    browsable, homeCatalogues, homeStrip, searchRoasters, stripRows, type RoasterMatch
 } from "@/library/roasterHome";
 import type {Settings} from "@/library/Settings";
 
@@ -19,6 +19,9 @@ export function useHomeRoasters(settings?: Settings, now?: () => number) {
     const [subs] = useSetting("roasterSubscriptions", settings);
     const [catalogue] = useSetting("roasterCatalogue", settings);
     const [alerts] = useSetting("roasterAlerts", settings);
+    // Off hides the strip and the empty library's button. The search still
+    // looks through the roasters: it shows them only when somebody types.
+    const [shown] = useSetting("showRoastersOnHome", settings);
     // Read once, as the ROASTERS list does: the only clock-dependent words
     // are a failing feed's "Updated 3 d ago", which minutes do not change.
     const [at] = useState(() => (now ?? Date.now)());
@@ -27,8 +30,8 @@ export function useHomeRoasters(settings?: Settings, now?: () => number) {
         subscribed:    catalogues.length > 0,
         subscriptions: catalogues.map((entry) => entry.sub),
         /** Subscriptions with coffees to show: the empty library's button. */
-        browsable:     browsable(catalogues),
-        strip:         stripRows(catalogues, alerts, at),
+        browsable:     shown ? browsable(catalogues) : [],
+        strip:         shown ? homeStrip(stripRows(catalogues, alerts, at)) : homeStrip([]),
         /** Cached feeds only: safe to call on every settled search term. */
         search:        (term: string): RoasterMatch[] => searchRoasters(catalogues, term)
     };

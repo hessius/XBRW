@@ -7,7 +7,9 @@ import SubscriptionScreen from "@/app/subscription";
 import SubscriptionsScreen from "@/app/subscriptions";
 import {refreshAllMessage} from "@/hooks/useRoasterSubscriptions";
 import {readCatalogue} from "@/library/roasterCatalogue";
-import {readSubscriptions, resetSyncLockForTests, subscribe, updateSubscription} from "@/library/roasterSync";
+import {
+    readSubscriptions, resetSyncLockForTests, setPinned, subscribe, updateSubscription
+} from "@/library/roasterSync";
 import {countLine, rowLine, statusLine} from "@/library/subscriptionStatus";
 import {renderWithProviders, SHEET_PRESS_TIMEOUT, TEST_INSETS} from "@/test-utils/render";
 import {FEED_URL, feedBody, memorySettings} from "@/test-utils/roasterFeed";
@@ -131,6 +133,30 @@ describe("the subscriptions list", () => {
         expect(screen.queryByText("Refresh all")).toBeNull();
     });
 
+    it("starts with the home screen switch, which turns the roasters off there", async () => {
+        const {settings} = await drawList(subscribed());
+        const drawn = JSON.stringify(screen.toJSON());
+        expect(drawn.indexOf("Show roasters on the home screen")).toBeLessThan(drawn.indexOf("YOUR ROASTERS"));
+        expect(settings.get("showRoastersOnHome")).toBe(true);
+
+        await fireEvent.press(screen.getByRole("switch", {name: "Show roasters on the home screen"}));
+
+        expect(settings.get("showRoastersOnHome")).toBe(false);
+    });
+
+    it("has no home screen switch with nothing subscribed", async () => {
+        await drawList();
+        expect(screen.queryByText("Show roasters on the home screen")).toBeNull();
+    });
+
+    it("marks a pinned roaster", async () => {
+        const settings = subscribed();
+        setPinned(settings, FEED_URL, true, NOW);
+        await drawList(settings);
+        expect(screen.getByLabelText("Test Roaster, pinned to the home screen, 3 coffees · Updated 2 h ago"))
+            .toBeTruthy();
+    });
+
     it("lists roasters the user asked not to be asked about, and can ask again", async () => {
         const settings = memorySettings();
         settings.set("roasterFeedOptOut", JSON.stringify(["https://other.example/feed"]));
@@ -230,6 +256,26 @@ describe("a roaster's subscription", () => {
         }, {timeout: SHEET_PRESS_TIMEOUT});
         expect(readSubscriptions(settings)).toHaveLength(1);
         expect(router.dismissTo).not.toHaveBeenCalled();
+    });
+
+    it("pins the roaster to the home screen and takes the pin away", async () => {
+        const {settings} = await drawDetail(subscribed());
+        expect(screen.getByText("With 3 roasters or fewer, all of them show. Pinned ones come first."))
+            .toBeTruthy();
+
+        await fireEvent.press(screen.getByRole("switch", {name: "Pin to the home screen"}));
+        expect(readSubscriptions(settings)[0].pinnedAt).toBe(NOW);
+
+        await fireEvent.press(screen.getByRole("switch", {name: "Pin to the home screen"}));
+        expect(readSubscriptions(settings)[0].pinnedAt).toBeUndefined();
+    });
+
+    it("says the roasters are hidden from home when the switch is off", async () => {
+        const settings = subscribed();
+        settings.set("showRoastersOnHome", false);
+        await drawDetail(settings);
+        expect(screen.getByText("Roasters are hidden from the home screen. Turn them on in Roaster feeds."))
+            .toBeTruthy();
     });
 
     it("says so when the roaster is no longer subscribed", async () => {

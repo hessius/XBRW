@@ -7,15 +7,17 @@ import {openLink} from "@/components/openLink";
 import ScreenHeader from "@/components/ScreenHeader";
 import SettingsActionRow from "@/components/SettingsActionRow";
 import SettingsSection from "@/components/SettingsSection";
+import SettingsToggleRow from "@/components/SettingsToggleRow";
 import UnsubscribeSheet from "@/components/UnsubscribeSheet";
 import {palette} from "@/constants/colors";
 import router from "@/hooks/steadyRouter";
 import {useScrollEndPadding} from "@/hooks/useBottomInset";
-import {sharedSettings} from "@/hooks/useSetting";
+import {sharedSettings, useSetting} from "@/hooks/useSetting";
 import {useLiveBrew} from "@/hooks/useLiveBrew";
 import {useRoasterSubscriptions} from "@/hooks/useRoasterSubscriptions";
 import {readCatalogue} from "@/library/roasterCatalogue";
 import type {RoasterFeed} from "@/library/roasterFeed";
+import {pinDescription} from "@/library/roasterHome";
 import {subscriptionFor} from "@/library/roasterSubscription";
 import {countLine, shownKey, statusLine} from "@/library/subscriptionStatus";
 import type {Settings} from "@/library/Settings";
@@ -26,7 +28,8 @@ import type {Settings} from "@/library/Settings";
  * Opened from a row on the subscriptions list, or straight from the roaster's
  * coffee list by MANAGE FEED. Says how many coffees the subscription
  * holds and how fresh they are, then offers what a person might want: browse
- * the coffees, go to the roaster, update now, stop for a while, stop for good.
+ * the coffees, go to the roaster, update now, stop for a while, stop for good,
+ * and pin it to the home screen.
  *
  * Unsubscribing lands on the subscriptions list: popped back to when this was
  * opened from it, put in this screen's place when it was not, so the screen
@@ -50,6 +53,7 @@ export default function SubscriptionScreen({settings, feedUrl, fetchBody, now: c
     const tick = () => setNow((clock ?? Date.now)());
     const scrollEnd = useScrollEndPadding(48);
     const sub = subscriptionFor(subs.subscriptions, feed);
+    const [onHome] = useSetting("showRoastersOnHome", store);
     const covered = ratingNoteOpen || ending;
 
     if (sub === undefined) {
@@ -108,6 +112,16 @@ export default function SubscriptionScreen({settings, feedUrl, fetchBody, now: c
                                                detail="The catalogue stays as it is until you resume."
                                                onPress={() => subs.pause(sub)}/>
                         )}
+                    </SettingsSection>
+
+                    <SettingsSection>
+                        <SettingsToggleRow label="Pin to the home screen"
+                                           description={pinDescription(subs.subscriptions.length, onHome)}
+                                           value={sub.pinnedAt !== undefined}
+                                           onChange={(next) => subs.pin(sub, next)}/>
+                    </SettingsSection>
+
+                    <SettingsSection>
                         <SettingsActionRow label="Unsubscribe" tone="danger"
                                            detail="Recipes in your library stay."
                                            onPress={() => setEnding(true)}/>
