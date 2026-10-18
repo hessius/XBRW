@@ -57,6 +57,7 @@ import {
 import {canHandOff, HANDOFF_TARGETS} from "@/library/brew/handoff/targets";
 import {handoffCoffee} from "@/library/brew/handoff/backfill";
 import {beanNameFromRecipe} from "@/library/brew/handoff/beanName";
+import {openBagBeanName} from "@/library/CoffeeBagDatabase";
 import {liveDrawdown} from "@/library/brew/liveDrawdown";
 import {pauseSeconds, pausedBeforeDrawdownSeconds, plannedSeconds, pourEndDelaySeconds} from "@/library/brew/brewShape";
 import {pausedWithin} from "@/library/brew/pauseIntervals";
@@ -822,9 +823,15 @@ export default function Brew({historyStore}: {historyStore?: ExportStore} = {}) 
             )}
         </YStack>
 
+        {/* A bag sent to Beanconqueror fixes the name its brews must carry
+            to land on it, so while one is open it is the suggestion and what
+            SKIP sends. Read only while the sheet is up: the lookup is SQLite
+            and this screen re-renders throughout a brew. */}
         <BeanNameSheet open={namingBean} onOpenChange={setNamingBean}
-                       suggestion={beanNameFromRecipe(recipe.name) ?? ""}
-                       onConfirm={(name) => void sendHandoff(name)} />
+                       suggestion={(namingBean ? openBagBeanName(recipe.uuid) : undefined)
+                           ?? beanNameFromRecipe(recipe.name) ?? ""}
+                       onConfirm={(name) => void sendHandoff(
+                           name !== "" ? name : openBagBeanName(recipe.uuid) ?? name)} />
         </KeyboardAvoidingView>
     );
 }

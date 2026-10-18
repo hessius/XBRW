@@ -405,7 +405,8 @@ describe("SettingsScreen", () => {
             {name: "Back up my recipes, Writes a file and hands it to the share sheet."}));
 
         expect(mockExportBackup).toHaveBeenCalledWith(
-            mockLibraryRecipes, expect.any(Object), expect.any(String), expect.any(Array)
+            mockLibraryRecipes, expect.any(Object), expect.any(String), expect.any(Array),
+            expect.any(Array)
         );
 
         // Asserted against DEFAULTS rather than a list written out here, because
@@ -601,7 +602,7 @@ describe("SettingsScreen", () => {
 
         expect(mockExportBackup).toHaveBeenCalledWith(expect.anything(),
             expect.objectContaining({showRecipeAvatars: false}),
-            expect.any(String), expect.any(Array));
+            expect.any(String), expect.any(Array), expect.any(Array));
     });
 
     it("reports a backup that could not be shared", async () => {
@@ -675,7 +676,7 @@ describe("SettingsScreen", () => {
         await fireEvent.press(screen.getByRole("button", {name: /back up my recipes/i}));
         expect(mockExportBackup).toHaveBeenCalledWith(expect.anything(),
             expect.objectContaining({brewHistorySort: "rating", brewHistorySortDirection: "asc"}),
-            expect.any(String), expect.any(Array));
+            expect.any(String), expect.any(Array), expect.any(Array));
     });
 
     it("restores a library sorted by rating", async () => {
@@ -1220,6 +1221,32 @@ describe("SettingsScreen", () => {
                 {name: "Send brews to Beanconqueror"}));
 
             expect(settings.get("beanconquerorHandoff")).toBe(true);
+        });
+
+        it("tracks bags in Beanconqueror by default once brews go there", async () => {
+            const settings = new Settings(memoryStorage());
+            settings.set("labsUnlocked", true);
+
+            await renderWithProviders(<SettingsScreen settings={settings}/>);
+            expect(screen.getByRole("radio", {name: "XBRW++", checked: true})).toBeTruthy();
+
+            await fireEvent.press(screen.getByRole("switch",
+                {name: "Send brews to Beanconqueror"}));
+            expect(screen.getByRole("radio", {name: "Beanconqueror", checked: true})).toBeTruthy();
+            // Still following the switch, not yet a choice of its own.
+            expect(settings.get("bagTracker")).toBe("auto");
+        });
+
+        it("keeps an explicit bag tracker choice", async () => {
+            const settings = new Settings(memoryStorage());
+            settings.set("labsUnlocked", true);
+            settings.set("beanconquerorHandoff", true);
+
+            await renderWithProviders(<SettingsScreen settings={settings}/>);
+            await fireEvent.press(screen.getByRole("radio", {name: "XBRW++"}));
+
+            expect(settings.get("bagTracker")).toBe("xbrw");
+            expect(screen.getByRole("radio", {name: "XBRW++", checked: true})).toBeTruthy();
         });
 
         it("closes Labs from inside it, and leaves the rest of settings alone", async () => {

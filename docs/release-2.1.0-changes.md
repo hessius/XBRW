@@ -277,6 +277,38 @@ machine's own row says Connected.
 
 Not yet checked on a device: the model correction on a Studio previously set
 to Original, and the wording with a second phone holding the machine.
+## Bag tracker and reorder (2026-10-18)
+
+A recipe can carry the bag of coffee it is brewed from: size (160, 250, 320,
+480 or 1000 g presets, or any whole grams), an optional roasted-on day and the
+buy day. It is added from the ABOUT deck's new BAG section or the recipe menu
+("I bought a bag"), and edited, finished or removed from the same sheet.
+Bags live in their own `coffee_bags` table, travel in backups under a new
+`bags` key (older files simply have none) and are deleted with their recipe.
+Brew history is untouched by finishing or removing a bag.
+
+A Labs choice, "Track bags in", decides which app counts the bag, because
+Beanconqueror already subtracts every brew it is handed and two counts drift.
+It follows the Beanconqueror handoff switch until set.
+
+- XBRW++: grams left are derived at read time from the doses of counted brews
+  (`done` and `endedOnMachine`) started since the bag was added or last
+  corrected. Cancelled, failed and lost brews cost nothing; hand-logged brews
+  carry no dose. The section reads "212 g left, about 11 brews"; under two
+  doses it says "Running low" with REORDER (opens the coffee's or recipe's
+  https link, hidden without one); under one dose it offers MARK FINISHED.
+  List cards and shelf tiles show grams or LOW in the badge corner.
+- Beanconqueror: no grams estimate here. Adding a bag opens
+  `beanconqueror://ADD_USER_BEAN` with a `BeanProto` carrying name, weight,
+  buy and roast dates, optional price and the pod's origin fields. The name is
+  the one the brew handoff sends for that recipe, and the brew and record
+  screens' bean sheet now offers the bag's name, so brews land on that bean.
+
+Release checks: on both platforms, add a bag in each mode; brew and confirm the
+count drops by the dose (XBRW++) and that a cancelled brew does not; confirm
+Beanconqueror opens its add-bean screen prefilled with the right name, weight
+and dates, and that a later brew handed over is linked to that bean; restore a
+backup with bags onto a clean install.
 
 ## Brew history trace storage (2026-10-15)
 

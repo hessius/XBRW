@@ -5,6 +5,7 @@ import RecipeShelfTile from "@/components/RecipeShelfTile";
 import Recipe, {CUP_TYPE} from "@/library/Recipe";
 import Pour, {POUR_PATTERN} from "@/library/Pour";
 import {renderWithProviders} from "@/test-utils/render";
+import {newBag} from "@/library/coffeeBag";
 
 function named(name: string): Recipe {
     const r = new Recipe();
@@ -288,5 +289,31 @@ describe("a tile in edit mode", () => {
             .map((a) => a.name);
         expect(names).toEqual(expect.arrayContaining(
             ["share", "duplicate", "delete"]));
+    });
+});
+
+describe("RecipeShelfTile bag badge", () => {
+    const bag = {...newBag("r1", {sizeGrams: 250}, 1_760_000_000_000), id: "bag-1"};
+
+    it("shows grams left in the corner and says them aloud", async () => {
+        await renderWithProviders(
+            <RecipeShelfTile recipe={writable("Guji")} {...HANDLERS}
+                             bag={{bag, usedGrams: 30}}/>
+        );
+        expect(screen.getByTestId("recipe-tile-bag")).toHaveTextContent("220G");
+        expect(screen.getByLabelText(/220 grams of coffee left/)).toBeTruthy();
+    });
+
+    it("says LOW once fewer than two doses remain", async () => {
+        await renderWithProviders(
+            <RecipeShelfTile recipe={writable("Guji")} {...HANDLERS}
+                             bag={{bag, usedGrams: 225}}/>
+        );
+        expect(screen.getByTestId("recipe-tile-bag")).toHaveTextContent("LOW");
+    });
+
+    it("draws nothing without a bag", async () => {
+        await renderWithProviders(<RecipeShelfTile recipe={writable("Guji")} {...HANDLERS}/>);
+        expect(screen.queryByTestId("recipe-tile-bag")).toBeNull();
     });
 });

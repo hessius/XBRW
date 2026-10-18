@@ -10,6 +10,8 @@ import RecipePhoto from "@/components/RecipePhoto";
 import SlotMarker from "@/components/SlotMarker";
 import Recipe from "@/library/Recipe";
 import {evidenceLine, isSet, spokenEvidence} from "@/library/recipeEvidence";
+import {bagBadge, readBag, spokenBag} from "@/library/coffeeBag";
+import type {StoredBagReading} from "@/library/CoffeeBagDatabase";
 import type {RecipeEvidence} from "@/library/libraryQuery";
 import type {SlotMarkerValue} from "@/library/slots/slotModel";
 import {accentGroupFor, resolveAccent} from "@/library/accent";
@@ -188,6 +190,13 @@ type Props = {
      * either.
      */
     evidence?: RecipeEvidence;
+    /**
+     * The recipe's open bag, when this app is the one counting it.
+     *
+     * Drawn in the badge corner as grams left or LOW, so it takes no row of
+     * its own and the card keeps its height. Absent draws nothing.
+     */
+    bag?: StoredBagReading;
     slotMarker?: SlotMarkerValue;
     onEasyMode?: () => void;
 };
@@ -204,6 +213,7 @@ export default function RecipeCard({
     onPress,
     editing = false,
     evidence,
+    bag,
     onDuplicate,
     onDelete,
     showCoffeeMarker = true,
@@ -232,6 +242,7 @@ export default function RecipeCard({
     const hasNote = recipe.description.length > 0;
 
     const shownEvidence = evidenceLine(evidence);
+    const bagReading = bag === undefined ? undefined : readBag(bag.bag, bag.usedGrams, recipe.dosage);
 
     const summary = [
         recipe.displayName(),
@@ -249,7 +260,8 @@ export default function RecipeCard({
         // reader would otherwise have the figures conveyed by the glyphs
         // alone. Kept out of the editing case for the same reason the drawn
         // line is: it is not on screen then.
-        ...(editing ? [] : spokenEvidence(evidence))
+        ...(editing ? [] : spokenEvidence(evidence)),
+        bagReading !== undefined ? spokenBag(bagReading) : undefined
     ].filter((part) => part !== undefined).join(", ");
 
     // The row actions are nested inside that same group, so VoiceOver cannot
@@ -433,6 +445,13 @@ export default function RecipeCard({
                             already in the card's own label above, and announcing
                             it twice is worse than not at all. */}
                         <SlotMarker marker={slotMarker}/>
+                        {bagReading !== undefined && (
+                            <DotMatrixText testID="recipe-card-bag" fontSize={11}
+                                           weight="bold" letterSpacing={1.4}
+                                           color={onAccent.marker}>
+                                {bagBadge(bagReading)}
+                            </DotMatrixText>
+                        )}
                         {recipe.favourite && (
                             <DotIcon testID="recipe-card-favourite" name="favourite"
                                      size={12} color={onAccent.marker}/>

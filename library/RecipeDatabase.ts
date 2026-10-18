@@ -6,6 +6,7 @@ import {reassignIfCrossed} from './accent';
 import {copyName} from './duplicates';
 import {tagKey} from './tagKey';
 import {ensureBrewTables} from './BrewDatabase';
+import {ensureBagTable, readOpenBags, type StoredBagReading} from './CoffeeBagDatabase';
 import {brewEvidenceAggregates} from './brew/brewPopulation';
 import {buildLibraryQuery, type FilterResolver, type LibraryQuery,
         type RecipeEvidence} from './libraryQuery';
@@ -184,6 +185,7 @@ class RecipeDatabase {
         // reference a table that does not exist and throw on first render. The
         // DDL is shared, not copied, so the two openers cannot drift.
         ensureBrewTables(this.db);
+        ensureBagTable(this.db);
         this.migrateIndex();
     }
 
@@ -423,6 +425,9 @@ class RecipeDatabase {
         this.atomically(() => {
             this.db.runSync("DELETE FROM recipes WHERE uuid = ?;", [uuid]);
             this.db.runSync("DELETE FROM recipe_tags WHERE uuid = ?;", [uuid]);
+            // A bag belongs to the recipe it was bought for. Its brews stay in
+            // history, which is kept on purpose; the bag has nothing to hang on.
+            this.db.runSync("DELETE FROM coffee_bags WHERE recipeUuid = ?;", [uuid]);
         });
     }
 
@@ -437,6 +442,7 @@ class RecipeDatabase {
         this.atomically(() => {
             this.db.runSync("DELETE FROM recipes");
             this.db.runSync("DELETE FROM recipe_tags");
+            this.db.runSync("DELETE FROM coffee_bags");
         });
     }
 
@@ -772,6 +778,17 @@ class RecipeDatabase {
      * stopped brews does get an entry with `brews` 0, and the card reads that
      * the same way: no evidence line, because there was no cup.
      */
+    /**
+     * Every open bag and the grams its brews have used, keyed by recipe uuid.
+     *
+     * Served from here, on the library's revision counter, for the same reason
+     * `brewEvidence` is: the card reads it beside the list without the hook
+     * opening a second store.
+     */
+    public coffeeBags(): Record<string, StoredBagReading> {
+        return readOpenBags(this.db);
+    }
+
     public brewEvidence(): Record<string, RecipeEvidence> {
         const rows = this.db.getAllSync(
             `SELECT recipeUuid,

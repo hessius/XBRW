@@ -150,6 +150,8 @@ tray, and the overflow sheet.
 | `home.overflow.hints.off` | `components/RecipeOverflowSheet.tsx:108` | Doto state when hints are off. | `OFF` |
 | `home.overflow.share.label` | `components/RecipeOverflowSheet.tsx:116` | Row label. | `Share` |
 | `home.overflow.share.hint` | `components/RecipeOverflowSheet.tsx:118` | Sub-note under Share. | `Creates a link that opens this recipe in the xBloom app.` |
+| `home.overflow.bag.label` | `components/RecipeOverflowSheet.tsx` (`onBag` row) | Editor-only row. "I bought a bag" until the recipe has an open bag, then "Edit bag". Doto caption is the same words in caps. | `I bought a bag` / `Edit bag` |
+| `home.overflow.bag.hint` | `components/RecipeOverflowSheet.tsx` (a11y hint) | (a11y) Hint on the bag row. | `Counts down the coffee left as you brew this recipe.` |
 | `home.overflow.duplicate` | `components/RecipeOverflowSheet.tsx:120` | Row label. | `Duplicate` |
 | `home.overflow.history.label` | `components/RecipeOverflowSheet.tsx` (`"Brew history"`) | Row label. | `Brew history` |
 | `home.overflow.history.hint` | `components/RecipeOverflowSheet.tsx:122` | Sub-note under Brew history. | `Shows every recorded brew of this recipe.` |
@@ -874,6 +876,42 @@ empty library with nothing to explain it.
 | `help.brewedWith.question` | `constants/recipeHelp.ts` | How the help sheet heads the long form. | `Where do the brewed with figures come from?` |
 | `help.brewedWith.detail` | `constants/recipeHelp.ts` | The long form. The only place the floor of three rated brews is stated, and the place that explains why a good looking row can be missing from the filter. | See `constants/recipeHelp.ts` |
 
+## Recipe editor: bag
+
+`components/BagSection.tsx` on the ABOUT deck, `components/BagSheet.tsx`, and
+the badge on `components/RecipeCard.tsx` / `components/RecipeShelfTile.tsx`
+(words from `library/coffeeBag.ts`). Grams left are drawn only while XBRW++ is
+the bag tracker; with Beanconqueror tracking, the section says so and draws no
+estimate.
+
+| ID | Source | Context — when the user sees this | Current text |
+|----|--------|-----------------------------------|--------------|
+| `bag.title` | `components/BagSection.tsx` | Doto section title, under HOW IT HAS GONE. | `BAG` |
+| `bag.none.xbrw` | `components/BagSection.tsx` | No open bag, XBRW++ tracking. | `Add the bag you bought to count down what is left as you brew.` |
+| `bag.none.bq` | `components/BagSection.tsx` | No open bag, Beanconqueror tracking. | `Add the bag you bought and it goes to Beanconqueror, which counts it down as you send brews.` |
+| `bag.add` | `components/BagSection.tsx` | Doto button; spoken "I bought a bag". | `I BOUGHT A BAG` |
+| `bag.remaining` | `library/coffeeBag.ts` (`remainingLine`) | Grams left and whole brews of the recipe's dose. Singular at one; at nought says so. | `212 g left, about 11 brews.` / `30 g left, about 1 brew.` / `10 g left, not enough for another brew.` |
+| `bag.facts` | `components/BagSection.tsx` | Dim line under the reading. Roast part only when a roast day is stored. | `250 g bag. Roasted 2026-10-12.` |
+| `bag.low` | `components/BagSection.tsx` | Fewer than two doses left (but at least one). | `Running low.` |
+| `bag.empty` | `components/BagSection.tsx` | Less than one dose left. | `Not enough left for another brew. Finished with this bag?` |
+| `bag.elsewhere` | `components/BagSection.tsx` | Beanconqueror tracking, in place of the reading. | `Bag tracked in Beanconqueror.` |
+| `bag.reorder` | `components/BagSection.tsx` | Doto button, only with an https coffee or recipe link; XBRW++ mode only once low, Beanconqueror mode always. Spoken "Reorder this coffee", hint "Opens the roaster's page in your browser." | `REORDER` |
+| `bag.finish` | `components/BagSection.tsx` | Doto button when the bag is empty. Spoken "Mark this bag finished", hint "Stops counting this bag. Your brews stay in history." | `MARK FINISHED` |
+| `bag.edit` | `components/BagSection.tsx` | Doto button; spoken "Edit bag". | `EDIT BAG` |
+| `bag.badge` | `library/coffeeBag.ts` (`bagBadge`) | Doto badge in the card/tile corner. | `212G` / `LOW` |
+| `bag.badge.a11y` | `library/coffeeBag.ts` (`spokenBag`) | (a11y) Part of the card's label. | `212 grams of coffee left` / `bag running low, 30 grams left` |
+| `bag.sheet.title` | `components/BagSheet.tsx` | Sheet title, adding / editing. | `I bought a bag` / `Your bag` |
+| `bag.sheet.intro.xbrw` | `components/BagSheet.tsx` | Top line, XBRW++ tracking. | `Each brew of this recipe takes its dose from the bag.` |
+| `bag.sheet.intro.bq` | `components/BagSheet.tsx` | Top line, Beanconqueror tracking. | `The bag goes to Beanconqueror, which takes each brew you send it from the bag.` |
+| `bag.sheet.size` | `components/BagSheet.tsx` | Doto field label, preset chips `160G` `250G` `320G` `480G` `1000G` `OTHER`. Error under it. | `BAG SIZE` · `Enter a size in whole grams.` |
+| `bag.sheet.roasted` | `components/BagSheet.tsx` | Doto field label, placeholder `YYYY-MM-DD`, note and error. | `ROASTED ON` · `Optional. The date on the bag.` · `Use the form 2026-10-12.` |
+| `bag.sheet.left` | `components/BagSheet.tsx` | Editing, XBRW++ only: manual correction. | `GRAMS LEFT` · `Correct this if you used some another way. Brews count down from here.` · `Enter what is left in whole grams.` |
+| `bag.sheet.beanName` | `components/BagSheet.tsx` | Beanconqueror only. Prefilled with the name the brew handoff sends; read-only for a pod. | `BEAN NAME` · `Brews you send from this recipe go to the bean with this name.` · `Give the bean a name.` |
+| `bag.sheet.price` | `components/BagSheet.tsx` | Beanconqueror only, optional. | `PRICE` · `Enter a price like 24.50.` |
+| `bag.sheet.save` | `components/BagSheet.tsx` | Primary button. SEND TO BEANCONQUEROR only for a new bag in Beanconqueror mode. | `SAVE` / `SEND TO BEANCONQUEROR` |
+| `bag.sheet.finish` / `bag.sheet.remove` | `components/BagSheet.tsx` | Editing an open bag. | `FINISHED` / `REMOVE` |
+| `bag.toast.bqFailed` | `app/editRecipe.tsx` (`saveBag`) | Error toast when the bag saved but Beanconqueror would not open. | `The bag is saved here, but Beanconqueror could not be opened. Make sure it is installed.` |
+
 ## Brew history
 
 `app/brewHistory.tsx`, `components/BrewHistoryControls.tsx` and `components/BrewHistoryRow.tsx`.
@@ -1317,6 +1355,10 @@ messages from `hooks/useBackup.ts` and `library/backup.ts`.
 | `settings.deleteAll.keep` | `components/DeleteAllSheet.tsx:58` | Cancel button label. | `Keep my recipes` |
 | `settings.labs.handoff.label` | `app/settings.tsx` | Labs toggle for the Beanconqueror handoff. | `Send brews to Beanconqueror` |
 | `settings.labs.handoff.description` | `app/settings.tsx` | Why the toggle is off by default, in terms of what goes wrong if it is switched on too early. | `Needs a version of Beanconqueror that can read the link. Older ones will say they do not recognise it.` |
+| `settings.labs.bagTracker.label` | `app/settings.tsx` | Labs choice beside the handoff toggle: which app counts down a bag. Shows the resolved value; until picked it follows the handoff toggle. | `Track bags in` |
+| `settings.labs.bagTracker.description` | `app/settings.tsx` | Why there is a choice at all. | `The app that counts down what is left in a bag. Beanconqueror already does this for the brews it receives, so pick one and the two never disagree.` |
+| `settings.labs.bagTracker.options` | `app/settings.tsx` | The two segments. | `XBRW++` / `Beanconqueror` |
+| `settings.restore.skippedBags` | `app/settings.tsx` | Error toast after a restore when bags in the file could not be read. Singular for one. | `One bag in that backup could not be read.` / `3 bags in that backup could not be read.` |
 
 ### Backup / restore messages (`hooks/useBackup.ts`, `library/backup.ts`)
 

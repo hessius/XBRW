@@ -99,8 +99,13 @@ import {asTemperatureUnit, type TemperatureUnit} from "@/library/units";
 import {tagKey} from "@/library/tagKey";
 import {shareBlockReason} from "@/library/shareLink";
 import {type Settings} from "@/library/Settings";
+import {resolveBagTracker} from "@/library/coffeeBag";
+import type {StoredBagReading} from "@/library/CoffeeBagDatabase";
 import {UNCLIPPED_LIST} from "@/constants/lists";
 import {STABLE_HOST} from "@/constants/views";
+
+/** No bags to draw, one object so a render does not mint a new empty map. */
+const NO_BAGS: Readonly<Record<string, StoredBagReading>> = {};
 
 /**
  * How long one import link stays claimed after it is acted on.
@@ -319,6 +324,13 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
     const [deletingShelf, setDeletingShelf] = useState<string | null>(null);
     const [onlySelected, setOnlySelected] = useState(false);
     const [showCoffeeMarker] = useSetting("showCoffeeMarker", settings);
+    const [bagTrackerSetting] = useSetting("bagTracker", settings);
+    const [beanconquerorHandoff] = useSetting("beanconquerorHandoff", settings);
+    // Grams left are this app's estimate only while this app is the tracker.
+    // With Beanconqueror counting the bag, a badge here would be a second,
+    // drifting answer, so the cards draw none.
+    const shownBags = resolveBagTracker(bagTrackerSetting, beanconquerorHandoff) === "xbrw"
+        ? library.bags : NO_BAGS;
     const [dottedProfile] = useSetting("dotMatrixProfile", settings);
     const [showRecipeAvatars] = useSetting("showRecipeAvatars", settings);
     const [invertAutoShelves] = useSetting("invertAutoShelves", settings);
@@ -1585,6 +1597,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                         onScroll={onScroll}
                         actionsFor={roomActionsFor}
                         evidence={library.evidence}
+                        bags={shownBags}
                         showCoffeeMarker={showCoffeeMarker}
                         dottedProfile={dottedProfile}
                         editing={editing}
@@ -1664,6 +1677,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                                 dottedProfile={dottedProfile}
                                 showPicture={showRecipeAvatars}
                                 evidence={library.evidence[item.recipe.uuid]}
+                                bag={shownBags[item.recipe.uuid]}
                                 slotMarker={slotMarkers(slotRecord, item.recipe)}
                                 onEasyMode={remembered !== ""
                                     ? () => openEasyModeRecipe(item.recipe, remembered) : undefined}

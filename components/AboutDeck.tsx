@@ -1,6 +1,7 @@
 import React from "react";
 import {YStack} from "tamagui";
 
+import BagSection, {type BagSectionProps} from "@/components/BagSection";
 import {BeanProfileDeck} from "@/components/BeanProfileDeck";
 import FromSection from "@/components/FromSection";
 import HistorySection from "@/components/HistorySection";
@@ -35,6 +36,12 @@ type Props = {
     onRate?: (rating: number) => void;
     /** Opens the full brewed-with ledger. */
     onShowBeanProfile: () => void;
+    /**
+     * The bag this recipe draws on. Optional so a caller with no bag store (a
+     * test reading the deck) leaves the section out rather than drawing
+     * controls that do nothing.
+     */
+    bag?: BagSectionProps;
     /** Every tag used elsewhere in the library, largest shelves first. */
     knownTags: string[];
     /** Replaces the recipe's tags through the editor operation. */
@@ -81,7 +88,7 @@ type Props = {
  * the comments that say why went with it into the pod section.
  */
 export default function AboutDeck({
-    recipe, accent, showAvatar, brews, beanProfile, onRate, onShowBeanProfile, knownTags,
+    recipe, accent, showAvatar, brews, beanProfile, onRate, onShowBeanProfile, bag, knownTags,
     onTags, showHint, dispatch, onDraft, onInputErrorChange, xidLookupFailed, externalEpoch,
     onXidFocusChange
 }: Props) {
@@ -110,6 +117,11 @@ export default function AboutDeck({
             <FromSection recipe={recipe} accent={accent} showAvatar={showAvatar}/>
 
             <HistorySection summary={brews} onRate={onRate}/>
+
+            {/* Under how it has gone, because what is left in the bag is the
+                next question after how the brews went, and above the brewed
+                with ledger, which is history rather than the bag in hand. */}
+            {bag !== undefined && <BagSection {...bag}/>}
 
             <BeanProfileDeck profile={beanProfile} accent={accent}
                              onShowAll={onShowBeanProfile}/>
