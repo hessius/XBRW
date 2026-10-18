@@ -77,7 +77,7 @@ export default function RoasterCoffeeRow({coffee, onPress, testID}: {
                     )}
                     {bags !== null && (
                         <DotMatrixText testID="roaster-row-bags" fontSize={11} weight="bold"
-                                       letterSpacing={1.2} color={palette.muted} numberOfLines={1}>
+                                       letterSpacing={1.2} color={palette.dim} numberOfLines={1}>
                             {bags.toUpperCase()}
                         </DotMatrixText>
                     )}

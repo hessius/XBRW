@@ -413,9 +413,8 @@ screen (`app/subscriptions.tsx`, `components/UnsubscribeSheet.tsx`,
 
 | ID | Source | Context — when the user sees this | Current text |
 |----|--------|-----------------------------------|--------------|
-| `roaster.offer.title` | `components/RoasterOfferSheet.tsx` | Sheet title. `${roaster}` is the feed's roaster name. | `Subscribe to ${roaster}?` |
-| `roaster.offer.body` | `components/RoasterOfferSheet.tsx` | Sheet body. `${count}` is how many coffees the feed lists. | `Browse all ${count} coffees and their recipes in XBRW++. New coffees appear as they're released.` |
-| `roaster.offer.body.one` | `components/RoasterOfferSheet.tsx` | The same, for one coffee. | `Browse this coffee and its recipes in XBRW++. New coffees appear as they're released.` |
+| `roaster.offer.title` | `components/RoasterOfferSheet.tsx` | Sheet title. `${roaster}` is the feed's roaster name. Wraps beside CLOSE when long. | `Subscribe to ${roaster}?` |
+| `roaster.offer.body` | `components/RoasterOfferSheet.tsx` (`ROASTER_OFFER_BODY`) | Sheet body. No coffee count (it changes as coffees sell out) and no app name (`XBRW++` broke across a line between the plus signs; if it is ever needed in body text, join it with U+2060 word joiners). | `Browse all their coffees and recipes. New coffees appear as they're released.` |
 | `roaster.offer.dontAsk` | `components/RoasterOfferSheet.tsx` | Checkbox label (also its a11y name). | `Don't ask again for this roaster` |
 | `roaster.offer.subscribe` | `components/RoasterOfferSheet.tsx` | Doto primary button. a11y: `Subscribe to ${roaster}`. | `SUBSCRIBE` |
 | `roaster.offer.notNow` | `components/RoasterOfferSheet.tsx` | Doto secondary button. a11y: `Not now`. | `NOT NOW` |
@@ -430,7 +429,8 @@ screen (`app/subscriptions.tsx`, `components/UnsubscribeSheet.tsx`,
 | `roaster.coffee.roast` | `app/roasterCoffee.tsx` | Doto roast level. | `${level} ROAST` |
 | `roaster.coffee.advice` | `library/roasterCatalogue.ts` (`roastAdvice`) | Roast timing; parts appear as stated. | `Rest ${n} days, peak day ${n}, best by day ${n}` |
 | `roaster.coffee.bags` | `app/roasterCoffee.tsx` | Bag sizes. | `Bags: 320 g · 160 g` |
-| `roaster.coffee.page` | `app/roasterCoffee.tsx` | Link to the roaster's product page. | `The roaster's page for this coffee` |
+| `roaster.coffee.facts` | `library/roasterCatalogue.ts` (`beanFacts`) | Doto captions beside the bean facts, ABOUT's words and formats: `1,750 m`, `90 points`. | `ORIGIN` / `COUNTRY` / `REGION` / `FARM` / `FARMER` / `ELEVATION` / `PROCESS` / `FERMENT` / `VARIETAL` / `SCORE` |
+| `roaster.coffee.page` | `components/CatalogueParts.tsx` (`PageLinkRow`) | Bordered row with a chevron, as ABOUT's recipe page link. a11y: `View the roaster's page. Opens in your browser.` | `View the roaster's page` |
 | `roaster.coffee.loading` | `app/roasterCoffee.tsx` | While the recipe is fetched. | `Loading the recipe from xBloom.` |
 | `roaster.coffee.failed` | `app/roasterCoffee.tsx` | Fetch failed; beside TRY AGAIN. | `Couldn't load the recipe from xBloom.` |
 | `roaster.coffee.brew` | `app/roasterCoffee.tsx` | Doto primary action. | `BREW NOW` |

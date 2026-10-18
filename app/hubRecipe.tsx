@@ -230,7 +230,8 @@ function RecipeDetail({
                             fill={false}
                             stageWater={[]}
                             stalls={[]}
-                            pauseElapsed={0}/>
+                            pauseElapsed={0}
+                            plan/>
                     </YStack>
                 )}
 
