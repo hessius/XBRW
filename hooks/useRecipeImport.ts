@@ -9,6 +9,7 @@ import {
     type ImportDecoration
 } from "@/library/importDecoration";
 import {parseImportInput, type ImportSource} from "@/library/importInput";
+import {planReimport, readPrints, rememberPrint, takeLatest} from "@/library/importRefresh";
 import {asMachineModel} from "@/library/machine/machineModel";
 import type Recipe from "@/library/Recipe";
 import {XBloomRecipe} from "@/library/XBloomRecipe";
@@ -66,6 +67,12 @@ export type ImportState =
     | {status: "idle"}
     | {status: "resolving"}
     | {status: "found"; preview: ImportPreview}
+    /**
+     * The link points at a recipe the user has edited, and its author's
+     * version has moved on. Nothing is changed until they choose
+     * (`acceptLatest` or `keepMine`). See `library/importRefresh.ts`.
+     */
+    | {status: "newer"; held: Recipe; latest: Recipe; decoration?: ImportDecoration}
     | {status: "error"; reason: ImportErrorReason; message: string};
 
 /**
@@ -113,12 +120,13 @@ type Options = {
     /** The library, for de-duplication. Passed in rather than re-opened here. */
     stored: Recipe[] | (() => Recipe[]);
     /** Navigation belongs to the screen; the timing rule belongs here. */
-    onOpenRecipe: (recipe: Recipe, isExisting: boolean) => void;
+    onOpenRecipe: (recipe: Recipe, isExisting: boolean, refreshed?: boolean) => void;
     /**
-     * Write a stored recipe back after an import link filled its blanks
-     * (`fillImportBlanks`). Called only when something changed, and before the
-     * recipe is opened. Optional: without it the filled recipe still opens,
-     * it just is not saved until the editor saves it.
+     * Write a stored recipe back after an import changed it: an import link
+     * filled its blanks (`fillImportBlanks`), or a re-import took the author's
+     * latest (`library/importRefresh.ts`). Called only when something changed,
+     * and before the recipe is opened. Optional: without it the change still
+     * opens, it just is not saved until the editor saves it.
      */
     onSaveExisting?: (recipe: Recipe) => void;
 };
@@ -183,6 +191,10 @@ export type RecipeImport = {
     openFound: () => void;
     /** Back to an empty field, cancelling anything in flight. */
     reset: () => void;
+    /** On a `newer` state: take the author's latest brewing content, keep everything else. */
+    acceptLatest: () => void;
+    /** On a `newer` state: open the user's own copy unchanged. */
+    keepMine: () => void;
 };
 
 export function useRecipeImport({stored, onOpenRecipe, onSaveExisting}: Options): RecipeImport {
@@ -371,7 +383,31 @@ export function useRecipeImport({stored, onOpenRecipe, onSaveExisting}: Options)
         const storedNow = typeof storedRef.current === "function"
             ? storedRef.current()
             : storedRef.current;
-        const {recipe, isExisting} = resolveOnOpen(storedNow, candidate, "brew");
+        // The same share link again, and its author changed it since. An
+        // untouched copy takes the latest quietly; an edited one is asked
+        // about. Never the name, notes, tags or brews. See `importRefresh`.
+        const prints = readPrints(sharedSettings());
+        const again = planReimport(storedNow, candidate, prints);
+        if (again.kind === "ask") {
+            setShowField(intent === "deliberate" || intent === "atomic");
+            setState({status: "newer", held: again.held, latest: candidate, decoration});
+            return;
+        }
+        let refreshed = false;
+        if (again.kind === "replace") {
+            takeLatest(again.held, candidate);
+            onSaveRef.current?.(again.held);
+            rememberPrint(sharedSettings(), again.held);
+            refreshed = true;
+        }
+        const {recipe, isExisting} = again.kind === "replace" || again.kind === "same"
+            ? {recipe: again.kind === "replace" ? again.held : again.recipe, isExisting: true}
+            : resolveOnOpen(storedNow, candidate, "brew");
+        // What it looked like as it arrived, so a later import of the same
+        // link can tell whether the user has changed it since.
+        if (!isExisting) {
+            rememberPrint(sharedSettings(), recipe, storedNow.map((entry) => entry.uuid));
+        }
 
         // A held recipe first imported before the link carried a picture or a
         // coffee would otherwise never get one, however often it is
@@ -394,9 +430,10 @@ export function useRecipeImport({stored, onOpenRecipe, onSaveExisting}: Options)
         if (
             intent === "atomic" ||
             intent === "shared" ||
+            refreshed ||
             (intent === "shortcut" && !isExisting)
         ) {
-            handOff(recipe, isExisting);
+            handOff(recipe, isExisting, refreshed);
             return;
         }
 
@@ -529,9 +566,30 @@ export function useRecipeImport({stored, onOpenRecipe, onSaveExisting}: Options)
      * recipe is handed over means every close path is covered, and a fourth one
      * added later cannot forget.
      */
-    function handOff(recipe: Recipe, isExisting: boolean) {
-        onOpenRef.current(recipe, isExisting);
+    function handOff(recipe: Recipe, isExisting: boolean, refreshed = false) {
+        onOpenRef.current(recipe, isExisting, refreshed);
         reset();
+    }
+
+    function acceptLatest() {
+        if (state.status !== "newer") return;
+        const {held, latest, decoration} = state;
+        takeLatest(held, latest);
+        // Blanks are filled whichever version the user keeps (#223).
+        if (decoration !== undefined) fillImportBlanks(held, decoration);
+        onSaveRef.current?.(held);
+        rememberPrint(sharedSettings(), held);
+        handOff(held, true, true);
+    }
+
+    function keepMine() {
+        if (state.status !== "newer") return;
+        const {held, decoration} = state;
+        // Keeping their brew is not refusing a picture they never had (#223).
+        if (decoration !== undefined && fillImportBlanks(held, decoration)) {
+            onSaveRef.current?.(held);
+        }
+        handOff(held, true);
     }
 
     function openFound() {
@@ -551,5 +609,5 @@ export function useRecipeImport({stored, onOpenRecipe, onSaveExisting}: Options)
         setState({status: "idle"});
     }
 
-    return {state, value, showField, focusField, hint, onChangeText, onSelectionChange, resolveNow, onPastedText, openFound, reset};
+    return {state, value, showField, focusField, hint, onChangeText, onSelectionChange, resolveNow, onPastedText, openFound, reset, acceptLatest, keepMine};
 }

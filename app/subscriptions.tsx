@@ -8,27 +8,13 @@ import SettingsActionRow from "@/components/SettingsActionRow";
 import SettingsSection from "@/components/SettingsSection";
 import UnsubscribeSheet from "@/components/UnsubscribeSheet";
 import {palette} from "@/constants/colors";
+import {sharedSettings} from "@/hooks/useSetting";
 import {useLiveBrew} from "@/hooks/useLiveBrew";
 import {useRoasterSubscriptions} from "@/hooks/useRoasterSubscriptions";
-import type {ShelfDeps} from "@/library/roasterShelf";
+import {readCatalogue, updatedAgo} from "@/library/roasterCatalogue";
 import type {RoasterFeed} from "@/library/roasterFeed";
-import {
-    subscriptionCounts, type RoasterSubscription, type SyncError
-} from "@/library/roasterSubscription";
+import type {RoasterSubscription, SyncError} from "@/library/roasterSubscription";
 import type {Settings} from "@/library/Settings";
-
-const MINUTE = 60_000;
-const HOUR = 60 * MINUTE;
-const DAY = 24 * HOUR;
-
-/** "Updated 2 h ago", in the short units the rest of the app uses. */
-export function updatedAgo(at: number, now: number): string {
-    const elapsed = Math.max(0, now - at);
-    if (elapsed < MINUTE) return "Updated just now";
-    if (elapsed < HOUR) return `Updated ${Math.floor(elapsed / MINUTE)} min ago`;
-    if (elapsed < DAY) return `Updated ${Math.floor(elapsed / HOUR)} h ago`;
-    return `Updated ${Math.floor(elapsed / DAY)} d ago`;
-}
 
 const ERROR_TEXT: Record<SyncError, string> = {
     network:    "no connection to the roaster",
@@ -43,9 +29,12 @@ export function statusLine(sub: RoasterSubscription, now: number): string {
     return `${updatedAgo(sub.lastSync, now)}.`;
 }
 
-function countLine(sub: RoasterSubscription): string {
-    const {available, soldOut} = subscriptionCounts(sub);
-    const coffees = available === 1 ? "1 coffee" : `${available} coffees`;
+/** "30 coffees · 4 sold out", from the cached catalogue. */
+export function countLine(feed: RoasterFeed | null): string {
+    if (feed === null) return "Not loaded yet";
+    const total = feed.coffees.length;
+    const soldOut = feed.coffees.filter((coffee) => !coffee.available).length;
+    const coffees = total === 1 ? "1 coffee" : `${total} coffees`;
     return soldOut > 0 ? `${coffees} · ${soldOut} sold out` : coffees;
 }
 
@@ -55,23 +44,23 @@ function shownKey(key: string): string {
 }
 
 /**
- * Roaster subscriptions: the shelves that keep themselves up to date.
+ * Roaster subscriptions: the roasters whose coffees are in the catalogue.
  *
- * Reached from Settings and from a subscribed shelf's own menu. Each
+ * Reached from Settings and from the catalogue's roaster list. Each
  * subscription says how many coffees it holds, how fresh it is, and offers
- * the four things a person might want: update now, stop for a while, stop
+ * what a person might want: browse it, update it now, stop for a while, stop
  * for good, and go to the roaster. Below them, the roasters the user asked
  * never to be asked about, so that answer can be taken back.
  */
-export default function SubscriptionsScreen({settings, deps, fetchFeed, now: clock}: {
+export default function SubscriptionsScreen({settings, fetchBody, now: clock}: {
     /** Injected by tests. */
     settings?: Settings;
-    deps?: ShelfDeps;
-    fetchFeed?: (url: string, signal?: AbortSignal) => Promise<RoasterFeed>;
+    fetchBody?: (url: string, signal?: AbortSignal) => Promise<{feed: RoasterFeed; body: string}>;
     now?: () => number;
 } = {}) {
     const {ratingNoteOpen} = useLiveBrew();
-    const subs = useRoasterSubscriptions({settings, deps, fetchFeed, now: clock});
+    const store = settings ?? sharedSettings();
+    const subs = useRoasterSubscriptions({settings: store, fetchBody, now: clock});
     // Read once and again after each action, rather than on every render: a
     // render must be pure, and "2 h ago" does not need to tick.
     const [now, setNow] = useState(() => (clock ?? Date.now)());
@@ -97,13 +86,16 @@ export default function SubscriptionsScreen({settings, deps, fetchFeed, now: clo
                         <SettingsSection key={sub.feed} title={sub.roaster}>
                             <YStack testID="subscription-status" paddingVertical="$3"
                                     paddingHorizontal="$4" gap="$1" accessible>
-                                <Text fontSize={16} color={palette.text}>{countLine(sub)}</Text>
+                                <Text fontSize={16} color={palette.text}>
+                                    {countLine(readCatalogue(store, sub.feed)?.feed ?? null)}
+                                </Text>
                                 <Text fontSize={13} color={palette.dim}>
-                                    {subs.refreshing === sub.feed
-                                        ? "Updating…"
-                                        : statusLine(sub, now)}
+                                    {subs.refreshing === sub.feed ? "Updating…" : statusLine(sub, now)}
                                 </Text>
                             </YStack>
+                            <SettingsActionRow label="Browse coffees"
+                                               onPress={() => router.push({pathname: "/roaster",
+                                                                           params: {feed: sub.feed}})}/>
                             <SettingsActionRow label="Refresh now"
                                                detail={`Checks ${sub.roaster} for new and sold-out coffees.`}
                                                onPress={() => {
@@ -118,7 +110,7 @@ export default function SubscriptionsScreen({settings, deps, fetchFeed, now: clo
                                                    }}/>
                             ) : (
                                 <SettingsActionRow label="Pause updates"
-                                                   detail="The shelf stays as it is until you resume."
+                                                   detail="The catalogue stays as it is until you resume."
                                                    onPress={() => subs.pause(sub)}/>
                             )}
                             {sub.roasterUrl !== undefined && (
@@ -127,7 +119,7 @@ export default function SubscriptionsScreen({settings, deps, fetchFeed, now: clo
                                                    onPress={() => openLink(sub.roasterUrl as string)}/>
                             )}
                             <SettingsActionRow label="Unsubscribe" tone="danger"
-                                               detail="Your shelf and recipes stay."
+                                               detail="Recipes in your library stay."
                                                onPress={() => setEnding(sub)}/>
                         </SettingsSection>
                     ))}
@@ -145,7 +137,7 @@ export default function SubscriptionsScreen({settings, deps, fetchFeed, now: clo
             </YStack>
 
             <UnsubscribeSheet open={ending !== null}
-                              shelf={ending?.shelf ?? ""}
+                              roaster={ending?.roaster ?? ""}
                               onOpenChange={(next) => {
                                   if (!next) setEnding(null);
                               }}

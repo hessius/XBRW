@@ -1,0 +1,398 @@
+import {useLocalSearchParams} from "expo-router";
+import React, {useEffect, useState} from "react";
+import {Pressable, ScrollView} from "react-native";
+import {useSafeAreaInsets} from "react-native-safe-area-context";
+import {Text, XStack, YStack} from "tamagui";
+
+import BrewStageLadder from "@/components/BrewStageLadder";
+import {CatalogueStatus, Chip, DetailPhoto} from "@/components/CatalogueParts";
+import DotMatrixText from "@/components/DotMatrixText";
+import LinkText from "@/components/LinkText";
+import NameShelfSheet from "@/components/NameShelfSheet";
+import NewerVersionPrompt from "@/components/NewerVersionPrompt";
+import ScreenHeader from "@/components/ScreenHeader";
+import ShelfChoiceSheet from "@/components/ShelfChoiceSheet";
+import {notify} from "@/components/XbrwToast";
+import {onAccent, palette} from "@/constants/colors";
+import {ALREADY_IN_LIBRARY, UPDATED_TO_LATEST} from "@/constants/copy";
+import {SCREEN_PADDING} from "@/constants/layout";
+import router from "@/hooks/steadyRouter";
+import {sharedSettings, useSetting} from "@/hooks/useSetting";
+import {assignAccent, resolveAccent} from "@/library/accent";
+import type Recipe from "@/library/Recipe";
+import {
+    bagLine, chooseRecipe, findCoffee, readCatalogue, roastAdvice
+} from "@/library/roasterCatalogue";
+import type {FeedCoffee} from "@/library/roasterFeed";
+import {
+    addToLibrary, addToShelf, fetchCoffeeRecipe, takeRoasterLatest,
+    type AddOutcome, type FetchedCoffee, type LibraryDeps
+} from "@/library/roasterRecipes";
+import {realLibraryDeps, realUserShelves} from "@/library/roasterSync";
+import type {Settings} from "@/library/Settings";
+
+const LADDER_BAR_HEIGHT = 18;
+const LADDER_RUNG_GAP = 12;
+
+type Loaded = {request: string; fetched: FetchedCoffee | null; failed: boolean};
+/** What the screen is waiting on after an add, if anything. */
+type Pending =
+    | {kind: "ask"; held: Recipe; latest: Recipe; then: "library" | "shelf"}
+    | {kind: "shelf"; recipe: Recipe};
+
+/** The bean facts a bag would print, as label and value pairs. */
+function beanFacts(coffee: FeedCoffee): [string, string][] {
+    const bean = coffee.coffee;
+    const facts: [string, string | undefined][] = [
+        ["COUNTRY", bean.country],
+        ["REGION", bean.region],
+        ["FARM", bean.farm],
+        ["PRODUCER", bean.farmer],
+        ["VARIETY", bean.variety],
+        ["PROCESS", bean.processing],
+        ["ELEVATION", bean.elevation === undefined ? undefined : `${bean.elevation} m`],
+        ["SCORE", bean.cupping_points === undefined ? undefined : String(bean.cupping_points)]
+    ];
+    return facts.filter((fact): fact is [string, string] => fact[1] !== undefined);
+}
+
+function Figure({label, value, accent}: {label: string; value: string; accent: string}) {
+    return (
+        <YStack flex={1} minWidth={72} gap="$1">
+            <DotMatrixText fontSize={20} weight="bold" color={accent}>{value}</DotMatrixText>
+            <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.2} color={palette.muted}>
+                {label}
+            </DotMatrixText>
+        </YStack>
+    );
+}
+
+function Action({label, spoken, testID, primary = false, disabled = false, onPress}: {
+    label: string;
+    spoken: string;
+    testID: string;
+    primary?: boolean;
+    disabled?: boolean;
+    onPress: () => void;
+}) {
+    return (
+        <Pressable accessibilityRole="button" accessibilityLabel={spoken}
+                   accessibilityState={{disabled}} testID={testID}
+                   onPress={disabled ? undefined : onPress}>
+            <XStack height={48} alignItems="center" justifyContent="center" borderRadius="$4"
+                    opacity={disabled ? 0.35 : 1}
+                    backgroundColor={primary ? palette.text : palette.none}
+                    borderWidth={primary ? 0 : 1} borderColor={palette.line}>
+                <DotMatrixText fontSize={12} weight="bold" letterSpacing={1.6}
+                               color={primary ? onAccent.text : palette.text}>
+                    {label}
+                </DotMatrixText>
+            </XStack>
+        </Pressable>
+    );
+}
+
+/**
+ * One coffee from a roaster's catalogue: what the bag says, and its recipes.
+ *
+ * Opening it is a user action, so this is where xBloom is asked: the chosen
+ * size's recipe is fetched as the screen opens and again when the size
+ * changes, so what is shown and what every action uses is the roaster's
+ * latest. Three actions, because a catalogue is for deciding: brew it now
+ * without keeping it, add it to the library, or put it on a shelf.
+ */
+export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, library, shelves}: {
+    /** Injected by tests; production reads the route and the real stores. */
+    settings?: Settings;
+    feedUrl?: string;
+    coffeeId?: string;
+    library?: LibraryDeps;
+    shelves?: () => string[];
+} = {}) {
+    const params = useLocalSearchParams<{feed: string; coffee: string}>();
+    const feed = feedUrl ?? params.feed ?? "";
+    const ref = coffeeId ?? params.coffee ?? "";
+    const store = settings ?? sharedSettings();
+    useSetting("roasterCatalogue", store);
+    const insets = useSafeAreaInsets();
+    const [deps] = useState(() => library ?? realLibraryDeps(store));
+    const cached = readCatalogue(store, feed);
+    const coffee = cached === null ? undefined : findCoffee(cached.feed, ref);
+
+    const [size, setSize] = useState<string | undefined>(undefined);
+    const [retry, setRetry] = useState(0);
+    const [loaded, setLoaded] = useState<Loaded | null>(null);
+    const [pending, setPending] = useState<Pending | null>(null);
+    const [naming, setNaming] = useState(false);
+    const chosen = coffee === undefined ? undefined : chooseRecipe(coffee, size);
+    const request = `${chosen?.share ?? ""}:${retry}`;
+
+    useEffect(() => {
+        if (coffee === undefined || chosen === undefined) return;
+        const controller = new AbortController();
+        let alive = true;
+        fetchCoffeeRecipe(coffee, chosen.size, deps, controller.signal)
+            .then((fetched) => {
+                if (alive) setLoaded({request, fetched, failed: false});
+            })
+            .catch(() => {
+                if (alive) setLoaded({request, fetched: null, failed: true});
+            });
+        return () => {
+            alive = false;
+            controller.abort();
+        };
+        // `request` is the share and the retry count, which is everything
+        // this fetch depends on.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [request]);
+
+    if (cached === null || coffee === undefined || chosen === undefined) {
+        return (
+            <YStack flex={1} backgroundColor={palette.base}>
+                <ScreenHeader title="Coffee" onBack={() => router.back()}/>
+                <CatalogueStatus testID="roaster-coffee-missing" title="NOT IN THE CATALOGUE"
+                                 body="This coffee is no longer in the roaster's list."/>
+            </YStack>
+        );
+    }
+
+    const arrived = loaded !== null && loaded.request === request;
+    const fetched = arrived ? loaded.fetched : null;
+    const failed = arrived && loaded.failed;
+    const recipe = fetched?.recipe ?? null;
+    const accent = recipe === null ? palette.text : resolveAccent(recipe);
+    const advice = roastAdvice(coffee);
+    const bags = bagLine(coffee);
+    const facts = beanFacts(coffee);
+    const notes = coffee.coffee.aromatics;
+    const covered = naming || (pending !== null && pending.kind === "shelf");
+
+    /** A fresh copy each time, so one action never mutates what another uses. */
+    async function latest(): Promise<FetchedCoffee> {
+        return fetchCoffeeRecipe(coffee as FeedCoffee, chosen?.size, deps);
+    }
+
+    function report(outcome: AddOutcome) {
+        if (outcome.kind === "added") notify({tone: "success", message: "Added to your library."});
+        if (outcome.kind === "already") notify({tone: "info", message: ALREADY_IN_LIBRARY});
+        if (outcome.kind === "updated") notify({tone: "info", message: UPDATED_TO_LATEST});
+    }
+
+    async function add(then: "library" | "shelf") {
+        let outcome: AddOutcome;
+        try {
+            outcome = addToLibrary(await latest(), deps, store);
+        } catch {
+            notify({tone: "error", message: "Couldn't reach xBloom. Check your connection."});
+            return;
+        }
+        if (outcome.kind === "ask") {
+            setPending({kind: "ask", held: outcome.held, latest: outcome.latest, then});
+            return;
+        }
+        if (then === "library") report(outcome);
+        else setPending({kind: "shelf", recipe: outcome.recipe});
+    }
+
+    function answer(takeLatest: boolean) {
+        if (pending === null || pending.kind !== "ask") return;
+        const kept = takeLatest
+            ? takeRoasterLatest(pending.held, pending.latest, deps, store)
+            : pending.held;
+        if (pending.then === "shelf") {
+            setPending({kind: "shelf", recipe: kept});
+            return;
+        }
+        setPending(null);
+        notify({tone: "info", message: takeLatest ? UPDATED_TO_LATEST : ALREADY_IN_LIBRARY});
+    }
+
+    function shelve(shelf: string): boolean {
+        if (pending === null || pending.kind !== "shelf") return false;
+        addToShelf(pending.recipe, shelf, deps, store);
+        setPending(null);
+        setNaming(false);
+        notify({tone: "success", message: `Added to ${shelf}.`});
+        return true;
+    }
+
+    async function brewNow() {
+        // Not saved: the editor opens it as an import does, and the user can
+        // brew, tune or save from there.
+        let fresh: FetchedCoffee;
+        try {
+            fresh = await latest();
+        } catch {
+            notify({tone: "error", message: "Couldn't reach xBloom. Check your connection."});
+            return;
+        }
+        assignAccent(fresh.recipe, deps.stored());
+        router.push({pathname: "/editRecipe", params: {recipeJSON: JSON.stringify(fresh.recipe)}});
+    }
+
+    return (
+        <YStack flex={1} backgroundColor={palette.base} paddingBottom={insets.bottom}>
+            <YStack flex={1} accessibilityElementsHidden={covered}
+                    importantForAccessibility={covered ? "no-hide-descendants" : "auto"}>
+                <ScreenHeader title={coffee.name} onBack={() => router.back()}/>
+                <ScrollView testID="roaster-coffee-scroll" showsVerticalScrollIndicator={false}
+                            contentContainerStyle={{paddingBottom: 24, gap: 18}}>
+                    <DetailPhoto uri={coffee.image ?? null} testID="roaster-coffee-photo"/>
+                    <YStack paddingHorizontal={SCREEN_PADDING} gap="$4">
+                        {!coffee.available && (
+                            <DotMatrixText testID="roaster-coffee-sold-out" fontSize={12}
+                                           weight="bold" letterSpacing={1.6} color={palette.text}>
+                                SOLD OUT
+                            </DotMatrixText>
+                        )}
+                        {coffee.roast?.level !== undefined && (
+                            <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.4}
+                                           color={palette.dim}>
+                                {`${coffee.roast.level.toUpperCase()} ROAST`}
+                            </DotMatrixText>
+                        )}
+                        {advice !== null && (
+                            <Text testID="roaster-coffee-advice" color={palette.text} fontSize={15}>
+                                {advice}
+                            </Text>
+                        )}
+                        {notes !== undefined && (
+                            <XStack flexWrap="wrap" gap="$2">
+                                {notes.split(",").map((note) => note.trim()).filter(Boolean)
+                                    .map((note) => <Chip key={note} label={note}/>)}
+                            </XStack>
+                        )}
+                        {facts.length > 0 && (
+                            <YStack gap="$2">
+                                {facts.map(([label, value]) => (
+                                    <XStack key={label} gap="$3">
+                                        <YStack width={96}>
+                                            <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.2}
+                                                           color={palette.muted}>
+                                                {label}
+                                            </DotMatrixText>
+                                        </YStack>
+                                        <Text fontSize={14} color={palette.text} flexShrink={1}>
+                                            {value}
+                                        </Text>
+                                    </XStack>
+                                ))}
+                            </YStack>
+                        )}
+                        {bags !== null && (
+                            <Text testID="roaster-coffee-bags" fontSize={14} color={palette.dim}>
+                                {`Bags: ${bags}`}
+                            </Text>
+                        )}
+                        {coffee.url !== undefined && (
+                            <LinkText label="The roaster's page for this coffee" url={coffee.url}/>
+                        )}
+
+                        <YStack gap="$3">
+                            <DotMatrixText fontSize={12} weight="bold" letterSpacing={1.5}
+                                           color={palette.dim}>
+                                RECIPE
+                            </DotMatrixText>
+                            {coffee.recipes.length > 1 && (
+                                <XStack gap="$2" accessibilityRole="radiogroup">
+                                    {coffee.recipes.map((entry) => {
+                                        const on = entry.size === chosen.size;
+                                        return (
+                                            <Pressable key={entry.size} accessibilityRole="radio"
+                                                       accessibilityState={{checked: on}}
+                                                       accessibilityLabel={entry.size}
+                                                       testID={`roaster-coffee-size-${entry.size}`}
+                                                       onPress={() => setSize(entry.size)}>
+                                                <XStack height={36} paddingHorizontal="$3"
+                                                        alignItems="center" borderRadius="$4"
+                                                        backgroundColor={on ? palette.text : palette.raised}>
+                                                    <DotMatrixText fontSize={12} weight="bold"
+                                                                   letterSpacing={1.4}
+                                                                   color={on ? onAccent.text : palette.dim}>
+                                                        {entry.size.toUpperCase()}
+                                                    </DotMatrixText>
+                                                </XStack>
+                                            </Pressable>
+                                        );
+                                    })}
+                                </XStack>
+                            )}
+                            {!arrived && (
+                                <Text testID="roaster-coffee-loading" color={palette.muted} fontSize={14}>
+                                    Loading the recipe from xBloom.
+                                </Text>
+                            )}
+                            {failed && (
+                                <XStack gap="$3" alignItems="center">
+                                    <Text color={palette.danger} fontSize={13} flex={1}
+                                          accessibilityRole="alert">
+                                        Couldn&apos;t load the recipe from xBloom.
+                                    </Text>
+                                    <Pressable accessibilityRole="button" accessibilityLabel="Try again"
+                                               testID="roaster-coffee-retry"
+                                               onPress={() => setRetry((value) => value + 1)}>
+                                        <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.5}
+                                                       color={palette.text}>
+                                            TRY AGAIN
+                                        </DotMatrixText>
+                                    </Pressable>
+                                </XStack>
+                            )}
+                            {recipe !== null && (
+                                <YStack gap="$3">
+                                    <XStack flexWrap="wrap" gap="$3">
+                                        <Figure label="DOSE" value={`${recipe.dosage} g`} accent={accent}/>
+                                        <Figure label="RATIO" value={`1:${recipe.ratio}`} accent={accent}/>
+                                        <Figure label="GRIND" value={recipe.grinder ? String(recipe.grindSize) : "OFF"}
+                                                accent={accent}/>
+                                    </XStack>
+                                    {recipe.pours.length > 0 && (
+                                        <BrewStageLadder pours={recipe.pours} accent={accent}
+                                                         activeIndex={null} barHeight={LADDER_BAR_HEIGHT}
+                                                         rungGap={LADDER_RUNG_GAP} scrolls={false}
+                                                         fill={false} stageWater={[]} stalls={[]}
+                                                         pauseElapsed={0}/>
+                                    )}
+                                </YStack>
+                            )}
+                        </YStack>
+
+                        {pending?.kind === "ask" ? (
+                            <NewerVersionPrompt name={pending.held.displayName()}
+                                                onLatest={() => answer(true)}
+                                                onKeep={() => answer(false)}/>
+                        ) : (
+                            <YStack gap="$2">
+                                <Action label="BREW NOW" spoken="Brew now" testID="roaster-coffee-brew"
+                                        primary disabled={recipe === null} onPress={() => void brewNow()}/>
+                                <Action label="ADD TO LIBRARY" spoken="Add to library"
+                                        testID="roaster-coffee-add" disabled={recipe === null}
+                                        onPress={() => void add("library")}/>
+                                <Action label="ADD TO SHELF" spoken="Add to shelf"
+                                        testID="roaster-coffee-shelf" disabled={recipe === null}
+                                        onPress={() => void add("shelf")}/>
+                            </YStack>
+                        )}
+                    </YStack>
+                </ScrollView>
+            </YStack>
+
+            <ShelfChoiceSheet open={pending?.kind === "shelf" && !naming}
+                              shelves={pending?.kind === "shelf" ? (shelves ?? (() => realUserShelves(store)))() : []}
+                              onOpenChange={(next) => {
+                                  if (!next && !naming) setPending(null);
+                              }}
+                              onChoose={shelve}
+                              onNew={() => setNaming(true)}/>
+            <NameShelfSheet open={naming} count={1}
+                            onOpenChange={(next) => {
+                                if (!next) {
+                                    setNaming(false);
+                                    setPending(null);
+                                }
+                            }}
+                            onName={shelve}/>
+        </YStack>
+    );
+}

@@ -84,7 +84,7 @@ export const OUTBOUND_CALLS: OutboundCall[] = [
     {
         id:      "import",
         title:   "Look up a shared recipe",
-        trigger: "You paste an xBloom link or a pod code, or share a link into the app, or a roaster shelf you subscribed to adds a coffee.",
+        trigger: "You paste an xBloom link or a pod code, or share a link into the app, or open, brew or add a coffee in a roaster's catalogue.",
         host:    "client-api.xbloom.com",
         hostPinned: true,
         owner:   "xBloom",
@@ -99,7 +99,7 @@ export const OUTBOUND_CALLS: OutboundCall[] = [
     {
         id:      "roasterFeed",
         title:   "Check a roaster's list of coffees",
-        trigger: "You open a roaster's import link that names a list of its coffees. If you subscribe, the app checks that list again when you open it, at most once every 12 hours, and whenever you tap Refresh. Pausing or ending the subscription stops it.",
+        trigger: "You open a roaster's import link that names a list of its coffees. If you subscribe, the app reads that list again when you open the app, at most once every 12 hours, and whenever you tap Refresh. Pausing or ending the subscription stops it.",
         host:    "whichever roaster the import link named",
         hostPinned: false,
         owner:   "The roaster who made the link",
@@ -107,9 +107,9 @@ export const OUTBOUND_CALLS: OutboundCall[] = [
             "Nothing but the request itself: your IP address, and the address of the list.",
             "No recipe, no account and nothing from your library. XBRW++ drops any address that is not https.",
             "Only while the app is open. There is no background fetch, and a phone in a pocket asks nobody for anything.",
-            "Each new coffee on the list is then looked up on xBloom the way a pasted share link is. That is the Look up a shared recipe entry, and its picture is the Load a photo entry."
+            "Only the list is read. Checking it never asks xBloom anything and never changes your library. A coffee's recipe is fetched from xBloom only when you open, brew or add that coffee, which is the Look up a shared recipe entry. Its picture is the Load a photo entry."
         ],
-        source:  ["library/roasterFeed.ts", "library/roasterSync.ts", "hooks/useRoasterShelf.ts"]
+        source:  ["library/roasterFeed.ts", "library/roasterSync.ts", "hooks/useRoasterOffer.ts"]
     },
     {
         id:      "brewMind",
@@ -210,7 +210,7 @@ export const OUTBOUND_CALLS: OutboundCall[] = [
     {
         id:      "images",
         title:   "Load a photo",
-        trigger: "You open the hub, an import preview, or a saved recipe that carries a pod photo or the avatar of whoever shared it. With Show recipe pictures on, also your library list.",
+        trigger: "You open the hub, a roaster's catalogue, an import preview, or a saved recipe that carries a pod photo or the avatar of whoever shared it. With Show recipe pictures on, also your library list.",
         host:    "whichever host xBloom named in its own reply",
         hostPinned: false,
         owner:   "xBloom, or whoever xBloom points at",
@@ -218,7 +218,7 @@ export const OUTBOUND_CALLS: OutboundCall[] = [
             "Nothing but the request itself: your IP address, and the address of the picture.",
             "No recipe, no account and nothing you have typed.",
             "The address comes from xBloom's reply rather than from this app, so it is not a fixed one. XBRW++ drops any address that is not https, and sends it nothing.",
-            "A roaster's list of coffees can name a picture for each coffee too, under the same https rule.",
+            "A roaster's list of coffees names a picture for each coffee too, under the same https rule, and the catalogue shows it.",
             "This is the one request that can happen while you are only looking at your own library, because a recipe imported from xBloom remembers the photo that came with it."
         ],
         source:  [
@@ -229,7 +229,8 @@ export const OUTBOUND_CALLS: OutboundCall[] = [
             "components/FromSection.tsx",
             "components/HubRow.tsx",
             "components/ImportResult.tsx",
-            "app/hubRecipe.tsx"
+            "components/CatalogueParts.tsx",
+            "components/RoasterCoffeeRow.tsx"
         ]
     }
 ];

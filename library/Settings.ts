@@ -359,13 +359,27 @@ export const DEFAULTS = {
      */
     roasterFeedOptOut: "",
     /**
-     * Roaster shelves the user subscribed to, as a JSON array of records
+     * Roasters the user subscribed to, as a JSON array of records
      * (`library/roasterSubscription.ts`). Carried in a backup: a subscription
-     * is something the user set up, and the shelf it keeps is already in the
-     * backup as tags. Read back through `parseSubscriptions`, which validates
-     * every field, because a backup file is untrusted.
+     * is something the user set up. Read back through `parseSubscriptions`,
+     * which validates every field, because a backup file is untrusted.
      */
     roasterSubscriptions: "",
+    /**
+     * The cached catalogue: each subscription's last feed body
+     * (`library/roasterCatalogue.ts`). Held out of backups below: it is a copy
+     * of somebody else's file, up to a megabyte each, and the next sync
+     * fetches it again.
+     */
+    roasterCatalogue: "",
+    /**
+     * What each imported recipe's brewing content was when it arrived, by
+     * uuid (`library/importRefresh.ts`). It is how importing the same link
+     * again tells an untouched copy, which takes the author's latest quietly,
+     * from one the user edited, which is asked about first. Carried in a
+     * backup with the recipes it names, and validated on the way back in.
+     */
+    importFingerprints: "",
     /**
      * Draw an auto shelf's tile the other way round: the accent fills the card
      * and the glyph's square takes the quiet background.
@@ -428,6 +442,8 @@ export type SettingKey = keyof typeof DEFAULTS;
  * has already taught, and a restored phone has not seen or forgotten the same
  * lessons.
  *
+ * `roasterCatalogue` is a cache of roasters' feeds, refetched on the next sync.
+ *
  * Named here rather than simply omitted from the snapshot so that the
  * exhaustiveness test still holds every other key to account: a key is either
  * in a backup or on this list, never quietly missing from both.
@@ -436,12 +452,12 @@ export type BackupExcluded =
     "machineDeviceId" | "savedMachines" | "lastCardRead" | "labsUnlocked" | "beanconquerorHandoff" |
     "machineModelString" | "machineName" | "ratingPromptDismissed" |
     "drawerHintLastShownAt" | "drawerHintShownCount" | "drawerHintManualOpens" |
-    "drawerHintSignature" | "drawerHintLastSeenAt";
+    "drawerHintSignature" | "drawerHintLastSeenAt" | "roasterCatalogue";
 export const NOT_IN_BACKUP: readonly SettingKey[] = [
     "machineDeviceId", "savedMachines", "lastCardRead", "labsUnlocked", "beanconquerorHandoff",
     "machineModelString", "machineName", "ratingPromptDismissed",
     "drawerHintLastShownAt", "drawerHintShownCount", "drawerHintManualOpens",
-    "drawerHintSignature", "drawerHintLastSeenAt"
+    "drawerHintSignature", "drawerHintLastSeenAt", "roasterCatalogue"
 ];
 
 /**

@@ -1,55 +1,49 @@
-import {parseHidden, serialiseHidden} from "@/library/hiddenShelves";
+import {canonicalShelfId, parseHidden} from "@/library/hiddenShelves";
 import {parseImportInput} from "@/library/importInput";
 import {tagFilterId} from "@/library/libraryFilters";
 import {asMachineModel} from "@/library/machine/machineModel";
 import RecipeDatabase from "@/library/RecipeDatabase";
+import {dropCatalogue, writeCatalogue} from "@/library/roasterCatalogue";
+import {fetchRoasterFeedBody, RoasterFeedError, type RoasterFeed} from "@/library/roasterFeed";
+import type {LibraryDeps} from "@/library/roasterRecipes";
 import {
-    fetchRoasterFeed, RoasterFeedError, type RoasterFeed
-} from "@/library/roasterFeed";
-import {
-    planRoasterSync, runRoasterSync, type ShelfDeps, type SyncOutcome, type SyncPlan
-} from "@/library/roasterShelf";
-import {
-    isDue, parseSubscriptions, withoutSubscription, serialiseSubscriptions, subscriptionFor, withSubscription,
-    type RoasterSubscription, type SubscriptionItem, type SyncError
+    isDue, parseSubscriptions, serialiseSubscriptions, subscriptionFor, withSubscription,
+    withoutSubscription, type RoasterSubscription, type SyncError
 } from "@/library/roasterSubscription";
 import type {Settings} from "@/library/Settings";
-import {tagKey} from "@/library/tagKey";
 import {XBloomRecipe} from "@/library/XBloomRecipe";
 
 /**
- * Subscribing to a roaster feed and syncing it, outside React.
+ * Subscribing to a roaster feed and keeping its catalogue fresh, outside React.
  *
- * Outside React because three places start a sync: the library on open and
- * on returning to the foreground, an import link for a feed already
- * subscribed to, and the subscriptions screen's REFRESH NOW. One module and
- * one lock means two of them can never sync the same shelf at once.
+ * Outside React because three places start a sync: the library on open and on
+ * returning to the foreground, an import link for a feed already subscribed
+ * to, and REFRESH NOW. One module and one lock means two of them can never
+ * sync the same feed at once.
+ *
+ * A sync reads the roaster's feed and refreshes the cached catalogue, and
+ * that is all. It never asks xBloom for anything and never touches the
+ * library: recipes are fetched when the user opens a coffee, imports, adds
+ * or brews it.
  *
  * Settings are read fresh before every write. A sync takes seconds, and the
- * user can pause, unsubscribe or rename in the meantime; a write built from a
- * list read at the start would quietly undo that.
+ * user can pause or unsubscribe in the meantime.
  */
 
 export type SyncDeps = {
     settings: Settings;
-    shelf?: ShelfDeps;
-    fetchFeed?: (url: string, signal?: AbortSignal) => Promise<RoasterFeed>;
+    fetchBody?: (url: string, signal?: AbortSignal) => Promise<{feed: RoasterFeed; body: string}>;
     now?: () => number;
 };
 
 export type SyncResult =
-    | {ok: true; plan: SyncPlan; outcome: SyncOutcome; subscription: RoasterSubscription}
+    | {ok: true; feed: RoasterFeed; subscription: RoasterSubscription}
     | {ok: false; reason: "busy" | "notDue" | "missing" | "paused" | SyncError};
 
 let running = false;
 
-/** Whether any sync is in flight. For tests and for the screen's spinner. */
-export function isSyncing(): boolean {
-    return running;
-}
-
-/** The live shelf dependencies: the share endpoint and the recipe table. */
-export function realShelfDeps(settings: Settings): ShelfDeps {
+/** The live dependencies: the share endpoint and the recipe table. */
+export function realLibraryDeps(settings: Settings): LibraryDeps {
     let store: RecipeDatabase | null = null;
     const open = () => (store ??= new RecipeDatabase());
     return {
@@ -88,49 +82,35 @@ export function updateSubscription(
     return next;
 }
 
-/** Mark a shelf as one the user made, the way NEW SHELF does. */
-function markShelf(settings: Settings, shelf: string): void {
-    settings.set("myShelves",
-        serialiseHidden([...parseHidden(settings.get("myShelves")), tagFilterId(shelf)]));
-}
-
-function merged(items: readonly SubscriptionItem[], more: readonly SubscriptionItem[]) {
-    const byShare = new Map(items.map((entry) => [entry.shareId, entry]));
-    for (const entry of more) if (!byShare.has(entry.shareId)) byShare.set(entry.shareId, entry);
-    return [...byShare.values()];
-}
-
-/** Record a new subscription. Its first sync is the caller's next step. */
+/**
+ * Record a subscription and cache the feed it was offered from.
+ *
+ * Nothing is imported. The roaster's coffees are now in the catalogue, and
+ * what goes into the library is the user's choice, one coffee at a time.
+ */
 export function subscribe(
-    settings: Settings, feedUrl: string, feed: RoasterFeed, shelf: string
+    settings: Settings, feedUrl: string, feed: RoasterFeed, body: string, now: number
 ): RoasterSubscription {
     const existing = subscriptionFor(readSubscriptions(settings), feedUrl);
     const sub: RoasterSubscription = existing ?? {
-        feed: feedUrl, roaster: feed.roaster.name, shelf,
-        lastSync: 0, lastAttempt: 0, items: [], soldOut: [], paused: false
+        feed: feedUrl, roaster: feed.roaster.name, lastSync: now, lastAttempt: now, paused: false
     };
     if (feed.roaster.url !== undefined) sub.roasterUrl = feed.roaster.url;
     writeSubscription(settings, sub);
+    writeCatalogue(settings, feedUrl, body, now);
     return sub;
 }
 
 /**
  * Sync one subscription.
  *
- * `feed` skips the fetch when the caller already has it, which is the case
- * for the first sync straight after the prompt. `force` ignores the twelve
- * hour limit; `ignorePause` is only for an explicit REFRESH NOW.
+ * `force` ignores the twelve hour limit; `ignorePause` is only for an explicit
+ * REFRESH NOW.
  */
 export async function syncSubscription(
     feedUrl: string,
     deps: SyncDeps,
-    options: {
-        feed?: RoasterFeed;
-        force?: boolean;
-        ignorePause?: boolean;
-        signal?: AbortSignal;
-        onProgress?: (done: number, total: number) => void;
-    } = {}
+    options: {force?: boolean; ignorePause?: boolean; signal?: AbortSignal} = {}
 ): Promise<SyncResult> {
     const {settings} = deps;
     const now = deps.now ?? Date.now;
@@ -144,46 +124,34 @@ export async function syncSubscription(
     // `finally` because a throw anywhere would otherwise latch the lock and
     // refuse every sync for the rest of the session.
     try {
-        let feed = options.feed;
-        if (feed === undefined) {
-            try {
-                const load = deps.fetchFeed
-                    ?? ((url: string, signal?: AbortSignal) => fetchRoasterFeed(url, {signal}));
-                feed = await load(sub.feed, options.signal);
-            } catch (error) {
-                const reason: SyncError =
-                    error instanceof RoasterFeedError ? error.kind : "network";
-                updateSubscription(settings, sub.feed, (current) =>
-                    ({...current, lastAttempt: now(), lastError: reason}));
-                return {ok: false, reason};
-            }
+        let fetched: {feed: RoasterFeed; body: string};
+        try {
+            const load = deps.fetchBody
+                ?? ((url: string, signal?: AbortSignal) => fetchRoasterFeedBody(url, {signal}));
+            fetched = await load(sub.feed, options.signal);
+        } catch (error) {
+            const reason: SyncError = error instanceof RoasterFeedError ? error.kind : "network";
+            updateSubscription(settings, sub.feed, (current) =>
+                ({...current, lastAttempt: now(), lastError: reason}));
+            return {ok: false, reason};
         }
 
-        const shelfDeps = deps.shelf ?? realShelfDeps(settings);
-        const plan = planRoasterSync(feed, shelfDeps.stored(), sub.items);
-        // The shelf keeps the name it was given, even if it has since been
-        // renamed here: the subscription follows the user's name, not the feed's.
-        const planned = {...plan, shelf: sub.shelf};
-        const outcome = await runRoasterSync(planned, shelfDeps, {
-            signal: options.signal, onProgress: options.onProgress
-        });
-
-        if (outcome.added + outcome.adopted > 0) markShelf(settings, sub.shelf);
         const stamp = now();
+        // Unsubscribed while the request was out: the cache stays gone too.
+        if (subscriptionFor(readSubscriptions(settings), sub.feed) === undefined) {
+            return {ok: false, reason: "missing"};
+        }
+        writeCatalogue(settings, sub.feed, fetched.body, stamp);
+
         const saved = updateSubscription(settings, sub.feed, (current) => {
             const next: RoasterSubscription = {
-                ...current,
-                items:       merged(current.items, outcome.tracked),
-                soldOut:     plan.soldOut,
-                lastSync:    stamp,
-                lastAttempt: stamp
+                ...current, roaster: fetched.feed.roaster.name, lastSync: stamp, lastAttempt: stamp
             };
             delete next.lastError;
-            if (feed.roaster.url !== undefined) next.roasterUrl = feed.roaster.url;
+            if (fetched.feed.roaster.url !== undefined) next.roasterUrl = fetched.feed.roaster.url;
             return next;
         });
-        // Unsubscribed while it ran: the recipes stay, the record stays gone.
-        return {ok: true, plan: planned, outcome, subscription: saved ?? sub};
+        return {ok: true, feed: fetched.feed, subscription: saved ?? sub};
     } finally {
         running = false;
     }
@@ -200,31 +168,34 @@ export async function syncDue(deps: SyncDeps): Promise<SyncResult[]> {
     return results;
 }
 
-/** Stop following a feed. The shelf and its recipes stay as they are. */
+/**
+ * Stop following a feed. Its coffees leave the catalogue; recipes the user
+ * added to the library stay, and simply stop receiving updates.
+ */
 export function unsubscribe(settings: Settings, feedUrl: string): void {
     settings.set("roasterSubscriptions",
         serialiseSubscriptions(withoutSubscription(readSubscriptions(settings), feedUrl)));
+    dropCatalogue(settings, feedUrl);
 }
 
 export function setPaused(settings: Settings, feedUrl: string, paused: boolean): void {
     updateSubscription(settings, feedUrl, (sub) => ({...sub, paused}));
 }
 
-/** The subscription that keeps a shelf, matched the way shelves match tags. */
-export function subscriptionForShelf(
-    list: readonly RoasterSubscription[], shelf: string
-): RoasterSubscription | undefined {
-    const key = tagKey(shelf);
-    return list.find((sub) => tagKey(sub.shelf) === key);
-}
-
-/** A subscribed shelf was renamed: follow it. */
-export function renameSubscribedShelf(settings: Settings, from: string, to: string): void {
-    const sub = subscriptionForShelf(readSubscriptions(settings), from);
-    if (sub !== undefined) writeSubscription(settings, {...sub, shelf: to});
-}
-
 /** Test hook: release the lock a test left held. */
 export function resetSyncLockForTests(): void {
     running = false;
+}
+
+/**
+ * The user's own shelves, in their order, spelled as the tags are.
+ *
+ * `myShelves` holds folded ids, so the spelling comes from the tags on the
+ * recipes; a marked shelf with no recipe left on it is not offered.
+ */
+export function realUserShelves(settings: Settings): string[] {
+    const order = parseHidden(settings.get("myShelves"));
+    const tags = new RecipeDatabase().countRecipesByTag();
+    const byId = new Map(tags.map(({tag}) => [canonicalShelfId(tagFilterId(tag)), tag]));
+    return order.map((id) => byId.get(id)).filter((tag): tag is string => tag !== undefined);
 }

@@ -1,62 +1,19 @@
 import {MAX_URL, SHORT_TEXT} from "@/library/brewmindLink";
 import {httpsUrl} from "@/library/podCoffee";
-import {MAX_TAG_LENGTH} from "@/library/Recipe";
 import {feedKey} from "@/library/roasterFeed";
 
 /**
- * A roaster shelf the user subscribed to.
+ * A roaster the user subscribed to.
  *
- * Stored in the `roasterSubscriptions` setting as a JSON array. The shelf
- * itself is still an ordinary tag shelf (`library/shelves.ts`); this record is
- * only what keeps it in step with the roaster's feed: where the feed is, which
- * coffees the subscription has already dealt with, and which of those are
- * sold out now.
- *
- * `items` is the memory that makes syncing safe. A coffee the subscription has
- * handled once is never handled again: if the user deletes its recipe or takes
- * it off the shelf, the next sync leaves that alone rather than putting it
- * back. Only coffees new to the subscription are imported or shelved.
+ * Stored in the `roasterSubscriptions` setting as a JSON array. A
+ * subscription puts the roaster's coffees in the catalogue (the feed itself
+ * is cached by `library/roasterCatalogue.ts`) and keeps them fresh. It owns
+ * nothing in the library: a shelf is what the user owns, and nothing is put
+ * on one unless they ask.
  */
 
 /** How often a subscription is synced on its own, at most. */
 export const SYNC_INTERVAL_MS = 12 * 60 * 60 * 1000;
-
-/** Coffees remembered per subscription. Far more than any roaster sells. */
-const MAX_ITEMS = 2000;
-/** Matches the share id cap in `importInput.ts`. */
-const MAX_SHARE_ID = 256;
-const MAX_COFFEE_ID = 200;
-
-export type SubscriptionItem = {
-    /** The share id of the recipe this coffee was imported or shelved as. */
-    shareId: string;
-    /** The feed's own id for the coffee, when it gave one. */
-    coffeeId?: string;
-};
-
-export type RoasterSubscription = {
-    /** The feed URL, https. */
-    feed: string;
-    roaster: string;
-    /** The tag, and so the shelf's name. */
-    shelf: string;
-    /** Epoch ms of the last sync that read the feed. 0 before the first. */
-    lastSync: number;
-    /**
-     * Epoch ms of the last attempt, successful or not. The rate limit runs on
-     * this, so a feed that is down is not asked again on every app open.
-     */
-    lastAttempt: number;
-    items: SubscriptionItem[];
-    /** Share ids of tracked coffees the feed no longer lists as available. */
-    soldOut: string[];
-    /** The roaster's own site, from the feed. https only. */
-    roasterUrl?: string;
-    /** Updates are paused: nothing syncs until the user resumes. */
-    paused: boolean;
-    /** Why the last attempt failed, or absent when it worked. */
-    lastError?: SyncError;
-};
 
 /**
  * Why a sync did not complete, in the few words the screen shows.
@@ -68,6 +25,25 @@ export type SyncError = "network" | "unreadable";
 
 const SYNC_ERRORS: readonly SyncError[] = ["network", "unreadable"];
 
+export type RoasterSubscription = {
+    /** The feed URL, https. */
+    feed: string;
+    roaster: string;
+    /** The roaster's own site, from the feed. https only. */
+    roasterUrl?: string;
+    /** Epoch ms of the last sync that read the feed. 0 before the first. */
+    lastSync: number;
+    /**
+     * Epoch ms of the last attempt, successful or not. The rate limit runs on
+     * this, so a feed that is down is not asked again on every app open.
+     */
+    lastAttempt: number;
+    /** Updates are paused: nothing syncs until the user resumes. */
+    paused: boolean;
+    /** Why the last attempt failed, or absent when it worked. */
+    lastError?: SyncError;
+};
+
 function text(value: unknown, max: number): string | undefined {
     if (typeof value !== "string") return undefined;
     const trimmed = value.trim();
@@ -78,45 +54,25 @@ function time(value: unknown): number {
     return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : 0;
 }
 
-function item(value: unknown): SubscriptionItem | null {
-    if (value === null || typeof value !== "object") return null;
-    const entry = value as Record<string, unknown>;
-    const shareId = text(entry.shareId, MAX_SHARE_ID);
-    if (shareId === undefined) return null;
-    const result: SubscriptionItem = {shareId};
-    const coffeeId = text(entry.coffeeId, MAX_COFFEE_ID);
-    if (coffeeId !== undefined) result.coffeeId = coffeeId;
-    return result;
+function url(value: unknown): string | undefined {
+    const raw = text(value, MAX_URL);
+    return raw === undefined ? undefined : httpsUrl(raw);
 }
 
 function subscription(value: unknown): RoasterSubscription | null {
     if (value === null || typeof value !== "object") return null;
     const entry = value as Record<string, unknown>;
-    const raw = text(entry.feed, MAX_URL);
-    const feed = raw === undefined ? undefined : httpsUrl(raw);
+    const feed = url(entry.feed);
     const roaster = text(entry.roaster, SHORT_TEXT);
-    const shelf = text(entry.shelf, MAX_TAG_LENGTH);
-    if (feed === undefined || roaster === undefined || shelf === undefined) return null;
+    if (feed === undefined || roaster === undefined) return null;
 
-    const items = Array.isArray(entry.items)
-        ? entry.items.slice(0, MAX_ITEMS).map(item)
-            .filter((kept): kept is SubscriptionItem => kept !== null)
-        : [];
-    const soldOut = Array.isArray(entry.soldOut)
-        ? entry.soldOut.slice(0, MAX_ITEMS)
-            .map((id) => text(id, MAX_SHARE_ID))
-            .filter((id): id is string => id !== undefined)
-        : [];
     const result: RoasterSubscription = {
-        feed, roaster, shelf,
+        feed, roaster,
         lastSync:    time(entry.lastSync),
         lastAttempt: time(entry.lastAttempt),
-        items,
-        soldOut,
         paused:      entry.paused === true
     };
-    const rawUrl = text(entry.roasterUrl, MAX_URL);
-    const roasterUrl = rawUrl === undefined ? undefined : httpsUrl(rawUrl);
+    const roasterUrl = url(entry.roasterUrl);
     if (roasterUrl !== undefined) result.roasterUrl = roasterUrl;
     if (SYNC_ERRORS.includes(entry.lastError as SyncError)) {
         result.lastError = entry.lastError as SyncError;
@@ -169,8 +125,7 @@ export function withSubscription(
     list: readonly RoasterSubscription[], next: RoasterSubscription
 ): RoasterSubscription[] {
     const key = feedKey(next.feed);
-    const kept = list.filter((sub) => feedKey(sub.feed) !== key);
-    return [...kept, next];
+    return [...list.filter((sub) => feedKey(sub.feed) !== key), next];
 }
 
 export function withoutSubscription(
@@ -183,20 +138,11 @@ export function withoutSubscription(
 /**
  * Whether a subscription should sync now on its own.
  *
- * Never while paused. A clock that has gone backwards (an attempt "in the future") counts as due,
- * so a phone whose date was once wrong does not stop syncing until it catches
- * up.
+ * Never while paused. A clock that has gone backwards (an attempt "in the
+ * future") counts as due, so a phone whose date was once wrong does not stop
+ * syncing until it catches up.
  */
 export function isDue(sub: RoasterSubscription, now: number): boolean {
     if (sub.paused) return false;
     return sub.lastAttempt > now || now - sub.lastAttempt >= SYNC_INTERVAL_MS;
-}
-
-/** How many tracked coffees are on sale, and how many are sold out. */
-export function subscriptionCounts(sub: RoasterSubscription): {available: number; soldOut: number} {
-    const soldOut = new Set(sub.soldOut);
-    const tracked = new Set(sub.items.map((entry) => entry.shareId));
-    let out = 0;
-    for (const id of tracked) if (soldOut.has(id)) out += 1;
-    return {available: tracked.size - out, soldOut: out};
 }
