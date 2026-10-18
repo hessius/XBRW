@@ -231,7 +231,7 @@ listed here.
 | `editor.pod.coffee.roasted.a11y` | `library/coffeeDetails.ts:138` | (a11y) Spoken name for the same row, read as `${spoken}, ${value}`. | `Roasted on` |
 | `editor.pod.coffee.caffeine.label` | `library/coffeeDetails.ts:142` | Doto caption on an XPOD detail row. Shown only when the block says decaf. | `CAFFEINE` |
 | `editor.pod.coffee.caffeine.a11y` | `library/coffeeDetails.ts:142` | (a11y) Spoken name for the same row, read as `${spoken}, ${value}`. | `Caffeine` |
-| `editor.pod.coffee.flavour.label` | `library/coffeeDetails.ts:147` | Doto caption on an XPOD detail row. Flavour notes (`aromatics`). | `FLAVOUR` |
+| `editor.pod.coffee.flavour.label` | `library/coffeeDetails.ts` (`flavourRow`) | Doto caption on an XPOD detail row. With the coffee's `flavours` (from a link or the roaster catalogue) the value is them as a comma list and the longer notes (`aromatics`) sit under it in secondary text; otherwise the value is the notes. Spoken "Flavour, ${flavours}. ${notes}". | `FLAVOUR` · `Papaya, Raspberry, Citrus` |
 | `editor.pod.coffee.flavour.a11y` | `library/coffeeDetails.ts:147` | (a11y) Spoken name for the same row, read as `${spoken}, ${value}`. | `Flavour` |
 | `editor.pod.coffee.score.label` | `library/coffeeDetails.ts:148` | Doto caption on an XPOD detail row. Cupping score (`cupping_points`). | `SCORE` |
 | `editor.pod.coffee.score.a11y` | `library/coffeeDetails.ts:148` | (a11y) Spoken name for the same row, read as `${spoken}, ${value}`. | `Cupping score` |

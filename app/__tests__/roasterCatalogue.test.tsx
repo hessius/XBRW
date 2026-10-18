@@ -370,7 +370,8 @@ describe("one coffee", () => {
     async function open(settings = subscribed(), library = memoryLibrary(), shelves = () => ["Pantry"]) {
         await renderWithProviders(
             <RoasterCoffeeScreen settings={settings} feedUrl={FEED_URL} coffeeId="b"
-                                 library={library.deps} shelves={shelves}/>
+                                 library={library.deps} shelves={shelves}
+                                 bagStore={{save: () => {}}}/>
         );
         await waitFor(() => expect(screen.queryByTestId("roaster-coffee-loading")).toBeNull());
         return {settings, library};
@@ -380,9 +381,20 @@ describe("one coffee", () => {
      * ADD TO SHELF onto Pantry, the one way a coffee is saved from here: it
      * goes to the library first, then onto the shelf.
      */
+    /** Saves the bag sheet ADD TO SHELF opens here, until `next` holds. */
+    async function bagThen(next: () => void): Promise<void> {
+        await waitFor(async () => {
+            const save = screen.queryByTestId("bag-save");
+            if (save !== null) await fireEvent.press(save);
+            next();
+        }, {timeout: SHEET_PRESS_TIMEOUT});
+    }
+
     async function shelve(): Promise<void> {
         const before = mockNotify.mock.calls.length;
         await fireEvent.press(screen.getByTestId("roaster-coffee-shelf"));
+        // The bag comes first on this branch; see "adding to a shelf with a bag".
+        await bagThen(() => expect(screen.getByTestId("shelf-choice-Pantry")).toBeTruthy());
         await waitFor(async () => {
             if (mockNotify.mock.calls.length === before) {
                 await fireEvent.press(screen.getByTestId("shelf-choice-Pantry"));
@@ -508,7 +520,7 @@ describe("one coffee", () => {
         library.serve("b-18g", 61);
 
         await fireEvent.press(screen.getByTestId("roaster-coffee-shelf"));
-        await waitFor(() => expect(screen.getByTestId("newer-version")).toBeTruthy());
+        await bagThen(() => expect(screen.getByTestId("newer-version")).toBeTruthy());
         await fireEvent.press(screen.getByTestId("newer-version-keep"));
 
         expect(library.find("b-18g")).toMatchObject({dosage: 20, grindSize: 50});
@@ -529,7 +541,7 @@ describe("one coffee", () => {
         library.serve("b-18g", 61);
 
         await fireEvent.press(screen.getByTestId("roaster-coffee-shelf"));
-        await waitFor(() => expect(screen.getByTestId("newer-version")).toBeTruthy());
+        await bagThen(() => expect(screen.getByTestId("newer-version")).toBeTruthy());
         await fireEvent.press(screen.getByTestId("newer-version-latest"));
 
         expect(library.find("b-18g")).toMatchObject({grindSize: 61, name: "Mine"});

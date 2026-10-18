@@ -21,6 +21,11 @@ export type CoffeeDetailRow = {
     /** What a screen reader says in place of the caption. */
     spokenLabel: string;
     value: string;
+    /**
+     * A quieter line under the value. Only FLAVOUR has one: the roaster's
+     * longer tasting notes, under the short flavours that lead the row.
+     */
+    detail?: string;
 };
 
 export type CoffeeDetails = {
@@ -99,6 +104,22 @@ function row(
 }
 
 /**
+ * FLAVOUR: the short flavours when a link or the catalogue gave them
+ * ("Papaya, Raspberry, Citrus"), with the longer notes under them; otherwise
+ * the notes, as before. Notes that say nothing beyond the list are not
+ * repeated under it.
+ */
+function flavourRow(coffee: PodCoffee): CoffeeDetailRow[] {
+    const flavours = coffee.flavours ?? [];
+    if (flavours.length === 0) return row("aromatics", "FLAVOUR", "Flavour", coffee.aromatics);
+    const value = flavours.join(", ");
+    const notes = said(coffee.aromatics);
+    const detail = notes !== undefined && folded(notes) !== folded(value) ? notes : undefined;
+    return [{field: "aromatics", label: "FLAVOUR", spokenLabel: "Flavour", value,
+             ...(detail !== undefined ? {detail} : {})}];
+}
+
+/**
  * The rows for a coffee, in groups, with empty fields and empty groups gone.
  *
  * `origin` is the pod's own one-line origin. The finer country, region and
@@ -144,7 +165,7 @@ function groupsFor(coffee: PodCoffee): CoffeeDetailRow[][] {
     ];
 
     const cup = [
-        ...row("aromatics", "FLAVOUR", "Flavour", coffee.aromatics),
+        ...flavourRow(coffee),
         ...row("cupping_points", "SCORE", "Cupping score",
                typeof coffee.cupping_points === "number" && coffee.cupping_points > 0
                    ? `${formatCuppingPoints(coffee.cupping_points)} points`
