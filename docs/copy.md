@@ -437,8 +437,8 @@ screen (`app/subscriptions.tsx`, `components/UnsubscribeSheet.tsx`,
 | `roaster.coffee.roast` | `app/roasterCoffee.tsx` | Doto roast level. | `${level} ROAST` |
 | `roaster.coffee.notes` | `library/roasterCatalogue.ts` (`noteChips`) | Tasting notes. Doto chips only for 2 to 8 parts of at most 20 characters split on commas or a spaced pipe, with no full stop or brackets; otherwise the roaster's own sentence in Inter. List rows show the same notes on one line. | (feed text) |
 | `roaster.coffee.tags` | `app/roasterCoffee.tsx` | The feed's `bean.tags`, quiet, under the flavour chips. | `${tag} · ${tag}` |
-| `from.roaster` | `components/FromSection.tsx` | FROM, for a recipe a link or catalogue named a roaster for (`roasterOf`). | `From ${roaster}` |
-| `from.roaster.sharer` | `components/FromSection.tsx` | Small line under it when xBloom names the account that shared it. | `Shared on xBloom by ${sharedBy}` |
+| `from.roaster` | `components/FromSection.tsx` | FROM, for a recipe a link or catalogue named a roaster for (`roasterOf`). The xBloom account that shared it is not named. | `From ${roaster}` |
+| `pod.roaster.label` | `components/PodSection.tsx` | XPOD, small caption over xBloom's own recipe title on a recipe from a roaster (`roasterOf`). The title is drawn smaller and dimmer, and USE THIS NAME is not offered. | `xBloom profile name` |
 | `roaster.coffee.advice` | `library/roasterCatalogue.ts` (`roastAdvice`) | Roast timing; parts appear as stated. | `Rest ${n} days, peak day ${n}, best by day ${n}` |
 | `roaster.coffee.bags` | `app/roasterCoffee.tsx` | Bag sizes, when the feed lists no `variants`. | `Bags: 320 g · 160 g` |
 | `roaster.coffee.buy` | `components/CatalogueParts.tsx` (`BuySection`) | Doto heading over one row per bag; rows read `${size} · ${price}` (`library/roasterBuy.ts`, `formatPrice`: narrow currency symbol, `$28 AUD` when the runtime cannot format it). | `BUY` |
