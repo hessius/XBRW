@@ -1,3 +1,4 @@
+import {FIT_NAME_MAX} from "@/library/fitName";
 import {MAX_NAME} from "@/library/Recipe";
 import {parseBrewMindLink} from "@/library/brewmindLink";
 
@@ -230,15 +231,27 @@ describe("parseBrewMindLink", () => {
                 .toEqual({share: SHARE, source: "brewmind"});
         });
 
-        it("drops an over-long name rather than truncating it", () => {
-            // The rename sheet's ceiling. A link that could set a longer name
-            // would hand the user one they could not edit whole.
+        it("fits an over-long name instead of dropping it, keeping the size", () => {
+            // A real roaster name, 102 characters with its size. Dropping it
+            // left the recipe on xBloom's own name.
             const parsed = parseBrewMindLink(valid({
-                "recipe.name": "N".repeat(MAX_NAME + 1),
+                "recipe.name": "Colombia | Las Flores | Jhoan Vergara | Java Hydrohoney " +
+                               "(Duo Cherry Velvet) (Competition Coffee) - 18g",
                 "bean.name": "Kept"
             }));
-            expect(parsed?.recipeName).toBeUndefined();
+            expect(parsed?.recipeName)
+                .toBe("Colombia | Las Flores | Jhoan Vergara | Java Hydrohoney (Duo Cherry Velvet) - 18g");
             expect(parsed?.coffee).toEqual({name: "Kept"});
+        });
+
+        it("cuts a long name with no size at a whole word, under the cap", () => {
+            const parsed = parseBrewMindLink(valid({"recipe.name": "Word ".repeat(40)}));
+            expect(parsed?.recipeName?.length).toBeLessThanOrEqual(MAX_NAME);
+            expect(parsed?.recipeName).toMatch(/^(Word )+Word…$/);
+        });
+
+        it("fits to the same ceiling the rename sheet uses", () => {
+            expect(FIT_NAME_MAX).toBe(MAX_NAME);
         });
 
         it("keeps a name sitting exactly on the cap", () => {

@@ -1,4 +1,5 @@
 import {readLabels} from "@/library/coffeeLabels";
+import {fitSizedName} from "@/library/fitName";
 import {MAX_NAME} from "@/library/Recipe";
 import {LEGACY_NAMES, PodCoffee, httpsUrl, podCoffeeFromStored} from "@/library/podCoffee";
 
@@ -196,22 +197,24 @@ export function parseBrewMindLink(link: string): BrewMindLink | null {
         if (checked !== undefined) result.recipeUrl = checked;
     }
 
-    // Capped at the rename sheet's ceiling rather than at `SHORT_TEXT`. This
-    // is a recipe name, not a bean field, and a link that could set a name the
+    // Held to the rename sheet's ceiling rather than `SHORT_TEXT`. This is a
+    // recipe name, not a bean field, and a link that could set a name the
     // sheet would refuse to hold would leave the user unable to edit what they
-    // were given. Over-length drops it, as everywhere else in this file: a
-    // name cut mid-word is a confident wrong name, and the recipe still has
-    // xBloom's own to fall back on.
+    // were given. A longer name is fitted, not dropped: dropping it left the
+    // recipe on xBloom's own name, which for a roaster is whatever its account
+    // typed ("col Java hydrohoney -18g"). `fitSizedName` keeps a " - 18g"
+    // suffix whole and shortens only what comes before it, removing trailing
+    // bracketed groups and then whole words, with an ellipsis when words go.
+    // Nothing is cut mid-word, so the result is the sender's name, shortened
+    // where it says so, rather than a confident wrong one.
     //
-    // Runs of whitespace fold to one space first, and the cap is measured
-    // after. A name is a one-line title in the header and on the card, and a
-    // line break, a tab or a U+2028 sent in the link would split it there. JS
-    // `\s` already covers the Unicode separators, so one rule is enough. This
-    // is folding, not truncating: no character the sender meant to be read is
-    // lost.
+    // Runs of whitespace fold to one space first. A name is a one-line title
+    // in the header and on the card, and a line break, a tab or a U+2028 sent
+    // in the link would split it there. JS `\s` already covers the Unicode
+    // separators, so one rule is enough.
     const recipeName = params.get("recipe.name")?.replace(/\s+/g, " ").trim();
-    if (recipeName !== undefined && recipeName !== "" && recipeName.length <= MAX_NAME) {
-        result.recipeName = recipeName;
+    if (recipeName !== undefined && recipeName !== "") {
+        result.recipeName = fitSizedName(recipeName, MAX_NAME);
     }
 
     const flavours = readLabels(params.get("bean.flavours") ?? "");
