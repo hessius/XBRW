@@ -3,7 +3,8 @@ import {
     adaptedModelFor,
     asMachineModel,
     isMachineModel,
-    MACHINE_MODELS
+    MACHINE_MODELS,
+    modelFromSerial
 } from "@/library/machine/machineModel";
 
 describe("the machine model", () => {
@@ -46,5 +47,25 @@ describe("the machine model", () => {
         // models sharing a partition would read as one machine to every endpoint.
         const values = MACHINE_MODELS.map(adaptedModelFor);
         expect(new Set(values).size).toBe(MACHINE_MODELS.length);
+    });
+});
+
+describe("the model a serial names", () => {
+    it("reads a Studio off the serials real Studios reported", () => {
+        expect(modelFromSerial("J15A01D48H051")).toBe("studio");
+        expect(modelFromSerial("J15A02A45H038")).toBe("studio");
+        expect(modelFromSerial("  j15a01d48h051 ")).toBe("studio");
+    });
+
+    it("reads an Original off xBloom's own code for it", () => {
+        expect(modelFromSerial("J20A01B12C345")).toBe("original");
+    });
+
+    it("says nothing when the serial does not name a model", () => {
+        // Null is "the serial does not say", never "so it is the other one".
+        expect(modelFromSerial("")).toBeNull();
+        expect(modelFromSerial("J1")).toBeNull();
+        expect(modelFromSerial("X15ABC")).toBeNull();
+        expect(modelFromSerial("S1")).toBeNull();
     });
 });

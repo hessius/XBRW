@@ -10,7 +10,7 @@ import {notify} from "@/components/XbrwToast";
 import {palette} from "@/constants/colors";
 import {useMachine} from "@/hooks/useMachine";
 import {useSavedMachines} from "@/hooks/useSavedMachines";
-import {MACHINE_MODELS, isMachineModel} from "@/library/machine/machineModel";
+import {MACHINE_MODELS, isMachineModel, modelFromSerial} from "@/library/machine/machineModel";
 import {MACHINE_LABEL_MAX, machineLabel, machineTag} from "@/library/machine/savedMachines";
 import type {Settings} from "@/library/Settings";
 
@@ -75,7 +75,7 @@ export default function MachineDetailSheet({machineId, onClose, settings}: Props
                 <YStack gap="$3">
                     <Text fontSize={13} color={palette.dim}>
                         {active
-                            ? status === "connected" ? "In use and connected." : "In use. Not connected."
+                            ? status === "connected" ? "Selected and connected." : "Selected. Not connected."
                             : index === 0 ? "Your default. Tried first." : `Tried after ${index} other${index === 1 ? "" : "s"}.`}
                     </Text>
                     <Text testID="machine-detail-id" fontSize={13} color={palette.dim}>
@@ -105,7 +105,14 @@ export default function MachineDetailSheet({machineId, onClose, settings}: Props
                             paddingVertical:   12
                         }}/>
 
-                    <YStack gap="$2">
+                    {/* No choice once the serial has named the model: the
+                        serial set it, and a choice could only point imports at
+                        the wrong grind scale. */}
+                    {modelFromSerial(machine.serial) === machine.model ? (
+                        <Text testID="machine-detail-model" fontSize={13} color={palette.dim}>
+                            {`${MODEL_NAMES[machine.model]}, read from its serial. Recipes are fetched for this model.`}
+                        </Text>
+                    ) : <YStack gap="$2">
                         <Text fontSize={13} color={palette.dim}>
                             Which xBloom this is. Recipes are fetched for the model of the machine in use, and grind
                             scales differ, so set each machine to its own model.
@@ -115,7 +122,7 @@ export default function MachineDetailSheet({machineId, onClose, settings}: Props
                                           onChange={(value) => {
                                               if (isMachineModel(value)) setModel(machine.id, value);
                                           }}/>
-                    </YStack>
+                    </YStack>}
 
                     <YStack borderRadius="$4" backgroundColor={palette.surface} overflow="hidden">
                         {!(active && status === "connected") && (

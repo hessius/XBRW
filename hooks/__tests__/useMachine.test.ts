@@ -7,7 +7,7 @@ import {
 import {CONNECT_DELAYS_MS, STUDIO_MODEL_STRINGS} from "@/constants/machine";
 import {sharedSettings} from "@/hooks/useSetting";
 import {DEFAULTS} from "@/library/Settings";
-import {FakeTransport} from "@/library/machine/__tests__/FakeTransport";
+import {FakeTransport, machineInfoFrame} from "@/library/machine/__tests__/FakeTransport";
 import Machine, {isActiveBrewPhase, type BrewPhase} from "@/library/machine/Machine";
 import {BluetoothPermissionError, RadioUnavailableError} from "@/library/machine/errors";
 import type {BluetoothPermissionResult} from "@/library/machine/Transport";
@@ -282,6 +282,9 @@ describe("the machine link", () => {
         sharedSettings().set("machineModel", "original");
         const transport = new FakeTransport();
         transport.modelNumber = "XB-MYSTERY-9";
+        // A serial that names no model, so only the Device Information
+        // reading is on trial here (the serial rule has its own tests).
+        transport.infoReply = machineInfoFrame({serial: "ZZZ000000001"});
 
         const {result} = await renderHook(() => useMachine(new Machine(transport, {frameGapMs: 0})));
         await act(async () => { await result.current.connect(); });
@@ -296,6 +299,7 @@ describe("the machine link", () => {
         sharedSettings().set("machineModel", "original");
         const transport = new FakeTransport();
         transport.modelNumber = STUDIO_MODEL_STRINGS[0] ?? "nothing matches an empty list";
+        transport.infoReply = machineInfoFrame({serial: "ZZZ000000001"});
 
         const {result} = await renderHook(() => useMachine(new Machine(transport, {frameGapMs: 0})));
         await act(async () => { await result.current.connect(); });
@@ -304,6 +308,21 @@ describe("the machine link", () => {
         // real behaviour the moment Task 11 fills it in, without being edited.
         const expected = STUDIO_MODEL_STRINGS.length > 0 ? "studio" : "original";
         expect(result.current.machineModel).toBe(expected);
+    });
+
+    it("sets the model from the serial the machine reports, where the importers read it", async () => {
+        // The owner's case: a Studio left on Original by hand. The serial is
+        // the machine saying what it is, so imports follow it.
+        sharedSettings().set("machineModel", "original");
+        const transport = new FakeTransport();
+        transport.infoReply = machineInfoFrame({serial: "J15A01D48H051"});
+
+        const {result} = await renderHook(() => useMachine(new Machine(transport, {frameGapMs: 0})));
+        await act(async () => { await result.current.connect(); });
+
+        expect(sharedSettings().get("machineModel")).toBe("studio");
+        expect(result.current.machines.map((machine) => [machine.serial, machine.model]))
+            .toEqual([["J15A01D48H051", "studio"]]);
     });
 
     it("keeps what an earlier connect learned when this one learns nothing", async () => {

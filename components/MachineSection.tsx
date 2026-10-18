@@ -15,7 +15,7 @@ import {useMachine} from "@/hooks/useMachine";
 import {useSetting} from "@/hooks/useSetting";
 import {RATING_PROMPT_WINDOW_MS} from "@/library/brew/ratingPrompt";
 import type {Settings} from "@/library/Settings";
-import {MACHINE_MODELS, isMachineModel, type MachineModel} from "@/library/machine/machineModel";
+import {MACHINE_MODELS, isMachineModel, modelFromSerial, type MachineModel} from "@/library/machine/machineModel";
 import {machineLabel, machineTag, type SavedMachine} from "@/library/machine/savedMachines";
 
 /** How many taps on the firmware row open the console. */
@@ -46,6 +46,16 @@ const MACHINE_MODEL_OPTIONS = MACHINE_MODELS.map(
     (value) => ({value, label: MACHINE_MODEL_LABELS[value]})
 );
 
+/**
+ * What the Connect row asks of the machine. The other phone is named because
+ * the machine takes one phone at a time and this one cannot tell that apart
+ * from a machine that is off.
+ */
+const CONNECT_NEEDS_STUDIO =
+    "Your xBloom Studio has to be on and nearby. If another phone is connected to it, close XBRW++ or the xBloom app there.";
+const CONNECT_NEEDS_ORIGINAL =
+    "Your xBloom has to be on and nearby. If another phone is connected to it, close XBRW++ or the xBloom app there.";
+
 /** One label-and-value line of the machine's own vitals. */
 function Vital({label, value}: {label: string; value: string}) {
     return (
@@ -72,7 +82,10 @@ function SavedMachineRow({machine, index, active, connected, onPress}: {
 }) {
     const parts = [MODEL_NAMES[machine.model], index === 0 ? "Default" : `Choice ${index + 1}`,
                    machineTag(machine)];
-    if (active) parts.push(connected ? "Connected" : "In use");
+    // "Selected", not "In use": this phone has no way to tell that another
+    // phone holds the machine (it simply stops answering), and "In use" was
+    // read as exactly that.
+    if (active) parts.push(connected ? "Connected" : "Selected");
     const detail = parts.join(" · ");
     const name = machineLabel(machine, index);
     return (
@@ -145,11 +158,26 @@ export default function MachineSection({settings, onOpenMachine, onAddMachine}: 
         `On, the last brew XBRW++ watched can ask how it was along the bottom for up to ${ratingPromptHours} hours. `
         + "Off, ratings are only given on the brew itself.";
 
-    /** What the section says when there is no live link. */
+    /**
+     * What the section says when there is no live link.
+     *
+     * A failed connect is "Not found" with every reason it could have,
+     * because the radio cannot tell them apart: the machine takes one phone
+     * at a time and, held by another, it stops answering exactly as it does
+     * switched off or out of range (`ble-protocol.md`, "Single-Client
+     * Limit"). The Bluetooth identifier used to follow here; it is in the
+     * machine's details now, where it is not noise.
+     */
     const idleStatus = status === "connecting" ? "Connecting…"
         : remembered === "" ? "No machine paired"
-            : status === "idle" ? `Not connected · ${remembered}`
-                : `Not in range · ${remembered}`;
+            : status === "idle" ? "Not connected"
+                : "Not found. It may be off, out of range or connected to another phone.";
+    // A machine whose serial names its model needs no model choice: the
+    // serial set it (`recordSerial`), and a choice would only offer a way to
+    // fetch imports for the wrong grind scale. Shown again whenever the
+    // serial says nothing, or says something the entry does not yet agree with.
+    const only = machines.length === 1 ? machines[0] : undefined;
+    const modelKnown = only !== undefined && modelFromSerial(only.serial) === only.model;
 
     // The vitals are a snapshot taken at connect. Left alone, a tank refilled
     // since then still reads Low here, and only a relaunch clears it.
@@ -181,7 +209,7 @@ export default function MachineSection({settings, onOpenMachine, onAddMachine}: 
             {/* The model is per machine once there are several, and set in
                 each machine's sheet. One row here would only ever describe
                 whichever happened to be in use. */}
-            {!several && <SettingsChoiceRow
+            {!several && !modelKnown && <SettingsChoiceRow
                 label="Your xBloom"
                 description="The two machines grind on different scales, so a recipe written for one is wrong on the other. Pick yours and the app asks xBloom for the right version. Recipes already saved keep the numbers they were written with."
                 value={machineModel}
@@ -222,7 +250,9 @@ export default function MachineSection({settings, onOpenMachine, onAddMachine}: 
                     onPress={openSettings}/>
             )}
 
-            <SettingsActionRow
+            {/* Not drawn while connected: the machine's row above already says
+                Connected, and this row has nothing to do then. */}
+            {!(status === "connected" && machines.length > 0) && <SettingsActionRow
                 label={status === "connected" ? "Connected" : "Connect to my machine"}
                 detail={status === "connected"
                     ? "The link is held while XBRW++ is open."
@@ -233,18 +263,19 @@ export default function MachineSection({settings, onOpenMachine, onAddMachine}: 
                     // Bluetooth protocol here is the Studio's throughout, and
                     // nobody has had an original in front of them to check.
                     : machineModel === "original"
-                        ? "Your xBloom has to be switched on and nearby. Only the Studio has been tested."
-                        : "Your xBloom Studio has to be switched on and nearby."}
+                        ? `${CONNECT_NEEDS_ORIGINAL} Only the Studio has been tested.`
+                        : CONNECT_NEEDS_STUDIO}
                 onPress={() => {
                     // The throw is for the brew path, which needs the reason.
                     // Here the reason is already on screen, in `error`.
                     if (status !== "connected") connect().catch(() => {});
-                }}/>
+                }}/>}
 
             {info !== null && (
                 <YStack paddingVertical="$1">
                     <Vital label="Serial" value={info.serial}/>
                     <Vital label="Model" value={info.model}/>
+                    {remembered !== "" && <Vital label="Bluetooth ID" value={remembered}/>}
                     <Pressable accessibilityRole="button"
                                accessibilityLabel={`Firmware, ${info.firmware}`}
                                onPress={onSecretPress}>

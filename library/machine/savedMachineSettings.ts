@@ -1,6 +1,6 @@
 import type {Settings} from "@/library/Settings";
 
-import {asMachineModel} from "./machineModel";
+import {asMachineModel, modelFromSerial} from "./machineModel";
 import {
     addSavedMachine,
     replaceSavedMachineId,
@@ -132,24 +132,34 @@ export function rememberMachine(settings: Store, id: string): void {
 }
 
 /**
- * Keep the serial a machine reported against its saved entry.
+ * Keep the serial a machine reported against its saved entry, and set the
+ * entry's model from it when the serial names one.
  *
- * Written only when it differs, so the reconnect after every trip to another
- * app does not rewrite the list for nothing.
+ * The model follows the serial because the serial is the machine saying what
+ * it is (`modelFromSerial`), and a hand-picked model that disagrees with it
+ * would fetch every import for the wrong grind scale. It goes through
+ * `saveSavedMachines`, so for the machine in use it lands in `machineModel`,
+ * the key the importers read. A serial that names no model changes nothing.
+ *
+ * Written only when something differs, so the reconnect after every trip to
+ * another app does not rewrite the list for nothing.
  */
 export function recordSerial(settings: Store, id: string, serial: string): void {
     const trimmed = serial.trim();
     if (trimmed === "") return;
     const machines = loadSavedMachines(settings);
     const entry = machines.find((machine) => machine.id === id);
-    if (entry === undefined || entry.serial === trimmed) return;
+    if (entry === undefined) return;
     // Never re-pointed. A machine's serial does not change, so a different
     // one under this entry means the id now names a different machine (the
     // stale-id rescan takes whatever xBloom answers first). Keeping the
-    // serial the entry already had is what lets the brew guard notice.
-    if (entry.serial !== "") return;
+    // serial the entry already had is what lets the brew guard notice, and
+    // the model is read from that kept serial, the entry's own machine.
+    const kept = entry.serial !== "" ? entry.serial : trimmed;
+    const model = modelFromSerial(kept) ?? entry.model;
+    if (kept === entry.serial && model === entry.model) return;
     saveSavedMachines(settings, machines.map((machine) =>
-        machine.id === id ? {...machine, serial: trimmed} : machine));
+        machine.id === id ? {...machine, serial: kept, model} : machine));
 }
 
 /**

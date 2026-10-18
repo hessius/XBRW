@@ -935,14 +935,15 @@ machine card's error line).
 | `machine.section.title` | `components/MachineSection.tsx:79` | Section title. | `Machine` |
 | `machine.section.idle.connecting` | `components/MachineSection.tsx:58` | Status while connecting. | `Connecting…` |
 | `machine.section.idle.none` | `components/MachineSection.tsx:59` | Status when no machine is paired. | `No machine paired` |
-| `machine.section.idle.notConnected` | `components/MachineSection.tsx:60` | Status when a machine is remembered but no connection attempt has been made. `${remembered}` is the machine name. | `Not connected · ${remembered}` |
-| `machine.section.idle.notInRange` | `components/MachineSection.tsx:61` | Status when a machine is remembered and a connection attempt was made but failed, or the link dropped. `${remembered}` is the machine name. | `Not in range · ${remembered}` |
+| `machine.section.idle.notConnected` | `components/MachineSection.tsx:60` | Status when a machine is remembered but no connection attempt has been made. The Bluetooth ID is in the machine's details, not here. | `Not connected` |
+| `machine.section.idle.notInRange` | `components/MachineSection.tsx:61` | Status when a machine is remembered and a connection attempt was made but failed, or the link dropped. Names every reason, because a machine held by another phone stops answering just like one that is off. | `Not found. It may be off, out of range or connected to another phone.` |
 | `machine.section.connect.connected` | `components/MachineSection.tsx:96` | Row label when connected. | `Connected` |
 | `machine.section.connect.connect` | `components/MachineSection.tsx:96` | Row label when not connected. | `Connect to my machine` |
-| `machine.section.connected.desc` | `components/MachineSection.tsx:98` | Sub-note when connected. | `The link is held while XBRW++ is open.` |
-| `machine.section.disconnected.desc` | `components/MachineSection.tsx:99` | Sub-note when not connected. | `Your xBloom Studio has to be switched on and nearby.` |
+| `machine.section.connected.desc` | `components/MachineSection.tsx:98` | Sub-note when connected. Only drawn before any machine is saved; with a saved machine its row already says Connected and this row is hidden. | `The link is held while XBRW++ is open.` |
+| `machine.section.disconnected.desc` | `components/MachineSection.tsx:99` | Sub-note when not connected. | `Your xBloom Studio has to be on and nearby. If another phone is connected to it, close XBRW++ or the xBloom app there.` |
 | `machine.section.vital.serial` | `components/MachineSection.tsx:108` | Vital label. | `Serial` |
 | `machine.section.vital.model` | `components/MachineSection.tsx:109` | Vital label. | `Model` |
+| `machine.section.vital.bluetooth` | `components/MachineSection.tsx` | Vital label; value is the saved Bluetooth identifier (a MAC address on Android, a UUID on iOS). Moved here from the status line. | `Bluetooth ID` |
 | `machine.section.vital.firmware.a11y` | `components/MachineSection.tsx:111` (a11y) | (a11y) Firmware vital. `${...}` is the firmware string. | `Firmware, ${info.firmware}` |
 | `machine.section.vital.firmware` | `components/MachineSection.tsx:113` | Vital label. | `Firmware` |
 | `machine.section.vital.water` | `components/MachineSection.tsx:115` | Vital label; value is OK/Low. | `Water` |
