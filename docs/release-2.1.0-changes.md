@@ -61,9 +61,9 @@ the TELL ME switch, the square photo on the Fold inner screen.
 
 Roasters on the home screen (2026-10-18): with at least one subscription the
 home screen has four ways into the catalogue, and without one it is unchanged.
-A strip under the three tiles lists up to two roasters (name, a status line,
-`${k} NEW` and `${b} BACK`, a small photo stack) with ALL ROASTERS for more;
-it folds away with the tiles. The library search also
+A strip under the three tiles lists the roasters (name, a status line,
+`${k} NEW` and `${b} BACK`, a small photo stack; see the pins entry below for
+how many); it folds away with the tiles. The library search also
 searches the subscribed roasters' cached feeds (no request) with the roaster
 list's own matching (`filterCoffees`), coffees on sale only, shown after the
 library under FROM YOUR ROASTERS;
@@ -71,7 +71,7 @@ a result opens the coffee's page. The import sheet gains YOUR ROASTERS above
 BROWSE THE CATALOGUE, and an empty library gains BROWSE ${ROASTER} (or BROWSE
 YOUR ROASTERS) when a subscribed roaster has coffees cached. Every
 subscription state has a row: "Loading coffees" or "Couldn't update" before a
-feed is cached (the row then opens Subscriptions), a PAUSED marker, "No coffees
+feed is cached (the row then opens the roaster's feed screen), a PAUSED marker, "No coffees
 on sale right now", and "Updated 3 d ago" beside a failing feed's cached count.
 Search uses the cache of paused and failing roasters and leaves out sold-out
 coffees and roasters not yet loaded. Unsubscribing clears the strip, results
@@ -79,6 +79,20 @@ and NEW counts at once. Strip order: something NEW or back first, then by
 name. Logic in `library/roasterHome.ts`. Device checks: the strip at
 360 dp and with large text, the strip folding on scroll, TalkBack on the strip
 rows and the search results.
+
+Home strip, pins and the home switch (2026-10-19): following hessius's
+suggestion, the strip lists every roaster when there are 1 to 3, and with 4 or
+more shows only pinned roasters (3 at most, in the order pinned) followed by one
+"Roasters · {n}" row that opens the roasters list and adds up every roaster's
+NEW and BACK. A roaster's feed screen has "Pin to the home screen"; pinned
+roasters come first and carry a small star on the strip and on the Roaster feeds
+list. Pins live on the subscription (`pinnedAt`), so a backup carries them and
+unsubscribing removes them. Roaster feeds starts with "Show roasters on the home
+screen" (`showRoastersOnHome`, on by default, in backups): off hides the strip
+and the empty library's Browse button, never the search. A strip row for a
+roaster still loading opens its feed screen. Device checks: the summary row and
+pin star at 360 dp and with large text, TalkBack on the summary row, pinning
+from the feed screen and Back to home.
 
 Roaster colour (2026-10-19): a feed coffee may carry `bean.colour` (or
 `bean.color`), a strict `#RRGGBB` for the roaster's own colour coding, e.g. by

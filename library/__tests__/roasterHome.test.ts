@@ -1,11 +1,16 @@
+import {buildBackup, parseBackup} from "@/library/backup";
+import Recipe from "@/library/Recipe";
 import {recordSync} from "@/library/roasterAlerts";
 import {writeCatalogue} from "@/library/roasterCatalogue";
 import {EMPTY_COFFEE_QUERY, filterCoffees} from "@/library/roasterFilters";
 import {
-    browsable, browseLabel, forgetHomeCataloguesForTests, homeCatalogues, searchRoasters, stripRows,
-    STRIP_PHOTOS
+    browsable, browseLabel, forgetHomeCataloguesForTests, homeCatalogues, homeStrip, pinDescription,
+    searchRoasters, stripRows, stripSummaryLabel, STRIP_PHOTOS
 } from "@/library/roasterHome";
-import {setPaused, subscribe, unsubscribe, updateSubscription} from "@/library/roasterSync";
+import {parseSubscriptions} from "@/library/roasterSubscription";
+import {
+    readSubscriptions, setPaused, setPinned, subscribe, unsubscribe, updateSubscription
+} from "@/library/roasterSync";
 import type {Settings} from "@/library/Settings";
 import {FEED_URL, feedBody, memorySettings, type CoffeeSpec} from "@/test-utils/roasterFeed";
 
@@ -222,5 +227,126 @@ describe("every subscription state", () => {
         recordSync(settings, "https://c.example/f", next.feed);
         expect(stripRows(catalogues(settings), settings.get("roasterAlerts"), NOW)
             .map((row) => row.roaster)).toEqual(["Cielo", "alto", "Bombora"]);
+    });
+});
+
+describe("pinning and the home strip", () => {
+    /** `count` roasters named R1, R2..., each with one coffee. */
+    function roasters(count: number): Settings {
+        const settings = memorySettings();
+        for (let n = 1; n <= count; n++) {
+            const {feed, body} = feedBody([{id: `c${n}`}], `R${n}`);
+            subscribe(settings, `https://r${n}.example/feed.json`, feed, body, 1000);
+        }
+        return settings;
+    }
+    const url = (n: number) => `https://r${n}.example/feed.json`;
+    const strip = (settings: Settings) =>
+        homeStrip(stripRows(catalogues(settings), settings.get("roasterAlerts"), NOW));
+    const names = (settings: Settings) => strip(settings).rows.map((row) => row.roaster);
+
+    it("lists one roaster, and three, with no summary row", () => {
+        expect(strip(roasters(1))).toMatchObject({summary: null});
+        expect(names(roasters(1))).toEqual(["R1"]);
+        expect(names(roasters(3))).toEqual(["R1", "R2", "R3"]);
+        expect(strip(roasters(3)).summary).toBeNull();
+    });
+
+    it("puts pinned roasters first with three or fewer, in the order they were pinned", () => {
+        const settings = roasters(3);
+        setPinned(settings, url(3), true, 2000);
+        setPinned(settings, url(2), true, 3000);
+        forgetHomeCataloguesForTests();
+        expect(names(settings)).toEqual(["R3", "R2", "R1"]);
+        expect(strip(settings).rows.map((row) => row.pinned)).toEqual([true, true, false]);
+    });
+
+    it("folds four or more into the summary row alone when none is pinned", () => {
+        const result = strip(roasters(4));
+        expect(result.rows).toEqual([]);
+        expect(result.summary).toEqual({count: 4, fresh: 0, back: 0});
+        expect(stripSummaryLabel({count: 4, fresh: 2, back: 1}))
+            .toBe("All roasters, 4, 2 new, 1 back in stock");
+    });
+
+    it("shows only the pinned with four or more, three at most, then the summary", () => {
+        const settings = roasters(5);
+        setPinned(settings, url(5), true, 2000);
+        setPinned(settings, url(1), true, 3000);
+        setPinned(settings, url(4), true, 4000);
+        setPinned(settings, url(2), true, 5000);
+        const result = strip(settings);
+        expect(result.rows.map((row) => row.roaster)).toEqual(["R5", "R1", "R4"]);
+        expect(result.summary).toEqual({count: 5, fresh: 0, back: 0});
+    });
+
+    it("counts every roaster's NEW coffees on the summary row", () => {
+        const settings = roasters(4);
+        const next = feedBody([{id: "c2"}, {id: "new"}], "R2");
+        writeCatalogue(settings, url(2), next.body, NOW);
+        recordSync(settings, url(2), next.feed);
+        expect(strip(settings).summary).toEqual({count: 4, fresh: 1, back: 0});
+    });
+
+    it("goes back to the usual order when a pin is taken away, and keeps the first pin time", () => {
+        const settings = roasters(3);
+        setPinned(settings, url(3), true, 2000);
+        setPinned(settings, url(3), true, 9000);
+        expect(readSubscriptions(settings).find((sub) => sub.feed === url(3))?.pinnedAt).toBe(2000);
+        forgetHomeCataloguesForTests();
+        expect(names(settings)).toEqual(["R3", "R1", "R2"]);
+
+        setPinned(settings, url(3), false, 3000);
+        forgetHomeCataloguesForTests();
+        expect(names(settings)).toEqual(["R1", "R2", "R3"]);
+        expect(readSubscriptions(settings).every((sub) => sub.pinnedAt === undefined)).toBe(true);
+    });
+
+    it("keeps a pin through a sync and loses it on unsubscribing", () => {
+        const settings = roasters(1);
+        setPinned(settings, url(1), true, 2000);
+        updateSubscription(settings, url(1), (sub) => ({...sub, lastSync: 5000}));
+        expect(readSubscriptions(settings)[0].pinnedAt).toBe(2000);
+
+        unsubscribe(settings, url(1));
+        const {feed, body} = feedBody([{id: "c1"}], "R1");
+        subscribe(settings, url(1), feed, body, 6000);
+        expect(readSubscriptions(settings)[0].pinnedAt).toBeUndefined();
+    });
+
+    it("drops a pin time that is not a positive number", () => {
+        const stored = JSON.stringify([
+            {feed: url(1), roaster: "R1", lastSync: 1, lastAttempt: 1, paused: false, pinnedAt: "soon"},
+            {feed: url(2), roaster: "R2", lastSync: 1, lastAttempt: 1, paused: false, pinnedAt: -5},
+            {feed: url(3), roaster: "R3", lastSync: 1, lastAttempt: 1, paused: false, pinnedAt: 7}
+        ]);
+        expect(parseSubscriptions(stored).map((sub) => sub.pinnedAt)).toEqual([undefined, undefined, 7]);
+    });
+
+    it("carries pins and the home screen switch through a backup", () => {
+        const settings = roasters(4);
+        setPinned(settings, url(2), true, 2000);
+        const recipe = new Recipe();
+        recipe.name = "A";
+        recipe.uuid = "u1";
+
+        const parsed = parseBackup(buildBackup([recipe], {
+            roasterSubscriptions: settings.get("roasterSubscriptions"),
+            showRoastersOnHome:   false
+        }));
+        expect(parsed.ok).toBe(true);
+        if (!parsed.ok) throw new Error(parsed.reason);
+        expect(parsed.payload.settings.showRoastersOnHome).toBe(false);
+
+        const restored = memorySettings();
+        restored.set("roasterSubscriptions", parsed.payload.settings.roasterSubscriptions as string);
+        expect(readSubscriptions(restored).find((sub) => sub.feed === url(2))?.pinnedAt).toBe(2000);
+    });
+
+    it("says what pinning does for few roasters, many, and with the strip off", () => {
+        expect(pinDescription(2, true)).toBe("With 3 roasters or fewer, all of them show. Pinned ones come first.");
+        expect(pinDescription(4, true)).toBe("With more than 3 roasters, only pinned ones show, up to 3.");
+        expect(pinDescription(4, false))
+            .toBe("Roasters are hidden from the home screen. Turn them on in Roaster feeds.");
     });
 });

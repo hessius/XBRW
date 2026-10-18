@@ -11,6 +11,11 @@ type Props = {
     detail?: string;
     /** `danger` for a row that destroys something. */
     tone?: "default" | "danger";
+    /**
+     * A small decorative glyph after the label, such as the pin on a pinned
+     * roaster, and the words a screen reader says for it instead.
+     */
+    mark?: {glyph: React.ReactNode; spoken: string};
     onPress: () => void;
 };
 
@@ -22,8 +27,9 @@ type Props = {
  * like its sibling. The rotation goes on a wrapper because `DotIcon` owns its
  * own style prop.
  */
-export default function SettingsActionRow({label, detail, tone = "default", onPress}: Props) {
+export default function SettingsActionRow({label, detail, tone = "default", mark, onPress}: Props) {
     const ink = tone === "danger" ? palette.danger : palette.text;
+    const spoken = [label, mark?.spoken, detail].filter((part) => part !== undefined).join(", ");
 
     return (
         // The detail joins the label rather than staying in the hint: VoiceOver
@@ -37,7 +43,7 @@ export default function SettingsActionRow({label, detail, tone = "default", onPr
         // owns the button role and the composed label — and RN's press system
         // does not drive Tamagui's.
         <Pressable accessibilityRole="button"
-                   accessibilityLabel={detail === undefined ? label : `${label}, ${detail}`}
+                   accessibilityLabel={spoken}
                    onPress={onPress}
                    style={({pressed}) => ({
                        opacity:   pressed ? 0.7 : 1,
@@ -53,7 +59,17 @@ export default function SettingsActionRow({label, detail, tone = "default", onPr
                     alignItems="center" justifyContent="space-between" gap="$4"
                     minHeight={44} paddingVertical="$3" paddingHorizontal="$4">
                 <YStack flex={1} gap="$1">
-                    <Text fontSize={16} color={ink}>{label}</Text>
+                    {mark === undefined ? (
+                        <Text fontSize={16} color={ink}>{label}</Text>
+                    ) : (
+                        <XStack alignItems="center" gap="$2">
+                            <Text fontSize={16} color={ink} flexShrink={1}>{label}</Text>
+                            <XStack accessibilityElementsHidden
+                                    importantForAccessibility="no-hide-descendants">
+                                {mark.glyph}
+                            </XStack>
+                        </XStack>
+                    )}
                     {detail !== undefined && (
                         <Text fontSize={13} color={palette.dim}>{detail}</Text>
                     )}

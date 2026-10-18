@@ -3,11 +3,13 @@ import React, {useState} from "react";
 import {useSafeAreaInsets} from "react-native-safe-area-context";
 import {ScrollView, Text, YStack} from "tamagui";
 
+import DotIcon from "@/components/DotIcon";
 import ScreenHeader from "@/components/ScreenHeader";
 import SettingsActionRow from "@/components/SettingsActionRow";
 import SettingsSection from "@/components/SettingsSection";
+import SettingsToggleRow from "@/components/SettingsToggleRow";
 import {palette} from "@/constants/colors";
-import {sharedSettings} from "@/hooks/useSetting";
+import {sharedSettings, useSetting} from "@/hooks/useSetting";
 import {useLiveBrew} from "@/hooks/useLiveBrew";
 import {useRoasterSubscriptions} from "@/hooks/useRoasterSubscriptions";
 import {readCatalogue, scrollEndPadding} from "@/library/roasterCatalogue";
@@ -18,7 +20,8 @@ import type {Settings} from "@/library/Settings";
 /**
  * Roaster feeds: the roasters whose coffees are in the catalogue.
  *
- * Reached from Settings and from the catalogue's roaster list. One row per
+ * Reached from Settings and from the catalogue's roaster list. At the top,
+ * whether the roasters show on the home screen at all. Then one row per
  * roaster, saying how many coffees it holds and how fresh they are; a row
  * opens that roaster's own screen (`app/subscription.tsx`), where it can be
  * browsed, refreshed, paused or ended. REFRESH ALL updates every roaster that
@@ -40,6 +43,7 @@ export default function SubscriptionsScreen({settings, fetchBody, now: clock}: {
     const tick = () => setNow((clock ?? Date.now)());
     const insets = useSafeAreaInsets();
     const active = subs.subscriptions.filter((sub) => !sub.paused);
+    const [onHome, setOnHome] = useSetting("showRoastersOnHome", store);
 
     return (
         <YStack testID="subscriptions-screen" flex={1} backgroundColor={palette.base}>
@@ -49,6 +53,15 @@ export default function SubscriptionsScreen({settings, fetchBody, now: clock}: {
                 <ScreenHeader title="Roaster feeds" onBack={() => router.back()}/>
                 <ScrollView testID="subscriptions-scroll"
                             contentContainerStyle={{padding: 16, paddingBottom: scrollEndPadding(48, insets.bottom)}}>
+                    {subs.subscriptions.length > 0 && (
+                        <SettingsSection>
+                            <SettingsToggleRow label="Show roasters on the home screen"
+                                               description="Under the tiles, and a button on an empty library. Search finds their coffees either way."
+                                               value={onHome}
+                                               onChange={setOnHome}/>
+                        </SettingsSection>
+                    )}
+
                     {subs.subscriptions.length === 0 && (
                         <Text testID="subscriptions-empty" fontSize={14} lineHeight={20}
                               color={palette.dim} paddingTop="$4">
@@ -60,6 +73,11 @@ export default function SubscriptionsScreen({settings, fetchBody, now: clock}: {
                         <SettingsSection title="Your roasters">
                             {subs.subscriptions.map((sub) => (
                                 <SettingsActionRow key={sub.feed} label={sub.roaster}
+                                                   mark={sub.pinnedAt === undefined ? undefined : {
+                                                       glyph:  <DotIcon name="favourite" size={12}
+                                                                        color={palette.muted}/>,
+                                                       spoken: "pinned to the home screen"
+                                                   }}
                                                    detail={subs.refreshing === sub.feed
                                                        ? "Updating…"
                                                        : rowLine(sub, readCatalogue(store, sub.feed)?.feed ?? null, now)}
