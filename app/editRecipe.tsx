@@ -947,7 +947,7 @@ export default function EditRecipe(
     // What a collapse takes back from this page: the slab, sized for this
     // name, and the stage curve's step down from its tall form to its compact
     // one (40 of height, 9 of padding above, 6 inside it either side). The home
-    // screen's 140 is far short of a four-line name.
+    // screen's 140 is short of a three-line name at a large text size.
     const {collapsed, onScroll} = useCollapsibleHeader(
         heroFoldAway(recipe?.displayName() ?? "")
         + PROFILE_HEIGHT.full - PROFILE_HEIGHT.compact + 9 + 12

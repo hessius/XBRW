@@ -6,25 +6,32 @@ device testing is complete. Update it whenever release scope or behaviour change
 ## Long recipe names wrap (2026-10-18)
 
 A roaster's import can name a recipe with its origin, farm, producer and lot,
-often 40 to 90 characters. The recipe screen cut that off after two lines.
+often 40 to 100 characters. The recipe screen cut that off after two lines.
 Names of 28 characters or fewer look exactly as before (26 pt, two lines).
-29 to 56 characters step down to 22 pt and up to three lines. Longer names step
-down to 18 pt and up to four lines, with less space under the button row; the
-COFFEE label stays. A name past 28 characters is never drawn across the
-pour-profile watermark: on a phone it takes the full width and the watermark
-gets a band of its own under it (the slab grows by about 64 pt), and on a wide
-screen such as the Fold's inner display it sits in the column beside the
-watermark instead. The size and layout come from the name's length and the
-screen width, so the title never jumps after the screen opens.
+A longer name takes at most three lines, at the largest of 22, 20, 18, 16 and
+15 pt that fits it in three at the screen's width and text size. Only past
+15 pt (about 100 characters on a 360 pt phone at the largest text sizes) does
+it end in an ellipsis. The size is worked out from the characters before the
+first layout, so the title never jumps, and the name uses simple line breaks so
+the phone wraps where the estimate does. The estimate is calibrated against two
+Fold cover screen screenshots and reproduces the second one's line breaks.
+A name past 28 characters is never drawn across the pour-profile watermark. On
+a phone it takes the full width and the watermark, drawn at 50 pt rather than
+74, sits in a band of up to 40 pt under it; a short last line lets the
+watermark rise beside it and the band shrinks. On a wide screen such as the
+Fold's inner display the name sits in the column beside the watermark instead.
+With the band, the space under the button row closes up a little; the COFFEE
+label stays.
 The folded header bar, the brew screen's title and a catalogue recipe's screen
 title each allow two lines in place of one. Library cards and shelf tiles keep
 their fixed heights, so they still truncate. The editor now tells its collapsing
-header how much it folds away for the current name (up to about 285 pt for a
-four-line name at the largest text size), so the taller slab cannot make the
-header strobe on a short page; the home screen keeps its 140. Name limits are
-unchanged. The first device build (Fold cover screen) still cut a 77-character
-name after three lines and ran it into the watermark; this revision is not yet
-checked on a device.
+header how much it folds away for the current name (up to about 250 pt with the
+stage curve, for a three-line name at the largest text size), so the taller slab
+cannot make the header strobe on a short page; the home screen keeps its 140.
+Name limits are unchanged. Two earlier builds were checked on the Fold cover
+screen: the first cut a 77-character name after three lines and ran it into the
+watermark; the second showed a 98-character name in four lines over a tall
+band. This revision is not yet checked on a device.
 
 ## Brew history trace storage (2026-10-15)
 

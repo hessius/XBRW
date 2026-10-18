@@ -3,8 +3,8 @@ import {Dimensions, StyleSheet} from "react-native";
 import {fireEvent, screen} from "@testing-library/react-native";
 
 import RecipeHero, {
-    estimateLines, HERO_NAME_LONG, HERO_NAME_LONGER, HERO_PROFILE_RESERVE,
-    heroFoldAway, heroNameLayout, heroNameStyle
+    estimateLines, HERO_NAME_LONG, HERO_NAME_MAX_LINES, HERO_PROFILE_RESERVE,
+    heroFoldAway, heroNameLayout, PROFILE_BAND_HEIGHT, wrapLines
 } from "@/components/RecipeHero";
 import {COLLAPSE_SHRINK} from "@/hooks/useCollapsibleHeader";
 import {onAccent} from "@/constants/colors";
@@ -41,7 +41,11 @@ const VINKA =
 const LONGEST =
     "Colombia | Finca El Paraiso | Diego Samuel Bermudez | Lychee Double Anaerobic Thermal Shock";
 
-/** A name between the two step-downs: 44 characters. */
+/** The name in the second device report: 98 characters, four lines at 18. */
+const AWARD =
+    "Ecuador | Vinka Farm | Carlos & Maria Fernanda | 2024 Sidra Washed Anaerobic **AWARD WINNER** - 18g";
+
+/** A name that fits three lines at the largest long-name step: 44 characters. */
 const MEDIUM_NAME = "Kenya | Gichathaini AA | Washed SL28 and SL34";
 
 /** Phones the name has to fit, in points: narrow, the Fold cover, the Fold inner. */
@@ -224,14 +228,14 @@ describe("RecipeHero", () => {
             .toEqual(expect.objectContaining({fontSize: 26, lineHeight: 31}));
     });
 
-    it("sets the device report's name at 18 over as many lines as it needs", async () => {
-        // A roaster's import names the origin, the farm, the producer and the
-        // lot. At 22 over three lines the Fold's cover screen cut this one off
-        // after "Sidra".
+    it("caps a long name at three lines, sized down a step until it fits", async () => {
+        // The device report's name on a 360 point phone at 1.15x text. Three
+        // lines at 22 or 20 would cut it; 18 holds it.
+        setWindow(NARROW, 1.15);
         await renderWithProviders(<RecipeHero {...BASE} name={VINKA}/>);
 
         const title = screen.getByTestId("hero-name");
-        expect(title.props.numberOfLines).toBe(4);
+        expect(title.props.numberOfLines).toBe(HERO_NAME_MAX_LINES);
         expect(StyleSheet.flatten(title.props.style))
             .toEqual(expect.objectContaining({fontSize: 18, lineHeight: 23}));
         // Never a shrink-to-fit: the size is a step on the scale, not
@@ -242,16 +246,75 @@ describe("RecipeHero", () => {
         expect(screen.getByText(VINKA)).toBeTruthy();
     });
 
-    it("keeps a long name off the watermark on a phone by leaving room under it", async () => {
+    it("keeps a medium name at 22, the largest long-name step", () => {
+        const layout = heroNameLayout(MEDIUM_NAME, NARROW, 1);
+        expect(layout.fontSize).toBe(22);
+        expect(estimateLines(MEDIUM_NAME, layout.maxWidth as number, 22))
+            .toBeLessThanOrEqual(HERO_NAME_MAX_LINES);
+    });
+
+    it("picks these sizes for the reported names on 360 and 412 point phones", () => {
+        // Rows are text sizes 1, 1.15 and 1.4; columns are 360 and 412 points.
+        const sizes = (name: string) => [1, 1.15, 1.4].map((scale) =>
+            [NARROW, COVER].map((width) => heroNameLayout(name, width, scale).fontSize));
+        expect(sizes(VINKA)).toEqual([[22, 22], [18, 22], [16, 18]]);
+        expect(sizes(LONGEST)).toEqual([[18, 22], [16, 20], [15, 16]]);
+        expect(sizes(AWARD)).toEqual([[16, 20], [15, 18], [15, 15]]);
+    });
+
+    it("fits each reported name in three lines unless the floor cannot", () => {
+        for (const name of [VINKA, LONGEST, AWARD]) {
+            for (const width of [NARROW, COVER]) {
+                for (const scale of [1, 1.15]) {
+                    const layout = heroNameLayout(name, width, scale);
+                    expect(estimateLines(name, (layout.maxWidth as number) - 4, layout.fontSize * scale))
+                        .toBeLessThanOrEqual(HERO_NAME_MAX_LINES);
+                }
+            }
+        }
+    });
+
+    it("wraps the second device report's name exactly where the phone did", () => {
+        // Calibration. On the Fold's cover screen (about 360 points, text 1x)
+        // the 18 pt name broke after "Carlos &", "Washed" and "-", and the
+        // three full lines measured 255, 298 and 266 points.
+        const lines = wrapLines(AWARD, NARROW - 36 - 23 - 4, 18).map(Math.round);
+        expect(lines).toHaveLength(4);
+        expect(lines.slice(0, 3)).toEqual([253, 296, 265]);
+    });
+
+    it("keeps a long name off the watermark on a phone with a band under it", async () => {
         // The column beside the pour profile is about 150 points on the cover
         // screen, far too narrow, so the name takes the full width and the
-        // profile gets a band of its own underneath.
-        await renderWithProviders(<RecipeHero {...BASE} name={VINKA}/>);
+        // profile, drawn lower, gets a band underneath.
+        await renderWithProviders(<RecipeHero {...BASE} name={AWARD}/>);
 
-        expect(screen.getByTestId("hero-profile-reserve").props.style)
-            .toEqual(expect.objectContaining({height: HERO_PROFILE_RESERVE}));
+        const reserve = screen.getByTestId("hero-profile-reserve").props.style.height;
+        expect(reserve).toBeGreaterThan(0);
+        expect(reserve).toBeLessThanOrEqual(HERO_PROFILE_RESERVE);
         expect(StyleSheet.flatten(screen.getByTestId("hero-name").props.style))
             .toEqual(expect.objectContaining({maxWidth: COVER - 36 - 23}));
+    });
+
+    it("keeps the band small: the lower watermark less the slab's padding", () => {
+        // 74 tall, the band was 64 and the header took a third of the screen.
+        expect(HERO_PROFILE_RESERVE)
+            .toBeGreaterThanOrEqual(PROFILE_BAND_HEIGHT + 1.6 - 0.8 - 2 - 13);
+        expect(HERO_PROFILE_RESERVE).toBeLessThanOrEqual(42);
+    });
+
+    it("lets the watermark rise beside a short last line", () => {
+        // "...SL28 and SL34" style endings: a last line that ends before the
+        // watermark begins does not need the band's height kept under it.
+        const name = "Ethiopia | Hambela Wamena | Natural G1 | Hand Picked By Ayele Tulu Family 18g";
+        const layout = heroNameLayout(name, NARROW, 1);
+        const lines = wrapLines(name, layout.maxWidth as number, layout.fontSize);
+        const last = lines[lines.length - 1];
+        if (last <= NARROW - 18 - 189 - 8) {
+            expect(layout.reserve).toBeLessThan(HERO_PROFILE_RESERVE);
+        } else {
+            expect(layout.reserve).toBe(HERO_PROFILE_RESERVE);
+        }
     });
 
     it("puts a long name beside the watermark where the screen is wide enough", async () => {
@@ -260,8 +323,9 @@ describe("RecipeHero", () => {
 
         expect(screen.queryByTestId("hero-profile-reserve")).toBeNull();
         const maxWidth = StyleSheet.flatten(screen.getByTestId("hero-name").props.style).maxWidth;
-        // Ends before the watermark's 189 points of the slab's right edge.
-        expect(maxWidth).toBeLessThanOrEqual(INNER - 18 - 189 - 23);
+        // Ends, pencil and all, before the watermark's 189 points of the
+        // slab's right edge.
+        expect(maxWidth + 23).toBeLessThanOrEqual(INNER - 18 - 189 - 8);
     });
 
     it("breaks lines the simple way the estimate counts them", async () => {
@@ -270,8 +334,8 @@ describe("RecipeHero", () => {
         expect(screen.getByTestId("hero-name").props.textBreakStrategy).toBe("simple");
     });
 
-    it("closes up the gap under the chrome row only for the four-line step", async () => {
-        await renderWithProviders(<RecipeHero {...BASE} name={VINKA}/>);
+    it("closes up the gap under the chrome row when the band is used", async () => {
+        await renderWithProviders(<RecipeHero {...BASE} name={AWARD}/>);
         expect(StyleSheet.flatten(screen.getByTestId("hero-name").props.style).marginTop)
             .toBeLessThan(7);
         // COFFEE stays.
@@ -295,70 +359,58 @@ describe("RecipeHero", () => {
             .toEqual(expect.objectContaining({fontSize: 15}));
     });
 
-    it("steps the size down at each threshold", () => {
-        expect(heroNameStyle("x".repeat(HERO_NAME_LONG)))
-            .toEqual({fontSize: 26, lineHeight: 31, lines: 2});
-        expect(heroNameStyle("x".repeat(HERO_NAME_LONG + 1)))
-            .toEqual({fontSize: 22, lineHeight: 27, lines: 3});
-        expect(heroNameStyle("x".repeat(HERO_NAME_LONGER)))
-            .toEqual({fontSize: 22, lineHeight: 27, lines: 3});
-        expect(heroNameStyle("x".repeat(HERO_NAME_LONGER + 1)))
-            .toEqual({fontSize: 18, lineHeight: 23, lines: 4});
+    it("steps down only past the long-name threshold", () => {
+        expect(heroNameLayout("x".repeat(HERO_NAME_LONG), NARROW))
+            .toEqual(expect.objectContaining({fontSize: 26, lineHeight: 31, lines: 2}));
+        expect(heroNameLayout("x ".repeat(15).trim(), NARROW))
+            .toEqual(expect.objectContaining({fontSize: 22, lineHeight: 27, lines: 3}));
     });
 
-    it("fits the long names in full on 360 to 412 point phones", () => {
-        // The estimate, not the device: 0.5 em a character, rounded up from the
-        // 0.48 read off the cover-screen screenshot. At the default text size
-        // and at the cover screen's own (about 1.15).
-        for (const width of [NARROW, COVER]) {
-            for (const fontScale of [1, 1.15]) {
-                for (const name of [VINKA, LONGEST]) {
-                    const layout = heroNameLayout(name, width, fontScale);
-                    const needed = estimateLines(
-                        name, layout.maxWidth as number, layout.fontSize * fontScale
-                    );
-                    expect(needed).toBeLessThanOrEqual(layout.lines);
-                }
-            }
-        }
-        expect(estimateLines(VINKA, NARROW - 59, 18)).toBe(3);
-        expect(estimateLines(VINKA, COVER - 59, 18)).toBe(2);
-        expect(estimateLines(LONGEST, NARROW - 59, 18)).toBe(3);
-        expect(estimateLines(LONGEST, COVER - 59, 18)).toBe(3);
-    });
-
-    it("never leaves a three- or four-line name across the watermark", () => {
-        // Either the column stops short of the watermark, or the band under
-        // the name holds it. Checked across the widths the app runs at.
-        for (const name of [MEDIUM_NAME, LONG_NAME, VINKA, LONGEST]) {
+    it("never leaves a long name across the watermark", () => {
+        // Either the column stops short of the watermark, or a band under the
+        // name holds it. Checked across the widths the app runs at.
+        for (const name of [MEDIUM_NAME, LONG_NAME, VINKA, LONGEST, AWARD]) {
             for (const width of [NARROW, COVER, 600, INNER]) {
                 for (const fontScale of [1, 1.15, 1.4]) {
                     const layout = heroNameLayout(name, width, fontScale);
-                    const beside = (layout.maxWidth as number) <= width - 18 - 189 - 23;
-                    expect(beside || layout.reserve === HERO_PROFILE_RESERVE).toBe(true);
+                    expect(layout.lines).toBe(HERO_NAME_MAX_LINES);
+                    const beside = (layout.maxWidth as number) + 23 <= width - 18 - 189 - 8;
+                    if (beside) {
+                        expect(layout.reserve).toBe(0);
+                    } else {
+                        expect(layout.profileHeight).toBe(PROFILE_BAND_HEIGHT);
+                        // Lines left out of the band all end before the
+                        // watermark begins.
+                        const lines = wrapLines(
+                            name, (layout.maxWidth as number) - 4,
+                            layout.fontSize * Math.min(fontScale, 1.4)
+                        ).slice(0, HERO_NAME_MAX_LINES);
+                        const freed = Math.round(
+                            (HERO_PROFILE_RESERVE - layout.reserve)
+                            / (layout.lineHeight * Math.min(fontScale, 1.4))
+                        );
+                        for (const line of lines.slice(lines.length - freed)) {
+                            expect(line).toBeLessThanOrEqual(width - 18 - 189 - 8);
+                        }
+                    }
                 }
             }
         }
-        // The band clears the watermark: 74 + stroke - overhang above the
-        // slab's bottom edge, less the 13 of padding under the name.
-        expect(HERO_PROFILE_RESERVE).toBeGreaterThanOrEqual(74 + 1.6 - 0.8 - 2 - 13);
     });
 
     it("counts a word too long for a line as several", () => {
         expect(estimateLines("x".repeat(25), 100, 20)).toBe(3);
         expect(estimateLines("ab cd", 100, 20)).toBe(1);
-        expect(estimateLines("abcdefg hij", 100, 20)).toBe(2);
+        expect(estimateLines("abcdefgh hijk", 100, 20)).toBe(2);
     });
 
     it("tells the editor how much a collapse folds away, more for a longer name", () => {
         const short = heroFoldAway("Ethiopia Guji");
-        const medium = heroFoldAway(MEDIUM_NAME);
-        const long = heroFoldAway(LONGEST);
-        expect(short).toBeLessThan(medium);
-        expect(medium).toBeLessThan(long);
-        // Four 23 pt lines at the largest text size, the beverage row and the
+        const long = heroFoldAway(AWARD);
+        expect(short).toBeLessThan(long);
+        // Three 27 pt lines at the largest text size, the beverage row and the
         // band under the name: well past the home screen's figure.
-        expect(long).toBeGreaterThanOrEqual(4 * 23 * 1.4 + HERO_PROFILE_RESERVE + 24);
+        expect(long).toBeGreaterThanOrEqual(3 * 27 * 1.4 + HERO_PROFILE_RESERVE + 24);
         expect(long).toBeGreaterThan(COLLAPSE_SHRINK);
     });
 
