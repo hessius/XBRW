@@ -953,6 +953,26 @@ only: there are no notifications (no notification dependency in the app).
 | `bag.sheet.restPeak.note` | `components/BagSheet.tsx` | Note under the fields. | `Days after the roast date. Pick a roast to fill them in, or type your own.` |
 | `bag.sheet.restPeak.errors` | `library/restPeak.ts` (`figuresProblem`) | Replaces the note when the fields do not make sense. | `Enter whole days, 0 to 540.` / `The peak day is on or after the rest ends.` |
 
+### Ready to brew
+
+The card at the top of the home library, `components/ReadyToBrewCard.tsx`, with
+its words from `library/readyToBrew.ts`. Drawn only while a recipe has an open
+bag, and not on a day it was closed. The grams line and the running-low line
+are this app's bag mode only.
+
+| ID | Source | Context — when the user sees this | Current text |
+|----|--------|-----------------------------------|--------------|
+| `home.ready.title` | `components/ReadyToBrewCard.tsx` | Doto label at the top of the card. | `READY TO BREW` |
+| `home.ready.freshness` | `library/readyToBrew.ts` (`readyFreshnessLine`) | Under the coffee's name. Shorter than the BAG section's line, no full stop. Day and short month, not the phone's locale. | `At its peak` / `Ready, peak around 29 Oct` / `Ready` / `Past its best` / `Resting, ready from 23 Oct` |
+| `home.ready.bag` | `library/coffeeBag.ts` (`remainingLine`) via `readyBagLine` | Under the freshness line, this app's bag mode only. | `212 g left, about 11 brews` |
+| `home.ready.brew` | `components/ReadyToBrewCard.tsx` | Doto button beside the name, only with a machine remembered. Filled in the recipe's colour unless the bag is resting or nearly empty. | `BREW` |
+| `home.ready.brew.a11y` | `components/ReadyToBrewCard.tsx` | (a11y) The BREW button. | `Brew ${name}` |
+| `home.ready.open.a11y` | `components/ReadyToBrewCard.tsx` | (a11y) The name and photo area, which opens the recipe. Label is the parts on screen joined by commas; hint below. | `Ready to brew, ${name}, ${freshness}, ${bag line}` · hint `Opens the recipe.` |
+| `home.ready.low` | `library/readyToBrew.ts` (`runningLowLine`) | Under the card when an open bag has under two doses left. `${name}` is the pod's coffee name, or the recipe name. | `${name} is running low` |
+| `home.ready.reorder` | `components/ReadyToBrewCard.tsx` | After the running-low line, only when the coffee or recipe has an https link. | `Reorder` · hint `Opens the roaster's page in your browser.` |
+| `home.ready.more` | `library/readyToBrew.ts` (`moreReadyLine`) | When more than one coffee is at its peak or ready. Steps the card to the next one. | `+${count} more ready` · hint `Shows the next coffee that is ready.` |
+| `home.ready.dismiss.a11y` | `components/ReadyToBrewCard.tsx` | (a11y) The small close button. | `Hide until tomorrow` |
+
 ## Brew history
 
 `app/brewHistory.tsx`, `components/BrewHistoryControls.tsx` and `components/BrewHistoryRow.tsx`.

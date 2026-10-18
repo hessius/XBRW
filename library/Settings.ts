@@ -286,6 +286,13 @@ export const DEFAULTS = {
     drawerHintSignature:   "",
     drawerHintLastSeenAt:  0,
     /**
+     * The local day (`YYYY-MM-DD`) the home screen's "Ready to brew" card was
+     * closed, or empty. The card stays away for the rest of that day and comes
+     * back the next, so it can be put away without being turned off. Held out
+     * of backups with the drawer hint: it is this phone's state, not a choice.
+     */
+    readyToBrewDismissedOn: "",
+    /**
      * Offer to send a finished brew to Beanconqueror.
      *
      * Off until the reader is in Beanconqueror's own release. Before then the
@@ -458,9 +465,9 @@ export type SettingKey = keyof typeof DEFAULTS;
  * evidence any more. The whole reason they are stored is to be trustworthy
  * about what a real machine said.
  *
- * The drawer hint counters are held out because they describe what this phone
- * has already taught, and a restored phone has not seen or forgotten the same
- * lessons.
+ * The drawer hint counters and the day the "Ready to brew" card was closed are
+ * held out because they describe what this phone has already taught or been
+ * told, and a restored phone has not seen or forgotten the same lessons.
  *
  * `roasterCatalogue` is a cache of roasters' feeds, refetched on the next sync,
  * and `roasterAlerts` is bookkeeping about that cache.
@@ -473,12 +480,13 @@ export type BackupExcluded =
     "machineDeviceId" | "savedMachines" | "lastCardRead" | "labsUnlocked" | "beanconquerorHandoff" | "bagTracker" |
     "machineModelString" | "machineName" | "ratingPromptDismissed" |
     "drawerHintLastShownAt" | "drawerHintShownCount" | "drawerHintManualOpens" |
-    "drawerHintSignature" | "drawerHintLastSeenAt" | "roasterCatalogue" | "roasterAlerts";
+    "drawerHintSignature" | "drawerHintLastSeenAt" | "roasterCatalogue" | "roasterAlerts" |
+    "readyToBrewDismissedOn";
 export const NOT_IN_BACKUP: readonly SettingKey[] = [
     "machineDeviceId", "savedMachines", "lastCardRead", "labsUnlocked", "beanconquerorHandoff", "bagTracker",
     "machineModelString", "machineName", "ratingPromptDismissed",
     "drawerHintLastShownAt", "drawerHintShownCount", "drawerHintManualOpens",
-    "drawerHintSignature", "drawerHintLastSeenAt", "roasterCatalogue", "roasterAlerts"
+    "drawerHintSignature", "drawerHintLastSeenAt", "roasterCatalogue", "roasterAlerts", "readyToBrewDismissedOn"
 ];
 
 /**
