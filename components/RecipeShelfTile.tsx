@@ -42,13 +42,15 @@ const TILE_PADDING = 13;
  * The profile sits in the corner the text leaves free, the way it sits beside
  * the card's figures rather than under them: badges, a two-line name and the
  * figures fill the top of the tile, and the profile takes what is left down to
- * the bottom edge. 30 is what a two-line name leaves at the default text size,
- * so every tile in a row draws its silhouette at the same height. Larger text
+ * the bottom edge. 26 is about what a two-line name leaves at the default text
+ * size (badges 15, name 2 x 18, figures 15, gaps and clearance), so tiles in a
+ * row draw their silhouettes at the same height whether a name takes one line
+ * or two. Larger text
  * leaves less, and the profile shrinks to fit rather than run under the
  * figures; below `PROFILE_MIN_HEIGHT` a staircase is no longer readable as one,
  * so it is not drawn at all.
  */
-export const PROFILE_HEIGHT = 30;
+export const PROFILE_HEIGHT = 26;
 export const PROFILE_CLEARANCE = 4;
 export const PROFILE_MIN_HEIGHT = 12;
 
