@@ -61,6 +61,12 @@ type Props = {
     /** Which way the star row reads and speaks. */
     favourite?: boolean;
     onEasyMode?: () => void;
+    /**
+     * Editor-only: add or edit the bag this recipe draws on. The row reads
+     * "I bought a bag" until there is one, then "Edit bag".
+     */
+    onBag?: () => void;
+    hasBag?: boolean;
 };
 
 /**
@@ -80,7 +86,7 @@ type Props = {
 export default function RecipeOverflowSheet({
     open, canRefreshName, recipeUuid, onOpenChange, showHints, onShowHintsChange,
     onShare, onDuplicate, onRefreshName, onRevert, onDelete,
-    onBrew, onWrite, onToggleFavourite, favourite = false, onEasyMode
+    onBrew, onWrite, onToggleFavourite, favourite = false, onEasyMode, onBag, hasBag = false
 }: Props) {
     function pick(action: () => void) {
         onOpenChange(false);
@@ -168,6 +174,11 @@ export default function RecipeOverflowSheet({
                     testID: "overflow-share-label",
                     hint:   "Creates a link that opens this recipe in the xBloom app."
                 })}
+                {onBag && row(hasBag ? "Edit bag" : "I bought a bag",
+                    hasBag ? "edit" : "plus", onBag, {
+                        testID: "overflow-bag-label",
+                        hint:   "Counts down the coffee left as you brew this recipe."
+                    })}
                 {row("Duplicate", "duplicate", onDuplicate)}
                 {onToggleFavourite && row(
                     favourite ? "Remove star from recipe" : "Star recipe",

@@ -2,7 +2,7 @@ import {useLocalSearchParams, useNavigation} from "expo-router";
 import router from "@/hooks/steadyRouter";
 import {openEasyModeRecipe} from "@/hooks/useEasyModeSlots";
 import React, {useEffect, useRef, useState} from "react";
-import {Pressable, ScrollView, Share, View, useWindowDimensions} from "react-native";
+import {Linking, Pressable, ScrollView, Share, View, useWindowDimensions} from "react-native";
 import Animated, {FadeIn, FadeOut, SlideInDown, SlideOutDown} from "react-native-reanimated";
 import {useSafeAreaInsets} from "react-native-safe-area-context";
 import {Text, XStack, YStack} from "tamagui";
@@ -19,6 +19,7 @@ import LeaveEditorSheet, {type LeaveIntent} from "@/components/LeaveEditorSheet"
 import NfcOverlay from "@/components/NfcOverlay";
 import RecipeHero from "@/components/RecipeHero";
 import RecipeOverflowSheet from "@/components/RecipeOverflowSheet";
+import BagSheet, {type BagSheetResult} from "@/components/BagSheet";
 import RenameSheet from "@/components/RenameSheet";
 import RevertSheet from "@/components/RevertSheet";
 import QuickEditPanel from "@/components/QuickEditPanel";
@@ -46,6 +47,20 @@ import {
     type RecipeRatingStore
 } from "@/hooks/useBrewHistory";
 import {useSetting} from "@/hooks/useSetting";
+import {useCoffeeBag} from "@/hooks/useCoffeeBag";
+import {openLink} from "@/components/openLink";
+import {
+    newBag,
+    readBag,
+    reorderUrl,
+    resolveBagTracker,
+    roastDayFromCoffee,
+    withGramsLeft,
+    withSize,
+    type CoffeeBag
+} from "@/library/coffeeBag";
+import {bagBeanName, bagBeanNameFixed, bagShareBean} from "@/library/brew/handoff/bagBean";
+import {beanLink} from "@/library/brew/handoff/beanLink";
 import {resolveAccent} from "@/library/accent";
 import {CARD_GRIND_MIN, grindBand} from "@/library/grindBands";
 import {BLE_GRIND_SIZE} from "@/library/cardLimits";
@@ -898,6 +913,9 @@ export default function EditRecipe(
     const [helpOpen, setHelpOpen] = useState(false);
     const [renameOpen, setRenameOpen] = useState(false);
     const [beanProfileOpen, setBeanProfileOpen] = useState(false);
+    const [bagSheetOpen, setBagSheetOpen] = useState(false);
+    // Bumped on each open so the bag sheet's fields start from the stored bag.
+    const [bagSheetEpoch, setBagSheetEpoch] = useState(0);
     const [bypassWriteOpen, setBypassWriteOpen] = useState(false);
     const [quickEditOpen, setQuickEditOpen] = useState(false);
     const [quickEditAdjustments, setQuickEditAdjustments] =
@@ -1026,6 +1044,16 @@ export default function EditRecipe(
         historyStore
     );
 
+    // The bag, re-read on focus: coming back from a brew this screen opened is
+    // exactly when a dose has just left it. The subscriber is held in state so
+    // its identity is stable on a screen the compiler does not memoise.
+    const [bagTrackerSetting] = useSetting("bagTracker");
+    const [beanconquerorHandoff] = useSetting("beanconquerorHandoff");
+    const bagTracker = resolveBagTracker(bagTrackerSetting, beanconquerorHandoff);
+    const [subscribeFocus] = useState(() =>
+        (listener: () => void) => navigation.addListener("focus", listener));
+    const coffeeBag = useCoffeeBag(recipe?.uuid ?? "", subscribeFocus);
+
     if (!recipe) return null;
 
     // While the panel is open the bar's BREW is the panel's BREW: it brews
@@ -1045,6 +1073,62 @@ export default function EditRecipe(
      * on the deck behind the panel is not something to brew over.
      */
     const canBrewNow = quickEditOpen ? !quickEditBlocked && !inputError : canBrew;
+
+    const openBag = coffeeBag.stored;
+    // Grams are this app's estimate only while this app is the tracker.
+    const bagReading = openBag !== null && bagTracker === "xbrw"
+        ? readBag(openBag.bag, openBag.usedGrams, recipe.dosage) : null;
+    const bagReorderUrl = reorderUrl(recipe);
+
+    function openBagSheet() {
+        setBagSheetEpoch((epoch) => epoch + 1);
+        setBagSheetOpen(true);
+    }
+
+    /**
+     * Save what the sheet says, and in Beanconqueror mode hand a new bag over.
+     *
+     * The bag is saved here first either way: its roast date is needed in both
+     * modes, and a Beanconqueror that will not open must not cost the person
+     * what they typed. The link goes out only for a new bag; an edit stays
+     * local, because sending again would add a second bean on their side.
+     */
+    function saveBag(result: BagSheetResult) {
+        if (!recipe) return;
+        setBagSheetOpen(false);
+        const existing = openBag?.bag ?? null;
+        if (existing !== null) {
+            let next: CoffeeBag = withSize(existing, result.sizeGrams);
+            next = {...next, roastedOn: result.roastedOn, price: result.price};
+            if (result.roastedOn === undefined) delete next.roastedOn;
+            if (result.price === undefined) delete next.price;
+            if (result.beanName !== undefined) next.beanName = result.beanName;
+            const before = bagReading?.remainingGrams;
+            if (result.gramsLeft !== undefined && result.gramsLeft !== before) {
+                next = withGramsLeft(next, result.gramsLeft);
+            }
+            coffeeBag.save(next);
+            return;
+        }
+        const bag = newBag(recipe.uuid, {
+            sizeGrams: result.sizeGrams,
+            roastedOn: result.roastedOn,
+            price: result.price,
+            beanName: bagTracker === "beanconqueror"
+                ? (result.beanName ?? bagBeanName(recipe)) : undefined
+        });
+        coffeeBag.save(bag);
+        if (bagTracker === "beanconqueror") {
+            const url = beanLink(bagShareBean(recipe, bag, bag.beanName ?? bagBeanName(recipe)));
+            // No canOpenURL preflight, for the reason `useBrewHandoff` gives:
+            // iOS answers false without a query-schemes entry even when
+            // Beanconqueror is installed.
+            Linking.openURL(url).catch(() => notify({
+                tone:    "error",
+                message: "The bag is saved here, but Beanconqueror could not be opened. Make sure it is installed."
+            }));
+        }
+    }
 
     function closeQuickEdit() {
         setQuickEditOpen(false);
@@ -1269,7 +1353,7 @@ export default function EditRecipe(
     // `accessibilityViewIsModal` does on iOS.
     const screenCovered = showNfcOverlay || overflowOpen || revertOpen || helpOpen
         || bypassWriteOpen || renameOpen || beanProfileOpen || leavePrompt !== null
-        || ratingNoteOpen;
+        || ratingNoteOpen || bagSheetOpen;
     // The quick edit panel covers the deck but not the action bar, which holds
     // the BREW it adjusts. So it hides the deck rather than the screen.
     const deckCovered = screenCovered || quickEditOpen;
@@ -1413,6 +1497,15 @@ export default function EditRecipe(
                                    refreshBeanProfile();
                                }}
                                onShowBeanProfile={() => setBeanProfileOpen(true)}
+                               bag={{
+                                   tracker:     bagTracker,
+                                   bag:         openBag?.bag ?? null,
+                                   reading:     bagReading,
+                                   reorderUrl:  bagReorderUrl,
+                                   onOpenSheet: openBagSheet,
+                                   onFinish:    coffeeBag.finish,
+                                   onReorder:   openLink
+                               }}
                                knownTags={knownTags}
                                onTags={editTags}
                                showHint={showHint} dispatch={dispatch}
@@ -1496,7 +1589,27 @@ export default function EditRecipe(
                                  onRevert={() => setRevertOpen(true)}
                                  onToggleFavourite={toggleFavourite}
                                  favourite={recipe.favourite}
+                                 onBag={openBagSheet}
+                                 hasBag={openBag !== null}
                                  onDelete={deleteRecipe}/>
+
+            <BagSheet open={bagSheetOpen} onOpenChange={setBagSheetOpen}
+                      epoch={bagSheetEpoch}
+                      tracker={bagTracker}
+                      bag={openBag?.bag ?? null}
+                      gramsLeft={bagReading?.remainingGrams ?? null}
+                      suggestedRoastedOn={roastDayFromCoffee(recipe.coffee?.roastingDate)}
+                      beanName={bagBeanName(recipe)}
+                      beanNameFixed={bagBeanNameFixed(recipe)}
+                      onSave={saveBag}
+                      onFinish={() => {
+                          setBagSheetOpen(false);
+                          coffeeBag.finish();
+                      }}
+                      onRemove={() => {
+                          setBagSheetOpen(false);
+                          coffeeBag.remove();
+                      }}/>
 
             <RevertSheet open={revertOpen} sources={revertSources}
                          onOpenChange={setRevertOpen} onReverted={onRecipeReplaced}/>

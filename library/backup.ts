@@ -13,6 +13,7 @@ import {
     normaliseBeanTags
 } from "./brew/beanTags";
 import {DOSE, TEMPERATURE} from "./cardLimits";
+import {reviveBag, type CoffeeBag} from "./coffeeBag";
 import Recipe, {GRINDER_OFF_VALUE, MAX_DESCRIPTION} from "./Recipe";
 import {XBLOOM_SHARE_HOST} from "./shareLink";
 
@@ -62,6 +63,16 @@ export type BackupPayload = {
      * file whose history is damaged look like a file whose library is.
      */
     skippedBrews: number;
+    /**
+     * Bags of coffee, open and finished.
+     *
+     * Absent from every file made before bags existed, which reads as none.
+     * What is left in a bag is not carried: it is derived from the brews,
+     * which travel beside it, so a restored bag reads the same figure.
+     */
+    bags: CoffeeBag[];
+    /** Bags present but unreadable. Counted apart, like `skippedBrews`. */
+    skippedBags: number;
     appVersion: string;
     exportedAt: string;
 };
@@ -75,7 +86,8 @@ export function buildBackup(
     recipes: readonly Recipe[],
     settings: BackupSettings,
     appVersion = "unknown",
-    brews: readonly (BrewRecord & {hasStream?: boolean})[] = []
+    brews: readonly (BrewRecord & {hasStream?: boolean})[] = [],
+    bags: readonly CoffeeBag[] = []
 ): string {
     return JSON.stringify({
         format: BACKUP_FORMAT,
@@ -94,6 +106,7 @@ export function buildBackup(
         // carry the flag, so it is named here and dropped rather than left to
         // a spread that would copy it straight through.
         brews: brews.map(({hasStream: _ignored, ...record}) => record),
+        bags,
         settings
     }, null, 2);
 }
@@ -150,6 +163,18 @@ export function parseBackup(text: string): ParseResult {
         }
     }
 
+    // Absent is an older file, like `brews`. A bag is restored only for a
+    // recipe that ends up in the library, which the caller decides.
+    const bags: CoffeeBag[] = [];
+    let skippedBags = 0;
+    if (Array.isArray(envelope.bags)) {
+        for (const entry of envelope.bags) {
+            const bag = reviveBag(entry);
+            if (bag === null) skippedBags += 1;
+            else bags.push(bag);
+        }
+    }
+
     const recipes: Recipe[] = [];
     const faults: string[] = [];
     let skipped = 0;
@@ -188,6 +213,8 @@ export function parseBackup(text: string): ParseResult {
             recipes,
             brews,
             skippedBrews,
+            bags,
+            skippedBags,
             settings: isPlainObject(envelope.settings) ? envelope.settings : {},
             skipped,
             appVersion: typeof envelope.appVersion === "string" ? envelope.appVersion : "unknown",

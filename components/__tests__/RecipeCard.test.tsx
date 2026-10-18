@@ -10,6 +10,7 @@ import {DOT_ICONS, litCells} from "@/constants/dotIcons";
 import {AA_LARGE, contrast} from "@/test-utils/contrast";
 import {DOTO_MAX_FONT_SCALE} from "@/components/DotMatrixText";
 import {renderWithProviders} from "@/test-utils/render";
+import {newBag} from "@/library/coffeeBag";
 
 /** The colour a dot icon's dots are drawn in. */
 function dotColourOf(testID: string): string {
@@ -1135,5 +1136,31 @@ describe("the evidence a card carries", () => {
 
         expect(screen.getByTestId("recipe-card").props.accessibilityLabel)
             .toContain("brewed once");
+    });
+});
+
+describe("RecipeCard bag badge", () => {
+    function guji(): Recipe {
+        const recipe = new Recipe();
+        recipe.name = "Guji";
+        recipe.dosage = 18;
+        return recipe;
+    }
+    const bag = {...newBag("r1", {sizeGrams: 250}, 1_760_000_000_000), id: "bag-1"};
+
+    it("shows grams left in the badge corner, not a new row", async () => {
+        await renderWithProviders(
+            <RecipeCard recipe={guji()} onPress={jest.fn()} bag={{bag, usedGrams: 38}}/>
+        );
+        expect(within(screen.getByTestId("recipe-card-badges"))
+            .getByTestId("recipe-card-bag")).toHaveTextContent("212G");
+        expect(screen.getByLabelText(/212 grams of coffee left/)).toBeTruthy();
+    });
+
+    it("says LOW once a reorder is due", async () => {
+        await renderWithProviders(
+            <RecipeCard recipe={guji()} onPress={jest.fn()} bag={{bag, usedGrams: 220}}/>
+        );
+        expect(screen.getByTestId("recipe-card-bag")).toHaveTextContent("LOW");
     });
 });

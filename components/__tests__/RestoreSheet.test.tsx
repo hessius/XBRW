@@ -18,6 +18,8 @@ const PAYLOAD = {
     settings: {temperatureUnit: "F"},
     skipped: 0,
     skippedBrews: 0,
+    bags: [],
+    skippedBags: 0,
     appVersion: "2.6.0",
     exportedAt: "2026-08-26T21:00:00.000Z"
 };

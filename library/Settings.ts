@@ -4,6 +4,7 @@ import type {SortAxis, SortDirection} from './librarySort';
 import type {LibraryView} from './libraryView';
 import type {MachineModel} from './machine/machineModel';
 import type {HistorySort, HistorySortDirection} from './brew/historyQuery';
+import type {BagTrackerSetting} from './coffeeBag';
 
 /**
  * Every setting, with its default.
@@ -278,6 +279,17 @@ export const DEFAULTS = {
      */
     beanconquerorHandoff: false,
     /**
+     * Which app counts what is left in a bag: this one, Beanconqueror, or
+     * `auto`, which is Beanconqueror exactly while brews are being handed to it.
+     *
+     * One tracker, because Beanconqueror subtracts each brew it is handed from
+     * the matching bean, and a second count here would drift from it. See
+     * `library/coffeeBag.ts`; `resolveBagTracker` is the only reader that
+     * should interpret it. Held out of backups with the handoff switch it
+     * follows (below).
+     */
+    bagTracker: "auto" as BagTrackerSetting,
+    /**
      * Whether the LABS section is visible in settings.
      *
      * Off until somebody taps the version string on the about screen seven
@@ -390,12 +402,12 @@ export type SettingKey = keyof typeof DEFAULTS;
  * in a backup or on this list, never quietly missing from both.
  */
 export type BackupExcluded =
-    "machineDeviceId" | "lastCardRead" | "labsUnlocked" | "beanconquerorHandoff" |
+    "machineDeviceId" | "lastCardRead" | "labsUnlocked" | "beanconquerorHandoff" | "bagTracker" |
     "machineModelString" | "machineName" | "ratingPromptDismissed" |
     "drawerHintLastShownAt" | "drawerHintShownCount" | "drawerHintManualOpens" |
     "drawerHintSignature" | "drawerHintLastSeenAt";
 export const NOT_IN_BACKUP: readonly SettingKey[] = [
-    "machineDeviceId", "lastCardRead", "labsUnlocked", "beanconquerorHandoff",
+    "machineDeviceId", "lastCardRead", "labsUnlocked", "beanconquerorHandoff", "bagTracker",
     "machineModelString", "machineName", "ratingPromptDismissed",
     "drawerHintLastShownAt", "drawerHintShownCount", "drawerHintManualOpens",
     "drawerHintSignature", "drawerHintLastSeenAt"

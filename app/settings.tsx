@@ -25,6 +25,12 @@ import {useLiveBrew} from "@/hooks/useLiveBrew";
 import {type BackupPayload} from "@/library/backup";
 import type {BrewRecord} from "@/library/brew/BrewRecord";
 import {RATING_PROMPT_WINDOW_MS} from "@/library/brew/ratingPrompt";
+import {sharedBagDatabase} from "@/library/CoffeeBagDatabase";
+import {
+    isBagTrackerSetting,
+    resolveBagTracker,
+    type CoffeeBag
+} from "@/library/coffeeBag";
 import type {BackupExcluded, Settings, SettingKey} from "@/library/Settings";
 import {isMachineModel} from "@/library/machine/machineModel";
 import {isSortAxis, isSortDirection} from "@/library/librarySort";
@@ -71,6 +77,18 @@ function brewHistory(): BrewRecord[] {
 }
 
 /**
+ * Every bag, for the backup. Same reasoning as `brewHistory`: a bag table that
+ * will not read is not worth losing the recipes' backup over.
+ */
+function bagHistory(): CoffeeBag[] {
+    try {
+        return sharedBagDatabase().all();
+    } catch {
+        return [];
+    }
+}
+
+/**
  * What a restore did, in one sentence.
  *
  * Both halves are named when both happened, because they land in different
@@ -104,6 +122,7 @@ export default function SettingsScreen({settings}: Props) {
     const [labsUnlocked, setLabsUnlocked] = useSetting("labsUnlocked", settings);
     const [beanconquerorHandoff, setBeanconquerorHandoff] =
         useSetting("beanconquerorHandoff", settings);
+    const [bagTracker, setBagTracker] = useSetting("bagTracker", settings);
     const cloud = useCloudSession();
 
     async function signOutOfCloud() {
@@ -238,7 +257,7 @@ export default function SettingsScreen({settings}: Props) {
             return;
         }
         const outcome = await exportBackup(
-            everything, settingsSnapshot(), VERSION, brewHistory()
+            everything, settingsSnapshot(), VERSION, brewHistory(), bagHistory()
         );
         if (!outcome.ok) notify({tone: "error", message: outcome.reason});
     }
@@ -388,6 +407,17 @@ export default function SettingsScreen({settings}: Props) {
             brews = 0;
         }
 
+        // After the brews, which are what a bag's grams left are counted
+        // from, and only for recipes now in the library. Not counted in the
+        // message: a bag is a detail of a recipe, and the recipe count already
+        // says the recipes came back.
+        try {
+            const known = new Set(library.allRecipes().map((recipe) => recipe.uuid));
+            sharedBagDatabase().restore(payload.bags, known);
+        } catch {
+            // A bag table that will not take the restore costs the bags only.
+        }
+
         // A restore that took only the settings did happen, and reporting it as
         // "0 recipes restored" reads as a failure the app is being coy about.
         if (outcome.added === 0 && brews === 0 && choice.includeSettings) {
@@ -406,6 +436,14 @@ export default function SettingsScreen({settings}: Props) {
                 message: payload.skippedBrews === 1
                     ? "One brew in that backup could not be read."
                     : `${payload.skippedBrews} brews in that backup could not be read.`
+            });
+        }
+        if (payload.skippedBags > 0) {
+            notify({
+                tone: "error",
+                message: payload.skippedBags === 1
+                    ? "One bag in that backup could not be read."
+                    : `${payload.skippedBags} bags in that backup could not be read.`
             });
         }
     }
@@ -639,6 +677,22 @@ export default function SettingsScreen({settings}: Props) {
                         label="Send brews to Beanconqueror"
                         description="Needs a version of Beanconqueror that can read the link. Older ones will say they do not recognise it."
                         value={beanconquerorHandoff} onChange={setBeanconquerorHandoff}/>
+                    {/* Beside the handoff because it is the same question seen
+                        from the bag's side: Beanconqueror subtracts every brew
+                        it is handed, so only one app may count a bag. Shows the
+                        resolved choice; picking one stores it explicitly, and
+                        until then it follows the handoff switch above. */}
+                    <SettingsChoiceRow
+                        label="Track bags in"
+                        description="The app that counts down what is left in a bag. Beanconqueror already does this for the brews it receives, so pick one and the two never disagree."
+                        value={resolveBagTracker(bagTracker, beanconquerorHandoff)}
+                        options={[
+                            {value: "xbrw", label: "XBRW++"},
+                            {value: "beanconqueror", label: "Beanconqueror"}
+                        ]}
+                        onChange={(next) => {
+                            if (isBagTrackerSetting(next)) setBagTracker(next);
+                        }}/>
                     <SettingsActionRow label="Hide Labs"
                                        detail="Anything you switched on here stays on."
                                        onPress={() => setLabsUnlocked(false)}/>
