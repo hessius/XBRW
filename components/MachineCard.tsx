@@ -47,6 +47,12 @@ type Props = {
      * saved. The summary says "Tried 1st" too.
      */
     isDefault: boolean;
+    /**
+     * Two or more machines are saved, so every card keeps a column for the
+     * star and the names line up under it. With one there is no star and no
+     * column, so the name is not left indented by an empty space.
+     */
+    ranked: boolean;
     /** The machine's colour ink, as a dot beside its name. Absent with one machine. */
     colour?: string;
     /** The summary turns green while this machine is the one connected. */
@@ -89,7 +95,7 @@ type Props = {
  * parent would clip the details in the middle of their animation.
  */
 export default function MachineCard({
-    title, summary, isDefault, colour, connected, failed = false, initiallyOpen = false, testID,
+    title, summary, isDefault, ranked, colour, connected, failed = false, initiallyOpen = false, testID,
     children, details, footer
 }: Props) {
     const [open, setOpen] = useState(initiallyOpen);
@@ -105,9 +111,11 @@ export default function MachineCard({
                        style={({pressed}) => ({opacity: pressed ? 0.7 : 1})}>
                 <XStack testID={testID} alignItems="center" gap="$3"
                         minHeight={44} paddingVertical="$3" paddingHorizontal="$4">
-                    <YStack width={14} alignItems="center">
-                        {isDefault && <DotIcon name="favourite" size={14} color={palette.dim}/>}
-                    </YStack>
+                    {ranked && (
+                        <YStack testID={`${testID}-star`} width={14} alignItems="center">
+                            {isDefault && <DotIcon name="favourite" size={14} color={palette.dim}/>}
+                        </YStack>
+                    )}
                     <YStack flex={1} gap="$1">
                         <XStack alignItems="center" gap="$2">
                             {colour !== undefined && (

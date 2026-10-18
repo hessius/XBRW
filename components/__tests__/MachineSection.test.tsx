@@ -365,6 +365,9 @@ describe("one card per saved machine", () => {
             `saved-machine-${id}-colour`, {includeHiddenElements: true}).props.style);
         expect(dot("HOME").backgroundColor).toBe(machineColours[2].ink);
         expect(dot("WORK").backgroundColor).toBe(machineColours[0].ink);
+        // With two, every card keeps the star's column so the names line up.
+        expect(screen.getByTestId("saved-machine-HOME-star", {includeHiddenElements: true})).toBeTruthy();
+        expect(screen.getByTestId("saved-machine-WORK-star", {includeHiddenElements: true})).toBeTruthy();
     });
 
     it("keeps every card closed until it is tapped, and says so to a screen reader", async () => {
@@ -580,6 +583,9 @@ describe("a single saved machine", () => {
         expect(screen.getByRole("button", {name: /^xBloom 1, Studio · ID AABB · Connected$/}))
             .toBeTruthy();
         expect(screen.queryByTestId("saved-machine-AA:BB-colour", {includeHiddenElements: true}))
+            .toBeNull();
+        // Nor the star's empty column, which left the name indented.
+        expect(screen.queryByTestId("saved-machine-AA:BB-star", {includeHiddenElements: true}))
             .toBeNull();
         expect(screen.getByText("Add another machine")).toBeTruthy();
         expect(screen.queryByText("Your xBloom", {includeHiddenElements: true})).toBeNull();
