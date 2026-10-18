@@ -69,6 +69,11 @@ export type RecipeStore = {
      */
     coffeeBags?: () => Record<string, StoredBagReading>;
     /**
+     * One recipe by uuid, for the few the open bags name. Optional: without
+     * it the bag recipes are picked out of `retrieveAllRecipes`.
+     */
+    getRecipe?: (uuid: string) => Recipe | null;
+    /**
      * A few members of each shelf, for the art on its tile.
      *
      * Optional for the same reason as `brewEvidence`: a store that cannot
@@ -230,6 +235,11 @@ export type RecipeLibrary = {
     evidence: Record<string, RecipeEvidence>;
     /** Each recipe's open bag, keyed by uuid. Absent means no bag. */
     bags: Record<string, StoredBagReading>;
+    /**
+     * The recipe each open bag belongs to, keyed by uuid, whatever the rail
+     * asked. Read for the home screen's "Ready to brew" card.
+     */
+    bagRecipes: Record<string, Recipe>;
     /** The art each shelf's tile draws, keyed by shelf id. */
     shelfMarks: Record<string, ShelfMarkMembers>;
     allRecipes: () => Recipe[];
@@ -292,6 +302,7 @@ export function useRecipeLibrary(
     const authorCounts = readAuthorCounts(store, revision);
     const evidence = readEvidence(store, revision);
     const bags = readBags(store, revision);
+    const bagRecipes = readBagRecipes(store, JSON.stringify(Object.keys(bags).sort()), revision);
     // Keyed by every shelf that could be drawn rather than by the ones the grid
     // actually draws, because suppression depends on which filters are applied
     // and the art does not: the same shelf shows the same members whether the
@@ -606,6 +617,7 @@ export function useRecipeLibrary(
         authorCounts,
         evidence,
         bags,
+        bagRecipes,
         shelfMarks,
         allRecipes,
         refresh: reload,
@@ -708,6 +720,39 @@ function readBags(
 ): Record<string, StoredBagReading> {
     void revision;
     return db.coffeeBags?.() ?? {};
+}
+
+/**
+ * The recipes the open bags name, keyed by uuid.
+ *
+ * Keyed on the uuids as one JSON string so the compiler can cache the read,
+ * the trick `shelfIdsOf` plays. One `getRecipe` per bag where the store has
+ * it, since a person has a handful of bags open and the table may hold
+ * hundreds of recipes. A store that cannot answer costs the card, nothing else.
+ */
+function readBagRecipes(
+    db: RecipeStore, uuids: string, revision: number
+): Record<string, Recipe> {
+    void revision;
+    const wanted: string[] = JSON.parse(uuids);
+    if (wanted.length === 0) return {};
+    const out: Record<string, Recipe> = {};
+    try {
+        if (db.getRecipe !== undefined) {
+            for (const uuid of wanted) {
+                const recipe = db.getRecipe(uuid);
+                if (recipe !== null && recipe !== undefined) out[uuid] = recipe;
+            }
+        } else {
+            const set = new Set(wanted);
+            for (const recipe of db.retrieveAllRecipes?.() ?? []) {
+                if (set.has(recipe.uuid)) out[recipe.uuid] = recipe;
+            }
+        }
+    } catch {
+        return {};
+    }
+    return out;
 }
 
 /**

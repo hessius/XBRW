@@ -104,7 +104,19 @@ import {asTemperatureUnit, type TemperatureUnit} from "@/library/units";
 import {tagKey} from "@/library/tagKey";
 import {shareBlockReason} from "@/library/shareLink";
 import {type Settings} from "@/library/Settings";
-import {resolveBagTracker} from "@/library/coffeeBag";
+import {dayOf, resolveBagTracker} from "@/library/coffeeBag";
+import {
+    brewEmphasised,
+    dismissedToday,
+    moreReadyLine,
+    readyBagLine,
+    readyFreshnessLine,
+    readyName,
+    readyToBrew,
+    runningLowLine
+} from "@/library/readyToBrew";
+import ReadyToBrewCard from "@/components/ReadyToBrewCard";
+import {openLink} from "@/components/openLink";
 import {freshnessOf, type Freshness} from "@/library/restPeak";
 import {useNow} from "@/hooks/useNow";
 import type {StoredBagReading} from "@/library/CoffeeBagDatabase";
@@ -340,8 +352,8 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
     // Grams left are this app's estimate only while this app is the tracker.
     // With Beanconqueror counting the bag, a badge here would be a second,
     // drifting answer, so the cards draw none.
-    const shownBags = resolveBagTracker(bagTrackerSetting, beanconquerorHandoff) === "xbrw"
-        ? library.bags : NO_BAGS;
+    const bagTracker = resolveBagTracker(bagTrackerSetting, beanconquerorHandoff);
+    const shownBags = bagTracker === "xbrw" ? library.bags : NO_BAGS;
     // Freshness is the roast day's, not a count, so it shows in both modes.
     const now = useNow();
     const bagFreshness: Record<string, Freshness> = {};
@@ -349,6 +361,18 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
         const reading = freshnessOf(stored.bag, now);
         if (reading !== null) bagFreshness[uuid] = reading.state;
     }
+    // The "Ready to brew" card: the one open bag worth brewing now. Nothing
+    // at all without an open bag, and nothing for the rest of a day it was
+    // closed on. `readyShown` is the good candidate "+2 more ready" stepped
+    // to, discarded at render once it is no longer a good candidate.
+    const [readyDismissedOn, setReadyDismissedOn] = useSetting("readyToBrewDismissedOn", settings);
+    const [readyShown, setReadyShown] = useState<string | null>(null);
+    const ready = dismissedToday(readyDismissedOn, dayOf(now))
+        ? null
+        : readyToBrew(library.bagRecipes, library.bags, library.evidence, bagTracker, now);
+    const readyEntry = ready === null ? null
+        : ready.good.find((entry) => entry.recipe.uuid === readyShown) ?? ready.entries[0];
+
     const [dottedProfile] = useSetting("dotMatrixProfile", settings);
     const [showRecipeAvatars] = useSetting("showRecipeAvatars", settings);
     const [invertAutoShelves] = useSetting("invertAutoShelves", settings);
@@ -1458,6 +1482,12 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
     // is settling, and what is on screen is the honest answer.
     const openShelf = shelves.find((shelf) => shelf.id === libraryQuery.openShelfId);
 
+    // The "Ready to brew" card. Not while picking, editing or standing in a
+    // shelf, where the screen is about something else.
+    const readyCard = ready === null || readyEntry === null || picker.active || inShelfRoom
+        || editing || wholeLibraryEmpty
+        ? null : {entry: readyEntry, good: ready.good, low: ready.low};
+
     return (
         <>
             {/* The NFC ceremony is a modal moment, and an absolutely positioned
@@ -1619,6 +1649,40 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                                 ? () => setEditing((current) => !current)
                                 : undefined
                         }/>
+                )}
+
+                {/* Under the rail, at the top of the library, and folded
+                    away with the header on scroll like the tiles above.
+                    `openRecipe` and `openBrew` are passed as they are, with
+                    the recipe as the card's item: wrapped in an arrow here,
+                    the compiler's purity check reads their Date.now() as
+                    called during render. */}
+                {readyCard !== null && (
+                    <Collapsible open={!collapsed}>
+                        <ReadyToBrewCard
+                            item={readyCard.entry.recipe}
+                            name={readyName(readyCard.entry.recipe)}
+                            accent={resolveAccent(readyCard.entry.recipe)}
+                            imageUri={showRecipeAvatars ? readyCard.entry.recipe.imageURL : undefined}
+                            freshnessLine={readyFreshnessLine(readyCard.entry.freshness)}
+                            bagLine={readyBagLine(readyCard.entry.reading)}
+                            emphasised={brewEmphasised(readyCard.entry)}
+                            onOpen={openRecipe}
+                            // The row tray's rule: no BREW without a machine.
+                            onBrew={remembered !== "" ? openBrew : undefined}
+                            low={readyCard.low === null ? null : {
+                                line: runningLowLine(readyCard.low.name),
+                                reorderUrl: readyCard.low.reorderUrl
+                            }}
+                            onReorder={openLink}
+                            moreLine={readyCard.good.includes(readyCard.entry)
+                                ? moreReadyLine(readyCard.good.length - 1) : null}
+                            onMore={() => {
+                                const {good, entry} = readyCard;
+                                setReadyShown(good[(good.indexOf(entry) + 1) % good.length].recipe.uuid);
+                            }}
+                            onDismiss={() => setReadyDismissedOn(dayOf(now))}/>
+                    </Collapsible>
                 )}
 
                 {wholeLibraryEmpty ? (

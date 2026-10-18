@@ -162,6 +162,7 @@ const EXPECTED_CALLS: Record<string, number> = {
     // feed's coffee photos, drawn only while somebody subscribes.
     "components/RoasterSearchRow.tsx": 1,
     "components/RoasterStrip.tsx": 1,
+    "components/ReadyToBrewCard.tsx": 1,
     "hooks/useShareRecipe.ts":     1,
     "library/XBloomRecipe.ts":     1,
     "library/cloud/transport.ts":  1,

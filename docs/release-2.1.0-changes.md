@@ -3,6 +3,36 @@
 This is the source for the full release-testing checklist, not a claim that
 device testing is complete. Update it whenever release scope or behaviour changes.
 
+## Ready to brew card (2026-10-18)
+
+Builds on the bag tracker and rest and peak. While any recipe has an open bag,
+the home library shows one compact card under the rail: the coffee worth
+brewing now. It prefers a bag at its peak, then a ready one, then the open bag
+brewed most recently; a resting bag is offered only when nothing else is open
+("Resting, ready from 23 Oct", with a quiet BREW). A bag with not enough left
+for another brew comes after any that can still be brewed. Ties go to the
+recipe brewed most recently, then the newest bag.
+
+The card shows the pod photo (when "Show recipe pictures" is on and the recipe
+has one), the coffee's name on up to two lines, a short freshness line and, in
+this app's bag mode, "212 g left, about 11 brews". BREW pushes the same brew
+route as the row's BREW and is drawn only with a machine remembered; tapping
+the name opens the recipe. In this app's bag mode, an open bag under two doses
+adds "Vinka is running low · Reorder", with Reorder only when the coffee or
+recipe has an https link. With several coffees at their peak or ready, "+2 more
+ready" steps the card to the next one rather than opening a second surface.
+
+A small close hides it for the rest of the local day (`readyToBrewDismissedOn`,
+held out of backups like the drawer hint). No open bag means no card and no
+change to the screen. It is hidden while picking shelf members, editing, or
+inside a shelf room, and folds away with the header on scroll.
+
+Release checks: on both platforms, add bags to two recipes with roast days that
+put one at its peak and one resting, and confirm the peak one is offered; tap
+BREW with a machine paired and confirm the brew screen opens on that recipe;
+tap the name and confirm the editor opens; brew a bag down under two doses and
+confirm the running-low line and Reorder; close the card and confirm it stays
+away until the next day; check at 360 dp and with the largest text size.
 ## Shelf tile name and pour profile (2026-10-18)
 
 A recipe tile in a shelf room now draws its name under the badges on up to two
