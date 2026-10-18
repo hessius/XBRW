@@ -216,3 +216,35 @@ describe("a real feed", () => {
         });
     });
 });
+
+describe("a coffee's colour", () => {
+    const withBean = (bean: Record<string, unknown>) => {
+        const body = JSON.parse(feedJson([{id: "a"}]));
+        body.coffees[0].bean = {...body.coffees[0].bean, ...bean};
+        return parseRoasterFeed(JSON.stringify(body))!.coffees[0];
+    };
+
+    it("is read from bean.colour, strictly, beside the coffee block", () => {
+        const coffee = withBean({colour: "#1f6f78"});
+        expect(coffee.colour).toBe("#1F6F78");
+        expect(coffee.coffee).not.toHaveProperty("colour");
+    });
+
+    it("accepts bean.color, and prefers bean.colour when both are sent", () => {
+        expect(withBean({color: "#8A2F35"}).colour).toBe("#8A2F35");
+        expect(withBean({colour: "#1D5F96", color: "#8A2F35"}).colour).toBe("#1D5F96");
+    });
+
+    it.each(["1D5F96", "#15A", "#1D5F96FF", "navy", 0x1d5f96, null])(
+        "drops %p and keeps the coffee",
+        (value) => {
+            const coffee = withBean({colour: value});
+            expect(coffee.colour).toBeUndefined();
+            expect(coffee.coffee.name).toBe("Coffee a");
+        }
+    );
+
+    it("is absent when the feed sends none", () => {
+        expect(withBean({}).colour).toBeUndefined();
+    });
+});

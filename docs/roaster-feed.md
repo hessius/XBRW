@@ -76,6 +76,7 @@ object instead of the theme template, so a feed must never be fetched that way.
         "aromatics": "Cacao, blueberry, red grape",
         "flavours": ["Dark Chocolate", "Blueberry", "Red Grape", "Vanilla"],
         "tags": ["Chocolate", "Berry", "Sweet", "Filter"],
+        "colour": "#8A2F35",
         "cupping_points": "88.0",
         "decaffeinated": false
       }
@@ -102,6 +103,7 @@ object instead of the theme template, so a feed must never be fetched that way.
 | `coffees[].variants` | no | Up to 10 bags, each `{id, grams, price, currency, available, url}`, every field optional. `id` is text or a whole number (up to 100 characters). `grams` as for `bag_sizes_g`. `price` is a number (or numeric text) from 0 to 100,000. `currency` is a three-letter ISO 4217 code. `available` must be `true` to be bought. `url` is an https link to buy exactly this bag and wins over `add_to_cart`. A variant with none of `id`, `grams`, `price` or `url` is skipped. |
 | `coffees[].bean` | no | The same fields as the link's `bean.*` parameters, under the same length caps. Numbers and booleans may be sent as JSON values or strings. |
 | `coffees[].bean.flavours` | no | A short list of tasting notes, as an array (or comma separated text). Up to 12, each up to 32 characters. Drawn as the coffee's chips in the catalogue, and kept on the recipe's coffee so ABOUT can show them as its flavour (with `aromatics` under them); without it, `aromatics` becomes chips only when it is a short list. |
+| `coffees[].bean.colour` | no | Your own colour for the coffee, such as the one you use for its origin, as `#RRGGBB` (`color` is accepted too). Nothing else is read: no `#RGB`, no alpha, no names. A recipe added from the catalogue takes the app's card colour nearest that colour's hue, so the card stays readable; a grey, or a hue far from every card colour, gets the usual colour instead. A recipe already in the library keeps its colour. |
 | `coffees[].bean.tags` | no | Labels such as "Berry" or "Filter", same limits. Shown quietly under the flavours, searchable, and added to the recipe's tags when it is added to the library (after the person's own tags, never replacing one). |
 
 ### Selling bags from any shop
