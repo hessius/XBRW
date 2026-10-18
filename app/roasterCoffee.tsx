@@ -5,9 +5,8 @@ import {useSafeAreaInsets} from "react-native-safe-area-context";
 import {Text, XStack, YStack} from "tamagui";
 
 import BrewStageLadder from "@/components/BrewStageLadder";
-import {CatalogueStatus, Chip, DetailPhoto} from "@/components/CatalogueParts";
+import {CatalogueStatus, Chip, DetailPhoto, PageLinkRow} from "@/components/CatalogueParts";
 import DotMatrixText from "@/components/DotMatrixText";
-import LinkText from "@/components/LinkText";
 import NameShelfSheet from "@/components/NameShelfSheet";
 import NewerVersionPrompt from "@/components/NewerVersionPrompt";
 import ScreenHeader from "@/components/ScreenHeader";
@@ -21,7 +20,8 @@ import {sharedSettings, useSetting} from "@/hooks/useSetting";
 import {assignAccent, resolveAccent} from "@/library/accent";
 import type Recipe from "@/library/Recipe";
 import {
-    bagLine, chooseRecipe, findCoffee, readCatalogue, roastAdvice
+    bagLine, beanFacts, chooseRecipe, detailTitle, findCoffee, readCatalogue, roastAdvice,
+    scrollEndPadding
 } from "@/library/roasterCatalogue";
 import type {FeedCoffee} from "@/library/roasterFeed";
 import {
@@ -40,21 +40,14 @@ type Pending =
     | {kind: "ask"; held: Recipe; latest: Recipe; then: "library" | "shelf"}
     | {kind: "shelf"; recipe: Recipe};
 
-/** The bean facts a bag would print, as label and value pairs. */
-function beanFacts(coffee: FeedCoffee): [string, string][] {
-    const bean = coffee.coffee;
-    const facts: [string, string | undefined][] = [
-        ["COUNTRY", bean.country],
-        ["REGION", bean.region],
-        ["FARM", bean.farm],
-        ["PRODUCER", bean.farmer],
-        ["VARIETY", bean.variety],
-        ["PROCESS", bean.processing],
-        ["ELEVATION", bean.elevation === undefined ? undefined : `${bean.elevation} m`],
-        ["SCORE", bean.cupping_points === undefined ? undefined : String(bean.cupping_points)]
-    ];
-    return facts.filter((fact): fact is [string, string] => fact[1] !== undefined);
-}
+/**
+ * Room for the longest caption, ELEVATION, so values line up. The same floor
+ * as the XPOD block on ABOUT.
+ */
+const FACT_LABEL_MIN_WIDTH = 92;
+
+/** Where the scroll view ends, before the bottom inset is counted. */
+const SCROLL_END = 24;
 
 function Figure({label, value, accent}: {label: string; value: string; accent: string}) {
     return (
@@ -165,6 +158,7 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
     const advice = roastAdvice(coffee);
     const bags = bagLine(coffee);
     const facts = beanFacts(coffee);
+    const title = detailTitle(coffee.name);
     const notes = coffee.coffee.aromatics;
     const covered = naming || (pending !== null && pending.kind === "shelf");
 
@@ -232,12 +226,19 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
     }
 
     return (
-        <YStack flex={1} backgroundColor={palette.base} paddingBottom={insets.bottom}>
+        <YStack flex={1} backgroundColor={palette.base}>
             <YStack flex={1} accessibilityElementsHidden={covered}
                     importantForAccessibility={covered ? "no-hide-descendants" : "auto"}>
-                <ScreenHeader title={coffee.name} onBack={() => router.back()}/>
+                <ScreenHeader title={coffee.name} titleLines={title.lines}
+                              titleSize={title.size} onBack={() => router.back()}/>
+                {/* Under the system's bottom bar rather than above it, so the
+                    photo and facts use the whole screen; the padding at the
+                    end is what lets the last action scroll clear of it. */}
                 <ScrollView testID="roaster-coffee-scroll" showsVerticalScrollIndicator={false}
-                            contentContainerStyle={{paddingBottom: 24, gap: 18}}>
+                            contentContainerStyle={{
+                                paddingBottom: scrollEndPadding(SCROLL_END, insets.bottom),
+                                gap: 18
+                            }}>
                     <DetailPhoto uri={coffee.image ?? null} testID="roaster-coffee-photo"/>
                     <YStack paddingHorizontal={SCREEN_PADDING} gap="$4">
                         {!coffee.available && (
@@ -265,15 +266,17 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
                         )}
                         {facts.length > 0 && (
                             <YStack gap="$2">
-                                {facts.map(([label, value]) => (
-                                    <XStack key={label} gap="$3">
-                                        <YStack width={96}>
-                                            <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.2}
-                                                           color={palette.muted}>
-                                                {label}
-                                            </DotMatrixText>
-                                        </YStack>
-                                        <Text fontSize={14} color={palette.text} flexShrink={1}>
+                                {facts.map(({label, value}) => (
+                                    <XStack key={label} testID={`roaster-coffee-fact-${label}`}
+                                            accessible accessibilityLabel={`${label}, ${value}`}
+                                            alignItems="flex-start" gap="$2">
+                                        <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.3}
+                                                       color={palette.dim}
+                                                       style={{minWidth: FACT_LABEL_MIN_WIDTH,
+                                                               paddingTop: 2}}>
+                                            {label}
+                                        </DotMatrixText>
+                                        <Text flex={1} minWidth={0} fontSize={14} color={palette.text}>
                                             {value}
                                         </Text>
                                     </XStack>
@@ -286,7 +289,8 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
                             </Text>
                         )}
                         {coffee.url !== undefined && (
-                            <LinkText label="The roaster's page for this coffee" url={coffee.url}/>
+                            <PageLinkRow testID="roaster-coffee-page"
+                                         label="View the roaster's page" url={coffee.url}/>
                         )}
 
                         <YStack gap="$3">
@@ -352,7 +356,7 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
                                                          activeIndex={null} barHeight={LADDER_BAR_HEIGHT}
                                                          rungGap={LADDER_RUNG_GAP} scrolls={false}
                                                          fill={false} stageWater={[]} stalls={[]}
-                                                         pauseElapsed={0}/>
+                                                         pauseElapsed={0} plan/>
                                     )}
                                 </YStack>
                             )}

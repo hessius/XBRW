@@ -1,5 +1,6 @@
 import router from "@/hooks/steadyRouter";
 import React, {useState} from "react";
+import {useSafeAreaInsets} from "react-native-safe-area-context";
 import {ScrollView, Text, YStack} from "tamagui";
 
 import {openLink} from "@/components/openLink";
@@ -11,7 +12,7 @@ import {palette} from "@/constants/colors";
 import {sharedSettings} from "@/hooks/useSetting";
 import {useLiveBrew} from "@/hooks/useLiveBrew";
 import {useRoasterSubscriptions} from "@/hooks/useRoasterSubscriptions";
-import {readCatalogue, updatedAgo} from "@/library/roasterCatalogue";
+import {readCatalogue, scrollEndPadding, updatedAgo} from "@/library/roasterCatalogue";
 import type {RoasterFeed} from "@/library/roasterFeed";
 import type {RoasterSubscription, SyncError} from "@/library/roasterSubscription";
 import type {Settings} from "@/library/Settings";
@@ -67,6 +68,7 @@ export default function SubscriptionsScreen({settings, fetchBody, now: clock}: {
     const [ending, setEnding] = useState<RoasterSubscription | null>(null);
     const covered = ratingNoteOpen || ending !== null;
     const tick = () => setNow((clock ?? Date.now)());
+    const insets = useSafeAreaInsets();
 
     return (
         <YStack testID="subscriptions-screen" flex={1} backgroundColor={palette.base}>
@@ -74,7 +76,8 @@ export default function SubscriptionsScreen({settings, fetchBody, now: clock}: {
                     accessibilityElementsHidden={covered}
                     importantForAccessibility={covered ? "no-hide-descendants" : "auto"}>
                 <ScreenHeader title="Subscriptions" onBack={() => router.back()}/>
-                <ScrollView contentContainerStyle={{padding: 16, paddingBottom: 48}}>
+                <ScrollView testID="subscriptions-scroll"
+                            contentContainerStyle={{padding: 16, paddingBottom: scrollEndPadding(48, insets.bottom)}}>
                     {subs.subscriptions.length === 0 && (
                         <Text testID="subscriptions-empty" fontSize={14} lineHeight={20}
                               color={palette.dim} paddingTop="$4">

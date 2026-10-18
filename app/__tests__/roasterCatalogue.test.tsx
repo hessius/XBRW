@@ -1,4 +1,5 @@
 import React from "react";
+import {StyleSheet} from "react-native";
 import {fireEvent, screen, waitFor} from "@testing-library/react-native";
 import {router} from "expo-router";
 
@@ -8,7 +9,7 @@ import RoastersScreen from "@/app/roasters";
 import {parseHidden} from "@/library/hiddenShelves";
 import {contentPrint} from "@/library/importRefresh";
 import {subscribe} from "@/library/roasterSync";
-import {renderWithProviders, SHEET_PRESS_TIMEOUT} from "@/test-utils/render";
+import {renderWithProviders, SHEET_PRESS_TIMEOUT, TEST_INSETS} from "@/test-utils/render";
 import {FEED_URL, feedBody, memoryLibrary, memorySettings} from "@/test-utils/roasterFeed";
 
 jest.mock("expo-router", () => ({
@@ -90,6 +91,22 @@ describe("one coffee", () => {
         expect(screen.getByText("18 g")).toBeTruthy();
     });
 
+    it("writes the facts as ABOUT does and links out without magenta", async () => {
+        await open();
+        expect(screen.getByLabelText("ELEVATION, 1,590 m")).toBeTruthy();
+        expect(screen.getByLabelText("SCORE, 88 points")).toBeTruthy();
+        const page = screen.getByTestId("roaster-coffee-page");
+        expect(page.props.accessibilityLabel).toBe("View the roaster's page. Opens in your browser.");
+        expect(screen.queryByText("The roaster's page for this coffee")).toBeNull();
+    });
+
+    it("lets the name wrap and ends the scroll clear of the bottom bar", async () => {
+        await open();
+        expect(screen.getByTestId("screen-title-text").props.numberOfLines).toBe(3);
+        expect(StyleSheet.flatten(screen.getByTestId("roaster-coffee-scroll")
+            .props.contentContainerStyle).paddingBottom).toBe(TEST_INSETS.bottom + 24);
+    });
+
     it("fetches the other size when it is chosen", async () => {
         const {library} = await open();
         await fireEvent.press(screen.getByTestId("roaster-coffee-size-15g"));
@@ -165,5 +182,21 @@ describe("one coffee", () => {
         }, {timeout: SHEET_PRESS_TIMEOUT});
         expect(parseHidden(settings.get("myShelves"))).toEqual(["tag:pantry"]);
         expect(mockNotify).toHaveBeenCalledWith({tone: "success", message: "Added to Pantry."});
+    });
+});
+
+describe("the bottom inset", () => {
+    function endPadding(testID: string): number {
+        return StyleSheet.flatten(screen.getByTestId(testID).props.contentContainerStyle).paddingBottom;
+    }
+
+    it("is cleared at the end of the roaster list", async () => {
+        await renderWithProviders(<RoastersScreen settings={subscribed()} now={() => 1000}/>);
+        expect(endPadding("roasters-scroll")).toBe(Math.max(48, TEST_INSETS.bottom + 24));
+    });
+
+    it("is cleared at the end of a roaster's coffees", async () => {
+        await renderWithProviders(<RoasterScreen settings={subscribed()} feedUrl={FEED_URL}/>);
+        expect(endPadding("roaster-list")).toBe(TEST_INSETS.bottom + 24);
     });
 });

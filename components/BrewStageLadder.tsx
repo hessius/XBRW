@@ -68,6 +68,16 @@ type Props = {
     bypass?: BypassView;
     /** Why the live brew is paused. Absent while it is running. */
     pauseKind?: PauseKind;
+    /**
+     * Draw the stages as a recipe to read rather than a brew still to come.
+     *
+     * A catalogue detail shows a recipe nobody is brewing. Every stage there is
+     * "pending", and pending is dimmed to say "not yet" beside a live stage;
+     * with no live stage to stand beside, the whole ladder read as disabled.
+     * A plan draws at full strength, numbered and marked in the accent as the
+     * editor's stage tiles are.
+     */
+    plan?: boolean;
 };
 
 /**
@@ -79,7 +89,8 @@ type Props = {
  */
 export default function BrewStageLadder({
     pours, accent, activeIndex, barHeight, rungGap, scrolls, fill, stageWater, stalls,
-    pauseElapsed, selectedIndex = null, onSelectStage, bypass, accentDone = false, pauseKind
+    pauseElapsed, selectedIndex = null, onSelectStage, bypass, accentDone = false, pauseKind,
+    plan = false
 }: Props) {
     const scroller = useRef<ScrollView>(null);
     // Maps rung index → measured layout relative to the ScrollView content.
@@ -179,6 +190,7 @@ export default function BrewStageLadder({
                     onPress={onSelectStage ? () => onSelectStage(index) : undefined}
                     accentDone={accentDone}
                     pauseKind={index === activeIndex ? pauseKind : undefined}
+                    plan={plan}
                 />
             </View>
         );

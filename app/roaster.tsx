@@ -11,7 +11,7 @@ import {palette} from "@/constants/colors";
 import {UNCLIPPED_LIST} from "@/constants/lists";
 import router from "@/hooks/steadyRouter";
 import {sharedSettings, useSetting} from "@/hooks/useSetting";
-import {coffeeRef, readCatalogue, updatedAgo} from "@/library/roasterCatalogue";
+import {coffeeRef, readCatalogue, scrollEndPadding, updatedAgo} from "@/library/roasterCatalogue";
 import type {Settings} from "@/library/Settings";
 
 /**
@@ -62,7 +62,7 @@ export default function RoasterScreen({settings, feedUrl, now}: {
                 testID="roaster-list"
                 data={coffees}
                 keyExtractor={(coffee) => coffeeRef(cached.feed, coffee)}
-                contentContainerStyle={{paddingBottom: insets.bottom + 8}}
+                contentContainerStyle={{paddingBottom: scrollEndPadding(8, insets.bottom)}}
                 renderItem={({item}) => (
                     <RoasterCoffeeRow
                         coffee={item}
