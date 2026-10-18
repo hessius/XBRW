@@ -86,7 +86,7 @@ const INFO = {
 /**
  * Open a machine's card from its header, if it is not open already.
  *
- * The machine in use starts open, so pressing its header blindly would close it.
+ * A machine in use with an error starts open, so pressing its header blindly would close it.
  */
 async function openCard(name: RegExp): Promise<void> {
     const header = screen.getByRole("button", {name});
@@ -385,9 +385,9 @@ describe("one card per saved machine", () => {
             .toEqual(expect.objectContaining({expanded: true}));
         expect(card("HOME").getByText("Use this machine now")).toBeTruthy();
         expect(card("HOME").getByText("Forget this machine")).toBeTruthy();
-        // Opening one card leaves the other as it was: Work, in use, open.
+        // Opening one card leaves the other as it was: Work, closed.
         expect(screen.getByRole("button", {name: /^Work, /}).props.accessibilityState)
-            .toEqual(expect.objectContaining({expanded: true}));
+            .toEqual(expect.objectContaining({expanded: false}));
     });
 
     it("closes a card again from its header", async () => {
@@ -398,14 +398,15 @@ describe("one card per saved machine", () => {
         expect(screen.queryByText("Use this machine now")).toBeNull();
     });
 
-    it("starts the machine in use open and the others closed", async () => {
+    it("starts every card closed, the machine in use included", async () => {
         await renderWithProviders(<MachineSection/>);
 
         expect(screen.getByRole("button", {name: /^Work, /}).props.accessibilityState)
-            .toEqual(expect.objectContaining({expanded: true}));
+            .toEqual(expect.objectContaining({expanded: false}));
         expect(screen.getByRole("button", {name: /^Home, /}).props.accessibilityState)
             .toEqual(expect.objectContaining({expanded: false}));
-        // The machine in use's own rows are there without a tap.
+        // One tap shows the machine in use's own rows.
+        await openCard(/^Work, /);
         expect(card("WORK").getByRole("button", {name: /^Name, colour and order, /})).toBeTruthy();
         expect(screen.queryByText("Use this machine now")).toBeNull();
     });
@@ -435,6 +436,7 @@ describe("one card per saved machine", () => {
         // choice could only point imports at the wrong grind scale.
         await renderWithProviders(<MachineSection/>);
         await openCard(/^Home, /);
+        await openCard(/^Work, /);
 
         expect(card("HOME").queryByText("Model")).toBeNull();
         expect(card("WORK").getByText("Model")).toBeTruthy();
