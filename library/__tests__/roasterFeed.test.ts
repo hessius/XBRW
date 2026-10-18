@@ -167,3 +167,38 @@ describe("fetchRoasterFeed", () => {
             .rejects.toMatchObject({kind: "network"});
     });
 });
+
+describe("roast and bag sizes", () => {
+    it("reads them when they are sound", () => {
+        const coffee = parseRoasterFeed(feedJson([{id: "a"}]))!.coffees[0];
+        expect(coffee.roast).toEqual({level: "Light", restDays: 11, peakDay: 28, bestUntilDay: 42});
+        expect(coffee.bagSizes).toEqual([320, 160]);
+    });
+
+    it("drops each bad value on its own and keeps the rest", () => {
+        const body = JSON.parse(feedJson([{id: "a"}, {id: "b"}]));
+        body.coffees[0].roast = {level: "", rest_days: -1, peak_day: 2.5, best_until_day: "42"};
+        body.coffees[0].bag_sizes_g = [320, "160", 0, 9999999, 320];
+        body.coffees[1].roast = {level: "Medium", rest_days: 7};
+        delete body.coffees[1].bag_sizes_g;
+        const [first, second] = parseRoasterFeed(JSON.stringify(body))!.coffees;
+        expect(first.roast).toBeUndefined();
+        expect(first.bagSizes).toEqual([320]);
+        expect(second.roast).toEqual({level: "Medium", restDays: 7});
+        expect(second.bagSizes).toEqual([]);
+    });
+});
+
+describe("a real feed", () => {
+    it("reads every coffee Central Coast Coffee publishes", () => {
+        const sample = require("./roasterFeedSample.json");
+        const feed = parseRoasterFeed(JSON.stringify(sample))!;
+        expect(feed.roaster.name).toBe("Central Coast Coffee");
+        expect(feed.coffees).toHaveLength(sample.coffees.length);
+        for (const coffee of feed.coffees) {
+            expect(coffee.recipes.length).toBeGreaterThan(0);
+            expect(coffee.roast?.level).toBeDefined();
+            expect(coffee.bagSizes.length).toBeGreaterThan(0);
+        }
+    });
+});

@@ -1,11 +1,13 @@
 import React from "react";
 import {Linking} from "react-native";
 import {fireEvent, screen, waitFor} from "@testing-library/react-native";
+import {router} from "expo-router";
 
-import SubscriptionsScreen, {statusLine, updatedAgo} from "@/app/subscriptions";
+import SubscriptionsScreen, {countLine, statusLine} from "@/app/subscriptions";
+import {readCatalogue} from "@/library/roasterCatalogue";
 import {readSubscriptions, resetSyncLockForTests, subscribe, updateSubscription} from "@/library/roasterSync";
 import {renderWithProviders, SHEET_PRESS_TIMEOUT} from "@/test-utils/render";
-import {FEED_URL, feed, memoryLibrary, memorySettings} from "@/test-utils/roasterFeed";
+import {FEED_URL, feedBody, memorySettings} from "@/test-utils/roasterFeed";
 
 jest.mock("expo-router", () => ({router: {push: jest.fn(), back: jest.fn()}}));
 
@@ -20,36 +22,29 @@ const HOUR = 60 * 60 * 1000;
 
 function subscribed(patch: Parameters<typeof updateSubscription>[2] = (sub) => sub) {
     const settings = memorySettings();
-    subscribe(settings, FEED_URL, feed([]), "Test Roaster");
-    updateSubscription(settings, FEED_URL, (sub) => patch({
-        ...sub,
-        lastSync:    NOW - 2 * HOUR,
-        lastAttempt: NOW - 2 * HOUR,
-        items:       [{shareId: "a-18g"}, {shareId: "b-18g"}, {shareId: "c-18g"}],
-        soldOut:     ["c-18g"]
-    }));
+    const {feed, body} = feedBody([{id: "a"}, {id: "b"}, {id: "c", available: false}]);
+    subscribe(settings, FEED_URL, feed, body, NOW - 2 * HOUR);
+    updateSubscription(settings, FEED_URL, patch);
     return settings;
 }
 
 async function draw(settings = memorySettings()) {
-    const library = memoryLibrary();
-    const fetchFeed = jest.fn(async () => feed([{id: "a"}, {id: "b"}, {id: "d"}]));
+    const fetchBody = jest.fn(async () => feedBody([{id: "a"}, {id: "b"}, {id: "d"}]));
     await renderWithProviders(
-        <SubscriptionsScreen settings={settings} deps={library.deps}
-                             fetchFeed={fetchFeed} now={() => NOW}/>
+        <SubscriptionsScreen settings={settings} fetchBody={fetchBody} now={() => NOW}/>
     );
-    return {settings, library, fetchFeed};
+    return {settings, fetchBody};
 }
 
 beforeEach(() => {
     mockNotify.mockReset();
+    (router.push as jest.Mock).mockReset();
     resetSyncLockForTests();
 });
 
 describe("SubscriptionsScreen", () => {
     it("explains where subscriptions come from when there are none", async () => {
         await draw();
-        expect(screen.getByTestId("subscriptions-empty")).toBeTruthy();
         expect(screen.getByText("Subscriptions appear here when you open a roaster's import link."))
             .toBeTruthy();
     });
@@ -57,9 +52,8 @@ describe("SubscriptionsScreen", () => {
     it("shows each subscription's coffees and how fresh it is", async () => {
         await draw(subscribed());
         expect(screen.getByText("TEST ROASTER")).toBeTruthy();
-        expect(screen.getByText("2 coffees · 1 sold out")).toBeTruthy();
+        expect(screen.getByText("3 coffees · 1 sold out")).toBeTruthy();
         expect(screen.getByText("Updated 2 h ago.")).toBeTruthy();
-        expect(screen.queryByTestId("subscriptions-empty")).toBeNull();
     });
 
     it("says why the last update failed", async () => {
@@ -67,15 +61,22 @@ describe("SubscriptionsScreen", () => {
         expect(screen.getByText("Couldn't update: no connection to the roaster.")).toBeTruthy();
     });
 
-    it("refreshes now, adding what is new and marking what sold out", async () => {
-        const {fetchFeed, library} = await draw(subscribed());
+    it("opens the roaster's coffees", async () => {
+        await draw(subscribed());
+        await fireEvent.press(screen.getByText("Browse coffees"));
+        expect(router.push).toHaveBeenCalledWith({pathname: "/roaster", params: {feed: FEED_URL}});
+    });
+
+    it("refreshes the catalogue now", async () => {
+        const {settings, fetchBody} = await draw(subscribed());
 
         await fireEvent.press(screen.getByText("Refresh now"));
 
         await waitFor(() => expect(mockNotify).toHaveBeenCalled());
-        expect(fetchFeed).toHaveBeenCalledTimes(1);
-        expect(library.find("d-18g")).toBeDefined();
-        expect(mockNotify).toHaveBeenCalledWith({tone: "success", message: "Added 1 coffee. 1 sold out."});
+        expect(fetchBody).toHaveBeenCalledTimes(1);
+        expect(readCatalogue(settings, FEED_URL)?.feed.coffees.map((coffee) => coffee.id))
+            .toEqual(["a", "b", "d"]);
+        expect(mockNotify).toHaveBeenCalledWith({tone: "success", message: "Test Roaster: 3 coffees."});
     });
 
     it("pauses and resumes updates", async () => {
@@ -89,16 +90,17 @@ describe("SubscriptionsScreen", () => {
         expect(readSubscriptions(settings)[0].paused).toBe(false);
     });
 
-    it("asks before unsubscribing, then keeps the shelf as an ordinary one", async () => {
+    it("asks before unsubscribing, then removes only the catalogue", async () => {
         const {settings} = await draw(subscribed());
 
         await fireEvent.press(screen.getByText("Unsubscribe"));
-        expect(screen.getByText("Test Roaster stops getting new coffees. Your shelf and recipes stay."))
+        expect(screen.getByText("Test Roaster's coffees leave the catalogue. Recipes in your library stay."))
             .toBeTruthy();
         await waitFor(async () => {
             await fireEvent.press(screen.getByTestId("unsubscribe-confirm"));
             expect(readSubscriptions(settings)).toEqual([]);
         }, {timeout: SHEET_PRESS_TIMEOUT});
+        expect(readCatalogue(settings, FEED_URL)).toBeNull();
         expect(screen.getByTestId("subscriptions-empty")).toBeTruthy();
     });
 
@@ -129,7 +131,6 @@ describe("SubscriptionsScreen", () => {
         settings.set("roasterFeedOptOut", JSON.stringify(["https://other.example/feed"]));
         await draw(settings);
 
-        expect(screen.getByText("other.example/feed")).toBeTruthy();
         await fireEvent.press(screen.getByText("other.example/feed"));
 
         expect(JSON.parse(settings.get("roasterFeedOptOut"))).toEqual([]);
@@ -138,16 +139,9 @@ describe("SubscriptionsScreen", () => {
 });
 
 describe("status wording", () => {
-    it("counts in the units a glance can read", () => {
-        expect(updatedAgo(NOW - 10_000, NOW)).toBe("Updated just now");
-        expect(updatedAgo(NOW - 5 * 60_000, NOW)).toBe("Updated 5 min ago");
-        expect(updatedAgo(NOW - 3 * HOUR, NOW)).toBe("Updated 3 h ago");
-        expect(updatedAgo(NOW - 50 * HOUR, NOW)).toBe("Updated 2 d ago");
-    });
-
-    it("says when a subscription has not updated yet", () => {
-        const settings = memorySettings();
-        subscribe(settings, FEED_URL, feed([]), "Test Roaster");
+    it("says when a subscription has not updated yet, and counts what it holds", () => {
+        const settings = subscribed((sub) => ({...sub, lastSync: 0}));
         expect(statusLine(readSubscriptions(settings)[0], NOW)).toBe("Not updated yet.");
+        expect(countLine(null)).toBe("Not loaded yet");
     });
 });

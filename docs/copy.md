@@ -401,56 +401,73 @@ dynamic text fetched from xBloom (`hooks/useRecipeImport.ts:348`,
 
 ---
 
-## Roaster subscriptions
+## Roaster catalogue
 
 The offer after an import link that names a roaster feed
-(`components/RoasterShelfSheet.tsx`, `hooks/useRoasterShelf.ts`), the sold-out
-badge, the shelf menu rows, and the subscriptions screen
-(`app/subscriptions.tsx`, `components/UnsubscribeSheet.tsx`,
+(`components/RoasterOfferSheet.tsx`, `hooks/useRoasterOffer.ts`), the catalogue
+screens (`app/roasters.tsx`, `app/roaster.tsx`, `app/roasterCoffee.tsx`,
+`components/RoasterCoffeeRow.tsx`, `components/ShelfChoiceSheet.tsx`), the
+re-import question (`components/NewerVersionPrompt.tsx`), and the subscriptions
+screen (`app/subscriptions.tsx`, `components/UnsubscribeSheet.tsx`,
 `hooks/useRoasterSubscriptions.ts`). The feed format is `docs/roaster-feed.md`.
 
 | ID | Source | Context — when the user sees this | Current text |
 |----|--------|-----------------------------------|--------------|
-| `roaster.offer.title` | `components/RoasterShelfSheet.tsx` | Sheet title. `${roaster}` is the feed's roaster name. | `Subscribe to ${roaster}?` |
-| `roaster.offer.body` | `components/RoasterShelfSheet.tsx` | Sheet body. `${count}` is how many available coffees the shelf would hold. | `Keep all ${count} ${roaster} coffees on a shelf. New coffees are added and sold-out ones are marked, automatically.` |
-| `roaster.offer.body.one` | `components/RoasterShelfSheet.tsx` | The same, for one coffee. | `Keep this ${roaster} coffee on a shelf. New coffees are added and sold-out ones are marked, automatically.` |
-| `roaster.offer.dontAsk` | `components/RoasterShelfSheet.tsx` | Checkbox label (also its a11y name). | `Don't ask again for this roaster` |
-| `roaster.offer.subscribe` | `components/RoasterShelfSheet.tsx` | Doto primary button. a11y: `Subscribe to ${roaster}`. | `SUBSCRIBE` |
-| `roaster.offer.notNow` | `components/RoasterShelfSheet.tsx` | Doto secondary button. a11y: `Not now`. | `NOT NOW` |
-| `roaster.adding.progress` | `components/RoasterShelfSheet.tsx` | Doto progress while the first coffees arrive. a11y: `Adding ${current} of ${total}`. | `ADDING ${current} OF ${total}` |
-| `roaster.adding.note` | `components/RoasterShelfSheet.tsx` | Under the progress. | `Coffees already added stay if you stop.` |
-| `roaster.adding.stop` | `components/RoasterShelfSheet.tsx` | Doto button. a11y: `Stop adding`. | `STOP` |
-| `roaster.toast.subscribed` | `hooks/useRoasterShelf.ts` (`subscribedMessage`) | Success toast after the first sync. | `Subscribed. ${n} coffees on ${shelf}.` |
-| `roaster.toast.subscribed.failed` | `hooks/useRoasterShelf.ts` (`subscribedMessage`) | Error toast when some coffees did not land. Up to three names, then "and N more". | `Subscribed. ${n} coffees on ${shelf}. Could not add: ${names}.` |
-| `roaster.toast.stopped` | `hooks/useRoasterShelf.ts` (`subscribedMessage`) | After STOP. | `Stopped. ${n} coffees on ${shelf}. The rest follow on the next update.` |
-| `roaster.toast.deferred` | `hooks/useRoasterShelf.ts` | Subscribed while another update was running. | `Subscribed to ${roaster}. Its coffees arrive on the next update.` |
-| `roaster.toast.quiet` | `hooks/useRoasterShelf.ts` (`reportQuiet`) | A background update added coffees. Silent otherwise. | `Added ${n} coffees to ${shelf}.` |
-| `roaster.tile.soldOut` | `components/RecipeShelfTile.tsx` | Doto badge on a sold-out tile; also spoken as `sold out`. | `SOLD OUT` |
-| `roaster.menu.refresh` | `components/ShelfOverflowSheet.tsx` | Shelf menu row on a subscribed shelf. a11y: `Check the roaster for new coffees`. | `REFRESH` |
-| `roaster.menu.manage` | `components/ShelfOverflowSheet.tsx` | Shelf menu row on a subscribed shelf. | `MANAGE SUBSCRIPTION` |
+| `roaster.offer.title` | `components/RoasterOfferSheet.tsx` | Sheet title. `${roaster}` is the feed's roaster name. | `Subscribe to ${roaster}?` |
+| `roaster.offer.body` | `components/RoasterOfferSheet.tsx` | Sheet body. `${count}` is how many coffees the feed lists. | `Browse all ${count} coffees and their recipes in XBRW++. New coffees appear as they're released.` |
+| `roaster.offer.body.one` | `components/RoasterOfferSheet.tsx` | The same, for one coffee. | `Browse this coffee and its recipes in XBRW++. New coffees appear as they're released.` |
+| `roaster.offer.dontAsk` | `components/RoasterOfferSheet.tsx` | Checkbox label (also its a11y name). | `Don't ask again for this roaster` |
+| `roaster.offer.subscribe` | `components/RoasterOfferSheet.tsx` | Doto primary button. a11y: `Subscribe to ${roaster}`. | `SUBSCRIBE` |
+| `roaster.offer.notNow` | `components/RoasterOfferSheet.tsx` | Doto secondary button. a11y: `Not now`. | `NOT NOW` |
+| `roaster.toast.subscribed` | `hooks/useRoasterOffer.ts` | After subscribing. | `Subscribed. ${n} coffees from ${roaster} are in the catalogue.` |
+| `roaster.hub.entry` | `app/hub.tsx` (`RoastersEntry`) | Row above the catalogue rail, only with a subscription. Caption `${n} roasters`. | `ROASTERS` |
+| `roaster.list.title` | `app/roasters.tsx` | Screen header. | `ROASTERS` |
+| `roaster.list.empty` | `app/roasters.tsx` | Empty state, Doto title then body. | `NO ROASTERS YET` / `Roasters appear here when you subscribe from a roaster's import link.` |
+| `roaster.list.row` | `app/roasters.tsx` | Detail under a roaster. | `${n} coffees · ${m} sold out · Updated 2 h ago` |
+| `roaster.list.manage` | `app/roasters.tsx` | Doto link to the subscriptions screen. | `MANAGE SUBSCRIPTIONS` |
+| `roaster.coffees.missing` | `app/roaster.tsx` | Roaster not in the catalogue. | `NOT IN THE CATALOGUE` / `This roaster's coffees are not in the catalogue. Subscribe from one of its import links.` |
+| `roaster.row.soldOut` | `components/RoasterCoffeeRow.tsx` | Doto line on a sold-out coffee; also spoken. | `SOLD OUT` |
+| `roaster.coffee.roast` | `app/roasterCoffee.tsx` | Doto roast level. | `${level} ROAST` |
+| `roaster.coffee.advice` | `library/roasterCatalogue.ts` (`roastAdvice`) | Roast timing; parts appear as stated. | `Rest ${n} days, peak day ${n}, best by day ${n}` |
+| `roaster.coffee.bags` | `app/roasterCoffee.tsx` | Bag sizes. | `Bags: 320 g · 160 g` |
+| `roaster.coffee.page` | `app/roasterCoffee.tsx` | Link to the roaster's product page. | `The roaster's page for this coffee` |
+| `roaster.coffee.loading` | `app/roasterCoffee.tsx` | While the recipe is fetched. | `Loading the recipe from xBloom.` |
+| `roaster.coffee.failed` | `app/roasterCoffee.tsx` | Fetch failed; beside TRY AGAIN. | `Couldn't load the recipe from xBloom.` |
+| `roaster.coffee.brew` | `app/roasterCoffee.tsx` | Doto primary action. | `BREW NOW` |
+| `roaster.coffee.add` | `app/roasterCoffee.tsx` | Doto action. | `ADD TO LIBRARY` |
+| `roaster.coffee.shelf` | `app/roasterCoffee.tsx` | Doto action. | `ADD TO SHELF` |
+| `roaster.toast.added` | `app/roasterCoffee.tsx` | After ADD TO LIBRARY. | `Added to your library.` |
+| `roaster.toast.shelved` | `app/roasterCoffee.tsx` | After choosing a shelf. | `Added to ${shelf}.` |
+| `roaster.shelfChoice.title` | `components/ShelfChoiceSheet.tsx` | Sheet title; rows are the user's shelves, then `NEW SHELF`. | `Add to shelf` |
+| `import.newer.title` | `components/NewerVersionPrompt.tsx` | Re-import of an edited recipe whose author changed it. | `The roaster has a newer version` |
+| `import.newer.body` | `components/NewerVersionPrompt.tsx` | Under the title. | `You have changed ${name}. Your name, notes and brews stay either way.` |
+| `import.newer.latest` | `components/NewerVersionPrompt.tsx` | Doto primary button. | `USE THE ROASTER'S LATEST` |
+| `import.newer.keep` | `components/NewerVersionPrompt.tsx` | Doto secondary button. | `KEEP MINE` |
+| `import.toast.updated` | `constants/copy.ts` (`UPDATED_TO_LATEST`) | Re-import refreshed an untouched copy, or the user took the latest. | `Already in your library. Updated to the latest version.` |
 | `roaster.settings.row` | `app/settings.tsx` | Library section row. Detail is `None yet.`, `1 roaster.` or `${n} roasters.` | `Roaster subscriptions` |
 | `roaster.screen.title` | `app/subscriptions.tsx` | Screen header. | `Subscriptions` |
 | `roaster.screen.empty` | `app/subscriptions.tsx` | Empty state. | `Subscriptions appear here when you open a roaster's import link.` |
-| `roaster.screen.count` | `app/subscriptions.tsx` | Per subscription. | `${n} coffees · ${m} sold out` |
-| `roaster.screen.updated` | `app/subscriptions.tsx` (`updatedAgo`) | Freshness line. Units: just now, min, h, d. | `Updated ${n} h ago.` |
+| `roaster.screen.count` | `app/subscriptions.tsx` (`countLine`) | Per subscription. | `${n} coffees · ${m} sold out` |
+| `roaster.screen.updated` | `library/roasterCatalogue.ts` (`updatedAgo`) | Freshness. Units: just now, min, h, d. | `Updated ${n} h ago.` |
 | `roaster.screen.never` | `app/subscriptions.tsx` | Before the first update. | `Not updated yet.` |
 | `roaster.screen.paused` | `app/subscriptions.tsx` | While paused. | `Updates paused.` |
-| `roaster.screen.error.network` | `app/subscriptions.tsx` | Last update failed to arrive. | `Couldn't update: no connection to the roaster.` |
-| `roaster.screen.error.unreadable` | `app/subscriptions.tsx` | Last update arrived but was not a feed. | `Couldn't update: the roaster's list could not be read.` |
+| `roaster.screen.error.network` | `app/subscriptions.tsx` | Last update did not arrive. | `Couldn't update: no connection to the roaster.` |
+| `roaster.screen.error.unreadable` | `app/subscriptions.tsx` | Last update was not a feed. | `Couldn't update: the roaster's list could not be read.` |
+| `roaster.screen.browse` | `app/subscriptions.tsx` | Row. | `Browse coffees` |
 | `roaster.screen.refresh` | `app/subscriptions.tsx` | Row, with detail `Checks ${roaster} for new and sold-out coffees.` | `Refresh now` |
-| `roaster.screen.pause` | `app/subscriptions.tsx` | Row, with detail `The shelf stays as it is until you resume.` | `Pause updates` |
+| `roaster.screen.pause` | `app/subscriptions.tsx` | Row, with detail `The catalogue stays as it is until you resume.` | `Pause updates` |
 | `roaster.screen.resume` | `app/subscriptions.tsx` | Row while paused. | `Resume updates` |
 | `roaster.screen.site` | `app/subscriptions.tsx` | Row; detail is the site without `https://`. | `Open roaster's site` |
-| `roaster.screen.unsubscribe` | `app/subscriptions.tsx` | Danger row, with detail `Your shelf and recipes stay.` | `Unsubscribe` |
-| `roaster.screen.optOuts` | `app/subscriptions.tsx` | Section title over "Don't ask again" answers; each row's detail is `Ask again`. | `Not asked about` |
-| `roaster.unsubscribe.title` | `components/UnsubscribeSheet.tsx` | Confirm sheet title. | `Stop updating this shelf?` |
-| `roaster.unsubscribe.body` | `components/UnsubscribeSheet.tsx` | Confirm sheet body. | `${shelf} stops getting new coffees. Your shelf and recipes stay.` |
-| `roaster.unsubscribe.confirm` | `components/UnsubscribeSheet.tsx` | Doto danger button. | `STOP UPDATING` |
+| `roaster.screen.unsubscribe` | `app/subscriptions.tsx` | Danger row, with detail `Recipes in your library stay.` | `Unsubscribe` |
+| `roaster.screen.optOuts` | `app/subscriptions.tsx` | Section over "Don't ask again" answers; each row's detail is `Ask again`. | `Not asked about` |
+| `roaster.unsubscribe.title` | `components/UnsubscribeSheet.tsx` | Confirm sheet title. | `Unsubscribe from ${roaster}?` |
+| `roaster.unsubscribe.body` | `components/UnsubscribeSheet.tsx` | Confirm sheet body. | `${roaster}'s coffees leave the catalogue. Recipes in your library stay.` |
+| `roaster.unsubscribe.confirm` | `components/UnsubscribeSheet.tsx` | Doto danger button. | `UNSUBSCRIBE` |
 | `roaster.unsubscribe.cancel` | `components/UnsubscribeSheet.tsx` | Doto secondary button. | `KEEP IT` |
-| `roaster.refresh.result` | `hooks/useRoasterSubscriptions.ts` (`refreshMessage`) | After Refresh. Parts appear as they apply. | `Added ${n} coffees. ${m} sold out.` / `${shelf} is up to date.` |
+| `roaster.refresh.result` | `hooks/useRoasterSubscriptions.ts` (`refreshMessage`) | After Refresh. | `${roaster}: ${n} coffees.` |
 | `roaster.refresh.network` | `hooks/useRoasterSubscriptions.ts` | Refresh could not reach the feed. | `Couldn't reach ${roaster}. Check your connection.` |
 | `roaster.refresh.unreadable` | `hooks/useRoasterSubscriptions.ts` | Refresh got something that was not a feed. | `${roaster}'s list of coffees couldn't be read.` |
-| `roaster.unsubscribed` | `hooks/useRoasterSubscriptions.ts` | After unsubscribing. | `Stopped updating ${shelf}.` |
+| `roaster.unsubscribed` | `hooks/useRoasterSubscriptions.ts` | After unsubscribing. | `Unsubscribed from ${roaster}.` |
 
 ---
 

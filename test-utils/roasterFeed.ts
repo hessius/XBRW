@@ -6,7 +6,7 @@
 import Pour from "@/library/Pour";
 import Recipe from "@/library/Recipe";
 import {parseRoasterFeed, type RoasterFeed} from "@/library/roasterFeed";
-import type {ShelfDeps} from "@/library/roasterShelf";
+import type {LibraryDeps} from "@/library/roasterRecipes";
 import {Settings, type SettingsStorage} from "@/library/Settings";
 
 export const FEED_URL = "https://roaster.example/collections/coffee?view=xbrw";
@@ -31,6 +31,8 @@ export function feedCoffee({id, available = true, sizes = ["18g", "15g"], name}:
         available,
         image:     `https://roaster.example/cdn/${id}.png`,
         recipes:   sizes.map((size) => ({size, share: share(`${id}-${size}`)})),
+        roast:       {level: "Light", rest_days: 11, peak_day: 28, best_until_day: 42},
+        bag_sizes_g: [320, 160],
         bean: {
             roaster:        "Test Roaster",
             country:        "Peru",
@@ -48,6 +50,12 @@ export function feedJson(coffees: CoffeeSpec[], roaster = "Test Roaster"): strin
         roaster: {name: roaster, url: "https://roaster.example", feed: FEED_URL},
         coffees: coffees.map(feedCoffee)
     });
+}
+
+/** A feed and the body it was read from, as `fetchRoasterFeedBody` returns them. */
+export function feedBody(coffees: CoffeeSpec[], roaster?: string): {feed: RoasterFeed; body: string} {
+    const body = feedJson(coffees, roaster);
+    return {feed: feed(coffees, roaster), body};
 }
 
 export function feed(coffees: CoffeeSpec[], roaster?: string): RoasterFeed {
@@ -74,12 +82,16 @@ export function brewable(shareId = ""): Recipe {
 export function memoryLibrary(initial: Recipe[] = [], fail: Set<string> = new Set()) {
     const recipes = new Map<string, Recipe>(initial.map((recipe) => [recipe.uuid, recipe]));
     const fetched: string[] = [];
-    const deps: ShelfDeps = {
+    /** What xBloom now serves per share id: a grind, to stand in for a roaster's change. */
+    const grinds = new Map<string, number>();
+    const deps: LibraryDeps = {
         fetchRecipe: async (link) => {
             const id = new URL(link).searchParams.get("id") ?? "";
             fetched.push(id);
             if (fail.has(id)) throw new Error("network");
-            return brewable(id);
+            const recipe = brewable(id);
+            recipe.grindSize = grinds.get(id) ?? recipe.grindSize;
+            return recipe;
         },
         stored: () => [...recipes.values()].map((recipe) => new Recipe(undefined, JSON.stringify(recipe))),
         save:   (recipe) => {
@@ -89,6 +101,10 @@ export function memoryLibrary(initial: Recipe[] = [], fail: Set<string> = new Se
     return {
         deps,
         fetched,
+        /** The roaster changes the recipe behind a share link. */
+        serve: (shareId: string, grind: number) => {
+            grinds.set(shareId, grind);
+        },
         all:  () => [...recipes.values()],
         find: (shareId: string) => [...recipes.values()].find((recipe) => recipe.shareId === shareId)
     };

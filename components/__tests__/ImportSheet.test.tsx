@@ -66,6 +66,8 @@ function stubImport(overrides: Partial<RecipeImport> = {}): RecipeImport {
         onPastedText: jest.fn(),
         openFound:    jest.fn(),
         reset:        jest.fn(),
+        acceptLatest: jest.fn(),
+        keepMine:     jest.fn(),
         ...overrides
     };
 }

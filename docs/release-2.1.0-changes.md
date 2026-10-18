@@ -3,26 +3,31 @@
 This is the source for the full release-testing checklist, not a claim that
 device testing is complete. Update it whenever release scope or behaviour changes.
 
-## Roaster subscriptions (2026-10-18)
+## Roaster catalogue (2026-10-18)
 
 An import link may carry `feed=<https URL>` naming a roaster feed
 (`docs/roaster-feed.md`). After that link's recipe imports and the person is back
-in the library, the app offers "Subscribe to {roaster}?" unless every available
-coffee is already held, they already subscribe, or they ticked "Don't ask again".
-Subscribing imports each available coffee's 18 g recipe (or its first) onto a
-shelf named after the roaster, two lookups at a time, with progress and STOP.
+in the library, the app offers "Subscribe to {roaster}?" unless they already
+subscribe (it refreshes quietly instead) or ticked "Don't ask again".
+Subscribing adds the roaster to the catalogue and imports nothing.
 
-Subscribed shelves resync on app open and foreground, at most every 12 hours, and
-on Refresh. New coffees are added; unavailable or vanished ones are badged SOLD
-OUT and moved to the end of the room, never deleted, and unmarked when back. A
-coffee the subscription has handled is never re-added, so deletions stick. Recipe
-changes on xBloom are not followed yet. Settings > Library > Roaster
-subscriptions lists each subscription with counts, freshness, Refresh now,
-Pause/Resume, Open roaster's site and Unsubscribe (confirmed; shelf and recipes
-stay), plus any "Don't ask again" answers with Ask again. Subscriptions and
-opt-outs are carried in backups and validated on restore. Network inventory gains
-the feed request. Device checks: cold-start link with feed, foreground resync,
-large text on the sheet and screen, TalkBack on the sold-out badge.
+Catalogue > Roasters lists subscribed roasters; each opens a list of coffees
+(photo, roast level, tasting notes, bag sizes, SOLD OUT) drawn from the cached
+feed. Opening a coffee fetches its recipe from xBloom and shows roast advice,
+bean details, sizes and the roaster's page, with Brew now (editor, unsaved),
+Add to library and Add to shelf (pick or make a shelf; a TODO marks where bags
+will attach). Feed sync runs on open and foreground at most every 12 hours and
+on Refresh, reads only the feed, and never touches the library or xBloom.
+
+Re-importing a share link the library holds now follows the author: an
+unedited copy takes the latest brewing content quietly; an edited one asks
+"The roaster has a newer version" (Use the roaster's latest / Keep mine). Name,
+notes, tags and brews always stay. Import-time brewing fingerprints are kept in
+the `importFingerprints` setting, carried in backups. Settings > Library >
+Roaster subscriptions manages subscriptions (Browse, Refresh now, Pause/Resume,
+Open roaster's site, Unsubscribe) and "Don't ask again" answers. Device checks:
+cold-start link with feed, foreground refresh, large text on the catalogue
+screens, TalkBack on SOLD OUT and the re-import question.
 
 ## Brew history trace storage (2026-10-15)
 

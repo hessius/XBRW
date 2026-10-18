@@ -11,38 +11,37 @@ import {onAccent, palette} from "@/constants/colors";
  *
  * Built like `RemoveShelfSheet`, and it says the same reassuring thing for
  * the same reason: what people fear losing is the recipes, and none of them
- * go anywhere. Only the updates stop.
+ * go anywhere. Only the roaster's catalogue goes.
  */
-export default function UnsubscribeSheet({open, shelf, onOpenChange, onConfirm}: {
+export default function UnsubscribeSheet({open, roaster, onOpenChange, onConfirm}: {
     open: boolean;
-    /** The shelf the subscription keeps, so the sheet can name it. */
-    shelf: string;
+    roaster: string;
     onOpenChange: (open: boolean) => void;
     onConfirm: () => void;
 }) {
     return (
         <XbrwSheet open={open} onOpenChange={onOpenChange}
-                   title="Stop updating this shelf?" heightPercent={32}>
+                   title={`Unsubscribe from ${roaster}?`} heightPercent={32}>
             <YStack gap="$3" paddingHorizontal="$4" paddingBottom="$4">
                 <Text fontSize={13} color={palette.dim}>
-                    {`${shelf} stops getting new coffees. Your shelf and recipes stay.`}
+                    {`${roaster}'s coffees leave the catalogue. Recipes in your library stay.`}
                 </Text>
 
                 <Pressable accessibilityRole="button"
-                           accessibilityLabel={`Stop updating ${shelf}`}
+                           accessibilityLabel={`Unsubscribe from ${roaster}`}
                            testID="unsubscribe-confirm"
                            onPress={onConfirm}>
                     <XStack height={48} alignItems="center" justifyContent="center"
                             borderRadius="$4" backgroundColor={palette.danger}>
                         <DotMatrixText fontSize={13} weight="bold" letterSpacing={1.5}
                                        color={onAccent.text}>
-                            STOP UPDATING
+                            UNSUBSCRIBE
                         </DotMatrixText>
                     </XStack>
                 </Pressable>
 
                 <Pressable accessibilityRole="button"
-                           accessibilityLabel="Keep updating"
+                           accessibilityLabel="Stay subscribed"
                            testID="unsubscribe-cancel"
                            onPress={() => onOpenChange(false)}>
                     <XStack height={48} alignItems="center" justifyContent="center"

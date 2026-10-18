@@ -1,10 +1,11 @@
 import {useLocalSearchParams} from "expo-router";
 import React, {useEffect, useState} from "react";
-import {Image, Pressable, ScrollView} from "react-native";
+import {Pressable, ScrollView} from "react-native";
 import {useSafeAreaInsets} from "react-native-safe-area-context";
 import {Text, XStack, YStack} from "tamagui";
 
 import BrewStageLadder from "@/components/BrewStageLadder";
+import {Chip, DetailPhoto} from "@/components/CatalogueParts";
 import DotMatrixText from "@/components/DotMatrixText";
 import ScreenHeader from "@/components/ScreenHeader";
 import {notify} from "@/components/XbrwToast";
@@ -17,8 +18,6 @@ import {criteriaVocabulary, heldHubCriteria} from "@/library/hub/hubCriteria";
 import {hubPours} from "@/library/hub/hubStages";
 import {hubAccent, normaliseHubRow, type HubRecipe} from "@/library/hub/hubRow";
 
-const PHOTO_HEIGHT = 260;
-const PHOTO_RADIUS = 12;
 const LADDER_BAR_HEIGHT = 18;
 const LADDER_RUNG_GAP = 12;
 
@@ -165,45 +164,6 @@ function Figure({
                 {label}
             </DotMatrixText>
         </YStack>
-    );
-}
-
-function Chip({label}: {label: string}) {
-    return (
-        <YStack paddingHorizontal="$2" paddingVertical="$1"
-                borderRadius="$3" backgroundColor={palette.raised}
-                borderWidth={1} borderColor={palette.line}>
-            <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.2}
-                           color={palette.dim}>
-                {label.toUpperCase()}
-            </DotMatrixText>
-        </YStack>
-    );
-}
-
-function DetailPhoto({uri}: {uri: string | null}) {
-    const [failed, setFailed] = useState(false);
-    if (uri !== null && !failed) {
-        return (
-            <Image
-                testID="hub-recipe-photo"
-                source={{uri}}
-                onError={() => setFailed(true)}
-                style={{
-                    width: "100%",
-                    height: PHOTO_HEIGHT,
-                    borderBottomLeftRadius: PHOTO_RADIUS,
-                    borderBottomRightRadius: PHOTO_RADIUS
-                }}/>
-        );
-    }
-
-    return (
-        <YStack testID="hub-recipe-photo-blank"
-                width="100%" height={PHOTO_HEIGHT}
-                borderBottomLeftRadius={PHOTO_RADIUS}
-                borderBottomRightRadius={PHOTO_RADIUS}
-                backgroundColor={palette.raised}/>
     );
 }
 
