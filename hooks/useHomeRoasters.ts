@@ -1,5 +1,4 @@
-import {useState} from "react";
-
+import {useNow} from "@/hooks/useNow";
 import {useSetting} from "@/hooks/useSetting";
 import {
     browsable, homeCatalogues, homeStrip, searchRoasters, stripRows, type RoasterMatch
@@ -22,9 +21,7 @@ export function useHomeRoasters(settings?: Settings, now?: () => number) {
     // Off hides the strip and the empty library's button. The search still
     // looks through the roasters: it shows them only when somebody types.
     const [shown] = useSetting("showRoastersOnHome", settings);
-    // Read once, as the ROASTERS list does: the only clock-dependent words
-    // are a failing feed's "Updated 3 d ago", which minutes do not change.
-    const [at] = useState(() => (now ?? Date.now)());
+    const at = useNow(now);
     const catalogues = homeCatalogues(subs, catalogue);
     return {
         subscribed:    catalogues.length > 0,

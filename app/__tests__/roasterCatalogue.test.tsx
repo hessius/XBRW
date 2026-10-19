@@ -7,6 +7,7 @@ import {router} from "expo-router";
 import RoasterScreen from "@/app/roaster";
 import RoasterCoffeeScreen from "@/app/roasterCoffee";
 import RoastersScreen from "@/app/roasters";
+import {TYPING_DEBOUNCE_MS} from "@/constants/motion";
 import {parseHidden} from "@/library/hiddenShelves";
 import {contentPrint} from "@/library/importRefresh";
 import type {CoffeeBag} from "@/library/coffeeBag";
@@ -65,6 +66,27 @@ beforeEach(() => {
 });
 
 describe("the roaster list", () => {
+    it.each([
+        ["roaster list", (settings: ReturnType<typeof subscribed>) => <RoastersScreen settings={settings}/>],
+        ["roaster's coffees", (settings: ReturnType<typeof subscribed>) =>
+            <RoasterScreen settings={settings} feedUrl={FEED_URL}/>]
+    ])("refreshes the %s cache age at midnight", async (_name, page) => {
+        jest.useFakeTimers();
+        const midnight = new Date(2026, 9, 20).getTime();
+        jest.setSystemTime(midnight - 10_000);
+        const settings = memorySettings();
+        const {feed, body} = feedBody([{id: "a"}]);
+        subscribe(settings, FEED_URL, feed, body, midnight - 3 * 86_400_000);
+        try {
+            await renderWithProviders(page(settings));
+            expect(screen.getByText(/Updated 2 d ago/)).toBeTruthy();
+            await act(async () => { jest.advanceTimersByTime(10_000); });
+            expect(screen.getByText(/Updated 3 d ago/)).toBeTruthy();
+        } finally {
+            jest.useRealTimers();
+        }
+    });
+
     it("explains itself when there are no subscriptions", async () => {
         await renderWithProviders(<RoastersScreen settings={memorySettings()}/>);
         expect(screen.getByTestId("roasters-empty")).toBeTruthy();
@@ -187,11 +209,11 @@ describe("searching and filtering a roaster's coffees", () => {
             await renderWithProviders(<RoasterScreen settings={shelf()} feedUrl={FEED_URL}/>);
             await fireEvent.press(screen.getByTestId("rail-search"));
             await fireEvent.changeText(screen.getByTestId("rail-search-input"), "vergara");
-            await act(async () => { jest.runAllTimers(); });
+            await act(async () => { jest.advanceTimersByTime(TYPING_DEBOUNCE_MS); });
             expect(rowIds()).toEqual(["roaster-coffee-a"]);
 
             await fireEvent.changeText(screen.getByTestId("rail-search-input"), "nothing like it");
-            await act(async () => { jest.runAllTimers(); });
+            await act(async () => { jest.advanceTimersByTime(TYPING_DEBOUNCE_MS); });
             expect(screen.getByText("No coffees match.")).toBeTruthy();
             await fireEvent.press(screen.getByTestId("roaster-no-matches-action"));
             expect(rowIds()).toEqual(["roaster-coffee-a", "roaster-coffee-b", "roaster-coffee-c"]);

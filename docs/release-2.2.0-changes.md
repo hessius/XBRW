@@ -29,6 +29,16 @@ numbers are unchanged. This version bump does not build, submit or deploy an app
 
 ## Verified preview follow-ups
 
+### Freshness and daily dismissal across midnight
+
+The shared freshness clock now refreshes at local midnight and on foregrounding,
+without polling during the day. Ready to brew can return after yesterday's
+dismissal while the app stays open, and hiding it after midnight records the new
+date (#242). Home roasters and the cached catalogue screens use the same clock
+instead of keeping the time from mount (#240). Regression coverage includes
+calendar midnight on daylight-saving boundaries, foreground rescheduling and
+timer/listener cleanup. This does not add network refreshes.
+
 ### Cancellation and interrupted uploads
 
 An interrupted upload no longer reinstalls manual START, and CANCEL invalidates

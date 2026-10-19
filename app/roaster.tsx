@@ -16,6 +16,7 @@ import {palette} from "@/constants/colors";
 import {UNCLIPPED_LIST} from "@/constants/lists";
 import router from "@/hooks/steadyRouter";
 import {useScrollEndPadding} from "@/hooks/useBottomInset";
+import {useNow} from "@/hooks/useNow";
 import {useRailSearch, type RailSearch} from "@/hooks/useRailSearch";
 import {sharedSettings, useSetting} from "@/hooks/useSetting";
 import {coffeeBadge, readAlerts, recordListViewed} from "@/library/roasterAlerts";
@@ -153,7 +154,7 @@ export default function RoasterScreen({settings, feedUrl, now}: {
     useSetting("roasterAlerts", store);
     const [storedSubscriptions] = useSetting("roasterSubscriptions", store);
     const subscribed = subscriptionFor(parseSubscriptions(storedSubscriptions), feed) !== undefined;
-    const [at] = useState(() => (now ?? Date.now)());
+    const at = useNow(now);
     const listEnd = useScrollEndPadding(8);
     const cached = readCatalogue(store, feed);
     const alerts = readAlerts(store, feed);
