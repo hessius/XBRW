@@ -42,6 +42,15 @@ describe("planReimport", () => {
         expect(planReimport([mine], latest(), prints)).toEqual({kind: "ask", held: mine});
     });
 
+    it("keeps local brewing edits when the author's content has not changed", () => {
+        const mine = held();
+        const prints = {[mine.uuid]: contentPrint(mine)};
+        mine.grindSize = 55;
+        expect(planReimport([mine], latest(50), prints)).toEqual({kind: "same", recipe: mine});
+        expect(mine.grindSize).toBe(55);
+        expect(planReimport([mine], latest(62), prints)).toEqual({kind: "ask", held: mine});
+    });
+
     it("does not count a rename as an edit", () => {
         const mine = held();
         const prints = {[mine.uuid]: contentPrint(mine)};

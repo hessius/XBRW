@@ -7,8 +7,8 @@ import type {Settings} from "@/library/Settings";
  *
  * A library copy is the user's and never changes on its own. It only changes
  * when the user imports the same share link again (from a link or from a
- * roaster's catalogue) and the version xBloom now returns differs from the
- * copy. Then:
+ * roaster's catalogue) and the version xBloom now returns differs from both
+ * the copy and its remembered import. Then:
  *
  *  - an unedited copy takes the new brewing content quietly, because nobody
  *    could prefer an old version of a recipe they never touched;
@@ -88,7 +88,7 @@ export function rememberPrint(
 export type Reimport =
     /** Not in the library. */
     | {kind: "new"}
-    /** In the library and identical: nothing to do. */
+    /** In the library with no author update to apply: keep the local copy. */
     | {kind: "same"; recipe: Recipe}
     /** In the library, untouched, and the author's version moved on. */
     | {kind: "replace"; held: Recipe}
@@ -121,7 +121,7 @@ export function planReimport(
     } catch {
         return {kind: "ask", held};
     }
-    if (now === latest) return {kind: "same", recipe: held};
+    if (now === latest || prints[held.uuid] === latest) return {kind: "same", recipe: held};
     return prints[held.uuid] === now ? {kind: "replace", held} : {kind: "ask", held};
 }
 
