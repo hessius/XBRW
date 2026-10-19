@@ -1,7 +1,7 @@
 import {
     BREW_INFO_ROUNDS, ECHO_FRAMES, FRAME_GAP_MS, FRAME_HISTORY_LIMIT, HANDSHAKE_FRESH_MS,
     HANDSHAKE_WINDOW_MS, INFO_ATTEMPTS, INFO_WAIT_MS, PAUSE_ACK_MS, RECIPE_ACK_MS, SETTLE_CAP_MS,
-    SETTLE_CEILING_MS, STATE_FRESH_MS
+    SETTLE_CEILING_MS, STATE_FRESH_MS, STATE_REPLY_MS
 } from "@/constants/machine";
 import {brewProblems} from "@/library/cardLimits";
 import {clampBypassTemp} from "@/library/bypassLimits";
@@ -600,7 +600,29 @@ export default class Machine {
      */
     private committed: boolean = false;
 
+    /**
+     * The one cancel (40519) in flight, shared by everyone who wants the
+     * machine cleared, so a second caller waits for it instead of sending
+     * another. Every 40519 beeps.
+     */
+    private cancelling: Promise<void> | null = null;
+    /** The user's CANCEL in flight, so a second tap sends nothing. */
+    private userCancel: Promise<void> | null = null;
+    /**
+     * Bumped by every CANCEL. A brew still in its pre-flight when it moves
+     * stops before sending its recipe.
+     */
+    private cancelTicket = 0;
+    /**
+     * The tank flag the machine pushes as event 40522: false for 0 (empty or
+     * below its low mark), true for 1 (filled). Null until one arrives on this
+     * link. Owner log 2026-10-19: `40522 (0)` before `0x0C no_water`, then
+     * `40522 (1)` once the tank was refilled.
+     */
+    private waterPresent: boolean | null = null;
+
     private frameGapMs: number;
+    private stateReplyMs: number;
     private infoWaitMs: number;
     private handshakeFreshMs: number;
     private settleCapMs: number;
@@ -614,16 +636,19 @@ export default class Machine {
      *     Tests pass 0; nothing else should.
      * @param options.settleCapMs How long a stranded settling phase waits before
      *     it is promoted to done. Tests may shorten it; nothing else should.
+     * @param options.stateReplyMs How long to wait for a state report after a
+     *     cancel or a back-to-home. See `STATE_REPLY_MS`.
      */
     constructor(
         transport: MachineTransport,
         options: {
             frameGapMs?: number; infoWaitMs?: number; handshakeFreshMs?: number;
-            settleCapMs?: number;
+            settleCapMs?: number; stateReplyMs?: number;
         } = {}
     ) {
         this.transport = transport;
         this.frameGapMs = options.frameGapMs ?? FRAME_GAP_MS;
+        this.stateReplyMs = options.stateReplyMs ?? STATE_REPLY_MS;
         this.infoWaitMs = options.infoWaitMs ?? INFO_WAIT_MS;
         this.handshakeFreshMs = options.handshakeFreshMs ?? HANDSHAKE_FRESH_MS;
         this.settleCapMs = options.settleCapMs ?? SETTLE_CAP_MS;
@@ -1066,6 +1091,12 @@ export default class Machine {
             this.info = parsed;
             this.announceLink();
         }
+        if (parsed.kind === "event" && parsed.code === EVENT.WATER_LOW
+            && parsed.value !== undefined) {
+            // Kept whether or not a brew is running: it is the tank, and the
+            // next brew's pre-flight is what reads it.
+            this.waterPresent = parsed.value !== 0;
+        }
         if (parsed.kind === "event") this.onEvent(parsed.code, parsed.value);
         // Proof of life during the drawdown. Handled after the frame, so an
         // ENJOY_2 that has just ended the brew does not re-arm a watchdog for a
@@ -1201,6 +1232,17 @@ export default class Machine {
         if (this.info.waterFeed === "tank" && !this.info.waterEnough) {
             return {kind: "notEnoughWater", message: "The machine's water tank is low."};
         }
+        // The tank's own flag, 40522, pushed when it changes. It can say empty
+        // while the vitals still say enough: on 2026-10-19 a `40522 (0)` came
+        // in, the recipe went out anyway, and the machine stopped on
+        // `0x0C no_water` after the brew had started. Refusing here costs
+        // nothing; the machine pushes `40522 (1)` once the tank is filled.
+        if (this.info.waterFeed === "tank" && this.waterPresent === false) {
+            return {
+                kind: "notEnoughWater",
+                message: "The machine says its water tank is empty. Fill it and try again."
+            };
+        }
         const state = this.freshState();
         if (state !== null) {
             const fault = FAULT_BLOCKS[state];
@@ -1242,11 +1284,16 @@ export default class Machine {
         // about its mode again if this send also goes nowhere.
         this.retriedInPro = false;
         this.pauseSent = false;
+        // A CANCEL pressed while this attempt is still preparing must stop it
+        // before the recipe goes out, not after.
+        const ticket = this.cancelTicket;
         // A brew that died on the machine leaves a warning up, and a machine
         // sitting on a warning will not take a recipe: on device, TRY AGAIN
         // after a no-beans stop did nothing until the warning was dismissed by
-        // hand. Send it home first -- it is the same pair `cancelBrew` sends.
-        if (this.mayBeShowingAWarning()) await this.sendHome();
+        // hand. At most one cancel, and none when the machine already says it
+        // is startable. See `clearForBrew`.
+        await this.clearForBrew();
+        if (ticket !== this.cancelTicket) return;
         // Ask how it is doing *now*, every time. Not only when the vitals are
         // missing: they go stale, and the tank is the whole point of asking.
         // Telling the user to reconnect is also asking them to do something the
@@ -1271,6 +1318,7 @@ export default class Machine {
             if (answered || this.info !== null) break;
             if (round + 1 >= BREW_INFO_ROUNDS) break;
         }
+        if (ticket !== this.cancelTicket) return;
         await this.brewOnce(recipe);
     }
 
@@ -1470,21 +1518,104 @@ export default class Machine {
     }
 
     /**
-     * Stop whatever is happening and put the machine back on its home screen.
+     * Wait for the next state report `accept` takes, or give up.
      *
-     * Paced, and through `sendPaced` rather than two bare writes: the pacing is
-     * what a burst of Write Without Response needs to survive at all, and going
-     * through it is also what takes the radio away from a brew sequence that
-     * may still be mid-flight.
+     * Listening starts at the call, so call it before sending the frame that
+     * provokes the report: the answer can arrive inside the write.
+     *
+     * @returns the state reported, or null when none came in time.
      */
-    private async sendHome(): Promise<void> {
-        await this.sendPaced([buildType1(40519, [1]), buildType1(8022)]);
+    private waitForState(accept: (state: number) => boolean): Promise<number | null> {
+        return new Promise((resolve) => {
+            const finish = (state: number | null): void => {
+                clearTimeout(timer);
+                off();
+                resolve(state);
+            };
+            const off = this.onNotification((parsed) => {
+                if (parsed.kind === "status" && accept(parsed.state)) finish(parsed.state);
+            });
+            const timer = setTimeout(() => finish(null), this.stateReplyMs);
+            timer.unref?.();
+        });
     }
 
-    /** Stop a brew and put the machine back on its home screen. */
-    async cancelBrew(): Promise<void> {
-        await this.sendHome();
-        this.setPhase({name: "cancelled"});
+    /**
+     * Send one cancel (40519) and wait for the machine to say it is startable.
+     *
+     * Every 40519 beeps, so a cancel already in flight is shared rather than
+     * repeated. Owner logs of 2026-10-19 (V12.0D.500) caught two and three of
+     * them a second apart, each one a beep, after the machine had already
+     * reported `0x41` to the first. The old pair, 40519 then 8022 after a
+     * fixed gap, gave the machine no say in when it was done, and a second
+     * caller inside that gap sent a second 40519.
+     *
+     * Through `sendPaced`, which takes the radio away from a brew sequence
+     * that may still be mid-flight. A machine that never reports is waited on
+     * for `STATE_REPLY_MS` and no longer.
+     */
+    private cancelOnce(): Promise<void> {
+        if (this.cancelling !== null) return this.cancelling;
+        const run = async (): Promise<void> => {
+            const settled = this.waitForState((state) => STARTABLE.has(state));
+            await this.sendPaced([buildType1(40519, [1])]);
+            await settled;
+        };
+        const tracked: Promise<void> = run().finally(() => {
+            if (this.cancelling === tracked) this.cancelling = null;
+        });
+        this.cancelling = tracked;
+        return tracked;
+    }
+
+    /**
+     * Get a machine that may be sitting on a warning ready for a recipe.
+     *
+     * Nothing at all after a brew that ended cleanly, as before. Otherwise the
+     * last state the machine reported decides: a startable one (idle,
+     * complete, ready) needs nothing, and anything else gets one cancel. A
+     * link with no state report yet (a fresh reconnect sends none) asks with
+     * 8022 first, the back-to-home the official app sends on connect
+     * (`ble-protocol.md`), and cancels only when the answer is not startable
+     * or no answer comes. No 8022 follows the cancel here: the machine
+     * reporting a startable state is what it was for.
+     */
+    private async clearForBrew(): Promise<void> {
+        if (!this.mayBeShowingAWarning()) return;
+        if (this.cancelling !== null) {
+            await this.cancelling;
+            return;
+        }
+        let state = this.state;
+        if (state === null) {
+            const answered = this.waitForState(() => true);
+            await this.sendPaced([buildType1(8022)]);
+            state = await answered;
+        }
+        if (state !== null && STARTABLE.has(state)) return;
+        await this.cancelOnce();
+    }
+
+    /**
+     * Stop a brew and put the machine back on its home screen.
+     *
+     * One 40519, then the machine's own report that it has stopped, then the
+     * 8022 the official app sends after a cancel. A second tap while this is
+     * under way joins it and sends nothing.
+     */
+    cancelBrew(): Promise<void> {
+        if (this.userCancel !== null) return this.userCancel;
+        this.cancelTicket++;
+        const run = async (): Promise<void> => {
+            await this.cancelOnce();
+            await this.sendPaced([buildType1(8022)]);
+            this.setPhase({name: "cancelled"});
+        };
+        const tracked: Promise<void> = run().finally(() => {
+            if (this.userCancel === tracked) this.userCancel = null;
+        });
+        this.userCancel = tracked;
+        return tracked;
     }
 
     /**
@@ -1792,6 +1923,11 @@ export default class Machine {
         // tank is full and the mode is PRO about a machine it is no longer
         // talking to.
         this.info = null;
+        this.waterPresent = null;
+        // A cancel waiting on the old link's answer is not one a new link can
+        // share.
+        this.cancelling = null;
+        this.userCancel = null;
         this.state = null;
         this.stateAt = 0;
         // Last, so a listener reading `isConnected()` or `info` sees the link
