@@ -1,11 +1,15 @@
-import {fireEvent, screen} from "@testing-library/react-native";
+import {fireEvent, screen, waitFor} from "@testing-library/react-native";
 import React from "react";
 
 import LiveBrewBar from "@/components/LiveBrewBar";
 import {accents} from "@/constants/colors";
+import {
+    COFFEE_JUDGEMENT_PLACEHOLDER, OVERFLOW_PAUSED_HEADLINE, TEA_JUDGEMENT_PLACEHOLDER
+} from "@/constants/brewCopy";
+import {plannedSeconds, traceAxisFor} from "@/library/brew/brewShape";
 import Pour from "@/library/Pour";
-import Recipe from "@/library/Recipe";
-import {renderWithProviders} from "@/test-utils/render";
+import Recipe, {CUP_TYPE} from "@/library/Recipe";
+import {renderWithProviders, SHEET_PRESS_TIMEOUT} from "@/test-utils/render";
 
 let mockPathname = "/";
 const mockPush = jest.fn();
@@ -86,6 +90,52 @@ beforeEach(() => {
 });
 
 describe("LiveBrewBar", () => {
+    it.each([CUP_TYPE.TEA, CUP_TYPE.XPOD])("sizes the mini trace from the live beverage kind %s", async cupType => {
+        const r = recipe();
+        r.cupType = cupType;
+        r.pours = [new Pour(1, 90, 92, 35, 0, 0, 45)];
+        const samples = [
+            {at: 0, water: 0, cup: 0, pour: 1},
+            {at: 20_000, water: 390, cup: 400, pour: 1},
+            {at: 30_000, water: 270, cup: 200, pour: 1}
+        ];
+        mockRun = {
+            recipe: r, samples, elapsed: 30, holding: false, heldSeconds: 0,
+            phase: {name: "pouring", pour: 1, pours: 1}
+        };
+        const {getByTestId} = await renderWithProviders(<LiveBrewBar/>);
+        const path = getByTestId("trace-cup").props.d as string;
+        const points = [...path.matchAll(/[ML]([0-9.-]+) ([0-9.-]+)/g)];
+        const maxV = cupType === CUP_TYPE.TEA ? 400 * 1.02 : 270;
+        expect(Number(points[1][2])).toBeCloseTo(34 - 400 / maxV * 34, 1);
+        expect(Number(points[2][2])).toBeCloseTo(34 - 200 / maxV * 34, 1);
+    });
+
+    it("carries an open automatic pause and the full live axis into its real compact trace", async () => {
+        const r = recipe();
+        const samples = [
+            {at: 0, water: 10, cup: 0, pour: 1},
+            {at: 1000, water: 20, cup: 4, pour: 1}
+        ];
+        const pauseIntervals = [{from: 1700, to: 90_000, pour: 1, reason: "overflow" as const}];
+        const bypass = {volume: 20, temperature: 90, delivered: 0,
+            startedAt: null, state: "pending" as const};
+        mockRun = {
+            recipe: r, samples, elapsed: 90, holding: false, heldSeconds: 0,
+            phase: {name: "paused", pour: 1, pours: 1, pauseKind: "overflow",
+                was: {name: "pouring", pour: 1, pours: 1}},
+            pauseIntervals, bypass
+        };
+        const {getByTestId, getByText, queryByText} = await renderWithProviders(<LiveBrewBar />);
+        const band = getByTestId("trace-pause-overflow-0");
+        const axis = traceAxisFor(r.pours, samples, plannedSeconds(r.pours), bypass, pauseIntervals);
+        expect(Number(band.props.x)).toBeCloseTo(1.7 / axis.maxT * 86);
+        expect(Number(band.props.width)).toBeCloseTo(88.3 / axis.maxT * 86);
+        expect(Number(band.props.height)).toBe(34);
+        expect(getByText(OVERFLOW_PAUSED_HEADLINE)).toBeTruthy();
+        expect(queryByText("Grinding")).toBeNull();
+    });
+
     it("shows the running brew on any other screen", async () => {
         const {getByText} = await renderWithProviders(<LiveBrewBar />);
         expect(getByText(/ETHIOPIA GUJI/i)).toBeTruthy();
@@ -146,6 +196,33 @@ describe("LiveBrewBar", () => {
         await fireEvent.press(screen.getByLabelText("Rate 4 stars"));
         expect(await screen.findByTestId("brew-note-done")).toBeTruthy();
     });
+
+    it.each([undefined, "coffee", "tea"] as const)(
+        "keeps the saved %s identity in the global note sheet and saves edits",
+        async (beverageKind) => {
+            mockRun = null;
+            mockPrompt.brew = {...BREW, beverageKind};
+            mockPrompt.annotate.mockReturnValue(true);
+            const view = await renderWithProviders(<LiveBrewBar />);
+
+            await fireEvent.press(screen.getByLabelText("Rate 4 stars"));
+            expect(mockPrompt.rate).toHaveBeenCalledWith(BREW.id, 4);
+            mockPrompt.brew = null;
+            await view.rerender(<LiveBrewBar />);
+
+            const placeholder = beverageKind === "tea"
+                ? TEA_JUDGEMENT_PLACEHOLDER : COFFEE_JUDGEMENT_PLACEHOLDER;
+            const field = await screen.findByPlaceholderText(placeholder);
+            if (beverageKind === "tea") {
+                expect(screen.queryByPlaceholderText(COFFEE_JUDGEMENT_PLACEHOLDER)).toBeNull();
+            }
+            await fireEvent.changeText(field, "Floral, steep less.");
+            await waitFor(async () => {
+                await fireEvent.press(screen.getByTestId("brew-note-done"));
+                expect(mockPrompt.annotate).toHaveBeenCalledWith(BREW.id, "Floral, steep less.");
+            }, {timeout: SHEET_PRESS_TIMEOUT});
+        }
+    );
 
     it("does not open the note sheet when a rating write is refused", async () => {
         mockRun = null;

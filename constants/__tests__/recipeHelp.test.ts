@@ -77,8 +77,11 @@ describe("the editor's help copy", () => {
         expect(RECIPE_HELP.xid.detail).toContain("nameless");
     });
 
-    it("explains the tea siphon's extra volume", () => {
-        expect(RECIPE_HELP.tea.detail).toContain("30");
+    it("distinguishes programmed tea fill from additional water without a fixed release amount", () => {
+        expect(RECIPE_HELP.tea.detail).toContain("90 ml");
+        expect(RECIPE_HELP.tea.detail).toContain("additional water");
+        expect(RECIPE_HELP.tea.detail).toContain("separate from the fill");
+        expect(RECIPE_HELP.tea.detail).not.toMatch(/\b(?:30|40)\s*ml\b/i);
     });
 });
 

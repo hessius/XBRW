@@ -9,9 +9,9 @@ contract. `docs/development-workflow.md` has the branch, release and recovery
 runbook. These rules apply to delegated agents and documentation tasks too.
 
 Start isolated task worktrees from a freshly fetched, pinned `origin/develop`
-commit. Develop also carries the 2.1.0 beta candidate; beta fixes use the same
-task/PR workflow, not a separate permanent version branch. Its application code
-has not been promoted to main by the workflow migration.
+commit. Version 2.1.0 is shipped at `v2.1.0`; its source was reconciled into
+develop before promotion to main. The next planned version is 2.2.0, using the
+same task/PR workflow rather than a separate permanent version branch.
 Never choose the base from the current checkout, write tasks directly on shared
 integration/main branches, or switch another session's checkout. Check status,
 upstream and worktree ownership first; stop on conflicting or unexpected work.
@@ -21,8 +21,7 @@ handoff record exact branch/worktree/base/head, dirty state, push state,
 pending work and hardware gaps. Report failed or unauthorized pushes as local
 only. Integrate serially with merge commits; never squash develop into main
 or rewrite shared integration/release history. Main is the approved release
-line, but already carries unreleased changes from the old workflow: do not
-rewind it to a guessed baseline.
+line; preserve its history rather than rewinding it to a guessed baseline.
 
 PR creation, PR merging, release promotion, production builds/submissions,
 deployments, force pushes and destructive local/remote cleanup require explicit
@@ -145,12 +144,13 @@ Byte layout (see `Recipe.parseData` / `Recipe.getData`, and `Data Format.png`):
 - 40: pour count `<< 3`
 - 41 + 8·n: per-pour records — volume, temperature, pattern, agitation, pause (stored as `256 − seconds`), a combined byte (bits 0–4 = dose, bits 5–7 = pause minutes — **dose and RPM only live in pour 1**), RPM, flow rate
 - then: grind size (stored with `GRIND_SIZE_OFFSET` = 40; byte `GRINDER_OFF` = 41 disables the grinder, which is the user-facing value **81**), ratio, CRC-8 checksum
-  - The offset is **hardware-verified** (#68): grind sizes written by the app appear as intended on the machine. **Do not widen `GRIND_SIZE` in `cardLimits.ts` below 40** — the encoder would emit a negative byte. The official app's 1–80 scale belongs to the grinder itself (including standalone grinding); a card carries 40–80, which is the machine's whole brewing band.
+  - The offset is **hardware-verified** (#68): grind sizes written by the app appear as intended on the machine. **Do not widen `GRIND_SIZE` in `cardLimits.ts` below 40** — the encoder would emit a negative byte. BLE recipes carry grind directly and use the separate `BLE_GRIND_SIZE` range of **1–80**. Editor controls, quick edits and Easy Mode use the BLE range; card writes retain **40–80**. Do not infer BLE brewing limits from the card's offset or silently coarsen an imported recipe.
 
 Other domain invariants:
 
 - The machine rejects a recipe unless the sum of pour volumes equals `dosage × ratio`. `isPourVolumeValid()` guards this; `autoFixPourVolumes()` rescales pours and redistributes rounding error so it holds exactly.
 - Ratios are whole numbers only — no `.5`.
+- Stage and bypass temperatures are whole Celsius. `normaliseCelsius` rounds valid fractional setpoints in saved recipe JSON and imported bypass water, including Fahrenheit-derived values. It preserves out-of-range saved stage values for validation; the xBloom stage importer separately rounds and clamps its setpoints, including the official app's BP preset.
 - Tea (`CUP_TYPE.TEA`) is special-cased throughout: volumes are clamped to 90 ml, dose defaults to 5 g, the ratio is recomputed with `fixRatio()`, and tea cards always write the default grind size.
 - `CUP_TYPE.OTHER` is the cup type the machine brews without overflow protection, and the UI says so. `CUP_TYPE.OMNI` is xBloom's own dripper, whose shape the machine knows, so it stops. This file said the opposite until #151; the bytes never moved, and `Recipe.card.test.ts` now holds all four of them.
 - `backup` / `offline_backup` / `uid` on a `Recipe` hold raw card bytes for the restore feature — preserve them through any serialization change.

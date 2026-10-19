@@ -85,6 +85,23 @@ function pathPoints(path: string): {x: number; y: number}[] {
 }
 
 describe("BrewSummary", () => {
+    it("shows tea leaf and neutral figures without coffee context in a capture", async () => {
+        await draw({
+            beverageKind: "tea", recipeInputs: {dose: 5, ratio: 18,
+                adjustedFromDose: 4, adjustedFromRatio: 16},
+            grind: {kind: "dial", dial: 53, recipe: 50, savedRecipe: 48},
+            drawdown: 0, delay: 0, drawdownRate: 0
+        });
+        for (const label of ["LEAF", "5 G", "RECIPE 4", "WATER", "CUP", "TIME"]) {
+            expect(screen.getAllByText(label).length).toBeGreaterThan(0);
+        }
+        for (const label of ["RATIO", "GRIND", "DRAWDOWN", "DELAY", "0:00",
+            "RECIPE 48", "RECIPE 50", "1:18"]) {
+            expect(screen.queryByText(label)).toBeNull();
+        }
+        expect(screen.getByTestId("ladder")).toBeTruthy();
+    });
+
     it("draws the trace when the brew kept a stream", async () => {
         const {getByLabelText} = await draw({hasStream: true});
         expect(getByLabelText("Brew trace, 93 then 93 then 93 degrees")).toBeTruthy();
@@ -112,6 +129,30 @@ describe("BrewSummary", () => {
         const capture = within(screen.getByTestId("brew-capture"));
         expect(capture.getByText("Ethiopia Guji")).toBeTruthy();
     });
+
+    it("captures recipe context inside measured chrome between the name and trace", async () => {
+        await draw({
+            recipeInputs: {dose: 16, ratio: 17, adjustedFromDose: 15, adjustedFromRatio: 16}
+        });
+        const chrome = within(screen.getByTestId("summary-chrome"));
+        expect(chrome.getByText("16 G")).toBeOnTheScreen();
+        expect(chrome.getByText("1:17")).toBeOnTheScreen();
+        expect(chrome.getByText("RECIPE 15")).toBeOnTheScreen();
+        expect(chrome.getByText("RECIPE 1:16")).toBeOnTheScreen();
+        expect(chrome.getAllByTestId(/^(brew-summary-name|brew-recipe-context|trace-chart-slot)$/)
+            .map((node) => node.props.testID))
+            .toEqual(["brew-summary-name", "brew-recipe-context", "trace-chart-slot"]);
+        expect(within(screen.getByTestId("brew-capture")).getByTestId("brew-recipe-context"))
+            .toBeOnTheScreen();
+    });
+
+    it.each([undefined, {}, {dose: 0, ratio: -1}])(
+        "omits context and its spacing when no valid inputs were supplied: %j",
+        async (recipeInputs) => {
+            await draw({recipeInputs});
+            expect(screen.queryByTestId("brew-recipe-context")).toBeNull();
+        }
+    );
 
     it("pads the captured area so the exported PNG has a margin", async () => {
         const {getByTestId} = await draw();
@@ -150,7 +191,7 @@ describe("BrewSummary", () => {
         // The chrome above the ladder reports 300, leaving 600 - 2*30 of capture
         // padding for three stages: room for both bands to reach their ceilings.
         await act(async () => {
-            fireEvent(getByTestId("summary-chrome"), "layout", {
+            await fireEvent(getByTestId("summary-chrome"), "layout", {
                 nativeEvent: {layout: {height: 300, width: 330, x: 0, y: 0}}
             });
         });
@@ -166,7 +207,7 @@ describe("BrewSummary", () => {
         });
 
         await act(async () => {
-            fireEvent(getByTestId("summary-chrome"), "layout", {
+            await fireEvent(getByTestId("summary-chrome"), "layout", {
                 nativeEvent: {layout: {height: 300, width: 330, x: 0, y: 0}}
             });
         });
@@ -185,7 +226,7 @@ describe("BrewSummary", () => {
         });
 
         await act(async () => {
-            fireEvent(getByTestId("summary-chrome"), "layout", {
+            await fireEvent(getByTestId("summary-chrome"), "layout", {
                 nativeEvent: {layout: {height: 420, width: 330, x: 0, y: 0}}
             });
         });
@@ -320,8 +361,7 @@ describe("BrewSummary", () => {
         });
 
         expect(screen.getByText("0:32")).toBeTruthy();
-        expect(screen.getByText("2.1")).toBeTruthy();
-        expect(screen.getByText("G/S")).toBeTruthy();
+        expect(screen.getByText("2.1 G/S")).toBeTruthy();
         expect(screen.getByText("+5")).toBeTruthy();
         expect(screen.getByText("53")).toBeTruthy();
         expect(screen.getByText("RECIPE 60")).toBeTruthy();
@@ -392,4 +432,72 @@ it("carries the bypass into the ladder, the trace and the figures", async () => 
     expect(screen.getByTestId("rung-bypass")).toBeTruthy();
     expect(screen.getByTestId("trace-bypass")).toBeTruthy();
     expect(screen.getByText("+5")).toBeTruthy();
+});
+
+describe("BrewSummary pause intervals", () => {
+    const intervals = [
+        {from: 20_000, to: 50_000, pour: 1, reason: "overflow" as const},
+        {from: 60_000, to: 90_000, pour: 2, reason: "manual" as const}
+    ];
+    const traceWidth = 390 - (18 + 12) * 2;
+    const rows: BrewSample[] = [
+        {at: 0, water: 0, cup: 0, pour: 1},
+        {at: 20_000, water: 40, cup: 30, pour: 1},
+        {at: 60_000, water: 80, cup: 70, pour: 2}
+    ];
+    const rateSeries = [
+        {at: 80_000, cup: 1.6, water: 3.2},
+        {at: 80_100, cup: 1.7, water: 3.2}
+    ];
+
+    it("draws the recorded bands inside the existing chart slot", async () => {
+        await draw({samples: rows, pauseIntervals: intervals, plannedSeconds: 50});
+        const slot = within(screen.getByTestId("trace-chart-slot"));
+        expect(slot.getByTestId("trace-pause-overflow-0")).toBeTruthy();
+        expect(slot.getByTestId("trace-pause-manual-1")).toBeTruthy();
+    });
+
+    it.each(["tea", "coffee"] as const)("sizes the %s trace and rate chart to the same interval extent", async beverageKind => {
+        await draw({beverageKind, samples: rows, pauseIntervals: intervals, plannedSeconds: 50, rateSeries});
+        // The final pause ends at 90 s, thirty seconds after the last sample.
+        const manual = screen.getByTestId("trace-pause-manual-1");
+        expect(Number(manual.props.x) + Number(manual.props.width)).toBeCloseTo(traceWidth, 1);
+        const rateX = pathPoints(screen.getByTestId("rate-chart-water").props.d as string)[1].x;
+        expect(rateX).toBeCloseTo(80.1 / 90 * traceWidth, 1);
+    });
+
+    it.each([120, 393, 600])("spends no height on story pause bands at width %i", async width => {
+        const storyProps = {
+            width, textScale: width / 393, samples: rows, plannedSeconds: 50, rateSeries,
+            traceHeight: 90, rateHeight: 40, storyBands: {barHeight: 8, rungGap: 4}
+        };
+        const plain = await draw(storyProps);
+        const plainHeight = plain.getByLabelText(/^Brew trace/).props.height;
+        const plainSlot = StyleSheet.flatten(
+            screen.getByTestId("trace-chart-slot").props.style as StyleProp<ViewStyle>);
+        await plain.unmount();
+
+        await draw({...storyProps, pauseIntervals: intervals});
+        expect(screen.getByLabelText(/^Brew trace/).props.height).toBe(plainHeight);
+        expect(screen.getByTestId("trace-pause-overflow-0").props.height).toBe(plainHeight);
+        expect(screen.getByLabelText("Brew rate chart").props.height).toBe(40);
+        expect(StyleSheet.flatten(
+            screen.getByTestId("trace-chart-slot").props.style as StyleProp<ViewStyle>
+        )).toEqual(plainSlot);
+    });
+
+    it("keeps the old axis when the record has no intervals", async () => {
+        await draw({samples: rows, plannedSeconds: 50, rateSeries});
+        expect(screen.queryByTestId(/^trace-pause-/)).toBeNull();
+        const rateX = pathPoints(screen.getByTestId("rate-chart-water").props.d as string)[1].x;
+        // Sample-only extent: the last sample, at 60 s, is the axis.
+        expect(rateX).toBeCloseTo(80.1 / 60 * traceWidth, 0);
+    });
+
+    it("draws no graph and no bands for a record whose stream is gone", async () => {
+        await draw({hasStream: false, samples: [], pauseIntervals: intervals});
+        expect(screen.queryByTestId("trace-chart-slot")).toBeNull();
+        expect(screen.queryByTestId(/^trace-pause-/)).toBeNull();
+        expect(screen.getByText("NO TRACE KEPT")).toBeTruthy();
+    });
 });

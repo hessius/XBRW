@@ -5,6 +5,7 @@ import {
 } from "@/library/bypassLimits";
 import {adaptedModelFor, type MachineModel} from "@/library/machine/machineModel";
 import {podCoffeeFromPodsVo, podImageUrl} from "@/library/podCoffee";
+import {clampCelsius, normaliseCelsius} from "@/library/units";
 import type {ImportSource} from "./importInput";
 
 /**
@@ -168,7 +169,7 @@ export class XBloomRecipe {
             // longer costs the user their bypass. That asymmetry is deliberate.
             if (bypassVolumeValid) {
                 recipe.bypassVolume = rawBypassVolume;
-                recipe.bypassTemp   = bypassTempValid ? rawBypassTemp : BYPASS_DEFAULT_TEMPERATURE;
+                recipe.bypassTemp   = bypassTempValid ? normaliseCelsius(rawBypassTemp) : BYPASS_DEFAULT_TEMPERATURE;
                 // isEnableBypassWater: 1 = ON, 2 = OFF — xBloom's inverted scheme.
                 // A non-zero volume is also required; flag-on with zero water
                 // means the machine dispenses nothing, so treat it as off.
@@ -230,6 +231,20 @@ export class XBloomRecipe {
                 if (recipe.cupType === CUP_TYPE.TEA && volume > 90) {
                     console.log("Fixing tea pour volume to 90ml, was: " + volume + "ml")
                     volume = 90;
+                }
+                // A cloud recipe can carry a temperature the card cannot hold
+                // -- the official app's "BP" preset has arrived here as 99.4 C
+                // rather than a clean round number, from a lossy conversion
+                // somewhere upstream of us. Clamped and rounded at the door,
+                // the same way tea's volume is, so the card gets the hottest
+                // figure it can actually do instead of a write-time refusal.
+                const clampedTemperature = clampCelsius(Math.round(temperature));
+                if (clampedTemperature !== temperature) {
+                    console.log(
+                        "Fixing pour temperature to " + clampedTemperature +
+                        "C, was: " + temperature + "C"
+                    );
+                    temperature = clampedTemperature;
                 }
                 let pour = new Pour(i + 1, volume, temperature, flowRate, 0, pattern, pause);
                 pour.setAgitationAfter(isEnableVibrationAfter);

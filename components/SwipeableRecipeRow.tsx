@@ -8,6 +8,7 @@ import DotIcon from "@/components/DotIcon";
 import DotMatrixText from "@/components/DotMatrixText";
 import RecipeCard from "@/components/RecipeCard";
 import type {RecipeEvidence} from "@/library/libraryQuery";
+import type {SlotMarkerValue} from "@/library/slots/slotModel";
 import type {DotIconName} from "@/constants/dotIcons";
 import {palette} from "@/constants/colors";
 import {canWriteToCard} from "@/library/cardLimits";
@@ -80,6 +81,8 @@ type Props = {
      * otherwise reach only through the long press.
      */
     onHistory?: () => void;
+    slotMarker?: SlotMarkerValue;
+    onEasyMode?: () => void;
 };
 
 /**
@@ -182,7 +185,9 @@ export default function SwipeableRecipeRow({
                                                onWrite,
                                                onToggleFavourite,
                                                onLongPress,
-                                               onHistory
+                                               onHistory,
+                                               slotMarker,
+                                               onEasyMode
                                            }: Props) {
     const swipeableRef = useRef<SwipeableMethods | null>(null);
     /**
@@ -446,7 +451,8 @@ export default function SwipeableRecipeRow({
                             onDelete={onDelete} onDuplicate={onDuplicate}
                             onToggleFavourite={onToggleFavourite}
                             onLongPress={onLongPress}
-                            onHistory={onHistory}/>
+                            onHistory={onHistory}
+                            slotMarker={slotMarker} onEasyMode={onEasyMode}/>
             </Swipeable>
         </View>
     );

@@ -1,8 +1,12 @@
 import React from "react";
-import {fireEvent, screen, waitFor} from "@testing-library/react-native";
+import {fireEvent, screen, waitFor, within} from "@testing-library/react-native";
 
 import MachineSection from "@/components/MachineSection";
 import {renderWithProviders} from "@/test-utils/render";
+import {notify} from "@/components/XbrwToast";
+import {SlotOperationError} from "@/library/machine/errors";
+
+jest.mock("@/components/XbrwToast", () => ({notify: jest.fn()}));
 
 // Jest forbids a `jest.mock` factory from closing over a variable unless its
 // name is `mock`-prefixed, so the plan's `push`/`link` are named `mockPush` and
@@ -73,6 +77,15 @@ describe("the machine section", () => {
         // Asking would mean writing to a transport that is not there.
         await renderWithProviders(<MachineSection/>);
         expect(mockAsk).not.toHaveBeenCalled();
+    });
+
+    it("surfaces a slot-lock refresh refusal instead of silently hiding it in Settings", async () => {
+        mockLink.status = "connected";
+        const message = "Finish the incomplete Easy Mode write before using the machine.";
+        mockAsk.mockRejectedValueOnce(new SlotOperationError(message));
+        await renderWithProviders(<MachineSection/>);
+        await waitFor(() => expect(notify).toHaveBeenCalledWith({tone: "error", message}));
+        expect(mockAsk).toHaveBeenCalledTimes(1);
     });
 
     it("is there before a machine has ever been paired", async () => {
@@ -207,6 +220,18 @@ describe("the machine section", () => {
         expect(screen.getByText("Your xBloom")).toBeTruthy();
         expect(screen.getByText("Studio")).toBeTruthy();
         expect(screen.getByText("Original")).toBeTruthy();
+        const stacked = within(screen.getByTestId("settings-choice-stacked"));
+        expect(stacked.getByText("Your xBloom")).toBeTruthy();
+        expect(stacked.getByText("Choose your model for matching imports. Grind scales differ. Saved recipes stay unchanged."))
+            .toBeTruthy();
+    });
+
+    it("keeps app brewing preferences out of the machine section", async () => {
+        await renderWithProviders(<MachineSection/>);
+        expect(screen.queryByText("Animate the brew chart")).toBeNull();
+        expect(screen.queryByText("Ask how a brew was")).toBeNull();
+        expect(screen.queryByText("Keep raw brew traces")).toBeNull();
+        expect(screen.queryByText("Brew detail storage")).toBeNull();
     });
 
     it("remembers the original xBloom when that is what you picked", async () => {

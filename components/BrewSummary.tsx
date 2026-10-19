@@ -4,7 +4,9 @@ import {Text, YStack} from "tamagui";
 
 import BrewFigures, {type BrewFigureAdjustments} from "@/components/BrewFigures";
 import BrewRateChart from "@/components/BrewRateChart";
+import BrewRecipeContext from "@/components/BrewRecipeContext";
 import BrewStageLadder from "@/components/BrewStageLadder";
+import TeaStageLadder from "@/components/TeaStageLadder";
 import BrewTrace from "@/components/BrewTrace";
 import MarqueeText from "@/components/MarqueeText";
 import DotMatrixText from "@/components/DotMatrixText";
@@ -12,10 +14,13 @@ import {palette} from "@/constants/colors";
 import {SCREEN_PADDING} from "@/constants/layout";
 import {summaryBands} from "@/library/brew/bands";
 import {traceAxisFor} from "@/library/brew/brewShape";
-import type {BrewSample} from "@/library/brew/BrewRecord";
+import type {BeverageKind, BrewSample} from "@/library/brew/BrewRecord";
 import type {BypassView} from "@/library/brew/bypassState";
+import type {PauseInterval} from "@/library/brew/pauseIntervals";
 import type {GrindFigure} from "@/library/brew/dialAfterBrew";
 import type {FlowPoint} from "@/library/brew/flowRate";
+import type {BrewRecipeInputs} from "@/library/brew/figureGeometry";
+import type {TeaStageView} from "@/library/brew/teaCycle";
 import {
     hasDrawableRateRun,
     RATE_BOTTOM_GAP,
@@ -53,10 +58,14 @@ export function summaryLadderHeight(
 }
 
 type Props = {
+    beverageKind?: BeverageKind;
     recipeName: string;
+    recipeInputs?: BrewRecipeInputs;
     hasStream: boolean;
     samples: BrewSample[];
     stages: Pour[];
+    /** Tea-only observed cycle presentation; omitted for coffee. */
+    teaStages?: readonly TeaStageView[];
     accent: string;
     width: number;
     plannedSeconds: number;
@@ -86,6 +95,12 @@ type Props = {
     onSelectStage?: (index: number) => void;
     /** The bypass this brew had, if any. Absent on every record without one. */
     bypass?: BypassView;
+    /**
+     * The confirmed pauses this brew had, on the sample clock, taken from the
+     * record or the finished run. Never rebuilt from a recipe. Drawn only where
+     * a trace is; the same intervals size the trace axis and the rate chart.
+     */
+    pauseIntervals?: readonly PauseInterval[];
     /**
      * Seconds of drawdown, or null when there are none to report.
      *
@@ -156,9 +171,9 @@ const NO_PLAN: Pour[] = [];
  * figures near-invisible.
  */
 export default function BrewSummary({
-    recipeName, hasStream, samples, stages, accent, width, plannedSeconds,
+    recipeName, recipeInputs, beverageKind, hasStream, samples, stages, teaStages, accent, width, plannedSeconds,
     water, cup, seconds, activeIndex, stageWater, stalls, stagesUnavailable,
-    note, nameStill = false, selectedIndex = null, onSelectStage, bypass,
+    note, nameStill = false, selectedIndex = null, onSelectStage, bypass, pauseIntervals,
     drawdown = null, rateSeries, drawdownRate = null, delay = null, grind = null,
     adjustments,
     availableHeight = 0,
@@ -170,6 +185,7 @@ export default function BrewSummary({
     chartWidth,
     testID = "brew-capture"
 }: Props) {
+    const shownKind = beverageKind ?? recipeInputs?.beverageKind;
     // The drawable width inside the capture's own padding.
     const traceWidth = width - capturePadding * 2;
     const bleedChartWidth = chartWidth ?? traceWidth;
@@ -177,7 +193,7 @@ export default function BrewSummary({
     const chartSlotStyle = chartBleed > 0
         ? {marginHorizontal: -chartBleed}
         : undefined;
-    const traceAxis = traceAxisFor(NO_PLAN, samples, plannedSeconds, bypass);
+    const traceAxis = traceAxisFor(NO_PLAN, samples, plannedSeconds, bypass, pauseIntervals, shownKind);
     const rates = rateSeries ?? [];
     const drawsRateChart = hasStream && showRateChart && hasDrawableRateRun(rates);
 
@@ -212,9 +228,13 @@ export default function BrewSummary({
                 </DotMatrixText>
             </MarqueeText>
 
+            <BrewRecipeContext inputs={{...recipeInputs, beverageKind: shownKind}}
+                               contentWidth={traceWidth} textScale={textScale}/>
+
             {hasStream ? (
                 <View testID="trace-chart-slot" style={chartSlotStyle}>
                 <BrewTrace
+                    beverageKind={shownKind}
                     pours={NO_PLAN}
                     samples={samples}
                     accent={accent}
@@ -228,6 +248,7 @@ export default function BrewSummary({
                     selectedIndex={selectedIndex}
                     onSelectStage={onSelectStage}
                     bypass={bypass}
+                    pauseIntervals={pauseIntervals}
                     legendInset={chartBleed}
                     axis={traceAxis}
                 />
@@ -272,6 +293,7 @@ export default function BrewSummary({
             )}
 
             <BrewFigures
+                beverageKind={shownKind}
                 water={water}
                 cup={cup}
                 seconds={seconds}
@@ -295,8 +317,14 @@ export default function BrewSummary({
                 <DotMatrixText fontSize={11} letterSpacing={1.2} color={palette.muted}>
                     Recipe deleted. Stages not available.
                 </DotMatrixText>
-            ) : (
-                <BrewStageLadder
+            ) : teaStages !== undefined ? (
+                <TeaStageLadder
+                    stages={teaStages}
+                    accent={accent}
+                    selectedIndex={selectedIndex}
+                    onSelectStage={onSelectStage}
+                />
+            ) : <BrewStageLadder
                     pours={stages}
                     accent={accent}
                     activeIndex={activeIndex}
@@ -322,7 +350,7 @@ export default function BrewSummary({
                     onSelectStage={onSelectStage}
                     bypass={bypass}
                 />
-            )}
+            }
             </View>
             )}
         </View>

@@ -7,22 +7,15 @@ import SettingsActionRow from "@/components/SettingsActionRow";
 import SettingsChoiceRow from "@/components/SettingsChoiceRow";
 import SettingsSection from "@/components/SettingsSection";
 import SettingsToggleRow from "@/components/SettingsToggleRow";
+import {notify} from "@/components/XbrwToast";
 import {palette} from "@/constants/colors";
 import {useMachine} from "@/hooks/useMachine";
 import {useSetting} from "@/hooks/useSetting";
-import {RATING_PROMPT_WINDOW_MS} from "@/library/brew/ratingPrompt";
 import type {Settings} from "@/library/Settings";
 import {MACHINE_MODELS, isMachineModel, type MachineModel} from "@/library/machine/machineModel";
 
 /** How many taps on the firmware row open the console. */
 const CONSOLE_TAPS = 7;
-
-const RETENTION_OPTIONS = [
-    {value: "10",  label: "10"},
-    {value: "50",  label: "50"},
-    {value: "200", label: "200"},
-    {value: "0",   label: "Don't keep traces"}
-] as const;
 
 /**
  * What each model is called on screen.
@@ -74,16 +67,9 @@ export default function MachineSection({settings}: {settings?: Settings}) {
     const {machine, status, error, remembered, connect, forget, canOpenSettings, openSettings}
         = useMachine(undefined, {settings});
     const [autoStart, setAutoStart] = useSetting("machineAutoStart", settings);
-    const [animateBrewChart, setAnimateBrewChart] = useSetting("animateBrewChart", settings);
-    const [askForRatings, setAskForRatings] = useSetting("askForRatings", settings);
-    const [brewTraceRetention, setBrewTraceRetention] = useSetting("brewTraceRetention", settings);
     const [machineModel, setMachineModel] = useSetting("machineModel", settings);
     const [taps, setTaps] = useState(0);
     const info = machine.info;
-    const ratingPromptHours = Math.round(RATING_PROMPT_WINDOW_MS / (60 * 60 * 1000));
-    const ratingPromptDescription =
-        `On, the last brew XBRW++ watched can ask how it was along the bottom for up to ${ratingPromptHours} hours. `
-        + "Off, ratings are only given on the brew itself.";
 
     /** What the section says when there is no live link. */
     const idleStatus = status === "connecting" ? "Connecting…"
@@ -95,7 +81,9 @@ export default function MachineSection({settings}: {settings?: Settings}) {
     // since then still reads Low here, and only a relaunch clears it.
     useEffect(() => {
         if (status !== "connected") return;
-        machine.askHowItIsDoing().catch(() => {});
+        machine.askHowItIsDoing().catch((error: unknown) => {
+            notify({tone: "error", message: error instanceof Error ? error.message : String(error)});
+        });
     }, [machine, status]);
 
     function onSecretPress() {
@@ -111,7 +99,8 @@ export default function MachineSection({settings}: {settings?: Settings}) {
         <SettingsSection title="Machine">
             <SettingsChoiceRow
                 label="Your xBloom"
-                description="The two machines grind on different scales, so a recipe written for one is wrong on the other. Pick yours and the app asks xBloom for the right version. Recipes already saved keep the numbers they were written with."
+                description="Choose your model for matching imports. Grind scales differ. Saved recipes stay unchanged."
+                stacked
                 value={machineModel}
                 options={MACHINE_MODEL_OPTIONS}
                 onChange={(value) => {
@@ -191,24 +180,6 @@ export default function MachineSection({settings}: {settings?: Settings}) {
                 description="Off, BREW loads the recipe onto the machine and waits for you to press START. On, it starts grinding the moment the recipe lands."
                 value={autoStart}
                 onChange={setAutoStart}/>
-
-            <SettingsToggleRow
-                label="Animate the brew chart"
-                description="When off, each phase change holds its end state immediately. The system Reduced Motion switch also disables animation independently."
-                value={animateBrewChart}
-                onChange={setAnimateBrewChart}/>
-
-            <SettingsToggleRow
-                label="Ask how a brew was"
-                description={ratingPromptDescription}
-                value={askForRatings} onChange={setAskForRatings}/>
-
-            <SettingsChoiceRow
-                label="Keep raw brew traces"
-                description="How many past brews keep their full sample stream. Records are always kept; only the detail behind them expires."
-                value={String(brewTraceRetention)}
-                options={RETENTION_OPTIONS}
-                onChange={(v) => setBrewTraceRetention(Number(v))}/>
 
             {remembered !== "" && (
                 <SettingsActionRow label="Forget this machine" tone="danger"

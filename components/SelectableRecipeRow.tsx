@@ -6,6 +6,7 @@ import DotIcon from "@/components/DotIcon";
 import RecipeCard from "@/components/RecipeCard";
 import {onAccent, palette} from "@/constants/colors";
 import type Recipe from "@/library/Recipe";
+import type {SlotMarkerValue} from "@/library/slots/slotModel";
 
 /** The tick's diameter. A touch under the card's own corner radius. */
 const TICK_SIZE = 26;
@@ -38,18 +39,19 @@ const ROW_PADDING  = 6;
  * distrust.
  */
 export default function SelectableRecipeRow({
-    recipe, selected, onToggle, showCoffeeMarker, dottedProfile
+    recipe, selected, onToggle, showCoffeeMarker, dottedProfile, slotMarker
 }: {
     recipe: Recipe;
     selected: boolean;
     onToggle: () => void;
     showCoffeeMarker?: boolean;
     dottedProfile?: boolean;
+    slotMarker?: SlotMarkerValue;
 }) {
     return (
         <Pressable accessibilityRole="checkbox"
                    accessibilityState={{checked: selected}}
-                   accessibilityLabel={recipe.displayName()}
+                   accessibilityLabel={[recipe.displayName(), slotMarker?.label].filter(Boolean).join(", ")}
                    testID={`select-${recipe.uuid}`}
                    onPress={onToggle}>
             <XStack alignItems="center" maxWidth={600}
@@ -66,6 +68,7 @@ export default function SelectableRecipeRow({
                         opacity={selected ? 1 : 0.65}>
                     <RecipeCard recipe={recipe} onPress={onToggle}
                                 showCoffeeMarker={showCoffeeMarker}
+                                slotMarker={slotMarker}
                                 dottedProfile={dottedProfile}/>
                 </YStack>
 

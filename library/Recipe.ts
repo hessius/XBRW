@@ -5,6 +5,8 @@ import {httpsUrl, podCoffeeFromStored, podImageUrl, type PodCoffee} from "./podC
 import Pour, {AGITATION, POUR_PATTERN} from "./Pour";
 import {BYPASS_DEFAULT_TEMPERATURE, isUsableBypassTemp} from "./bypassLimits";
 import {tagKey} from "./tagKey";
+import {isOverflowProtection, type OverflowProtection} from "./brew/overflowConfig";
+import {normaliseCelsius} from "@/library/units";
 import uuid from 'react-native-uuid';
 
 /**
@@ -170,6 +172,8 @@ class Recipe {
     public backup: number[] = [];
     public offline_backup: number[] = [];
     public uid: number[] = [];
+    /** Opt-in retained-water protection for the Other dripper. Never reaches the card. */
+    public overflowProtection?: OverflowProtection;
     /** The name the user chose. Empty until they rename something. */
     public name: string = "";
     /**
@@ -317,6 +321,13 @@ class Recipe {
             if (this.cupType !== CUP_TYPE.TEA) {
                 this.defaultCups = 0; // only used for Tea
             }
+            if (jsonRecipe.overflowProtection !== undefined) {
+                if (!isOverflowProtection(jsonRecipe.overflowProtection)) {
+                    throw new Error('Invalid dripper overflow protection configuration.');
+                }
+                const {retainedGrams, checkSeconds} = jsonRecipe.overflowProtection;
+                this.overflowProtection = {retainedGrams, checkSeconds};
+            }
             this.grinder = jsonRecipe.grinder ?? true;
             this.backup = jsonRecipe.backup ?? [];
             this.offline_backup = jsonRecipe.offline_backup ?? [];
@@ -333,7 +344,7 @@ class Recipe {
                 let p = new Pour(
                     (pour.pourNumber),
                     pour.volume,
-                    pour.temperature,
+                    normaliseCelsius(pour.temperature),
                     pour.flowRate,
                     pour.agitation,
                     pour.pourPattern,
@@ -415,7 +426,7 @@ class Recipe {
             // sentinel that survived here would still be drawn in the bypass
             // box, shared in a link, and handed to every other reader.
             this.bypassTemp    = isUsableBypassTemp(jsonRecipe.bypassTemp)
-                ? jsonRecipe.bypassTemp!
+                ? normaliseCelsius(jsonRecipe.bypassTemp!)
                 : BYPASS_DEFAULT_TEMPERATURE;
         }
 

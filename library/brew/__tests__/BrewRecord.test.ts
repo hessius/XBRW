@@ -9,6 +9,16 @@ function samples(rows: [number, number, number][]): BrewSample[] {
 }
 
 describe("summarise", () => {
+    it("subtracts only interval overlap on the sample clock, not the pause total twice", () => {
+        const stream = samples([[0, 0, 0], [134_000, 250, 244]]);
+        expect(summarise(stream, 120, 29, [
+            {from: 0, to: 0, pour: 0, reason: "manual"},
+            {from: 1000, to: 10_000, pour: 1, reason: "overflow"},
+            {from: 134_000, to: 154_000, pour: 1, reason: "manual"}
+        ])).toEqual({waterTotal: 250, cupTotal: 244, heldSeconds: 5, pausedSeconds: 29});
+        expect(summarise(stream, 120, 29, []).heldSeconds).toBe(14);
+    });
+
     it("reports the last water and cup figures, not the largest", () => {
         // The cup can lose weight: a drip settles, or the machine is nudged.
         // The record is what the brew ended at.
@@ -35,7 +45,23 @@ describe("summarise", () => {
 
     it("summarises an empty stream as zeroes rather than throwing", () => {
         // A brew that fails during `sending` has a record and no samples.
-        expect(summarise([], 120)).toEqual({waterTotal: 0, cupTotal: 0, heldSeconds: 0});
+        expect(summarise([], 120)).toEqual({waterTotal: 0, cupTotal: 0, heldSeconds: 0, pausedSeconds: 0});
+    });
+
+    it("does not count a pause as the machine holding water back", () => {
+        // Held time is not measured, it is `elapsed - planned`. So a pause
+        // lands in it on its own, without anybody writing a line of code, and
+        // the brew reports the machine holding water it never held. 134 s on a
+        // 120 s plan is 14 s over, and 14 of those were a person pressing
+        // PAUSE.
+        expect(summarise(samples([[0, 0, 0], [134_000, 250, 244]]), 120, 14).heldSeconds).toBe(0);
+    });
+
+    it("keeps the paused seconds rather than only subtracting them", () => {
+        // Whose decision made this brew long is the only question worth asking
+        // of the pair, and it cannot be answered from held time alone.
+        expect(summarise(samples([[0, 0, 0], [134_000, 250, 244]]), 120, 9))
+            .toEqual({waterTotal: 250, cupTotal: 244, heldSeconds: 5, pausedSeconds: 9});
     });
 });
 

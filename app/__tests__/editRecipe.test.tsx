@@ -3,7 +3,8 @@ import {Share, StyleSheet, TextInput} from "react-native";
 import {act, fireEvent, screen, waitFor, within} from "@testing-library/react-native";
 
 import EditRecipe, {PROFILE_HEIGHT, stageScrollTarget} from "@/app/editRecipe";
-import {renderWithProviders} from "@/test-utils/render";
+import {renderWithProviders, SHEET_PRESS_TIMEOUT} from "@/test-utils/render";
+import {sharedSlotDatabase} from "@/hooks/useEasyModeSlots";
 
 import Pour, {POUR_PATTERN} from "@/library/Pour";
 import Recipe, {CUP_TYPE} from "@/library/Recipe";
@@ -37,6 +38,9 @@ jest.mock("expo-router", () => ({
 }));
 
 jest.mock("@/library/RecipeDatabase");
+jest.mock("expo-sqlite", () => ({
+    openDatabaseSync: () => jest.requireActual("@/test-utils/sqlite").createTestDatabase()
+}));
 
 // How a recipe has gone comes from the brew database, which is SQLite and has
 // no business being opened by a test of the editor. The hook is stubbed rather
@@ -48,6 +52,7 @@ let mockBrewSummary = {
     timed: 0, meanBrewSeconds: 0, measured: 0, meanCupMl: 0, abandoned: 0, lastDial: null
 };
 const mockRate = jest.fn();
+const mockRecipeRatingInput = jest.fn();
 const mockRefreshBeanProfile = jest.fn();
 let mockBeanProfile: BeanProfile = {
     rows: [],
@@ -56,7 +61,10 @@ let mockBeanProfile: BeanProfile = {
 };
 jest.mock("@/hooks/useBrewHistory", () => ({
     ...jest.requireActual("@/hooks/useBrewHistory"),
-    useRecipeRating: () => ({summary: mockBrewSummary, rate: mockRate}),
+    useRecipeRating: (recipe: unknown) => {
+        mockRecipeRatingInput(recipe);
+        return {summary: mockBrewSummary, rate: mockRate};
+    },
     useBeanProfile: () => ({profile: mockBeanProfile, refresh: mockRefreshBeanProfile})
 }));
 
@@ -180,6 +188,7 @@ beforeEach(() => {
     mockPush.mockClear();
     mockNotify.mockClear();
     mockRefreshBeanProfile.mockClear();
+    mockRecipeRatingInput.mockClear();
     mockBeanProfile = {
         rows: [],
         untagged: {brews: 0, rated: 0, avgRating: 0},
@@ -224,6 +233,20 @@ async function renderEditor(overrides: Partial<Recipe> = {}) {
 async function openAbout(): Promise<void> {
     await fireEvent.press(screen.getByLabelText("About this recipe"));
 }
+
+it("opens Easy Mode with the editor's current recipe through the recipe menu", async () => {
+    const deviceId = "slot-device";
+    mockSettings = {machineDeviceId: deviceId};
+    await renderEditor({name: "Current slot recipe"});
+    await fireEvent.press(screen.getByLabelText("More"));
+    await waitFor(async () => {
+        if (mockPush.mock.calls.length === 0) {
+            await fireEvent.press(screen.getByRole("button", {name: "Assign to Easy Mode"}));
+        }
+        expect(mockPush).toHaveBeenCalledWith({pathname: "/easyMode"});
+    }, {timeout: SHEET_PRESS_TIMEOUT});
+    expect(sharedSlotDatabase().read(deviceId).drafts[0]?.name).toBe("Current slot recipe");
+});
 
 async function openTheQuickEditPanel(): Promise<void> {
     mockSettings = {machineDeviceId: "AA:BB:CC:DD:EE:FF"};
@@ -275,6 +298,16 @@ function fillsWithin(element: unknown): string[] {
 }
 
 describe("the editor", () => {
+    it.each([
+        [CUP_TYPE.TEA, "tea"],
+        [CUP_TYPE.XPOD, "coffee"]
+    ])("passes beverage identity to recipe ratings for cup type %s", async (cupType, beverageKind) => {
+        await renderEditor({cupType});
+        expect(mockRecipeRatingInput).toHaveBeenLastCalledWith(
+            expect.objectContaining({beverageKind})
+        );
+    });
+
     it("opens on the recipe, not on a form", async () => {
         await renderEditor();
 
@@ -1499,16 +1532,27 @@ describe("grind-too-fine banner", () => {
         expect(screen.queryByTestId("grind-too-fine")).toBeNull();
     });
 
-    it("does not let the stepper raise a below-minimum grind through Decrease", async () => {
-        // With a fixed floor of 40, `stepped()` clamped 11 *up* to 40, so the
-        // control announced as Decrease raised the value -- and the stepper
-        // advertised a minimum of 40 while reporting 12.
+    it("allows decreasing a BLE grind below the card minimum", async () => {
         await renderEditor({grindSize: 12});
 
         await fireEvent.press(screen.getByLabelText("Decrease Grind size"));
 
-        expect(screen.getByLabelText(/^Grind size, 12/)).toBeTruthy();
+        expect(screen.getByLabelText(/^Grind size, 11/)).toBeTruthy();
         expect(screen.getByTestId("grind-too-fine")).toBeTruthy();
+    });
+
+    it("lets a card-range recipe cross into the BLE-only grind range", async () => {
+        await renderEditor({grindSize: 40});
+        await fireEvent.press(screen.getByLabelText("Decrease Grind size"));
+        expect(screen.getByLabelText(/^Grind size, 39/)).toBeTruthy();
+        expect(screen.getByTestId("grind-too-fine")).toBeTruthy();
+        expect(screen.queryByTestId("range-problems")).toBeNull();
+    });
+
+    it("stops the grind stepper at the BLE minimum", async () => {
+        await renderEditor({grindSize: 1});
+        await fireEvent.press(screen.getByLabelText("Decrease Grind size"));
+        expect(screen.getByLabelText(/^Grind size, 1 /)).toBeTruthy();
     });
 
     it("speaks the band with the value, because the label is only visual", async () => {
@@ -1622,5 +1666,95 @@ describe("the action bar", () => {
             .toBe(true);
         expect(screen.getByText(/can still be saved and brewed over Bluetooth/i))
             .toBeTruthy();
+    });
+});
+
+describe("custom overflow protection", () => {
+    const LIMIT = "Retained-water limit in grams";
+    const config = {retainedGrams: 70, checkSeconds: 30 as const};
+
+    it("is not offered on Omni or any dripper but Other", async () => {
+        await renderEditor({cupType: CUP_TYPE.OMNI});
+
+        expect(screen.queryByLabelText(LIMIT)).toBeNull();
+        expect(screen.queryByText(/Keep XBRW\+\+ open/)).toBeNull();
+    });
+
+    it("sits right after the brewer choice, empty, with no caution until configured", async () => {
+        await renderEditor({cupType: CUP_TYPE.OTHER});
+
+        expect(screen.getByLabelText(LIMIT).props.value).toBe("");
+        expect(screen.queryByText(/Keep XBRW\+\+ open/)).toBeNull();
+        const rows = screen.getByTestId("brew-deck").children
+            .filter((child) => typeof child !== "string");
+        const holds = (testID?: string, text?: string) => rows.findIndex((row) =>
+            testID !== undefined
+                ? row.props.testID === testID || within(row).queryByTestId(testID) !== null
+                : within(row).queryByText(text!) !== null);
+        expect(holds("overflow-section")).toBe(holds(undefined, "Brewer") + 1);
+    });
+
+    it("configures from the field, shows the caution, and brews with the config at no extra step", async () => {
+        mockSettings = {machineDeviceId: "AA:BB:CC:DD:EE:FF"};
+        await renderEditor({cupType: CUP_TYPE.OTHER});
+
+        await fireEvent.changeText(screen.getByLabelText(LIMIT), "70");
+        await fireEvent.press(screen.getByLabelText("30 S"));
+        expect(screen.getByText(/Keep XBRW\+\+ open/)).toBeOnTheScreen();
+
+        await fireEvent.press(screen.getByLabelText("Brew"));
+
+        expect(mockPush).toHaveBeenCalledTimes(1);
+        const params = mockPush.mock.calls[0][0].params;
+        expect(JSON.parse(params.recipeJSON).overflowProtection).toEqual(config);
+    });
+
+    it("keeps an existing config, hidden, when the brewer changes, and shows it on return", async () => {
+        mockSettings = {machineDeviceId: "AA:BB:CC:DD:EE:FF"};
+        await renderEditor({cupType: CUP_TYPE.OTHER, overflowProtection: config});
+        expect(screen.getByLabelText(LIMIT).props.value).toBe("70");
+
+        await fireEvent.press(screen.getByLabelText("OMNI"));
+        expect(screen.queryByLabelText(LIMIT)).toBeNull();
+
+        await fireEvent.press(screen.getByLabelText("OTHER"));
+        expect(screen.getByLabelText(LIMIT).props.value).toBe("70");
+        expect(screen.getByLabelText("30 S")).toBeChecked();
+    });
+
+    it("an invalid entry disables the stored config instead of leaving it armed behind the text", async () => {
+        mockSettings = {machineDeviceId: "AA:BB:CC:DD:EE:FF"};
+        await renderEditor({cupType: CUP_TYPE.OTHER, overflowProtection: config});
+
+        await fireEvent.changeText(screen.getByLabelText(LIMIT), "7x");
+        await fireEvent.press(screen.getByLabelText("Brew"));
+
+        expect(screen.getByText("Enter a whole number of grams above 0.")).toBeOnTheScreen();
+        expect(JSON.parse(mockPush.mock.calls[0][0].params.recipeJSON))
+            .not.toHaveProperty("overflowProtection");
+    });
+
+    it("turning it off removes the config from the recipe that brews", async () => {
+        mockSettings = {machineDeviceId: "AA:BB:CC:DD:EE:FF"};
+        await renderEditor({cupType: CUP_TYPE.OTHER, overflowProtection: config});
+
+        await fireEvent.press(screen.getByLabelText("Turn off overflow protection"));
+        await fireEvent.press(screen.getByLabelText("Brew"));
+
+        expect(JSON.parse(mockPush.mock.calls[0][0].params.recipeJSON))
+            .not.toHaveProperty("overflowProtection");
+    });
+
+    it("a quick edit brew carries the saved config with the adjustments", async () => {
+        mockSettings = {machineDeviceId: "AA:BB:CC:DD:EE:FF"};
+        await renderEditor({cupType: CUP_TYPE.OTHER, overflowProtection: config});
+
+        await fireEvent.press(screen.getByLabelText("Quick edit brew"));
+        await fireEvent.press(screen.getByLabelText("Increase Quick edit dose"));
+        await fireEvent.press(screen.getByLabelText("Brew"));
+
+        const params = mockPush.mock.calls[0][0].params;
+        expect(params.quickEditAdjustments).toBeDefined();
+        expect(JSON.parse(params.recipeJSON).overflowProtection).toEqual(config);
     });
 });

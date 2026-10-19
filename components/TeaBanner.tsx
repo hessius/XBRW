@@ -24,8 +24,8 @@ export default function TeaBanner({accent}: {accent: string}) {
                 <Text testID="tea-banner-body" fontSize={12} lineHeight={17}
                       color={palette.dim}>
                     Tea stages are capped at 90 ml each and the grinder is not used.
-                    The siphon draws roughly 30 ml more than the recipe asks for, so
-                    a cup finishes fuller than the numbers here.
+                    A tea cycle may dispense water after the programmed fill; the
+                    brew view keeps that separate from the fill target.
                 </Text>
             </YStack>
         </XStack>

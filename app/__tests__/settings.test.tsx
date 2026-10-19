@@ -8,7 +8,7 @@ import {SUPPORT_TITLE} from "@/components/SupportTile";
 import {palette} from "@/constants/colors";
 import Recipe from "@/library/Recipe";
 import {DEFAULTS, NOT_IN_BACKUP, Settings, type SettingKey, type SettingsStorage} from "@/library/Settings";
-import {renderWithProviders} from "@/test-utils/render";
+import {renderWithProviders, SHEET_PRESS_TIMEOUT} from "@/test-utils/render";
 
 /**
  * The rendered text of a `toJSON()` tree, in document order.
@@ -203,6 +203,24 @@ describe("SettingsScreen", () => {
         mockBrewStore.restore.mockReturnValue(0);
     });
 
+    it("groups app brew preferences separately and preserves their settings", async () => {
+        const settings = new Settings(memoryStorage());
+        const rendered = await renderWithProviders(<SettingsScreen settings={settings}/>);
+        const order = renderOrder(rendered.toJSON());
+        const brewing = order.indexOf("BREWING");
+        expect(brewing).toBeGreaterThan(order.indexOf("MACHINE"));
+        for (const label of ["Animate the brew chart", "Ask how a brew was", "Brew detail storage"]) {
+            expect(order.indexOf(label)).toBeGreaterThan(brewing);
+            expect(order.indexOf(label)).toBeLessThan(order.indexOf("XBLOOM ACCOUNT"));
+        }
+        await fireEvent.press(screen.getByRole("switch", {name: "Animate the brew chart"}));
+        expect(settings.get("animateBrewChart")).toBe(false);
+        await fireEvent.press(screen.getByRole("switch", {name: "Ask how a brew was"}));
+        expect(settings.get("askForRatings")).toBe(false);
+        await fireEvent.press(screen.getByRole("radio", {name: "50 MB"}));
+        expect(settings.get("brewTraceBudgetMB")).toBe(50);
+    });
+
     it("shows the coffee marker toggle in its stored state", async () => {
         const settings = new Settings(memoryStorage());
         settings.set("showCoffeeMarker", false);
@@ -364,6 +382,8 @@ describe("SettingsScreen", () => {
         // silently absent from every backup while the tests stayed green. A
         // test that names the keys itself would have gone on passing too.
         const snapshot = mockExportBackup.mock.calls[0][1] as Record<string, unknown>;
+        expect(snapshot.brewTraceBudgetMB).toBe(10);
+        expect(snapshot).not.toHaveProperty("brewTraceRetention");
         expect(Object.keys(snapshot).sort()).toEqual(
             Object.keys(DEFAULTS).filter(key => !NOT_IN_BACKUP.includes(key as SettingKey)).sort()
         );
@@ -424,6 +444,47 @@ describe("SettingsScreen", () => {
         await fireEvent.press(screen.getByRole("button", {name: /add to my library/i}));
 
         expect(new Settings(storage).get("machineDeviceId")).toBe("mine");
+    });
+
+    it("shows the brew detail storage budget and stores a choice of 25 MB", async () => {
+        const settings = new Settings(memoryStorage());
+        await renderWithProviders(<SettingsScreen settings={settings}/>);
+        expect(screen.getByText("Brew detail storage")).toBeTruthy();
+        expect(screen.getByText("Brew traces are the detailed charts. When they pass this limit, the oldest are dropped first. Rated and noted brews, and the newest brews of each recipe, go last. Summaries are always kept.")).toBeTruthy();
+        expect(screen.getByRole("radio", {name: "10 MB", checked: true})).toBeTruthy();
+        expect(screen.getByRole("radio", {name: "50 MB"})).toBeTruthy();
+        expect(screen.getByRole("radio", {name: "Unlimited"})).toBeTruthy();
+        await fireEvent.press(screen.getByRole("radio", {name: "25 MB"}));
+        expect(settings.get("brewTraceBudgetMB")).toBe(25);
+    });
+
+    it.each([
+        [{brewTraceRetention: 200}, 25],
+        [{brewTraceBudgetMB: 50}, 50],
+        [{brewTraceBudgetMB: 10}, 10],
+        [{brewTraceBudgetMB: 25}, 25],
+        [{brewTraceBudgetMB: 0}, 0],
+        [{brewTraceBudgetMB: 200}, 25],
+        [{brewTraceBudgetMB: -1}, 25],
+        [{brewTraceBudgetMB: 10.5}, 25],
+        [{brewTraceBudgetMB: "50"}, 25],
+        [{brewTraceBudgetMB: null}, 25]
+    ])("restores only supported brew storage budgets from %j", async (incoming, expected) => {
+        const storage = memoryStorage();
+        const settings = new Settings(storage);
+        settings.set("brewTraceBudgetMB", 25);
+        mockPickBackup.mockResolvedValue(backupOf([recipeNamed("A", "u1")], incoming));
+        mockApplyRestore.mockReturnValue({status: "restored", added: 1});
+        await renderWithProviders(<SettingsScreen settings={settings}/>);
+        await fireEvent.press(screen.getByRole("button",
+            {name: "Restore from a backup, Adds anything your library does not already have."}));
+        await waitFor(async () => {
+            await fireEvent(screen.getByLabelText(/settings from this backup/i), "checkedChange", true);
+            await fireEvent.press(screen.getByRole("button", {name: /add to my library/i}));
+            expect(mockApplyRestore).toHaveBeenCalled();
+        }, {timeout: SHEET_PRESS_TIMEOUT});
+        expect(new Settings(storage).get("brewTraceBudgetMB")).toBe(expected);
+        expect(mockNotify).not.toHaveBeenCalledWith(expect.objectContaining({tone: "error"}));
     });
 
     it("restores every setting a backup carries, not a subset of them", async () => {
@@ -508,6 +569,46 @@ describe("SettingsScreen", () => {
         expect(mockNotify).toHaveBeenCalledWith(
             expect.objectContaining({tone: "success", message: "2 recipes restored"})
         );
+    });
+
+    it.each([
+        {brewHistorySort: "grind", brewHistorySortDirection: "asc"},
+        {brewHistorySort: "supernova", brewHistorySortDirection: "sideways"},
+        {brewHistorySort: "rating", brewHistorySortDirection: "sideways"},
+        {brewHistorySort: "supernova", brewHistorySortDirection: "asc"},
+        {}
+    ])("restores only valid history preferences from %j", async (incoming) => {
+        const storage = memoryStorage();
+        const settings = new Settings(storage);
+        settings.set("brewHistorySort", "dose");
+        settings.set("brewHistorySortDirection", "desc");
+        mockPickBackup.mockResolvedValue(backupOf([recipeNamed("A", "u1")], incoming));
+        mockApplyRestore.mockReturnValue({status: "restored", added: 1});
+        await renderWithProviders(<SettingsScreen settings={settings}/>);
+        await fireEvent.press(screen.getByRole("button",
+            {name: "Restore from a backup, Adds anything your library does not already have."}));
+        await waitFor(async () => {
+            await fireEvent(screen.getByLabelText(/settings from this backup/i), "checkedChange", true);
+            await fireEvent.press(screen.getByRole("button", {name: /add to my library/i}));
+            expect(mockApplyRestore).toHaveBeenCalled();
+        }, {timeout: SHEET_PRESS_TIMEOUT});
+        const restored = new Settings(storage);
+        expect(restored.get("brewHistorySort")).toBe(
+            incoming.brewHistorySort === "grind" || incoming.brewHistorySort === "rating"
+                ? incoming.brewHistorySort : "dose");
+        expect(restored.get("brewHistorySortDirection")).toBe(incoming.brewHistorySortDirection === "asc" ? "asc" : "desc");
+    });
+
+    it("includes history preferences in the typed settings snapshot", async () => {
+        const settings = new Settings(memoryStorage());
+        settings.set("brewHistorySort", "rating");
+        settings.set("brewHistorySortDirection", "asc");
+        mockExportBackup.mockResolvedValue({ok: true});
+        await renderWithProviders(<SettingsScreen settings={settings}/>);
+        await fireEvent.press(screen.getByRole("button", {name: /back up my recipes/i}));
+        expect(mockExportBackup).toHaveBeenCalledWith(expect.anything(),
+            expect.objectContaining({brewHistorySort: "rating", brewHistorySortDirection: "asc"}),
+            expect.any(String), expect.any(Array));
     });
 
     it("restores a library sorted by rating", async () => {
@@ -935,11 +1036,11 @@ describe("SettingsScreen", () => {
         expect(mockPush).toHaveBeenCalledWith("/importCloud");
     });
 
-    it("offers a retention choice, including keeping none", async () => {
+    it("offers a storage budget choice, including Unlimited", async () => {
         const {getByText} = await renderWithProviders(
             <SettingsScreen settings={new Settings(memoryStorage())}/>
         );
-        expect(getByText("Don't keep traces")).toBeTruthy();
+        expect(getByText("Unlimited")).toBeTruthy();
     });
 
     describe("Labs", () => {
@@ -959,9 +1060,24 @@ describe("SettingsScreen", () => {
         });
 
         it("hides Labs until somebody has gone looking for it", async () => {
-            await renderWithProviders(<SettingsScreen settings={new Settings(memoryStorage())}/>);
+            const settings = new Settings(memoryStorage());
+            settings.set("machineConsoleAcknowledged", true);
+            await renderWithProviders(<SettingsScreen settings={settings}/>);
 
             expect(screen.queryByText("LABS")).toBeNull();
+            expect(screen.queryByText("CARD DIAGNOSTICS")).toBeNull();
+            expect(screen.queryByRole("button", {name: /^Machine console/})).toBeNull();
+        });
+
+        it("offers card diagnostics and the guarded console from Labs", async () => {
+            const settings = new Settings(memoryStorage());
+            settings.set("labsUnlocked", true);
+            const rendered = await renderWithProviders(<SettingsScreen settings={settings}/>);
+            const order = renderOrder(rendered.toJSON());
+            expect(order.indexOf("CARD DIAGNOSTICS")).toBeGreaterThan(order.indexOf("LABS"));
+            await fireEvent.press(screen.getByRole("button", {name: /^Machine console/}));
+            expect(mockPush).toHaveBeenCalledWith("/machine");
+            expect(settings.get("machineConsoleAcknowledged")).toBe(false);
         });
 
         it("offers a way back out once Labs is open", async () => {
@@ -1005,6 +1121,7 @@ describe("SettingsScreen", () => {
 
             expect(settings.get("labsUnlocked")).toBe(false);
             expect(screen.queryByText("LABS")).toBeNull();
+            expect(screen.queryByText("CARD DIAGNOSTICS")).toBeNull();
             // The section closing does not take the rest of the screen with it.
             expect(screen.getByText("XBLOOM ACCOUNT")).toBeTruthy();
         });

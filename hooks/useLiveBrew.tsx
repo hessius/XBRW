@@ -3,7 +3,9 @@ import React, {createContext, useContext, useRef, useState} from "react";
 import {OVER} from "@/constants/brewCopy";
 import {useBrewRun} from "@/hooks/useBrewRun";
 import type {BrewStore} from "@/hooks/useBrewRun";
-import type {BrewRecord, BrewSample} from "@/library/brew/BrewRecord";
+import type {BrewRecord, BrewSample, TeaCycleObservation} from "@/library/brew/BrewRecord";
+import type {OverflowSnapshot} from "@/library/brew/OverflowController";
+import type {PauseInterval} from "@/library/brew/pauseIntervals";
 import type {Stall} from "@/library/brew/stalls";
 import type {BrewPhase} from "@/library/machine/Machine";
 import type {BypassView} from "@/library/brew/bypassState";
@@ -30,6 +32,24 @@ export type LiveBrewSnapshot = {
     bypass?: BypassView;
     /** The row the recorder wrote for a finished brew. */
     record?: BrewRecord;
+    /** Tea cycle boundaries, published on the recorder's live cadence. */
+    teaCycles?: TeaCycleObservation[];
+    /** Live sample-clock time, used only for tea observation timers. */
+    teaNow?: number;
+    overflow?: OverflowSnapshot;
+    /** Epoch ms the owner last published `overflow` at; drives its countdown. */
+    overflowNow?: number;
+    pauseIntervals?: PauseInterval[];
+    /**
+     * When this attempt began, stamped by the provider the moment `start`
+     * registers it. Read by a "Copy diagnostic log" press to scope the log
+     * to this attempt rather than the whole session — including when the
+     * screen is reopened from the mini bar (`view=1`) rather than having
+     * started the run itself, which is why this lives on the shared run
+     * rather than as a ref local to the brew screen.
+     */
+    startedAt: number;
+    quickEdit?: QuickEditRecordAdjustments;
 };
 
 type LiveBrew = {
@@ -70,6 +90,8 @@ type LiveBrew = {
     /** Command the machine to brew this recipe.  Only meaningful after `start`. */
     brew: (recipe: Recipe) => Promise<void>;
     startBrew: () => Promise<void>;
+    pauseBrew: () => Promise<void>;
+    resumeBrew: () => Promise<void>;
     cancelBrew: () => Promise<void>;
     canOfferProMode: () => boolean;
     switchToProAndRetry: (recipe: Recipe) => Promise<void>;
@@ -101,6 +123,8 @@ const defaultValue: LiveBrew = {
     watch: () => () => {},
     brew: noop,
     startBrew: noop,
+    pauseBrew: noop,
+    resumeBrew: noop,
     cancelBrew: noop,
     canOfferProMode: () => false,
     switchToProAndRetry: noop,
@@ -128,8 +152,9 @@ export function LiveBrewProvider({children, store}: {
     // `runId` is bumped for every run so a second brew starts from nothing
     // rather than inheriting the last one's samples and spent recorder.
     const [current, setCurrent] = useState<
-        {recipe: Recipe | null; runId: number; pro: boolean; quickEdit?: QuickEditRecordAdjustments}
-    >({recipe: null, runId: 0, pro: false});
+        {recipe: Recipe | null; runId: number; pro: boolean;
+         quickEdit?: QuickEditRecordAdjustments; startedAt: number}
+    >({recipe: null, runId: 0, pro: false, startedAt: 0});
     const [ratingNoteOpen, setRatingNoteOpen] = useState(false);
 
     function begin(
@@ -137,23 +162,25 @@ export function LiveBrewProvider({children, store}: {
         pro: boolean = false,
         quickEdit?: QuickEditRecordAdjustments
     ): void {
-        setCurrent((was) => ({recipe, runId: was.runId + 1, pro, quickEdit}));
+        setCurrent((was) => ({recipe, runId: was.runId + 1, pro, quickEdit, startedAt: Date.now()}));
     }
 
     // One element, always, wrapping `children`. `children` here is the whole
     // navigator: swapping the component above it — or re-keying it for a new
     // run, which is what this used to do — unmounts and remounts every screen
     // in the app, so starting a brew would throw away the navigation stack it
-    // was started from.
+    // was started from. Dismiss retires the generation too, disposing its
+    // controller even if nobody starts another brew.
     return (
         <RunOwner
             recipe={current.recipe}
             runId={current.runId}
             pro={current.pro}
             quickEdit={current.quickEdit}
+            startedAt={current.startedAt}
             store={store}
             onStart={begin}
-            onDismiss={() => setCurrent((was) => ({...was, recipe: null}))}
+            onDismiss={() => setCurrent((was) => ({...was, recipe: null, runId: was.runId + 1}))}
             ratingNoteOpen={ratingNoteOpen}
             setRatingNoteOpen={setRatingNoteOpen}
         >
@@ -169,13 +196,14 @@ export function LiveBrewProvider({children, store}: {
  * shape of the tree never depends on whether a brew is running.
  */
 function RunOwner({
-    recipe, runId, pro, quickEdit, store, onStart, onDismiss, ratingNoteOpen,
+    recipe, runId, pro, quickEdit, startedAt, store, onStart, onDismiss, ratingNoteOpen,
     setRatingNoteOpen, children
 }: {
     recipe: Recipe | null;
     runId: number;
     pro: boolean;
     quickEdit?: QuickEditRecordAdjustments;
+    startedAt: number;
     store?: BrewStore;
     onStart: (recipe: Recipe, pro?: boolean, quickEdit?: QuickEditRecordAdjustments) => void;
     onDismiss: () => void;
@@ -186,7 +214,9 @@ function RunOwner({
     const result = useBrewRun(recipe, store, runId, quickEdit);
     const {phase, error, samples, elapsed, stageElapsed, activeIndex, holding,
            heldSeconds, stalls, stageWater, pauseElapsed, brew, startBrew,
-           cancelBrew, canOfferProMode, switchToProAndRetry, bypass, record} = result;
+           pauseBrew, resumeBrew,
+           cancelBrew, canOfferProMode, switchToProAndRetry, bypass, record,
+           overflow, overflowNow, pauseIntervals, teaCycles, teaNow} = result;
 
     // Command the machine exactly once, on the first mount of this RunOwner.
     // How many screens are showing this run in full. A count rather than a
@@ -222,7 +252,8 @@ function RunOwner({
 
     const snapshot: LiveBrewSnapshot | null = recipe === null ? null : {
         recipe, samples, elapsed, stageElapsed, activeIndex, phase,
-        holding, heldSeconds, stalls, stageWater, pauseElapsed, bypass, record,
+        holding, heldSeconds, stalls, stageWater, pauseElapsed, bypass, record, startedAt, quickEdit,
+        overflow, overflowNow, pauseIntervals, teaCycles, teaNow,
     };
     const quickEditFor = (
         next: Recipe,
@@ -266,7 +297,8 @@ function RunOwner({
                     setWatchers((n) => n - 1);
                 };
             },
-            brew, startBrew, cancelBrew, canOfferProMode, switchToProAndRetry, error,
+            brew, startBrew, pauseBrew, resumeBrew, cancelBrew, canOfferProMode,
+            switchToProAndRetry, error,
         }}>
             {children}
         </Context.Provider>

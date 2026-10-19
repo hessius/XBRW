@@ -6,9 +6,11 @@ import DigitRoll from "@/components/DigitRoll";
 import DotIcon from "@/components/DotIcon";
 import DotMatrixText, {DOTO_MAX_FONT_SCALE} from "@/components/DotMatrixText";
 import PourProfile, {PROFILE_BLEED} from "@/components/PourProfile";
+import SlotMarker from "@/components/SlotMarker";
 import Recipe from "@/library/Recipe";
 import {evidenceLine, isSet, spokenEvidence} from "@/library/recipeEvidence";
 import type {RecipeEvidence} from "@/library/libraryQuery";
+import type {SlotMarkerValue} from "@/library/slots/slotModel";
 import {accentGroupFor, resolveAccent} from "@/library/accent";
 import {canWriteToCard} from "@/library/cardLimits";
 import {onAccent, palette} from "@/constants/colors";
@@ -172,6 +174,8 @@ type Props = {
      * either.
      */
     evidence?: RecipeEvidence;
+    slotMarker?: SlotMarkerValue;
+    onEasyMode?: () => void;
 };
 
 /**
@@ -196,7 +200,9 @@ export default function RecipeCard({
     onWrite,
     onToggleFavourite,
     onLongPress,
-    onHistory
+    onHistory,
+    slotMarker,
+    onEasyMode
 }: Props) {
     const accent = resolveAccent(recipe);
     const isTea = accentGroupFor(recipe) === "tea";
@@ -216,6 +222,7 @@ export default function RecipeCard({
         hasNote ? recipe.description : undefined,
         marker.toLowerCase(),
         recipe.favourite ? "starred" : undefined,
+        slotMarker?.label,
         isSet(recipe.dosage) ? `${recipe.dosage} grams` : undefined,
         isSet(recipe.ratio) ? `ratio 1 to ${recipe.ratio}` : undefined,
         !isTea && !recipe.grinder ? "grinder off" : undefined,
@@ -238,6 +245,8 @@ export default function RecipeCard({
     // tile behind a pan gesture, so removing this action would leave screen
     // reader users with no path to brew from the library.
     const actions = [
+        ...(onEasyMode !== undefined
+            ? [{name: "easyMode", label: "Assign to Easy Mode"}] : []),
         ...(onDuplicate !== undefined
             ? [{name: "duplicate", label: "Duplicate recipe"}]
             : []),
@@ -301,7 +310,9 @@ export default function RecipeCard({
             onPress={onPress}
             onLongPress={onLongPress}
             onAccessibilityAction={(event) => {
-                if (event.nativeEvent.actionName === "duplicate") {
+                if (event.nativeEvent.actionName === "easyMode") {
+                    onEasyMode?.();
+                } else if (event.nativeEvent.actionName === "duplicate") {
                     onDuplicate?.();
                 } else if (event.nativeEvent.actionName === "delete") {
                     onDelete?.();
@@ -388,21 +399,15 @@ export default function RecipeCard({
                             </Text>
                         )}
                     </YStack>
-                    <XStack alignItems="center" gap="$1.5">
+                    <XStack testID="recipe-card-badges" alignItems="center" gap="$1.5">
                         {/* The card's badge corner: the star joins the marker
                             rather than the stats row, so the numbers keep their
-                            full width for the library view to build on. It leads
-                            the cluster, pushing the marker left.
-
-                            It is the only badge here now. A small X used to
-                            trail the marker on a recipe no card can hold, and
-                            it read as a dismiss button; that refusal has moved
-                            onto the WRITE tile in the swipe tray, which is the
-                            control it actually refuses.
+                            full width for the library view to build on.
 
                             Hidden from accessibility on purpose: the word is
                             already in the card's own label above, and announcing
                             it twice is worse than not at all. */}
+                        <SlotMarker marker={slotMarker}/>
                         {recipe.favourite && (
                             <DotIcon testID="recipe-card-favourite" name="favourite"
                                      size={12} color={onAccent.marker}/>

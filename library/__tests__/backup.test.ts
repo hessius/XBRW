@@ -42,6 +42,14 @@ describe("buildBackup", () => {
 });
 
 describe("the round trip", () => {
+    it.each([0, 10, 25, 50])("preserves the brew trace storage budget of %i MB", (budgetMB) => {
+        const result = parseBackup(buildBackup([recipeNamed("A", "u1")], {brewTraceBudgetMB: budgetMB}));
+        expect(result.ok).toBe(true);
+        if (!result.ok) throw new Error(result.reason);
+        expect(result.payload.settings.brewTraceBudgetMB).toBe(budgetMB);
+        expect(result.payload.settings).not.toHaveProperty("brewTraceRetention");
+    });
+
     it("gives back the recipes that went in", () => {
         const recipes = [recipeNamed("Morning", "u1"), recipeNamed("Evening", "u2")];
         const result = parseBackup(buildBackup(recipes, {}));
@@ -682,6 +690,26 @@ describe("authored fields through backup", () => {
 });
 
 describe("every setting is carried or deliberately excluded", () => {
+    it("round-trips history ordering but never invents preferences in older backups", () => {
+        expect(DEFAULTS.brewHistorySort).toBe("date");
+        expect(DEFAULTS.brewHistorySortDirection).toBe("desc");
+        expect(NOT_IN_BACKUP).not.toContain("brewHistorySort");
+        expect(NOT_IN_BACKUP).not.toContain("brewHistorySortDirection");
+        const parsed = parseBackup(buildBackup([recipeNamed("A", "u1")], {
+            brewHistorySort: "grind", brewHistorySortDirection: "asc"
+        }));
+        expect(parsed.ok).toBe(true);
+        if (!parsed.ok) throw new Error(parsed.reason);
+        expect(parsed.payload.settings).toEqual({
+            brewHistorySort: "grind", brewHistorySortDirection: "asc"
+        });
+        const old = parseBackup(buildBackup([recipeNamed("A", "u1")], {}));
+        expect(old.ok).toBe(true);
+        if (!old.ok) throw new Error(old.reason);
+        expect(old.payload.settings).not.toHaveProperty("brewHistorySort");
+        expect(old.payload.settings).not.toHaveProperty("brewHistorySortDirection");
+    });
+
     // The showHints bug was a key that lived in DEFAULTS but not in the snapshot
     // the settings screen hands buildBackup, so the backup silently dropped it.
     // The snapshot's type (Record<Exclude<SettingKey, BackupExcluded>, unknown>)
@@ -773,6 +801,135 @@ function backupFileWithBrewFields(extra: Record<string, unknown>): string {
 }
 
 describe("brew history through a backup", () => {
+    it.each(["tea", "coffee"] as const)("round trips %s without a version bump", (beverageKind) => {
+        const text = buildBackup([recipeNamed("A", "u1")], {}, "2.6.0",
+                                 [brewNamed("b1", {beverageKind})]);
+        expect(JSON.parse(text).version).toBe(1);
+        const result = parseBackup(text);
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.payload.brews[0]).toHaveProperty("beverageKind", beverageKind);
+        expect(result.payload.skippedBrews).toBe(0);
+    });
+
+    it("keeps a legacy backup's beverage kind absent", () => {
+        const result = parseBackup(backupFileWithBrewFields({}));
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.payload.brews[0]).not.toHaveProperty("beverageKind");
+        expect(reviveBrew(brewNamed("b1"))).not.toHaveProperty("beverageKind");
+    });
+
+    it("round trips compact tea observations while leaving legacy identity absent", () => {
+        const teaCycles = [{
+            index: 0, fillStartedAt: -500, fillEndedAt: 20_000,
+            steepStartedAt: 20_500, steepEndedAt: 65_000, endingEndedAt: 90_000,
+            fillMl: 90, releaseWaterMl: 40
+        }];
+        const text = buildBackup([recipeNamed("A", "u1")], {}, "2.6.0", [
+            brewNamed("tea", {beverageKind: "tea", teaCycles})
+        ]);
+        const result = parseBackup(text);
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.payload.brews[0]).toMatchObject({beverageKind: "tea", teaCycles});
+
+        const old = reviveBrew(brewNamed("old"));
+        expect(old).not.toHaveProperty("beverageKind");
+        expect(old).not.toHaveProperty("teaCycles");
+    });
+
+    const invalidTeaCycles: unknown[][] = [
+        [{index: -1}],
+        [{index: 0, fillMl: -1}],
+        [{index: 0, steepStartedAt: Infinity}],
+        [{index: 1}, {index: 0}],
+        [{index: 2}]
+    ];
+    it.each(invalidTeaCycles)("skips invalid or out-of-plan tea observations (%p)", (cycles) => {
+        const entry = brewNamed("b1", {
+            beverageKind: "tea", teaCycles: cycles as BrewRecord["teaCycles"]
+        });
+        expect(reviveBrew(entry)).toBeNull();
+    });
+
+    it.each(["Tea", "COFFEE", "water", "", "tea ", null, 0, {}, []])(
+        "skips an invalid present beverage discriminator (%p)", (beverageKind) => {
+            expect(reviveBrew({...brewNamed("b1"), beverageKind})).toBeNull();
+            const result = parseBackup(backupFileWithBrewFields({beverageKind}));
+            expect(result.ok).toBe(true);
+            if (!result.ok) return;
+            expect(result.payload.brews).toEqual([]);
+            expect(result.payload.skippedBrews).toBe(1);
+        }
+    );
+
+    it("round trips pause intervals without changing the backup version", () => {
+        const pauseIntervals: NonNullable<BrewRecord["pauseIntervals"]> = [
+            {from: 0, to: 1000, pour: 0, reason: "manual"},
+            {from: 1000, to: 190_000, pour: 3, reason: "overflow"}
+        ];
+        const text = buildBackup([recipeNamed("A", "u1")], {}, "2.6.0",
+                                 [brewNamed("b1", {pauseIntervals})]);
+        expect(JSON.parse(text).version).toBe(1);
+        const result = parseBackup(text);
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.payload.brews[0].pauseIntervals).toEqual(pauseIntervals);
+        expect(result.payload.skippedBrews).toBe(0);
+    });
+
+    it.each([undefined, []])("omits an empty or legacy pause list (%p)", (pauseIntervals) => {
+        const brew = reviveBrew(brewNamed("b1", {pauseIntervals}));
+        expect(brew).not.toBeNull();
+        expect(brew).not.toHaveProperty("pauseIntervals");
+    });
+
+    it.each([undefined, 0])("falls back to startedAt without first water (%p)", (pouringAt) => {
+        const pauseIntervals: NonNullable<BrewRecord["pauseIntervals"]> = [
+            {from: 190_000, to: 200_000, pour: 3, reason: "overflow"}
+        ];
+        expect(reviveBrew(brewNamed("b1", {pouringAt, pauseIntervals})))
+            .toMatchObject({pauseIntervals});
+    });
+
+    it.each([
+        ["null", null],
+        ["object", {}],
+        ["nested array", [[]]],
+        ["null entry", [null]],
+        ["missing field", [{from: 0, to: 1, pour: 1}]],
+        ["negative time", [{from: -1, to: 1, pour: 1, reason: "manual"}]],
+        ["backwards time", [{from: 2, to: 1, pour: 1, reason: "manual"}]],
+        ["nonfinite start", [{from: Infinity, to: 1, pour: 1, reason: "manual"}]],
+        ["nonfinite end", [{from: 0, to: NaN, pour: 1, reason: "manual"}]],
+        ["wrong reason", [{from: 0, to: 1, pour: 1, reason: "automatic"}]],
+        ["fractional pour", [{from: 0, to: 1, pour: 1.5, reason: "manual"}]],
+        ["unsafe pour", [{from: 0, to: 1, pour: Number.MAX_SAFE_INTEGER + 1, reason: "manual"}]],
+        ["negative pour", [{from: 0, to: 1, pour: -1, reason: "manual"}]],
+        ["pour beyond bypass", [{from: 0, to: 1, pour: 4, reason: "manual"}]],
+        ["end after brew", [{from: 0, to: 190_001, pour: 1, reason: "manual"}]],
+        ["overlap", [
+            {from: 0, to: 10, pour: 1, reason: "manual"},
+            {from: 9, to: 20, pour: 2, reason: "overflow"}
+        ]],
+        ["unsorted", [
+            {from: 10, to: 20, pour: 1, reason: "manual"},
+            {from: 0, to: 5, pour: 2, reason: "overflow"}
+        ]]
+    ])("rejects and reports a pause list with %s", (_label, pauseIntervals) => {
+        expect(reviveBrew({...brewNamed("b1"), pauseIntervals})).toBeNull();
+        const envelope = JSON.parse(backupFileWithBrewFields({pauseIntervals}));
+        envelope.brews.push(brewNamed("good"));
+        const result = parseBackup(JSON.stringify(envelope));
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.payload.brews.map((brew) => brew.id)).toEqual(["good"]);
+        expect(result.payload.skippedBrews).toBe(1);
+        expect(result.payload.recipes).toHaveLength(1);
+        expect(result.payload.skipped).toBe(0);
+    });
+
     it("carries a rating and a note back out again", () => {
         const text = buildBackup([recipeNamed("A", "u1")], {}, "2.6.0",
                                  [brewNamed("b1", {rating: 4, note: "Too sour"})]);
@@ -811,6 +968,37 @@ describe("brew history through a backup", () => {
         expect(result.ok).toBe(true);
         if (!result.ok) return;
         expect(result.payload.brews[0].cupAtDrawdown).toBeCloseTo(118.5, 6);
+    });
+
+    it("carries the paused seconds through a round trip", () => {
+        const text = buildBackup([recipeNamed("A", "u1")], {}, "2.6.0",
+                                 [brewNamed("b1", {pausedSeconds: 42})]);
+        const result = parseBackup(text);
+
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.payload.brews[0].pausedSeconds).toBe(42);
+    });
+
+    it("accepts a backup written before anybody could pause a brew", () => {
+        // Which is every backup written before this release, so the absence
+        // has to be ordinary rather than a defect in the file.
+        const result = parseBackup(buildBackup([recipeNamed("A", "u1")], {}, "2.6.0",
+                                               [brewNamed("b1", {})]));
+
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.payload.brews).toHaveLength(1);
+        expect(result.payload.brews[0].pausedSeconds).toBeUndefined();
+    });
+
+    it("refuses a backup whose paused seconds are not a number", () => {
+        const result = parseBackup(backupFileWithBrewFields({pausedSeconds: "a while"}));
+
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.payload.brews).toEqual([]);
+        expect(result.payload.skippedBrews).toBe(1);
     });
 
     it("refuses a backup whose drawdown cup reading is not a number", () => {
@@ -934,6 +1122,17 @@ describe("brew history through a backup", () => {
         expect(result.payload.recipes).toHaveLength(1);
         expect(result.payload.skipped).toBe(0);
         expect(result.payload.skippedBrews).toBe(1);
+    });
+
+    it.each([undefined, false, true])("round trips an optional legacy pin (%p)", (pinned) => {
+        const record = brewNamed("legacy-pin", pinned === undefined ? {} : {pinned});
+        const result = parseBackup(buildBackup([recipeNamed("A", "u1")], {}, "2.6.0", [record]));
+
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.payload.skippedBrews).toBe(0);
+        expect(result.payload.brews).toHaveLength(1);
+        expect(result.payload.brews[0]).toMatchObject({id: "legacy-pin", pinned: pinned ?? false});
     });
 
     it("fills in the judgement a record never got", () => {
@@ -1223,5 +1422,27 @@ describe("mergeBrews", () => {
 
         expect(toAdd).toHaveLength(1);
         expect(alreadyPresent).toBe(1);
+    });
+});
+
+describe("dripper overflow protection in a backup", () => {
+    const config = {retainedGrams: 40, checkSeconds: 30 as const};
+
+    it("survives buildBackup and parseBackup", () => {
+        const recipe = recipeNamed("A", "u1");
+        recipe.cupType = 0x01;
+        recipe.overflowProtection = config;
+        const result = parseBackup(buildBackup([recipe], {}));
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.payload.recipes[0].overflowProtection).toEqual(config);
+    });
+
+    it("names the field and refuses the recipe when the configuration is invalid", () => {
+        const result = parseBackup(backupFileWithRecipeFields(
+            {overflowProtection: {retainedGrams: 0, checkSeconds: 30}}));
+        expect(result.ok).toBe(false);
+        if (result.ok) return;
+        expect(result.reason).toMatch(/overflowProtection/);
     });
 });

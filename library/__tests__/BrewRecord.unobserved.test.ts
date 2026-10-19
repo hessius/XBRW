@@ -1,4 +1,4 @@
-import {unobservedBrew} from "@/library/brew/BrewRecord";
+import {isBeverageKind, unobservedBrew} from "@/library/brew/BrewRecord";
 
 /**
  * The brew nobody watched.
@@ -14,6 +14,24 @@ describe("unobservedBrew", () => {
         rating: 4, at: 5_000, id: "hand-1"
     };
 
+    it.each(["tea", "coffee"] as const)("forwards an explicit %s kind", (beverageKind) => {
+        expect(unobservedBrew({...input, beverageKind})).toHaveProperty("beverageKind", beverageKind);
+    });
+
+    it("does not invent a beverage kind for legacy narrow inputs", () => {
+        expect(unobservedBrew(input)).not.toHaveProperty("beverageKind");
+        expect(JSON.parse(JSON.stringify(unobservedBrew(input))))
+            .not.toHaveProperty("beverageKind");
+    });
+
+    it.each([
+        ["tea", true], ["coffee", true], ["Tea", false], ["COFFEE", false],
+        ["", false], [" tea", false], ["tea ", false], ["water", false],
+        [null, false], [undefined, false], [0, false], [{}, false], [[], false]
+    ])("validates only literal beverage kinds (%p)", (value, expected) => {
+        expect(isBeverageKind(value)).toBe(expected);
+    });
+
     it("says it was not watched", () => {
         // An explicit field rather than a figure of zero. A brew refused for
         // want of water has no water and no held time either, and it is a brew
@@ -25,11 +43,8 @@ describe("unobservedBrew", () => {
         expect(unobservedBrew(input).rating).toBe(4);
     });
 
-    it("is pinned, because a judgement is all it is", () => {
-        // There is nothing here for the retention sweep to take -- no samples
-        // -- but the record itself is only the rating, so it is kept on the
-        // same rule that keeps a judged brew.
-        expect(unobservedBrew(input).pinned).toBe(true);
+    it("does not set the legacy pin", () => {
+        expect(unobservedBrew(input)).not.toHaveProperty("pinned");
     });
 
     it("measures nothing, because nothing was measured", () => {

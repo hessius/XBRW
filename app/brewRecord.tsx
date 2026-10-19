@@ -1,16 +1,17 @@
 import {useLocalSearchParams} from "expo-router";
 import router from "@/hooks/steadyRouter";
 import React, {useState} from "react";
-import {PixelRatio, Pressable, ScrollView, useWindowDimensions} from "react-native";
+import {PixelRatio, ScrollView, useWindowDimensions} from "react-native";
 import {Text, XStack, YStack} from "tamagui";
 
 import BrewJudgement from "@/components/BrewJudgement";
-import {brewFigureAdjustmentMeasures, type BrewFigureAdjustments} from "@/components/BrewFigures";
+import {brewFigureAdjustmentMeasures} from "@/components/BrewFigures";
 import BrewStoryCard from "@/components/BrewStoryCard";
 import BrewStorySheet from "@/components/BrewStorySheet";
 import BrewSummary from "@/components/BrewSummary";
 import CompareWithSheet from "@/components/CompareWithSheet";
 import StageDetail from "@/components/StageDetail";
+import TeaStageDetail from "@/components/TeaStageDetail";
 import DotMatrixText from "@/components/DotMatrixText";
 
 import ExportButton from "@/components/ExportButton";
@@ -27,13 +28,14 @@ import {sharedBrewDatabase, useBrewHistory, useBrewJudgement, type JudgementStor
 import {useSetting} from "@/hooks/useSetting";
 import {bypassViewFromRecord} from "@/library/brew/bypassState";
 import {formatBrewDate, formatBrewTime} from "@/library/brew/brewFormat";
-import {brewFigures} from "@/library/brew/brewFigures";
+import {brewFigures, brewFigureAdjustments, brewFigureDetails} from "@/library/brew/brewFigures";
 import {poursFromPlan} from "@/library/brew/BrewRecord";
-import {dialNote, type GrindFigure} from "@/library/brew/dialAfterBrew";
+import {dialNote, grindRecipeBadges, type GrindFigure} from "@/library/brew/dialAfterBrew";
 import {drawdownFigures, retrospectiveFlowSeries} from "@/library/brew/flowRate";
 import {hasDrawableRateRun} from "@/library/brew/rateChartGeometry";
 import {canHandOff, HANDOFF_TARGETS} from "@/library/brew/handoff/targets";
 import {ladderFrontier} from "@/library/brew/ladderState";
+import {buildTeaCycleViews} from "@/library/brew/teaCycle";
 import {
     offeredStoryContent,
     storyCoffeeLine,
@@ -46,13 +48,14 @@ import {
     storyTextScale,
     type StoryContentKey
 } from "@/library/brew/storyCard";
-import {plannedSeconds, pourEndDelaySeconds} from "@/library/brew/brewShape";
+import {pausedBeforeDrawdownSeconds, plannedSeconds, pourEndDelaySeconds} from "@/library/brew/brewShape";
 import {brewFigureAdjustmentLayout} from "@/library/brew/figureGeometry";
 import RecipeDatabase from "@/library/RecipeDatabase";
 import type Recipe from "@/library/Recipe";
 import {RECORD_ACTION_GAP, SCREEN_PADDING} from "@/constants/layout";
 import type {StoredBrew} from "@/library/BrewDatabase";
-import {HANDOFF_ALREADY_SENT, ENDED_ON_MACHINE_NOTE} from "@/constants/brewCopy";
+import {HANDOFF_ALREADY_SENT, ENDED_ON_MACHINE_NOTE, pausedNote, pauseReasonsNote}
+    from "@/constants/brewCopy";
 
 /** Minimal interface for looking up a recipe. Injected by tests. */
 export type RecipeLookup = {getRecipe: (uuid: string) => Recipe | null};
@@ -60,37 +63,6 @@ export type RecipeLookup = {getRecipe: (uuid: string) => Recipe | null};
 let sharedLookup: RecipeLookup | undefined;
 
 const JUDGEMENT_ACTION_GAP = "$4";
-
-function quickEditFigures(
-    record: StoredBrew,
-    grind: GrindFigure | null
-): BrewFigureAdjustments | undefined {
-    const adjustments: BrewFigureAdjustments = {};
-
-    if (record.adjustedFromDose !== undefined && record.dose !== undefined) {
-        adjustments.dose = {value: record.dose, from: record.adjustedFromDose};
-    }
-
-    if (record.adjustedFromRatio !== undefined && record.ratio !== undefined) {
-        adjustments.ratio = {value: record.ratio, from: record.adjustedFromRatio};
-    }
-    if (record.adjustedFromGrind !== undefined && record.grindSize !== undefined) {
-        adjustments.grind = {
-            value:     record.grindSize,
-            from:      record.adjustedFromGrind,
-            confirmed: grind?.kind === "recipe" ? false : undefined
-        };
-    }
-    const tempOffset = record.adjustedTempOffset;
-    if (tempOffset !== undefined) {
-        const temperatures = record.plan?.map((stage) => stage.temperature) ?? [];
-        if (temperatures.length > 0) {
-            adjustments.temperature = {offset: tempOffset, temperatures};
-        }
-    }
-
-    return Object.keys(adjustments).length === 0 ? undefined : adjustments;
-}
 
 type RecordAction = {
     key: "handoff" | "export" | "compare" | "story";
@@ -109,15 +81,18 @@ const STORY_TOGGLE_LABELS: Record<StoryContentKey, string> = {
     tags:    "TAGS",
     note:    "NOTE",
     details: "DETAILS",
-    flow:    "FLOW"
+    flow:    "FLOW",
+    recipe:  "DOSE & RATIO"
 };
 
 function storyGrindForBudget(
     grind: GrindFigure | null,
     showRecipeBadge: boolean
 ): GrindFigure | null {
-    if (showRecipeBadge || grind === null || grind.kind !== "dial") return grind;
-    return {...grind, recipe: null};
+    if (showRecipeBadge || grind === null) return grind;
+    return grind.kind === "dial"
+        ? {kind: "dial", dial: grind.dial, recipe: null}
+        : grind.kind === "recipe" ? {kind: "recipe", recipe: grind.recipe} : {kind: "off"};
 }
 
 function RecordActionRows(
@@ -252,16 +227,13 @@ export default function BrewRecord({recipeLookup}: Props) {
     // injected store need not grow a judgement fake to draw a trace.
     const judgementStore: JudgementStore = {
         judge: (id, verdict) =>
-            (sharedBrewDatabase() as Partial<JudgementStore>).judge?.(id, verdict),
-        setPinned: (id, pinned) =>
-            (sharedBrewDatabase() as Partial<JudgementStore>).setPinned?.(id, pinned)
+            (sharedBrewDatabase() as Partial<JudgementStore>).judge?.(id, verdict)
     };
     const judgement = useBrewJudgement(
         () => opened?.record.id ?? null,
         {
             rating: opened?.record.rating ?? 0,
-            note:   opened?.record.note ?? "",
-            pinned: opened?.record.pinned ?? false
+            note:   opened?.record.note ?? ""
         },
         judgementStore
     );
@@ -294,7 +266,7 @@ export default function BrewRecord({recipeLookup}: Props) {
     // The record screen renders the first target only; adding a second target
     // means revisiting this selection rather than assuming it appears here.
     const [handoffTarget] = HANDOFF_TARGETS;
-    const showHandoff = handoffEnabled && canHandOff(record.outcome);
+    const showHandoff = handoffEnabled && canHandOff(record);
     const accent = record.accent;
 
     // Measured from the first drop, because that is where the sample stream is
@@ -330,6 +302,14 @@ export default function BrewRecord({recipeLookup}: Props) {
     // what it always did and is only ever right for a brew that finished.
     const delivered = record.stageWater
         ?? stages.map((pour) => Math.max(pour.volume, 0));
+    const teaStages = record.beverageKind === "tea"
+        ? buildTeaCycleViews(stages, record.teaCycles ?? [], {
+            now: durationSeconds * 1000,
+            pauseIntervals: record.pauseIntervals,
+            finished: true,
+            outcome: record.outcome
+        })
+        : undefined;
 
     const bypass = bypassViewFromRecord(record.bypass);
     // The scale's running total includes the bypass, so the brew water is the
@@ -341,8 +321,7 @@ export default function BrewRecord({recipeLookup}: Props) {
     const figures = brewFigures(record);
     const drawdown = drawdownFigures(record);
     const grind = dialNote(record);
-    const adjustments = quickEditFigures(record, grind);
-    const summaryGrind = adjustments?.grind?.confirmed === false ? null : grind;
+    const adjustments = brewFigureAdjustments(record);
 
     function openComparisonPicker(): void {
         const candidates = sharedBrewDatabase()
@@ -378,8 +357,19 @@ export default function BrewRecord({recipeLookup}: Props) {
     // story card adds its own width and nothing else. Neither works the
     // figures out a second time.
     const summary = {
+        beverageKind:      record.beverageKind,
         recipeName:        record.recipeName,
+        recipeInputs:      {
+            beverageKind:      record.beverageKind,
+            dose:              record.dose,
+            ratio:             record.ratio,
+            adjustedFromDose:  record.adjustedFromDose,
+            adjustedFromRatio: record.adjustedFromRatio
+        },
         hasStream:         record.hasStream,
+        // The record's own, so a deleted recipe or a later edit cannot move
+        // them. A swept stream draws no trace, so nothing is drawn from them.
+        pauseIntervals:    record.pauseIntervals,
         samples,
         stages,
         accent,
@@ -390,23 +380,33 @@ export default function BrewRecord({recipeLookup}: Props) {
         activeIndex:       ladderFrontier(record.outcome, delivered),
         stageWater:        delivered,
         stalls:            record.stalls ?? stages.map(() => []),
+        teaStages,
+        // A paused brew's clock runs long and its trace holds a flat stretch
+        // nothing else on the screen accounts for. Ending on the machine is
+        // the louder fact, so it keeps the slot where both are true.
         note:              record.outcome === "endedOnMachine"
-            ? ENDED_ON_MACHINE_NOTE : undefined,
+            ? ENDED_ON_MACHINE_NOTE
+            : pausedNote(record.pausedSeconds),
         stagesUnavailable: snapshot.length === 0 && recipe === null,
         bypass,
-        drawdown:          drawdown?.seconds ?? null,
-        drawdownRate:      drawdown?.rate ?? null,
         rateSeries:        record.hasStream && samples.length > 0
             ? retrospectiveFlowSeries(samples, record.pours)
             : [],
-        delay:             pourEndDelaySeconds(
-            durationSeconds,
-            drawdown?.seconds ?? null,
-            plannedSecs
-        ),
-        grind:             summaryGrind,
+        ...brewFigureDetails(record.beverageKind, {
+            drawdown:     drawdown?.seconds ?? null,
+            drawdownRate: drawdown?.rate ?? null,
+            delay:        pourEndDelaySeconds(
+                durationSeconds,
+                drawdown?.seconds ?? null,
+                plannedSecs,
+                pausedBeforeDrawdownSeconds(
+                    record.pauseIntervals, record.drawdownAt, record.pausedSeconds)
+            ),
+            grind
+        }),
         adjustments
     };
+    const pauseReasons = pauseReasonsNote(record.pauseIntervals);
     const hasStoryRateChart = hasDrawableRateRun(summary.rateSeries);
     const hasStoryDetails = [
         summary.drawdown !== null,
@@ -423,6 +423,7 @@ export default function BrewRecord({recipeLookup}: Props) {
         hasRating:      judgement.rating > 0,
         tags:           record.tags ?? [],
         hasSummaryNote: summary.note !== undefined,
+        recipeInputs: summary.recipeInputs,
         figureExtraRows: storyFigureDetailRows,
         figureAdjustmentRows: summary.adjustments === undefined ? 0 : 1
     });
@@ -445,6 +446,7 @@ export default function BrewRecord({recipeLookup}: Props) {
     const storyHasNote = summary.note !== undefined && storyContentRequested("note");
     const storyHasDetails = hasStoryDetails && storyContentRequested("details");
     const storyHasRateChart = hasStoryRateChart && storyContentRequested("flow");
+    const storyRecipeInputs = storyContentRequested("recipe") ? summary.recipeInputs : undefined;
     const actionFullWidth = Math.max(0, width - SCREEN_PADDING * 2);
     const actionHalfWidth = Math.max(0, (actionFullWidth - RECORD_ACTION_GAP) / 2);
     // COMPARE and the Beanconqueror handoff each keep a full width row, then
@@ -550,15 +552,32 @@ export default function BrewRecord({recipeLookup}: Props) {
                 </YStack>
             )}
 
+            {watched && pauseReasons !== undefined && (
+                // Outside the summary, and so outside the story card's height
+                // budget. It survives a swept stream because it is metadata.
+                <YStack paddingHorizontal={SCREEN_PADDING}>
+                    <DotMatrixText testID="record-pause-reasons" fontSize={11}
+                                   weight="bold" letterSpacing={1.6}
+                                   color={palette.dim}>
+                        {pauseReasons}
+                    </DotMatrixText>
+                </YStack>
+            )}
+
             {/* Below the figures rather than over them: the panel explains a
                 stage that stays highlighted above it, and a sheet would cover
                 the very highlight that opened it. */}
-            {selectedIndex !== null && stages[selectedIndex] !== undefined && (
+            {record.beverageKind === "tea" && selectedIndex !== null
+                && teaStages?.[selectedIndex] !== undefined ? (
+                <TeaStageDetail stage={teaStages[selectedIndex]} accent={accent}
+                                onClose={() => setSelectedIndex(null)}/>
+            ) : selectedIndex !== null && stages[selectedIndex] !== undefined && (
                 <StageDetail
                     index={selectedIndex}
                     stage={stages[selectedIndex]}
                     deliveredMl={delivered[selectedIndex] ?? 0}
-                    stalls={(record.stalls ?? [])[selectedIndex] ?? []}
+                    stalls={(record.beverageKind === "tea"
+                        ? [] : (record.stalls ?? [])[selectedIndex] ?? [])}
                     samples={samples}
                     hasStream={record.hasStream}
                     outcome={record.outcome}
@@ -572,31 +591,10 @@ export default function BrewRecord({recipeLookup}: Props) {
             <YStack paddingHorizontal={SCREEN_PADDING} gap="$2"
                     marginBottom={JUDGEMENT_ACTION_GAP}>
                 <BrewJudgement rating={judgement.rating} note={judgement.note}
+                               beverageKind={record.beverageKind}
                                onRate={handoff.rateBrew}
                                onNote={handoff.annotateBrew}
                                onNoteDraft={handoff.setNoteDraft}/>
-                {judgement.pinned && (
-                    // The pin as a state rather than a question. It is set by
-                    // judging, so the user is told what happened and offered
-                    // the way out, instead of being asked twice whether a brew
-                    // they just rated is worth keeping.
-                    <XStack alignItems="center" justifyContent="space-between">
-                        <DotMatrixText testID="record-pinned" fontSize={11}
-                                       letterSpacing={1.4} color={palette.dim}>
-                            TRACE KEPT
-                        </DotMatrixText>
-                        <Pressable testID="record-release"
-                                   accessibilityRole="button"
-                                   accessibilityLabel="Let this brew expire with the rest"
-                                   hitSlop={8}
-                                   onPress={() => judgement.setPinned(false)}>
-                            <DotMatrixText fontSize={11} letterSpacing={1.4}
-                                           color={palette.muted}>
-                                LET IT EXPIRE
-                            </DotMatrixText>
-                        </Pressable>
-                    </XStack>
-                )}
             </YStack>
 
             {/* No stream to export or share as a story for a brew the app never
@@ -630,6 +628,7 @@ export default function BrewRecord({recipeLookup}: Props) {
                 onDone={handoff.continueSend}
                 figures={figures}
                 recipeName={record.recipeName}
+                beverageKind={record.beverageKind}
                 rating={judgement.rating}
                 note={judgement.note}
                 onRate={handoff.rateBrew}
@@ -669,10 +668,11 @@ export default function BrewRecord({recipeLookup}: Props) {
                                     tags: storyTags,
                                     hasBypass: summary.bypass !== undefined,
                                     hasGrindRecipeBadge: storyHasDetails
-                                        && summary.grind?.kind === "dial"
-                                        && summary.grind.recipe !== null,
+                                        && grindRecipeBadges(summary.grind).length > 0,
+                                    grindRecipeBadgeTexts: grindRecipeBadges(summary.grind),
                                     drawdownRate: storyHasDetails ? summary.drawdownRate : null,
                                     hasSummaryNote: storyHasNote,
+                                    recipeInputs: storyRecipeInputs,
                                     stagesUnavailable: summary.stagesUnavailable,
                                     figureExtraRows: storyHasDetails ? storyFigureDetailRows : 0,
                                     figureAdjustmentRows: storyHasDetails ? storyAdjustmentRows : 0,
@@ -699,6 +699,7 @@ export default function BrewRecord({recipeLookup}: Props) {
                         summary={(budget) => (
                             <BrewSummary
                                 {...summary}
+                                recipeInputs={budget.showRecipeInputs ? storyRecipeInputs : undefined}
                                 note={storyHasNote && budget.showSummaryNote
                                     ? summary.note : undefined}
                                 drawdown={storyHasDetails && budget.showFigureDetails

@@ -5,9 +5,14 @@ import {Text, XStack, YStack} from "tamagui";
 import BrewStars from "@/components/BrewStars";
 import DotMatrixText from "@/components/DotMatrixText";
 import {palette} from "@/constants/colors";
+import {
+    COFFEE_JUDGEMENT_PLACEHOLDER, RATING_PROMPT_QUESTION,
+    TEA_JUDGEMENT_HEADING, TEA_JUDGEMENT_PLACEHOLDER
+} from "@/constants/brewCopy";
+import type {BeverageKind} from "@/library/brew/BrewRecord";
 
 /**
- * How the coffee was, said by the person who drank it.
+ * How the cup was, said by the person who drank it.
  *
  * The first user-authored thing in the brew database, and the reason the rest
  * of #95 can exist: a machine log ranks nothing on its own.
@@ -36,7 +41,7 @@ import {palette} from "@/constants/colors";
  */
 export default function BrewJudgement({
     rating, note, onRate, onNote, onNoteDraft, testID, showHeading = true, hint,
-    clearable = true
+    clearable = true, beverageKind
 }: {
     rating: number;
     note: string;
@@ -47,7 +52,9 @@ export default function BrewJudgement({
     showHeading?: boolean;
     hint?: string;
     clearable?: boolean;
+    beverageKind?: BeverageKind;
 }) {
+    const tea = beverageKind === "tea";
     return (
         <YStack gap="$2" testID={testID ?? "brew-judgement"}>
             <XStack testID="judgement-stars-row"
@@ -56,7 +63,7 @@ export default function BrewJudgement({
                 {showHeading ? (
                     <DotMatrixText fontSize={12} weight="bold" letterSpacing={1.4}
                                    color={palette.dim}>
-                        HOW WAS IT
+                        {tea ? TEA_JUDGEMENT_HEADING : RATING_PROMPT_QUESTION}
                     </DotMatrixText>
                 ) : (
                     <XStack flex={1} testID="judgement-heading-space" />
@@ -74,7 +81,7 @@ export default function BrewJudgement({
                 accessibilityLabel="Note on this brew"
                 accessibilityHint="What the cup was like, and what to change next time."
                 defaultValue={note}
-                placeholder="e.g. Sweet, a little thin. Grind finer."
+                placeholder={tea ? TEA_JUDGEMENT_PLACEHOLDER : COFFEE_JUDGEMENT_PLACEHOLDER}
                 placeholderTextColor={palette.placeholder}
                 multiline={true}
                 returnKeyType="done"

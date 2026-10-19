@@ -137,6 +137,7 @@ describe("XbrwSheet", () => {
         jest.useFakeTimers();
         try {
             const {rerender} = await open();
+            expect(screen.getByLabelText("ABOUT").props.accessibilityViewIsModal).toBe(true);
 
             await rerender(
                 <XbrwSheet open={false} onOpenChange={jest.fn()} title="ABOUT">
@@ -144,6 +145,8 @@ describe("XbrwSheet", () => {
                 </XbrwSheet>
             );
             expect(screen.queryByText("the body")).toBeTruthy();
+            expect(screen.getByLabelText("ABOUT", {includeHiddenElements: true}).props.accessibilityViewIsModal)
+                .toBe(false);
 
             await act(async () => {
                 jest.advanceTimersByTime(EXIT_GRACE);

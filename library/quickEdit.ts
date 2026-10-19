@@ -1,7 +1,7 @@
 import {
-    cardWriteProblems,
+    brewProblems,
     DOSE,
-    GRIND_SIZE,
+    BLE_GRIND_SIZE,
     RATIO,
     TEMPERATURE,
     type Range,
@@ -138,7 +138,7 @@ export function quickEditBounds(recipe: Recipe): QuickEditBounds {
         },
         ratio: recipe.isTea() ? null : RATIO,
         grind: recipe.isTea() ? null : {
-            ...GRIND_SIZE,
+            ...BLE_GRIND_SIZE,
             off: GRINDER_OFF_VALUE,
         },
         // Deliberately the range where moving the knob still changes at least
@@ -156,7 +156,7 @@ export function quickEditProblems(
     adjustments: QuickEditAdjustments,
     temperatureUnit?: TemperatureUnit
 ): string[] {
-    return cardWriteProblems(applyQuickEdit(recipe, adjustments), temperatureUnit);
+    return brewProblems(applyQuickEdit(recipe, adjustments), temperatureUnit);
 }
 
 export function describeAdjustment(

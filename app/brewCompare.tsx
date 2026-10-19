@@ -11,6 +11,7 @@ import BrewTrace from "@/components/BrewTrace";
 import CompareTable from "@/components/CompareTable";
 import CompareTrace, {compareTracePlotHeight} from "@/components/CompareTrace";
 import DotMatrixText from "@/components/DotMatrixText";
+import TeaStageLadder from "@/components/TeaStageLadder";
 import ScreenHeader from "@/components/ScreenHeader";
 import {
     COMPARE_COPY,
@@ -23,9 +24,11 @@ import {SCREEN_PADDING} from "@/constants/layout";
 import {useBrewComparison} from "@/hooks/useBrewComparison";
 import type {StoredBrew} from "@/library/BrewDatabase";
 import {plannedSeconds, toPath} from "@/library/brew/brewShape";
+import {pourDurationSeconds} from "@/library/brew/compare";
 import type {Point} from "@/library/brew/brewShape";
 import {formatBrewDate, formatBrewTime} from "@/library/brew/brewFormat";
 import type {FlowPoint} from "@/library/brew/flowRate";
+import {buildTeaCycleViews} from "@/library/brew/teaCycle";
 import {referenceCupColour, type Role} from "@/library/brew/traceStyle";
 
 const CHART_HEIGHT = 220;
@@ -138,26 +141,29 @@ function GuardedComparison({
 }
 
 function SeparateCupGap({
-    points,
+    runs,
     width,
     maxT,
     colour
 }: {
-    points: Point[];
+    runs: Point[][];
     width: number;
     maxT: number;
     colour: string;
 }) {
-    if (points.length < 2) return null;
+    const drawable = runs.filter((run) => run.length >= 2);
+    if (drawable.length === 0) return null;
     const maxGap = Math.max(
         1,
-        points.reduce((max, point) => Math.max(max, Math.abs(point.v)), 0)
+        ...drawable.map((run) => run.reduce((max, point) => Math.max(max, Math.abs(point.v)), 0))
     );
     const baseline = maxGap;
     const box = {width, height: GAP_HEIGHT, maxT, maxV: maxGap * 2};
-    const top = points.map((point) => ({t: point.t, v: point.v + baseline}));
-    const bottom = [...points].reverse().map((point) => ({t: point.t, v: baseline}));
-    const d = `${toPath([...top, ...bottom], box)} Z`;
+    const d = drawable.map((points) => {
+        const top = points.map((point) => ({t: point.t, v: point.v + baseline}));
+        const bottom = [...points].reverse().map((point) => ({t: point.t, v: baseline}));
+        return `${toPath([...top, ...bottom], box)} Z`;
+    }).join(" ");
     const zeroY = GAP_HEIGHT / 2;
     return (
         <Svg width={width} height={GAP_HEIGHT} accessibilityRole="image"
@@ -206,6 +212,32 @@ function traceLaneLabel(kind: "This" | "That", drewRate: boolean, startedAt: num
     return drewRate
         ? `${kind} brew trace with flow rate, ${suffix}`
         : `${kind} brew trace, ${suffix}`;
+}
+
+function TeaCompareCycles({record, label, testID, accent}: {
+    record: StoredBrew;
+    label: string;
+    testID: string;
+    accent: string;
+}) {
+    if (record.beverageKind !== "tea") return null;
+    const observations = record.teaCycles ?? [];
+    const stages = buildTeaCycleViews(record.plan ?? [], observations, {
+        now: pourDurationSeconds(record) * 1000,
+        pauseIntervals: record.pauseIntervals,
+        finished: true,
+        outcome: record.outcome
+    });
+    if (stages.length === 0) return null;
+    return (
+        <YStack testID={testID} gap="$2" padding="$3" borderRadius="$5"
+                backgroundColor={palette.surface}>
+            <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.2} color={accent}>
+                {label}
+            </DotMatrixText>
+            <TeaStageLadder stages={stages} accent={accent}/>
+        </YStack>
+    );
 }
 
 /**
@@ -271,9 +303,7 @@ export default function BrewCompareScreen() {
         showRateLanes,
         traceCount,
         survivingTrace,
-        hasChart,
-        canKeepTrace,
-        keepSurvivingTrace
+        hasChart
     } = comparisonState;
     const copy = COMPARE_COPY[comparison.pour.verdict];
 
@@ -358,18 +388,6 @@ export default function BrewCompareScreen() {
                             <Text color={palette.warn} fontSize={13}>
                                 {COMPARE_DEGRADED.one}
                             </Text>
-                            {canKeepTrace && (
-                                <Button accessibilityRole="button"
-                                        accessibilityLabel="Keep this trace"
-                                        alignSelf="flex-start"
-                                        chromeless
-                                        onPress={keepSurvivingTrace}>
-                                    <DotMatrixText fontSize={11} weight="bold"
-                                                   letterSpacing={1.2} color={palette.warn}>
-                                        KEEP TRACE
-                                    </DotMatrixText>
-                                </Button>
-                            )}
                         </YStack>
                     )}
                     {traceCount === 0 && (
@@ -392,6 +410,8 @@ export default function BrewCompareScreen() {
                                     maxV={axis.maxV}
                                     subjectPlan={subjectPlan}
                                     referencePlan={referencePlan}
+                                    subjectPauses={axis.subjectPauses}
+                                    referencePauses={axis.referencePauses}
                                 />
                             ) : (
                                 <YStack gap="$2">
@@ -414,6 +434,7 @@ export default function BrewCompareScreen() {
                                                 height={LANE_HEIGHT}
                                                 plannedSeconds={plannedSeconds(axis.subjectPours)}
                                                 axis={{maxT: axis.maxT, maxV: axis.maxV}}
+                                                pauseIntervals={axis.subjectPauses}
                                             />
                                             {showRateLanes && (
                                                 <CompareRateLane
@@ -428,7 +449,7 @@ export default function BrewCompareScreen() {
                                         </YStack>
                                     )}
                                     <SeparateCupGap
-                                        points={comparison.cupGap}
+                                        runs={comparison.cupGapRuns}
                                         width={chartWidth}
                                         maxT={axis.maxT}
                                         colour={subject.record.accent}
@@ -453,6 +474,7 @@ export default function BrewCompareScreen() {
                                                 height={LANE_HEIGHT}
                                                 plannedSeconds={plannedSeconds(axis.referencePours)}
                                                 axis={{maxT: axis.maxT, maxV: axis.maxV}}
+                                                pauseIntervals={axis.referencePauses}
                                             />
                                             {showRateLanes && (
                                                 <CompareRateLane
@@ -472,7 +494,14 @@ export default function BrewCompareScreen() {
                         </YStack>
                     )}
 
-                    <CompareTable rows={comparison.rows} accent={subject.record.accent} />
+                    <CompareTable rows={comparison.rows} accent={subject.record.accent}
+                                  beverageKinds={[subject.record.beverageKind,
+                                      reference.record.beverageKind]}/>
+
+                    <TeaCompareCycles record={subject.record} label="THIS BREW · TEA CYCLES"
+                                      testID="compare-tea-this" accent={subject.record.accent}/>
+                    <TeaCompareCycles record={reference.record} label="THAT BREW · TEA CYCLES"
+                                      testID="compare-tea-that" accent={referenceCupColour}/>
 
                     <XStack gap="$3">
                         <YStack flex={1}>

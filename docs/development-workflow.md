@@ -9,22 +9,26 @@ This runbook explains the branch lifecycle and recovery procedures.
 | Branch | Role |
 | --- | --- |
 | `main` | Approved release line. No ordinary task development. |
-| `develop` | Permanent integrated development line, including the 2.1.0 beta candidate. |
+| `develop` | Permanent integrated development line; next planned release is 2.2.0. |
 | `feat/`, `fix/`, `chore/`, `docs/`, `recover/` task branches | One bounded task, isolated worktree, explicit base. |
 | `release/<version>` | Optional, explicitly approved short-lived freeze candidate; fixes only. |
 
 On 2026-10-11, develop was seeded from the authoritative former
 `integration/2.1.0` candidate at
-`3a02987030dd378daea5ae0bd1135dce63e4ee66`. Its application code was not
-promoted to main. The candidate now lives in develop so beta corrections exercise
-the ordinary task/PR process; do not recreate the old integration branch.
-Main receives the workflow/CI documentation separately.
-Do not rewind main: it already carries unreleased work from the previous workflow.
-Physical/native/external release gates in the
-[2.1.0 ledger on develop](https://github.com/hessius/XBRecipeWriterPlus/blob/develop/docs/release-2.1.0-changes.md)
-remain required before application release promotion. That ledger is intentionally
-not copied into main before the release. Repository migration is not evidence
-that those gates have passed.
+`3a02987030dd378daea5ae0bd1135dce63e4ee66`. That migration did not promote
+application code to main; beta corrections continued through the ordinary
+task/PR process. Do not recreate the old integration branch or rewind main.
+
+Version 2.1.0 shipped on 2026-10-19 from
+`a121929e0d770d39db07168b482e2e3cd7c1102a`, tagged `v2.1.0`.
+PR #248 reconciled that exact source into develop before promotion to main,
+preserving main's existing linking documentation and the candidate's
+platform-separated CI. The
+[release record](https://github.com/hessius/XBRW/releases/tag/v2.1.0)
+identifies the shipped Android artifact and maintainer sign-off.
+Historical open-gate notes in the [2.1.0 ledger](release-2.1.0-changes.md)
+describe their recorded checkpoints, not new verification by this reconciliation.
+Future physical/native/external release gates remain mandatory.
 
 Keep the GitHub default branch `main`. Users requesting a PR must name its base;
 GitHub's default PR target is not the ordinary development target.
@@ -140,6 +144,37 @@ integrated source reachable; local follow-up work still requires preservation.
 The existing main ruleset additionally enables code quality and Copilot review.
 No second automatic review target is added for develop. Documentation alone
 cannot guarantee an agent or administrator never bypasses the process.
+
+### CI jobs, caches and failure reports
+
+`.github/workflows/ci.yml` runs independent Ubuntu jobs: `quality` runs
+typecheck, lint, worktree-audit tests and Expo Doctor (10-minute timeout);
+`tests` runs the existing iOS and Android Jest projects on separate runners
+(20 minutes each, matrix fail-fast disabled). All use `npm ci` and setup-node's
+npm cache. Jest worker limits, test discovery and coverage settings are unchanged.
+
+The `check` aggregate (2-minute timeout) retains the exact required status
+`Typecheck, lint and test`, GitHub Actions app ID 15368, on main and develop.
+It runs even after dependency failures and passes only when quality and the
+entire test matrix both report success. Failed, skipped or cancelled validation
+cannot pass it; whole-workflow cancellation may cancel the gate, never turn it
+green. Existing push/PR triggers and concurrency cancellation remain unchanged.
+
+Jest restores only `.jest-cache/ios` or `.jest-cache/android`. Cache keys
+include schema `jest-v1`, runner OS/architecture, resolved Node version,
+platform, dependency/configuration hash and commit SHA. The restore prefix
+omits only the SHA; successful Jest runs save the primary key unless already
+an exact hit. No cross-platform/configuration fallback, secret or workspace
+cache is allowed. These caches contain derived data, including transformed
+source, and are not a place for credentials. The workflow uses read-only
+contents permission and does not use `pull_request_target`.
+
+A failed Jest step still runs `scripts/name-failing-tests.mjs`; when its JSON
+report exists, it is uploaded as `jest-results-ios` or `jest-results-android`
+for 14 days. Missing reports do not turn failures or cancellations into passes.
+Remote timing, cache restore/save, artifact delivery and cancellation behavior
+need observation in a separately authorized PR run; local validation is not
+evidence of those Actions runtime outcomes.
 
 ## Preserve before cleaning
 

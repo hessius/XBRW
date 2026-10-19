@@ -6,6 +6,32 @@ import {RATING_CAN_WAIT} from "@/constants/brewCopy";
 import {renderWithProviders} from "@/test-utils/render";
 
 describe("BrewJudgement", () => {
+    it.each([undefined, "coffee"] as const)("keeps existing %s copy", async (beverageKind) => {
+        await draw({beverageKind});
+        expect(screen.getByText("HOW WAS IT")).toBeTruthy();
+        expect(screen.getByPlaceholderText("e.g. Sweet, a little thin. Grind finer."))
+            .toBeTruthy();
+        expect(screen.queryByText("HOW WAS THE TEA")).toBeNull();
+        expect(screen.getByTestId("judgement-note").props.placeholder).toMatch(/^e\.g\. /);
+    });
+
+    it("uses tea copy without changing rating or note handlers", async () => {
+        const onRate = jest.fn();
+        const onNote = jest.fn();
+        await draw({beverageKind: "tea", onRate, onNote, note: "Floral"});
+        expect(screen.getByText("HOW WAS THE TEA")).toBeTruthy();
+        expect(screen.getByPlaceholderText("e.g. Floral, a little bitter. Steep less."))
+            .toHaveProp("defaultValue", "Floral");
+        expect(screen.queryByPlaceholderText("e.g. Sweet, a little thin. Grind finer."))
+            .toBeNull();
+        expect(screen.getByTestId("judgement-note").props.placeholder).toMatch(/^e\.g\. /);
+        await fireEvent.press(screen.getByLabelText("Rate 4 stars"));
+        await fireEvent(screen.getByTestId("judgement-note"), "endEditing",
+            {nativeEvent: {text: "Steep less."}});
+        expect(onRate).toHaveBeenCalledWith(4);
+        expect(onNote).toHaveBeenCalledWith("Steep less.");
+    });
+
     const draw = (props: Partial<React.ComponentProps<typeof BrewJudgement>> = {}) =>
         renderWithProviders(
             <BrewJudgement rating={0} note="" onRate={jest.fn()} onNote={jest.fn()}

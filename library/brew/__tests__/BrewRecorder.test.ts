@@ -2,9 +2,9 @@ import BrewRecorder, {type RecorderMachine} from "@/library/brew/BrewRecorder";
 import {drawdownSeconds} from "@/library/brew/BrewRecord";
 import type {BrewRecord, BrewSample} from "@/library/brew/BrewRecord";
 import type {BrewPhase} from "@/library/machine/Machine";
-import type {Notification} from "@/library/machine/protocol";
+import {EVENT, MACHINE_STATE, type Notification} from "@/library/machine/protocol";
 import Pour from "@/library/Pour";
-import Recipe from "@/library/Recipe";
+import Recipe, {CUP_TYPE} from "@/library/Recipe";
 
 /** A machine that says only what a test tells it to. */
 function fakeMachine() {
@@ -68,6 +68,86 @@ afterEach(() => {
 });
 
 describe("BrewRecorder", () => {
+    it.each([
+        [CUP_TYPE.TEA, "tea", CUP_TYPE.XPOD],
+        [CUP_TYPE.XPOD, "coffee", CUP_TYPE.TEA]
+    ])("snapshots beverage kind at construction for cup type %s", (cupType, kind, changedType) => {
+        const r = recipe();
+        r.cupType = cupType;
+        const fake = fakeMachine();
+        const records: BrewRecord[] = [];
+        const recorder = new BrewRecorder({
+            machine: fake.machine, recipe: r,
+            onRecord: (record) => records.push(record)
+        });
+        built.push(recorder);
+        r.cupType = changedType;
+        recorder.start();
+        fake.phase({name: "cancelled"});
+        expect(records).toHaveLength(1);
+        expect(records[0]).toHaveProperty("beverageKind", kind);
+    });
+
+    it("keeps the tea cup-only tail until the machine terminal without coffee completion heuristics", () => {
+        const tea = recipe();
+        tea.cupType = CUP_TYPE.TEA;
+        const {fake, time, records, recorder} = build({recipe: tea});
+        fake.phase({name: "pouring", pour: 1, pours: 2});
+        fake.cup(100);
+        fake.water(200);
+        fake.phase({name: "settling"});
+        fake.state(MACHINE_STATE.READY);
+        time.advance(1_000);
+        fake.cup(150);
+        time.advance(120_000);
+        fake.cup(150);
+        time.advance(1_000);
+        fake.cup(10);
+        expect(records).toHaveLength(0);
+        expect(recorder.samples.at(-1)).toMatchObject({
+            at: 122_000, water: 200, cup: 10
+        });
+        time.advance(1_000);
+        fake.cup(160);
+        fake.phase({name: "done"});
+        expect(records).toHaveLength(1);
+        expect(records[0].samples.at(-1)).toMatchObject({
+            at: 123_000, water: 200, cup: 160
+        });
+        expect(records[0].samples.map(({cup}) => cup)).toEqual([100, 150, 150, 10, 160]);
+        expect(records[0].record).toMatchObject({
+            beverageKind: "tea", waterTotal: 200, cupTotal: 160, heldSeconds: 0
+        });
+        expect(records[0].record).not.toHaveProperty("drawdownAt");
+    });
+
+    it("does not interpret the resume acknowledgement state as a tea steep end", () => {
+        const tea = recipe();
+        tea.cupType = CUP_TYPE.TEA;
+        tea.pours = [new Pour(1, 90, 92, 35, 0, 0, 45)];
+        const {fake, time, recorder} = build({recipe: tea});
+        fake.phase({name: "pouring", pour: 1, pours: 1});
+        fake.water(0);
+        fake.water(2);
+        fake.event(EVENT.POUR_START, 0);
+        fake.state(MACHINE_STATE.TEA_STEEPING);
+        time.advance(20_000);
+        fake.phase({
+            name: "paused", pour: 1, pours: 1,
+            was: {name: "pouring", pour: 1, pours: 1}
+        });
+        time.advance(5_000);
+        fake.phase({name: "pouring", pour: 1, pours: 1});
+        fake.event(EVENT.COFFEE_RESUMED);
+        fake.state(MACHINE_STATE.BREWING_SUB);
+
+        expect(recorder.teaCycleObservations[0].steepEndedAt).toBeUndefined();
+
+        time.advance(1_000);
+        fake.state(MACHINE_STATE.BREWING_SUB);
+        expect(recorder.teaCycleObservations[0].steepEndedAt).toBe(26_000);
+    });
+
     it("ignores weights that arrive before the first pour", () => {
         // The machine chatters while it grinds. None of it belongs on a plan
         // whose axis starts at the first drop.
@@ -1122,5 +1202,253 @@ describe("the bypass", () => {
         emitPhase({name: "done"});
 
         expect(saved?.outcome).toBe("endedOnMachine");
+    });
+});
+
+describe("the pause clock", () => {
+    function paused(pour = 1): Extract<BrewPhase, {name: "paused"}> {
+        return {name: "paused", pour, pours: 2, was: {name: "pouring", pour, pours: 2}};
+    }
+
+    it("publishes owned open intervals without samples and snapshots the first confirmation", () => {
+        const {fake, time, recorder, records} = build();
+        fake.phase({name: "pouring", pour: 1, pours: 2});
+        fake.water(20);
+        time.advance(1000);
+        fake.phase({...paused(), pauseKind: "overflow"});
+        time.advance(3000);
+        fake.phase(paused(2));
+        expect(recorder.pauseIntervals).toEqual([
+            {from: 1000, to: 4000, pour: 1, reason: "overflow"}
+        ]);
+        const copy = recorder.pauseIntervals;
+        copy[0].from = 99;
+        copy.splice(0);
+        time.advance(2000);
+        expect(recorder.pauseIntervals).toEqual([
+            {from: 1000, to: 6000, pour: 1, reason: "overflow"}
+        ]);
+        fake.phase({name: "pouring", pour: 1, pours: 2});
+        time.advance(1000);
+        fake.phase({name: "pouring", pour: 2, pours: 2});
+        fake.phase(paused(2));
+        time.advance(2000);
+        fake.phase({name: "cancelled"});
+        expect(records[0].record.pauseIntervals).toEqual([
+            {from: 1000, to: 6000, pour: 1, reason: "overflow"},
+            {from: 7000, to: 9000, pour: 2, reason: "manual"}
+        ]);
+        recorder.pauseIntervals[0].to = 999;
+        time.advance(5000);
+        expect(recorder.pauseIntervals[0].to).toBe(6000);
+        expect(records[0].record.pausedSeconds).toBe(7);
+        expect(recorder.samples).toHaveLength(1);
+    });
+
+    it("rebases pre-water pauses to the eventual first-water origin", () => {
+        const {fake, time, recorder, records} = build();
+        fake.phase({name: "grinding"});
+        time.advance(1000);
+        fake.phase({name: "paused", pour: 0, pours: 0, was: {name: "grinding"}});
+        time.advance(10_000);
+        fake.phase({name: "grinding"});
+        expect(recorder.pauseIntervals).toEqual([
+            {from: 1000, to: 11_000, pour: 0, reason: "manual"}
+        ]);
+        time.advance(4000);
+        fake.phase({name: "pouring", pour: 1, pours: 2});
+        time.advance(5000);
+        fake.water(20);
+        time.advance(100_000);
+        fake.water(30);
+        fake.phase({name: "done"});
+        expect(records[0].record.pauseIntervals).toEqual([
+            {from: 0, to: 0, pour: 0, reason: "manual"}
+        ]);
+        expect(records[0].record.pausedSeconds).toBe(10);
+        // 70 planned seconds: a pre-water pause must not subtract from this clock.
+        expect(records[0].record.heldSeconds).toBe(30);
+    });
+
+    it("subtracts a pause once from held time and from a pre-pause plateau", () => {
+        const {fake, time, records} = build();
+        fake.phase({name: "pouring", pour: 1, pours: 2});
+        fake.water(20);
+        time.advance(1000);
+        fake.water(20);
+        fake.phase(paused());
+        time.advance(30_000);
+        fake.phase({name: "pouring", pour: 1, pours: 2});
+        time.advance(1000);
+        fake.water(20);
+        fake.phase({name: "done"});
+        expect(records[0].record.stalls?.[0]).toEqual([{atMl: 20, seconds: 2}]);
+        expect(records[0].record.heldSeconds).toBe(0);
+    });
+
+    it("records nothing when nobody paused", () => {
+        const {fake, time, records} = build();
+        fake.phase({name: "pouring", pour: 1, pours: 2});
+        fake.water(200);
+        time.advance(60_000);
+        fake.phase({name: "done"});
+
+        expect(records[0].record.pausedSeconds).toBeUndefined();
+        expect(records[0].record).not.toHaveProperty("pauseIntervals");
+    });
+
+    it("measures a pause from the phase to the one that follows it", () => {
+        const {fake, time, records} = build();
+        fake.phase({name: "pouring", pour: 1, pours: 2});
+        fake.water(200);
+        fake.phase(paused());
+        time.advance(30_000);
+        fake.phase({name: "pouring", pour: 2, pours: 2});
+        fake.phase({name: "done"});
+
+        expect(records[0].record.pausedSeconds).toBe(30);
+    });
+
+    it("sums every pause rather than keeping the last", () => {
+        const {fake, time, records} = build();
+        fake.phase({name: "pouring", pour: 1, pours: 2});
+        fake.water(200);
+        fake.phase(paused());
+        time.advance(20_000);
+        fake.phase({name: "pouring", pour: 1, pours: 2});
+        fake.phase(paused());
+        time.advance(15_000);
+        fake.phase({name: "pouring", pour: 2, pours: 2});
+        fake.phase({name: "done"});
+
+        expect(records[0].record.pausedSeconds).toBe(35);
+    });
+
+    it("keeps a pause that was still open when the brew ended", () => {
+        // Cancelling from a pause is the realistic way a pause ends, and it is
+        // the case where the span is longest. Closing it only on the next
+        // phase would throw exactly that one away.
+        const {fake, time, records} = build();
+        fake.phase({name: "pouring", pour: 1, pours: 2});
+        fake.water(200);
+        fake.phase(paused());
+        time.advance(45_000);
+        fake.phase({name: "cancelled"});
+
+        expect(records[0].record.pausedSeconds).toBe(45);
+    });
+
+    it("does not report a pause as the machine holding water back", () => {
+        // Held time is `elapsed - planned`, so without the subtraction the
+        // pause arrives in it untouched. The plan here is 20 s of pause plus
+        // two pours; a 40 s pause inside a brew that otherwise ran to plan is
+        // not the machine holding anything.
+        const {fake, time, records} = build();
+        fake.phase({name: "pouring", pour: 1, pours: 2});
+        fake.water(200);
+        fake.phase(paused());
+        time.advance(40_000);
+        fake.phase({name: "pouring", pour: 2, pours: 2});
+        fake.water(200);
+        fake.phase({name: "done"});
+
+        expect(records[0].record.heldSeconds).toBe(0);
+        expect(records[0].record.pausedSeconds).toBe(40);
+    });
+});
+
+describe("the scale while a brew is paused", () => {
+    function paused(pour = 1): BrewPhase {
+        return {name: "paused", pour, pours: 2, was: {name: "pouring", pour, pours: 2}};
+    }
+
+    it("does not keep cup-driven samples while settling is paused", () => {
+        const {fake, time, recorder} = build();
+        fake.phase({name: "pouring", pour: 1, pours: 2});
+        fake.water(200);
+        fake.phase({name: "settling"});
+        const before = recorder.samples.length;
+        fake.phase({name: "paused", pour: 0, pours: 0, was: {name: "settling"}});
+        time.advance(3000);
+        fake.cup(100);
+        expect(recorder.samples).toHaveLength(before);
+    });
+
+    it("keeps no readings from a paused brew", () => {
+        // The water is flat throughout a pause by design, and the scale goes
+        // on reporting it ten times a second. Kept, those readings are an
+        // observed plateau, which is the definition of a stall -- so the brew
+        // would report the user's own button press back to them as a fault.
+        const {fake, recorder} = build();
+        fake.phase({name: "pouring", pour: 1, pours: 2});
+        fake.water(200);
+        fake.water(210);
+        const before = recorder.samples.length;
+
+        fake.phase(paused());
+        fake.water(210);
+        fake.water(210);
+        fake.water(210);
+
+        expect(recorder.samples.length).toBe(before);
+    });
+
+    it("starts taking readings again once the brew resumes", () => {
+        const {fake, recorder} = build();
+        fake.phase({name: "pouring", pour: 1, pours: 2});
+        fake.water(200);
+        fake.phase(paused());
+        fake.water(210);
+        const held = recorder.samples.length;
+
+        fake.phase({name: "pouring", pour: 1, pours: 2});
+        fake.water(220);
+
+        expect(recorder.samples.length).toBe(held + 1);
+    });
+});
+
+describe("a pause during the bypass", () => {
+    it("does not move the bypass's start to the moment of the resume", () => {
+        // `leavePause` restores the phase the pause interrupted, so the bypass
+        // branch runs a second time. Stamping the start again would place the
+        // bypass wherever the user happened to press RESUME, which on a
+        // history chart shortens it and slides it right.
+        const {machine, time, emitPhase, emitWeight} = makeMachine();
+        const recipe = makeRecipe([{volume: 40}, {volume: 115}, {volume: 85}]);
+        recipe.bypassEnabled = true;
+        recipe.bypassVolume = 5;
+        recipe.bypassTemp = 85;
+
+        let saved: BrewRecord | undefined;
+        const recorder = new BrewRecorder({
+            machine, recipe, now: time.now, onRecord: (record) => { saved = record; }
+        });
+        recorder.start();
+        built.push(recorder);
+
+        emitPhase({name: "pouring", pour: 1, pours: 3});
+        emitWeight(40, 0);
+        emitPhase({name: "pouring", pour: 2, pours: 3});
+        emitWeight(155, 20);
+        emitPhase({name: "pouring", pour: 3, pours: 3});
+        emitWeight(240, 100);
+        emitPhase({name: "bypass"});
+        emitWeight(243, 155);
+        const started = recorder.samples[recorder.samples.length - 1].at;
+
+        emitPhase({name: "paused", pour: 3, pours: 3, was: {name: "bypass"}});
+        time.advance(45_000);
+        emitPhase({name: "bypass"});
+        emitWeight(245, 160);
+        emitPhase({name: "settling"});
+        emitPhase({name: "done"});
+
+        // Within a second of the first bypass sample, and nowhere near the
+        // forty-five seconds the pause added.
+        expect(saved?.bypass?.startedAt).toBeLessThan(started + 1000);
+        expect(saved?.pauseIntervals).toEqual([
+            {from: 155_000, to: 200_000, pour: 4, reason: "manual"}
+        ]);
     });
 });

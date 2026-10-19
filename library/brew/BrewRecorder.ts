@@ -7,12 +7,25 @@ import {LIFT_DROP_G, SETTLE_CAP_MS, SETTLE_CEILING_MS, SETTLE_FLAT_MS}
     from "@/constants/machine";
 import {EVENT, MACHINE_STATE} from "@/library/machine/protocol";
 
-import type {BrewRecord, BrewSample} from "./BrewRecord";
+import type {
+    BeverageKind, BrewRecord, BrewSample, TeaCycleObservation
+} from "./BrewRecord";
 import {drawdownFrom, finalOutcome, newBrewId, planFromPours,
         stageWaterFromSamples, stallsFromSamples, summarise} from "./BrewRecord";
 import {plannedSeconds} from "./brewShape";
 import {cupAtDrawdownFrom} from "./flowRate";
 import {NOISE_FLOOR_ML, stageWaterFrom} from "./stalls";
+import type {PauseInterval, PauseKind} from "./pauseIntervals";
+
+type TeaCycleDraft = TeaCycleObservation & {
+    startWater?: number;
+    fillEndWater?: number;
+    steepEndWater?: number;
+};
+
+function observedWaterDelta(end: number, start: number): number {
+    return Math.max(0, Math.round((end - start) * 10_000) / 10_000);
+}
 
 /** The part of `Machine` a recorder needs. Narrow, so a test can be a literal. */
 export type RecorderMachine = {
@@ -63,12 +76,22 @@ const TERMINAL: ReadonlySet<BrewPhase["name"]> =
  */
 export default class BrewRecorder {
     private readonly options: RecorderOptions;
+    private readonly beverageKind: BeverageKind;
     private readonly collected: BrewSample[] = [];
+    private readonly teaCycles: TeaCycleDraft[] = [];
+    private teaResumePending = false;
     private unsubscribers: (() => void)[] = [];
 
     private startedAt = 0;
     /** Wall clock of the first water that moved, or 0 before it. The samples' zero. */
     private pouringAt = 0;
+    /** Wall clock when the current pause opened, or null when none is open. */
+    private pausedAt: number | null = null;
+    /** Milliseconds held across every pause so far. */
+    private pausedMs = 0;
+    private readonly closedPauses: PauseInterval[] = [];
+    private pausePour = 0;
+    private pauseReason: PauseKind = "manual";
     /** True once the pour phase has opened, so the backstop knows a brew began. */
     private pourOpened = false;
     /** Wall clock when the pour phase opened — the fallback zero if water never moves. */
@@ -88,6 +111,8 @@ export default class BrewRecorder {
     /** The most recent water reading, carried onto cup-driven settling samples. */
     private lastWater = 0;
     private emitted = false;
+    /** Tea keeps observing the tail, but only the machine can end it. */
+    private teaTail = false;
 
     /** True while draining after the pour: still sampling, not yet a record. */
     private settling = false;
@@ -123,10 +148,31 @@ export default class BrewRecorder {
 
     constructor(options: RecorderOptions) {
         this.options = options;
+        this.beverageKind = options.recipe.isTea() ? "tea" : "coffee";
     }
 
     get samples(): readonly BrewSample[] {
         return this.collected;
+    }
+    get teaCycleObservations(): TeaCycleObservation[] {
+        return this.serialisedTeaCycles() ?? [];
+    }
+    get sampleClockNow(): number {
+        return this.pouringAt > 0 ? Math.max(0, this.clock() - this.pouringAt) : 0;
+    }
+
+    get pauseIntervals(): PauseInterval[] {
+        // Keep epochs until publication: first water can move the origin after
+        // a grinding/heating pause has already closed.
+        const origin = this.pouringAt || this.pourOpenedAt || this.startedAt;
+        const intervals = this.pausedAt === null ? this.closedPauses : [
+            ...this.closedPauses,
+            {from: this.pausedAt, to: Math.max(this.pausedAt, this.clock()),
+                pour: this.pausePour, reason: this.pauseReason}
+        ];
+        return intervals.map(({from, to, pour, reason}) => ({
+            from: Math.max(0, from - origin), to: Math.max(0, to - origin), pour, reason
+        }));
     }
 
     start(): void {
@@ -161,6 +207,7 @@ export default class BrewRecorder {
 
     private receive(parsed: Notification): void {
         if (this.emitted) return;
+        if (this.beverageKind === "tea") this.observeTeaNotification(parsed);
         if (parsed.kind === "event" && parsed.code === EVENT.ENJOY) this.machineReady = true;
         if (parsed.kind === "status"
             && (parsed.state === MACHINE_STATE.READY
@@ -173,13 +220,17 @@ export default class BrewRecorder {
         if (this.settling) this.armSettleCap();
         if (parsed.kind === "cupWeight") {
             this.cup = parsed.grams;
+            if (this.beverageKind === "tea") {
+                if (this.teaTail && this.pausedAt === null) this.push(this.lastWater);
+                return;
+            }
             // During settling the water stream may have stopped at BREWER_STOP
             // — that is the very hardware unknown this phase is contingent on.
             // If it has, the drawdown reaches the record only through the cup
             // channel, so sample on it here (the water value is static by now).
             // A silent gap in the trace would look exactly like success. Record
             // before deciding, so the frame that ends the settle is itself kept.
-            if (this.settling) {
+            if (this.settling && this.pausedAt === null) {
                 if (this.pouringAt !== 0) this.push(this.lastWater);
                 this.watchSettle(parsed.grams);
             }
@@ -191,6 +242,13 @@ export default class BrewRecorder {
         // through anyway.
         if (parsed.kind !== "waterWeight") return;
         this.lastWater = parsed.grams;
+        // Nothing is kept from a pause. The water is flat throughout one by
+        // design and the scale goes on reporting it at about 10 Hz, so those
+        // readings are an observed plateau -- which is exactly what `stalls.ts`
+        // defines a stall as. Kept, a brew would report the user's own button
+        // press back to them as a fault. The reading is still carried into
+        // `lastWater`, so the settle path and the resume both pick up from it.
+        if (this.pausedAt !== null) return;
         if (this.pouringAt === 0) {
             // Before the pour opens the machine is grinding; nothing it says
             // then belongs on the plan's axis.
@@ -234,6 +292,93 @@ export default class BrewRecorder {
         });
     }
 
+    private teaNow(): number {
+        return this.clock();
+    }
+
+    private observeTeaNotification(parsed: Notification): void {
+        if (parsed.kind === "event" && parsed.code === EVENT.COFFEE_RESUMED) {
+            const current = this.teaCycles.at(-1);
+            if (current?.steepStartedAt !== undefined && current.steepEndedAt === undefined) {
+                this.teaResumePending = true;
+            }
+            return;
+        }
+        if (parsed.kind === "event" && parsed.code === EVENT.POUR_START
+            && Number.isInteger(parsed.value) && parsed.value! >= 0) {
+            const index = parsed.value!;
+            const current = this.teaCycles.at(-1);
+            if (current?.index === index) return;
+            this.teaResumePending = false;
+            this.closeTeaEnding(this.teaNow());
+            this.teaCycles.push({
+                index,
+                fillStartedAt: this.teaNow(),
+                startWater: this.lastWater
+            });
+            return;
+        }
+        const cycle = this.teaCycles.at(-1);
+        if (!cycle) return;
+        if (parsed.kind === "event" && parsed.code === EVENT.TEA_FILL_END) {
+            cycle.fillEndedAt ??= this.teaNow();
+            return;
+        }
+        if (parsed.kind !== "status") return;
+        if (parsed.state === MACHINE_STATE.TEA_STEEPING) {
+            cycle.fillEndWater ??= this.lastWater;
+            if (cycle.startWater !== undefined && this.collected.length > 0) {
+                cycle.fillMl = observedWaterDelta(this.lastWater, cycle.startWater);
+            }
+            cycle.steepStartedAt ??= this.teaNow();
+        } else if (parsed.state === MACHINE_STATE.BREWING_SUB && this.teaResumePending) {
+            this.teaResumePending = false;
+        } else if (parsed.state === MACHINE_STATE.BREWING_SUB
+            && cycle.steepStartedAt !== undefined && cycle.steepEndedAt === undefined) {
+            cycle.steepEndedAt = this.teaNow();
+            cycle.steepEndWater = this.lastWater;
+        }
+    }
+
+    private closeTeaEnding(at: number): void {
+        const cycle = this.teaCycles.at(-1);
+        if (!cycle || cycle.steepEndedAt === undefined || cycle.endingEndedAt !== undefined) {
+            return;
+        }
+        cycle.endingEndedAt = at;
+        if (cycle.steepEndWater !== undefined) {
+            cycle.releaseWaterMl = observedWaterDelta(this.lastWater, cycle.steepEndWater);
+        }
+    }
+
+    private serialisedTeaCycles(): TeaCycleObservation[] | undefined {
+        if (this.teaCycles.length === 0) return undefined;
+        const origin = this.pouringAt || this.pourOpenedAt || this.startedAt;
+        return this.teaCycles.map((cycle) => {
+            const {
+                startWater: _startWater,
+                fillEndWater: _fillEndWater,
+                steepEndWater: _steepEndWater,
+                ...observation
+            } = cycle;
+            const rebase = (time: number | undefined): number | undefined =>
+                time === undefined ? undefined : time - origin;
+            return {
+                ...observation,
+                ...(observation.fillStartedAt === undefined ? {}
+                    : {fillStartedAt: rebase(observation.fillStartedAt)}),
+                ...(observation.fillEndedAt === undefined ? {}
+                    : {fillEndedAt: rebase(observation.fillEndedAt)}),
+                ...(observation.steepStartedAt === undefined ? {}
+                    : {steepStartedAt: rebase(observation.steepStartedAt)}),
+                ...(observation.steepEndedAt === undefined ? {}
+                    : {steepEndedAt: rebase(observation.steepEndedAt)}),
+                ...(observation.endingEndedAt === undefined ? {}
+                    : {endingEndedAt: rebase(observation.endingEndedAt)})
+            };
+        });
+    }
+
     /**
      * Anchor the samples' zero when water never started the clock itself.
      *
@@ -249,6 +394,23 @@ export default class BrewRecorder {
 
     private observe(phase: BrewPhase): void {
         this.noteDial(phase);
+        // The pause clock. Opened on the phase and closed by whatever phase
+        // follows it, so a brew paused three times is the sum of three spans
+        // rather than the last one.
+        if (phase.name === "paused") {
+            if (this.pausedAt === null) {
+                this.pausedAt = this.clock();
+                // The sample lane includes bypass; the paused phase's pour does not.
+                this.pausePour = this.pour;
+                this.pauseReason = phase.pauseKind ?? "manual";
+            }
+            return;
+        }
+        // Here rather than beside `summarise`, and that is load-bearing: a
+        // brew cancelled out of a pause is the case where the span is longest,
+        // and the terminal phase arrives through this same line, so closing it
+        // here closes it for the record too.
+        this.closePause();
         if (phase.name === "pouring") {
             this.pour = phase.pour;
             this.pours = phase.pours;
@@ -276,13 +438,23 @@ export default class BrewRecorder {
             // `pouringAt` is 0 if water never moved; `ensurePouringAt` is what
             // the terminal path uses, and the same fallback applies here.
             this.ensurePouringAt();
-            this.bypassAt = this.clock() - this.pouringAt;
+            // Once only. Leaving a pause restores the phase it interrupted,
+            // so a brew paused during the bypass arrives here a second time,
+            // and stamping it again would place the bypass wherever the user
+            // happened to press RESUME: shorter than it was, and slid right.
+            if (this.bypassAt === null) this.bypassAt = this.clock() - this.pouringAt;
             return;
         }
         // Non-terminal: water is done but coffee is still draining onto the
         // scale. Keep sampling and wait for the cup line to settle rather than
         // ending the record on the earliest of the machine's three end events.
         if (phase.name === "settling") {
+            if (this.beverageKind === "tea") {
+                this.closeTeaEnding(this.teaNow());
+                this.ensurePouringAt();
+                this.teaTail = true;
+                return;
+            }
             this.beginSettle();
             return;
         }
@@ -294,6 +466,16 @@ export default class BrewRecorder {
             return;
         }
         this.emit(phase);
+    }
+
+    /** Shut an open pause span, adding it to the total. */
+    private closePause(): void {
+        if (this.pausedAt === null) return;
+        const to = Math.max(this.pausedAt, this.clock());
+        this.pausedMs += to - this.pausedAt;
+        this.closedPauses.push({from: this.pausedAt, to,
+            pour: this.pausePour, reason: this.pauseReason});
+        this.pausedAt = null;
     }
 
     private beginSettle(): void {
@@ -369,6 +551,7 @@ export default class BrewRecorder {
         // `cancelled` is routinely followed by another phase, and a machine
         // that drops mid-cancel produces two terminals for one brew.
         if (this.emitted) return;
+        this.closePause();
         this.emitted = true;
         // If a brew opened but water never moved the clock, fall back to where
         // the pour opened so the record has a coherent, non-zero zero rather
@@ -380,7 +563,10 @@ export default class BrewRecorder {
         const plannedWater = recipe.pours.reduce(
             (sum, pour) => sum + Math.max(pour.volume, 0), 0
         );
-        const figures = summarise(this.collected, plannedSeconds(recipe.pours));
+        const pauseIntervals = this.pauseIntervals;
+        const figures = summarise(
+            this.collected, plannedSeconds(recipe.pours), this.pausedMs / 1000, pauseIntervals
+        );
         const failure: BrewFailure | null =
             phase.name === "failed" ? phase.reason : null;
         const stages = this.pours > 0 ? this.pours : recipe.pours.length;
@@ -416,7 +602,9 @@ export default class BrewRecorder {
         // Read one boundary once. If the clock and stored cup reading are
         // derived from separate passes, a future tweak can make the drawdown
         // rate mix two instants.
-        const drawdownAt = outcome === "cancelled" || outcome === "lostContact"
+        const drawdownAt = this.beverageKind === "tea"
+            ? undefined
+            : outcome === "cancelled" || outcome === "lostContact"
                            || outcome === "failed"
             ? 0
             : drawdownFrom(
@@ -424,28 +612,34 @@ export default class BrewRecorder {
                 stages,
                 this.collected.some((sample) => sample.pour === stages)
             );
-        const cupAtDrawdown = cupAtDrawdownFrom(this.collected, stages, drawdownAt);
+        const cupAtDrawdown = drawdownAt === undefined ? null
+            : cupAtDrawdownFrom(this.collected, stages, drawdownAt);
         const record: BrewRecord = {
             id: (this.options.newId ?? newBrewId)(),
             recipeUuid: recipe.uuid,
             recipeName: recipe.displayName(),
             accent: resolveAccent(recipe),
+            beverageKind: this.beverageKind,
             startedAt: this.startedAt,
             pouringAt: this.pouringAt,
-            drawdownAt,
+            ...(drawdownAt === undefined ? {} : {drawdownAt}),
             endedAt: this.clock(),
             outcome,
             failure,
             pours: this.pours > 0 ? this.pours : recipe.pours.length,
-            stalls: stallsFromSamples(
-                this.collected,
-                recipe.pours.map((pour) => Math.max(pour.volume, 0))
-            ),
+            stalls: this.beverageKind === "tea"
+                ? recipe.pours.map(() => [])
+                : stallsFromSamples(
+                    this.collected,
+                    recipe.pours.map((pour) => Math.max(pour.volume, 0)), pauseIntervals
+                ),
             // Snapshotted here for the same reason `stalls` is computed here:
             // a record is a thing that happened, and it must go on saying what
             // it said even after the recipe is edited or deleted.
             plan: planFromPours(recipe.pours),
             stageWater: stageWaterFromSamples(this.collected, recipe.pours.length),
+            ...(this.serialisedTeaCycles() === undefined ? {}
+                : {teaCycles: this.serialisedTeaCycles()}),
             // `-1` is the recipe sentinel for ratio and grind size "not set";
             // all four figures use the same > 0 rule as BrewDatabase.hydrate,
             // so the written and read record shapes stay equal.
@@ -473,7 +667,14 @@ export default class BrewRecorder {
             // leaves the key off the row entirely and reads back exactly like
             // a record written before this field existed.
             ...(cupAtDrawdown === null ? {} : {cupAtDrawdown}),
-            ...figures
+            waterTotal: figures.waterTotal,
+            cupTotal: figures.cupTotal,
+            heldSeconds: this.beverageKind === "tea" ? 0 : figures.heldSeconds,
+            // Omitted when nobody paused, so an ordinary brew's record is what
+            // it was before the pause existed. The storage column has the same
+            // rule, and the backup round trip depends on the two agreeing.
+            ...(figures.pausedSeconds > 0 ? {pausedSeconds: figures.pausedSeconds} : {}),
+            ...(pauseIntervals.length > 0 ? {pauseIntervals} : {})
         };
         // The machine hands a phase to every listener in turn, and this is one
         // of them. If the write throws — a full disk is the realistic way —

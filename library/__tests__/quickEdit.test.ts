@@ -1,6 +1,6 @@
 import Pour, {POUR_PATTERN} from "@/library/Pour";
 import Recipe, {CUP_TYPE, GRINDER_OFF_VALUE} from "@/library/Recipe";
-import {DOSE, GRIND_SIZE, RATIO, TEMPERATURE} from "@/library/cardLimits";
+import {DOSE, BLE_GRIND_SIZE, RATIO, TEMPERATURE} from "@/library/cardLimits";
 import {
     applyQuickEdit,
     cloneRecipe,
@@ -195,7 +195,7 @@ describe("quickEditBounds", () => {
         expect(quickEditBounds(coffeeRecipe())).toEqual({
             dose: DOSE,
             ratio: RATIO,
-            grind: {...GRIND_SIZE, off: GRINDER_OFF_VALUE},
+            grind: {...BLE_GRIND_SIZE, off: GRINDER_OFF_VALUE},
             tempOffset: {min: TEMPERATURE.min - 92, max: TEMPERATURE.max - 88},
         });
     });
@@ -286,6 +286,13 @@ describe("quickEditProblems", () => {
     it("reports no problems for an ordinary in-range adjustment", () => {
         expect(quickEditProblems(coffeeRecipe(), {dose: 16, ratio: 15, tempOffset: 1, grind: 55}))
             .toEqual([]);
+    });
+
+    it.each([1, 30, 39, 80])("allows BLE-only quick-edit grind %s", (grind) => {
+        const recipe = coffeeRecipe();
+        expect(quickEditBounds(recipe).grind).toMatchObject({min: 1, max: 80});
+        expect(quickEditProblems(recipe, {grind})).toEqual([]);
+        expect(applyQuickEdit(recipe, {grind}).grindSize).toBe(grind);
     });
 });
 

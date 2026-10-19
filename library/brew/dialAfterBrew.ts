@@ -63,7 +63,7 @@ export async function readDialAfterBrew(
     return dial;
 }
 
-export type GrindFigure =
+export type GrindFigure = (
     | {kind: "off"}
     | {
         kind: "dial";
@@ -78,7 +78,24 @@ export type GrindFigure =
          */
         kind: "recipe";
         recipe: number;
-    };
+    }
+) & {
+    /** The saved baseline before a one-brew adjustment, separate from the sent recipe. */
+    savedRecipe?: number;
+};
+
+export function grindRecipeBadges(grind: GrindFigure | null): string[] {
+    if (grind === null) return [];
+    const badges: string[] = [];
+    if (grind.kind === "dial" && grind.recipe !== null) {
+        badges.push(`RECIPE ${grind.recipe}`);
+    }
+    if (grind.savedRecipe !== undefined) {
+        const label = badges.length === 0 ? "RECIPE" : "SAVED";
+        badges.push(`${label} ${grindValueMeansOff(grind.savedRecipe) ? "OFF" : grind.savedRecipe}`);
+    }
+    return badges;
+}
 
 /**
  * The grind figure a surface may draw, or null when it may not say anything.
@@ -108,10 +125,15 @@ export type GrindFigure =
  */
 export function dialNote(record: BrewRecord): GrindFigure | null {
     const recipeGrind = record.grindSize;
+    const saved = record.adjustedFromGrind;
+    const baseline = saved !== undefined && Number.isFinite(saved)
+        && (grindBand(saved) !== undefined || grindValueMeansOff(saved))
+        && saved !== recipeGrind
+        ? {savedRecipe: saved} : {};
     const recipeSaysOff = typeof recipeGrind === "number"
         && grindValueMeansOff(recipeGrind);
     if (record.grinderUsed === false || recipeSaysOff) {
-        return {kind: "off"};
+        return {kind: "off", ...baseline};
     }
     if (!grinderRan(record)) return null;
     const after = record.dialAfter ?? 0;
@@ -124,12 +146,13 @@ export function dialNote(record: BrewRecord): GrindFigure | null {
         // on-card band; the typeof is only the narrowing TypeScript cannot get
         // from a boolean helper.
         return typeof recipeGrind === "number"
-            ? {kind: "recipe", recipe: recipeGrind}
+            ? {kind: "recipe", recipe: recipeGrind, ...baseline}
             : null;
     }
     return {
         kind: "dial",
         dial: after,
+        ...baseline,
         recipe: typeof recipeGrind === "number"
             && grindBand(recipeGrind) !== undefined
             && recipeGrind !== after

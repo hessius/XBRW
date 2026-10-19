@@ -7,6 +7,7 @@ import DotIcon from "@/components/DotIcon";
 import DotMatrixText from "@/components/DotMatrixText";
 import RecipeShelfTile from "@/components/RecipeShelfTile";
 import type {RecipeEvidence} from "@/library/libraryQuery";
+import type {SlotMarkerValue} from "@/library/slots/slotModel";
 import {onAccent, palette} from "@/constants/colors";
 import type Recipe from "@/library/Recipe";
 import {UNCLIPPED_LIST} from "@/constants/lists";
@@ -38,6 +39,8 @@ export type RoomRecipeActions = {
     onToggleFavourite?: () => void;
     /** Open this recipe's brew history, the sheet row no tray carries. */
     onHistory: () => void;
+    onEasyMode?: () => void;
+    slotMarker?: SlotMarkerValue;
 };
 
 /**
@@ -196,6 +199,8 @@ export default function ShelfRoom({
                                     onDelete={acts.onDelete}
                                     onToggleFavourite={acts.onToggleFavourite}
                                     onHistory={acts.onHistory}
+                                    onEasyMode={acts.onEasyMode}
+                                    slotMarker={acts.slotMarker}
                                     editing={editing}/>
                             );
                         })}

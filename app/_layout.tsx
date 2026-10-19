@@ -67,17 +67,16 @@ export default function RootLayout() {
         startMachineLink();
     }, []);
 
-    const [retention] = useSetting("brewTraceRetention");
+    const [budgetMB] = useSetting("brewTraceBudgetMB");
 
-    // Sweep old brew streams once at launch, not after each brew. A ref guards
-    // against a double-run if `retention` changes before the sweep fires (e.g.,
-    // on a fresh install before the settings table has been read).
+    // A changed budget does not repeat the launch sweep. Finished brews also
+    // sweep after their records have been saved.
     const sweptRef = useRef(false);
     useEffect(() => {
         if (sweptRef.current) return;
         sweptRef.current = true;
-        sweepOnLaunch(sharedBrewDatabase(), retention);
-    }, [retention]);
+        sweepOnLaunch(sharedBrewDatabase(), budgetMB);
+    }, [budgetMB]);
 
     if (!loaded) {
         return null;
@@ -134,6 +133,7 @@ export default function RootLayout() {
                                             <Stack.Screen name="licences" options={{headerShown: false}}/>
                                             <Stack.Screen name="network" options={{headerShown: false}}/>
                                             <Stack.Screen name="machine" options={{headerShown: false}}/>
+                                            <Stack.Screen name="easyMode" options={{headerShown: false}}/>
                                             <Stack.Screen name="importCloud" options={{headerShown: false}}/>
                                             {/* The history list and one brew's
                                                 record. These were registered

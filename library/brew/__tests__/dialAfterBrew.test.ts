@@ -109,6 +109,42 @@ describe("readDialAfterBrew", () => {
 });
 
 describe("dialNote", () => {
+    it("keeps a quick-edit baseline on the confirmed grind figure", () => {
+        expect(dialNote(record({
+            grinderUsed: true, grindSize: 53, dialAfter: 53, adjustedFromGrind: 48
+        }))).toEqual({kind: "dial", dial: 53, recipe: null, savedRecipe: 48});
+    });
+
+    it("keeps requested and saved values distinct when the dial overrides a quick edit", () => {
+        expect(dialNote(record({
+            grinderUsed: true, grindSize: 53, dialAfter: 47, adjustedFromGrind: 48
+        }))).toEqual({kind: "dial", dial: 47, recipe: 53, savedRecipe: 48});
+    });
+
+    it("keeps an unconfirmed quick edit outlined with its baseline", () => {
+        expect(dialNote(record({
+            grinderUsed: true, grindSize: 53, adjustedFromGrind: 48
+        }))).toEqual({kind: "recipe", recipe: 53, savedRecipe: 48});
+    });
+
+    it("keeps the baseline when a quick edit switched the grinder off", () => {
+        expect(dialNote(record({
+            grinderUsed: false, grindSize: GRINDER_OFF_VALUE, adjustedFromGrind: 48
+        }))).toEqual({kind: "off", savedRecipe: 48});
+    });
+
+    it.each([53, 0, -1, 82, NaN])("does not show an unchanged or invalid baseline %s", (saved) => {
+        expect(dialNote(record({
+            grinderUsed: true, grindSize: 53, dialAfter: 53, adjustedFromGrind: saved
+        }))).toEqual({kind: "dial", dial: 53, recipe: null});
+    });
+
+    it("preserves a finer imported baseline on the grinder's full scale", () => {
+        expect(dialNote(record({
+            grinderUsed: true, grindSize: 53, dialAfter: 53, adjustedFromGrind: 39
+        }))).toEqual({kind: "dial", dial: 53, recipe: null, savedRecipe: 39});
+    });
+
     it("falls back to the recipe's own grind when no dial reading arrived", () => {
         const figure = dialNote(record({
             grinderUsed: true, grindSize: 58, dialAfter: undefined

@@ -12,6 +12,16 @@ const record: StoredBrew = {
 const samples: BrewSample[] = [{at: 0, water: 0, cup: 0, pour: 1}];
 
 describe("brewExport", () => {
+    it.each(["tea", "coffee"] as const)("preserves the raw %s identity", (beverageKind) => {
+        const exported = JSON.parse(toExportJson({...record, beverageKind}, samples));
+        expect(exported.brew.beverageKind).toBe(beverageKind);
+        expect(exported.version).toBe(1);
+    });
+
+    it("leaves legacy exports without a beverage discriminator", () => {
+        expect(JSON.parse(toExportJson(record, samples)).brew).not.toHaveProperty("beverageKind");
+    });
+
     it("carries the summary and the stream", () => {
         const exported = JSON.parse(toExportJson(record, samples));
         expect(exported.brew.recipeName).toBe("Ethiopia Guji");

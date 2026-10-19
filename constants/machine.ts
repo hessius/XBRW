@@ -38,6 +38,24 @@ export const ATT_HEADER_BYTES = 3;
  */
 export const RADIO_READY_MS = 5000;
 
+/**
+ * How long `BleTransport.connect()` will wait for the rest of the connect
+ * sequence (the native connect call, service discovery, MTU negotiation and
+ * the model-number read) before giving up.
+ *
+ * Without this, a native BLE call that never resolves — the file's own
+ * ghost-link comments already describe how this can happen — hangs the
+ * promise forever. Nothing fails, so nothing retries and nothing is logged,
+ * and the only way out is restarting the app, which recreates the one
+ * `Machine` singleton `useMachine.ts` holds for the app's life.
+ *
+ * Sized from a real session log: observed connects, including the existing
+ * ghost-link retry-once, completed in 1.5-3.5 s. `waitForRadio()` already has
+ * its own 5 s timeout earlier in the same `connect()` call, so this only has
+ * to cover what is left — 10 s is roughly 3x the slowest connect observed.
+ */
+export const CONNECT_TIMEOUT_MS = 10_000;
+
 /** How long to scan before giving up on finding a machine. */
 export const SCAN_SECONDS = 10;
 
@@ -84,8 +102,30 @@ export const INFO_WAIT_MS = 2000;
  */
 export const FRAME_GAP_MS = 2000;
 
-/** How long to wait for a sent recipe to reach `loading` or `armed`. */
+/** UNMEASURED conservative slot budgets; dispatch includes its pacing gap. */
+export const SLOT_DISPATCH_MS = 15_000;
+export const SLOT_RECEIPT_MS = 15_000;
+export const SLOT_COMPLETION_MS = 15_000;
+
+/** Start-response silence budget; changing grinder positions renew it. */
 export const RECIPE_ACK_MS = 8000;
+
+/**
+ * How long to wait for the machine to acknowledge a pause with 40515.
+ *
+ * A guess, and the only number in the pause path that is. Hardware on
+ * 2026-10-08 acknowledged in well under a second, but a single observation on
+ * one firmware is not a budget. Three seconds is long enough that a busy
+ * machine is not accused of ignoring us, and short enough that somebody who
+ * pressed PAUSE and is watching the water finds out quickly that it did not
+ * take.
+ *
+ * It is deliberately generous in the direction of giving up. The failure this
+ * timeout prevents is the UI saying "paused" about a machine that is still
+ * pouring, which is the one failure in this feature that sends somebody out
+ * of the room.
+ */
+export const PAUSE_ACK_MS = 3000;
 
 /**
  * There is deliberately **no** grinding timeout.

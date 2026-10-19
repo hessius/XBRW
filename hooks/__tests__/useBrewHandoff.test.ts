@@ -64,6 +64,21 @@ function decode(url: string): HandoffEnvelope {
 }
 
 describe("useBrewHandoff", () => {
+    it("refuses tea before opening the recipe database or marking it sent", async () => {
+        const markSent = jest.fn();
+        const {result} = await renderHook(() => useBrewHandoff(
+            () => ({record: brew({beverageKind: "tea"}), samples}), {markSent}
+        ));
+        await act(async () => { expect(await result.current.send()).toBeNull(); });
+        expect(RecipeDatabaseMock).not.toHaveBeenCalled();
+        expect(openURL).not.toHaveBeenCalled();
+        expect(markSent).not.toHaveBeenCalled();
+        expect(result.current.busy).toBe(false);
+        expect(notifyMock).toHaveBeenCalledWith({
+            tone: "error", message: "Tea brews cannot be sent to Beanconqueror."
+        });
+    });
+
     beforeEach(() => {
         RecipeDatabaseMock.mockReset();
         RecipeDatabaseMock.mockImplementation(() => recipeStore(null));

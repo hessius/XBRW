@@ -157,7 +157,9 @@ export const MACHINE_STATE = {
     BREWING_ALT:      0x3B,
     COMPLETE:         0x41,
     SAVING_SLOTS:     0x43,
-    SLOTS_SAVED:      0x25
+    SLOTS_SAVED:      0x25,
+    /** Tea steeping state, observed in one three-stage V12.0D.500 capture. */
+    TEA_STEEPING:     0x45
 } as const;
 
 /**
@@ -190,9 +192,12 @@ export function frameCommand(frame: Uint8Array): number | null {
 /** Notification codes the brew state machine reacts to. */
 export const EVENT = {
     COFFEE_STARTING:  40502,
+    GRINDER_POSITION: 40505,
     BREWER_START:     40506,
     GRINDER_STOP:     40507,
     POUR_START:       40510,
+    /** Tea fill boundary, observed immediately before state `TEA_STEEPING`. */
+    TEA_FILL_END:      9012,
     /**
      * 40520. The bypass firing.
      *
@@ -210,6 +215,24 @@ export const EVENT = {
     ENJOY:            40512,
     ENJOY_2:          40513,
     ERROR_IDLING:     40517,
+    /**
+     * 40515. The machine acknowledging a pause, carrying the volume delivered
+     * so far.
+     *
+     * Hardware 2026-10-08 (V12.0D.500): sending 40518 into a running recipe
+     * produced this with a rising number (138, then 184 within one brew),
+     * followed by state 0x1f. Volume-so-far is the obvious reading of the
+     * number and has not been checked against the scale, so nothing depends
+     * on its value -- only on its arrival, which is the only confirmation
+     * the machine ever gives that a brew is actually paused.
+     */
+    COFFEE_PAUSED:    40515,
+    /**
+     * 40516. The machine acknowledging a resume. State returns to 0x23 and
+     * the brew carries on from where it stopped rather than restarting the
+     * stage.
+     */
+    COFFEE_RESUMED:   40516,
     /**
      * 40522. Named for what a capture proves it to be, not for what it was
      * assumed to be.
@@ -229,6 +252,18 @@ export const EVENT = {
     HANDSHAKE_ACK:    8100
 } as const;
 
+/**
+ * Commands the app sends, where the number is worth a name.
+ *
+ * Only the pause pair so far; the rest of the app still writes its literals
+ * inline. These two earn constants because the obvious-looking alternative,
+ * `8019`, is named "Brewer pause" by every upstream source and is **not** a
+ * pause: hardware on 2026-10-08 showed it abandoning the recipe into a
+ * FreeSolo water pour. Anybody reaching for a pause code should land on these.
+ */
+export const COMMAND_PAUSE = 40518;
+export const COMMAND_RESUME = 40524;
+
 export type MachineInfo = {
     kind: "info";
     serial: string;
@@ -241,6 +276,7 @@ export type MachineInfo = {
 };
 
 export type Notification =
+    | {kind: "receipt"; code: number; status: number}
     | {kind: "status"; state: number}
     | {kind: "event"; code: number; value?: number}
     | {kind: "waterWeight"; grams: number}
@@ -354,6 +390,12 @@ export function parseNotification(bytes: Uint8Array): Notification {
     const sub = bytes[4];
     const payload = bytes.subarray(PAYLOAD_START, bytes.length - 2);
 
+    // Slot ACKs carry no index. Preserve the command status, including refusals.
+    const command = type | (sub << 8);
+    if (command === 11510 || command === 40526) {
+        return {kind: "receipt", code: command, status: bytes[9]};
+    }
+
     if (type === 0x57) {
         return {kind: "status", state: payload[0] ?? 0};
     }
@@ -409,6 +451,18 @@ export const GRINDER_OFF_WIRE = 0xFE;
 /** The largest volume one segment can carry before it has to be chunked. */
 const MAX_SEGMENT_VOLUME = 127;
 
+export const MAX_BLOB_SEGMENT_BYTES = 255;
+
+export function encodedSegmentsLength(recipe: BlobRecipe): number {
+    return segmentsFor(recipe).length;
+}
+
+function checkSegmentLength(segments: readonly number[]): void {
+    if (segments.length > MAX_BLOB_SEGMENT_BYTES) {
+        throw new Error("The recipe is too large to send over Bluetooth. Reduce the number or volume of stages.");
+    }
+}
+
 /**
  * The tail byte: the ratio, times ten, **rounded up**.
  *
@@ -462,6 +516,7 @@ function segmentsFor(recipe: BlobRecipe): number[] {
  */
 export function encodeCoffeeBlob(recipe: BlobRecipe): Uint8Array {
     const segments = segmentsFor(recipe);
+    checkSegmentLength(segments);
     const total = recipe.pours.reduce((sum, pour) => sum + pour.volume, 0);
     return Uint8Array.from([
         segments.length,
@@ -513,6 +568,7 @@ export function encodeTeaBlob(recipe: BlobRecipe): Uint8Array {
         );
     });
 
+    checkSegmentLength(segments);
     const total = recipe.pours.reduce((sum, pour) => sum + pour.volume, 0);
     return Uint8Array.from([
         segments.length,

@@ -41,20 +41,19 @@ describe("CardReadDiagnostic", () => {
         jest.clearAllMocks();
     });
 
-    it("stays hidden until the machine console has been acknowledged", async () => {
+    it("stays hidden outside Labs even after acknowledging the console", async () => {
         const settings = new Settings(memoryStorage());
+        settings.set("machineConsoleAcknowledged", true);
         settings.set("lastCardRead", serialiseCapture(sampleCapture()));
 
         await renderWithProviders(<CardReadDiagnostic settings={settings}/>);
 
-        // Not gated, this section would clutter every user's screen. The gate is
-        // the machine console's, reused rather than a second one invented.
         expect(screen.queryByText(/card diagnostics/i)).toBeNull();
     });
 
-    it("says nothing has been read yet when acknowledged and empty", async () => {
+    it("is available in Labs without acknowledging console commands", async () => {
         const settings = new Settings(memoryStorage());
-        settings.set("machineConsoleAcknowledged", true);
+        settings.set("labsUnlocked", true);
 
         await renderWithProviders(<CardReadDiagnostic settings={settings}/>);
 
@@ -64,7 +63,7 @@ describe("CardReadDiagnostic", () => {
 
     it("shows the timestamp and capacity once a card has been read", async () => {
         const settings = new Settings(memoryStorage());
-        settings.set("machineConsoleAcknowledged", true);
+        settings.set("labsUnlocked", true);
         settings.set("lastCardRead", serialiseCapture(sampleCapture()));
 
         await renderWithProviders(<CardReadDiagnostic settings={settings}/>);
@@ -76,7 +75,7 @@ describe("CardReadDiagnostic", () => {
 
     it("copies the full readable report to the clipboard", async () => {
         const settings = new Settings(memoryStorage());
-        settings.set("machineConsoleAcknowledged", true);
+        settings.set("labsUnlocked", true);
         settings.set("lastCardRead", serialiseCapture(sampleCapture()));
 
         await renderWithProviders(<CardReadDiagnostic settings={settings}/>);
@@ -87,7 +86,7 @@ describe("CardReadDiagnostic", () => {
 
     it("treats an unreadable stored capture as nothing read", async () => {
         const settings = new Settings(memoryStorage());
-        settings.set("machineConsoleAcknowledged", true);
+        settings.set("labsUnlocked", true);
         settings.set("lastCardRead", "{corrupt");
 
         await renderWithProviders(<CardReadDiagnostic settings={settings}/>);

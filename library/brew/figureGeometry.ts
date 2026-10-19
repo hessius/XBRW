@@ -1,4 +1,5 @@
-import {dotoTextWidth, DOTO_MIN_FONT_SIZE} from "@/library/dotoMetrics";
+import {dotoRowHeight, dotoTextWidth, DOTO_MIN_FONT_SIZE} from "@/library/dotoMetrics";
+import type {BeverageKind} from "@/library/brew/BrewRecord";
 
 export const BREW_FIGURE_LABEL_SIZE = 10;
 export const BREW_FIGURE_VALUE_SIZE = 28;
@@ -79,6 +80,131 @@ export function brewFigureBadgeWidth(
         + (badge.paddingHorizontal + badge.borderWidth) * 2;
 }
 
+export const BREW_RECIPE_SIZE = 12;
+export const BREW_RECIPE_TRACKING = 1.2;
+export const BREW_RECIPE_LABEL_GAP = 4;
+export const BREW_RECIPE_UNIT_GAP = 16;
+export const BREW_RECIPE_ROW_GAP = 6;
+export const BREW_RECIPE_AFTER_GAP = 8;
+
+export type BrewRecipeInputs = {
+    beverageKind?: BeverageKind;
+    dose?: number;
+    ratio?: number;
+    adjustedFromDose?: number;
+    adjustedFromRatio?: number;
+};
+
+export type BrewRecipeUnit = {
+    key: "dose" | "ratio";
+    label: string;
+    value: string;
+    badge: string | null;
+    accessibilityLabel: string;
+};
+
+export function brewRecipeUnits(inputs: BrewRecipeInputs = {}): BrewRecipeUnit[] {
+    const {dose, ratio, adjustedFromDose, adjustedFromRatio} = inputs;
+    const tea = inputs.beverageKind === "tea";
+    const units: BrewRecipeUnit[] = [];
+    if (dose !== undefined && Number.isFinite(dose) && dose > 0) {
+        const hasBaseline = adjustedFromDose !== undefined
+            && Number.isFinite(adjustedFromDose) && adjustedFromDose > 0
+            && adjustedFromDose !== dose;
+        units.push({
+            key: "dose",
+            label: tea ? "LEAF" : "DOSE",
+            value: `${dose} G`,
+            badge: hasBaseline ? `RECIPE ${adjustedFromDose}` : null,
+            accessibilityLabel: `${tea ? "Recipe leaf dose" : "Recipe dose"}, ${dose} grams`
+                + (hasBaseline ? `, saved recipe ${adjustedFromDose} grams` : "")
+        });
+    }
+    if (!tea && ratio !== undefined && Number.isFinite(ratio) && ratio > 0) {
+        const hasBaseline = adjustedFromRatio !== undefined
+            && Number.isFinite(adjustedFromRatio) && adjustedFromRatio > 0
+            && adjustedFromRatio !== ratio;
+        units.push({
+            key: "ratio",
+            label: "RATIO",
+            value: `1:${ratio}`,
+            badge: hasBaseline ? `RECIPE 1:${adjustedFromRatio}` : null,
+            accessibilityLabel: `Recipe ratio, 1 to ${ratio}`
+                + (hasBaseline ? `, saved recipe 1 to ${adjustedFromRatio}` : "")
+        });
+    }
+    return units;
+}
+
+export type BrewRecipeMeasuredUnit = {
+    unit: BrewRecipeUnit;
+    badgeBelow: boolean;
+    width: number;
+    height: number;
+};
+
+export type BrewRecipeContextLayout = {
+    rows: {units: BrewRecipeMeasuredUnit[]; height: number}[];
+    columnWidth: number;
+    maxWidth: number;
+    totalHeight: number;
+    fits: boolean;
+};
+
+export function brewRecipeContextLayout(
+    inputs: BrewRecipeInputs | undefined,
+    contentWidth: number,
+    fontScale: number,
+    scale = 1
+): BrewRecipeContextLayout {
+    const size = BREW_RECIPE_SIZE * scale;
+    const tracking = BREW_RECIPE_TRACKING * scale;
+    const lineHeight = dotoRowHeight(size, fontScale);
+    const badge = brewFigureBadgeGeometry(scale);
+    const badgeHeight = dotoRowHeight(badge.fontSize, fontScale, DOTO_MIN_FONT_SIZE * scale)
+        + 2 * (badge.paddingVertical + badge.borderWidth);
+    const segments = brewRecipeUnits(inputs).map((unit) => ({
+        unit,
+        baseWidth: dotoTextWidth(unit.label, size, fontScale, tracking)
+            + BREW_RECIPE_LABEL_GAP * scale
+            + dotoTextWidth(unit.value, size, fontScale, tracking),
+        badgeWidth: unit.badge === null ? 0 : brewFigureBadgeWidth(unit.badge, fontScale, scale)
+    }));
+    const twoColumnWidth = (contentWidth - BREW_RECIPE_UNIT_GAP * scale) / 2;
+    const columns = segments.length === 2 && segments.every(({baseWidth, badgeWidth}) =>
+        Math.max(baseWidth, badgeWidth) + STORY_FIT_MARGIN <= twoColumnWidth)
+        ? 2 : 1;
+    const columnWidth = Math.max(0, columns === 2 ? twoColumnWidth : contentWidth);
+    const measured = segments.map(({unit, baseWidth, badgeWidth}): BrewRecipeMeasuredUnit => {
+        if (unit.badge === null) {
+            return {unit, badgeBelow: false, width: baseWidth, height: lineHeight};
+        }
+        const inlineWidth = baseWidth + badge.gap + badgeWidth;
+        const badgeBelow = inlineWidth + STORY_FIT_MARGIN > columnWidth;
+        return {
+            unit,
+            badgeBelow,
+            width: badgeBelow ? Math.max(baseWidth, badgeWidth) : inlineWidth,
+            height: badgeBelow ? lineHeight + badge.gap + badgeHeight : Math.max(lineHeight, badgeHeight)
+        };
+    });
+    const rows: BrewRecipeContextLayout["rows"] = [];
+    for (let index = 0; index < measured.length; index += columns) {
+        const units = measured.slice(index, index + columns);
+        rows.push({units, height: Math.max(...units.map(({height}) => height))});
+    }
+    const maxWidth = Math.max(0, ...measured.map(({width}) => width));
+    return {
+        rows,
+        columnWidth,
+        maxWidth,
+        totalHeight: rows.length === 0 ? 0
+            : rows.reduce((sum, {height}) => sum + height, 0)
+                + (rows.length - 1) * BREW_RECIPE_ROW_GAP * scale + BREW_RECIPE_AFTER_GAP * scale,
+        fits: measured.length === 0 || maxWidth + STORY_FIT_MARGIN <= columnWidth
+    };
+}
+
 export type BrewFigureAdjustmentMeasure = {
     label: string;
     value: string;
@@ -88,57 +214,11 @@ export type BrewFigureAdjustmentMeasure = {
 type AdjustmentMeasureInput = string | BrewFigureAdjustmentMeasure;
 
 /**
- * DRAWDOWN is the only eight-character label in the row, so its column is
- * wider than the others rather than the row being sized for its longest word.
- */
-export const BREW_FIGURE_DRAWDOWN_FLEX = 1.4;
-
-/**
- * GRIND carries the longest quiet-line text in the row (`RECIPE nn`), while
- * DELAY's value is the shortest (`+N`), so DELAY yields share to GRIND without
- * changing the DRAWDOWN slot or the row's total flex.
- */
-export const BREW_FIGURE_GRIND_FLEX = 1.25;
-export const BREW_FIGURE_DELAY_FLEX = 0.75;
-
-const FOUR_COLUMN_FLEX = [
-    BREW_FIGURE_GRIND_FLEX,
-    BREW_FIGURE_DELAY_FLEX,
-    BREW_FIGURE_DRAWDOWN_FLEX,
-    1
-];
-const THREE_COLUMN_FLEX = [1, 1, 1];
-
-function columnWidthsForFlex(contentWidth: number, flex: number[], scale = 1): number[] {
-    const geometry = brewFigureTextGeometry(scale);
-    const free = Math.max(0, contentWidth - geometry.columnGap * (flex.length - 1));
-    const total = flex.reduce((sum, share) => sum + share, 0);
-    return flex.map((share) => (free * share) / total);
-}
-
-/** Whether the detail row can afford four columns at this width and text scale. */
-export function brewFigureUsesFourColumns(fontScale: number, contentWidth: number): boolean {
-    // Before the first layout pass there is no measured width. Assume the
-    // intended row, otherwise mount can blink through the fallback and back.
-    if (contentWidth <= 0) return true;
-
-    const [grind] = columnWidthsForFlex(contentWidth, FOUR_COLUMN_FLEX);
-    return brewFigureBadgeWidth("RECIPE 58", fontScale) + STORY_FIT_MARGIN <= grind;
-}
-
-/** The flex shares the detail row's columns take, left to right. */
-export function brewFigureColumnFlex(fontScale: number, contentWidth: number): number[] {
-    return brewFigureUsesFourColumns(fontScale, contentWidth)
-        ? FOUR_COLUMN_FLEX
-        : THREE_COLUMN_FLEX;
-}
-
-/**
  * What each detail column actually measures, so a test can ask whether the
  * text fits instead of looking at a picture of it.
  *
  * @param contentWidth the row's width, after the screen's padding.
- * @param fontScale the user's text scale, which decides the column count.
+ * @param fontScale the user's text scale; all sizes retain three columns.
  * @param scale the story card's shrink from the reference width.
  */
 export function brewFigureColumnWidths(
@@ -146,11 +226,9 @@ export function brewFigureColumnWidths(
     fontScale: number,
     scale = 1
 ): number[] {
-    return columnWidthsForFlex(
-        contentWidth,
-        brewFigureColumnFlex(fontScale, contentWidth),
-        scale
-    );
+    void fontScale;
+    const column = Math.max(0, (contentWidth - brewFigureTextGeometry(scale).columnGap * 2) / 3);
+    return [column, column, column];
 }
 
 export function brewFigureAdjustmentColumns(

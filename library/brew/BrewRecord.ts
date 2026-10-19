@@ -6,6 +6,13 @@ import {grindBand} from "@/library/grindBands";
 
 import type {Fermentation, Process, Roast} from "./beanTags";
 import {NOISE_FLOOR_ML, stageWaterFrom, stallsInStage, type Stall} from "./stalls";
+import {pausedWithin, type PauseInterval} from "./pauseIntervals";
+
+export type BeverageKind = "coffee" | "tea";
+
+export function isBeverageKind(value: unknown): value is BeverageKind {
+    return value === "coffee" || value === "tea";
+}
 
 /**
  * One instant of a brew, as the machine reported it.
@@ -23,6 +30,47 @@ export type BrewSample = {
     /** Which pour was running, 1-based. 0 before the first drop. */
     pour: number;
 };
+
+/**
+ * A compact tea-cycle observation retained with the brew after its sample
+ * stream expires. Time markers share the sample clock; a negative start is
+ * valid when the machine announced a cycle just before the first water sample.
+ * Missing boundaries and amounts stay absent, never zero.
+ */
+export type TeaCycleObservation = {
+    /** Zero-based index from the observed tea `40510` event. */
+    index: number;
+    fillStartedAt?: number;
+    fillEndedAt?: number;
+    steepStartedAt?: number;
+    steepEndedAt?: number;
+    endingEndedAt?: number;
+    fillMl?: number;
+    releaseWaterMl?: number;
+};
+
+export function isTeaCycleObservations(value: unknown): value is TeaCycleObservation[] {
+    if (!Array.isArray(value)) return false;
+    let previousIndex = -1;
+    for (const entry of value) {
+        if (typeof entry !== "object" || entry === null || Array.isArray(entry)) return false;
+        const cycle = entry as Record<string, unknown>;
+        if (!Number.isInteger(cycle.index) || (cycle.index as number) <= previousIndex) return false;
+        previousIndex = cycle.index as number;
+        const markers = [
+            cycle.fillStartedAt, cycle.fillEndedAt, cycle.steepStartedAt,
+            cycle.steepEndedAt, cycle.endingEndedAt
+        ];
+        if (markers.some((marker) => marker !== undefined
+            && (typeof marker !== "number" || !Number.isFinite(marker)))) return false;
+        const ordered = markers.filter((marker): marker is number => typeof marker === "number");
+        if (ordered.some((marker, index) => index > 0 && marker < ordered[index - 1])) return false;
+        const amounts = [cycle.fillMl, cycle.releaseWaterMl];
+        if (amounts.some((amount) => amount !== undefined
+            && (typeof amount !== "number" || !Number.isFinite(amount) || amount < 0))) return false;
+    }
+    return true;
+}
 
 /**
  * How a brew ended. `failed` carries the reason separately.
@@ -97,6 +145,8 @@ export type BrewRecord = {
     recipeUuid: string;
     recipeName: string;
     accent: string;
+    /** Snapshotted at brew creation; absent on records written before it was known. */
+    beverageKind?: BeverageKind;
     startedAt: number;
     /**
      * Wall clock of the first drop. Absent on rows written before it existed,
@@ -169,6 +219,20 @@ export type BrewRecord = {
     /** Seconds the brew ran beyond its plan — overflow protection, mostly. */
     heldSeconds: number;
     /**
+     * Seconds held by confirmed manual or overflow pauses, summed over every pause.
+     *
+     * Separate from `heldSeconds`, which excludes pauses on its clock. This is not a
+     * refinement but a correction: held time is derived as `elapsed - planned`
+     * rather than measured, so without this a pause would be reported as the
+     * machine holding water back. Whose decision made a brew long is the only
+     * question worth asking of the pair.
+     *
+     * Absent on rows written before it existed, and 0 where nobody paused.
+     */
+    pausedSeconds?: number;
+    /** Confirmed pauses on the first-water sample clock, in milliseconds. */
+    pauseIntervals?: PauseInterval[];
+    /**
      * Where each stage stopped pouring, one list per stage, index-aligned with
      * the recipe's pours.
      *
@@ -195,6 +259,8 @@ export type BrewRecord = {
      * silently go back to drawing the plan as though it had all poured.
      */
     stageWater?: number[];
+    /** Tea-only cycle markers and measured amounts, independent of trace retention. */
+    teaCycles?: TeaCycleObservation[];
     /**
      * The bypass, if the recipe had one.
      *
@@ -218,13 +284,7 @@ export type BrewRecord = {
     rating?: number;
     /** What the user said about the cup. Empty is no note; there is no flag. */
     note?: string;
-    /**
-     * Kept back from the retention sweep.
-     *
-     * Set by judging rather than by a control of its own: a user who has just
-     * said a brew was good has already said it is worth keeping, and a
-     * judgement whose trace has been swept is one that cannot be acted on.
-     */
+    /** Legacy, inert trace pin retained for database and backup compatibility. */
     pinned?: boolean;
     /** When this brew was last handed to another app. Absent until it was. */
     sentAt?: number;
@@ -356,7 +416,8 @@ export function isRating(value: unknown): value is number {
         && value <= MAX_RATING;
 }
 
-export type BrewSummary = Pick<BrewRecord, "waterTotal" | "cupTotal" | "heldSeconds">;
+export type BrewSummary =
+    Pick<BrewRecord, "waterTotal" | "cupTotal" | "heldSeconds"> & {pausedSeconds: number};
 
 /**
  * How long the bed took to finish, in seconds, or null if it was not measured.
@@ -458,14 +519,27 @@ export function drawdownFrom(
     return at;
 }
 
-export function summarise(samples: BrewSample[], plannedSeconds: number): BrewSummary {
+export function summarise(
+    samples: BrewSample[], plannedSeconds: number, pausedSeconds = 0,
+    intervals?: readonly PauseInterval[]
+): BrewSummary {
     const last = samples[samples.length - 1];
-    if (last === undefined) return {waterTotal: 0, cupTotal: 0, heldSeconds: 0};
+    if (last === undefined) {
+        return {waterTotal: 0, cupTotal: 0, heldSeconds: 0, pausedSeconds: 0};
+    }
     const elapsed = last.at / 1000;
+    const pausedOnClock = intervals === undefined
+        ? pausedSeconds : pausedWithin(intervals, 0, last.at) / 1000;
     return {
         waterTotal: last.water,
         cupTotal: last.cup,
-        heldSeconds: Math.max(0, Math.round(elapsed - plannedSeconds)),
+        // Only overlap on this clock comes out; pre-water pauses still belong
+        // to pausedSeconds but cannot reduce a first-water-clock overrun.
+        // The pause comes out before the comparison, not after: a brew that
+        // was paused for longer than it ran over has not held anything, and
+        // the subtraction has to be able to reach zero.
+        heldSeconds: Math.max(0, Math.round(elapsed - plannedSeconds - pausedOnClock)),
+        pausedSeconds: Math.max(0, Math.round(pausedSeconds)),
     };
 }
 
@@ -474,8 +548,10 @@ export function summarise(samples: BrewSample[], plannedSeconds: number): BrewSu
  *
  * @param targets each stage's planned volume, index-aligned with the pours
  */
-export function stallsFromSamples(samples: BrewSample[], targets: number[]): Stall[][] {
-    return targets.map((target, i) => stallsInStage(samples, i + 1, target));
+export function stallsFromSamples(
+    samples: BrewSample[], targets: number[], intervals?: readonly PauseInterval[]
+): Stall[][] {
+    return targets.map((target, i) => stallsInStage(samples, i + 1, target, undefined, intervals));
 }
 
 /**
@@ -583,6 +659,7 @@ export function unobservedBrew(input: {
     recipeUuid: string;
     recipeName: string;
     accent: string;
+    beverageKind?: BeverageKind;
     rating: number;
     /** Injected by tests; the wall clock otherwise. */
     at?: number;
@@ -595,6 +672,7 @@ export function unobservedBrew(input: {
         recipeUuid: input.recipeUuid,
         recipeName: input.recipeName,
         accent: input.accent,
+        ...(input.beverageKind !== undefined ? {beverageKind: input.beverageKind} : {}),
         startedAt: at,
         // Zero, the app's own word for "it never poured". A first drop would
         // be an invention, and the record draws from this.
@@ -607,7 +685,6 @@ export function unobservedBrew(input: {
         cupTotal: 0,
         heldSeconds: 0,
         rating: input.rating,
-        pinned: true,
         watched: false,
         ...(input.quickEdit ?? {})
     };

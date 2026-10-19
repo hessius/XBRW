@@ -1,5 +1,6 @@
 import * as SQLite from "expo-sqlite";
 import {appDatabase} from "@/library/appDatabase";
+import {decodeSamples, decodeText, encodeSamples, encodeText} from "@/library/brew/traceCodec";
 
 import {
     COUNTED_SQL,
@@ -8,7 +9,8 @@ import {
     TIMED_SQL
 } from "@/library/brew/brewPopulation";
 import type {BrewFailure} from "./machine/Machine";
-import {isRating} from "./brew/BrewRecord";
+import {isBeverageKind, isRating, isTeaCycleObservations} from "./brew/BrewRecord";
+import {isPauseIntervals} from "./brew/pauseIntervals";
 import {
     BEAN_FIELDS,
     isFermentation,
@@ -27,7 +29,8 @@ import type {
     BrewRecord,
     BrewSample,
     BypassRecord,
-    PlanStage
+    PlanStage,
+    TeaCycleObservation
 } from "./brew/BrewRecord";
 import type {Stall} from "./brew/stalls";
 import type {PodCoffee} from "./podCoffee";
@@ -95,6 +98,7 @@ type BrewRow = {
     recipeUuid: string;
     recipeName: string;
     accent: string;
+    beverageKind: string;
     startedAt: number;
     /** 0 on a brew that never poured, and on rows written before the column. */
     pouringAt: number | null;
@@ -108,12 +112,17 @@ type BrewRow = {
     waterTotal: number;
     cupTotal: number;
     heldSeconds: number;
+    pausedSeconds: number | null;
+    /** JSON, pause timing retained independently of the sample stream. */
+    pauseIntervals: string;
     /** JSON, one list of stalls per stage. `[]` on rows written before it. */
     stalls: string | null;
     /** JSON, the plan as it stood. `[]` on rows written before it. */
     plan: string | null;
     /** JSON, one delivered volume per stage. `[]` on rows written before it. */
     stageWater: string | null;
+    /** JSON, compact tea observations; empty on older and non-tea rows. */
+    teaCycles: string;
     /** 0 on a brew nobody judged, and on rows written before the column. */
     rating: number | null;
     note: string | null;
@@ -182,6 +191,7 @@ export function ensureBrewTables(db: SQLite.SQLiteDatabase): void {
                 recipeUuid TEXT NOT NULL,
                 recipeName TEXT NOT NULL,
                 accent TEXT NOT NULL,
+                beverageKind TEXT NOT NULL DEFAULT '',
                 startedAt INTEGER NOT NULL,
                 pouringAt INTEGER NOT NULL DEFAULT 0,
                 drawdownAt INTEGER NOT NULL DEFAULT 0,
@@ -193,9 +203,12 @@ export function ensureBrewTables(db: SQLite.SQLiteDatabase): void {
                 waterTotal REAL NOT NULL,
                 cupTotal REAL NOT NULL,
                 heldSeconds INTEGER NOT NULL,
+                pausedSeconds INTEGER NOT NULL DEFAULT 0,
+                pauseIntervals TEXT NOT NULL DEFAULT '[]',
                 stalls TEXT NOT NULL DEFAULT '[]',
                 plan TEXT NOT NULL DEFAULT '[]',
                 stageWater TEXT NOT NULL DEFAULT '[]',
+                teaCycles TEXT NOT NULL DEFAULT '',
                 rating INTEGER NOT NULL DEFAULT 0,
                 note TEXT NOT NULL DEFAULT '',
                 pinned INTEGER NOT NULL DEFAULT 0,
@@ -236,7 +249,8 @@ export function ensureBrewTables(db: SQLite.SQLiteDatabase): void {
                 PRIMARY KEY (brewId, tagKey)
             );
             CREATE INDEX IF NOT EXISTS idx_brew_tags_key ON brew_tags(tagKey);
-            CREATE INDEX IF NOT EXISTS idx_brews_recipeUuid ON brews(recipeUuid);`);
+            CREATE INDEX IF NOT EXISTS idx_brews_recipeUuid ON brews(recipeUuid);
+            CREATE INDEX IF NOT EXISTS idx_brews_recipe_started ON brews(recipeUuid, startedAt);`);
     // Rows written before `pouringAt` existed keep the 0 default, which
     // reads as "no first drop recorded" and falls back to `startedAt`.
     // `IF NOT EXISTS` on ADD COLUMN is not portable across the SQLite
@@ -245,6 +259,20 @@ export function ensureBrewTables(db: SQLite.SQLiteDatabase): void {
         db.execSync("ALTER TABLE brews ADD COLUMN pouringAt INTEGER NOT NULL DEFAULT 0;");
     } catch {
         // Already there.
+    }
+    // 0 means nobody paused, which is also what every row written before the
+    // pause existed should say. The sentinel and the truth coincide here, so
+    // unlike `cupAtDrawdown` there is nothing for `hydrate` to translate back
+    // into absence beyond omitting the key.
+    const columns = db.getAllSync<{name: string}>("PRAGMA table_info(brews);");
+    if (!columns.some((column) => column.name === "beverageKind")) {
+        db.execSync("ALTER TABLE brews ADD COLUMN beverageKind TEXT NOT NULL DEFAULT '';");
+    }
+    if (!columns.some((column) => column.name === "pausedSeconds")) {
+        db.execSync("ALTER TABLE brews ADD COLUMN pausedSeconds INTEGER NOT NULL DEFAULT 0;");
+    }
+    if (!columns.some((column) => column.name === "pauseIntervals")) {
+        db.execSync("ALTER TABLE brews ADD COLUMN pauseIntervals TEXT NOT NULL DEFAULT '[]';");
     }
     // Rows written before the drawdown was measured keep the 0 default, which
     // `drawdownSeconds` reads as "not measured" rather than "no drawdown".
@@ -295,6 +323,11 @@ export function ensureBrewTables(db: SQLite.SQLiteDatabase): void {
     try {
         db.execSync(
             "ALTER TABLE brews ADD COLUMN stageWater TEXT NOT NULL DEFAULT '[]';");
+    } catch {
+        // Already there.
+    }
+    try {
+        db.execSync("ALTER TABLE brews ADD COLUMN teaCycles TEXT NOT NULL DEFAULT '';");
     } catch {
         // Already there.
     }
@@ -437,6 +470,15 @@ const PROFILE_COLUMN: Record<typeof BEAN_FIELDS[number], string> = {
     fermentation: "fermentation"
 };
 
+type TraceMaintenance = {
+    migration?: Promise<boolean>;
+    sweep?: Promise<void>;
+    budgetMB: number;
+};
+
+// History and the live run wrap the same appDatabase connection separately.
+const traceMaintenance = new WeakMap<SQLite.SQLiteDatabase, TraceMaintenance>();
+
 /**
  * A brew whose recipe is still in the library.
  *
@@ -468,8 +510,8 @@ const UNTAGGED_SQL = `(b.origin = '' AND b.roast = '' AND b.process = ''
  * Brew history, in two tables because they have two lifetimes.
  *
  * `brews` is one short row per brew and is kept until the user deletes it.
- * `brew_samples` is roughly 2 400 rows per brew and is swept by the retention
- * setting, which is why `hasStream` exists: a record whose stream has gone
+ * `brew_samples` holds one compressed stream per brew, swept by a storage
+ * budget, which is why `hasStream` exists: a record whose stream has gone
  * still shows its figures, it just has no trace to draw.
  *
  * The values are copied, not joined to the recipe. A brew is a thing that
@@ -507,16 +549,17 @@ class BrewDatabase {
             `INSERT INTO brews (id, recipeUuid, recipeName, accent, startedAt, pouringAt,
                                 drawdownAt, cupAtDrawdown,
                                 endedAt, outcome, failure, pours, waterTotal, cupTotal,
-                                heldSeconds, stalls, plan, stageWater, bypass,
+                                heldSeconds, pausedSeconds, pauseIntervals,
+                                stalls, plan, stageWater, teaCycles, bypass,
                                 rating, note, pinned, watched,
                                 adjustedFromDose, adjustedFromRatio,
                                 adjustedFromGrind, adjustedTempOffset,
                                 dose, ratio,
                                 grindSize, grinderRpm, grinderUsed,
                                 dialBefore, dialAfter, coffee, recipeUrl,
-                                origin, roast, process, fermentation, sentAt, hasStream)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+                                origin, roast, process, fermentation, sentAt, hasStream, beverageKind)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                     ?, ?,                      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
             [
                 record.id, record.recipeUuid, record.recipeName, record.accent,
                 record.startedAt, record.pouringAt ?? 0, record.drawdownAt ?? 0,
@@ -527,9 +570,12 @@ class BrewDatabase {
                 record.cupAtDrawdown ?? 0,
                 record.endedAt, record.outcome, record.failure,
                 record.pours, record.waterTotal, record.cupTotal, record.heldSeconds,
+                record.pausedSeconds ?? 0,
+                JSON.stringify(record.pauseIntervals ?? []),
                 JSON.stringify(record.stalls ?? []),
                 JSON.stringify(record.plan ?? []),
                 JSON.stringify(record.stageWater ?? []),
+                record.teaCycles ? JSON.stringify(record.teaCycles) : "",
                 record.bypass ? JSON.stringify(record.bypass) : "",
                 // A restore carries a judgement in with the record, so the
                 // insert has to take one. A live brew never does: nothing
@@ -556,7 +602,8 @@ class BrewDatabase {
                 isProcess(record.process) ? record.process : "",
                 isFermentation(record.fermentation) ? record.fermentation : "",
                 record.sentAt ?? 0,
-                hasStream ? 1 : 0
+                hasStream ? 1 : 0,
+                record.beverageKind ?? ""
             ]
         );
     }
@@ -567,18 +614,18 @@ class BrewDatabase {
         this.db.withTransactionSync(() => {
             this.writeBrewRow(record, samples.length > 0);
             if (samples.length > 0) {
-                // One JSON row rather than 2 400 rows per brew. Nothing ever
-                // queries inside a stream — it is read whole to draw a line, and
+                // One compressed row rather than 2 400 rows per brew. Nothing ever
+                // queries inside a stream: it is read whole to draw a line, and
                 // deleted whole by the retention sweep.
                 this.db.runSync(
                     "INSERT INTO brew_samples (brewId, stream) VALUES (?, ?);",
-                    [record.id, JSON.stringify(samples)]
+                    [record.id, encodeSamples(samples)]
                 );
             }
             if (frames.length > 0) {
                 this.db.runSync(
                     "INSERT INTO brew_frames (brewId, frames) VALUES (?, ?);",
-                    [record.id, frames]
+                    [record.id, encodeText(frames)]
                 );
             }
             this.writeTags(record.id, record.tags ?? []);
@@ -882,13 +929,8 @@ class BrewDatabase {
     }
 
     /**
-     * The user's verdict on a brew, and the pin that comes with it.
-     *
-     * One statement, so the pin cannot lag the judgement it is there to
-     * protect: a rating whose trace the next sweep took is a rating the user
-     * cannot act on. A rating outside the scale is refused rather than clamped,
-     * because a 9 arriving here means a caller is wrong, and clamping it to 5
-     * would write a verdict nobody gave.
+     * The user's verdict on a brew. A rating outside the scale is refused
+     * rather than clamped, because clamping would write a verdict nobody gave.
      */
     public judge(id: string, judgement: {rating?: number; note?: string}): void {
         const {rating, note} = judgement;
@@ -904,25 +946,8 @@ class BrewDatabase {
             params.push(note);
         }
         if (sets.length === 0) return;
-        // Clearing a rating back to 0 still pins: the user has been here and
-        // said something about this brew, and taking the trace away underneath
-        // them for changing their mind is the same loss by another route.
-        sets.push("pinned = 1");
         this.db.runSync(
             `UPDATE brews SET ${sets.join(", ")} WHERE id = ?;`, [...params, id]
-        );
-    }
-
-    /**
-     * Let a brew back into the sweep, or hold it out of one by hand.
-     *
-     * Releasing does not bring back a stream that has already gone, and nothing
-     * here pretends it might: `hasStream` already tells a record whether its
-     * trace survived.
-     */
-    public setPinned(id: string, pinned: boolean): void {
-        this.db.runSync(
-            "UPDATE brews SET pinned = ? WHERE id = ?;", [pinned ? 1 : 0, id]
         );
     }
 
@@ -1024,11 +1049,7 @@ class BrewDatabase {
         if (rows.length === 0) return [];
         // A stream that will not parse is a stream that is gone. Losing a trace
         // is a shrug; throwing here would take the history screen down with it.
-        try {
-            return JSON.parse(rows[0].stream) as BrewSample[];
-        } catch {
-            return [];
-        }
+        return decodeSamples(rows[0].stream);
     }
 
     /** The frame log covering a brew, or empty if none was kept or it expired. */
@@ -1036,7 +1057,11 @@ class BrewDatabase {
         const rows = this.db.getAllSync<{frames: string}>(
             "SELECT frames FROM brew_frames WHERE brewId = ?;", [id]
         );
-        return rows.length > 0 ? rows[0].frames : "";
+        try {
+            return rows.length > 0 ? decodeText(rows[0].frames) : "";
+        } catch {
+            return "";
+        }
     }
 
     /**
@@ -1075,34 +1100,138 @@ class BrewDatabase {
         });
     }
 
-    /**
-     * Drop the streams of every brew older than the `keep` most recent, and
-     * mark those records as having no trace. The records themselves stay:
-     * history is complete, only the detail behind it expires.
-     *
-     * Written as a read then a loop rather than one nested DELETE because the
-     * row counts are dozens and this version can be checked by reading it.
-     */
-    public sweep(keep: number): void {
-        // A nonsense keep count would slice from zero and quietly expire every
-        // trace the user has. Refuse rather than delete on a bad number.
-        if (!Number.isFinite(keep) || keep < 0) return;
-        // A pinned brew is outside the sweep entirely, and is not counted
-        // against `keep` either: holding one back must not push an unpinned
-        // brew over the edge, or pinning a favourite would quietly cost the
-        // most recent ordinary brew its trace.
-        const expiring = this.all()
-            .filter((b) => !b.pinned)
-            .slice(keep)
-            .filter((b) => b.hasStream);
-        if (expiring.length === 0) return;
+    private maintenance(): TraceMaintenance {
+        let state = traceMaintenance.get(this.db);
+        if (state === undefined) {
+            state = {budgetMB: 0};
+            traceMaintenance.set(this.db, state);
+        }
+        return state;
+    }
+
+    /** Migrate before enforcing a budget. Overlapping callers share the latest requested budget. */
+    public sweepWhenReady(budgetMB: number): Promise<void> {
+        const state = this.maintenance();
+        state.budgetMB = budgetMB;
+        if (state.sweep !== undefined) return state.sweep;
+        state.sweep = this.migrateLegacyTraces().then((complete) => {
+            if (complete) this.sweep(state.budgetMB);
+        }).finally(() => {
+            state.sweep = undefined;
+        });
+        return state.sweep;
+    }
+
+    /** False means migration could not finish; callers must not enforce a budget yet. Never rejects. */
+    public migrateLegacyTraces(): Promise<boolean> {
+        const state = this.maintenance();
+        if (state.migration !== undefined) return state.migration;
+        state.migration = Promise.resolve().then(() => this.convertLegacyTraces()).finally(() => {
+            state.migration = undefined;
+        });
+        return state.migration;
+    }
+
+    /** Drop trace detail by storage budget in MiB; 0 means Unlimited. Summaries stay. */
+    public sweep(budgetMB: number): void {
+        this.sweepBytes(budgetMB * 1024 * 1024);
+    }
+
+    /** Synchronous accounting includes raw legacy lengths. App callers must use sweepWhenReady. */
+    public sweepBytes(limitBytes: number): void {
+        if (!Number.isFinite(limitBytes) || limitBytes < 0) return;
+        if (limitBytes === 0) return;
+
         this.db.withTransactionSync(() => {
-            expiring.forEach((brew) => {
+            let total = this.traceBytes();
+            if (total <= limitBytes) return;
+            const candidates = this.db.getAllSync<{id: string; tier: number; bytes: number}>(`
+                SELECT b.id,
+                  COALESCE(length(s.stream), 0) + COALESCE(length(f.frames), 0) AS bytes,
+                  CASE
+                    WHEN b.rating > 0 OR TRIM(b.note) <> '' THEN 1
+                    WHEN NOT EXISTS (SELECT 1 FROM brews n
+                          WHERE n.recipeUuid = b.recipeUuid AND n.startedAt > b.startedAt
+                          LIMIT 1 OFFSET 1) THEN 2
+                    ELSE 3
+                  END AS tier
+                FROM brews b
+                LEFT JOIN brew_samples s ON s.brewId = b.id
+                LEFT JOIN brew_frames f ON f.brewId = b.id
+                WHERE s.brewId IS NOT NULL OR f.brewId IS NOT NULL
+                ORDER BY tier DESC, b.startedAt ASC, b.id ASC;
+            `);
+            for (const brew of candidates) {
+                if (total <= limitBytes) break;
                 this.db.runSync("DELETE FROM brew_frames WHERE brewId = ?;", [brew.id]);
                 this.db.runSync("DELETE FROM brew_samples WHERE brewId = ?;", [brew.id]);
                 this.db.runSync("UPDATE brews SET hasStream = 0 WHERE id = ?;", [brew.id]);
-            });
+                total -= brew.bytes;
+            }
         });
+    }
+
+    private traceBytes(): number {
+        return this.db.getFirstSync<{bytes: number}>(`
+            SELECT (SELECT COALESCE(SUM(length(stream)), 0) FROM brew_samples)
+                 + (SELECT COALESCE(SUM(length(frames)), 0) FROM brew_frames) AS bytes;
+        `)!.bytes;
+    }
+
+    private async convertLegacyTraces(): Promise<boolean> {
+        try {
+            let after: string | null = null;
+            for (;;) {
+                const rows: {brewId: string; stream: string}[] = this.db.getAllSync(`
+                    SELECT brewId, stream FROM brew_samples
+                    WHERE stream NOT LIKE 'z1:%' ${after === null ? "" : "AND brewId > ?"}
+                    ORDER BY brewId LIMIT 25;
+                `, after === null ? [] : [after]);
+                if (rows.length === 0) break;
+                after = rows[rows.length - 1].brewId;
+                this.db.withTransactionSync(() => {
+                    for (const row of rows) {
+                        try {
+                            const samples: unknown = JSON.parse(row.stream);
+                            if (!Array.isArray(samples) || !samples.every((sample) =>
+                                sample !== null && typeof sample === "object"
+                                && ["at", "water", "cup", "pour"].every((field) =>
+                                    Number.isFinite(sample[field])))) continue;
+                            this.db.runSync("UPDATE brew_samples SET stream = ? WHERE brewId = ?;",
+                                [encodeSamples(samples), row.brewId]);
+                        } catch {
+                            // Preserve unreadable legacy data; the next page still advances past it.
+                        }
+                    }
+                });
+                await new Promise<void>((resolve) => setTimeout(resolve, 0));
+            }
+            after = null;
+            for (;;) {
+                const rows: {brewId: string; frames: string}[] = this.db.getAllSync(`
+                    SELECT brewId, frames FROM brew_frames
+                    WHERE frames NOT LIKE 'z1:%' ${after === null ? "" : "AND brewId > ?"}
+                    ORDER BY brewId LIMIT 25;
+                `, after === null ? [] : [after]);
+                if (rows.length === 0) break;
+                after = rows[rows.length - 1].brewId;
+                this.db.withTransactionSync(() => {
+                    for (const row of rows) {
+                        try {
+                            this.db.runSync("UPDATE brew_frames SET frames = ? WHERE brewId = ?;",
+                                [encodeText(row.frames), row.brewId]);
+                        } catch {
+                            // A failed conversion must not prevent the rest of the launch sweep.
+                        }
+                    }
+                });
+                await new Promise<void>((resolve) => setTimeout(resolve, 0));
+            }
+            return true;
+        } catch (error) {
+            console.warn("Could not migrate legacy brew traces", error);
+            return false;
+        }
     }
 
     /**
@@ -1161,9 +1290,20 @@ class BrewDatabase {
 }
 
 function hydrate(row: BrewRow): StoredBrew {
+    let pauseIntervals: unknown;
+    try {
+        pauseIntervals = JSON.parse(row.pauseIntervals);
+    } catch (error) {
+        if (!(error instanceof SyntaxError)) throw error;
+        throw new Error(`Invalid stored pauseIntervals for brew ${row.id}: invalid JSON.`);
+    }
+    if (!isPauseIntervals(pauseIntervals)) {
+        throw new Error(`Invalid stored pauseIntervals for brew ${row.id}: invalid intervals.`);
+    }
     const stalls = jsonOf<Stall[]>(row.stalls);
     const plan = jsonOf<PlanStage>(row.plan);
     const stageWater = jsonOf<number>(row.stageWater);
+    const teaCycles = teaCyclesFromStoredColumn(row.teaCycles, row.id);
     const bypass = bypassFromStoredColumn(row.bypass);
     const coffee = coffeeFromStoredColumn(row.coffee);
     return {
@@ -1171,6 +1311,7 @@ function hydrate(row: BrewRow): StoredBrew {
         recipeUuid: row.recipeUuid,
         recipeName: row.recipeName,
         accent: row.accent,
+        ...(isBeverageKind(row.beverageKind) ? {beverageKind: row.beverageKind} : {}),
         startedAt: row.startedAt,
         pouringAt: row.pouringAt ?? 0,
         drawdownAt: row.drawdownAt ?? 0,
@@ -1184,9 +1325,14 @@ function hydrate(row: BrewRow): StoredBrew {
         waterTotal: row.waterTotal,
         cupTotal: row.cupTotal,
         heldSeconds: row.heldSeconds,
+        // Emitted only when somebody paused, so an ordinary brew serialises
+        // byte for byte the way it did before this column existed.
+        ...((row.pausedSeconds ?? 0) > 0 ? {pausedSeconds: row.pausedSeconds ?? 0} : {}),
+        ...(pauseIntervals.length > 0 ? {pauseIntervals} : {}),
         ...(stalls.length > 0 ? {stalls} : {}),
         ...(plan.length > 0 ? {plan} : {}),
         ...(stageWater.length > 0 ? {stageWater} : {}),
+        ...(teaCycles !== null ? {teaCycles} : {}),
         rating: row.rating ?? 0,
         note: row.note ?? "",
         pinned: row.pinned === 1,
@@ -1251,6 +1397,20 @@ function coffeeFromStoredColumn(value: string): PodCoffee | null {
     try {
         return podCoffeeFromStored(JSON.parse(value));
     } catch {
+        return null;
+    }
+}
+
+function teaCyclesFromStoredColumn(value: string, brewId: string): TeaCycleObservation[] | null {
+    if (value === "") return null;
+    try {
+        const parsed: unknown = JSON.parse(value);
+        if (!isTeaCycleObservations(parsed)) {
+            throw new Error("Invalid stored teaCycles: invalid observations.");
+        }
+        return parsed;
+    } catch (error) {
+        console.warn(`BrewDatabase: could not read teaCycles for brew ${brewId}`, error);
         return null;
     }
 }

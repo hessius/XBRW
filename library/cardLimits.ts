@@ -3,6 +3,7 @@ import {AGITATION, POUR_PATTERN} from "./Pour";
 import type Recipe from "./Recipe";
 import {displayRange, toDisplay, type TemperatureUnit} from "./units";
 import {grindTooFine} from "@/constants/copy";
+import {encodedSegmentsLength, MAX_BLOB_SEGMENT_BYTES} from "@/library/machine/protocol";
 
 /**
  * Whether a recipe can be written to a card, and why not.
@@ -32,7 +33,9 @@ export const RATIO: Range = {min: 5, max: 100};
 export const DOSE: Range = {min: 1, max: 31};
 /** Exported for the test that keeps `library/grindBands` in step with the card. */
 export const GRIND_SIZE: Range = {min: 40, max: 80};
-const GRIND_RPM: Range = {min: 60, max: 120};
+/** BLE carries the grind directly, without the card's offset. */
+export const BLE_GRIND_SIZE: Range = {min: 1, max: 80};
+export const GRIND_RPM: Range = {min: 60, max: 120};
 /** Exported for the test that keeps `library/units` in step with the card. */
 export const TEMPERATURE: Range = {min: 39, max: 99};
 /** Tenths of a millilitre per second: the byte 30 means 3.0 ml/s. */
@@ -94,6 +97,9 @@ function checkInteger(value: number, rangeMessage: string, problems: string[]): 
 const FRACTIONAL_RATIO = (ratio: number): string =>
     `The ratio is 1:${ratio}. It has to be a whole number.`;
 
+const STAGE_COUNT = (count: number, maximum: number): string =>
+    `The recipe has ${count} stages. The most is ${maximum}.`;
+
 /**
  * The one problem the editor draws its own banner for.
  *
@@ -107,6 +113,14 @@ const VOLUME_MISMATCH = (poured: number, total: number): string =>
 export function cardWriteProblems(
     recipe: Recipe,
     temperatureUnit: TemperatureUnit = "C"
+): string[] {
+    return recipeProblems(recipe, temperatureUnit, GRIND_SIZE);
+}
+
+function recipeProblems(
+    recipe: Recipe,
+    temperatureUnit: TemperatureUnit,
+    grindRange: Range
 ): string[] {
     const problems: string[] = [];
     const tea = recipe.isTea();
@@ -129,10 +143,10 @@ export function cardWriteProblems(
         // Below the minimum is worth distinguishing: it is what an imported
         // recipe carries when it was ground for espresso, and "the range is
         // 40-80" alone does not explain how it got that way.
-        const grindSizeMsg = recipe.grindSize < GRIND_SIZE.min
+        const grindSizeMsg = grindRange === GRIND_SIZE && recipe.grindSize < GRIND_SIZE.min
             ? `The grind size is ${recipe.grindSize}. ${grindTooFine(GRIND_SIZE.min)}`
-            : `The grind size is ${recipe.grindSize}. The range is ${GRIND_SIZE.min}-${GRIND_SIZE.max}.`;
-        if (outside(recipe.grindSize, GRIND_SIZE)) {
+            : `The grind size is ${recipe.grindSize}. The range is ${grindRange.min}-${grindRange.max}.`;
+        if (outside(recipe.grindSize, grindRange)) {
             problems.push(grindSizeMsg);
         } else {
             checkInteger(recipe.grindSize, grindSizeMsg, problems);
@@ -149,7 +163,7 @@ export function cardWriteProblems(
     if (recipe.pours.length < 1) {
         problems.push("The recipe has no stages.");
     } else if (recipe.pours.length > maxPours) {
-        problems.push(`The recipe has ${recipe.pours.length} stages. The most is ${maxPours}.`);
+        problems.push(STAGE_COUNT(recipe.pours.length, maxPours));
     }
 
     const volumeRange = tea ? TEA_POUR_VOLUME : COFFEE_POUR_VOLUME;
@@ -245,7 +259,12 @@ export function canWriteToCard(recipe: Recipe): boolean {
  * What stops a Bluetooth brew, which is not quite what stops a card write.
  *
  * Nearly everything a card refuses, the machine refuses too, because the two
- * carry the same recipe. The exception is a fractional ratio.
+ * carry the same recipe. Grind range, coffee stage capacity and fractional
+ * ratios differ. BLE carries a raw grind from 1–80; cards require 40–80 for
+ * their offset.
+ * The ten-stage ceiling is card-only; Bluetooth capacity is instead limited by
+ * the segment body's one-byte length. Tea retains its existing three-stage
+ * app constraint.
  * `encodeCoffeeBlob` never sends `recipe.ratio`: it derives a byte from the
  * pour volumes and the dose, at one decimal place and ceilinged rather than
  * rounded, so the number the machine receives for a 1:15.5 recipe is exactly
@@ -265,9 +284,14 @@ export function brewProblems(
     recipe: Recipe,
     temperatureUnit: TemperatureUnit = "C"
 ): string[] {
-    const cardOnly = FRACTIONAL_RATIO(recipe.ratio);
-    return cardWriteProblems(recipe, temperatureUnit)
-        .filter((problem) => problem !== cardOnly);
+    const cardOnlyRatio = FRACTIONAL_RATIO(recipe.ratio);
+    const cardOnlyStages = recipe.isTea() ? null : STAGE_COUNT(recipe.pours.length, MAX_POURS);
+    const problems = recipeProblems(recipe, temperatureUnit, BLE_GRIND_SIZE)
+        .filter((problem) => problem !== cardOnlyRatio && problem !== cardOnlyStages);
+    if (problems.length === 0 && encodedSegmentsLength(recipe) > MAX_BLOB_SEGMENT_BYTES) {
+        problems.push("The recipe is too large to send over Bluetooth. Reduce the number or volume of stages.");
+    }
+    return problems;
 }
 
 /**

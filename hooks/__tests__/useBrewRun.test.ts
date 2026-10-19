@@ -1,4 +1,5 @@
-import {act, renderHook} from "@testing-library/react-native";
+import {act, cleanup, renderHook} from "@testing-library/react-native";
+import {AppState} from "react-native";
 
 import {stageWaterFrom, useBrewRun} from "@/hooks/useBrewRun";
 import type {BrewRecord, BrewSample} from "@/library/brew/BrewRecord";
@@ -8,6 +9,14 @@ import Pour from "@/library/Pour";
 import {applyQuickEdit, quickEditRecordAdjustments} from "@/library/quickEdit";
 import Recipe from "@/library/Recipe";
 
+const mockReadSetting = jest.fn(() => 10);
+jest.mock("@/hooks/useSetting", () => ({
+    ...jest.requireActual("@/hooks/useSetting"),
+    sharedSettings: () => ({get: mockReadSetting})
+}));
+
+const appStateDescriptor = Object.getOwnPropertyDescriptor(AppState, "currentState")!;
+
 jest.mock("@/hooks/useBrew", () => ({
     useBrew: () => global.__brewer
 }));
@@ -16,6 +25,7 @@ declare global {
     var __brewer: Omit<ReturnType<typeof import("@/hooks/useBrew").useBrew>, "machine">
         & {machine: import("@/library/brew/BrewRecorder").RecorderMachine
             & {phase: BrewPhase}
+            & Pick<import("@/library/machine/Machine").default, "pauseBrew" | "resumeBrew">
             & {info?: {grindSize: number} | null;
                askHowItIsDoing?: () => Promise<boolean>}};
 }
@@ -42,11 +52,15 @@ function harness() {
         error: null,
         brew: jest.fn(async () => {}),
         startBrew: jest.fn(async () => {}),
+        pauseBrew: jest.fn(async () => {}),
+        resumeBrew: jest.fn(async () => {}),
         cancelBrew: jest.fn(async () => {}),
         canOfferProMode: () => false,
         switchToProAndRetry: jest.fn(async () => {}),
         machine: {
             phase: {name: "idle"} as BrewPhase,
+            pauseBrew: jest.fn(async () => {}),
+            resumeBrew: jest.fn(async () => {}),
             info: {get grindSize() { return vitals.grindSize; }},
             askHowItIsDoing: async () => {
                 vitals.asked++;
@@ -83,6 +97,7 @@ function harness() {
         vitals,
         dials,
         store: {
+            sweepWhenReady: jest.fn(async (_budgetMB: number) => {}),
             insert: (record: BrewRecord, samples: BrewSample[]) =>
                 written.push({record, samples}),
             recordDialAfter: (id: string, dial: number) => dials.push([id, dial])
@@ -91,8 +106,116 @@ function harness() {
 }
 
 describe("useBrewRun", () => {
-    beforeEach(() => jest.useFakeTimers());
-    afterEach(() => jest.useRealTimers());
+    beforeEach(() => {
+        mockReadSetting.mockReset().mockReturnValue(10);
+        jest.useFakeTimers();
+        Object.defineProperty(AppState, "currentState", {configurable: true, value: "active"});
+    });
+    afterEach(async () => {
+        await cleanup();
+        jest.restoreAllMocks();
+        Object.defineProperty(AppState, "currentState", appStateDescriptor);
+        jest.useRealTimers();
+    });
+
+    it("publishes an open pause's advancing clock without fake samples", async () => {
+        const h = harness();
+        const {result} = await renderHook(() => useBrewRun(recipe(), h.store));
+        const pouring: BrewPhase = {name: "pouring", pour: 1, pours: 2};
+        await h.setPhase(pouring);
+        await h.water(20);
+        await act(async () => { jest.advanceTimersByTime(500); });
+        await h.setPhase({...pouring, name: "paused", was: pouring, pauseKind: "overflow"});
+        await act(async () => { jest.advanceTimersByTime(10_000); });
+        expect(result.current.pauseIntervals).toEqual([
+            {from: 500, to: 10_500, pour: 1, reason: "overflow"}
+        ]);
+        expect(result.current.elapsed).toBe(10.5);
+        expect(result.current.samples).toHaveLength(1);
+        await h.setPhase({name: "cancelled"});
+        expect(result.current.pauseIntervals).toEqual(result.current.record?.pauseIntervals);
+        expect(result.current.elapsed).toBe(10.5);
+    });
+
+    it("notifies protection before ordinary commands and uses direct commands for automatic control", async () => {
+        const h = harness();
+        const r = recipe();
+        r.cupType = 1;
+        r.overflowProtection = {retainedGrams: 50, checkSeconds: 15};
+        const {result} = await renderHook(() => useBrewRun(r, h.store));
+        await h.setPhase({name: "pouring", pour: 1, pours: 2});
+        await h.water(100);
+        await h.cup(0);
+        await act(async () => { jest.advanceTimersByTime(500); });
+        await h.water(100);
+        await h.cup(0);
+        expect(global.__brewer.machine.pauseBrew).toHaveBeenCalledWith("overflow");
+        expect(global.__brewer.pauseBrew).not.toHaveBeenCalled();
+        const pouring: BrewPhase = {name: "pouring", pour: 1, pours: 2};
+        await h.setPhase({name: "paused", pour: 1, pours: 2, was: pouring, pauseKind: "overflow"});
+        await act(async () => { jest.advanceTimersByTime(14_250); });
+        await h.water(100);
+        await h.cup(90);
+        await act(async () => { jest.advanceTimersByTime(500); });
+        await h.water(100);
+        await h.cup(90);
+        global.__brewer.resumeBrew = jest.fn(async () => { jest.advanceTimersByTime(250); });
+        await act(async () => { await result.current.resumeBrew(); });
+        expect(global.__brewer.resumeBrew).toHaveBeenCalledTimes(1);
+        expect(global.__brewer.machine.resumeBrew).not.toHaveBeenCalled();
+        expect(result.current.overflow?.disabledReason).toBe("manualOverride");
+        await act(async () => { await result.current.cancelBrew(); });
+        expect(result.current.overflow?.mode).toBe("ended");
+        expect(global.__brewer.cancelBrew).toHaveBeenCalledTimes(1);
+    });
+
+    it("latches a manual pause before its asynchronous ordinary command is confirmed", async () => {
+        const h = harness();
+        const r = recipe();
+        r.cupType = 1;
+        r.overflowProtection = {retainedGrams: 50, checkSeconds: 15};
+        const {result} = await renderHook(() => useBrewRun(r, h.store));
+        await h.setPhase({name: "pouring", pour: 1, pours: 2});
+        await h.water(100);
+        await h.cup(0);
+        await act(async () => { jest.advanceTimersByTime(500); });
+        global.__brewer.pauseBrew = jest.fn(async () => {
+            await h.water(100);
+            await h.cup(0);
+        });
+        await act(async () => { await result.current.pauseBrew(); });
+        await h.water(100);
+        await h.cup(0);
+        expect(global.__brewer.pauseBrew).toHaveBeenCalledTimes(1);
+        expect(global.__brewer.machine.pauseBrew).not.toHaveBeenCalled();
+    });
+
+    it("keeps the pause extent until the next real sample after resume", async () => {
+        const h = harness();
+        const {result} = await renderHook(() => useBrewRun(recipe(), h.store));
+        const pouring: BrewPhase = {name: "pouring", pour: 1, pours: 2};
+        await h.setPhase(pouring);
+        await h.water(20);
+        await act(async () => { jest.advanceTimersByTime(500); });
+        await h.setPhase({name: "paused", pour: 1, pours: 2, was: pouring});
+        await act(async () => { jest.advanceTimersByTime(1000); });
+        expect(result.current.elapsed).toBe(1.5);
+        await h.setPhase(pouring);
+        await act(async () => { jest.advanceTimersByTime(250); });
+        expect(result.current.elapsed).toBe(1.5);
+        expect(result.current.samples).toHaveLength(1);
+    });
+
+    it("does not activate stored Other protection for another cup type", async () => {
+        const h = harness();
+        const intervals = jest.spyOn(global, "setInterval");
+        const r = recipe();
+        r.cupType = 0;
+        r.overflowProtection = {retainedGrams: 50, checkSeconds: 15};
+        const {result} = await renderHook(() => useBrewRun(r, h.store));
+        expect(result.current.overflow).toBeUndefined();
+        expect(intervals).not.toHaveBeenCalled();
+    });
 
     it("has no samples before the machine pours", async () => {
         const h = harness();
@@ -126,6 +249,32 @@ describe("useBrewRun", () => {
         expect(result.current.samples).toEqual([]);
         await act(async () => { jest.advanceTimersByTime(250); });
         expect(result.current.samples).toHaveLength(2);
+    });
+
+    it("publishes pause metadata and excludes it from a plateau after resume", async () => {
+        const h = harness();
+        const {result} = await renderHook(() => useBrewRun(recipe(), h.store));
+        const pouring: BrewPhase = {name: "pouring", pour: 1, pours: 2};
+        await h.setPhase(pouring);
+        await h.water(20);
+        await act(async () => { jest.advanceTimersByTime(500); });
+        await h.water(20);
+        await h.setPhase({name: "paused", pour: 1, pours: 2, was: pouring,
+            pauseKind: "overflow"});
+        await act(async () => { jest.advanceTimersByTime(10_000); });
+        await h.setPhase(pouring);
+        await h.water(20);
+        await act(async () => { jest.advanceTimersByTime(250); });
+        expect(result.current.pauseIntervals).toEqual([
+            {from: 500, to: 10_500, pour: 1, reason: "overflow"}
+        ]);
+        expect(result.current.holding).toBe(false);
+        expect(result.current.stalls[0]).toEqual([]);
+        await act(async () => { jest.advanceTimersByTime(2000); });
+        await h.water(20);
+        await act(async () => { jest.advanceTimersByTime(250); });
+        expect(result.current.holding).toBe(true);
+        expect(result.current.stalls[0][0].seconds).toBe(2.8);
     });
 
     it("keeps publishing the trace while the brew settles", async () => {
@@ -181,6 +330,31 @@ describe("useBrewRun", () => {
         const {result} = await renderHook(() => useBrewRun(recipe(), h.store));
         await h.setPhase({name: "pouring", pour: 2, pours: 2});
         await h.setPhase({name: "done"});
+        expect(result.current.activeIndex).toBe(2);
+    });
+
+    it("leaves the ladder standing where it stood when the brew was paused", async () => {
+        // A pause changes nothing about which stages have poured. Read off
+        // `phase` alone it is neither pouring nor over, so the whole ladder
+        // drops to the un-started look the moment the user presses PAUSE.
+        const h = harness();
+        const {result} = await renderHook(() => useBrewRun(recipe(), h.store));
+        await h.setPhase({name: "pouring", pour: 2, pours: 2});
+        await h.setPhase({
+            name: "paused", pour: 2, pours: 2,
+            was: {name: "pouring", pour: 2, pours: 2}
+        });
+        expect(result.current.activeIndex).toBe(1);
+    });
+
+    it("keeps a paused drawdown's stages done rather than pending", async () => {
+        const h = harness();
+        const {result} = await renderHook(() => useBrewRun(recipe(), h.store));
+        await h.setPhase({name: "pouring", pour: 2, pours: 2});
+        await h.setPhase({name: "settling"});
+        await h.setPhase({
+            name: "paused", pour: 2, pours: 2, was: {name: "settling"}
+        });
         expect(result.current.activeIndex).toBe(2);
     });
 
@@ -287,6 +461,41 @@ describe("useBrewRun", () => {
         expect(result.current.heldSeconds).toBe(0);
     });
 
+    it.each([0, 10, 25, 50])("sweeps after saving a finished brew using the current %i MB budget", async (budgetMB) => {
+        const h = harness();
+        const savedCounts: number[] = [];
+        h.store.sweepWhenReady.mockImplementation(async () => {
+            savedCounts.push(h.written.length);
+        });
+        await renderHook(() => useBrewRun(recipe(), h.store));
+        await h.setPhase({name: "pouring", pour: 1, pours: 2});
+        mockReadSetting.mockReturnValue(budgetMB);
+        await h.water(40);
+        expect(h.store.sweepWhenReady).not.toHaveBeenCalled();
+        await h.setPhase({name: "done"});
+        await h.setPhase({name: "done"});
+        expect(mockReadSetting).toHaveBeenCalledWith("brewTraceBudgetMB");
+        expect(h.store.sweepWhenReady).toHaveBeenCalledTimes(1);
+        expect(h.store.sweepWhenReady).toHaveBeenCalledWith(budgetMB);
+        expect(savedCounts).toEqual([1]);
+    });
+
+    it("keeps the record and dial reading when the post-brew sweep fails", async () => {
+        const h = harness();
+        const error = new Error("sweep unavailable");
+        h.store.sweepWhenReady.mockImplementation(async () => { throw error; });
+        const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+        const {result} = await renderHook(() => useBrewRun(recipe(), h.store));
+        await h.setPhase({name: "pouring", pour: 1, pours: 2});
+        await h.water(40);
+        await h.setPhase({name: "done"});
+        expect(h.written).toHaveLength(1);
+        expect(result.current.record?.id).toBe(h.written[0].record.id);
+        expect(result.current.phase.name).toBe("done");
+        expect(h.dials).toEqual([[h.written[0].record.id, 52]]);
+        expect(warn).toHaveBeenCalledWith(expect.any(String), error);
+    });
+
     it("writes the brew to history when it ends", async () => {
         const h = harness();
         await renderHook(() => useBrewRun(recipe(), h.store));
@@ -345,13 +554,14 @@ describe("useBrewRun", () => {
         // that answers the question is the one taken after the grind. The
         // record is written first and this lands as an update to that row.
         const h = harness();
-        await renderHook(() => useBrewRun(recipe(), h.store));
+        const {result} = await renderHook(() => useBrewRun(recipe(), h.store));
         await h.setPhase({name: "sending"});
         await h.setPhase({name: "pouring", pour: 1, pours: 2});
         await h.water(40);
         await h.setPhase({name: "done"});
         await act(async () => {});
         expect(h.dials).toEqual([[h.written[0].record.id, 52]]);
+        expect(result.current.record?.dialAfter).toBe(52);
     });
 
     it("keeps no reading when the machine did not answer after the brew", async () => {
@@ -366,6 +576,33 @@ describe("useBrewRun", () => {
         await act(async () => {});
         expect(h.written).toHaveLength(1);
         expect(h.dials).toEqual([]);
+    });
+
+    it("does not put a late previous dial reading onto the next finished run", async () => {
+        const h = harness();
+        let answer: (value: boolean) => void = () => { throw new Error("No pending reading"); };
+        global.__brewer.machine.askHowItIsDoing = () => new Promise<boolean>((resolve) => {
+            answer = resolve;
+        });
+        const r = recipe();
+        const {result, rerender} = await renderHook<ReturnType<typeof useBrewRun>, {runId: number}>(
+            ({runId}) => useBrewRun(r, h.store, runId), {initialProps: {runId: 1}}
+        );
+        await h.setPhase({name: "pouring", pour: 1, pours: 2});
+        await h.water(40);
+        await h.setPhase({name: "done"});
+        const oldAnswer = answer;
+        const oldId = result.current.record?.id;
+        await act(async () => { rerender({runId: 2}); });
+        await h.setPhase({name: "pouring", pour: 1, pours: 2});
+        await h.water(40);
+        await h.setPhase({name: "done"});
+        const newId = result.current.record?.id;
+        expect(newId).not.toBe(oldId);
+        await act(async () => { oldAnswer(true); });
+        expect(result.current.record?.id).toBe(newId);
+        expect(result.current.record?.dialAfter).toBeUndefined();
+        expect(h.dials).toEqual([[oldId, 52]]);
     });
 
     it("does not beep a brew that never got past the grind", async () => {
@@ -484,6 +721,22 @@ describe("useBrewRun", () => {
         harness();
         await act(async () => { rerender(undefined); });
         expect(result.current.activeIndex).toBeNull();
+    });
+
+    it("keeps the bypass rung active while the bypass is paused", async () => {
+        const h = harness();
+        const r = recipe();
+        r.bypassEnabled = true;
+        r.bypassVolume = 5;
+        r.bypassTemp = 85;
+        const {result} = await renderHook(() => useBrewRun(r, h.store));
+
+        await h.setPhase({name: "bypass"});
+        expect(result.current.bypass?.state).toBe("filling");
+        await h.setPhase({
+            name: "paused", pour: 2, pours: 2, was: {name: "bypass"}
+        });
+        expect(result.current.bypass?.state).toBe("filling");
     });
 
 });

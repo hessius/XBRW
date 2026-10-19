@@ -1,22 +1,29 @@
 import React from "react";
 import {Dimensions, StyleSheet, type StyleProp, type ViewStyle} from "react-native";
 import {act, fireEvent, screen, waitFor, within} from "@testing-library/react-native";
+import * as Clipboard from "expo-clipboard";
 import * as Sharing from "expo-sharing";
 import {Linking} from "react-native";
 
 import Brew from "@/app/brew";
 import {SCREEN_PADDING} from "@/constants/layout";
-import {LONGEST_ACTIVE_HEADLINE, RATING_CAN_WAIT} from "@/constants/brewCopy";
-import {renderWithProviders} from "@/test-utils/render";
+import {
+    LONGEST_ACTIVE_HEADLINE, OVERFLOW_FOREGROUND_CAUTION, OVERFLOW_MANUAL_OVERRIDE,
+    PAUSED_NOTE, RATING_CAN_WAIT
+} from "@/constants/brewCopy";
+import {renderWithProviders, SHEET_PRESS_TIMEOUT} from "@/test-utils/render";
 import type {BrewPhase} from "@/library/machine/Machine";
+import type {OverflowSnapshot} from "@/library/brew/OverflowController";
 import type {StoredBrew} from "@/library/BrewDatabase";
 import {drawdownFrom, drawdownSeconds, type BrewSample} from "@/library/brew/BrewRecord";
 import Pour from "@/library/Pour";
 import type {BypassView} from "@/library/brew/bypassState";
-import Recipe from "@/library/Recipe";
+import Recipe, {CUP_TYPE} from "@/library/Recipe";
+import type {QuickEditRecordAdjustments} from "@/library/quickEdit";
 import {HANDOFF_TARGETS} from "@/library/brew/handoff/targets";
 
 const mockUseKeepAwake = jest.fn();
+const mockNotify = jest.fn();
 
 let summaryProps: Record<string, unknown> = {};
 jest.mock("@/components/BrewSummary", () => {
@@ -35,6 +42,10 @@ jest.mock("expo-keep-awake", () => ({
     useKeepAwake: (...args: unknown[]) => mockUseKeepAwake(...args)
 }));
 
+jest.mock("@/components/XbrwToast", () => ({
+    notify: (notice: unknown) => mockNotify(notice)
+}));
+
 // The record the provider writes when a brew finishes; the in-place export
 // sources it from the injected store on press.
 const record: StoredBrew = {
@@ -50,6 +61,7 @@ let mockPhase: BrewPhase = {name: "pouring", pour: 1, pours: 2};
 // screen a default install draws.
 let mockHandoffEnabled = false;
 let mockSamples: BrewSample[] = [];
+let mockPauseIntervals: {from: number; to: number; pour: number; reason: "manual" | "overflow"}[] = [];
 let mockElapsed = 12;
 let mockStageElapsed = 12;
 let mockActiveIndex: number | null = 0;
@@ -59,11 +71,20 @@ let mockFirstBrewDone = true;
 let mockError: string | null = null;
 let mockBypass: BypassView | undefined = undefined;
 let mockRecord: StoredBrew | undefined = undefined;
+let mockStartedAt = 0;
+let mockLinkHistory: {at: number; text: string}[] = [];
+let mockRunQuickEdit: QuickEditRecordAdjustments | undefined = undefined;
+let mockOverflow: OverflowSnapshot | undefined = undefined;
+let mockOverflowNow: number | undefined = undefined;
+let mockOwnerRecipe: Recipe | undefined = undefined;
 let mockBandAllocationArgs: [number, number][] = [];
 const mockBrew = jest.fn();
 const mockStartBrew = jest.fn();
 const mockCancelBrew = jest.fn();
+const mockPauseBrew = jest.fn();
+const mockResumeBrew = jest.fn();
 const mockSwitchToProAndRetry = jest.fn();
+const mockFrameLogSince = jest.fn((since: number) => `FRAMES SINCE ${since}`);
 const mockStart = jest.fn();
 const mockStartInPro = jest.fn();
 let mockView: string | undefined = undefined;
@@ -92,6 +113,9 @@ const mockRecipe = (() => {
     r.grindRPM = 90;
     return r;
 })();
+const originalRecipeInputs = {
+    dosage: mockRecipe.dosage, ratio: mockRecipe.ratio, cupType: mockRecipe.cupType
+};
 
 // The real hook, wrapped so a test can see what the screen handed it. The
 // flicker reading the recipe's grind speed lives on one line of the screen --
@@ -122,9 +146,11 @@ jest.mock("@/library/brew/bands", () => {
 jest.mock("@/hooks/useLiveBrew", () => {
     const value = () => ({
         run: {
-            recipe: mockRecipe,
+            recipe: mockOwnerRecipe ?? mockRecipe,
             phase: mockPhase,
             samples: mockSamples,
+            pauseIntervals: mockPauseIntervals,
+            startedAt: mockStartedAt,
             elapsed: mockElapsed,
             stageElapsed: mockStageElapsed,
             activeIndex: mockActiveIndex,
@@ -132,6 +158,9 @@ jest.mock("@/hooks/useLiveBrew", () => {
             heldSeconds: 0,
             bypass: mockBypass,
             record: mockRecord,
+            quickEdit: mockRunQuickEdit,
+            overflow: mockOverflow,
+            overflowNow: mockOverflowNow,
         },
         start: mockStart,
         startInPro: mockStartInPro,
@@ -140,6 +169,8 @@ jest.mock("@/hooks/useLiveBrew", () => {
         brew: mockBrew,
         startBrew: mockStartBrew,
         cancelBrew: mockCancelBrew,
+        pauseBrew: mockPauseBrew,
+        resumeBrew: mockResumeBrew,
         canOfferProMode: () => mockCanOfferPro,
         switchToProAndRetry: mockSwitchToProAndRetry,
         error: mockError,
@@ -150,7 +181,12 @@ jest.mock("@/hooks/useLiveBrew", () => {
 jest.mock("@/hooks/useMachine", () => ({
     __esModule: true,
     useMachine: () => ({
-        machine: {isConnected: () => true, onLink: () => () => undefined},
+        machine: {
+            isConnected:    () => true,
+            onLink:         () => () => undefined,
+            get linkHistory() { return mockLinkHistory; },
+            frameLogSince:  mockFrameLogSince
+        },
         status: "connected",
         error: null,
         remembered: null,
@@ -203,15 +239,19 @@ beforeEach(() => {
     mockBrew.mockClear();
     mockStartBrew.mockClear();
     mockCancelBrew.mockClear();
+    mockPauseBrew.mockClear();
+    mockResumeBrew.mockClear();
     mockSwitchToProAndRetry.mockClear();
     mockStart.mockClear();
     mockPush.mockClear();
     mockBack.mockClear();
     mockPhase = {name: "pouring", pour: 1, pours: 2};
+    Object.assign(mockRecipe, originalRecipeInputs);
     mockRecipe.pours = [
         new Pour(1, 40, 93, 40, 0, 0, 20),
     ];
     mockSamples = [];
+    mockPauseIntervals = [];
     mockElapsed = 12;
     mockStageElapsed = 12;
     mockActiveIndex = 0;
@@ -223,7 +263,18 @@ beforeEach(() => {
     traceAnimationArgs = [];
     mockBypass = undefined;
     mockRecord = undefined;
+    mockStartedAt = 0;
+    mockLinkHistory = [];
+    mockRunQuickEdit = undefined;
+    mockOverflow = undefined;
+    mockOverflowNow = undefined;
+    mockOwnerRecipe = undefined;
+    delete mockRecipe.overflowProtection;
+    mockRecipe.cupType = originalRecipeInputs.cupType;
     mockBandAllocationArgs = [];
+    mockFrameLogSince.mockClear();
+    mockNotify.mockClear();
+    (Clipboard.setStringAsync as jest.Mock).mockClear();
 });
 
 // The done branch: a finished brew, drawn in its scroller. A shared entry so
@@ -235,6 +286,152 @@ async function drawDone() {
 }
 
 describe("brew route", () => {
+    it.each([false, true])("shows the finished grind with mini-player reopening %s", async (reopened) => {
+        mockView = reopened ? "1" : undefined;
+        if (reopened) mockRecipeJSON = undefined;
+        mockRecord = {...record, grinderUsed: true, grindSize: 53, dialAfter: 53,
+                      adjustedFromGrind: 48};
+        await drawDone();
+
+        const capture = within(screen.getByTestId("brew-capture"));
+        expect(capture.getAllByText("GRIND")).toHaveLength(1);
+        expect(capture.getByText("53")).toBeOnTheScreen();
+        expect(capture.getByText("RECIPE 48")).toBeOnTheScreen();
+        expect(capture.queryByTestId("figures-grind-outline")).toBeNull();
+        if (reopened) expect(mockStart).not.toHaveBeenCalled();
+    });
+
+    it("shows the active owner's recipe and saved inputs when reopened without route data", async () => {
+        mockView = "1";
+        mockRecipeJSON = undefined;
+        mockRecipe.dosage = 16;
+        mockRecipe.ratio = 17;
+        mockRunQuickEdit = {adjustedFromDose: 15, adjustedFromRatio: 16};
+
+        await renderWithProviders(<Brew />);
+
+        expect(screen.getByLabelText("Recipe dose, 16 grams, saved recipe 15 grams"))
+            .toBeOnTheScreen();
+        expect(screen.getByLabelText("Recipe ratio, 1 to 17, saved recipe 1 to 16"))
+            .toBeOnTheScreen();
+        expect(screen.getByText("16 G")).toBeOnTheScreen();
+        expect(screen.getByText("1:17")).toBeOnTheScreen();
+        expect(screen.getByText("RECIPE 15")).toBeOnTheScreen();
+        expect(mockStart).not.toHaveBeenCalled();
+    });
+
+    it("captures finished record inputs instead of the run's changed recipe", async () => {
+        mockRecord = {...record, dose: 15, ratio: 16};
+        mockRecipe.dosage = 20;
+        mockRecipe.ratio = 18;
+        mockRunQuickEdit = {adjustedFromDose: 19, adjustedFromRatio: 17};
+        await drawDone();
+
+        const capture = within(screen.getByTestId("brew-capture"));
+        expect(capture.getByLabelText("Recipe dose, 15 grams")).toBeOnTheScreen();
+        expect(capture.getByLabelText("Recipe ratio, 1 to 16")).toBeOnTheScreen();
+        expect(capture.getByText("15 G")).toBeOnTheScreen();
+        expect(capture.getByText("1:16")).toBeOnTheScreen();
+        expect(capture.queryByText("20 G")).toBeNull();
+        expect(capture.queryByText("1:18")).toBeNull();
+        expect(capture.queryByTestId("brew-recipe-dose-comparison")).toBeNull();
+        expect(screen.getAllByTestId("brew-recipe-context")).toHaveLength(1);
+    });
+
+    it("does not fill a finished record's missing ratio from the active recipe", async () => {
+        mockRecord = {...record, dose: 15};
+        mockRecipe.dosage = 20;
+        mockRecipe.ratio = 18;
+        await drawDone();
+
+        const capture = within(screen.getByTestId("brew-capture"));
+        expect(capture.getByText("15 G")).toBeOnTheScreen();
+        expect(capture.queryByTestId("brew-recipe-ratio")).toBeNull();
+        expect(capture.queryByText("1:18")).toBeNull();
+    });
+
+    it.each(["pouring", "failed", "done"] as const)(
+        "shows planned inputs during %s before a record is published, not measured yield",
+        async (name) => {
+            mockPhase = namedPhase(name);
+            mockRecipe.dosage = 15;
+            mockRecipe.ratio = 16;
+            mockSamples = [{at: 12_000, water: 120, cup: 90, pour: 1}];
+
+            await renderWithProviders(<Brew />);
+
+            expect(screen.getByText("15 G")).toBeOnTheScreen();
+            expect(screen.getByText("1:16")).toBeOnTheScreen();
+            expect(screen.getByLabelText("Recipe ratio, 1 to 16")).toBeOnTheScreen();
+            expect(screen.getAllByTestId("brew-recipe-context")).toHaveLength(1);
+        }
+    );
+
+    it("keeps tea leaf dose independent of yield and hides coffee ratio", async () => {
+        mockRecipe.cupType = CUP_TYPE.TEA;
+        mockRecipe.dosage = 5;
+        mockRecipe.ratio = 18;
+        mockSamples = [{at: 12_000, water: 45, cup: 40, pour: 1}];
+
+        await renderWithProviders(<Brew />);
+
+        expect(screen.getByText("5 G")).toBeOnTheScreen();
+        expect(screen.getByText("LEAF")).toBeOnTheScreen();
+        expect(screen.queryByText("1:18")).toBeNull();
+        expect(screen.queryByText("DRAWDOWN")).toBeNull();
+        expect(screen.queryByText("DELAY")).toBeNull();
+    });
+
+    it("uses finished tea identity even when the owner's recipe is coffee", async () => {
+        mockRecord = {...record, beverageKind: "tea", dose: 5, ratio: 18,
+            grinderUsed: false, drawdownAt: 0};
+        await drawDone();
+        expect(screen.getByText("LEAF")).toBeOnTheScreen();
+        expect(screen.getByText("HOW WAS THE TEA")).toBeOnTheScreen();
+        for (const label of ["GRIND", "OFF", "RATIO", "DRAWDOWN", "DELAY"]) {
+            expect(screen.queryByText(label)).toBeNull();
+        }
+        expect(screen.getByLabelText("Save as image")).toBeTruthy();
+        expect(screen.getByLabelText("Export the data")).toBeTruthy();
+        expect(screen.queryByLabelText(HANDOFF_TARGETS[0].buttonLabel)).toBeNull();
+    });
+
+    it.each(["coffee", undefined] as const)(
+        "keeps finished %s identity when the current recipe is tea",
+        async (beverageKind) => {
+            mockRecipe.cupType = CUP_TYPE.TEA;
+            mockRecord = {...record, beverageKind, dose: 15, ratio: 16};
+            await drawDone();
+            expect(screen.getByText("HOW WAS IT")).toBeTruthy();
+            expect(screen.getByText("DOSE")).toBeTruthy();
+            expect(screen.getByText("1:16")).toBeTruthy();
+            expect(screen.queryByText("LEAF")).toBeNull();
+        }
+    );
+
+    it("retains context rows and spacing from pouring through settling", async () => {
+        mockRecipe.dosage = 16;
+        mockRecipe.ratio = 17;
+        mockRunQuickEdit = {adjustedFromDose: 15, adjustedFromRatio: 16};
+        const rendered = await renderWithProviders(<Brew />);
+        const rowCount = screen.getAllByTestId("brew-recipe-row").length;
+        expect(screen.getByTestId("brew-recipe-context"))
+            .toHaveStyle({marginBottom: 8, gap: 6});
+        expect(screen.getByTestId("brew-recipe-context").parent)
+            .toHaveStyle({flex: 1, gap: 0});
+        expect(screen.getByTestId("brew-band-region").parent)
+            .toBe(screen.getByTestId("brew-recipe-context").parent);
+
+        mockPhase = {name: "settling"};
+        await rendered.rerender(<Brew />);
+
+        expect(screen.getAllByTestId("brew-recipe-row")).toHaveLength(rowCount);
+        expect(screen.getByTestId("brew-recipe-context"))
+            .toHaveStyle({marginBottom: 8, gap: 6});
+        expect(screen.getByText("16 G")).toBeOnTheScreen();
+        expect(screen.getByText("1:17")).toBeOnTheScreen();
+    });
+
     it.each([
         "waking", "sending", "readyToStart", "armed", "pressPlay",
         "grinding", "pouring", "bypass", "settling"
@@ -510,6 +707,79 @@ describe("brew route", () => {
         expect(queryByLabelText("Try again")).toBeNull();
     });
 
+    it("offers the diagnostic log on a blocked failure", async () => {
+        mockPhase = {name: "failed", reason: "blocked", detail: "The tank is low."} as BrewPhase;
+        const {getByLabelText} = await renderWithProviders(<Brew />);
+        expect(getByLabelText("Copy diagnostic log")).toBeTruthy();
+    });
+
+    it("offers the diagnostic log even with no retry, on a NO_RETRY failure", async () => {
+        // The dose is spent and there is no TRY AGAIN button here, but a
+        // report of a brew that stopped mid-pour is exactly the case where
+        // diagnostics matter most.
+        mockPhase = {name: "failed", reason: "noWater"} as BrewPhase;
+        const {getByLabelText} = await renderWithProviders(<Brew />);
+        expect(getByLabelText("Copy diagnostic log")).toBeTruthy();
+    });
+
+    it("does not offer the diagnostic log while a brew is running", async () => {
+        mockPhase = {name: "pouring", pour: 1, pours: 1} as BrewPhase;
+        const {queryByLabelText} = await renderWithProviders(<Brew />);
+        expect(queryByLabelText("Copy diagnostic log")).toBeNull();
+    });
+
+    it("copies only this attempt's history, and confirms with a toast", async () => {
+        mockStartedAt = Date.parse("2026-10-09T10:00:00.000Z");
+        mockLinkHistory = [
+            {at: Date.parse("2026-10-09T09:59:00.000Z"), text: "an earlier attempt's line"},
+            {at: Date.parse("2026-10-09T10:00:05.000Z"), text: "connecting to AA:BB:CC"}
+        ];
+        mockPhase = {name: "failed", reason: "blocked", detail: "The tank is low."} as BrewPhase;
+        const {getByLabelText} = await renderWithProviders(<Brew />);
+
+        await fireEvent.press(getByLabelText("Copy diagnostic log"));
+        await waitFor(() => expect(Clipboard.setStringAsync).toHaveBeenCalled());
+
+        const copied = (Clipboard.setStringAsync as jest.Mock).mock.calls[0][0] as string;
+        expect(copied).not.toContain("an earlier attempt's line");
+        expect(copied).toContain("connecting to AA:BB:CC");
+        expect(copied).toContain("FRAMES SINCE");
+        expect(mockFrameLogSince).toHaveBeenCalledWith(mockStartedAt);
+        await waitFor(() => expect(mockNotify).toHaveBeenCalledWith({
+            tone: "success",
+            message: "Diagnostic log copied"
+        }));
+    });
+
+    it("scopes the diagnostic log to the viewed run's own start, when reopened from the mini bar", async () => {
+        // Regression test: the attempt's start time must come from the shared
+        // run (stamped once, when the attempt actually began), not from
+        // anything this particular mount does — because this mount, opened
+        // via view=1 from the mini bar, never calls start() itself. An
+        // earlier version of this feature tracked the start time in a local
+        // ref that only start() stamped, so reopening an already-failed run
+        // this way left the ref at its initial value and scoped the log to
+        // everything instead of the attempt. Mounting straight into view=1
+        // with mockStartedAt already set (as the provider would have left
+        // it from whenever the attempt actually began, well before this
+        // mount) reproduces exactly that path.
+        mockView = "1";
+        mockRecipeJSON = undefined;
+        mockStartedAt = Date.parse("2026-10-09T10:00:00.000Z");
+        mockLinkHistory = [
+            {at: Date.parse("2026-10-09T10:00:05.000Z"), text: "connecting to AA:BB:CC"}
+        ];
+        mockPhase = {name: "failed", reason: "blocked", detail: "The tank is low."} as BrewPhase;
+        const {getByLabelText} = await renderWithProviders(<Brew />);
+
+        expect(mockStart).not.toHaveBeenCalled();
+
+        await fireEvent.press(getByLabelText("Copy diagnostic log"));
+        await waitFor(() => expect(Clipboard.setStringAsync).toHaveBeenCalled());
+
+        expect(mockFrameLogSince).toHaveBeenCalledWith(mockStartedAt);
+    });
+
     it("shows the press-play notice without making it look pressable", async () => {
         mockPhase = {name: "pressPlay"} as BrewPhase;
         const {getByText, queryByLabelText} = await renderWithProviders(<Brew />);
@@ -694,6 +964,23 @@ describe("brew route", () => {
         expect(summaryProps.drawdownRate).toBeCloseTo(2);
     });
 
+    it("hands the finished run's pause intervals to the summary and draws their bands", async () => {
+        mockSamples = [
+            {at: 0, water: 0, cup: 0, pour: 1},
+            {at: 20_000, water: 60, cup: 40, pour: 1}
+        ];
+        mockPauseIntervals = [{from: 20_000, to: 50_000, pour: 1, reason: "overflow"}];
+        mockElapsed = 50;
+        mockPhase = {name: "done"} as BrewPhase;
+        mockActiveIndex = 1;
+        mockRecord = {...record, endedAt: 50_000};
+
+        await renderWithProviders(<Brew />);
+
+        expect(summaryProps.pauseIntervals).toEqual(mockPauseIntervals);
+        expect(screen.getByTestId("trace-pause-overflow-0")).toBeTruthy();
+    });
+
     it("captures and shares the brew in place, without pushing /brewRecord", async () => {
         mockPhase = {name: "done"} as BrewPhase;
         mockActiveIndex = 1;
@@ -799,6 +1086,57 @@ describe("brew route", () => {
         const {getByLabelText} = await renderWithProviders(<Brew />);
         await fireEvent.press(getByLabelText("Cancel"));
         expect(mockCancelBrew).toHaveBeenCalled();
+    });
+
+    it("offers Pause while water is going into the dripper", async () => {
+        mockPhase = {name: "pouring", pour: 1, pours: 2} as BrewPhase;
+        const {getByLabelText} = await renderWithProviders(<Brew />);
+        await fireEvent.press(getByLabelText("Pause"));
+        expect(mockPauseBrew).toHaveBeenCalled();
+    });
+
+    it("does not offer Pause before a brew is running", async () => {
+        // 40518 is inert here, so the button would do nothing while claiming
+        // to stop a machine.
+        mockPhase = {name: "readyToStart"} as BrewPhase;
+        const {queryByLabelText} = await renderWithProviders(<Brew />);
+        expect(queryByLabelText("Pause")).toBeNull();
+    });
+
+    it("does not offer Pause once the water is off and the bed is draining", async () => {
+        mockPhase = {name: "settling"} as BrewPhase;
+        const {queryByLabelText} = await renderWithProviders(<Brew />);
+        expect(queryByLabelText("Pause")).toBeNull();
+    });
+
+    it("offers Resume, and not Pause, on a paused brew", async () => {
+        mockPhase = {
+            name: "paused", pour: 1, pours: 2, was: {name: "pouring", pour: 1, pours: 2}
+        } as BrewPhase;
+        const {getByLabelText, queryByLabelText} = await renderWithProviders(<Brew />);
+        await fireEvent.press(getByLabelText("Resume"));
+        expect(mockResumeBrew).toHaveBeenCalled();
+        expect(queryByLabelText("Pause")).toBeNull();
+    });
+
+    it("still offers Cancel while paused, because they are opposite answers", async () => {
+        mockPhase = {
+            name: "paused", pour: 1, pours: 2, was: {name: "pouring", pour: 1, pours: 2}
+        } as BrewPhase;
+        const {getByLabelText} = await renderWithProviders(<Brew />);
+        await fireEvent.press(getByLabelText("Cancel"));
+        expect(mockCancelBrew).toHaveBeenCalled();
+    });
+
+    it("says the machine's own screen will not mention the pause", async () => {
+        // Nothing on the machine knows a brew is paused: its state is ARMED,
+        // which is what a brew waiting to start looks like. Somebody who walks
+        // over to it needs to have been told.
+        mockPhase = {
+            name: "paused", pour: 1, pours: 2, was: {name: "pouring", pour: 1, pours: 2}
+        } as BrewPhase;
+        const {getByText} = await renderWithProviders(<Brew />);
+        expect(getByText(PAUSED_NOTE)).toBeTruthy();
     });
 
     it("says the machine is still brewing when contact is lost", async () => {
@@ -958,6 +1296,104 @@ function flatDrawdown(
 }
 
 describe("live flow and drawdown", () => {
+    it.each(["record", "run fallback"] as const)(
+        "drawdown pause regression: keeps live and finished capture DELAY at 10 seconds using %s intervals",
+        async (source) => {
+            const owner = new Recipe();
+            owner.pours = [new Pour(1, 120, 93, 40, 0, 0, 0)];
+            owner.cupType = CUP_TYPE.OTHER;
+            owner.overflowProtection = {retainedGrams: 50, checkSeconds: 15};
+            mockOwnerRecipe = owner;
+            mockView = "1";
+            mockRecipeJSON = undefined;
+            mockStartedAt = 1_791_576_000_000;
+            const pouringAt = mockStartedAt + 12_000;
+            const intervals = [
+                {from: 40_700, to: 55_700, pour: 1, reason: "overflow" as const}
+            ];
+            mockPauseIntervals = intervals;
+            mockSamples = [
+                {at: 0, water: 0, cup: 0, pour: 1},
+                {at: 30_000, water: 90, cup: 70, pour: 1},
+                {at: 40_000, water: 120, cup: 100, pour: 1},
+                {at: 40_700, water: 120, cup: 100, pour: 1},
+                {at: 55_700, water: 120, cup: 110, pour: 1},
+                {at: 60_000, water: 120, cup: 115, pour: 1}
+            ];
+            mockElapsed = 60;
+            mockPhase = {name: "settling"};
+            const finished: StoredBrew = {
+                ...record,
+                startedAt: mockStartedAt,
+                pouringAt,
+                endedAt: pouringAt + 60_000,
+                pours: 1,
+                waterTotal: 120,
+                cupTotal: 115,
+                cupAtDrawdown: 100,
+                drawdownAt: drawdownFrom(mockSamples, 1),
+                pausedSeconds: 15,
+                ...(source === "record" ? {pauseIntervals: intervals} : {})
+            };
+            (Sharing.shareAsync as jest.Mock).mockClear();
+            const {rerender} = await renderWithProviders(
+                <Brew historyStore={{all: () => [finished], samples: () => mockSamples}} />
+            );
+            expect(screen.getByLabelText("Drawdown, 20 seconds")).toBeOnTheScreen();
+            expect(screen.getByLabelText("Delay, 10 seconds")).toBeOnTheScreen();
+            expect(finished.drawdownAt).toBe(40_000);
+
+            mockRecord = finished;
+            mockPhase = {name: "done"};
+            mockActiveIndex = 1;
+            delete owner.overflowProtection;
+            // The persisted record wins over a stale run view when it has intervals.
+            if (source === "record") {
+                mockPauseIntervals = [
+                    {from: 10_000, to: 25_000, pour: 1, reason: "manual"}
+                ];
+            }
+            await rerender(
+                <Brew historyStore={{all: () => [finished], samples: () => mockSamples}} />
+            );
+            const capture = within(screen.getByTestId("viewshot"));
+            expect(capture.getByLabelText(/^Drawdown, 20 seconds(?:,|$)/)).toBeOnTheScreen();
+            expect(capture.getByLabelText("Delay, 10 seconds")).toBeOnTheScreen();
+            expect(summaryProps.delay).toBe(10);
+            await fireEvent.press(screen.getByLabelText("Save as image"));
+            await waitFor(() => expect(Sharing.shareAsync).toHaveBeenCalledWith(
+                "file:///mock/brew.png", expect.objectContaining({mimeType: "image/png"})
+            ));
+            expect(capture.getByLabelText("Delay, 10 seconds")).toBeOnTheScreen();
+            expect(mockStart).not.toHaveBeenCalled();
+            expect(mockPush).not.toHaveBeenCalled();
+        }
+    );
+
+    it.each([["overflow", 0], ["manual", 0], ["overflow", 10]] as const)(
+        "excludes a confirmed %s pause from live delay but preserves %i seconds of real delay",
+        async (reason, delay) => {
+            mockRecipe.pours = [new Pour(1, 120, 93, 40, 0, 0, 0)];
+            mockPauseIntervals = [{from: 1700, to: 31_700, pour: 1, reason}];
+            const boundary = 60_000 + delay * 1000;
+            mockSamples = [
+                {at: 0, water: 0, cup: 0, pour: 1},
+                {at: 1000, water: 4, cup: 1, pour: 1},
+                {at: 1600, water: 6, cup: 2, pour: 1},
+                {at: 31_700, water: 6, cup: 4, pour: 1},
+                {at: 32_000, water: 7, cup: 4, pour: 1},
+                {at: boundary, water: 120, cup: 100, pour: 1},
+                {at: boundary + 10_000, water: 120, cup: 110, pour: 1}
+            ];
+            mockElapsed = boundary / 1000 + 10;
+            mockPhase = {name: "settling"};
+            await renderWithProviders(<Brew />);
+            expect(screen.getByLabelText("Drawdown, 10 seconds")).toBeTruthy();
+            if (delay === 0) expect(screen.queryByTestId("figures-delay")).toBeNull();
+            else expect(screen.getByLabelText(`Delay, ${delay} seconds`)).toBeTruthy();
+        }
+    );
+
     it("shows the flow row once the bed is giving something up", async () => {
         mockSamples = sampleStream(6, {water: 3, cup: 2, pour: 1});
         mockElapsed = 6;
@@ -1118,6 +1554,8 @@ describe("bypass on the live brew screen", () => {
     });
 
     it("does not count bypass water into the WATER figure", async () => {
+        mockRecipe.dosage = 15;
+        mockRecipe.ratio = 16;
         await renderBrew({
             phase: {name: "settling"},
             samples: [{at: 190_000, water: 245, cup: 200, pour: 4}],
@@ -1126,6 +1564,8 @@ describe("bypass on the live brew screen", () => {
         });
         expect(screen.getByText("240")).toBeTruthy();
         expect(screen.getByText("+5")).toBeTruthy();
+        expect(screen.getByText("1:16")).toBeOnTheScreen();
+        expect(screen.getByLabelText("Recipe ratio, 1 to 16")).toBeOnTheScreen();
     });
 });
 
@@ -1152,6 +1592,57 @@ describe("Beanconqueror handoff on the finished brew", () => {
 
     const store = (brew: StoredBrew = record) => ({
         all: () => [brew], samples: () => [], markSent: jest.fn()
+    });
+
+    it("never offers tea handoff or bean naming when the live run finishes", async () => {
+        mockRecipe.cupType = CUP_TYPE.TEA;
+        mockPhase = {name: "pouring"} as BrewPhase;
+        const history = store({...record, beverageKind: "tea"});
+        const {rerender} = await renderWithProviders(<Brew historyStore={history} />);
+        mockPhase = {name: "done"} as BrewPhase;
+        await rerender(<Brew historyStore={history} />);
+        expect(screen.queryByLabelText(handoffTarget.buttonLabel)).toBeNull();
+        expect(screen.queryByTestId("bean-name-field")).toBeNull();
+        expect(screen.getByLabelText("Export the data")).toBeTruthy();
+        expect(screen.getByLabelText("Save as image")).toBeTruthy();
+        expect(openURL).not.toHaveBeenCalled();
+        expect(history.markSent).not.toHaveBeenCalled();
+    });
+
+    it("uses a known tea record to gate handoff even if the active recipe says coffee", async () => {
+        mockRecord = {...record, beverageKind: "tea"};
+        await renderWithProviders(<Brew historyStore={store(mockRecord)} />);
+        expect(screen.queryByLabelText(handoffTarget.buttonLabel)).toBeNull();
+        expect(screen.queryByTestId("bean-name-field")).toBeNull();
+        expect(openURL).not.toHaveBeenCalled();
+    });
+
+    it.each(["coffee", undefined] as const)(
+        "hands off a finished %s record even if the current recipe says tea",
+        async (beverageKind) => {
+            mockRecord = {...record, beverageKind, coffee: {name: "Kenya Sakami"}};
+            mockRecipe.cupType = CUP_TYPE.TEA;
+            const history = store(mockRecord);
+            await renderWithProviders(<Brew historyStore={history} />);
+
+            await fireEvent.press(screen.getByLabelText(handoffTarget.buttonLabel));
+
+            await waitFor(() => expect(openURL).toHaveBeenCalledTimes(1));
+            expect(history.markSent).toHaveBeenCalledWith(record.id, expect.any(Number));
+            expect(screen.queryByTestId("bean-name-field")).toBeNull();
+        }
+    );
+
+    it("rechecks the current recipe on press while no finished snapshot exists", async () => {
+        const history = store({...record, coffee: {name: "Kenya Sakami"}});
+        await renderWithProviders(<Brew historyStore={history} />);
+        mockRecipe.cupType = CUP_TYPE.TEA;
+
+        await fireEvent.press(screen.getByLabelText(handoffTarget.buttonLabel));
+
+        expect(screen.queryByTestId("bean-name-field")).toBeNull();
+        expect(openURL).not.toHaveBeenCalled();
+        expect(history.markSent).not.toHaveBeenCalled();
     });
 
     it("offers the handoff when the gate is on", async () => {
@@ -1196,7 +1687,7 @@ describe("Beanconqueror handoff on the finished brew", () => {
         await waitFor(async () => {
             await fireEvent.press(getByTestId("bean-name-send"));
             expect(openURL).toHaveBeenCalledTimes(1);
-        });
+        }, {timeout: SHEET_PRESS_TIMEOUT});
     });
 
     it("opens Beanconqueror straight away for a pod brew, which knows its coffee", async () => {
@@ -1208,5 +1699,163 @@ describe("Beanconqueror handoff on the finished brew", () => {
 
         await waitFor(() => expect(openURL).toHaveBeenCalledTimes(1));
         expect(screen.queryByTestId("bean-name-field")).toBeNull();
+    });
+});
+
+describe("brew route custom overflow protection", () => {
+    const armed: OverflowSnapshot = {
+        mode: "armed", retainedGrams: null, nextCheckAt: null, telemetryAvailable: false
+    };
+    const holding: OverflowSnapshot = {
+        mode: "holding", retainedGrams: 60, nextCheckAt: 20_000, telemetryAvailable: true
+    };
+
+    function protect(recipe: Recipe = mockRecipe) {
+        recipe.cupType = CUP_TYPE.OTHER;
+        recipe.overflowProtection = {retainedGrams: 50, checkSeconds: 15};
+    }
+
+    it("draws no status and no caution for an unconfigured recipe", async () => {
+        await renderWithProviders(<Brew />);
+        expect(screen.queryByTestId("overflow-status")).toBeNull();
+        expect(screen.queryByText(OVERFLOW_FOREGROUND_CAUTION)).toBeNull();
+    });
+
+    it("draws none for an Omni recipe that kept a config, and its snapshot is ignored", async () => {
+        protect();
+        mockRecipe.cupType = CUP_TYPE.OMNI;
+        await renderWithProviders(<Brew />);
+        expect(screen.queryByTestId("overflow-status")).toBeNull();
+    });
+
+    it.each(["waking", "sending", "readyToStart"] as const)(
+        "shows the caution at once in %s, before any snapshot and with no first crossing",
+        async (phaseName) => {
+            protect();
+            mockPhase = namedPhase(phaseName);
+            await renderWithProviders(<Brew />);
+            expect(screen.getByText(OVERFLOW_FOREGROUND_CAUTION)).toBeOnTheScreen();
+        }
+    );
+
+    it("takes the owner's recipe over the route's", async () => {
+        // The route's recipe carries nothing; the run's owner is protected.
+        mockOwnerRecipe = new Recipe(undefined, JSON.stringify(mockRecipe));
+        protect(mockOwnerRecipe);
+        mockPhase = namedPhase("readyToStart");
+        await renderWithProviders(<Brew />);
+        expect(screen.getByText(OVERFLOW_FOREGROUND_CAUTION)).toBeOnTheScreen();
+    });
+
+    it("adds no control and no modal to a protected brew", async () => {
+        const labels = () => screen.getAllByRole("button").map((b) => b.props.accessibilityLabel);
+        const plain = await renderWithProviders(<Brew />);
+        const unprotected = labels();
+        await plain.unmount();
+
+        protect();
+        mockOverflow = armed;
+        await renderWithProviders(<Brew />);
+
+        expect(labels()).toEqual(unprotected);
+        expect(screen.queryByRole("alert")).toBeNull();
+    });
+
+    it("keeps the existing RESUME and CANCEL beside a distinct automatic pause label", async () => {
+        protect();
+        mockPhase = {name: "paused", pour: 1, pours: 1, was: {name: "pouring", pour: 1, pours: 1},
+                     pauseKind: "overflow"};
+        mockOverflow = holding;
+        mockOverflowNow = 15_000;
+        await renderWithProviders(<Brew />);
+
+        expect(screen.getByLabelText("Resume")).toBeOnTheScreen();
+        expect(screen.getByLabelText("Cancel")).toBeOnTheScreen();
+        expect(screen.getByText("Paused for the dripper to drain.")).toBeOnTheScreen();
+        expect(screen.getByText(/Next check in 5 s/)).toBeOnTheScreen();
+        expect(screen.getByText("Paused for overflow.")).toBeOnTheScreen();
+    });
+
+    it("leaves a manual pause's own note alone", async () => {
+        protect();
+        mockPhase = {name: "paused", pour: 1, pours: 1, was: {name: "pouring", pour: 1, pours: 1}};
+        mockOverflow = armed;
+        await renderWithProviders(<Brew />);
+        expect(screen.getByText(PAUSED_NOTE)).toBeOnTheScreen();
+        expect(screen.getByText("Paused.")).toBeOnTheScreen();
+    });
+
+    it.each([
+        [{mode: "disabled", disabledReason: "background"}, /left the foreground/],
+        [{mode: "disabled", disabledReason: "manualOverride"}, new RegExp(OVERFLOW_MANUAL_OVERRIDE)],
+        [{mode: "error", error: "Could not pause the brew for protection. Pause the machine manually."},
+         /Could not pause the brew/]
+    ] as const)("shows %j without the caution", async (partial, pattern) => {
+        protect();
+        mockOverflow = {...armed, ...partial} as OverflowSnapshot;
+        await renderWithProviders(<Brew />);
+        expect(screen.getByText(pattern)).toBeOnTheScreen();
+        expect(screen.queryByText(OVERFLOW_FOREGROUND_CAUTION)).toBeNull();
+    });
+
+    it.each(["requesting", "holding", "resuming"] as const)(
+        "keeps the caution while %s",
+        async (mode) => {
+            protect();
+            mockOverflow = {...holding, mode};
+            await renderWithProviders(<Brew />);
+            expect(screen.getByText(OVERFLOW_FOREGROUND_CAUTION)).toBeOnTheScreen();
+        }
+    );
+
+    it("keeps the caution while holding without a fresh reading", async () => {
+        protect();
+        mockOverflow = {mode: "holding", retainedGrams: null, nextCheckAt: 20_000, telemetryAvailable: false};
+        await renderWithProviders(<Brew />);
+        expect(screen.getByText(OVERFLOW_FOREGROUND_CAUTION)).toBeOnTheScreen();
+        expect(screen.getByText(/Waiting for fresh scale readings/)).toBeOnTheScreen();
+    });
+
+    it("shows the lost-contact reason on the stopped run, owner recipe taking precedence", async () => {
+        mockOwnerRecipe = new Recipe(undefined, JSON.stringify(mockRecipe));
+        protect(mockOwnerRecipe);
+        mockPhase = {name: "lostContact"} as BrewPhase;
+        mockOverflow = {...armed, mode: "disabled", disabledReason: "lostContact"};
+        await renderWithProviders(<Brew />);
+        expect(screen.getByText(/contact with the machine was lost/)).toBeOnTheScreen();
+        expect(screen.queryByText(OVERFLOW_FOREGROUND_CAUTION)).toBeNull();
+    });
+
+    it("shows nothing on a lost-contact run that was never protected", async () => {
+        mockPhase = {name: "lostContact"} as BrewPhase;
+        mockOverflow = {...armed, mode: "disabled", disabledReason: "lostContact"};
+        await renderWithProviders(<Brew />);
+        expect(screen.queryByTestId("overflow-status")).toBeNull();
+    });
+
+    it("shows no active status once the run has ended", async () => {
+        protect();
+        mockPhase = {name: "cancelled"} as BrewPhase;
+        mockOverflow = {...armed, mode: "ended"};
+        await renderWithProviders(<Brew />);
+        expect(screen.queryByTestId("overflow-status")).toBeNull();
+    });
+
+    it("budgets the status outside the band region and bounds its height on a small screen", async () => {
+        protect();
+        mockOverflow = armed;
+        const spy = jest.spyOn(Dimensions, "get").mockReturnValue(
+            {width: 320, height: 568, scale: 2, fontScale: 2}
+        );
+        await renderWithProviders(<Brew />);
+
+        const region = screen.getByTestId("overflow-status-region");
+        const band = screen.getByTestId("brew-band-region");
+        expect(within(band).queryByTestId("overflow-status")).toBeNull();
+        expect(region.parent).toBe(band.parent?.parent);
+        const style = StyleSheet.flatten(region.props.style);
+        expect(style.flexGrow).toBe(0);
+        expect(style.maxHeight).toBeLessThanOrEqual(568 * 0.25);
+        spy.mockRestore();
     });
 });

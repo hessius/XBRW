@@ -25,7 +25,7 @@ import {
     type BrewRecordOpenResult
 } from "@/test-utils/brewRecordMocks";
 import type {StoredBrew} from "@/library/BrewDatabase";
-import type Recipe from "@/library/Recipe";
+import Recipe, {CUP_TYPE} from "@/library/Recipe";
 import Pour, {AGITATION, POUR_PATTERN} from "@/library/Pour";
 import {planFromPours} from "@/library/brew/BrewRecord";
 import {HANDOFF_TARGETS} from "@/library/brew/handoff/targets";
@@ -61,7 +61,6 @@ let mockBrews: StoredBrew[] = [];
 // The judgement writes the screen makes, recorded rather than performed.
 const mockJudgementStore = {
     judge: jest.fn(),
-    setPinned: jest.fn(),
     brewsFor: jest.fn(),
     markSent: jest.fn()
 };
@@ -233,6 +232,79 @@ describe("brew record", () => {
         expect(screen.getByText("244")).toBeTruthy();
     });
 
+    it("captures recorded dose and ratio even when the recipe was deleted", async () => {
+        mockOpened = {
+            record: {...record, dose: 15, ratio: 16},
+            samples: []
+        };
+        await renderWithProviders(<BrewRecord recipeLookup={noRecipeLookup} />);
+
+        const capture = within(screen.getByTestId("brew-capture"));
+        const context = within(capture.getByTestId("brew-recipe-context"));
+        expect(context.getByText("15 G")).toBeTruthy();
+        expect(context.getByText("1:16")).toBeTruthy();
+    });
+
+    it("does not borrow dose or ratio from a surviving recipe for an old record", async () => {
+        const savedRecipe = new Recipe();
+        savedRecipe.dosage = 20;
+        savedRecipe.ratio = 18;
+        await renderWithProviders(
+            <BrewRecord recipeLookup={{getRecipe: jest.fn(() => savedRecipe)}} />
+        );
+
+        expect(within(screen.getByTestId("brew-capture"))
+            .queryByTestId("brew-recipe-context")).toBeNull();
+    });
+
+    it("keeps recorded dose and ratio independent of the current saved recipe", async () => {
+        mockOpened = {
+            record: {...record, dose: 15, ratio: 16},
+            samples: []
+        };
+        const savedRecipe = new Recipe();
+        savedRecipe.dosage = 20;
+        savedRecipe.ratio = 18;
+        const rendered = await renderWithProviders(
+            <BrewRecord recipeLookup={{getRecipe: jest.fn(() => savedRecipe)}} />
+        );
+
+        const context = within(within(screen.getByTestId("brew-capture"))
+            .getByTestId("brew-recipe-context"));
+        expect(context.getByText("15 G")).toBeTruthy();
+        expect(context.getByText("1:16")).toBeTruthy();
+        expect(context.queryByText("20 G")).toBeNull();
+        expect(context.queryByText("1:18")).toBeNull();
+
+        await rendered.rerender(<BrewRecord recipeLookup={noRecipeLookup} />);
+
+        const deletedRecipeContext = within(within(screen.getByTestId("brew-capture"))
+            .getByTestId("brew-recipe-context"));
+        expect(deletedRecipeContext.getByText("15 G")).toBeTruthy();
+        expect(deletedRecipeContext.getByText("1:16")).toBeTruthy();
+    });
+
+    it("captures edited dose and ratio comparisons once in the recipe context", async () => {
+        mockOpened = {
+            record: {
+                ...record, dose: 16, ratio: 17,
+                adjustedFromDose: 15, adjustedFromRatio: 16
+            },
+            samples: []
+        };
+        await renderWithProviders(<BrewRecord recipeLookup={noRecipeLookup} />);
+
+        const capture = within(screen.getByTestId("brew-capture"));
+        const context = within(capture.getByTestId("brew-recipe-context"));
+        expect(context.getByText("16 G")).toBeTruthy();
+        expect(context.getByText("1:17")).toBeTruthy();
+        expect(context.getAllByText("RECIPE 15")).toHaveLength(1);
+        expect(context.getAllByText("RECIPE 1:16")).toHaveLength(1);
+        expect(capture.queryByTestId("figures-adjusted-dose")).toBeNull();
+        expect(capture.queryByTestId("figures-adjusted-ratio")).toBeNull();
+        expect(capture.queryByTestId("figures-adjustments-row")).toBeNull();
+    });
+
     it("does not call normal drawdown time a delay", async () => {
         await renderWithProviders(<BrewRecord recipeLookup={mockLookup} />);
         expect(screen.queryByText(/\+14 S/)).toBeNull();
@@ -392,6 +464,21 @@ describe("brew record", () => {
         expect(pours[1].volume).toBe(160);
     });
 
+    it("shows adjusted grind only once with its saved baseline", async () => {
+        mockOpened = {
+            record: {...record, grinderUsed: true, grindSize: 53, dialAfter: 53,
+                     adjustedFromGrind: 48},
+            samples: []
+        };
+        await renderWithProviders(<BrewRecord recipeLookup={mockLookup} />);
+        const capture = within(screen.getByTestId("brew-capture"));
+        expect(capture.getAllByText("GRIND")).toHaveLength(1);
+        expect(capture.getAllByText("53")).toHaveLength(1);
+        expect(capture.getByText("RECIPE 48")).toBeOnTheScreen();
+        expect(capture.getByTestId("figures-grind-recipe"))
+            .toHaveStyle({alignSelf: "flex-start"});
+    });
+
     it("hands quick-edit adjustments to the captured summary", async () => {
         mockOpened = {
             record: {
@@ -399,6 +486,8 @@ describe("brew record", () => {
                 dose: 20,
                 ratio: 18,
                 grindSize: 61,
+                grinderUsed: true,
+                dialAfter: 61,
                 adjustedFromDose: 18,
                 adjustedFromRatio: 16,
                 adjustedFromGrind: 50,
@@ -414,12 +503,20 @@ describe("brew record", () => {
         };
         await renderWithProviders(<BrewRecord recipeLookup={mockLookup} />);
 
-        expect(summaryProps.adjustments).toEqual({
-            dose:        {value: 20, from: 18},
-            ratio:       {value: 18, from: 16},
-            grind:       {value: 61, from: 50},
-            temperature: {offset: 2, temperatures: [90, 92]}
-        });
+        const capture = within(screen.getByTestId("brew-capture"));
+        const context = within(capture.getByTestId("brew-recipe-context"));
+        expect(context.getByText("20 G")).toBeTruthy();
+        expect(context.getByText("1:18")).toBeTruthy();
+        expect(context.getByText("RECIPE 18")).toBeTruthy();
+        expect(context.getByText("RECIPE 1:16")).toBeTruthy();
+        expect(capture.getByTestId("figures-grind")).toBeTruthy();
+        expect(capture.getByLabelText("Grind, dial 61, saved recipe 50")).toBeTruthy();
+        expect(capture.getByTestId("figures-adjusted-temperature")).toBeTruthy();
+        expect(capture.getByLabelText(
+            "Temperature, 90, 92 degrees, offset +2 degrees"
+        )).toBeTruthy();
+        expect(capture.queryByTestId("figures-adjusted-dose")).toBeNull();
+        expect(capture.queryByTestId("figures-adjusted-ratio")).toBeNull();
     });
 
     it("hands a saturating temperature quick edit to the summary as used temperatures", async () => {
@@ -450,7 +547,7 @@ describe("brew record", () => {
         expect(screen.queryByText("RECIPE 94")).toBeNull();
     });
 
-    it("uses the adjusted grind row alone when the dial reading was not confirmed", async () => {
+    it("uses one outlined grind figure when the adjusted dial was not confirmed", async () => {
         mockOpened = {
             record: {
                 ...record,
@@ -466,15 +563,13 @@ describe("brew record", () => {
 
         await renderWithProviders(<BrewRecord recipeLookup={mockLookup} />);
 
-        expect(summaryProps.grind).toBeNull();
-        expect(summaryProps.adjustments).toEqual({
-            grind: {value: 61, from: 50, confirmed: false}
-        });
-        expect(screen.getByTestId("figures-adjusted-grind-outline")).toBeTruthy();
-        expect(screen.queryByTestId("figures-grind")).toBeNull();
+        expect(summaryProps.grind).toEqual({kind: "recipe", recipe: 61, savedRecipe: 50});
+        expect(summaryProps.adjustments).toBeUndefined();
+        expect(screen.getByTestId("figures-grind-outline")).toBeTruthy();
+        expect(screen.getAllByText("GRIND")).toHaveLength(1);
     });
 
-    it("says the trace has expired rather than drawing an empty chart", async () => {
+    it("explains a missing trace rather than drawing an empty chart", async () => {
         mockOpened = {record: {...record, hasStream: false}, samples: []};
         await renderWithProviders(<BrewRecord recipeLookup={mockLookup} />);
         expect(screen.getByText(/no trace was kept/i)).toBeTruthy();
@@ -1016,7 +1111,6 @@ describe("a verdict on a record", () => {
     beforeEach(() => {
         mockParams = {id: "brew-1"};
         mockJudgementStore.judge.mockReset();
-        mockJudgementStore.setPinned.mockReset();
         mockJudgementStore.markSent.mockReset();
         mockOpened = {record, samples: []};
     });
@@ -1042,19 +1136,14 @@ describe("a verdict on a record", () => {
         expect(screen.queryByTestId("record-pinned")).toBeNull();
     });
 
-    it("reports the pin, and lets it go", async () => {
-        // The pin is set by judging rather than asked for, so the screen's job
-        // is to say what happened and offer the way out.
+    it("does not offer trace pin controls for a legacy pinned record", async () => {
         mockOpened = {record: {...record, rating: 5, pinned: true}, samples: []};
         await renderWithProviders(<BrewRecord recipeLookup={mockLookup} />);
 
-        expect(screen.getByTestId("record-pinned")).toHaveTextContent("TRACE KEPT");
-        expect(screen.getByTestId("record-release")).toHaveTextContent("LET IT EXPIRE");
-        await fireEvent.press(screen.getByTestId("record-release"));
-
-        expect(mockJudgementStore.setPinned).toHaveBeenCalledWith("brew-1", false);
         expect(screen.queryByTestId("record-pinned")).toBeNull();
-        // Releasing is about the trace, not the verdict.
+        expect(screen.queryByTestId("record-release")).toBeNull();
+        expect(screen.queryByText("TRACE KEPT")).toBeNull();
+        expect(screen.queryByText("LET IT EXPIRE")).toBeNull();
         expect(screen.getByLabelText("Clear the rating, currently 5 stars")).toBeTruthy();
     });
 
@@ -1214,10 +1303,10 @@ describe("the drawdown on the record screen", () => {
         await renderWithProviders(<BrewRecord recipeLookup={mockLookup} />);
 
         expect(await screen.findByTestId("rate-chart")).toBeTruthy();
-        expect(screen.getByTestId("figures-rate")).toBeTruthy();
+        expect(screen.getByTestId("figures-drawdown-rate")).toBeTruthy();
         expect(screen.getByLabelText(/Drawdown, .* average .* grams per second/))
             .toBeTruthy();
-        expect(screen.getByLabelText(/Average rate, .* grams per second/))
+        expect(screen.getByLabelText(/Drawdown, .* average .* grams per second/))
             .toBeTruthy();
     });
 
@@ -1230,10 +1319,10 @@ describe("the drawdown on the record screen", () => {
         await renderWithProviders(<BrewRecord recipeLookup={mockLookup} />);
 
         expect(screen.queryByTestId("rate-chart")).toBeNull();
-        expect(screen.getByTestId("figures-rate")).toBeTruthy();
+        expect(screen.getByTestId("figures-drawdown-rate")).toBeTruthy();
         expect(screen.getByLabelText(/Drawdown, .* average .* grams per second/))
             .toBeTruthy();
-        expect(screen.getByLabelText(/Average rate, .* grams per second/))
+        expect(screen.getByLabelText(/Drawdown, .* average .* grams per second/))
             .toBeTruthy();
     });
 
@@ -1318,14 +1407,14 @@ describe("brew record's story card", () => {
     });
 
     /** Give the sheet a stage to draw in; nothing is drawn until it has one. */
-    async function openCard(width = 360): Promise<void> {
+    async function openCard(width = 360, height = Math.ceil(width * 16 / 9) + 100): Promise<void> {
         // Pressed once, not in a retry loop: the sheet hides the screen behind
         // it from a screen reader, so the button this press found is gone by
         // the time a second attempt would look for it.
         await fireEvent.press(screen.getByLabelText("Share this brew as a story card"));
         await waitFor(() => expect(screen.getByTestId("story-stage")).toBeTruthy());
         await fireEvent(screen.getByTestId("story-stage"), "layout", {
-            nativeEvent: {layout: {width, height: Math.ceil(width * 16 / 9) + 100, x: 0, y: 0}}
+            nativeEvent: {layout: {width, height, x: 0, y: 0}}
         });
         await waitFor(() => expect(screen.getByTestId("brew-story-card")).toBeTruthy());
     }
@@ -1342,6 +1431,151 @@ describe("brew record's story card", () => {
             {timeout: SHEET_PRESS_TIMEOUT}
         );
     }
+
+    it("subtracts the recorded pause from a tea steep in record and story", async () => {
+        mockOpened = {
+            record: makeBrewRecordFixture({
+                beverageKind: "tea", pouringAt: 1_000, endedAt: 81_000,
+                plan: planFromPours([new Pour(1, 90, 92, 35, 0, 0, 45)]),
+                teaCycles: [{
+                    index: 0, steepStartedAt: 10_000, steepEndedAt: 65_000,
+                    endingEndedAt: 80_000, fillMl: 90
+                }],
+                pauseIntervals: [{from: 20_000, to: 30_000, pour: 1, reason: "manual"}]
+            }),
+            samples: []
+        };
+        await renderWithProviders(<BrewRecord recipeLookup={lookup}/>);
+        expect(within(screen.getByTestId("brew-capture"))
+            .getByText("STEEP · 0:45 planned · 0:45 elapsed")).toBeTruthy();
+        await openCard();
+        expect(within(screen.getByTestId("story-capture"))
+            .getByText("STEEP · 0:45 planned · 0:45 elapsed")).toBeTruthy();
+    });
+
+    it.each([
+        {orientation: "portrait", width: 393, height: 852, stageHeight: 740},
+        {orientation: "landscape", width: 852, height: 393, stageHeight: 360}
+    ])("keeps tea figures in record and story in $orientation", async ({width, height, stageHeight}) => {
+        const window = {...mockWindow, width, height};
+        Dimensions.set({screen: window, window});
+        mockOpened = {
+            record: makeBrewRecordFixture({
+                beverageKind: "tea", dose: 5, ratio: 18, grinderUsed: false,
+                grindSize: 81, grinderRpm: 120, adjustedFromGrind: 50,
+                adjustedFromDose: 4, adjustedFromRatio: 16, adjustedTempOffset: -2,
+                drawdownAt: 0, plan: planFromPours(twoPours.pours)
+            }),
+            samples: []
+        };
+        await renderWithProviders(<BrewRecord recipeLookup={lookup}/>);
+        expect(screen.getByText("HOW WAS THE TEA")).toBeTruthy();
+        expect(screen.getByLabelText("Export the data")).toBeTruthy();
+        expect(screen.getByTestId("record-action-export")).toBeTruthy();
+        expect(screen.queryByLabelText(HANDOFF_TARGETS[0].buttonLabel)).toBeNull();
+        const assertTea = (capture: ReturnType<typeof within>) => {
+            for (const label of ["LEAF", "5 G", "WATER", "CUP", "TIME"]) {
+                expect(capture.getAllByText(label).length).toBeGreaterThan(0);
+            }
+            for (const label of ["RATIO", "GRIND", "OFF", "RPM", "DRAWDOWN", "DELAY",
+                "RECIPE 50", "1:18"]) {
+                expect(capture.queryByText(label)).toBeNull();
+            }
+        };
+        assertTea(within(screen.getByTestId("brew-capture")));
+        expect(screen.getByText("TEMP")).toBeTruthy();
+        expect(screen.getByText("RECIPE 4")).toBeTruthy();
+        expect(screen.getByText("OFFSET -2")).toBeTruthy();
+        await openCard(width, stageHeight);
+        assertTea(within(screen.getByTestId("story-capture")));
+    });
+
+    it("keeps legacy record copy and figures when its saved recipe is now tea", async () => {
+        mockOpened = {record: makeBrewRecordFixture({dose: 15, ratio: 16}), samples: []};
+        const teaRecipe = new Recipe();
+        teaRecipe.cupType = CUP_TYPE.TEA;
+        await renderWithProviders(
+            <BrewRecord recipeLookup={{getRecipe: () => teaRecipe}}/>
+        );
+        expect(screen.getByText("HOW WAS IT")).toBeTruthy();
+        expect(screen.getByText("DOSE")).toBeTruthy();
+        expect(screen.getByText("1:16")).toBeTruthy();
+        expect(screen.queryByText("LEAF")).toBeNull();
+    });
+
+    it.each([
+        {recipeState: "deleted", from: 40_700, to: 55_700, delay: 10},
+        {recipeState: "edited", from: 40_700, to: 55_700, delay: 10},
+        {recipeState: "deleted, pause straddles drawdown", from: 35_000, to: 50_000, delay: 5}
+    ].flatMap((scenario) => ["ordinary", "full Story"].map((panel) => ({...scenario, panel}))))(
+        "drawdown pause regression: preserves record DELAY $delay in $panel export with recipe $recipeState",
+        async ({recipeState, from, to, delay, panel}) => {
+            const pouringAt = 1_791_576_012_000;
+            const plan = planFromPours([new Pour(1, 120, 93, 40, 0, 0, 0)]);
+            mockOpened = {
+                record: makeBrewRecordFixture({
+                    startedAt: pouringAt - 12_000,
+                    pouringAt,
+                    endedAt: pouringAt + 60_000,
+                    pours: 1,
+                    waterTotal: 120,
+                    cupTotal: 115,
+                    cupAtDrawdown: 100,
+                    drawdownAt: 40_000,
+                    pausedSeconds: 15,
+                    pauseIntervals: [{from, to, pour: 1, reason: "overflow"}],
+                    plan,
+                    stageWater: [120],
+                    heldSeconds: 15
+                }),
+                samples: [
+                    {at: 0, water: 0, cup: 0, pour: 1},
+                    {at: 30_000, water: 90, cup: 70, pour: 1},
+                    {at: 40_000, water: 120, cup: 100, pour: 1},
+                    {at: 60_000, water: 120, cup: 115, pour: 1}
+                ]
+            };
+            const edited = new Recipe();
+            edited.pours = [new Pour(1, 240, 93, 40, 0, 0, 30)];
+            edited.overflowProtection = {retainedGrams: 200, checkSeconds: 45};
+            const recipeLookup: RecipeLookup = {
+                getRecipe: jest.fn(() => recipeState === "edited" ? edited : null)
+            };
+            (Sharing.shareAsync as jest.Mock).mockClear();
+            await renderWithProviders(<BrewRecord recipeLookup={recipeLookup}/>);
+
+            if (panel === "full Story") await openCard(600);
+            const capture = within(screen.getByTestId(
+                panel === "ordinary" ? "brew-capture" : "story-capture"
+            ));
+            expect(capture.getByLabelText(/^Drawdown, 20 seconds(?:,|$)/)).toBeOnTheScreen();
+            expect(capture.getByLabelText(`Delay, ${delay} seconds`)).toBeOnTheScreen();
+            expect(capture.getByTestId("trace-pause-overflow-0")).toBeOnTheScreen();
+            expect(summaryProps.delay).toBe(delay);
+            expect(summaryProps.plannedSeconds).toBe(30);
+            expect(summaryProps.pauseIntervals).toEqual(mockOpened.record.pauseIntervals);
+
+            if (panel === "full Story") {
+                const {mockCapture} = jest.requireMock<{mockCapture: jest.Mock}>(
+                    "react-native-view-shot"
+                );
+                mockCapture.mockClear();
+                mockCapture.mockImplementationOnce(async () => {
+                    const shot = within(within(screen.getByTestId("story-card-host"))
+                        .getByTestId("viewshot"));
+                    expect(shot.getByLabelText(`Delay, ${delay} seconds`)).toBeOnTheScreen();
+                    expect(shot.getByTestId("story-capture")).toBeOnTheScreen();
+                    return "file:///mock/brew.png";
+                });
+                await fireEvent.press(screen.getByLabelText("Share the card"));
+                await waitFor(() => expect(Sharing.shareAsync).toHaveBeenCalledWith(
+                    "file:///mock/brew.png", expect.objectContaining({mimeType: "image/png"})
+                ));
+                expect(mockCapture).toHaveBeenCalledTimes(1);
+                expect(capture.getByLabelText(`Delay, ${delay} seconds`)).toBeOnTheScreen();
+            }
+        }
+    );
 
     it("offers a story card on a brew that was watched", async () => {
         await renderWithProviders(<BrewRecord recipeLookup={lookup}/>);
@@ -1385,6 +1619,41 @@ describe("brew record's story card", () => {
                 .toHaveLength(1);
         });
 
+    it("draws the record's pause bands in the card's chart slot and no reason row",
+        async () => {
+            mockOpened = {
+                record:  makeBrewRecordFixture({
+                    pauseIntervals: [
+                        {from: 20_000, to: 50_000, pour: 1, reason: "overflow"}
+                    ]
+                }),
+                samples: [
+                    {at: 0,       water: 0,   cup: 0,   pour: 1},
+                    {at: 228_000, water: 250, cup: 244, pour: 2}
+                ]
+            };
+            await renderWithProviders(<BrewRecord recipeLookup={lookup}/>);
+            await openCard(600);
+            const card = within(screen.getByTestId("brew-story-card"));
+            expect(within(card.getByTestId("story-capture"))
+                .getByTestId("trace-pause-overflow-0")).toBeTruthy();
+            expect(card.queryByTestId("record-pause-reasons")).toBeNull();
+        });
+
+    it("leaves the card without bands when the brew kept no chart", async () => {
+        mockOpened = {
+            record:  makeBrewRecordFixture({
+                hasStream: false,
+                pauseIntervals: [{from: 20_000, to: 50_000, pour: 1, reason: "overflow"}]
+            }),
+            samples: []
+        };
+        await renderWithProviders(<BrewRecord recipeLookup={lookup}/>);
+        await openCard(600);
+        expect(within(screen.getByTestId("brew-story-card")).queryByTestId(/^trace-pause-/))
+            .toBeNull();
+    });
+
     it("carries the coffee, the rating and the tags", async () => {
         await renderWithProviders(<BrewRecord recipeLookup={lookup}/>);
         await openCard(600);
@@ -1404,6 +1673,7 @@ describe("brew record's story card", () => {
         expect(screen.queryByLabelText("NOTE")).toBeNull();
         expect(screen.queryByLabelText("DETAILS")).toBeNull();
         expect(screen.queryByLabelText("FLOW")).toBeNull();
+        expect(screen.queryByLabelText("DOSE & RATIO")).toBeNull();
     });
 
     it("offers note, detail and flow toggles when the story can draw them", async () => {
@@ -1437,6 +1707,108 @@ describe("brew record's story card", () => {
         expect(card.queryByTestId("story-coffee")).toBeNull();
         expect(screen.getByLabelText("COFFEE").props.accessibilityState)
             .toEqual(expect.objectContaining({selected: false}));
+    });
+
+    it("toggles recipe inputs and their comparisons independently of details", async () => {
+        mockOpened = {
+            record: makeBrewRecordFixture({
+                dose: 16, ratio: 17, adjustedFromDose: 15, adjustedFromRatio: 16,
+                grindSize: 60, adjustedFromGrind: 50, grinderUsed: true, hasStream: false
+            }),
+            samples: []
+        };
+        await renderWithProviders(<BrewRecord recipeLookup={lookup}/>);
+        await openCard(600);
+        const card = within(screen.getByTestId("brew-story-card"));
+        expect(card.getByText("RECIPE 50")).toBeTruthy();
+        await pressStoryToggle("DETAILS");
+        expect(card.queryByText("RECIPE 50")).toBeNull();
+        expect(card.getByText("16 G")).toBeTruthy();
+        expect(card.getByText("RECIPE 15")).toBeTruthy();
+        expect(card.getByLabelText("Recipe dose, 16 grams, saved recipe 15 grams")).toBeTruthy();
+        expect(card.getByLabelText("Recipe ratio, 1 to 17, saved recipe 1 to 16")).toBeTruthy();
+        await pressStoryToggle("DOSE & RATIO");
+        expect(card.queryByTestId("brew-recipe-context")).toBeNull();
+        expect(sharedSettings().get("storyCardHidden")).toBe('["details","recipe"]');
+        await pressStoryToggle("DOSE & RATIO");
+        expect(card.getByText("16 G")).toBeTruthy();
+        expect(card.getByText("1:17")).toBeTruthy();
+        expect(card.getByText("RECIPE 15")).toBeTruthy();
+        expect(sharedSettings().get("storyCardHidden")).toBe('["details"]');
+    });
+
+    it("offers recipe but no empty details toggle for a dose-only quick edit", async () => {
+        mockOpened = {
+            record: makeBrewRecordFixture({
+                dose: 16, ratio: undefined, adjustedFromDose: 15, hasStream: false
+            }),
+            samples: []
+        };
+        await renderWithProviders(<BrewRecord recipeLookup={lookup}/>);
+        await openCard(600);
+        expect(screen.getByLabelText("DOSE & RATIO")).toBeTruthy();
+        expect(screen.queryByLabelText("DETAILS")).toBeNull();
+        const card = within(screen.getByTestId("brew-story-card"));
+        expect(card.getByLabelText("Recipe dose, 16 grams, saved recipe 15 grams")).toBeTruthy();
+        expect(card.queryByTestId("brew-recipe-ratio")).toBeNull();
+    });
+
+    it("defaults recipe context on with an old hidden-details preference", async () => {
+        sharedSettings().set("storyCardHidden", '["details"]');
+        mockOpened = {
+            record: makeBrewRecordFixture({
+                dose: 16, ratio: 17, adjustedFromDose: 15, hasStream: false
+            }),
+            samples: []
+        };
+        await renderWithProviders(<BrewRecord recipeLookup={lookup}/>);
+        await openCard(600);
+        const card = within(screen.getByTestId("brew-story-card"));
+        expect(card.getByText("16 G")).toBeTruthy();
+        expect(card.getByText("RECIPE 15")).toBeTruthy();
+        expect(screen.getByLabelText("DOSE & RATIO").props.accessibilityState)
+            .toEqual(expect.objectContaining({selected: true}));
+        expect(sharedSettings().get("storyCardHidden")).toBe('["details"]');
+    });
+
+    it("offers the recipe toggle even when a remembered preference hides its context", async () => {
+        sharedSettings().set("storyCardHidden", '["coffee","recipe"]');
+        mockOpened = {
+            record: makeBrewRecordFixture({dose: 15, ratio: 16, hasStream: false}),
+            samples: []
+        };
+        await renderWithProviders(<BrewRecord recipeLookup={lookup}/>);
+        await openCard(600);
+        const card = within(screen.getByTestId("brew-story-card"));
+        expect(card.queryByTestId("brew-recipe-context")).toBeNull();
+        expect(screen.getByLabelText("DOSE & RATIO").props.accessibilityState)
+            .toEqual(expect.objectContaining({selected: false}));
+        await pressStoryToggle("DOSE & RATIO");
+        expect(card.getByLabelText("Recipe dose, 15 grams")).toBeTruthy();
+        expect(card.getByLabelText("Recipe ratio, 1 to 16")).toBeTruthy();
+        expect(sharedSettings().get("storyCardHidden")).toBe('["coffee"]');
+    });
+
+    it("marks unfittable recipe context unavailable without persisting the refusal", async () => {
+        mockOpened = {
+            record: makeBrewRecordFixture({dose: 31, ratio: 100, hasStream: false}),
+            samples: []
+        };
+        await renderWithProviders(<BrewRecord recipeLookup={lookup}/>);
+        await openCard(120);
+        const card = within(screen.getByTestId("brew-story-card"));
+        expect(card.queryByTestId("brew-recipe-context")).toBeNull();
+        expect(screen.getByLabelText("DOSE & RATIO unavailable, this will not fit")
+            .props.accessibilityState).toEqual(expect.objectContaining({selected: false}));
+        expect(screen.getByTestId("story-toggle-recipe-unavailable")).toBeTruthy();
+        expect(sharedSettings().get("storyCardHidden")).toBe("");
+        await fireEvent(screen.getByTestId("story-stage"), "layout", {
+            nativeEvent: {layout: {width: 600, height: 1167, x: 0, y: 0}}
+        });
+        expect(within(screen.getByTestId("brew-story-card"))
+            .getByLabelText("Recipe ratio, 1 to 100")).toBeTruthy();
+        expect(screen.queryByTestId("story-toggle-recipe-unavailable")).toBeNull();
+        expect(sharedSettings().get("storyCardHidden")).toBe("");
     });
 
     it("marks a requested story section unavailable when it cannot fit", async () => {
@@ -1573,11 +1945,14 @@ describe("brew record's story card", () => {
         await openCard(375);
 
         expect(summaryProps.adjustments).toEqual({
-            dose:        {value: 31, from: 31},
-            ratio:       {value: 100, from: 100},
-            grind:       {value: 81, from: 81},
             temperature: {offset: 60, temperatures: [39, 60, 80, 99]}
         });
+        const card = within(screen.getByTestId("brew-story-card"));
+        const context = within(card.getByTestId("brew-recipe-context"));
+        expect(context.getByText("31 G")).toBeTruthy();
+        expect(context.getByText("1:100")).toBeTruthy();
+        expect(card.queryByTestId("figures-adjusted-dose")).toBeNull();
+        expect(card.queryByTestId("figures-adjusted-ratio")).toBeNull();
         expect(screen.getAllByText("39 to 99").length).toBeGreaterThan(0);
         expect(screen.getAllByText("OFFSET +60").length).toBeGreaterThan(0);
         fontScale.mockRestore();
@@ -1614,6 +1989,112 @@ describe("brew record's story card", () => {
             expect(summaryProps.delay).toBeNull();
             expect(summaryProps.grind).toBeNull();
         });
+
+    it("says a brew was paused, since nothing else on the record would", async () => {
+        // The clock runs long and the trace holds a flat stretch. Without the
+        // note the record shows both and explains neither.
+        mockOpened = {
+            record:  recordWithDrawdownRate({
+                plan:          planFromPours(twoPours.pours),
+                pausedSeconds: 40
+            }),
+            samples: samplesForRate()
+        };
+
+        await renderWithProviders(<BrewRecord recipeLookup={lookup}/>);
+
+        expect(screen.getByText("PAUSED FOR 40 S")).toBeTruthy();
+    });
+
+    describe("recorded pause intervals", () => {
+        const intervals = [
+            {from: 20_000, to: 50_000, pour: 1, reason: "overflow" as const},
+            {from: 100_000, to: 130_000, pour: 2, reason: "manual" as const},
+            {from: 150_000, to: 160_000, pour: 2, reason: "overflow" as const}
+        ];
+        const stream = [
+            {at: 0, water: 0, cup: 0, pour: 1},
+            {at: 20_000, water: 60, cup: 40, pour: 1},
+            {at: 228_000, water: 250, cup: 244, pour: 2}
+        ];
+
+        it("draws the record's own bands in the capture after the recipe was deleted",
+            async () => {
+                mockOpened = {
+                    record:  recordWithDrawdownRate({
+                        plan: planFromPours(twoPours.pours), pauseIntervals: intervals
+                    }),
+                    samples: stream
+                };
+                await renderWithProviders(<BrewRecord recipeLookup={noRecipeLookup}/>);
+
+                const capture = within(screen.getByTestId("brew-capture"));
+                expect(capture.getByTestId("trace-pause-overflow-0")).toBeTruthy();
+                expect(capture.getByTestId("trace-pause-manual-1")).toBeTruthy();
+                expect(capture.getByTestId("trace-pause-overflow-2")).toBeTruthy();
+                expect(summaryProps.pauseIntervals).toEqual(intervals);
+            });
+
+        it("counts the automatic pauses without restating their duration", async () => {
+            mockOpened = {
+                record:  recordWithDrawdownRate({
+                    plan: planFromPours(twoPours.pours), pauseIntervals: intervals,
+                    pausedSeconds: 70
+                }),
+                samples: stream
+            };
+            await renderWithProviders(<BrewRecord recipeLookup={lookup}/>);
+
+            expect(screen.getByTestId("record-pause-reasons"))
+                .toHaveTextContent("2 AUTOMATIC OVERFLOW PAUSES, 1 MANUAL");
+            expect(screen.getByText("PAUSED FOR 70 S")).toBeTruthy();
+            expect(screen.queryByText(/\d+ S\b.*OVERFLOW|OVERFLOW.*\d+ S\b/)).toBeNull();
+        });
+
+        it("keeps the metadata but invents no graph once the stream is swept", async () => {
+            mockOpened = {
+                record:  recordWithDrawdownRate({
+                    plan: planFromPours(twoPours.pours), pauseIntervals: intervals,
+                    hasStream: false
+                }),
+                samples: []
+            };
+            await renderWithProviders(<BrewRecord recipeLookup={lookup}/>);
+
+            expect(screen.getByTestId("record-pause-reasons")).toBeTruthy();
+            expect(summaryProps.pauseIntervals).toEqual(intervals);
+            expect(screen.getByText("NO TRACE KEPT")).toBeTruthy();
+            expect(screen.queryByTestId(/^trace-pause-/)).toBeNull();
+            expect(screen.queryByTestId("trace-chart-slot")).toBeNull();
+        });
+
+        it("keeps a restored record with no intervals exactly as it was", async () => {
+            mockOpened = {
+                record:  recordWithDrawdownRate({hasStream: false}),
+                samples: []
+            };
+            await renderWithProviders(<BrewRecord recipeLookup={lookup}/>);
+
+            expect(screen.queryByTestId("record-pause-reasons")).toBeNull();
+            expect(screen.queryByTestId(/^trace-/)).toBeNull();
+        });
+    });
+
+    it("lets ending on the machine keep the note slot from a pause", async () => {
+        mockOpened = {
+            record:  recordWithDrawdownRate({
+                plan:          planFromPours(twoPours.pours),
+                outcome:       "endedOnMachine",
+                pausedSeconds: 40
+            }),
+            samples: samplesForRate()
+        };
+
+        await renderWithProviders(<BrewRecord recipeLookup={lookup}/>);
+
+        expect(screen.getByText("ENDED ON THE MACHINE")).toBeTruthy();
+        expect(screen.queryByText("PAUSED FOR 40 S")).toBeNull();
+    });
 
     it("hides the screen from a screen reader while the card is up", async () => {
         await renderWithProviders(<BrewRecord recipeLookup={lookup}/>);
