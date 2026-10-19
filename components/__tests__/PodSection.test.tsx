@@ -32,6 +32,20 @@ function linked(over: Partial<Recipe> = {}): Recipe {
 }
 
 describe("PodSection", () => {
+    it("drops the duplicate coffee name after a lookup mutates the same recipe", async () => {
+        const recipe = linked({xbloomName: "", coffee: {name: "Ethiopia Guji"}});
+        const properties = props({recipe});
+        const {rerender} = await renderWithProviders(<PodSection {...properties}/>);
+        expect(screen.getByTestId("coffee-name")).toHaveTextContent("Ethiopia Guji");
+
+        recipe.xbloomName = "Ethiopia Guji";
+        await rerender(<PodSection {...properties}/>);
+
+        expect(screen.getByTestId("pod-name")).toHaveTextContent("Ethiopia Guji");
+        expect(screen.queryByTestId("coffee-name")).toBeNull();
+        expect(screen.getAllByText("Ethiopia Guji")).toHaveLength(1);
+    });
+
     it("lists what the pod carries directly under the pod line", async () => {
         await renderWithProviders(
             <PodSection {...props({recipe: linked({

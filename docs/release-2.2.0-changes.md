@@ -29,6 +29,15 @@ numbers are unchanged. This version bump does not build, submit or deploy an app
 
 ## Verified preview follow-ups
 
+### Mutable recipes and compiler caches
+
+Quick edit and the pod section now use the editor's existing compiler opt-out
+pattern. Saving a new dose can replace the recipe-dose chip without remounting
+the panel (#239), and a late pod-name lookup removes the now-duplicate coffee
+name (#230). Compiler regressions reproduce the unsafe reference-keyed caches;
+component regressions retain the same recipe instance across each update.
+Recipes remain mutable and no brew or card serialization changes.
+
 ### Catalogue content behind sheets
 
 The roaster list, a roaster's coffees and a coffee page now leave the screen-reader

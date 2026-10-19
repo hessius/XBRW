@@ -66,6 +66,9 @@ export default function PodSection({
     /** Clears the recipe's own name, putting the title back on the pod's. */
     onFollowPod: () => void;
 }) {
+    "use no memo";
+
+    // A late pod lookup mutates the recipe; cached children must follow that update.
     const [podFailed, setPodFailed] = useState(false);
 
     const linked = recipe.xbloomName.trim().length > 0;
