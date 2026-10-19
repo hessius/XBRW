@@ -13,6 +13,14 @@ function hasUndefined(value: unknown): boolean {
 }
 
 describe("buildEnvelope", () => {
+    it.each([1, 30, 39])("carries a used BLE grind of %s without card-floor suppression", (grindSize) => {
+        const envelope = buildEnvelope(brew({grindSize, grinderUsed: true}), samples);
+        expect(envelope.brew).toMatchObject({
+            grindSize: String(grindSize), grinderName: DEVICE_NAME
+        });
+        expect(envelope.brew.note).toContain(`grind ${grindSize}`);
+    });
+
     it("refuses known tea at the envelope boundary", () => {
         expect(() => buildEnvelope(brew({beverageKind: "tea"}), samples))
             .toThrow("Tea brews cannot be sent to Beanconqueror.");

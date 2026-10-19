@@ -250,6 +250,14 @@ describe("BypassRecord", () => {
 });
 
 describe("grinderRan", () => {
+    it.each([1, 15, 30, 39, 40, 80])("recognises a used BLE grind of %s", (grindSize) => {
+        expect(grinderRan({grinderUsed: true, grindSize} as BrewRecord)).toBe(true);
+    });
+
+    it.each([-1, NaN, Infinity, 1.5, 40.5])("rejects an invalid grind of %s", (grindSize) => {
+        expect(grinderRan({grinderUsed: true, grindSize} as BrewRecord)).toBe(false);
+    });
+
     it("is false when the recipe said the grinder was off", () => {
         expect(grinderRan({grinderUsed: false, grindSize: 62} as BrewRecord)).toBe(false);
     });

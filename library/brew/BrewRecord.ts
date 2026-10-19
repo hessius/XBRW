@@ -447,14 +447,17 @@ export function drawdownSeconds(record: BrewRecord): number | null {
  * Whether the xBloom ground this brew's coffee.
  *
  * Two independent records of one fact: the boolean the recipe carried, and
- * whether the grind size is a plausible brewing-band value. They should never
+ * whether the grind size is a whole BLE brewing value (1-80), not merely
+ * writable to a card. They should never
  * disagree, and if they do the cautious reading wins — a mill claimed in
  * error becomes a row in somebody's equipment list they did not ask for and
  * will not know to clean up (spec §3.1).
  */
 export function grinderRan(record: BrewRecord): boolean {
     if (record.grinderUsed !== true) return false;
-    return typeof record.grindSize === "number" && grindBand(record.grindSize)?.onCard === true;
+    return typeof record.grindSize === "number"
+        && Number.isInteger(record.grindSize)
+        && grindBand(record.grindSize) !== undefined;
 }
 
 /**

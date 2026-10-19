@@ -60,6 +60,10 @@ function oneStage(overrides: Partial<PlanStage> = {}): Partial<BrewRecord> {
 }
 
 describe("brewNote", () => {
+    it.each([1, 30, 39])("names a used BLE grind of %s below the card floor", (grindSize) => {
+        expect(brewNote(record({grindSize}))).toContain(`grind ${grindSize}`);
+    });
+
     it("renders a finished brew as a stage ladder and footer", () => {
         expect(brewNote(record())).toBe(`House recipe
 #1 · 40 ml · 94°C · spiral · agitate before · wait 30 s

@@ -47,6 +47,15 @@ in the combined incoming code and is pinned by a regression test.
 These are preview-owned follow-ups, not edits to the contributor's #247 branch.
 They do not establish recipe-buffer clearing or resolve the wrong-recipe report.
 
+### Low-grind brew history
+
+The shared `grinderRan` predicate now accepts integer BLE grinds 1-80 rather than
+requiring the narrower NFC card band. Explicit grinder use is still required;
+off, fractional, non-finite and out-of-range values remain excluded. History
+sorting, dial figures, brew notes and handoff grinder details have regression
+coverage for values below 40. No NFC limits, card encoding or stored records
+change. This corrects a shipped 2.1.0 defect only on the 2.2.0 preview.
+
 ## Imported proposal notes
 
 Moved from additions to the shipped 2.1.0 ledger without rewriting that ledger.
