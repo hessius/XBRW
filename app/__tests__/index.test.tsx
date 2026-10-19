@@ -16,6 +16,8 @@ import {CARD_READ_FAILED} from "@/constants/copy";
 import {TYPING_DEBOUNCE_MS} from "@/constants/motion";
 import {sharedSlotDatabase} from "@/hooks/useEasyModeSlots";
 import {snapshotRecipe} from "@/library/slots/slotModel";
+import * as roasterFeed from "@/library/roasterFeed";
+import {FEED_URL, feedBody} from "@/test-utils/roasterFeed";
 
 const mockPush = jest.fn();
 
@@ -2995,6 +2997,58 @@ describe("the import deep link", () => {
             expect.objectContaining({id: "abc123"}), expect.anything()
         );
     });
+
+    it("follows the feed when that link's own import succeeds", async () => {
+        const fetchFeed = jest.spyOn(roasterFeed, "fetchRoasterFeedBody")
+            .mockResolvedValue(feedBody([{id: "a"}]));
+        mockGetRecipe = () => new Recipe();
+        mockImportUrl = link({feed: FEED_URL});
+        await renderWithProviders(
+            <HomeScreen db={store([])} settings={new Settings(memoryStorage())}/>
+        );
+        await waitFor(() => expect(mockPush).toHaveBeenCalled());
+        expect(fetchFeed).toHaveBeenCalledTimes(1);
+        expect(fetchFeed).toHaveBeenCalledWith(FEED_URL, expect.objectContaining({
+            signal: expect.any(AbortSignal)
+        }));
+    });
+
+    it.each(["cancelled then pasted", "replaced by a share"] as const)(
+        "does not follow a feed from an import %s", async (route) => {
+            jest.useFakeTimers();
+            const fetchFeed = jest.spyOn(roasterFeed, "fetchRoasterFeedBody")
+                .mockResolvedValue(feedBody([{id: "a"}]));
+            mockFetchRecipeDetail = () => new Promise<void>(() => {});
+            mockImportUrl = link({feed: FEED_URL});
+            const db = store([]);
+            const settings = new Settings(memoryStorage());
+            const {rerender} = await renderWithProviders(<HomeScreen db={db} settings={settings}/>);
+            await waitFor(() => expect(XBloomRecipe).toHaveBeenCalledTimes(1));
+            await act(async () => { jest.advanceTimersByTime(500); });
+
+            if (route === "cancelled then pasted") {
+                await fireEvent.press(screen.getAllByLabelText("Close").at(-1)!);
+                await act(async () => { jest.advanceTimersByTime(500); });
+                await fireEvent.press(screen.getByLabelText("Import a recipe"));
+                await act(async () => { jest.advanceTimersByTime(500); });
+            }
+            mockFetchRecipeDetail = () => Promise.resolve();
+            mockGetRecipe = () => new Recipe();
+            const plainShare = "https://share-h5.xbloom.com/r?id=ordinary456";
+            if (route === "cancelled then pasted") {
+                await fireEvent.changeText(screen.getByLabelText("Share link or pod code"), plainShare);
+            } else {
+                mockShareIntentState = {
+                    hasShareIntent: true,
+                    shareIntent: {type: "weburl", webUrl: plainShare},
+                    resetShareIntent: jest.fn()
+                };
+                await rerender(<HomeScreen db={db} settings={settings}/>);
+            }
+            await waitFor(() => expect(mockPush).toHaveBeenCalled());
+            expect(fetchFeed).not.toHaveBeenCalled();
+        }
+    );
 
     it("puts the link's coffee on the recipe it opens", async () => {
         const fetched = new Recipe();

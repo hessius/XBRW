@@ -49,7 +49,7 @@ export type RoasterOffer = {
     state: RoasterOfferState;
     /** An import link named this feed. Nothing happens until it imports. */
     arm: (feedUrl: string) => void;
-    /** The armed link's import failed, so there is nothing to follow it up. */
+    /** The armed import failed, was cancelled or was replaced by one without a feed. */
     disarm: () => void;
     /** An import just succeeded: follow up the armed feed, if there is one. */
     imported: () => void;
