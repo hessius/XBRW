@@ -238,7 +238,7 @@ export function heroNameLayout(
 
     const fitted = (step: typeof HERO_NAME_STEPS[number], last: boolean): HeroNameLayout | null => {
         const size = step.fontSize * scale;
-        if (beside > 0 && estimateLines(name, beside - FIT_SLACK, size) <= HERO_NAME_MAX_LINES) {
+        if (beside > FIT_SLACK && estimateLines(name, beside - FIT_SLACK, size) <= HERO_NAME_MAX_LINES) {
             return {
                 ...step, lines: HERO_NAME_MAX_LINES, maxWidth: beside, reserve: 0,
                 profileHeight: PROFILE_HEIGHT, tight: false
