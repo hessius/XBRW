@@ -20,6 +20,7 @@ import {useSavedMachines} from "@/hooks/useSavedMachines";
 import {sharedSettings} from "@/hooks/useSetting";
 import {FakeTransport, olderFirmwareInfoFrame} from "@/library/machine/__tests__/FakeTransport";
 import Machine from "@/library/machine/Machine";
+import {modelFromSerial} from "@/library/machine/machineModel";
 import {loadSavedMachines, recordSerial} from "@/library/machine/savedMachineSettings";
 import {serialiseSavedMachines, type SavedMachine} from "@/library/machine/savedMachines";
 import {DEFAULTS, type Settings} from "@/library/Settings";
@@ -102,6 +103,7 @@ it("saves the machine record while connected without touching the link", async (
 
     await act(async () => {
         result.current.rename("WORK", "Office");
+        result.current.setColour("WORK", 2);
         result.current.setModel("WORK", "studio");
     });
     // The serial again, as every later connect reports it: nothing differs,
@@ -117,7 +119,7 @@ it("saves the machine record while connected without touching the link", async (
     expect(loadSavedMachines(settings()).find((saved) => saved.id === "WORK")?.label).toBe("Office");
 });
 
-it("keeps the serial on the second machine, not the first", async () => {
+it("keeps the serial on the second machine, not the first, and its model then needs no choice", async () => {
     const {machine} = work();
     await chooseMachine(machine, settings(), "WORK", granted, instant);
 
@@ -125,6 +127,8 @@ it("keeps the serial on the second machine, not the first", async () => {
     expect(office.id).toBe("WORK");
     expect(office.serial).toBe("J15A01D48G023");
     expect(home.serial).toBe("J15A02A45H051");
+    // What the detail sheet checks before it drops the Studio/Original choice.
+    expect(modelFromSerial(office.serial)).toBe(office.model);
 });
 
 it("lets go of the link only for an explicit switch or the app going away", async () => {
