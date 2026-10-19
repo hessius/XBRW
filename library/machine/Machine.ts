@@ -10,7 +10,7 @@ import type {SlotDatabase} from "@/library/slots/SlotDatabase";
 import type {SlotAcquireOptions, SlotIdentity} from "@/library/slots/slotWriter";
 import {sameBytes} from "@/library/slots/slotModel";
 
-import {RadioUnavailableError, SlotOperationError} from "./errors";
+import {BrewUploadError, RadioUnavailableError, SlotOperationError} from "./errors";
 
 import {frameLogText, historyLine} from "./frameLog";
 import {
@@ -687,8 +687,9 @@ export default class Machine {
      *
      * The gap is the point. A burst of Write Without Response frames is not
      * flow-controlled in any way, and the machine simply loses most of it.
+     * Returns false when a newer sequence interrupted the upload.
      */
-    private async sendPaced(frames: Uint8Array[]): Promise<void> {
+    private async sendPaced(frames: Uint8Array[]): Promise<boolean> {
         this.assertOrdinaryOperation();
         const finish = this.beginOrdinaryOperation();
         try {
@@ -696,9 +697,10 @@ export default class Machine {
             for (let index = 0; index < frames.length; index++) {
                 if (index > 0) await this.gap();
                 // A newer sequence, including cancel, owns the radio.
-                if (this.sequence !== mine) return;
+                if (this.sequence !== mine) return false;
                 await this.send(frames[index]);
             }
+            return this.sequence === mine;
         } finally {
             finish();
         }
@@ -1293,6 +1295,9 @@ export default class Machine {
         // is startable. See `clearForBrew`.
         await this.clearForBrew();
         if (ticket !== this.cancelTicket) return;
+        if (generation !== this.generation && this.isConnected()) {
+            throw new Error("The machine connection changed.");
+        }
         // The vitals this link already heard are used as they are: the
         // official app brews on its connect-time reading, and asking again
         // costs a handshake, which beeps (2026-10-19 owner report). Only a
@@ -1322,6 +1327,9 @@ export default class Machine {
 
     private async brewOnce(recipe: Recipe): Promise<void> {
         this.assertOrdinaryOperation();
+        const generation = this.generation;
+        const ticket = this.cancelTicket;
+        const autoStart = this.autoStart;
         const blocked = this.brewBlock(recipe);
         if (blocked !== null) {
             // The phase as well as the throw. The caller gets an exception to
@@ -1352,7 +1360,7 @@ export default class Machine {
             // This whole sequence, gaps and all, mirrors `run_brew` in the
             // reference implementation, which is the only brew sequence we have
             // that is known to work on real hardware.
-            await this.sendPaced([
+            const sent = await this.sendPaced([
                 // The dose has to travel whether or not there is a bypass: the
                 // machine needs it to grind correctly, and skipping this frame
                 // makes the grind drift. Tea sends no bypass at all -- the
@@ -1386,23 +1394,28 @@ export default class Machine {
                 ]),
                 // The commit is the frame that sets a burr spinning, so it is
                 // the one the user may want to keep for themselves.
-                ...(this.autoStart ? [commit] : [])
+                ...(autoStart ? [commit] : [])
             ]);
+            if (!sent || ticket !== this.cancelTicket || generation !== this.generation) return;
             // The burst carried the commit when auto-start is on, so from here
             // the machine is starting itself and needs nothing from the user.
-            this.committed = this.autoStart;
+            this.committed = autoStart;
         } catch (error) {
+            if (ticket !== this.cancelTicket) return;
             // Without this the brew is left in `sending` with no timer armed —
             // the phase is only ever left by an acknowledgement that can no
             // longer come, so the brew screen would spin for good.
-            this.setPhase({
-                name: "failed", reason: "rejected",
-                detail: error instanceof Error ? error.message : undefined
-            });
-            throw error;
+            if (generation === this.generation) {
+                this.setPhase({
+                    name: "failed", reason: "rejected",
+                    detail: error instanceof Error ? error.message : undefined
+                });
+            }
+            if (error instanceof SlotOperationError) throw error;
+            throw new BrewUploadError(error);
         }
 
-        if (!this.autoStart) {
+        if (!autoStart) {
             // Uploaded, not committed. Nothing is timed from here: the machine
             // is holding a recipe quite happily, and the only thing outstanding
             // is a person.
@@ -1425,6 +1438,8 @@ export default class Machine {
      */
     async startBrew(): Promise<void> {
         this.assertOrdinaryOperation();
+        const generation = this.generation;
+        const ticket = this.cancelTicket;
         const commit = this.pendingCommit;
         if (commit === null) throw new Error("There is no recipe waiting to be started.");
         this.pendingCommit = null;
@@ -1432,11 +1447,18 @@ export default class Machine {
         try {
             await this.send(commit);
         } catch (error) {
-            this.setPhase({
-                name: "failed", reason: "rejected",
-                detail: error instanceof Error ? error.message : undefined
-            });
+            if (ticket !== this.cancelTicket) return;
+            if (generation === this.generation) {
+                this.setPhase({
+                    name: "failed", reason: "rejected",
+                    detail: error instanceof Error ? error.message : undefined
+                });
+            }
             throw error;
+        }
+        if (ticket !== this.cancelTicket) return;
+        if (generation !== this.generation) {
+            throw new Error("The machine connection changed during the brew start.");
         }
         this.committed = true;
         this.armAckTimer();
@@ -1459,6 +1481,13 @@ export default class Machine {
     /** Switch the machine to PRO, then send the recipe again. Once. */
     async switchToProAndRetry(recipe: Recipe): Promise<void> {
         this.assertOrdinaryOperation();
+        const generation = this.generation;
+        const ticket = this.cancelTicket;
+        const canContinue = (): boolean => {
+            if (ticket !== this.cancelTicket) return false;
+            if (generation !== this.generation) throw new Error("The machine connection changed.");
+            return true;
+        };
         this.retriedInPro = true;
         // Byte-exact, confirmed on hardware: "00000000" is PRO, "91327856" EASY.
         await this.send(buildType2(11511, ascii("00000000")));
@@ -1466,11 +1495,13 @@ export default class Machine {
         // handshake would tread on the mode frame -- the one unpaced seam in
         // the whole sequence, at the position where a lost frame costs most.
         await this.gap();
+        if (!canContinue()) return;
         // Renewed after a mode change, as it always was. Nobody has looked at
         // whether a session survives one, and this path is rare enough that a
         // beep is the cheaper risk.
         await this.shakeHands();
         await this.gap();
+        if (!canContinue()) return;
         await this.brewOnce(recipe);
     }
 
@@ -1527,6 +1558,7 @@ export default class Machine {
      * @returns the state reported, or null when none came in time.
      */
     private waitForState(accept: (state: number) => boolean): Promise<number | null> {
+        const generation = this.generation;
         return new Promise((resolve) => {
             const finish = (state: number | null): void => {
                 clearTimeout(timer);
@@ -1534,6 +1566,10 @@ export default class Machine {
                 resolve(state);
             };
             const off = this.onNotification((parsed) => {
+                if (generation !== this.generation) {
+                    finish(null);
+                    return;
+                }
                 if (parsed.kind === "status" && accept(parsed.state)) finish(parsed.state);
             });
             const timer = setTimeout(() => finish(null), this.stateReplyMs);
@@ -1558,9 +1594,13 @@ export default class Machine {
     private cancelOnce(): Promise<void> {
         if (this.cancelling !== null) return this.cancelling;
         const run = async (): Promise<void> => {
+            const generation = this.generation;
             const settled = this.waitForState((state) => STARTABLE.has(state));
             await this.sendPaced([buildType1(40519, [1])]);
             await settled;
+            if (generation !== this.generation) {
+                throw new Error("The machine connection changed during cancellation.");
+            }
         };
         const tracked: Promise<void> = run().finally(() => {
             if (this.cancelling === tracked) this.cancelling = null;
@@ -1582,6 +1622,10 @@ export default class Machine {
      * reporting a startable state is what it was for.
      */
     private async clearForBrew(): Promise<void> {
+        if (this.userCancel !== null) {
+            await this.userCancel;
+            return;
+        }
         if (!this.mayBeShowingAWarning()) return;
         if (this.cancelling !== null) {
             await this.cancelling;
@@ -1589,9 +1633,15 @@ export default class Machine {
         }
         let state = this.state;
         if (state === null) {
+            const generation = this.generation;
+            const ticket = this.cancelTicket;
             const answered = this.waitForState(() => true);
             await this.sendPaced([buildType1(8022)]);
             state = await answered;
+            if (generation !== this.generation) {
+                throw new Error("The machine connection changed during brew preparation.");
+            }
+            if (ticket !== this.cancelTicket) return;
         }
         if (state !== null && STARTABLE.has(state)) return;
         await this.cancelOnce();
@@ -1607,9 +1657,17 @@ export default class Machine {
     cancelBrew(): Promise<void> {
         if (this.userCancel !== null) return this.userCancel;
         this.cancelTicket++;
+        this.pendingCommit = null;
+        const generation = this.generation;
         const run = async (): Promise<void> => {
             await this.cancelOnce();
+            if (generation !== this.generation) {
+                throw new Error("The machine connection changed during cancellation.");
+            }
             await this.sendPaced([buildType1(8022)]);
+            if (generation !== this.generation) {
+                throw new Error("The machine connection changed during cancellation.");
+            }
             this.setPhase({name: "cancelled"});
         };
         const tracked: Promise<void> = run().finally(() => {

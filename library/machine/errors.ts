@@ -39,6 +39,17 @@ export class SlotOperationError extends Error {
 }
 
 /**
+ * Upload began, so a lost link does not prove the machine missed the recipe.
+ * This must never enter the automatic pre-flight relink retry.
+ */
+export class BrewUploadError extends Error {
+    constructor(cause: unknown) {
+        super(cause instanceof Error ? cause.message : "The recipe upload could not be confirmed.", {cause});
+        this.name = "BrewUploadError";
+    }
+}
+
+/**
  * The brew connected, but not to the machine the screen named.
  *
  * With several machines saved, a connect picks by scan, and in a room where

@@ -7,9 +7,9 @@ PR has been merged into develop or main.
 
 Issue [#249](https://github.com/hessius/XBRW/issues/249) owns package order, review
 findings and acceptance gates. Home roasters (#240), Ready to brew (#242) and
-magenta primary controls (#243) still require product decisions. The cancellation
-races on #247 and physical BLE/NFC qualification remain open. The wrong-recipe
-report is not reproduced or fixed by this integration.
+magenta primary controls (#243) still require product decisions. Cancellation
+ownership fixes are applied locally below; physical BLE/NFC qualification remains
+open. The wrong-recipe report is not reproduced or fixed by this integration.
 
 The preview uses app version 2.2.0 because the date picker and Android navigation
 bar plugin change the native runtime. EAS profiles, channels and remote build
@@ -26,6 +26,26 @@ numbers are unchanged. This version bump does not build, submit or deploy an app
 | Roasters | #237, #240, #245 | Import/restore ownership and uncluttered home UI |
 | Bags and brew suggestions | #238, #241, #242; #239 separately | Restore conflict policy, historical beans, freshness and dose presets |
 | Brand proposal | #243 | Contrast and explicit visual approval |
+
+## Verified preview follow-ups
+
+### Cancellation and interrupted uploads
+
+An interrupted upload no longer reinstalls manual START, and CANCEL invalidates
+an already offered START immediately. Late upload/START write completions cannot
+overwrite a cancelled or replacement connection's phase. Pending cancellation
+and preflight waits cannot send commands on a replacement connection. A PRO retry
+stops after cancellation or reconnection during either pacing gap.
+
+Upload write errors now carry an explicit non-retryable classification. A lost
+link after sending may mean the recipe reached the machine; the automatic
+preflight relink must not resend it. A hook/transport regression covers that
+boundary as well as the machine-level cancellation tests on both platforms.
+The unanswered-vitals cancellation reported by review already remains terminal
+in the combined incoming code and is pinned by a regression test.
+
+These are preview-owned follow-ups, not edits to the contributor's #247 branch.
+They do not establish recipe-buffer clearing or resolve the wrong-recipe report.
 
 ## Imported proposal notes
 
