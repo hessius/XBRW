@@ -150,7 +150,7 @@ function SavedMachineRow({machine, index, count, active, connected, onPress}: {
  * the only place a failed connection can be read about, and the firmware row is
  * not rendered when there is no connection to report the firmware of.
  */
-export default function MachineSection({settings, onOpenMachine, onAddMachine}: {
+export default function MachineSection({settings, onOpenMachine, onAddMachine, onForgetMachine}: {
     settings?: Settings;
     /**
      * Open one saved machine's detail sheet. The screen owns the sheet,
@@ -159,13 +159,15 @@ export default function MachineSection({settings, onOpenMachine, onAddMachine}: 
     onOpenMachine?: (id: string) => void;
     /** Open the add-a-machine sheet, which the screen owns for the same reason. */
     onAddMachine?: () => void;
+    /** Ask whether to forget a machine. The screen owns that sheet too. */
+    onForgetMachine?: (id: string) => void;
 }) {
     // The injected store matters: the link writes `machineModel` through it
     // when it recognises a Studio, and a test that injected a store while the
     // hook wrote to the shared one would watch the correction land somewhere
     // this row cannot see.
     const {machine, status, error, remembered, connect, forget, canOpenSettings, openSettings,
-           machines}
+           machines, changeBlocker}
         = useMachine(undefined, {settings});
     // With one machine the section keeps its model row and its Forget row as
     // they always were. The list row above them is new, so that one machine
@@ -349,7 +351,13 @@ export default function MachineSection({settings, onOpenMachine, onAddMachine}: 
             {remembered !== "" && !several && (
                 <SettingsActionRow label="Forget this machine" tone="danger"
                                    detail="XBRW++ will scan again next time."
-                                   onPress={() => void forget()}/>
+                                   // Asks first. While a brew holds the link
+                                   // there is nothing to ask: `forget` refuses
+                                   // and says why, as it always has.
+                                   onPress={() => {
+                                       if (changeBlocker !== null) void forget();
+                                       else onForgetMachine?.(remembered);
+                                   }}/>
             )}
         </SettingsSection>
     );

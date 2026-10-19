@@ -52,20 +52,31 @@ beforeEach(() => {
 });
 
 describe("a saved machine's sheet", () => {
-    it("forgets the machine when asked", async () => {
-        await renderWithProviders(<MachineDetailSheet machineId="HOME" onClose={jest.fn()}/>);
+    it("asks the screen to confirm, and forgets nothing itself", async () => {
+        // It used to forget on the tap. The screen's ForgetMachineSheet asks.
+        const onForget = jest.fn();
+        const onClose = jest.fn();
+        await renderWithProviders(
+            <MachineDetailSheet machineId="HOME" onClose={onClose} onForget={onForget}/>
+        );
 
         await fireEvent.press(screen.getByText("Forget this machine"));
 
-        expect(mockForget).toHaveBeenCalledWith("HOME");
+        expect(onForget).toHaveBeenCalledWith("HOME");
+        expect(onClose).toHaveBeenCalled();
+        expect(mockForget).not.toHaveBeenCalled();
     });
 
     it("will not forget the machine while a brew owns the link, and says why", async () => {
         mockBlocker = "A brew is running. Stop it or let it finish before changing machines.";
-        await renderWithProviders(<MachineDetailSheet machineId="HOME" onClose={jest.fn()}/>);
+        const onForget = jest.fn();
+        await renderWithProviders(
+            <MachineDetailSheet machineId="HOME" onClose={jest.fn()} onForget={onForget}/>
+        );
 
         await fireEvent.press(screen.getByText("Forget this machine"));
 
+        expect(onForget).not.toHaveBeenCalled();
         expect(mockForget).not.toHaveBeenCalled();
         expect(screen.getAllByText(/A brew is running/).length).toBeGreaterThan(0);
     });

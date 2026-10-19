@@ -62,6 +62,11 @@ type Props = {
     /** The machine on show, or null when the sheet is closed. */
     machineId: string | null;
     onClose: () => void;
+    /**
+     * Ask whether to forget this machine. The screen owns that question's
+     * sheet (`ForgetMachineSheet`), for the reason it owns this one.
+     */
+    onForget?: (id: string) => void;
     settings?: Settings;
 };
 
@@ -76,9 +81,9 @@ type Props = {
  * The name is committed when editing ends rather than on each keystroke, so
  * the chip on the editor does not flicker through "H", "Ho", "Hom".
  */
-export default function MachineDetailSheet({machineId, onClose, settings}: Props) {
+export default function MachineDetailSheet({machineId, onClose, onForget, settings}: Props) {
     const {machines, rename, setModel, setColour, makeDefault, move} = useSavedMachines(settings);
-    const {remembered, status, changeBlocker, choose, forgetMachine}
+    const {remembered, status, changeBlocker, choose}
         = useMachine(undefined, {settings});
     const index = machines.findIndex((entry) => entry.id === machineId);
     const machine = index < 0 ? null : machines[index];
@@ -224,11 +229,15 @@ export default function MachineDetailSheet({machineId, onClose, settings}: Props
                             detail={changeBlocker ?? (machines.length > 1
                                 ? "Takes it off the list. Add it again to get it back."
                                 : "XBRW++ will scan again next time.")}
+                            // Asks first: it used to forget on the tap, and a
+                            // machine forgotten by accident has to be found
+                            // by a scan again. This sheet closes so the
+                            // question is the only sheet up.
                             onPress={() => {
                                 if (changeBlocker !== null) return;
-                                void forgetMachine(machine.id).then((gone) => {
-                                    if (gone) onClose();
-                                });
+                                commitName();
+                                onClose();
+                                onForget?.(machine.id);
                             }}/>
                     </YStack>
                 </YStack>
