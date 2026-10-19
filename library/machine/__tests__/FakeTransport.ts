@@ -27,6 +27,25 @@ export function machineInfoFrame(
 }
 
 /**
+ * The shorter info frame firmware V12.0D.210 sends: a 55-byte payload, not 63.
+ *
+ * Bytes 0-50 are as captured from a Studio on 2026-10-19 (serial
+ * J15A01D48G023, frame length 0x43). Bytes 51-54 were cut from the log that
+ * reported it, so they are zero here.
+ */
+export function olderFirmwareInfoFrame(): number[] {
+    const payload = [
+        ...Array.from("J15A01D48G023", (c) => c.charCodeAt(0)),
+        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+        ...Array.from("V12.0D.210", (c) => c.charCodeAt(0)),
+        0x00, 0xDB, 0xC4, 0x47, 0x01, 0x00, 0x01, 0x00, 0x55, 0x0F, 0xDC,
+        0x01, 0x01, 0x01, 0xA4, 0x00, 0x00, 0x00, 0xC0, 0x20, 0x71, 0x43,
+        0x00, 0x00, 0x00, 0x00
+    ];
+    return notification(0x49, 0x9E, payload);
+}
+
+/**
  * A radio that does exactly what a test tells it to.
  *
  * Records what was written, decoded, so an assertion can read

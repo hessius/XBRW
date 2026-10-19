@@ -1,5 +1,6 @@
 import {buildType1, buildType1Bytes, buildType2, crc16Kermit, parseNotification, parseNotifications} from "@/library/machine/protocol";
 
+import {olderFirmwareInfoFrame} from "./FakeTransport";
 import {event, float32, hex, kermit, notification, status, type1, type1Bytes, type2} from "./protocolFixtures";
 
 describe("the frame codec", () => {
@@ -117,6 +118,29 @@ describe("reading what the machine says", () => {
             waterEnough: false,
             waterFeed: "tap"
         });
+    });
+
+    it("reads the shorter info blob firmware V12.0D.210 sends", () => {
+        // A whole frame (its own length byte says 0x43) with a 55-byte
+        // payload. Refusing it as an event left the machine with no serial
+        // and no vitals, and every brew relinked.
+        const frame = olderFirmwareInfoFrame();
+        expect(frame[5]).toBe(0x43);
+        expect(parseNotification(Uint8Array.from(frame))).toEqual({
+            kind: "info",
+            serial: "J15A01D48G023",
+            model: "",
+            firmware: "V12.0D.210",
+            waterEnough: true,
+            waterFeed: "tank",
+            grindSize: 55,
+            mode: "PRO"
+        });
+    });
+
+    it("still refuses an info payload that stops before the mode field", () => {
+        const parsed = parseNotification(Uint8Array.from(notification(0x49, 0x9E, new Array(54).fill(0x4A))));
+        expect(parsed).toEqual({kind: "event", code: 40521, value: 0x4A});
     });
 
     it("hands back a code it has no name for rather than dropping it", () => {

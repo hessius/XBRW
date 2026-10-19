@@ -326,6 +326,12 @@ overlap on the sample clock, once; radio gaps alone never imply a pause.
 | 55–58 | pouringRadius | LE uint32 |
 | 59–62 | vibrationInit | LE uint32 |
 
+> **Observed in the field 2026-10-19 (owner log, not a bench capture):** a Studio on
+> firmware V12.0D.210 (serial `J15A01D48G023`) sends a whole, CRC-valid 40521 frame of
+> 0x43 bytes, a **55-byte payload** ending with modeType at 51–54. pouringRadius and
+> vibrationInit are absent. V12.0D.500 sends 63. XBRW++ accepts 55 bytes or more;
+> it used to require 59, which left this machine with no vitals and no serial.
+
 ---
 
 ### Recipe Blob Format
