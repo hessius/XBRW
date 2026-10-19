@@ -95,10 +95,11 @@ function bagHistory(): CoffeeBag[] {
  * places: a user who sees only "12 recipes restored" has no way to tell whether
  * their history came back with them.
  */
-function restoredMessage(recipes: number, brews: number): string {
+function restoredMessage(recipes: number, brews: number, bags: number): string {
     const parts: string[] = [];
     if (recipes > 0) parts.push(recipes === 1 ? "1 recipe" : `${recipes} recipes`);
     if (brews > 0) parts.push(brews === 1 ? "1 brew" : `${brews} brews`);
+    if (bags > 0) parts.push(bags === 1 ? "1 bag" : `${bags} bags`);
     if (parts.length === 0) return "0 recipes restored";
     return `${parts.join(" and ")} restored`;
 }
@@ -408,24 +409,26 @@ export default function SettingsScreen({settings}: Props) {
         }
 
         // After the brews, which are what a bag's grams left are counted
-        // from, and only for recipes now in the library. Not counted in the
-        // message: a bag is a detail of a recipe, and the recipe count already
-        // says the recipes came back.
+        // from, and only for recipes now in the library.
+        let bags = 0;
+        let bagRestoreFailed = false;
         try {
             const known = new Set(library.allRecipes().map((recipe) => recipe.uuid));
-            sharedBagDatabase().restore(payload.bags, known);
+            bags = sharedBagDatabase().restore(payload.bags, known);
         } catch {
-            // A bag table that will not take the restore costs the bags only.
+            bagRestoreFailed = true;
         }
 
         // A restore that took only the settings did happen, and reporting it as
         // "0 recipes restored" reads as a failure the app is being coy about.
-        if (outcome.added === 0 && brews === 0 && choice.includeSettings) {
-            notify({tone: "success", message: "Settings restored"});
-            return;
+        const settingsOnly = outcome.added === 0 && brews === 0 && bags === 0 && choice.includeSettings;
+        notify({
+            tone: "success",
+            message: settingsOnly ? "Settings restored" : restoredMessage(outcome.added, brews, bags)
+        });
+        if (bagRestoreFailed) {
+            notify({tone: "error", message: "Bags could not be restored."});
         }
-
-        notify({tone: "success", message: restoredMessage(outcome.added, brews)});
 
         // Said out loud, and after the good news rather than instead of it. A
         // history that came back short is not a failed restore, but a user who

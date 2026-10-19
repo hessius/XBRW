@@ -469,11 +469,14 @@ class RecipeDatabase {
      * method rather than a delete followed by a loop of inserts: if any insert
      * throws, the delete is rolled back with it, so a failed replace leaves the
      * original library exactly as it was instead of an emptied, half-filled one.
+     * Retained recipes keep their local bags, which take precedence over backups.
      */
     public replaceAllRecipes(recipes: Recipe[]): void {
         this.atomically(() => {
-            this.deleteAllRecipes();
+            this.db.runSync("DELETE FROM recipes");
+            this.db.runSync("DELETE FROM recipe_tags");
             for (const recipe of recipes) this.insertRecipe(recipe);
+            this.db.runSync("DELETE FROM coffee_bags WHERE recipeUuid NOT IN (SELECT uuid FROM recipes);");
         });
     }
 
