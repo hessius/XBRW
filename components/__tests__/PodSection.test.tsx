@@ -32,6 +32,24 @@ function linked(over: Partial<Recipe> = {}): Recipe {
 }
 
 describe("PodSection", () => {
+    it("shows the pod name after a lookup mutates the same recipe", async () => {
+        // The lookup writes the pod name onto the recipe the section already
+        // holds, so a memoised child keyed on that reference would keep
+        // drawing the unlinked state.
+        const recipe = linked({xbloomName: ""});
+        const properties = props({recipe});
+        const {rerender} = await renderWithProviders(<PodSection {...properties}/>);
+        expect(screen.getByTestId("pod-none")).toBeTruthy();
+        expect(screen.queryByTestId("pod-linked")).toBeNull();
+
+        recipe.xbloomName = "Ethiopia Guji";
+        await rerender(<PodSection {...properties}/>);
+
+        expect(screen.queryByTestId("pod-none")).toBeNull();
+        expect(screen.getByTestId("pod-linked")).toBeTruthy();
+        expect(screen.getAllByText("Ethiopia Guji")).toHaveLength(1);
+    });
+
     it("lists what the pod carries directly under the pod line", async () => {
         await renderWithProviders(
             <PodSection {...props({recipe: linked({
