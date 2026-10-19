@@ -8,9 +8,12 @@ import {SUPPORT_TITLE} from "@/components/SupportTile";
 import {palette} from "@/constants/colors";
 import Recipe from "@/library/Recipe";
 import {feedKey, serialiseFeedOptOut} from "@/library/roasterFeed";
-import {serialiseSubscriptions} from "@/library/roasterSubscription";
+import {readCatalogue} from "@/library/roasterCatalogue";
+import {parseSubscriptions, serialiseSubscriptions} from "@/library/roasterSubscription";
+import {syncDue} from "@/library/roasterSync";
 import {DEFAULTS, NOT_IN_BACKUP, Settings, type SettingKey, type SettingsStorage} from "@/library/Settings";
 import {renderWithProviders, SHEET_PRESS_TIMEOUT} from "@/test-utils/render";
+import {FEED_URL, feedBody} from "@/test-utils/roasterFeed";
 
 /**
  * The rendered text of a `toJSON()` tree, in document order.
@@ -762,6 +765,40 @@ describe("SettingsScreen", () => {
         expect(mockNotify).toHaveBeenCalledWith(expect.objectContaining({
             tone: "success", message: "1 recipe and 2 brews restored"
         }));
+    });
+
+    it("repopulates a restored catalogue immediately without resuming paused subscriptions", async () => {
+        const settings = new Settings(memoryStorage());
+        const stamp = Date.now();
+        const subscriptions = [
+            {feed: FEED_URL, roaster: "Example Roasters", lastSync: stamp, lastAttempt: stamp,
+                paused: false, pinnedAt: stamp - 1},
+            {feed: "https://paused.example/feed.json", roaster: "Paused Roasters",
+                lastSync: stamp, lastAttempt: stamp, paused: true}
+        ];
+        mockPickBackup.mockResolvedValue(backupOf([], {
+            roasterSubscriptions: serialiseSubscriptions(subscriptions)
+        }));
+        mockApplyRestore.mockReturnValue({status: "restored", added: 0});
+        await renderWithProviders(<SettingsScreen settings={settings}/>);
+
+        await fireEvent.press(screen.getByRole("button",
+            {name: "Restore from a backup, Adds anything your library does not already have."}));
+        await settleSheet();
+        await fireEvent(screen.getByLabelText(/settings from this backup/i), "checkedChange", true);
+        await fireEvent.press(screen.getByRole("button", {name: /take the settings/i}));
+
+        expect(parseSubscriptions(settings.get("roasterSubscriptions"))).toEqual(
+            subscriptions.map((sub) => ({...sub, lastSync: 0, lastAttempt: 0})));
+        expect(readCatalogue(settings, FEED_URL)).toBeNull();
+        const fetchBody = jest.fn(async () => feedBody([{id: "restored"}]));
+        await act(async () => { await syncDue({settings, fetchBody, now: () => stamp}); });
+        expect(fetchBody).toHaveBeenCalledTimes(1);
+        expect(fetchBody).toHaveBeenCalledWith(FEED_URL, undefined);
+        expect(readCatalogue(settings, FEED_URL)?.feed.coffees.map((coffee) => coffee.id))
+            .toEqual(["restored"]);
+        expect(parseSubscriptions(settings.get("roasterSubscriptions"))
+            .find((sub) => sub.feed === "https://paused.example/feed.json")?.paused).toBe(true);
     });
 
     it("says so when part of a history could not be read", async () => {

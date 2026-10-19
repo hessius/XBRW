@@ -31,7 +31,7 @@ import {isSortAxis, isSortDirection} from "@/library/librarySort";
 import {isHistorySort, isHistorySortDirection} from "@/library/brew/historyQuery";
 import {isLibraryView} from "@/library/libraryView";
 import {parseFeedOptOut} from "@/library/roasterFeed";
-import {parseSubscriptions} from "@/library/roasterSubscription";
+import {parseSubscriptions, serialiseSubscriptions} from "@/library/roasterSubscription";
 import {asTemperatureUnit} from "@/library/units";
 
 type Props = {
@@ -379,10 +379,12 @@ export default function SettingsScreen({settings}: Props) {
         if (typeof incoming.roasterFeedOptOut === "string") {
             setRoasterFeedOptOut(incoming.roasterFeedOptOut);
         }
-        // Validated on read by `parseSubscriptions`; an unreadable record is
-        // dropped there rather than here, the same as every other reader.
+        // The catalogue cache is not backed up, so its sync timestamps cannot
+        // suppress the first fetch after restore. Paused subscriptions stay paused.
         if (typeof incoming.roasterSubscriptions === "string") {
-            setRoasterSubscriptions(incoming.roasterSubscriptions);
+            setRoasterSubscriptions(incoming.roasterSubscriptions === "" ? "" : serialiseSubscriptions(
+                parseSubscriptions(incoming.roasterSubscriptions).map((sub) =>
+                    ({...sub, lastSync: 0, lastAttempt: 0}))));
         }
         // Validated on read by `parsePrints`.
         if (typeof incoming.importFingerprints === "string") {
