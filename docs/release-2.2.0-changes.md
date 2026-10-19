@@ -113,6 +113,12 @@ coffees immediately; paused subscriptions remain paused. An orchestration
 regression restores settings, runs the real sync path with an injected feed
 response and checks the populated catalogue.
 
+Cancelling an import or replacing it with an ordinary share, browser import
+or clipboard shortcut now disarms its roaster-feed follow-up. A later,
+unrelated successful import cannot fetch or offer the cancelled link's feed.
+Home-screen regressions cover cancellation, replacement and successful
+follow-up of the original link.
+
 ## Imported proposal notes
 
 Moved from additions to the shipped 2.1.0 ledger without rewriting that ledger.

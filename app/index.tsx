@@ -1120,6 +1120,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
             // from.
             // eslint-disable-next-line react-hooks/set-state-in-effect
             setImportOpen(true);
+            roasterOffer.disarm();
             importer.resolveNow(source, "shared");
         }
         resetShareIntent();
@@ -1180,6 +1181,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
         if (!source || source.kind !== "share") return;
 
         setImportOpen(true);
+        roasterOffer.disarm();
         importer.resolveNow(source, "shared");
     }
 
@@ -1598,7 +1600,10 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                                 // not parse opens the sheet with a plain field
                                 // (the hook's default), indistinguishable from a
                                 // plain tap.
-                                if (source) importer.resolveNow(source, "shortcut");
+                                if (source) {
+                                    roasterOffer.disarm();
+                                    importer.resolveNow(source, "shortcut");
+                                }
                             }}/>
                         <CtaTile icon="plus" label="NEW"
                                  accessibilityLabel="Create a recipe"
@@ -2049,6 +2054,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                 onOpenChange={(open) => {
                     setImportOpen(open);
                     if (!open) {
+                        roasterOffer.disarm();
                         importer.reset();
                         library.refresh();
                     }
