@@ -491,9 +491,17 @@ export default function Brew({historyStore}: {historyStore?: ExportStore} = {}) 
             bottom of the display, and on Android 15+ that is behind the
             navigation bar: with three-button navigation CANCEL and START
             BREWING sat half under it. The mini bar, which clears the inset on
-            other screens, is not drawn on this one. */}
+            other screens, is not drawn on this one.
+
+            The top carries the status bar's inset on Android, for the same
+            reason: the modal is a full-screen page there, and the recipe title
+            and the close chevron were drawn over the clock. On iOS the modal
+            is a sheet that starts below the status bar, and the inset the
+            root provider reports would open a gap above the title. */}
         <YStack testID="brew-screen" flex={1} backgroundColor={palette.base}
-                padding="$4" paddingBottom={SCREEN_PADDING + insets.bottom} gap="$3"
+                padding="$4" paddingBottom={SCREEN_PADDING + insets.bottom}
+                paddingTop={SCREEN_PADDING + (Platform.OS === "android" ? insets.top : 0)}
+                gap="$3"
                 accessibilityElementsHidden={namingBean || ratingNoteOpen}
                 importantForAccessibility={namingBean || ratingNoteOpen
                     ? "no-hide-descendants"

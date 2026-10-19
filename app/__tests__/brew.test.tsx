@@ -1,5 +1,5 @@
 import React from "react";
-import {Dimensions, StyleSheet, type StyleProp, type ViewStyle} from "react-native";
+import {Dimensions, Platform, StyleSheet, type StyleProp, type ViewStyle} from "react-native";
 import {act, fireEvent, screen, waitFor, within} from "@testing-library/react-native";
 import * as Clipboard from "expo-clipboard";
 import * as Sharing from "expo-sharing";
@@ -492,6 +492,22 @@ describe("brew route", () => {
         const style = StyleSheet.flatten(screen.getByTestId("brew-screen").props.style);
 
         expect(style.paddingBottom).toBe(SCREEN_PADDING + 48);
+    });
+
+    it("keeps the title and the close chevron clear of the Android status bar", async () => {
+        // Owner screenshot, 2026-10-19: on Android the dot-matrix title and
+        // the chevron were drawn over the clock. Android's modal is a full
+        // page; iOS presents a sheet below the status bar, so it adds nothing.
+        const withStatusBar = {
+            frame:  {x: 0, y: 0, width: 412, height: 915},
+            insets: {top: 32, left: 0, right: 0, bottom: 48}
+        };
+        await renderWithProviders(
+            <SafeAreaProvider initialMetrics={withStatusBar}><Brew /></SafeAreaProvider>
+        );
+        const style = StyleSheet.flatten(screen.getByTestId("brew-screen").props.style);
+
+        expect(style.paddingTop).toBe(SCREEN_PADDING + (Platform.OS === "android" ? 32 : 0));
     });
 
     it("shows the refusal in amber, with the recipe's own volume", async () => {
