@@ -85,11 +85,13 @@
       "expo-font",
       "expo-sqlite",
       "./plugins/withOptionalRadios",
+      "./plugins/withDarkNavigationBar",
       "./plugins/withUserScriptSandboxDisabled",
       "./plugins/withExplicitModulesDisabled",
       "./plugins/withInhibitPodWarnings",
       "./plugins/withShareExtensionCcache",
-      "expo-sharing"
+      "expo-sharing",
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true,

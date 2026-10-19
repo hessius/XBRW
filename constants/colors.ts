@@ -81,7 +81,9 @@ export const palette = {
      * screen dropped it, so the app's own identity stopped at the home screen
      * icon. It is a brand colour rather than a semantic one, so it marks the
      * app being itself (the mark, the wordmark's `++`) and never a state: a
-     * user cannot learn it means anything, because it does not.
+     * user cannot learn it means anything, because it does not. The one
+     * exception is a switch that is on (`switchColours`); position carries the
+     * state too, so the colour is reinforcement, not the only cue.
      *
      * 5.56:1 on `base`, so it clears AA for body text as well as for graphics.
      */
@@ -225,6 +227,85 @@ export const onBrand = {
 } as const;
 
 /**
+ * The colours of an on/off switch, by state and by what the switch sits on.
+ *
+ * On and off have to differ in more than where the thumb is. With the track
+ * the same grey both ways, a row of switches cannot be read at a glance, and
+ * WCAG 1.4.11 asks the parts that show state to reach 3:1 against what is
+ * next to them. So the two states differ three ways at once: the track fills,
+ * the ring around it changes, and the thumb brightens.
+ *
+ * `dark` is every switch on `base`, `surface` or `raised`: settings rows and
+ * sheets. On, the track is `brand`, the magenta of the `++`, with a white
+ * thumb: 5.04:1 on `surface`, 4.79:1 on `raised`, 3.59:1 against the off
+ * track, and 3.78:1 for the thumb on it. `brand` rather than `brandFill`,
+ * though the thumb is white: `brandFill` is only 2.53:1 against the off
+ * track, so the two states would sit too close. Off, the track stays the
+ * quiet `control` grey and a `muted` ring draws its edge, 3.73:1 on `surface`
+ * and 3.55:1 on `raised`, with a `dim` thumb that steps back from the white.
+ *
+ * `accent` is the switch on an Easy Mode slot card, which is filled with a
+ * recipe accent. On is a solid `base` track; off is the same outline drawn in
+ * `onAccent.text` ink with nothing inside, so the accent shows through. Filled
+ * against hollow reads at any size.
+ *
+ * The off fill is `control` rather than `line` because `line` is for
+ * hairlines: on the card's `surface` fill the lighter `control` grey is what
+ * tells the switch apart from a divider.
+ *
+ * `ring` equals `track` when on, so the ring adds no colour there; it exists in
+ * both states so the thumb's travel and size do not jump when the state flips.
+ * `components/__tests__/colors.test.ts` measures every pairing.
+ */
+export const switchColours = {
+    dark: {
+        on:  {track: palette.brand, ring: palette.brand, thumb: palette.text},
+        off: {track: palette.control, ring: palette.muted, thumb: palette.dim}
+    },
+    accent: {
+        on:  {track: palette.base, ring: palette.base, thumb: palette.text},
+        off: {track: palette.none, ring: onAccent.text, thumb: onAccent.text}
+    }
+} as const;
+
+/** What a switch is drawn on. See `switchColours`. */
+export type SwitchGround = keyof typeof switchColours;
+
+/**
+ * The primary action, and the "selected with no recipe accent" fill.
+ *
+ * Every big filled button that is not running a recipe (SAVE NAME, CREATE
+ * SHELF, WRITE TO MACHINE, TRY AGAIN) and every selected segment, view toggle
+ * and rail chip that has no recipe accent to borrow takes its fill from here.
+ * Until this existed each of them said `palette.text` on its own, so the white
+ * could only be changed one call site at a time.
+ *
+ * `fill` is `brand`, the magenta of the `++`. That bends the rule on `brand`,
+ * which says the colour marks the app being itself and never a state; a
+ * selected segment in magenta is a state. It is a proposal, and it is one line
+ * to take back: set `fill` to `palette.text` and every site returns to white.
+ * The ink does not move either way, because `onAccent.text` reads on both:
+ * 5.18:1 on `brand`, 18.1:1 on white. `brand` rather than `brandFill`: the
+ * deeper fill wants white ink, which would have to change with it on a revert,
+ * and it is only 3.9:1 against `base` where `brand` is 5.56:1.
+ *
+ * Where a recipe accent is on screen it still wins. The editor's segments and
+ * deck switch pass the accent, and BREW is the accent's job, not this one.
+ *
+ * Disabled is grey, not a faded magenta. A faded magenta over a dark sheet
+ * still reads as the colour of the thing to press. `control` with `muted` ink
+ * is the quiet grey of a control that cannot be used yet; it is exempt from
+ * the contrast floor and is deliberately well under it.
+ */
+export const primary = {
+    fill:         palette.brand,
+    /** Labels and glyphs on `fill`. */
+    ink:          onAccent.text,
+    disabledFill: palette.control,
+    disabledInk:  palette.muted
+} as const;
+
+/**
  * Recipe accents, split by beverage. Colour is a redundant signal — a Doto
  * `TEA` / `COFFEE` marker carries the same information — because colour alone is
  * not an accessible signal.
@@ -257,6 +338,44 @@ export const accents: Readonly<Record<AccentGroup, readonly string[]>> = {
         "#E0AEA6"  // Hibiscus
     ]
 };
+
+/** One machine colour: its ink, its stepped-back twin, and what it is called. */
+export type MachineColour = {
+    /** Said by a screen reader on the colour choice. */
+    name: string;
+    /** The dot, and the home link glyph while that machine is connected. */
+    ink: string;
+    /**
+     * The ink with its OKLCH chroma multiplied by 0.45 and lightness and hue
+     * held, the rule `successMuted` follows, for the header as it collapses.
+     */
+    muted: string;
+};
+
+/**
+ * Which saved xBloom is which, with several saved.
+ *
+ * The first is today's connected green, exactly, so a phone with one machine
+ * draws what it always drew. The others sit in the same lightness band as that
+ * green (OKLCH L 0.76 to 0.80) at hues kept well away from the three that
+ * already mean something: amber is the machine stopped or connecting, red is
+ * a fault or a machine not answering, and magenta is `brand`, which never
+ * marks a state. A colour here only says "this machine", and connected or not
+ * is carried by the link glyph's shape, never by the colour alone.
+ *
+ * Every ink clears 8.5:1 on `base`, `surface` and `raised`, and so does every
+ * muted twin; the colour tests hold both. The app is dark only, so there is
+ * no light theme to check against.
+ *
+ * Order matters: a new machine takes the first colour no other machine has,
+ * and the order puts the hues furthest from green first.
+ */
+export const machineColours: readonly MachineColour[] = [
+    {name: "Green",  ink: palette.success, muted: palette.successMuted},
+    {name: "Blue",   ink: palette.info,    muted: "#9CB4D5"},
+    {name: "Violet", ink: "#C4A4FE",       muted: "#BDB0D8"},
+    {name: "Cyan",   ink: "#44D4E2",       muted: "#95C9CE"}
+];
 
 /**
  * Blend two hex colours.

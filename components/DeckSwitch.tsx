@@ -3,7 +3,7 @@ import {Pressable} from "react-native";
 import {XStack} from "tamagui";
 
 import DotMatrixText from "@/components/DotMatrixText";
-import {palette} from "@/constants/colors";
+import {palette, primary} from "@/constants/colors";
 
 export type Deck = "brew" | "stages" | "about";
 
@@ -52,7 +52,7 @@ export default function DeckSwitch({deck, stageCount, accent, onChange}: Props) 
                            alignItems:      "center",
                            paddingVertical: 9,
                            borderRadius:    9,
-                           backgroundColor: active ? (accent ?? palette.text) : undefined
+                           backgroundColor: active ? (accent ?? primary.fill) : undefined
                        }}>
                 <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.8}
                                color={active ? palette.base : palette.dim}>

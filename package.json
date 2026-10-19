@@ -14,6 +14,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "worktrees:check": "node scripts/worktree-audit.mjs",
+    "check-feed": "node scripts/check-feed.mjs",
     "test:worktrees": "node --test scripts/__tests__/worktree-audit.test.mjs",
     "generate-licences": "./scripts/generate-licences.sh"
   },
@@ -21,6 +22,7 @@
     "@backpackapp-io/react-native-toast": "^0.15.1",
     "@expo/vector-icons": "^15.0.2",
     "@miblanchard/react-native-slider": "^2.6.0",
+    "@react-native-community/datetimepicker": "9.1.0",
     "@tamagui/animations-react-native": "^2.7.7",
     "@tamagui/config": "^2.7.7",
     "@tamagui/font-inter": "^2.7.7",

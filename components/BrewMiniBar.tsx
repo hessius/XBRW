@@ -17,6 +17,7 @@ import {formatBrewClock} from "@/library/brew/brewFormat";
 import {plannedSeconds} from "@/library/brew/brewShape";
 import type {BrewPhase} from "@/library/machine/Machine";
 import type Pour from "@/library/Pour";
+import {useTakesBottomInset} from "@/hooks/useBottomInset";
 
 type Props = {
     recipeName: string;
@@ -151,6 +152,9 @@ export default function BrewMiniBar(props: Props) {
     const {title, detail, line} = say(props);
     const over = OVER.has(phase.name);
     const insets = useSafeAreaInsets();
+    // This bar pads itself by the inset, so the screen above it has none left
+    // to clear. See `hooks/useBottomInset.ts`.
+    useTakesBottomInset();
 
     return (
         <Animated.View

@@ -2,9 +2,8 @@ import {useLocalSearchParams, useNavigation} from "expo-router";
 import router from "@/hooks/steadyRouter";
 import {openEasyModeRecipe} from "@/hooks/useEasyModeSlots";
 import React, {useEffect, useRef, useState} from "react";
-import {Pressable, ScrollView, Share, View, useWindowDimensions} from "react-native";
+import {Linking, Pressable, ScrollView, Share, View, useWindowDimensions} from "react-native";
 import Animated, {FadeIn, FadeOut, SlideInDown, SlideOutDown} from "react-native-reanimated";
-import {useSafeAreaInsets} from "react-native-safe-area-context";
 import {Text, XStack, YStack} from "tamagui";
 
 import AboutDeck from "@/components/AboutDeck";
@@ -17,9 +16,12 @@ import FieldRow from "@/components/FieldRow";
 import HelpSheet from "@/components/HelpSheet";
 import LeaveEditorSheet, {type LeaveIntent} from "@/components/LeaveEditorSheet";
 import NfcOverlay from "@/components/NfcOverlay";
-import RecipeHero from "@/components/RecipeHero";
+import RecipeHero, {heroFoldAway} from "@/components/RecipeHero";
 import RecipeOverflowSheet from "@/components/RecipeOverflowSheet";
+import BagSheet, {type BagSheetResult} from "@/components/BagSheet";
 import RenameSheet from "@/components/RenameSheet";
+import MachineChip from "@/components/MachineChip";
+import MachinePickerSheet from "@/components/MachinePickerSheet";
 import RevertSheet from "@/components/RevertSheet";
 import QuickEditPanel from "@/components/QuickEditPanel";
 import OverflowSection from "@/components/OverflowSection";
@@ -33,9 +35,11 @@ import {notify} from "@/components/XbrwToast";
 import {palette} from "@/constants/colors";
 import {grindTooFine} from "@/constants/copy";
 import {DURATION, EASING, useReducedMotionState} from "@/constants/motion";
+import {pinnedBarPadding, useBottomInset} from "@/hooks/useBottomInset";
 import {useCardWriter} from "@/hooks/useCardWriter";
 import {useCollapsibleHeader} from "@/hooks/useCollapsibleHeader";
 import {useLiveBrew} from "@/hooks/useLiveBrew";
+import {useMachinePicker} from "@/hooks/useMachinePicker";
 import {RECIPE_LABELS, useRecipeEditor} from "@/hooks/useRecipeEditor";
 import type {BypassField} from "@/hooks/useRecipeEditor";
 import {SHARE_FAILURE_MESSAGE, useShareRecipe} from "@/hooks/useShareRecipe";
@@ -45,7 +49,24 @@ import {
     type BeanProfileStore,
     type RecipeRatingStore
 } from "@/hooks/useBrewHistory";
-import {useSetting} from "@/hooks/useSetting";
+import {sharedSettings, useSetting} from "@/hooks/useSetting";
+import {useCoffeeBag} from "@/hooks/useCoffeeBag";
+import {useNow} from "@/hooks/useNow";
+import {freshnessOf} from "@/library/restPeak";
+import {openLink} from "@/components/openLink";
+import {
+    newBag,
+    readBag,
+    reorderUrl,
+    resolveBagTracker,
+    roastDayFromCoffee,
+    withGramsLeft,
+    withSize,
+    type CoffeeBag
+} from "@/library/coffeeBag";
+import {bagBeanName, bagBeanNameFixed, bagShareBean} from "@/library/brew/handoff/bagBean";
+import {beanLink} from "@/library/brew/handoff/beanLink";
+import {reorderLink} from "@/library/roasterBuy";
 import {resolveAccent} from "@/library/accent";
 import {CARD_GRIND_MIN, grindBand} from "@/library/grindBands";
 import {BLE_GRIND_SIZE} from "@/library/cardLimits";
@@ -55,6 +76,8 @@ import type Pour from "@/library/Pour";
 import {
     applyQuickEdit,
     quickEditProblems,
+    rescaleDose,
+    withoutDose,
     type QuickEditAdjustments
 } from "@/library/quickEdit";
 import type {OverflowProtection} from "@/library/brew/overflowConfig";
@@ -62,6 +85,7 @@ import Recipe, {CUP_TYPE} from "@/library/Recipe";
 import RecipeDatabase from "@/library/RecipeDatabase";
 import {shareBlockReason} from "@/library/shareLink";
 import {asTemperatureUnit, type TemperatureUnit} from "@/library/units";
+import {STABLE_HOST} from "@/constants/views";
 
 /** What a field's edit callback commits, given a label and the new value. */
 type Dispatch = (label: string, value: string) => void;
@@ -79,6 +103,18 @@ const AUTOSAVED_LABELS: string[] = [RECIPE_LABELS.TITLE, RECIPE_LABELS.NOTE];
  * this is trying to save the user from.
  */
 const FALLBACK_MAX_STAGES = 10;
+
+/**
+ * The catalogue's buy link for the same bag, or undefined. A settings store
+ * that cannot be read costs the reorder its catalogue link and nothing else.
+ */
+function catalogueReorder(coffeeUrl: string | undefined, grams: number | undefined): string | undefined {
+    try {
+        return reorderLink(sharedSettings(), coffeeUrl, grams);
+    } catch {
+        return undefined;
+    }
+}
 
 function maxStagesFromLastCard(lastCardRead: string): number {
     const info = parseCapture(lastCardRead)?.systemInfo;
@@ -632,7 +668,7 @@ type ActionBarProps = {
  *
  * Module scope, so it is a stable component type across the screen's renders.
  */
-/** How far the bar sits into the home indicator's inset. */
+/** How far the bar sits into the home indicator's inset, on iOS only. */
 const ACTION_BAR_SINK = 5;
 
 type BarButtonProps = {
@@ -699,20 +735,23 @@ function ActionBar({
     accent, canBrewAtAll, canBrew, quickEditOpen, onBrew, onQuickEdit, canWrite, canSave,
     onWrite, onSave, onHeight
 }: ActionBarProps) {
-    const insets = useSafeAreaInsets();
+    const bottomInset = useBottomInset();
 
     return (
-        // The bottom padding is the home indicator's own height, less a few
-        // points. The inset is clearance for a gesture, not a margin, and the
-        // buttons are tall enough that overlapping its outer edge costs nothing
-        // -- on the phone this was tuned against, the full inset still read as
-        // the bar floating. The top padding is half the sides'. The bar is
+        // On iOS the bottom padding is the home indicator's own height, less a
+        // few points. The inset is clearance for a gesture, not a margin, and
+        // the buttons are tall enough that overlapping its outer edge costs
+        // nothing -- on the phone this was tuned against, the full inset still
+        // read as the bar floating. On Android it is the whole inset: with
+        // three-button navigation the inset is an opaque bar, and sinking into
+        // it hid the bottom of BREW, WRITE and SAVE. The top padding is half
+        // the sides'. The bar is
         // pinned over the deck, so every point above the buttons is a point
         // taken off the control being edited underneath it.
         <XStack testID="editor-actions"
                 position="absolute" bottom={0} left={0} right={0} gap="$2"
                 paddingHorizontal="$4" paddingTop="$2"
-                paddingBottom={Math.max(insets.bottom - ACTION_BAR_SINK, 0)}
+                paddingBottom={pinnedBarPadding(bottomInset, ACTION_BAR_SINK)}
                 backgroundColor={palette.base}
                 onLayout={(event) => onHeight(event.nativeEvent.layout.height)}>
             {/* The accent goes to the one act that runs the recipe. With no
@@ -743,13 +782,15 @@ type QuickEditLayerProps = {
     temperatureUnit: TemperatureUnit;
     actionBarHeight: number;
     onChange: (adjustments: QuickEditAdjustments) => void;
+    onSaveDose: (dose: number) => void;
     onClose: () => void;
 };
 
 const QUICK_EDIT_HORIZONTAL_PADDING = 16;
 
 function QuickEditLayer({
-    open, recipe, adjustments, accent, temperatureUnit, actionBarHeight, onChange, onClose
+    open, recipe, adjustments, accent, temperatureUnit, actionBarHeight, onChange,
+    onSaveDose, onClose
 }: QuickEditLayerProps) {
     const {reduced, resolved} = useReducedMotionState();
     if (!open) return null;
@@ -804,7 +845,8 @@ function QuickEditLayer({
                                 adjustments={adjustments}
                                 accent={accent}
                                 temperatureUnit={temperatureUnit}
-                                onChange={onChange}/>
+                                onChange={onChange}
+                                onSaveDose={onSaveDose}/>
             </Animated.View>
         </View>
     );
@@ -897,7 +939,11 @@ export default function EditRecipe(
     const [revertOpen, setRevertOpen] = useState(false);
     const [helpOpen, setHelpOpen] = useState(false);
     const [renameOpen, setRenameOpen] = useState(false);
+    const machinePicker = useMachinePicker();
     const [beanProfileOpen, setBeanProfileOpen] = useState(false);
+    const [bagSheetOpen, setBagSheetOpen] = useState(false);
+    // Bumped on each open so the bag sheet's fields start from the stored bag.
+    const [bagSheetEpoch, setBagSheetEpoch] = useState(0);
     const [bypassWriteOpen, setBypassWriteOpen] = useState(false);
     const [quickEditOpen, setQuickEditOpen] = useState(false);
     const [quickEditAdjustments, setQuickEditAdjustments] =
@@ -922,8 +968,6 @@ export default function EditRecipe(
     // this visit only and never writes back, so a user can fold the notes away
     // without changing what the next recipe opens on.
 
-    const {collapsed, onScroll} = useCollapsibleHeader();
-
     const {
         recipe, balance, canBrew, canWrite, canSave, revertSources, inputError,
         rangeProblems,
@@ -937,6 +981,15 @@ export default function EditRecipe(
         temperatureUnit,
         onSaved:    () => navigation.goBack()
     });
+
+    // What a collapse takes back from this page: the slab, sized for this
+    // name, and the stage curve's step down from its tall form to its compact
+    // one (40 of height, 9 of padding above, 6 inside it either side). The home
+    // screen's 140 is short of a three-line name at a large text size.
+    const {collapsed, onScroll} = useCollapsibleHeader(
+        heroFoldAway(recipe?.displayName() ?? "", showRecipeAvatars && !!recipe?.imageURL)
+        + PROFILE_HEIGHT.full - PROFILE_HEIGHT.compact + 9 + 12
+    );
 
     const {writeCard, onNFCDialogClose, showNfcOverlay, writeProgress, nfcUnavailable} =
         useCardWriter(setVolumeError);
@@ -1026,6 +1079,17 @@ export default function EditRecipe(
         historyStore
     );
 
+    // The bag, re-read on focus: coming back from a brew this screen opened is
+    // exactly when a dose has just left it. The subscriber is held in state so
+    // its identity is stable on a screen the compiler does not memoise.
+    const [bagTrackerSetting] = useSetting("bagTracker");
+    const [beanconquerorHandoff] = useSetting("beanconquerorHandoff");
+    const bagTracker = resolveBagTracker(bagTrackerSetting, beanconquerorHandoff);
+    const [subscribeFocus] = useState(() =>
+        (listener: () => void) => navigation.addListener("focus", listener));
+    const coffeeBag = useCoffeeBag(recipe?.uuid ?? "", subscribeFocus);
+    const now = useNow();
+
     if (!recipe) return null;
 
     // While the panel is open the bar's BREW is the panel's BREW: it brews
@@ -1045,6 +1109,68 @@ export default function EditRecipe(
      * on the deck behind the panel is not something to brew over.
      */
     const canBrewNow = quickEditOpen ? !quickEditBlocked && !inputError : canBrew;
+
+    const openBag = coffeeBag.stored;
+    // Grams are this app's estimate only while this app is the tracker.
+    const bagReading = openBag !== null && bagTracker === "xbrw"
+        ? readBag(openBag.bag, openBag.usedGrams, recipe.dosage) : null;
+    // The same bag again from the roaster's catalogue when it still sells
+    // that size, otherwise the coffee's page.
+    const bagReorderUrl = catalogueReorder(recipe.coffee?.url, openBag?.bag.sizeGrams)
+        ?? reorderUrl(recipe);
+    // Freshness is the roast day's, so it is drawn in both tracker modes.
+    const bagFreshness = openBag === null ? null : freshnessOf(openBag.bag, now);
+
+    function openBagSheet() {
+        setBagSheetEpoch((epoch) => epoch + 1);
+        setBagSheetOpen(true);
+    }
+
+    /**
+     * Save what the sheet says, and in Beanconqueror mode hand a new bag over.
+     *
+     * The bag is saved here first either way: its roast date is needed in both
+     * modes, and a Beanconqueror that will not open must not cost the person
+     * what they typed. The link goes out only for a new bag; an edit stays
+     * local, because sending again would add a second bean on their side.
+     */
+    function saveBag(result: BagSheetResult) {
+        if (!recipe) return;
+        setBagSheetOpen(false);
+        const existing = openBag?.bag ?? null;
+        if (existing !== null) {
+            let next: CoffeeBag = withSize(existing, result.sizeGrams);
+            next = {...next, roastedOn: result.roastedOn, price: result.price, ...result.figures};
+            if (result.roastedOn === undefined) delete next.roastedOn;
+            if (result.price === undefined) delete next.price;
+            if (result.beanName !== undefined) next.beanName = result.beanName;
+            const before = bagReading?.remainingGrams;
+            if (result.gramsLeft !== undefined && result.gramsLeft !== before) {
+                next = withGramsLeft(next, result.gramsLeft);
+            }
+            coffeeBag.save(next);
+            return;
+        }
+        const bag = newBag(recipe.uuid, {
+            sizeGrams: result.sizeGrams,
+            roastedOn: result.roastedOn,
+            price: result.price,
+            ...result.figures,
+            beanName: bagTracker === "beanconqueror"
+                ? (result.beanName ?? bagBeanName(recipe)) : undefined
+        });
+        coffeeBag.save(bag);
+        if (bagTracker === "beanconqueror") {
+            const url = beanLink(bagShareBean(recipe, bag, bag.beanName ?? bagBeanName(recipe)));
+            // No canOpenURL preflight, for the reason `useBrewHandoff` gives:
+            // iOS answers false without a query-schemes entry even when
+            // Beanconqueror is installed.
+            Linking.openURL(url).catch(() => notify({
+                tone:    "error",
+                message: "The bag is saved here, but Beanconqueror could not be opened. Make sure it is installed."
+            }));
+        }
+    }
 
     function closeQuickEdit() {
         setQuickEditOpen(false);
@@ -1176,6 +1302,36 @@ export default function EditRecipe(
         brewWith(edited, adjustments);
     }
 
+    /**
+     * "Save as this dose" from the quick-edit panel.
+     *
+     * The dose goes into the recipe on the bench, with the stages and bypass
+     * rescaled, and the panel keeps whatever else was adjusted for this brew.
+     * It writes straight away only when nothing else is waiting for SAVE:
+     * saving the bench would otherwise also save edits the user never chose
+     * to keep. In that case, and for a recipe not yet in the library, the
+     * change joins the others and SAVE owns it, which the toast says.
+     */
+    async function onSaveQuickEditDose(dose: number) {
+        const currentRecipe = recipe;
+        if (!currentRecipe) return;
+        await flushDrafts();
+        const writesNow = !hasPendingEdits() && recipeInLibrary();
+        rescaleDose(currentRecipe, dose);
+        bumpKey();
+        setQuickEditAdjustments((current) => withoutDose(current));
+        if (!writesNow) {
+            notify({tone: "info", message: `Dose set to ${dose} g. Press SAVE to keep it.`});
+            return;
+        }
+        try {
+            persistRecipe();
+            notify({tone: "success", message: `Saved at ${dose} g.`});
+        } catch {
+            notify({tone: "error", message: "Could not save the recipe."});
+        }
+    }
+
     function brewWith(brewing: Recipe, adjustments?: QuickEditAdjustments) {
         // A brew record points back at its recipe by uuid, and the record
         // screen draws its stage ladder from that row. So a recipe with no row
@@ -1269,7 +1425,7 @@ export default function EditRecipe(
     // `accessibilityViewIsModal` does on iOS.
     const screenCovered = showNfcOverlay || overflowOpen || revertOpen || helpOpen
         || bypassWriteOpen || renameOpen || beanProfileOpen || leavePrompt !== null
-        || ratingNoteOpen;
+        || ratingNoteOpen || machinePicker.open || bagSheetOpen;
     // The quick edit panel covers the deck but not the action bar, which holds
     // the BREW it adjusts. So it hides the deck rather than the screen.
     const deckCovered = screenCovered || quickEditOpen;
@@ -1282,10 +1438,10 @@ export default function EditRecipe(
                 screen reader, so TalkBack cannot reach and fire the controls
                 behind it — the Android half of what `accessibilityViewIsModal`
                 does on iOS. */}
-            <YStack testID="editor-content" flex={1} backgroundColor={palette.base}
+            <YStack {...STABLE_HOST} testID="editor-content" flex={1} backgroundColor={palette.base}
                     accessibilityElementsHidden={screenCovered}
                     importantForAccessibility={screenCovered ? "no-hide-descendants" : "auto"}>
-            <YStack testID="editor-deck" flex={1}
+            <YStack {...STABLE_HOST} testID="editor-deck" flex={1}
                     accessibilityElementsHidden={deckCovered}
                     importantForAccessibility={deckCovered ? "no-hide-descendants" : "auto"}>
             {/* Outside the scroll view, so it is the screen's header rather
@@ -1301,7 +1457,8 @@ export default function EditRecipe(
                         onBack={async () => { await flushDrafts(); navigation.goBack(); }}
                         onMore={() => setOverflowOpen(true)}
                         onHelp={() => setHelpOpen(true)}
-                        onRename={() => setRenameOpen(true)}/>
+                        onRename={() => setRenameOpen(true)}
+                        imageURL={recipe.imageURL} showPicture={showRecipeAvatars}/>
 
             {/* `stickyHeaderIndices` only sticks *direct* children, and it
                 counts slots — so every slot below is always occupied, by an
@@ -1343,8 +1500,18 @@ export default function EditRecipe(
                         onScroll={onScroll} scrollEventThrottle={16}>
                 {recipe.isTea() ? <TeaBanner accent={accent}/> : <YStack/>}
 
-                <DeckSwitch deck={deck} stageCount={recipe.pours.length}
-                            accent={accent} onChange={setDeck}/>
+                {/* One slot with the deck switch, not a slot of its own:
+                    `stickyHeaderIndices` counts direct children, and a new
+                    child here would move the stages deck's sticky profile
+                    off index 2. */}
+                <YStack>
+                    {machinePicker.available && (
+                        <MachineChip label={machinePicker.label}
+                                     onPress={machinePicker.show}/>
+                    )}
+                    <DeckSwitch deck={deck} stageCount={recipe.pours.length}
+                                accent={accent} onChange={setDeck}/>
+                </YStack>
 
                 {/* Above the decks rather than on one of them, because a
                     recipe can be out of range in a stage's temperature and in
@@ -1413,6 +1580,16 @@ export default function EditRecipe(
                                    refreshBeanProfile();
                                }}
                                onShowBeanProfile={() => setBeanProfileOpen(true)}
+                               bag={{
+                                   tracker:     bagTracker,
+                                   bag:         openBag?.bag ?? null,
+                                   reading:     bagReading,
+                                   freshness:   bagFreshness,
+                                   reorderUrl:  bagReorderUrl,
+                                   onOpenSheet: openBagSheet,
+                                   onFinish:    coffeeBag.finish,
+                                   onReorder:   openLink
+                               }}
                                knownTags={knownTags}
                                onTags={editTags}
                                showHint={showHint} dispatch={dispatch}
@@ -1474,6 +1651,7 @@ export default function EditRecipe(
                             temperatureUnit={temperatureUnit}
                             actionBarHeight={actionBarHeight}
                             onChange={setQuickEditAdjustments}
+                            onSaveDose={(dose) => void onSaveQuickEditDose(dose)}
                             onClose={closeQuickEdit}/>
 
             <RecipeOverflowSheet open={overflowOpen} canRefreshName={recipe.xid.trim().length > 0}
@@ -1496,7 +1674,28 @@ export default function EditRecipe(
                                  onRevert={() => setRevertOpen(true)}
                                  onToggleFavourite={toggleFavourite}
                                  favourite={recipe.favourite}
+                                 onBag={openBagSheet}
+                                 hasBag={openBag !== null}
                                  onDelete={deleteRecipe}/>
+
+            <BagSheet open={bagSheetOpen} onOpenChange={setBagSheetOpen}
+                      epoch={bagSheetEpoch}
+                      tracker={bagTracker}
+                      bag={openBag?.bag ?? null}
+                      gramsLeft={bagReading?.remainingGrams ?? null}
+                      suggestedRoastedOn={roastDayFromCoffee(recipe.coffee?.roastingDate)}
+                      coffee={recipe.coffee}
+                      beanName={bagBeanName(recipe)}
+                      beanNameFixed={bagBeanNameFixed(recipe)}
+                      onSave={saveBag}
+                      onFinish={() => {
+                          setBagSheetOpen(false);
+                          coffeeBag.finish();
+                      }}
+                      onRemove={() => {
+                          setBagSheetOpen(false);
+                          coffeeBag.remove();
+                      }}/>
 
             <RevertSheet open={revertOpen} sources={revertSources}
                          onOpenChange={setRevertOpen} onReverted={onRecipeReplaced}/>
@@ -1508,15 +1707,29 @@ export default function EditRecipe(
                               profile={beanProfile}
                               accent={accent}/>
 
-            {/* The recipe's own name, not its displayName(): a recipe following
-                its pod has an empty name and a borrowed title, and seeding the
-                field with the borrowed one would turn the next save into a
-                rename nobody asked for. Committed through the same dispatch the
-                Name row uses, so a rename from the header and a rename from
-                ABOUT are one code path. */}
+            {/* The recipe's own name and, apart from it, the pod name it
+                borrows while that is empty. The sheet opens on whichever is on
+                screen and hands the pod name back as an empty name when it is
+                saved unchanged, so looking at the name never stops a recipe
+                following its pod. Only the pod name is offered: a recipe
+                titled by its Recipe ID or a placeholder opens empty, as it
+                always did. Committed through the same dispatch the Name row
+                uses, so a rename from the header and a rename from ABOUT are
+                one code path. */}
             <RenameSheet open={renameOpen} onOpenChange={setRenameOpen}
                          name={recipe.name}
+                         borrowedName={recipe.xbloomName}
                          onRename={(next) => dispatch(RECIPE_LABELS.TITLE, next)}/>
+
+            <MachinePickerSheet open={machinePicker.open}
+                                onOpenChange={machinePicker.setOpen}
+                                machines={machinePicker.machines}
+                                activeId={machinePicker.activeId}
+                                connected={machinePicker.connected}
+                                survey={machinePicker.survey}
+                                onRescan={machinePicker.rescan}
+                                blocker={machinePicker.blocker}
+                                onChoose={machinePicker.choose}/>
 
             <BypassWriteSheet open={bypassWriteOpen}
                               recipe={recipe}

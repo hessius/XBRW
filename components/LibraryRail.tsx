@@ -16,6 +16,7 @@ import {
     type SortAxis,
     type SortDirection
 } from "@/library/librarySort";
+import {STABLE_HOST} from "@/constants/views";
 
 /** The rail's own vertical padding when expanded, and when shrunk to make room. */
 const RAIL_PADDING = 10;
@@ -393,7 +394,7 @@ export default function LibraryRail({
                     toggle that was invisible to everyone else. Both props,
                     because they are the iOS and Android halves of the one
                     instruction and neither platform reads the other's. */}
-                <XStack flex={1} alignItems="center"
+                <XStack {...STABLE_HOST} flex={1} alignItems="center"
                         paddingHorizontal="$3" gap={CHIP_GAP}
                         accessibilityElementsHidden={searchOpen}
                         importantForAccessibility={

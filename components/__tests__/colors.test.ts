@@ -1,4 +1,4 @@
-import {accents, mix, onAccent, onBrand, palette} from "@/constants/colors";
+import {accents, machineColours, mix, onAccent, onBrand, palette, primary, switchColours} from "@/constants/colors";
 import {contrast, over} from "@/test-utils/contrast";
 
 const everyAccent = [...accents.coffee, ...accents.tea];
@@ -102,6 +102,53 @@ describe("the support tile, filled with the deepened brand magenta", () => {
     });
 });
 
+describe("the primary action fill", () => {
+    // The owner asked for the white primary buttons in the brand colour. It is
+    // pinned to `brand` so the switch's on track and the buttons are one pink.
+    it("is the brand magenta", () => {
+        expect(primary.fill).toBe(palette.brand);
+    });
+
+    it("carries button labels and glyphs at AA", () => {
+        expect(contrast(primary.ink, primary.fill)).toBeGreaterThanOrEqual(4.5);
+    });
+
+    // SegmentedControl and DeckSwitch draw their selected label in `base`
+    // rather than `primary.ink`, and fall back to this fill without an accent.
+    it("carries a selected segment's black label at AA", () => {
+        expect(contrast(palette.base, primary.fill)).toBeGreaterThanOrEqual(4.5);
+    });
+
+    // A button's edge is a graphic, so 3:1 against whatever it sits on.
+    it.each([
+        ["base", palette.base],
+        ["surface", palette.surface],
+        ["raised", palette.raised]
+    ])("stands out from %s", (_name, ground) => {
+        expect(contrast(primary.fill, ground)).toBeGreaterThanOrEqual(3);
+    });
+
+    // The revert is one line: put `fill` back to white. That only stays one
+    // line while the ink still reads on white, so pin it.
+    it("keeps an ink that would still read if the fill went back to white", () => {
+        expect(contrast(primary.ink, palette.text)).toBeGreaterThanOrEqual(4.5);
+    });
+
+    // Disabled must read as unavailable, not as a dimmer pink.
+    it("is grey when disabled, with no magenta in it", () => {
+        const [r, g, b] = [1, 3, 5].map((at) => primary.disabledFill.slice(at, at + 2));
+        expect(r).toBe(g);
+        expect(g).toBe(b);
+        expect(contrast(primary.disabledFill, primary.fill)).toBeGreaterThanOrEqual(3);
+    });
+
+    it("keeps a disabled label visible but below the live one", () => {
+        const disabled = contrast(primary.disabledInk, primary.disabledFill);
+        expect(disabled).toBeGreaterThan(1.5);
+        expect(disabled).toBeLessThan(contrast(primary.ink, primary.fill));
+    });
+});
+
 describe("palette inks on the base background", () => {
     it.each([
         ["text", palette.text],
@@ -149,5 +196,105 @@ describe("mix", () => {
 
     it("always returns a six-digit hex, padding a small channel", () => {
         expect(mix("#000000", "#0f0f0f", 0.5)).toBe("#080808");
+    });
+});
+
+describe("switch states", () => {
+    // WCAG 1.4.11: the parts of a control that show its state need 3:1 against
+    // what is next to them. Before these tokens, on and off were two near-equal
+    // greys with the same white thumb, and position was the only cue.
+    const {dark, accent} = switchColours;
+    const grounds = {base: palette.base, surface: palette.surface, raised: palette.raised};
+
+    it.each(Object.entries(grounds))("fills the on track visibly on %s", (_, ground) => {
+        expect(contrast(dark.on.track, ground)).toBeGreaterThanOrEqual(3);
+    });
+
+    it.each(Object.entries(grounds))("rings the off track visibly on %s", (_, ground) => {
+        // The off fill is the quiet `control` grey and stays under 3:1 on
+        // purpose; the ring is what carries the edge.
+        expect(contrast(dark.off.track, ground)).toBeLessThan(3);
+        expect(contrast(dark.off.ring, ground)).toBeGreaterThanOrEqual(3);
+    });
+
+    it("tells the on track from the off track", () => {
+        expect(contrast(dark.on.track, dark.off.track)).toBeGreaterThanOrEqual(3);
+    });
+
+    it("fills the on track with the brighter of the two magentas", () => {
+        // `brandFill` would carry the white thumb better, but sits only 2.53:1
+        // from the off track. Pinned so it is not swapped in by symmetry with
+        // the support tile.
+        expect(dark.on.track).toBe(palette.brand);
+        expect(contrast(palette.brandFill, dark.off.track)).toBeLessThan(3);
+    });
+
+    it("keeps each thumb visible on its own track", () => {
+        expect(contrast(dark.on.thumb, dark.on.track)).toBeGreaterThanOrEqual(3);
+        expect(contrast(dark.off.thumb, dark.off.track)).toBeGreaterThanOrEqual(3);
+    });
+
+    it("pins the measured values", () => {
+        // The figures quoted in `switchColours`. A retuned token has to move
+        // these on purpose rather than drift past them.
+        expect(contrast(dark.on.track, palette.surface)).toBeCloseTo(5.04, 2);
+        expect(contrast(dark.on.track, palette.raised)).toBeCloseTo(4.79, 2);
+        expect(contrast(dark.on.track, dark.off.track)).toBeCloseTo(3.59, 2);
+        expect(contrast(dark.on.thumb, dark.on.track)).toBeCloseTo(3.78, 2);
+        expect(contrast(dark.off.ring, palette.surface)).toBeCloseTo(3.73, 2);
+        expect(contrast(dark.off.ring, palette.raised)).toBeCloseTo(3.55, 2);
+        expect(contrast(dark.off.thumb, dark.off.track)).toBeCloseTo(5.38, 2);
+    });
+
+    describe("on a recipe accent", () => {
+        it.each(everyAccent)("fills the on track visibly on %s", (fill) => {
+            expect(contrast(accent.on.track, fill)).toBeGreaterThanOrEqual(3);
+            expect(contrast(accent.on.thumb, accent.on.track)).toBeGreaterThanOrEqual(3);
+        });
+
+        it.each(everyAccent)("outlines the off track and thumb visibly on %s", (fill) => {
+            // Off is hollow: the accent shows through, so the ring and the
+            // thumb are measured against the accent itself, and so is the
+            // difference between the filled on track and the empty off one.
+            expect(accent.off.track).toBe(palette.none);
+            expect(contrast(accent.off.ring, fill)).toBeGreaterThanOrEqual(3);
+            expect(contrast(accent.off.thumb, fill)).toBeGreaterThanOrEqual(3);
+        });
+    });
+});
+
+describe("machine colours", () => {
+    const surfaces = [["base", palette.base], ["surface", palette.surface],
+                      ["raised", palette.raised]] as const;
+    const inks = machineColours.flatMap((colour) => [
+        [`${colour.name} ink`, colour.ink], [`${colour.name} muted`, colour.muted]
+    ] as const);
+
+    it("starts with today's connected green, so one machine draws what it always drew", () => {
+        expect(machineColours[0].ink).toBe(palette.success);
+        expect(machineColours[0].muted).toBe(palette.successMuted);
+    });
+
+    it.each(inks.flatMap(([name, ink]) => surfaces.map(([where, surface]) =>
+        [name, where, ink, surface] as const)))(
+        "keeps %s readable on %s, as text as well as a dot", (_name, _where, ink, surface) => {
+            expect(contrast(ink, surface)).toBeGreaterThanOrEqual(4.5);
+        });
+
+    it("spends none of the colours that already mean something", () => {
+        // Amber is the machine connecting or stopped, red a fault or a machine
+        // not answering, and magenta is the brand, which never marks a state.
+        const reserved = [palette.warn, palette.danger, palette.dangerFaint,
+                          palette.brand, palette.brandFill];
+        for (const colour of machineColours) {
+            expect(reserved).not.toContain(colour.ink);
+            expect(reserved).not.toContain(colour.muted);
+        }
+    });
+
+    it("has four distinct colours with distinct names", () => {
+        expect(new Set(machineColours.map((colour) => colour.ink)).size).toBe(machineColours.length);
+        expect(new Set(machineColours.map((colour) => colour.name)).size).toBe(machineColours.length);
+        expect(machineColours).toHaveLength(4);
     });
 });

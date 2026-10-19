@@ -66,6 +66,8 @@ function stubImport(overrides: Partial<RecipeImport> = {}): RecipeImport {
         onPastedText: jest.fn(),
         openFound:    jest.fn(),
         reset:        jest.fn(),
+        acceptLatest: jest.fn(),
+        keepMine:     jest.fn(),
         ...overrides
     };
 }
@@ -635,3 +637,40 @@ it.each([
     expect(screen.queryByRole("button", {name: CATALOGUE})).toBeNull();
 });
 
+
+describe("YOUR ROASTERS", () => {
+    const ROASTERS = /YOUR ROASTERS/;
+
+    it("is not offered to somebody with no subscriptions", async () => {
+        await renderWithProviders(
+            <ImportSheet open onOpenChange={() => {}} importer={stubImport()}/>
+        );
+        expect(screen.queryByRole("button", {name: ROASTERS})).toBeNull();
+        expect(screen.queryByTestId("import-roasters")).toBeNull();
+    });
+
+    it("sits above the catalogue row and opens the roasters list", async () => {
+        const onOpenChange = jest.fn();
+        await renderWithProviders(
+            <ImportSheet open onOpenChange={onOpenChange} importer={stubImport()} hasRoasters/>
+        );
+        const buttons = screen.getAllByRole("button").map((node) => node.props.accessibilityLabel);
+        const roasters = buttons.findIndex((label) => ROASTERS.test(label ?? ""));
+        const catalogue = buttons.findIndex((label) => CATALOGUE.test(label ?? ""));
+        expect(roasters).toBeGreaterThanOrEqual(0);
+        expect(roasters).toBeLessThan(catalogue);
+        expect(screen.getByText("Coffees from the roasters you subscribe to.")).toBeTruthy();
+
+        await fireEvent.press(screen.getByRole("button", {name: ROASTERS}));
+        expect(onOpenChange).toHaveBeenCalledWith(false);
+        expect(router.push).toHaveBeenCalledWith("/roasters");
+    });
+
+    it("steps aside while a lookup is in flight, as the other doors do", async () => {
+        await renderWithProviders(
+            <ImportSheet open onOpenChange={() => {}} hasRoasters
+                         importer={stubImport({state: {status: "resolving"}})}/>
+        );
+        expect(screen.queryByRole("button", {name: ROASTERS})).toBeNull();
+    });
+});

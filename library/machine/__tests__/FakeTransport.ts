@@ -1,6 +1,6 @@
-import type {FoundMachine, MachineTransport} from "@/library/machine/Transport";
+import type {FoundMachine, MachineTransport, ScanDecider} from "@/library/machine/Transport";
 
-import {notification} from "./protocolFixtures";
+import {notification, status} from "./protocolFixtures";
 
 /**
  * The frame a machine sends to describe itself.
@@ -10,19 +10,38 @@ import {notification} from "./protocolFixtures";
  * the only report of the water level.
  */
 export function machineInfoFrame(
-    overrides: {mode?: string; waterEnough?: number; waterFeed?: number} = {}
+    overrides: {mode?: string; waterEnough?: number; waterFeed?: number; serial?: string} = {}
 ): number[] {
     const payload = new Array(63).fill(0);
     const put = (at: number, textValue: string) => {
         for (let i = 0; i < textValue.length; i++) payload[at + i] = textValue.charCodeAt(i);
     };
-    put(0, "J15ABC123456");
+    put(0, overrides.serial ?? "J15ABC123456");
     put(13, "J15");
     put(19, "V12.0D.500");
     payload[33] = overrides.waterEnough ?? 1;
     payload[36] = overrides.waterFeed ?? 0;
     payload[37] = 30 + 62;
     put(51, overrides.mode ?? "00000000");
+    return notification(0x49, 0x9E, payload);
+}
+
+/**
+ * The shorter info frame firmware V12.0D.210 sends: a 55-byte payload, not 63.
+ *
+ * Bytes 0-50 are as captured from a Studio on 2026-10-19 (serial
+ * J15A01D48G023, frame length 0x43). Bytes 51-54 were cut from the log that
+ * reported it, so they are zero here.
+ */
+export function olderFirmwareInfoFrame(): number[] {
+    const payload = [
+        ...Array.from("J15A01D48G023", (c) => c.charCodeAt(0)),
+        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+        ...Array.from("V12.0D.210", (c) => c.charCodeAt(0)),
+        0x00, 0xDB, 0xC4, 0x47, 0x01, 0x00, 0x01, 0x00, 0x55, 0x0F, 0xDC,
+        0x01, 0x01, 0x01, 0xA4, 0x00, 0x00, 0x00, 0xC0, 0x20, 0x71, 0x43,
+        0x00, 0x00, 0x00, 0x00
+    ];
     return notification(0x49, 0x9E, payload);
 }
 
@@ -99,12 +118,23 @@ export class FakeTransport implements MachineTransport {
      */
     public infoReply: number[] | null = machineInfoFrame();
     /**
-     * How many info requests to swallow before answering.
+     * How many handshakes to leave without the vitals that follow them.
      *
      * A machine that misses the question, which is what a burst of unpaced
      * frames does to it.
      */
     public ignoreInfoRequests = 0;
+    /**
+     * What the machine answers a cancel (40519) with. On V12.0D.500 it is the
+     * startable state 0x41 about 0.8 s later (owner logs 2026-10-19), so the
+     * fake answers with it by default. Null plays a machine that stays quiet.
+     */
+    public cancelReply: number[] | null = status(0x41);
+    /**
+     * What the machine answers a back-to-home (8022) with. Nothing by default:
+     * whether it always reports a state is not established.
+     */
+    public homeReply: number[] | null = null;
 
     private frameListeners = new Set<(frame: Uint8Array, source?: string) => void>();
     private disconnectListeners = new Set<() => void>();
@@ -114,10 +144,18 @@ export class FakeTransport implements MachineTransport {
         return this.written.map((frame) => frame[3] | (frame[4] << 8));
     }
 
-    async scan(): Promise<FoundMachine[]> {
+    /** How many scans have run, and what each was asked to decide with. */
+    public scans: (ScanDecider | undefined)[] = [];
+    private heardNames = new Map<string, string>();
+
+    async scan(_seconds?: number, decide?: ScanDecider): Promise<FoundMachine[]> {
+        this.scans.push(decide);
         // As the real transport does: a name is only ever learned by a scan,
         // and it is the machine `attemptLink` will take, which is the first.
         if (this.devices.length > 0) this.advertisedName = this.devices[0].name;
+        for (const device of this.devices) this.heardNames.set(device.id, device.name);
+        // Every device is heard at once, so a decider has nothing to cut
+        // short here: the settle timing is the real transport's alone.
         return this.devices;
     }
 
@@ -130,6 +168,10 @@ export class FakeTransport implements MachineTransport {
         if (this.refuseConnection || this.refuseIds.includes(id)) {
             throw refusal();
         }
+        // Keyed by id, as the real transport's name is. Only when a scan
+        // heard it, so a returning user still has no name.
+        const heard = this.heardNames.get(id);
+        if (heard !== undefined) this.advertisedName = heard;
         this.connectedTo = id;
     }
 
@@ -155,7 +197,11 @@ export class FakeTransport implements MachineTransport {
         }
         this.written.push(frame);
         const code = frame[3] | (frame[4] << 8);
-        if (code === 40521 && this.infoReply !== null) {
+        if (code === 40519 && this.cancelReply !== null) this.emit(this.cancelReply);
+        if (code === 8022 && this.homeReply !== null) this.emit(this.homeReply);
+        // As V12.0D.500 does (2026-10-19): the vitals follow a handshake by
+        // themselves, and a bare 40521 request is ignored.
+        if (code === 8100 && this.infoReply !== null) {
             if (this.ignoreInfoRequests > 0) this.ignoreInfoRequests--;
             else this.emit(this.infoReply);
         }

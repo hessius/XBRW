@@ -8,6 +8,7 @@ import type {ColorTokens} from "tamagui";
 import DotIcon from "@/components/DotIcon";
 import DotMatrixText from "@/components/DotMatrixText";
 import ImportResult from "@/components/ImportResult";
+import NewerVersionPrompt from "@/components/NewerVersionPrompt";
 import PasteOverlay from "@/components/PasteOverlay";
 import XbrwSheet from "@/components/XbrwSheet";
 import {palette} from "@/constants/colors";
@@ -17,6 +18,8 @@ const FIELD_LABEL = "Share link or pod code";
 const FORMAT_HINT = "Paste an xBloom share link, or a pod code like ETH120.";
 const ACCOUNT_LABEL = "YOUR XBLOOM ACCOUNT";
 const ACCOUNT_CAPTION = "Bring in the recipes you've made";
+const ROASTERS_LABEL = "YOUR ROASTERS";
+const ROASTERS_CAPTION = "Coffees from the roasters you subscribe to.";
 const CATALOGUE_LABEL = "BROWSE THE CATALOGUE";
 const CATALOGUE_CAPTION = "Find recipes shared by other xBloom users.";
 
@@ -50,6 +53,11 @@ type Props = {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     importer: RecipeImport;
+    /**
+     * Whether the user subscribes to any roaster. Adds YOUR ROASTERS above the
+     * catalogue row; without a subscription the sheet is exactly as before.
+     */
+    hasRoasters?: boolean;
 };
 
 /**
@@ -59,7 +67,7 @@ type Props = {
  * whether the field is drawn and what is said when it fails belongs to
  * `useRecipeImport`.
  */
-export default function ImportSheet({open, onOpenChange, importer}: Props) {
+export default function ImportSheet({open, onOpenChange, importer, hasRoasters = false}: Props) {
     // `showField` and `focusField` are the hook's, not props: whether the field
     // is drawn and whether it grabs focus both follow from the import intent,
     // which only the hook knows, so they live in exactly one place. `showField`
@@ -291,6 +299,40 @@ export default function ImportSheet({open, onOpenChange, importer}: Props) {
                     </Pressable>
                 )}
 
+                {/* The roasters the user subscribed to, above the community
+                    catalogue: their coffees are the ones they chose to follow.
+                    Same shape as the rows around it. */}
+                {state.status === "idle" && hasRoasters && (
+                    <Pressable testID="import-roasters"
+                               accessibilityRole="button"
+                               accessibilityLabel={`${ROASTERS_LABEL}, ${ROASTERS_CAPTION}`}
+                               onPress={() => {
+                                   onOpenChange(false);
+                                   router.push("/roasters");
+                               }}
+                               style={({pressed}) => ({
+                                   opacity:   pressed ? 0.7 : 1,
+                                   transform: [{scale: pressed ? 0.98 : 1}]
+                               })}>
+                        <XStack alignItems="center" justifyContent="space-between"
+                                gap="$4" minHeight={44}>
+                            <YStack flex={1} gap="$1">
+                                <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.6}
+                                               color={palette.text}>
+                                    {ROASTERS_LABEL}
+                                </DotMatrixText>
+                                <Text fontSize={13} color={palette.dim}>
+                                    {ROASTERS_CAPTION}
+                                </Text>
+                            </YStack>
+                            {/* Decorative, as on the rows around it. */}
+                            <XStack style={{transform: [{rotate: "180deg"}]}}>
+                                <DotIcon name="back" size={14} color={palette.muted}/>
+                            </XStack>
+                        </XStack>
+                    </Pressable>
+                )}
+
                 {state.status === "idle" && (
                     <Pressable accessibilityRole="button"
                                accessibilityLabel={`${CATALOGUE_LABEL}, ${CATALOGUE_CAPTION}`}
@@ -379,6 +421,12 @@ export default function ImportSheet({open, onOpenChange, importer}: Props) {
 
                 {state.status === "found" && (
                     <ImportResult preview={state.preview} onOpen={openFound}/>
+                )}
+
+                {state.status === "newer" && (
+                    <NewerVersionPrompt name={state.held.displayName()}
+                                        onLatest={importer.acceptLatest}
+                                        onKeep={importer.keepMine}/>
                 )}
             </YStack>
         </XbrwSheet>

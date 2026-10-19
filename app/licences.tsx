@@ -8,7 +8,9 @@ import XbrwSheet from "@/components/XbrwSheet";
 import {palette} from "@/constants/colors";
 import {LICENCES, LICENCE_TEXTS, type Licence} from "@/constants/licences";
 import {useLiveBrew} from "@/hooks/useLiveBrew";
+import {useScrollEndPadding} from "@/hooks/useBottomInset";
 import {UNCLIPPED_LIST} from "@/constants/lists";
+import {STABLE_HOST} from "@/constants/views";
 
 /**
  * The full third-party licence list, on its own route.
@@ -38,6 +40,9 @@ export default function LicencesScreen({
     entries?: readonly Licence[];
     texts?: Readonly<Record<string, string>>;
 }) {
+    // The end of the scroll clears whatever is under the screen: the
+    // navigation bar on Android, the home indicator on iOS.
+    const scrollEnd = useScrollEndPadding(48);
     const [reading, setReading] = useState<Licence | null>(null);
     const {ratingNoteOpen} = useLiveBrew();
     const body = reading?.text !== undefined ? texts[reading.text] : undefined;
@@ -45,7 +50,7 @@ export default function LicencesScreen({
 
     return (
         <>
-            <YStack flex={1} backgroundColor={palette.base}
+            <YStack {...STABLE_HOST} flex={1} backgroundColor={palette.base}
                     accessibilityElementsHidden={screenCovered}
                     importantForAccessibility={screenCovered ? "no-hide-descendants" : "auto"}>
                 <ScreenHeader title="Licences" onBack={() => router.back()}/>
@@ -57,7 +62,7 @@ export default function LicencesScreen({
                                               ? () => setReading(item)
                                               : undefined}/>
                           )}
-                          contentContainerStyle={{padding: 16, paddingBottom: 48}}/>
+                          contentContainerStyle={{padding: 16, paddingBottom: scrollEnd}}/>
             </YStack>
             <XbrwSheet open={reading !== null} onOpenChange={(open) => {if (!open) setReading(null);}}
                        title={reading?.name ?? ""} heightPercent={80}>

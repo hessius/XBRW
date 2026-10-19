@@ -79,14 +79,14 @@
 | Code | Hex | Name | Type | Payload | Notes | Confidence |
 |------|-----|------|------|---------|-------|------------|
 | 8100 | 0x1FA4 | **Session Handshake** | T1 | `[185, 1]` (ints) | Must be sent within ~200ms of connect. Machine ignores all subsequent commands without it. | `spec` |
-| 8022 | 0x1F56 | **Back to Home** | T1 | (none) | App sends this on initial connect and after cancel. | `spec` |
+| 8022 | 0x1F56 | **Back to Home** | T1 | (none) | App sends this on initial connect and after cancel. XBRW++ sends it after a user CANCEL, and before a retry on a link that has had no state report yet, to get one (see "One cancel per brew start"). Its echo can carry a longer payload (`56 1F 1C ...`, owner log 2026-10-19) whose layout is not decoded. | `spec` |
 | 8102 | 0x1FA6 | **Bypass + Dose** | T1 | `[bypass_vol_floatbits, bypass_temp×10_floatbits, dose_int]` | Sends dose even when bypass disabled (bypass args = 0). Machine needs dose to grind correctly. Skipping causes drift. | `spec` |
 | 8104 | 0x1FA8 | **Set Cup** | T1 | `[max_floatbits, min_floatbits]` | Cup weight range. Coffee uses (110.0, 90.0) per HomoLand; brAzzi64 observed (200.0, 80.0) from cloud API; saya6k uses (80.0–90.0, 40.0). See CONTRADICTION C3. | `corroborated` |
 | 8001 | 0x1F41 | **Recipe Send (with grind)** | T1h | recipe blob | Pours frame opcode when grinder IS used. | `corroborated` |
 | 8004 | 0x1F44 | **Recipe Send (no grind)** | T1h | recipe blob | Pours frame opcode when grinder OFF. Distinct from 8001. | `corroborated` |
 | 8002 | 0x1F42 | **Execute / Commit** | T1 | `[1]` | Arms → awaiting-confirm. Byte-exact: `580101421F0C000000017FCF`. | `spec` |
 | 40518 | 0x9E46 | **Coffee Pause** | T1 | `[1]` | Seq=0x9E. Pauses a running recipe; state goes to `0x1F`, and `40515` reports volume so far. Inert if already paused. C4 settled. | `hardware 2026-10-08, V12.0D.500` |
-| 40519 | 0x9E47 | **Cancel** | T1 | `[1]` | Seq=0x9E. Abort committed/running brew. | `corroborated` |
+| 40519 | 0x9E47 | **Cancel** | T1 | `[1]` | Seq=0x9E. Abort committed/running brew. **Beeps every time.** Answered by its own event and a startable state (`0x41`) about 0.8 s later on V12.0D.500. Send one and wait for that state; see "One cancel per brew start". | `corroborated`; beep and reply `hardware 2026-10-19, V12.0D.500` |
 | 40524 | 0x9E4C | **Coffee Resume** | T1 | `[1]` | Resumes a `40518` pause; `40516`, then back to `0x23`. The brew continues, it does not restart. Inert if not paused. | `hardware 2026-10-08, V12.0D.500` |
 | 8019 | 0x1F53 | **FreeSolo pour** (named Brewer Pause) | T1 | (none) | **Destructive.** Abandons any running recipe and starts a standalone water pour: `0x03`, then `9006` and `0x41` about 13 s later. It is not a pause. | `hardware 2026-10-08, V12.0D.500` |
 | 8021 | 0x1F55 | **FreeSolo stop** (named Brewer Resume) | T1 | (none) | Ends a `8019` pour and reports `0x23`, but no recipe survives to resume. | `hardware 2026-10-08, V12.0D.500` |
@@ -136,7 +136,7 @@
 | 0x15 frame | — | Coffee/Cup Weight | float32 LE (grams) | Brew-record cup weight stream, ~10×/s. | `corroborated` |
 | 20501 | 0x5015 | Scale Weight (alt) | float32 LE | brAzzi64 notation for the weight stream. See CONTRADICTION C7. | `spec` |
 | 10507 | 0x290B | Scale Weight (alt-2) | float32 LE | Second alternative notation observed in some captures. | `single-source` (brAzzi64) |
-| 40523 | 0x9E4B | Water Volume | float32 LE | Named "tank volume" by the sources, but on this firmware it is the **dispensed** water and it climbs through a brew. `parseNotification` matches it on its low byte `0x4B` alone, so it decodes as a water weight and never reaches the event map. Its neighbour 40522 is the no-water fault. | `corroborated` |
+| 40523 | 0x9E4B | Water Volume | float32 LE | Named "tank volume" by the sources, but on this firmware it is the **dispensed** water and it climbs through a brew. `parseNotification` matches it on its low byte `0x4B` alone, so it decodes as a water weight and never reaches the event map. Its neighbour 40522 is the tank flag. | `corroborated` |
 | 8023 | 0x1F57 | Machine Activity | LE uint32 | Activity states: 1=Pro idle, 65=Easy idle, 34=brewing, 36=brew done, 16=grinding complete. | `corroborated` |
 | 8011 | 0x1F4B | Machine Awake | — | Machine is not sleeping | `spec` |
 | 8009 | 0x1F49 | Machine Sleeping | — | Machine entered sleep | `spec` |
@@ -154,8 +154,99 @@
 | 40516 | 0x9E44 | Pour resumed | — | Emitted right after a `40524` resume, before the state returns to `0x23`. | `hardware 2026-10-08, V12.0D.500` |
 | 40517 | 0x9E45 | Error: Idling | — | | `spec` |
 | 40520 | 0x9E48 | RD_Bypass | — | The bypass firing, after the drawdown | **`verified`** (capture 2026-09-10) |
-| 40522 | 0x9E4A | Error: No Water | — | Tank empty | `spec` |
+| 40522 | 0x9E4A | Tank flag (named Error: No Water) | uint8 | **Not a fault.** Pushed by the machine when the tank changes: `0` = empty or below its low mark, `1` = filled. XBRW++ keeps the latest value per link and refuses a brew before sending anything while it is `0` on a tank-fed machine. See "Event 40522 is the tank flag". | `hardware 2026-09-09 and 2026-10-19, V12.0D.500` |
 | 8203 | 0x200B | Error: Gear Position | — | Grinder gear error | `spec` |
+
+### One cancel per brew start `hardware 2026-10-19, V12.0D.500`
+
+> Owner logs, Galaxy Z Fold, Studio V12.0D.500, preview build `4c3cf3a`.
+> Every 40519 makes the machine beep, and the app was sending two or three.
+>
+> TRY AGAIN after a failed brew (no water):
+>
+> ```
+> 09:38:26.426  ->  58 01 01 47 9E 10 00 00 00 01 01 00 00 00 F4 8E   (40519)
+> 09:38:26.824  <-  event 40519
+> 09:38:27.267  <-  state 0x41 complete (Easy idle)      machine already clear
+> 09:38:27.475  ->  58 01 01 47 9E 10 00 00 00 01 01 00 00 00 F4 8E   (40519 again)
+> 09:38:27.850  <-  event 40519
+> 09:38:28.239  <-  event 40522 (0)
+> 09:38:28.488  ->  8102 ... 8104 ... 8001 recipe ... state 0x1f ... 8002 ... 40522 (0) ... state 0x0c no_water
+> ```
+>
+> Before an earlier brew: `09:08:42.362 -> 40519`, `09:08:43.187 <- state 0x41`,
+> `09:08:43.922 -> 40519`, `09:08:45.933 -> 8022`, then `8102`.
+>
+> BREW right after a reconnect, with no fault on the machine:
+> `09:40:04.456 -> 8100`, `09:40:04.870 <- info`, `09:40:10.026 -> 40519`,
+> `09:40:10.842 <- state 0x41`, `09:40:12.035 -> 8022`, `09:40:12.105 -> 8102`.
+> No state frame arrived between the connect and BREW, so the app did not know
+> the machine was idle and cancelled anyway (the phase still said the last
+> brew had failed).
+>
+> CANCEL while armed: `09:40:21.866 -> 40519`, `22.254 <- 40519`,
+> `22.693 <- state 0x41`, `23.033 -> 40519`, `23.419 <-`, `23.688 -> 40519`,
+> `24.064 <-`, `25.695 -> 8022`. Three beeps.
+>
+> **Cause.** The cancel was a fixed pair, 40519, a 2 s gap, 8022, sent by two
+> callers: the brew pre-flight (whenever the last brew had failed or lost
+> contact) and CANCEL. Neither looked at the machine's state, neither waited
+> for its answer, and a second call inside the gap sent a second 40519. The
+> newer paced sequence then dropped the older one's 8022, which is why the
+> logs show 40519 twice and 8022 once. In every log the machine had already
+> reported `0x41` about 0.8 s after the first 40519.
+>
+> **Rule since then (`Machine.clearForBrew`, `cancelOnce`, `cancelBrew`).**
+> At most one 40519 is in flight; anyone else who wants the machine cleared
+> waits for it. After a 40519 the app waits for a startable state report
+> (idle `0x01`, ready `0x24`, complete `0x41`), up to `STATE_REPLY_MS`, and
+> never sends another. Before a brew, nothing is sent after a clean ending.
+> After a failed or lost brew, a last reported state that is startable needs
+> nothing, and anything else gets one cancel. A link with no state report yet
+> sends 8022 (the official app's connect-time back-to-home) and decides on the
+> state that follows it, cancelling once if none comes. A CANCEL sends one
+> 40519, waits for the startable report, then sends 8022 as the official app
+> does after a cancel; repeated taps join it. A CANCEL pressed while a brew is
+> still in its pre-flight stops that brew before the recipe goes out.
+>
+> **8022 before a recipe.** This document only has the official app sending
+> 8022 on connect and after a cancel. Nothing documents it as needed before a
+> recipe, so the brew path no longer sends it after its cancel. It is sent
+> only as the state question on a link that has no state yet.
+>
+> **Unverified.** Whether 8022 always produces a 0x57 state frame when the
+> state has not changed is not established. The official app's own connect,
+> overheard on a shared Android link on 2026-10-19 (`04:15:13`), shows
+> `state 0x1d`, `event 8022`, `state 0x01`. The
+> owner reports the 8022 echo itself carries `... 00 10 00 41 ...` in a longer
+> `56 1F 1C` frame, but the full bytes were not captured, so the echo is not
+> parsed. With no state frame the app falls back to one cancel, which is one
+> beep, as before. Which second caller sent the duplicate 40519 in the TRY
+> AGAIN log is not proven from the log alone: only the pre-flight and CANCEL
+> send 40519, and the fix holds whichever it was. None of this has been run
+> on the machine yet.
+
+### Event 40522 is the tank flag `hardware 2026-10-19, V12.0D.500`
+
+> Same session. Before the no-water stop: `09:38:28.239 <- 40522 (0)` and
+> `09:38:34.285 <- 40522 (0)`, each right before `state 0x0c no_water`. After
+> the owner refilled the tank: `09:38:45.669 <- 40522 (1)`, then
+> `09:38:46.114 <- state 0x1f armed`. With the 2026-09-09 capture (a
+> `40522 (0)` eleven seconds into a brew that went on to finish, the tank
+> crossing its low mark) this reads as a tank flag pushed when it changes:
+> `0` empty or low, `1` filled. It is not a stop on its own, so it still ends
+> no running brew.
+>
+> The vitals (`waterEnough`, payload[33]) did not catch the 09:38 case: the
+> recipe went out and the machine stopped after the start. So the app keeps
+> the latest 40522 value per link (forgotten on disconnect) and, on a
+> tank-fed machine, refuses a brew while it is `0`, before anything is sent,
+> as the amber `notEnoughWater` block with TRY AGAIN. A `40522 (1)` lets the
+> next brew through.
+>
+> **Not done.** A `40522 (1)` arriving while a mid-brew no-water failure is on
+> screen could offer TRY AGAIN there. That failure deliberately offers no
+> button today (`NO_RETRY`), and changing it is a UI decision left open.
 
 ### Event 40520 is the bypass, and there is no pour start for it `verified`
 
@@ -348,7 +439,7 @@ overlap on the sample clock, once; radio gaps alone never imply a pause.
 | 19–28 | theVersion | ASCII firmware string |
 | 29–32 | areaAp | LE float |
 | 33 | waterEnough | uint8 (0=low, 1=ok); reservoir sensor only, ignore for brew preflight when `waterFeed=1` |
-| 34 | systemStatus | uint8 |
+| 34 | systemStatus | uint8. Unverified: nobody has checked it against the 0x57 state, and XBRW++ does not read it. Owner logs of 2026-10-19 show a byte near the end of the payload changing between sessions (`01 00 1F 5B 09` against `01 00 1D 5A 09`), which looks state-like (`0x1F` armed, `0x1D` loading) but has not been tied to a named field. Not used until a capture pins it. |
 | 35 | userCount | uint8 |
 | 36 | waterFeed | uint8 (0=tank, 1=tap) |
 | 37 | grinder (raw) | uint8 − 30, min 1 |
@@ -359,6 +450,12 @@ overlap on the sample clock, once; radio gaps alone never imply a pause.
 | 51–54 | modeType | hex match vs `91327856` → EASY else PRO |
 | 55–58 | pouringRadius | LE uint32 |
 | 59–62 | vibrationInit | LE uint32 |
+
+> **Observed in the field 2026-10-19 (owner log, not a bench capture):** a Studio on
+> firmware V12.0D.210 (serial `J15A01D48G023`) sends a whole, CRC-valid 40521 frame of
+> 0x43 bytes, a **55-byte payload** ending with modeType at 51–54. pouringRadius and
+> vibrationInit are absent. V12.0D.500 sends 63. XBRW++ accepts 55 bytes or more;
+> it used to require 59, which left this machine with no vitals and no serial.
 
 ---
 
@@ -463,7 +560,7 @@ The machine pushes the following data unprompted on FFE2:
 | Coffee/cup weight | ~10×/s | float32 LE, grams | Frame type 0x15. Same timing. |
 | Machine status | Event-driven | State byte after 0xC1 in 0x57 frame | State transitions: idle, loading, armed, awaiting_confirm, starting, brewing, complete, etc. |
 | Machine activity | Periodic + on-event | LE uint32 in 8023 notification | 1=Pro idle, 65=Easy idle, 34=brewing active, 36=brew done. |
-| Machine info | **On request only** (see note) | 61-byte blob in 40521 notification | Contains all persistent machine settings: firmware ver, grinder size, water level, temp unit, weight unit, water source, mode, LED brightness, pour radius, vibration amplitude. |
+| Machine info | **After each 8100 handshake** (see note) | 61-byte blob in 40521 notification | Contains all persistent machine settings: firmware ver, grinder size, water level, temp unit, weight unit, water source, mode, LED brightness, pour radius, vibration amplitude. |
 | Water volume | ~100ms | float32 LE in 40523 notification | Tank water level. |
 
 > **The machine offers a third characteristic, `ffe3`.** Read off hardware
@@ -487,29 +584,75 @@ The machine pushes the following data unprompted on FFE2:
 > The handshake makes the machine **beep**, which rules out sending it
 > speculatively or on a timer.
 
+> **A bare 40521 request is ignored; the vitals follow an 8100 (2026-10-19,
+> V12.0D.500).** Device log on preview 329229b, machine "Work" just updated to
+> V12.0D.500, with every send logged:
+>
+> ```
+> 05:31:02.480  ->  8100                         (connect handshake, beep 1)
+> 05:31:02.538  <-  event 8100
+> 05:31:03.161  <-  58 02 07 4B 1F 0C 00 00 00 C1 FC 83   (event 8011, see below)
+> 05:31:03.624  <-  state 0x1d
+> 05:31:03.689  <-  40521 info (75 bytes, V12.0D.500 PRO)   (no request sent)
+> 05:31:04.564  <-  state 0x01
+> 05:31:09.653  ->  58 01 01 49 9E 0C 00 00 00 01 74 B8   (40521 request)  no reply
+> 05:31:13.658  ->  40521 request  no reply
+> 05:31:17.692  ->  40521 request  no reply
+> 05:31:19.781  ->  8100                         (beep 2)
+> 05:31:20.087  <-  event 8100
+> 05:31:20.189  <-  40521 info                   (no request sent)
+> 05:31:21.789  ->  8102, 8104, 8001 ... the brew (stopped at 0x0f, no beans)
+> 05:31:40.147  ->  40521 request  no reply      (the post-brew dial read)
+> 05:31:44.118  ->  40521 request  no reply
+> 05:31:48.128  ->  40521 request  no reply
+> ```
+>
+> The machine sends 40521 by itself, 0.4 to 1.2 s after acknowledging an 8100,
+> and ignores a 40521 request on its own even seven seconds into a fresh
+> session. So the 2026-09-01 "stale session" reading above was most likely
+> this: the 40521 that "worked" at connect was the one the handshake pushed.
+> V12.0D.210 has not been tested this way; its earlier logs show the same
+> 8100-then-info pairing, with requests that were not logged at the time.
+>
+> What XBRW++ does now:
+> - Connect sends one 8100 and waits up to `INFO_WAIT_MS` (3 s) for the info
+>   it pushes. No 40521, and no second handshake if none comes.
+> - BREW uses the vitals this link already heard if they are under
+>   `INFO_FRESH_MS` (10 minutes) old, with no handshake and no question, and
+>   the brew burst never carries an 8100. Older or missing vitals, or a cached
+>   low tank (which may have been filled since), get one 8100 and one wait.
+>   A mode switch (`11511`) still renews before the retry.
+> - Refresh on the home screen is the only other sender: one 8100.
+> - Nothing sends a bare 40521. Settings no longer asks when it opens.
+>
+> **Unverified on hardware:** that a session opened at connect still takes a
+> recipe ten minutes later without a fresh 8100. The official app appears to
+> work this way (one beep at connect, none at brew). If it does not, the
+> recipe is not acknowledged and the brew fails as `rejected` after
+> `RECIPE_ACK_MS` with nothing poured.
+>
+> The `4B 1F` frame with no payload is event **8011**, which the table above
+> names "Machine Awake". It arrives right after the handshake. The parser used
+> to read every `0x4B` frame as a water weight and logged this one as
+> unreadable; it now reads a `0x4B` frame with no float as an event.
+
 > **The info blob is not a heartbeat.** Sources describe 40521 as streaming
 > periodically. On hardware (2026-09-01, V12.0D.500) it does not: a tank
 > refilled after connect still read Low in XBRW++ until the app asked again.
-> XBRW++ therefore sends 40521 before every brew and whenever the settings
-> screen opens, rather than trusting the reading taken at connect.
+> (Superseded 2026-10-19: "asked again" was a handshake, which pushes the
+> blob. XBRW++ now refreshes only on Refresh, on a stale or missing reading
+> at BREW, and on a cached low tank at BREW. See the note above.)
 
-> **The grind dial is read again after a brew, and that costs a beep.**
+> **The grind dial after a brew is no longer asked for (2026-10-19).**
 > The dial is an override: where it is set changes how the machine grinds
-> without the app being told, with no event and no characteristic, and setting
-> it is how a recipe gets nudged to suit a bean. It is turned before a brew,
-> not during one: the machine takes its position when it starts grinding and
-> there is no point after that at which moving it does anything. The reading
-> taken before the recipe is sent can therefore still be stale, because the
-> app asks for it at the moment it is about to brew and the hand that moved
-> the dial was there a second earlier. XBRW++ takes a second reading once the
-> brew has ended and stores it as `dialAfter` on the record, keeping the
-> pre-send one as `dialBefore`; the two normally agree, and a difference is a
-> positive observation that the first reading was taken too early.
->
-> Renewing the session to ask beeps, which is accepted here: the brew is over,
-> nothing is interrupted, and it happens once, only on a brew that got as far
-> as the pour. `askHowItIsDoing` returning false leaves `info` holding the
-> pre-brew value, so an unconfirmed reading is stored as nothing at all.
+> without the app being told, and it is turned before a brew, not during one.
+> XBRW++ used to read it again once a brew ended and store it as `dialAfter`
+> beside the pre-send `dialBefore`. That read sent bare 40521s, which
+> V12.0D.500 ignores (the three requests at 05:31:40-48 above), and the only
+> working alternative is a handshake, which beeps after every brew. So
+> `readDialAfterBrew` sends nothing now: it keeps a `dialAfter` only when the
+> machine reported its vitals after the pour began by some other route, and
+> otherwise leaves the field absent, which records already read as "not taken".
 >
 > **Still unsettled, and it needs hardware.** Nobody has checked whether the
 > blob reports the *physical dial* or the value the app last sent in the recipe
@@ -522,7 +665,7 @@ The machine pushes the following data unprompted on FFE2:
 
 | Pour events | Event-driven | 40510 per pour | pour_index in payload |
 | Brew lifecycle | Event-driven | 40502, 40507, 40510, 40511, 40512, 40513 | Grinder start, stop, bloom, brewer stop, enjoy |
-| Error events | Event-driven | 40517, 40522, 8203, 8204 | Idling error, no water, gear position, dose/water |
+| Error events | Event-driven | 40517, 8203, 8204 | Idling error, gear position, dose/water (40522 is the tank flag, not an error) |
 | Scale events | Event-driven | 9002 (In Scale), 9008 (Scale Out) | Object placed/removed |
 | Grinder events | Event-driven | 9003, 40507, 40505 | Grinder begin, stop, gear report |
 | Mode ACK | On command | 11511 notification | Status C2 confirms mode change |
@@ -613,6 +756,49 @@ The machine allows **one BLE link at a time**. The official app holds the link w
 
 ### Multiple Simultaneous Clients
 **Not possible.** Single connection architecture. `spec`
+
+> **But on Android two apps can share the one link (owner log, 2026-10-19,
+> Galaxy Z Fold, machine "Work" V12.0D.210 updated to V12.0D.500).** XBRW++
+> held the link with a brew loaded, went to the back, and the owner opened the
+> official app and ran a firmware update. Android keeps one physical connection
+> per device and hands notifications to every app subscribed to the
+> characteristic, so XBRW++'s log recorded the official app's side of the
+> conversation without having sent anything:
+>
+> ```
+> 04:14:55.968  active brew went to the back, keeping the link
+> 04:15:13.176  <-ffe2  event 8100 + 40521 info   (no send logged: the official app's connect handshake)
+> 04:15:13.722  state 0x1d / 04:15:13.976 event 8022 / 04:15:14.924 state 0x01
+>                         (8022 "back to home" is what the official app sends on connect;
+>                          XBRW++ only sends 8022 after a 40519, and none was logged)
+> 04:15:38.474  <-ffe2  event 8101
+> 04:15:39.000  <-ffe2  06 43
+> 04:15:39.517 .. 04:16:06.542  <-ffe2  06   (one every ~0.6 s)
+> 04:17:21.795-.803  <-ffe2  06 x ~60 (burst), 15, 06 43, 06
+> 04:17:21.858  link dropped by the radio
+> ```
+>
+> The official app's screenshots put "Update Success, Version 12.0D.500" at
+> 15:17:14 local (04:17:14 UTC), and the machine came back on V12.0D.500. The
+> single bytes match XMODEM-CRC flow control from a bootloader (inferred):
+> `43` ('C') asks the sender to start with CRC blocks, `06` (ACK) accepts a
+> block, `15` (NAK) asks for one again. The burst and the drop are the end of
+> the transfer and the reboot. So `8101` is very probably the official app's
+> "enter firmware update" command (inferred, one observation, payload not
+> seen because the official app's writes are not visible to us). The `06`
+> stream is not the machine waiting for XBRW++, and it is unrelated to the
+> brew the owner stopped.
+>
+> The parser is fine with these: a frame under 12 bytes or without the
+> `58 02 07` header comes back as `unknown` with its bytes intact, which is how
+> they reached the log.
+>
+> **TODO, not fixed:** XBRW++ cannot tell its own link from a shared one, and
+> anything it wrote during that transfer (a settings-screen refresh, a cancel)
+> would have landed in the middle of a firmware image. Nothing was written
+> this time. A guard that goes quiet once raw `06`/`15`/`43` frames appear
+> would be the obvious shape, but it needs a capture of an update to design
+> against, not one log.
 
 ### Keepalive
 No periodic keepalive is needed. The machine maintains the connection without pings. The app sends none. `corroborated`

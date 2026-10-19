@@ -2,6 +2,7 @@ import {useLocalSearchParams} from "expo-router";
 import router from "@/hooks/steadyRouter";
 import React, {useState} from "react";
 import {PixelRatio, ScrollView, useWindowDimensions} from "react-native";
+import {useSafeAreaInsets} from "react-native-safe-area-context";
 import {Text, XStack, YStack} from "tamagui";
 
 import BrewJudgement from "@/components/BrewJudgement";
@@ -23,6 +24,7 @@ import {useLiveBrew} from "@/hooks/useLiveBrew";
 import BeanNameSheet from "@/components/BeanNameSheet";
 import BrewNoteSheet from "@/components/BrewNoteSheet";
 import {beanNameFromRecipe} from "@/library/brew/handoff/beanName";
+import {openBagBeanName} from "@/library/CoffeeBagDatabase";
 import {sharedBrewDatabase, useBrewHistory, useBrewJudgement, type JudgementStore}
     from "@/hooks/useBrewHistory";
 import {useSetting} from "@/hooks/useSetting";
@@ -56,6 +58,7 @@ import {RECORD_ACTION_GAP, SCREEN_PADDING} from "@/constants/layout";
 import type {StoredBrew} from "@/library/BrewDatabase";
 import {HANDOFF_ALREADY_SENT, ENDED_ON_MACHINE_NOTE, pausedNote, pauseReasonsNote}
     from "@/constants/brewCopy";
+import {STABLE_HOST} from "@/constants/views";
 
 /** Minimal interface for looking up a recipe. Injected by tests. */
 export type RecipeLookup = {getRecipe: (uuid: string) => Recipe | null};
@@ -171,6 +174,7 @@ type Props = {
 export default function BrewRecord({recipeLookup}: Props) {
     const {id, latest} = useLocalSearchParams<{id?: string; latest?: string}>();
     const {width} = useWindowDimensions();
+    const insets = useSafeAreaInsets();
 
     const {open, brews} = useBrewHistory();
 
@@ -497,7 +501,7 @@ export default function BrewRecord({recipeLookup}: Props) {
                 nothing on its own, so the screen underneath stays reachable
                 unless it is hidden from here. The sheet sits outside this
                 subtree so it never hides itself. */}
-            <YStack flex={1} gap="$2" testID="brew-record-content"
+            <YStack {...STABLE_HOST} flex={1} gap="$2" testID="brew-record-content"
                     accessibilityElementsHidden={screenCovered}
                     importantForAccessibility={screenCovered ? "no-hide-descendants" : "auto"}>
             {/* Titled "Brew", not with the recipe's name: `BrewSummary` draws
@@ -528,7 +532,11 @@ export default function BrewRecord({recipeLookup}: Props) {
                         // A tap on a star while the keyboard is up rates the
                         // brew rather than being eaten by the dismiss.
                         keyboardShouldPersistTaps="handled"
-                        contentContainerStyle={{paddingBottom: 24, gap: 8}}>
+                        // Plus the inset: the screen runs to the bottom of the
+                        // display, and on Android that is under the navigation
+                        // bar, which hid the end of the record. The mini bar
+                        // that clears it elsewhere is silent on this route.
+                        contentContainerStyle={{paddingBottom: 24 + insets.bottom, gap: 8}}>
             {watched ? (
                 <BrewSummary
                     {...summary}
@@ -619,9 +627,14 @@ export default function BrewRecord({recipeLookup}: Props) {
             </ScrollView>
             </YStack>
 
+            {/* As on the brew screen: an open bag sent to Beanconqueror names
+                the bean these brews belong to. */}
             <BeanNameSheet open={handoff.namingBean} onOpenChange={handoff.setNamingBean}
-                           suggestion={beanNameFromRecipe(record.recipeName) ?? ""}
-                           onConfirm={(name) => void handoff.sendNow(name)} />
+                           suggestion={(handoff.namingBean
+                               ? openBagBeanName(record.recipeUuid) : undefined)
+                               ?? beanNameFromRecipe(record.recipeName) ?? ""}
+                           onConfirm={(name) => void handoff.sendNow(
+                               name !== "" ? name : openBagBeanName(record.recipeUuid) ?? name)} />
             <BrewNoteSheet
                 open={handoff.ratingBeforeSend}
                 onOpenChange={handoff.setRatingBeforeSend}

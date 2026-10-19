@@ -2,6 +2,7 @@ import {buildBackup, mergeBrews, mergeRecipes, parseBackup, reviveBrew,
         BACKUP_FORMAT, BACKUP_VERSION, MAX_BACKUP_NOTE}
     from "@/library/backup";
 import type {BrewRecord} from "@/library/brew/BrewRecord";
+import {newBag} from "@/library/coffeeBag";
 import Recipe, {MAX_DESCRIPTION} from "@/library/Recipe";
 import {DEFAULTS, NOT_IN_BACKUP, type SettingKey} from "@/library/Settings";
 
@@ -1444,5 +1445,47 @@ describe("dripper overflow protection in a backup", () => {
         expect(result.ok).toBe(false);
         if (result.ok) return;
         expect(result.reason).toMatch(/overflowProtection/);
+    });
+});
+
+describe("bags through a backup", () => {
+    const bag = {
+        ...newBag("u1", {sizeGrams: 250, roastedOn: "2026-10-12", price: 24.5}, 1_760_000_000_000),
+        id: "bag-1"
+    };
+
+    it("carries bags, open and finished, and reads them back", () => {
+        const finished = {...bag, id: "bag-0", finishedAt: 1_760_000_100_000};
+        const result = parseBackup(buildBackup([recipeNamed("A", "u1")], {}, "x", [], [bag, finished]));
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.payload.bags).toEqual([bag, finished]);
+        expect(result.payload.skippedBags).toBe(0);
+    });
+
+    it("reads a file from before bags as having none", () => {
+        const envelope = JSON.parse(buildBackup([recipeNamed("A", "u1")], {}));
+        delete envelope.bags;
+        const result = parseBackup(JSON.stringify(envelope));
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.payload.bags).toEqual([]);
+        expect(result.payload.skippedBags).toBe(0);
+    });
+
+    it("counts an unreadable bag without losing the recipes or the good bags", () => {
+        const envelope = JSON.parse(buildBackup([recipeNamed("A", "u1")], {}, "x", [], [bag]));
+        envelope.bags.push({id: "bad", sizeGrams: -5}, "bag");
+        const result = parseBackup(JSON.stringify(envelope));
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.payload.recipes).toHaveLength(1);
+        expect(result.payload.bags.map((b) => b.id)).toEqual(["bag-1"]);
+        expect(result.payload.skippedBags).toBe(2);
+    });
+
+    it("keeps the roast date in the exact form the rest and peak reader expects", () => {
+        const result = parseBackup(buildBackup([recipeNamed("A", "u1")], {}, "x", [], [bag]));
+        expect(result.ok && result.payload.bags[0].roastedOn).toBe("2026-10-12");
     });
 });

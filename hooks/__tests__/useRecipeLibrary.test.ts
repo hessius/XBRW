@@ -67,7 +67,7 @@ function favouriteRecipe(): Recipe {
 
 function payloadOf(recipes: Recipe[]): BackupPayload {
     return {
-        recipes, brews: [], settings: {}, skipped: 0, skippedBrews: 0,
+        recipes, brews: [], settings: {}, skipped: 0, skippedBrews: 0, bags: [], skippedBags: 0,
         appVersion: "2.6.0", exportedAt: ""
     };
 }

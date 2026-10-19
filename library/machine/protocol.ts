@@ -400,8 +400,10 @@ export function parseNotification(bytes: Uint8Array): Notification {
         return {kind: "status", state: payload[0] ?? 0};
     }
 
-    if (type === 0x4B || type === 0x15) {
-        if (payload.length < 4) return unknown;
+    // Only with a float to read. `4B 1F` with no payload is event 8011,
+    // documented as "machine awake", seen right after the handshake on
+    // V12.0D.500 (2026-10-19), and was logged as an unreadable frame.
+    if ((type === 0x4B || type === 0x15) && payload.length >= 4) {
         const view = new DataView(payload.buffer, payload.byteOffset, 4);
         const value = view.getFloat32(0, true);
         // The water stream is milligrams; the cup stream is already grams.
@@ -412,10 +414,20 @@ export function parseNotification(bytes: Uint8Array): Notification {
 
     const code = type | (sub << 8);
 
-    // 59, not 42: `readInfo` reads the mode string through index 58, and a
-    // payload that stops short of it decodes as an empty mode — which is then
-    // reported as PRO. A truncated frame claiming the machine is in PRO is
-    // worse than no frame, because the PRO-mode fallback trusts it.
+    // 55, not 59. Firmware V12.0D.210 (a Studio, serial J15A01D48G023, seen
+    // 2026-10-19) sends a 55-byte payload: everything up to and including
+    // modeType at 51-54, and no pouringRadius or vibrationInit after it. The
+    // frame is whole, not cut short: `splitFrames` walks by its own length
+    // field and the CRC above held. Refusing it left `info` null forever, so
+    // that machine never had a serial, never had vitals, and every BREW was
+    // refused as `noVitals` and relinked, which beeped and reconnected.
+    //
+    // The mode on such a frame is read exactly as on a longer one. The ASCII
+    // token `readInfo` looks for cannot fit in four bytes, so it reads PRO;
+    // that is also what every V12.0D.500 capture reads, because they carry
+    // the token as raw bytes (see ble-protocol.md, "Contradiction,
+    // unresolved"). The cost of a wrong PRO is only that the switch-to-PRO
+    // offer is not made.
     if (code === EVENT.MACHINE_INFO && payload.length >= INFO_PAYLOAD_BYTES) {
         return readInfo(payload);
     }
@@ -425,8 +437,8 @@ export function parseNotification(bytes: Uint8Array): Notification {
         : {kind: "event", code};
 }
 
-/** The mode string ends at index 58, so a shorter payload is not an info frame. */
-const INFO_PAYLOAD_BYTES = 59;
+/** The shortest whole info payload seen on hardware ends with modeType at 54. */
+const INFO_PAYLOAD_BYTES = 55;
 
 /** What the encoder needs of a recipe, without depending on `Recipe` itself. */
 export type BlobPour = {

@@ -4,6 +4,7 @@ import type {SortAxis, SortDirection} from './librarySort';
 import type {LibraryView} from './libraryView';
 import type {MachineModel} from './machine/machineModel';
 import type {HistorySort, HistorySortDirection} from './brew/historyQuery';
+import type {BagTrackerSetting} from './coffeeBag';
 
 /**
  * Every setting, with its default.
@@ -29,12 +30,19 @@ export const DEFAULTS = {
     /**
      * Draw the picture a recipe arrived with, where there is one.
      *
-     * Off by default, because this is here to find out whether a face or a pod
-     * photo helps at all. A 40 pt mark is a far smaller promise than the recipe
-     * images the roadmap deferred, and anything that will not load falls back
-     * to the accent mark without saying a word about it.
+     * On by default. It started off, because it was here to find out whether a
+     * face or a pod photo helps at all, and at the time most recipes had
+     * neither. They usually have one now: a pod recipe carries its artwork, a
+     * shared one its sharer's picture, and an import link its coffee's photo.
+     * Off, all of that arrives and is never drawn, which is a quiet way to
+     * answer the question in the negative.
+     *
+     * The promise is still small. It is a 40 pt mark, not the recipe images
+     * the roadmap deferred, and anything that will not load falls back to the
+     * accent mark without saying a word about it, so a recipe with no picture
+     * looks exactly as it did.
      */
-    showRecipeAvatars: false,
+    showRecipeAvatars: true,
     /**
      * Draw the one-line hint under every label on the BREW deck.
      *
@@ -79,6 +87,20 @@ export const DEFAULTS = {
      * dead button on every recipe would be worse than no button.
      */
     machineDeviceId: "",
+    /**
+     * Every machine the user has saved, in the order the app reaches for them.
+     *
+     * A JSON array of `SavedMachine` (`library/machine/savedMachines.ts`),
+     * stored as a string for the reason `hiddenShelves` is: this table holds
+     * strings, and `get` can only type-check primitives.
+     *
+     * Empty by default and empty on upgrade. The active machine is still
+     * `machineDeviceId` and the three keys after it, and the list is read
+     * through `resolveSavedMachines`, which lays those keys over it. Somebody
+     * upgrading with a paired machine therefore sees a list of one, their
+     * machine as the default, without anything being written.
+     */
+    savedMachines: "",
     /**
      * Which xBloom this phone is driving.
      *
@@ -264,6 +286,13 @@ export const DEFAULTS = {
     drawerHintSignature:   "",
     drawerHintLastSeenAt:  0,
     /**
+     * The local day (`YYYY-MM-DD`) the home screen's "Ready to brew" card was
+     * closed, or empty. The card stays away for the rest of that day and comes
+     * back the next, so it can be put away without being turned off. Held out
+     * of backups with the drawer hint: it is this phone's state, not a choice.
+     */
+    readyToBrewDismissedOn: "",
+    /**
      * Offer to send a finished brew to Beanconqueror.
      *
      * Off until the reader is in Beanconqueror's own release. Before then the
@@ -277,6 +306,17 @@ export const DEFAULTS = {
      * feature deserves, and it survives a relaunch like any other preference.
      */
     beanconquerorHandoff: false,
+    /**
+     * Which app counts what is left in a bag: this one, Beanconqueror, or
+     * `auto`, which is Beanconqueror exactly while brews are being handed to it.
+     *
+     * One tracker, because Beanconqueror subtracts each brew it is handed from
+     * the matching bean, and a second count here would drift from it. See
+     * `library/coffeeBag.ts`; `resolveBagTracker` is the only reader that
+     * should interpret it. Held out of backups with the handoff switch it
+     * follows (below).
+     */
+    bagTracker: "auto" as BagTrackerSetting,
     /**
      * Whether the LABS section is visible in settings.
      *
@@ -328,6 +368,54 @@ export const DEFAULTS = {
      */
     myShelves: "",
     /**
+     * Roaster feeds the user said not to be asked about again, as a JSON array
+     * of feed keys (origin and path, see `library/roasterFeed.ts`).
+     *
+     * Per feed rather than one switch, because saying no to one roaster's
+     * shelf is not saying no to every roaster's. Carried in a backup for the
+     * reason `hiddenShelves` is: it is an answer the user gave, and a restored
+     * phone that asked again would be asking a question already answered.
+     */
+    roasterFeedOptOut: "",
+    /**
+     * Roasters the user subscribed to, as a JSON array of records
+     * (`library/roasterSubscription.ts`). Carried in a backup: a subscription
+     * is something the user set up. Read back through `parseSubscriptions`,
+     * which validates every field, because a backup file is untrusted.
+     */
+    roasterSubscriptions: "",
+    /**
+     * The cached catalogue: each subscription's last feed body
+     * (`library/roasterCatalogue.ts`). Held out of backups below: it is a copy
+     * of somebody else's file, up to a megabyte each, and the next sync
+     * fetches it again.
+     */
+    roasterCatalogue: "",
+    /**
+     * What is new and what has come back in each subscribed catalogue
+     * (`library/roasterAlerts.ts`): coffees seen, NEW flags, and the coffees
+     * and bags the user asked to hear about. Held out of backups below:
+     * it is bookkeeping about the cached feeds, and a restored phone starts it
+     * again from its first sync rather than flagging a whole list NEW.
+     */
+    roasterAlerts: "",
+    /**
+     * Draw the subscribed roasters on the home screen, under the three tiles,
+     * and the empty library's BROWSE button. On by default: somebody who
+     * subscribed asked for the roaster. Off does not touch the home search,
+     * which shows a roaster's coffees only when somebody types. Carried in a
+     * backup like the other display settings.
+     */
+    showRoastersOnHome: true,
+    /**
+     * What each imported recipe's brewing content was when it arrived, by
+     * uuid (`library/importRefresh.ts`). It is how importing the same link
+     * again tells an untouched copy, which takes the author's latest quietly,
+     * from one the user edited, which is asked about first. Carried in a
+     * backup with the recipes it names, and validated on the way back in.
+     */
+    importFingerprints: "",
+    /**
      * Draw an auto shelf's tile the other way round: the accent fills the card
      * and the glyph's square takes the quiet background.
      *
@@ -368,6 +456,10 @@ export type SettingKey = keyof typeof DEFAULTS;
  * machine that, as far as it is concerned, does not exist -- and it would have
  * displaced whatever pairing that phone had made for itself.
  *
+ * `savedMachines` is held out for the same reason: it is a list of those
+ * identifiers. The names the user gave them go with it, which is the price of
+ * not restoring a list of machines the new phone cannot reach.
+ *
  * `labsUnlocked` is held out for a different reason: a backup file is not
  * private. It goes to the share sheet, and the whole point of the seven taps
  * is that an unfinished feature is off for everybody who has not deliberately
@@ -381,24 +473,28 @@ export type SettingKey = keyof typeof DEFAULTS;
  * evidence any more. The whole reason they are stored is to be trustworthy
  * about what a real machine said.
  *
- * The drawer hint counters are held out because they describe what this phone
- * has already taught, and a restored phone has not seen or forgotten the same
- * lessons.
+ * The drawer hint counters and the day the "Ready to brew" card was closed are
+ * held out because they describe what this phone has already taught or been
+ * told, and a restored phone has not seen or forgotten the same lessons.
+ *
+ * `roasterCatalogue` is a cache of roasters' feeds, refetched on the next sync,
+ * and `roasterAlerts` is bookkeeping about that cache.
  *
  * Named here rather than simply omitted from the snapshot so that the
  * exhaustiveness test still holds every other key to account: a key is either
  * in a backup or on this list, never quietly missing from both.
  */
 export type BackupExcluded =
-    "machineDeviceId" | "lastCardRead" | "labsUnlocked" | "beanconquerorHandoff" |
+    "machineDeviceId" | "savedMachines" | "lastCardRead" | "labsUnlocked" | "beanconquerorHandoff" | "bagTracker" |
     "machineModelString" | "machineName" | "ratingPromptDismissed" |
     "drawerHintLastShownAt" | "drawerHintShownCount" | "drawerHintManualOpens" |
-    "drawerHintSignature" | "drawerHintLastSeenAt";
+    "drawerHintSignature" | "drawerHintLastSeenAt" | "roasterCatalogue" | "roasterAlerts" |
+    "readyToBrewDismissedOn";
 export const NOT_IN_BACKUP: readonly SettingKey[] = [
-    "machineDeviceId", "lastCardRead", "labsUnlocked", "beanconquerorHandoff",
+    "machineDeviceId", "savedMachines", "lastCardRead", "labsUnlocked", "beanconquerorHandoff", "bagTracker",
     "machineModelString", "machineName", "ratingPromptDismissed",
     "drawerHintLastShownAt", "drawerHintShownCount", "drawerHintManualOpens",
-    "drawerHintSignature", "drawerHintLastSeenAt"
+    "drawerHintSignature", "drawerHintLastSeenAt", "roasterCatalogue", "roasterAlerts", "readyToBrewDismissedOn"
 ];
 
 /**

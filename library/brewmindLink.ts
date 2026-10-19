@@ -1,4 +1,8 @@
+import {readLabels} from "@/library/coffeeLabels";
+import {fitSizedName} from "@/library/fitName";
+import {MAX_NAME} from "@/library/Recipe";
 import {LEGACY_NAMES, PodCoffee, httpsUrl, podCoffeeFromStored} from "@/library/podCoffee";
+import {readRoasterColour} from "@/library/roasterColour";
 
 /**
  * The deep link a coffee app hands XBRW++ (issue #159).
@@ -36,9 +40,12 @@ export const BREWMIND_SOURCE = "brewmind";
  * these caps are also what keeps the handoff working. Capped, the whole block
  * is roughly 3 kB before gzip against a 131 kB budget.
  */
-const SHORT_TEXT = 120;
-/** A URL's cap, shared by the coffee's link, its image, and `recipe.url`. */
-const MAX_URL = 2000;
+export const SHORT_TEXT = 120;
+/**
+ * A URL's cap, shared by the coffee's link, its image, `recipe.url`, and a
+ * roaster `feed`.
+ */
+export const MAX_URL = 2000;
 const CAPS: Readonly<Record<string, number>> = {
     name: SHORT_TEXT,
     roaster: SHORT_TEXT,
@@ -59,7 +66,12 @@ const CAPS: Readonly<Record<string, number>> = {
     aromatics: 500,
     note: 2000,
     url: MAX_URL,
-    imageUrl: MAX_URL
+    imageUrl: MAX_URL,
+    // Whole days, 0 to 540, read by `roastDays`. Four digits is room for any
+    // of them and nothing else.
+    restDays: 4,
+    peakDay: 4,
+    bestUntilDay: 4
 };
 
 /**
@@ -82,6 +94,10 @@ const CAPS: Readonly<Record<string, number>> = {
  */
 const PARAM_ALIASES: Readonly<Record<string, string>> = {
     image: "imageUrl",
+    // The roaster feed's spelling, so a roaster mints both with one set of names.
+    rest_days: "restDays",
+    peak_day: "peakDay",
+    best_until_day: "bestUntilDay",
     ...LEGACY_NAMES
 };
 
@@ -101,6 +117,43 @@ export type BrewMindLink = {
      * through xBloom. https only, on the same reasoning as an image.
      */
     recipeUrl?: string;
+    /**
+     * `recipe.name`: what the producer calls this recipe.
+     *
+     * A roaster's xBloom recipe is usually named for the person who keyed it
+     * into xBloom ("col chiroso -18g") rather than for the coffee, and the
+     * share link can only carry that name. This lets the page that sent the
+     * link name it properly. It lands on the recipe's own `name`, the one a
+     * rename writes, so `xbloomName` keeps what xBloom said and USE THIS NAME
+     * still has something to go back to.
+     */
+    recipeName?: string;
+    /**
+     * `feed`: where the roaster publishes every coffee it has a recipe for.
+     *
+     * Only an address. Nothing is fetched here, and nothing is fetched at all
+     * until the recipe this link carries has imported: the feed is an offer
+     * made after the fact, read by `library/roasterFeed.ts`. https only and
+     * capped like every other URL, so an older build that ignores the
+     * parameter and a newer one that refuses a bad value both import the
+     * recipe exactly as before.
+     */
+    feed?: string;
+    /**
+     * `bean.flavours`: a short list of tasting notes, comma separated, for
+     * the catalogue's chips. Kept out of the coffee block, which is the
+     * Beanconqueror contract and has no such field.
+     */
+    flavours?: string[];
+    /** `bean.tags`: labels the recipe is tagged with on import, comma separated. */
+    tags?: string[];
+    /**
+     * `bean.colour` (or `bean.color`): the roaster's own colour for this
+     * coffee, strictly `#RRGGBB`. Kept beside the coffee rather than in it:
+     * the coffee block is the Beanconqueror contract and is stored whole, and
+     * the colour is only ever used to pick the card accent on import.
+     */
+    colour?: string;
 };
 
 /**
@@ -151,8 +204,47 @@ export function parseBrewMindLink(link: string): BrewMindLink | null {
         const checked = httpsUrl(recipeUrl);
         if (checked !== undefined) result.recipeUrl = checked;
     }
+
+    // Held to the rename sheet's ceiling rather than `SHORT_TEXT`. This is a
+    // recipe name, not a bean field, and a link that could set a name the
+    // sheet would refuse to hold would leave the user unable to edit what they
+    // were given. A longer name is fitted, not dropped: dropping it left the
+    // recipe on xBloom's own name, which for a roaster is whatever its account
+    // typed ("col Java hydrohoney -18g"). `fitSizedName` keeps a " - 18g"
+    // suffix whole and shortens only what comes before it, removing trailing
+    // bracketed groups and then whole words, with an ellipsis when words go.
+    // Nothing is cut mid-word, so the result is the sender's name, shortened
+    // where it says so, rather than a confident wrong one.
+    //
+    // Runs of whitespace fold to one space first. A name is a one-line title
+    // in the header and on the card, and a line break, a tab or a U+2028 sent
+    // in the link would split it there. JS `\s` already covers the Unicode
+    // separators, so one rule is enough.
+    const recipeName = params.get("recipe.name")?.replace(/\s+/g, " ").trim();
+    if (recipeName !== undefined && recipeName !== "") {
+        result.recipeName = fitSizedName(recipeName, MAX_NAME);
+    }
+
+    const flavours = readLabels(params.get("bean.flavours") ?? "");
+    if (flavours.length > 0) result.flavours = flavours;
+    const tags = readLabels(params.get("bean.tags") ?? "");
+    if (tags.length > 0) result.tags = tags;
+
+    const feed = params.get("feed")?.trim();
+    if (feed !== undefined && feed.length <= MAX_URL) {
+        const checked = httpsUrl(feed);
+        if (checked !== undefined) result.feed = checked;
+    }
+
+    // British spelling first, then the American one. A value that is not a
+    // strict `#RRGGBB` is dropped and the recipe imports as before.
+    const colour = readRoasterColour(params.get("bean.colour") ?? params.get("bean.color"));
+    if (colour !== undefined) result.colour = colour;
     return result;
 }
+
+/** The colour's two spellings, which are not coffee fields. */
+const COLOUR_PARAMS: ReadonlySet<string> = new Set(["colour", "color"]);
 
 /**
  * Collect the `bean.*` parameters into a record and validate it.
@@ -165,14 +257,36 @@ export function parseBrewMindLink(link: string): BrewMindLink | null {
  * which is length.
  */
 function coffeeFrom(params: URLSearchParams): PodCoffee | null {
-    const record: Record<string, string> = {};
-    let sawAny = false;
-
+    const fields: [string, string][] = [];
     for (const [key, value] of params.entries()) {
         if (!key.startsWith("bean.")) continue;
-        sawAny = true;
         const param = key.slice("bean.".length);
+        // Read by `parseBrewMindLink` and not part of the coffee block.
+        if (!COLOUR_PARAMS.has(param)) fields.push([param, value]);
+    }
+    if (fields.length === 0) return null;
+    return coffeeFromFields(fields);
+}
+
+/**
+ * Turn named coffee fields from outside the app into a validated coffee.
+ *
+ * Shared by the link's `bean.*` parameters and a roaster feed's `bean` block
+ * (`library/roasterFeed.ts`), so the two doors apply the same aliases and the
+ * same caps. A URL only ever carries strings; a feed is JSON and may send a
+ * number or a boolean, which is passed through for `podCoffeeFromStored` to
+ * judge exactly as it judges a stored one. Anything else is dropped.
+ */
+export function coffeeFromFields(fields: Iterable<[string, unknown]>): PodCoffee | null {
+    const record: Record<string, unknown> = {};
+
+    for (const [param, value] of fields) {
         const field = PARAM_ALIASES[param] ?? param;
+        if (typeof value === "number" || typeof value === "boolean") {
+            record[field] = value;
+            continue;
+        }
+        if (typeof value !== "string") continue;
         const trimmed = value.trim();
         if (trimmed === "") continue;
 
@@ -185,6 +299,5 @@ function coffeeFrom(params: URLSearchParams): PodCoffee | null {
         record[field] = trimmed;
     }
 
-    if (!sawAny) return null;
     return podCoffeeFromStored(record);
 }

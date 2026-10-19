@@ -1,3 +1,5 @@
+import {FIT_NAME_MAX} from "@/library/fitName";
+import {MAX_NAME} from "@/library/Recipe";
 import {parseBrewMindLink} from "@/library/brewmindLink";
 
 const SHARE = "https://xbloom.com/share?id=abc123";
@@ -193,6 +195,75 @@ describe("parseBrewMindLink", () => {
         expect(parsed?.coffee).toEqual({name: "X"});
     });
 
+    describe("recipe.name", () => {
+        it("reads the producer's name for the recipe", () => {
+            const parsed = parseBrewMindLink(valid({
+                "recipe.name": "Colombia | Las Flores | Chiroso Natural - 18g"
+            }));
+            expect(parsed?.recipeName).toBe("Colombia | Las Flores | Chiroso Natural - 18g");
+        });
+
+        it("trims it", () => {
+            expect(parseBrewMindLink(valid({"recipe.name": "  Chiroso - 18g \n"}))?.recipeName)
+                .toBe("Chiroso - 18g");
+        });
+
+        it("folds line breaks and tabs into single spaces", () => {
+            // A name is a one-line title. A break sent in the link would split
+            // it in the header, U+2028 included.
+            expect(parseBrewMindLink(valid({
+                "recipe.name": "Colombia\n|\tLas Flores\u2028|  Chiroso\r\nNatural"
+            }))?.recipeName).toBe("Colombia | Las Flores | Chiroso Natural");
+        });
+
+        it("measures the cap after folding", () => {
+            // 100 characters once folded, 101 as sent.
+            const name = "N".repeat(49) + "  " + "N".repeat(50);
+            expect(parseBrewMindLink(valid({"recipe.name": name}))?.recipeName)
+                .toHaveLength(MAX_NAME);
+        });
+
+        it("drops a name that is only whitespace", () => {
+            // An empty `name` means follow the pod, so setting one would be
+            // harmless. Leaving the key off keeps the parsed link honest about
+            // what the sender actually said.
+            expect(parseBrewMindLink(valid({"recipe.name": "   "})))
+                .toEqual({share: SHARE, source: "brewmind"});
+        });
+
+        it("fits an over-long name instead of dropping it, keeping the size", () => {
+            // A real roaster name, 102 characters with its size. Dropping it
+            // left the recipe on xBloom's own name.
+            const parsed = parseBrewMindLink(valid({
+                "recipe.name": "Colombia | Las Flores | Jhoan Vergara | Java Hydrohoney " +
+                               "(Duo Cherry Velvet) (Competition Coffee) - 18g",
+                "bean.name": "Kept"
+            }));
+            expect(parsed?.recipeName)
+                .toBe("Colombia | Las Flores | Jhoan Vergara | Java Hydrohoney (Duo Cherry Velvet) - 18g");
+            expect(parsed?.coffee).toEqual({name: "Kept"});
+        });
+
+        it("cuts a long name with no size at a whole word, under the cap", () => {
+            const parsed = parseBrewMindLink(valid({"recipe.name": "Word ".repeat(40)}));
+            expect(parsed?.recipeName?.length).toBeLessThanOrEqual(MAX_NAME);
+            expect(parsed?.recipeName).toMatch(/^(Word )+Word…$/);
+        });
+
+        it("fits to the same ceiling the rename sheet uses", () => {
+            expect(FIT_NAME_MAX).toBe(MAX_NAME);
+        });
+
+        it("keeps a name sitting exactly on the cap", () => {
+            expect(parseBrewMindLink(valid({"recipe.name": "N".repeat(MAX_NAME)}))
+                ?.recipeName).toHaveLength(MAX_NAME);
+        });
+
+        it("is absent when the link does not send one", () => {
+            expect(parseBrewMindLink(valid())).not.toHaveProperty("recipeName");
+        });
+    });
+
     it("reads a height a user pasted off a bag", () => {
         // Beanconqueror holds elevation as a string and BrewMind's value
         // comes from whatever somebody copied, so a bare integer is the one
@@ -202,5 +273,39 @@ describe("parseBrewMindLink", () => {
             "bean.elevation": "5,900 ft"
         }));
         expect(parsed?.coffee?.elevation).toBe(1798);
+    });
+});
+
+describe("bean.colour", () => {
+    it("reads a strict #RRGGBB beside the coffee, not in it", () => {
+        const parsed = parseBrewMindLink(valid({"bean.name": "X", "bean.colour": "#1d5f96"}));
+
+        expect(parsed?.colour).toBe("#1D5F96");
+        expect(parsed?.coffee).toEqual({name: "X"});
+    });
+
+    it("accepts the American spelling", () => {
+        expect(parseBrewMindLink(valid({"bean.color": "#8A2F35"}))?.colour).toBe("#8A2F35");
+    });
+
+    it("prefers bean.colour when both are sent", () => {
+        const parsed = parseBrewMindLink(valid({"bean.colour": "#1D5F96", "bean.color": "#8A2F35"}));
+
+        expect(parsed?.colour).toBe("#1D5F96");
+    });
+
+    it.each(["1D5F96", "#15A", "#1D5F96FF", "navy", ""])(
+        "drops %p and still imports the recipe",
+        (value) => {
+            const parsed = parseBrewMindLink(valid({"bean.name": "X", "bean.colour": value}));
+
+            expect(parsed).not.toBeNull();
+            expect(parsed?.colour).toBeUndefined();
+            expect(parsed?.coffee).toEqual({name: "X"});
+        }
+    );
+
+    it("does not make a coffee out of a colour alone", () => {
+        expect(parseBrewMindLink(valid({"bean.colour": "#1D5F96"}))?.coffee).toBeUndefined();
     });
 });

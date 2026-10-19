@@ -130,4 +130,27 @@ describe("ShelfRoom", () => {
         await fireEvent(screen.getByTestId(`recipe-tile-${recipe.uuid}`), "longPress");
         expect(onLongPress).toHaveBeenCalledTimes(1);
     });
+
+    it("passes the recipe pictures setting to its tiles", async () => {
+        const recipe = named("Ethiopia");
+        recipe.imageURL = "https://example.com/bag.jpg";
+        await renderWithProviders(
+            <ShelfRoom label="MORNINGS" recipes={[recipe]}
+                       onBack={jest.fn()} actionsFor={actionsFor()} showPicture/>
+        );
+        expect(screen.getByTestId("recipe-tile-photo", {includeHiddenElements: true})
+            .props.source).toEqual({uri: "https://example.com/bag.jpg"});
+    });
+
+    it("draws no pictures with the setting off", async () => {
+        const recipe = named("Ethiopia");
+        recipe.imageURL = "https://example.com/bag.jpg";
+        await renderWithProviders(
+            <ShelfRoom label="MORNINGS" recipes={[recipe]}
+                       onBack={jest.fn()} actionsFor={actionsFor()}/>
+        );
+
+        expect(screen.queryByTestId("recipe-tile-photo", {includeHiddenElements: true}))
+            .toBeNull();
+    });
 });

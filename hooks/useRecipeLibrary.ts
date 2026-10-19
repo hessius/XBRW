@@ -13,8 +13,10 @@ import type {FilterResolver, LibraryQuery,
 import type Pour from "@/library/Pour";
 import Recipe from "@/library/Recipe";
 import RecipeDatabase from "@/library/RecipeDatabase";
+import {recipeAtDose} from "@/library/quickEdit";
 import {canonicalShelfId} from "@/library/hiddenShelves";
 import {tagKey} from "@/library/tagKey";
+import type {StoredBagReading} from "@/library/CoffeeBagDatabase";
 
 /**
  * The part of `RecipeDatabase` this hook uses.
@@ -60,6 +62,18 @@ export type RecipeStore = {
      */
     brewEvidence?: () => Record<string, RecipeEvidence>;
     /**
+     * Each recipe's open bag and the grams its brews have used.
+     *
+     * Optional like `brewEvidence`, and for the same reason: a store that
+     * cannot answer costs the cards their bag badge and nothing else.
+     */
+    coffeeBags?: () => Record<string, StoredBagReading>;
+    /**
+     * One recipe by uuid, for the few the open bags name. Optional: without
+     * it the bag recipes are picked out of `retrieveAllRecipes`.
+     */
+    getRecipe?: (uuid: string) => Recipe | null;
+    /**
      * A few members of each shelf, for the art on its tile.
      *
      * Optional for the same reason as `brewEvidence`: a store that cannot
@@ -70,6 +84,12 @@ export type RecipeStore = {
         resolveFilter?: FilterResolver,
         perShelf?: number
     ) => Record<string, Recipe[]>;
+    /** The newest members' pictures, for a shelf's cover. Optional as above. */
+    shelfPhotos?: (
+        ids: readonly string[],
+        resolveFilter?: FilterResolver,
+        perShelf?: number
+    ) => Record<string, string[]>;
     deleteRecipe: (uuid: string) => void;
     cloneRecipe: (uuid: string) => void;
     updateRecipe: (uuid: string, recipe: Recipe) => void;
@@ -175,6 +195,11 @@ export type ShelfWriteOutcome = {
 /** What a shelf's mark is drawn from: its first few members, in shelf order. */
 export type ShelfMarkMembers = {
     accents: string[];
+    /**
+     * The newest members' pictures, newest first, at most four. Absent when no
+     * member has one. Drawn only while `showRecipeAvatars` is on.
+     */
+    photos?: string[];
 };
 
 export type RecipeLibrary = {
@@ -208,6 +233,13 @@ export type RecipeLibrary = {
     authorCounts: {author: string; count: number}[];
     /** What each recipe's brews add up to, keyed by uuid. Absent means none. */
     evidence: Record<string, RecipeEvidence>;
+    /** Each recipe's open bag, keyed by uuid. Absent means no bag. */
+    bags: Record<string, StoredBagReading>;
+    /**
+     * The recipe each open bag belongs to, keyed by uuid, whatever the rail
+     * asked. Read for the home screen's "Ready to brew" card.
+     */
+    bagRecipes: Record<string, Recipe>;
     /** The art each shelf's tile draws, keyed by shelf id. */
     shelfMarks: Record<string, ShelfMarkMembers>;
     allRecipes: () => Recipe[];
@@ -215,6 +247,8 @@ export type RecipeLibrary = {
     deleteRecipe: (recipe: Recipe) => void;
     duplicateRecipe: (recipe: Recipe) => void;
     toggleFavourite: (recipe: Recipe) => void;
+    /** Writes `recipe` back at `dose`, water scaled; `null` if the store refused. */
+    saveAtDose: (recipe: Recipe, dose: number) => Recipe | null;
     /** Make exactly these recipes the members of a shelf. */
     setShelfMembers: (tag: string, uuids: readonly string[]) => ShelfWriteOutcome;
     /** Rename a shelf and set its membership, in one pass over the library. */
@@ -267,6 +301,8 @@ export function useRecipeLibrary(
     const tagCounts = readTagCounts(store, revision);
     const authorCounts = readAuthorCounts(store, revision);
     const evidence = readEvidence(store, revision);
+    const bags = readBags(store, revision);
+    const bagRecipes = readBagRecipes(store, JSON.stringify(Object.keys(bags).sort()), revision);
     // Keyed by every shelf that could be drawn rather than by the ones the grid
     // actually draws, because suppression depends on which filters are applied
     // and the art does not: the same shelf shows the same members whether the
@@ -345,6 +381,26 @@ export function useRecipeLibrary(
             // Deliberately empty: reload() below restores the true value.
         }
         reload();
+    }
+
+    /**
+     * Write a recipe back at a different dose: "Save as this dose".
+     *
+     * A copy is scaled and written, so the object the caller holds is never
+     * left half-changed by a failed write. Returns the recipe as saved, or
+     * `null` when the store refused it; the reload runs either way so the list
+     * shows what the store really holds.
+     */
+    function saveAtDose(recipe: Recipe, dose: number): Recipe | null {
+        const scaled = recipeAtDose(recipe, dose);
+        let saved: Recipe | null = scaled;
+        try {
+            store.updateRecipe(scaled.uuid, scaled);
+        } catch {
+            saved = null;
+        }
+        reload();
+        return saved;
     }
 
     /**
@@ -560,12 +616,15 @@ export function useRecipeLibrary(
         tagCounts,
         authorCounts,
         evidence,
+        bags,
+        bagRecipes,
         shelfMarks,
         allRecipes,
         refresh: reload,
         deleteRecipe,
         duplicateRecipe,
         toggleFavourite,
+        saveAtDose,
         deleteAll,
         setShelfMembers,
         renameShelf,
@@ -653,6 +712,50 @@ function readEvidence(
 }
 
 /**
+ * Each open bag and what its brews used, on the same revision counter as
+ * evidence, so a brew and a return to the library moves the badge with it.
+ */
+function readBags(
+    db: RecipeStore, revision: number
+): Record<string, StoredBagReading> {
+    void revision;
+    return db.coffeeBags?.() ?? {};
+}
+
+/**
+ * The recipes the open bags name, keyed by uuid.
+ *
+ * Keyed on the uuids as one JSON string so the compiler can cache the read,
+ * the trick `shelfIdsOf` plays. One `getRecipe` per bag where the store has
+ * it, since a person has a handful of bags open and the table may hold
+ * hundreds of recipes. A store that cannot answer costs the card, nothing else.
+ */
+function readBagRecipes(
+    db: RecipeStore, uuids: string, revision: number
+): Record<string, Recipe> {
+    void revision;
+    const wanted: string[] = JSON.parse(uuids);
+    if (wanted.length === 0) return {};
+    const out: Record<string, Recipe> = {};
+    try {
+        if (db.getRecipe !== undefined) {
+            for (const uuid of wanted) {
+                const recipe = db.getRecipe(uuid);
+                if (recipe !== null && recipe !== undefined) out[uuid] = recipe;
+            }
+        } else {
+            const set = new Set(wanted);
+            for (const recipe of db.retrieveAllRecipes?.() ?? []) {
+                if (set.has(recipe.uuid)) out[recipe.uuid] = recipe;
+            }
+        }
+    } catch {
+        return {};
+    }
+    return out;
+}
+
+/**
  * Every shelf id that could be drawn, as one string.
  *
  * A primitive rather than an array so the read below can be cached on it, and
@@ -702,6 +805,9 @@ function readAuthorCounts(
  * Read on the same revision counter as the list, so a recipe joining a shelf
  * changes the shelf's picture without a reload.
  */
+/** How many pictures a shelf's cover can show: a 2x2 mosaic. */
+const SHELF_PHOTOS = 4;
+
 function readShelfMarks(
     db: RecipeStore, ids: string, revision: number
 ): Record<string, ShelfMarkMembers> {
@@ -710,10 +816,20 @@ function readShelfMarks(
         JSON.parse(ids) as string[], resolveLibraryFilter, MARK_MEMBERS
     ) ?? {};
 
+    const photos = db.shelfPhotos?.(
+        JSON.parse(ids) as string[], resolveLibraryFilter, SHELF_PHOTOS
+    ) ?? {};
+
     const marks: Record<string, ShelfMarkMembers> = {};
     for (const [id, recipes] of Object.entries(members)) {
         if (recipes.length === 0) continue;
-        marks[id] = {accents: recipes.map(resolveAccent)};
+        marks[id] = photos[id] === undefined
+            ? {accents: recipes.map(resolveAccent)}
+            : {accents: recipes.map(resolveAccent), photos: photos[id]};
+    }
+    // A store that answers pictures but not members still gets its covers.
+    for (const [id, found] of Object.entries(photos)) {
+        if (marks[id] === undefined && found.length > 0) marks[id] = {accents: [], photos: found};
     }
     return marks;
 }

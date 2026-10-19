@@ -5,6 +5,8 @@ import {Text, XStack, YStack} from "tamagui";
 
 import DotIcon from "@/components/DotIcon";
 import DotMatrixText from "@/components/DotMatrixText";
+import type {StoredBagReading} from "@/library/CoffeeBagDatabase";
+import type {Freshness} from "@/library/restPeak";
 import RecipeShelfTile from "@/components/RecipeShelfTile";
 import type {RecipeEvidence} from "@/library/libraryQuery";
 import type {SlotMarkerValue} from "@/library/slots/slotModel";
@@ -74,9 +76,9 @@ export type RoomRecipeActions = {
  * mounted behind the room, not to replay a saved offset here.
  */
 export default function ShelfRoom({
-    label, recipes, onBack, actionsFor, evidence = {}, namedByUser = false,
+    label, recipes, onBack, actionsFor, evidence = {}, bags = {}, freshness = {}, namedByUser = false,
     showCoffeeMarker = true, dottedProfile = false, onScroll, paddingBottom = 0,
-    editing = false
+    editing = false, showPicture = false
 }: {
     /** The shelf's name, drawn as the room's heading. */
     label: string;
@@ -103,6 +105,10 @@ export default function ShelfRoom({
      * same brews.
      */
     evidence?: Readonly<Record<string, RecipeEvidence>>;
+    /** Each recipe's open bag, by uuid, when this app counts bags. */
+    bags?: Readonly<Record<string, StoredBagReading>>;
+    /** Each open bag's freshness today, by uuid, in both tracker modes. */
+    freshness?: Readonly<Record<string, Freshness>>;
     /**
      * True for any shelf whose name is a word the user typed, which is both a
      * shelf they made and a tag not yet promoted into one. It draws in a plain
@@ -117,6 +123,8 @@ export default function ShelfRoom({
     namedByUser?: boolean;
     showCoffeeMarker?: boolean;
     dottedProfile?: boolean;
+    /** `showRecipeAvatars`, forwarded to every tile. */
+    showPicture?: boolean;
     /** Drives the screen's collapsing header. */
     onScroll?: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
     paddingBottom?: number;
@@ -191,7 +199,10 @@ export default function ShelfRoom({
                                     onLongPress={acts.onLongPress}
                                     showCoffeeMarker={showCoffeeMarker}
                                     dottedProfile={dottedProfile}
+                                    showPicture={showPicture}
                                     evidence={evidence[recipe.uuid]}
+                                    bag={bags[recipe.uuid]}
+                                    freshness={freshness[recipe.uuid]}
                                     onBrew={acts.onBrew}
                                     onShare={acts.onShare}
                                     onWrite={acts.onWrite}

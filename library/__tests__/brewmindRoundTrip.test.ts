@@ -1,4 +1,5 @@
 import Recipe from "@/library/Recipe";
+import {buildBackup, parseBackup} from "@/library/backup";
 import {parseBrewMindLink} from "@/library/brewmindLink";
 import {decorateImport} from "@/library/importDecoration";
 import {buildEnvelope} from "@/library/brew/handoff/envelope";
@@ -136,5 +137,47 @@ describe("a BrewMind coffee, end to end", () => {
 
         expect(reloaded.coffee?.decaffeinated).toBe(false);
         expect(envelope.bean).toHaveProperty("decaffeinated", false);
+    });
+});
+
+describe("a link's name and picture, end to end", () => {
+    /**
+     * A share-link import of a recipe made without a pod: xBloom's own title
+     * and no artwork.
+     */
+    const imported = () => {
+        const link = parseBrewMindLink("xbrw://import?v=1&source=centralcoastcoffee"
+            + "&share=" + encodeURIComponent("https://share-h5.xbloom.com/r?id=abc123")
+            + "&recipe.name=" + encodeURIComponent("Colombia | Las Flores | Chiroso Natural - 18g")
+            + "&bean.name=" + encodeURIComponent("Chiroso Natural")
+            + "&bean.image=" + encodeURIComponent("https://example.com/bag.png"));
+        if (link === null) throw new Error("the fixture link should parse");
+        const recipe = new Recipe();
+        recipe.xbloomName = "col chiroso -18g";
+        return decorateImport(recipe, {
+            coffee:     link.coffee,
+            recipeName: link.recipeName,
+            source:     "import"
+        });
+    };
+
+    it("survives being stored and read back", () => {
+        const reloaded = stored(imported());
+
+        expect(reloaded.name).toBe("Colombia | Las Flores | Chiroso Natural - 18g");
+        expect(reloaded.xbloomName).toBe("col chiroso -18g");
+        expect(reloaded.imageURL).toBe("https://example.com/bag.png");
+    });
+
+    it("survives a backup and a restore", () => {
+        // `backup.ts` holds `imageURL` to its own https rule, so the picture a
+        // link set has to be one a restore will take back.
+        const result = parseBackup(buildBackup([imported()], {}));
+
+        expect(result.ok).toBe(true);
+        if (!result.ok) throw new Error(result.reason);
+        const [restored] = result.payload.recipes;
+        expect(restored.name).toBe("Colombia | Las Flores | Chiroso Natural - 18g");
+        expect(restored.imageURL).toBe("https://example.com/bag.png");
     });
 });

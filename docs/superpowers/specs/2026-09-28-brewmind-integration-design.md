@@ -93,6 +93,9 @@ their names and meanings, so nothing already emitted changes shape.
 | `decaffeinated` | `bean.decaffeinated` | boolean, from `1`/`0` | BrewMind |
 | `url` | `bean.url` | string, https only | BrewMind |
 | `imageUrl` | `bean.image` | string, https only | pod + BrewMind |
+| `restDays` | `bean.rest_days` | whole days 0 to 540 (added with rest and peak, 2026-10-18) | BrewMind, roaster catalogue |
+| `peakDay` | `bean.peak_day` | whole days 0 to 540 | BrewMind, roaster catalogue |
+| `bestUntilDay` | `bean.best_until_day` | whole days 0 to 540 | BrewMind, roaster catalogue |
 
 Two entries need explaining because the names do not line up.
 
@@ -107,6 +110,24 @@ simply leaves the new ones empty", read in the other direction.
 in the shipped envelope and in
 `docs/superpowers/specs/2026-09-20-beanconqueror-brew-export-design.md`, so
 renaming it would break the half of the contract that already works.
+
+### Amendment: `bean.colour` (2026-10-19)
+
+A link may carry `bean.colour=#RRGGBB` (`bean.color` is accepted too, and
+`bean.colour` wins when both are sent): the roaster's own colour for the
+coffee, such as the colour it uses for an origin on its bags and its site.
+It is optional and read strictly. Anything other than `#` and six hex digits
+(shorthand, alpha, a name, no `#`) is dropped and the recipe imports as before.
+
+It is **not** in the bean block. The bean block is the Beanconqueror contract
+and is stored whole, and the colour is used once, on import, to choose the
+recipe's card accent. `library/roasterColour.ts` snaps it to the nearest
+palette accent **by hue**, never keeping the hex: accents are stored as palette
+indices, every accent is a pale fill proven to carry the card's dark ink, and a
+roaster's label colour is mid to dark, so `matchAccent`'s distance test would
+refuse every one. A grey, or a hue more than 30 degrees from every accent in the
+recipe's half of the palette, gives no answer and the recipe takes an accent as
+any new recipe does. A recipe already in the library keeps its accent.
 
 ### `recipe.url`, the producer's own page
 
@@ -136,6 +157,57 @@ For the note to carry it, the brew has to know it, so `BrewRecord` gains
 uses. Copied at write time for the same reason `recipeName` and `accent` are:
 an export must still say where the recipe came from after the recipe itself
 has been deleted.
+
+### `recipe.name`, the producer's name for the recipe
+
+Requested by Central Coast Coffee, who link to XBRW++ from their product pages.
+A roaster's xBloom recipe tends to be named by whoever keyed it into xBloom
+("col chiroso -18g"), and a share link can only carry that name, so the recipe
+arrived named for the keying rather than for the coffee.
+
+`recipe.name` sets the recipe's own `name`, the field a rename writes. It does
+not touch `xbloomName`: that stays what xBloom published, so `displayName()`
+shows the producer's name while USE THIS NAME still has xBloom's to go back to.
+
+Runs of whitespace, line breaks and U+2028 included, fold to one space, so a
+link cannot split a one-line title. It is then trimmed, and dropped when
+empty. It is capped at `MAX_NAME` (100), the rename sheet's ceiling, which now
+lives on `Recipe` so both read one constant.
+Not the 120 of the bean's short text: a link should not be able to set a name
+the rename sheet would then refuse to hold whole. A longer name is fitted
+rather than dropped (`library/fitName.ts`): a trailing size suffix such as
+" - 18g" is kept whole, trailing bracketed groups are removed from the end one
+at a time, and only then is the name cut at the last whole word, with "…"
+before the suffix. Dropping it had left real roaster names (six of Central
+Coast Coffee's thirty, such as "Colombia | Las Flores | Jhoan Vergara | Java
+Hydrohoney (Duo Cherry Velvet) (Competition Coffee) - 18g") on xBloom's own
+name. Nothing is cut mid-word, so what remains is the sender's name, visibly
+shortened.
+
+Like the rest of the decoration it applies only to a new import. A recipe
+already in the library keeps its stored name, even an empty one; see "How the
+coffee reaches the recipe" below.
+
+### `bean.image` as the recipe's picture
+
+`bean.image` was stored on the coffee as `imageUrl` and sent on to
+Beanconqueror, but never became the recipe's own `imageURL`. `XBloomRecipe`
+sets `imageURL` from the pod's coffee or artwork, and it does so before the
+link's coffee is applied, so a share-link import of a recipe made without a
+pod arrived with no picture. (A share link to a pod-made recipe carries
+`podsVo`, so it already had the pod's artwork.)
+
+`decorateImport` now sets `imageURL` from the decorated coffee's `imageUrl`,
+through `podImageUrl` (https only, the rule backup restore applies to
+`imageURL`), but only when the recipe has no picture of its own. Pod artwork
+wins where there is any. A recipe already in the library keeps a picture it
+has; one with no picture gets this one through the fill-blanks rule below.
+
+The picture is drawn in one place: the XPOD section on ABOUT, beside the
+xBloom name, and only while `showRecipeAvatars` is on. That setting defaults to
+off, so most users will not see it until they turn it on. The import preview
+panel is not involved: a link resolves as `"shared"`, which opens the editor
+without drawing that panel.
 
 ### Why the pod output does not change
 
@@ -200,6 +272,15 @@ would buy nothing.
 `share` goes through `parseImportInput`, unchanged, so the recipe half needs no
 new code and the deep link cannot drift from the paste field.
 
+### Amendment: `feed` (2026-10-18)
+
+A link may also carry `feed=<https URL>`, the address of a roaster feed: one
+JSON file listing every coffee that roaster has a recipe for. It is optional,
+https only and capped at 2,000 characters like every other URL here; a bad
+value is dropped and the recipe imports as before. Nothing is fetched until the
+link's own recipe has imported. The format, the catalogue subscription it offers and how
+often an app may poll it are in `docs/roaster-feed.md`.
+
 ### Where it attaches
 
 `app/+native-intent.tsx` returns `null` for an import link, exactly as it does
@@ -233,7 +314,21 @@ Applied to the *candidate*, before `resolveOnOpen`. The consequence is
 deliberate: when the link points at a recipe already in the library, the stored
 recipe wins and its own coffee is kept. A link should not silently rewrite the
 coffee on a recipe the user has already edited, and "already in your library"
-is what the sheet says in that case.
+is what the sheet says in that case. The same holds for `recipe.url`,
+`recipe.name` and the picture: a stored recipe keeps its own page, name and
+artwork.
+
+The stored recipe is not frozen, though. After the match, `fillImportBlanks`
+gives it what the link carries in the places it has nothing: `imageURL` when it
+has no picture (through `podImageUrl`), `coffee` when it has none, each missing
+or blank field of an existing coffee, and `recipeUrl` when it has none. A value
+is never replaced. The name and the source are never touched, since an empty
+name means "follow the pod" and the source is history. Derived tags are added
+only to a recipe with no tags, and only from the coffee fields just filled, so
+a cleared tag list stays cleared. The hook saves the recipe through
+`onSaveExisting` only when something changed. Without this, a recipe first
+imported before links carried `bean.image` never got its photo, however often
+it was re-imported.
 
 ### Provenance
 

@@ -3,7 +3,7 @@ import {Pressable} from "react-native";
 import {XStack, YStack} from "tamagui";
 
 import DotMatrixText from "@/components/DotMatrixText";
-import {onAccent, palette} from "@/constants/colors";
+import {palette, primary} from "@/constants/colors";
 
 const BAR_PADDING = 12;
 const BUTTON_HEIGHT = 44;
@@ -54,13 +54,12 @@ export default function HubSaveBar({
                         accessibilityState={{disabled}}
                         testID="hub-save-confirm"
                         onPress={disabled ? undefined : onSave}
-                        opacity={disabled ? 0.35 : 1}
                         height={BUTTON_HEIGHT} paddingHorizontal="$4"
                         alignItems="center" justifyContent="center"
                         borderRadius="$4"
-                        backgroundColor={palette.text}>
+                        backgroundColor={disabled ? primary.disabledFill : primary.fill}>
                     <DotMatrixText fontSize={12} weight="bold" letterSpacing={1.5}
-                                   color={onAccent.text}>
+                                   color={disabled ? primary.disabledInk : primary.ink}>
                         {label}
                     </DotMatrixText>
                 </XStack>

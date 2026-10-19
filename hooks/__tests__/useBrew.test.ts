@@ -46,6 +46,7 @@ jest.mock("@/hooks/useMachine", () => ({
         status: "connected",
         error: null,
         remembered: "",
+        machines: [],
         forget: jest.fn()
     })
 }));
@@ -254,6 +255,8 @@ describe("overflow protection through useBrew's real preflight retry", () => {
             transport.infoReply = null;
         } else if (block === "notConnected") {
             // Lose the link during the real preflight question, before brewBlock.
+            // Old vitals, so the preflight asks (a fresh reading is used as is).
+            machine.infoAt = 0;
             jest.spyOn(machine, "askHowItIsDoing").mockImplementationOnce(async () => {
                 transport.drop();
                 return false;

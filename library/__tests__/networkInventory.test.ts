@@ -141,20 +141,37 @@ function callSites(): Map<string, number> {
 const EXPECTED_CALLS: Record<string, number> = {
     "api/_lib/store.ts":           2,
     "api/_lib/xbloom.ts":          1,
-    "app/hubRecipe.tsx":           1,
     // The WebView's `source={{uri}}`. One site, but unlike every other line
     // here it opens a page rather than making a request, so the count bounds
     // where the browser starts and says nothing about where it then goes. The
     // inventory entry carries that caveat in words.
     "components/BrewMindBrowser.tsx": 1,
+    // The detail photo, lifted out of app/hubRecipe.tsx so the hub and a
+    // roaster's catalogue share it, and the roaster list's row photo. Two
+    // sites in CatalogueParts: the hub's banner and the roaster's whole photo,
+    // the same picture drawn in two shapes.
+    "components/CatalogueParts.tsx": 2,
     "components/FromSection.tsx":  1,
     "components/HubRow.tsx":       1,
     "components/ImportResult.tsx": 1,
     "components/PodSection.tsx":   1,
+    "components/RecipePhoto.tsx":  1,
+    "components/RoasterCoffeeRow.tsx": 1,
+    "components/ShelfPhotoMark.tsx": 1,
+    // The home screen's roaster strip and search results: the same cached
+    // feed's coffee photos, drawn only while somebody subscribes.
+    "components/RoasterSearchRow.tsx": 1,
+    "components/RoasterStrip.tsx": 1,
+    "components/ReadyToBrewCard.tsx": 1,
+    // The header picture opened full screen: the same address, already loaded.
+    "components/PhotoViewer.tsx":   1,
     "hooks/useShareRecipe.ts":     1,
     "library/XBloomRecipe.ts":     1,
     "library/cloud/transport.ts":  1,
-    "library/hub/hubApi.ts":       1
+    "library/hub/hubApi.ts":       1,
+    // The roaster feed: one GET of a JSON list, at an address the import link
+    // named. Its recipes then go through XBloomRecipe, counted above.
+    "library/roasterFeed.ts":      1
 };
 
 const listed = new Set(OUTBOUND_CALLS.flatMap((call) => call.source));

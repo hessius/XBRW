@@ -18,7 +18,7 @@ import BrewRecord from "@/app/brewRecord";
 import type {RecipeLookup} from "@/app/brewRecord";
 import {sharedSettings} from "@/hooks/useSetting";
 import {palette} from "@/constants/colors";
-import {renderWithProviders, SHEET_PRESS_TIMEOUT} from "@/test-utils/render";
+import {renderWithProviders, SHEET_PRESS_TIMEOUT, TEST_INSETS} from "@/test-utils/render";
 import {
     brewRecordFixture as record,
     makeBrewRecordFixture,
@@ -1190,6 +1190,17 @@ describe("brew record's stage detail", () => {
         await fireEvent.press(screen.getByTestId("rung-1"));
         expect(within(screen.getByTestId("record-scroll"))
             .getByTestId("stage-detail")).toBeTruthy();
+    });
+
+    it("lets the end of the record scroll clear of the bottom inset", async () => {
+        // On Android the screen runs under the navigation bar, and the mini bar
+        // that takes the inset elsewhere is silent here.
+        await renderWithProviders(<BrewRecord recipeLookup={lookup} />);
+        const content = StyleSheet.flatten(
+            screen.getByTestId("record-scroll").props.contentContainerStyle
+        );
+
+        expect(content.paddingBottom).toBe(24 + TEST_INSETS.bottom);
     });
 
     it("shows nothing until a stage is asked about", async () => {

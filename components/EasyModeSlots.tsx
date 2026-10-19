@@ -1,7 +1,6 @@
 import React, {useEffect, useRef, useState} from "react";
 import {AccessibilityInfo, findNodeHandle, FlatList, Pressable, ScrollView, View} from "react-native";
 import {Button, Input, Text, XStack, YStack, type ColorTokens} from "tamagui";
-import {useSafeAreaInsets} from "react-native-safe-area-context";
 import Recipe from "@/library/Recipe";
 import {resolveAccent} from "@/library/accent";
 import {overflowFor} from "@/library/brew/overflowConfig";
@@ -10,6 +9,7 @@ import {
     type SlotIndex, type SlotJournal, type SlotRecord
 } from "@/library/slots/slotModel";
 import {SLOT_INTEGRATION_BLOCK} from "@/library/slots/slotWriter";
+import {useBottomInset} from "@/hooks/useBottomInset";
 import type {SlotAttempt} from "@/hooks/useEasyModeSlots";
 import {useLiveBrewBarGuard} from "@/hooks/useLiveBrewBarGuard";
 import EasyModeSlotCard, {teaSlotFigures} from "@/components/EasyModeSlotCard";
@@ -20,7 +20,8 @@ import XbrwSheet from "@/components/XbrwSheet";
 import TeaSlotProbePanel, {type TeaSlotProbePanelProps} from "@/components/TeaSlotProbePanel";
 import {teaProbeStatus} from "@/library/slots/teaSlotProbe";
 import {isTeaProbeSnapshot} from "@/library/slots/teaSlotCandidate";
-import {onAccent, palette} from "@/constants/colors";
+import {onAccent, palette, primary} from "@/constants/colors";
+import {STABLE_HOST} from "@/constants/views";
 
 const BREW_BUSY = "The machine is busy with a running or held brew. Finish the brew before writing or recovering.";
 const SERIAL_BLOCK = "This incomplete write belongs to a different machine. Reconnect to the machine you started with.";
@@ -280,7 +281,7 @@ export default function EasyModeSlots({
     const writeRef = writeControlRef ?? ownWriteRef;
     const focusOrigin = useRef<React.RefObject<React.ComponentRef<typeof Button> | null> | null>(null);
     const wasCovered = useRef(false);
-    const insets = useSafeAreaInsets();
+    const bottomInset = useBottomInset();
     const currentAttempt: SlotAttempt | null = attempt === null && running
         ? {deviceId, serial: serial ?? record.journal?.serial ?? null, operation: "write", status: "writing"}
         : attempt?.deviceId === deviceId
@@ -320,6 +321,7 @@ export default function EasyModeSlots({
     const displayedFailure = failure === null ? null : writeError(failure, journal);
     const availability = slotWriteAvailability({record, deviceId, connected, available, busy, serialMatches});
     const blocked = active || overlay || availability !== null;
+    const restoreBlocked = active || overlay || !connected || !serialMatches || busy || !available;
     const dirty = unwrittenSlotCount(record);
     const incomingProblem = incoming === undefined ? null : recipeProblem(incoming);
     const incomingKey = incoming === undefined ? null : JSON.stringify([deviceId, incoming]);
@@ -330,12 +332,16 @@ export default function EasyModeSlots({
 
     return (
         <YStack flex={1} backgroundColor={palette.base}>
-            <View testID="easy-mode-host" style={{flex: 1}} accessibilityElementsHidden={covered}
+            <View {...STABLE_HOST} testID="easy-mode-host" style={{flex: 1}} accessibilityElementsHidden={covered}
                 importantForAccessibility={covered ? "no-hide-descendants" : "auto"}
                 pointerEvents={covered ? "none" : "auto"}>
                 {header}
                 <ScrollView testID="easy-mode-cards" style={{flex: 1, minHeight: 0}}
-                    contentContainerStyle={{paddingHorizontal: 14, paddingBottom: 14, gap: 10}}>
+                    contentContainerStyle={{paddingHorizontal: 14, gap: 10,
+                        // The actions panel takes the inset while it is drawn.
+                        // During a write it is not, and the cards reach the
+                        // bottom of the screen themselves.
+                        paddingBottom: journal === null ? 14 : 14 + bottomInset}}>
                     <XStack justifyContent="space-between" alignItems="center" gap="$2" flexWrap="wrap">
                         {journal === null && <Text color={palette.dim} fontSize={12} flex={1}>
                             {record.experiment?.phase === "active"
@@ -383,11 +389,11 @@ export default function EasyModeSlots({
                         <StoppedWrite journal={journal} failure={failure}/>
                         {availability !== null && <Text color={palette.dim}>{availability}</Text>}
                         <Button ref={retryRef} accessibilityLabel="Retry slot write" height="auto" minHeight={48}
-                            paddingVertical="$3" disabled={blocked} backgroundColor={palette.text} color={onAccent.text}
-                            disabledStyle={{backgroundColor: palette.text, opacity: 0.45}}
+                            paddingVertical="$3" disabled={blocked} backgroundColor={primary.fill} color={primary.ink}
+                            disabledStyle={{backgroundColor: primary.disabledFill}}
                             onPress={() => {
                                 focusOrigin.current = retryRef; setConfirmation({deviceId, kind: "retry"});
-                            }}><DotMatrixText fontSize={12} weight="bold" color={onAccent.text}>RETRY WRITE</DotMatrixText></Button>
+                            }}><DotMatrixText fontSize={12} weight="bold" color={blocked ? primary.disabledInk : primary.ink}>RETRY WRITE</DotMatrixText></Button>
                         <Button ref={cancelRef} accessibilityLabel={onDismissWrite ? "Stop slot write" : "Cancel slot write"} height="auto" minHeight={48}
                             paddingVertical="$3" disabled={blocked} backgroundColor={palette.raised} color={palette.text}
                             borderWidth={1} borderColor={palette.line}
@@ -420,7 +426,7 @@ export default function EasyModeSlots({
                 {journal === null && <ScrollView testID="easy-mode-actions" nestedScrollEnabled
                     style={{flexGrow: 0, flexShrink: 1, maxHeight: "60%", backgroundColor: palette.base,
                         borderTopWidth: 1, borderTopColor: palette.line}}
-                    contentContainerStyle={{padding: 14, gap: 10, paddingBottom: Math.max(insets.bottom, 14)}}>
+                    contentContainerStyle={{padding: 14, gap: 10, paddingBottom: Math.max(bottomInset, 14)}}>
                     {displayedFailure !== null && <Text selectable accessibilityRole="alert"
                         color={displayedFailure.tone === "error" ? palette.danger : palette.text}>
                         {displayedFailure.message}
@@ -428,18 +434,20 @@ export default function EasyModeSlots({
                     {availability !== null && <Text color={palette.dim}>{availability}</Text>}
                     {record.experiment?.phase === "active" && onRestoreOriginal !== undefined &&
                         <Button accessibilityLabel="Restore original slot set" height="auto" minHeight={48}
-                            paddingVertical="$3" backgroundColor={palette.text} color={onAccent.text}
-                            disabled={active || overlay || !connected || !serialMatches || busy || !available}
+                            paddingVertical="$3" backgroundColor={primary.fill}
+                            color={restoreBlocked ? primary.disabledInk : primary.ink}
+                            disabledStyle={{backgroundColor: primary.disabledFill}}
+                            disabled={restoreBlocked}
                             onPress={onRestoreOriginal}>RESTORE ORIGINAL SET</Button>}
                     {overflow && <Text color={palette.dim}>
                         Stored slots do not run the app&apos;s automatic pause protection.
                     </Text>}
                     <Text color={palette.dim} fontSize={12} textAlign="center">Writes A, B and C. Switches to EASY.</Text>
                     <Button ref={writeRef} accessibilityLabel="Write all three slots" height="auto" minHeight="$4"
-                        paddingVertical="$3" disabled={blocked} backgroundColor={palette.text} color={onAccent.text}
-                        disabledStyle={{backgroundColor: palette.text, opacity: 0.45}}
+                        paddingVertical="$3" disabled={blocked} backgroundColor={primary.fill} color={primary.ink}
+                        disabledStyle={{backgroundColor: primary.disabledFill}}
                         onPress={() => { focusOrigin.current = writeRef; onWrite(); }}>
-                        <DotMatrixText fontSize={12} weight="bold" color={onAccent.text}>WRITE TO MACHINE</DotMatrixText>
+                        <DotMatrixText fontSize={12} weight="bold" color={blocked ? primary.disabledInk : primary.ink}>WRITE TO MACHINE</DotMatrixText>
                     </Button>
                     {record.written !== null && <Text color={palette.dim} fontSize={12} textAlign="center">
                         {`Last written by XBRW++ ${new Date(record.written.at).toLocaleString()}.`}
@@ -469,7 +477,7 @@ export default function EasyModeSlots({
             </XbrwSheet>
             <XbrwSheet open={confirmationOpen} onOpenChange={open => { if (!open) setConfirmation(null); }}
                 title={confirmationKind === "retry" ? "RETRY WRITE" : onDismissWrite ? "STOP THIS WRITE" : "CANCEL THIS WRITE"} heightPercent={70}>
-                <ScrollView contentContainerStyle={{gap: 16, paddingBottom: insets.bottom}}>
+                <ScrollView contentContainerStyle={{gap: 16}}>
                     <Text color={palette.text} fontSize={23} fontWeight="600">
                         {confirmationKind === "retry" ? "Which screen is your machine showing?"
                             : onDismissWrite ? "Stop this write?" : "Back to normal?"}
@@ -488,13 +496,16 @@ export default function EasyModeSlots({
                                 : "Cancelling clears this unfinished write from the app. Your assignments are kept, but the machine's slot contents remain unconfirmed."}
                     </Text>
                     {confirmationKind === "retry" && <Button height="auto" minHeight="$4" paddingVertical="$3"
-                        backgroundColor={palette.text} color={onAccent.text}
-                        disabledStyle={{backgroundColor: palette.text, opacity: 0.45}}
+                        backgroundColor={primary.fill} color={blocked ? primary.disabledInk : primary.ink}
+                        disabledStyle={{backgroundColor: primary.disabledFill}}
                         disabled={blocked} accessibilityLabel="Finish write while machine is still saving"
                         onPress={() => { setConfirmation(null); onRecover(false); }}>STILL SAVING, FINISH WRITE</Button>}
                     <Button height="auto" minHeight="$4" paddingVertical="$3" disabled={blocked}
-                        backgroundColor={confirmationKind === "retry" ? palette.raised : palette.text}
-                        color={confirmationKind === "retry" ? palette.text : onAccent.text}
+                        backgroundColor={confirmationKind === "retry" ? palette.raised : primary.fill}
+                        color={confirmationKind === "retry" ? palette.text
+                            : blocked ? primary.disabledInk : primary.ink}
+                        disabledStyle={confirmationKind === "retry" ? undefined
+                            : {backgroundColor: primary.disabledFill}}
                         accessibilityLabel={confirmationKind === "retry"
                             ? "Confirm machine is back to normal and retry"
                             : onDismissWrite ? "Confirm stop slot write" : "Confirm machine is back to normal and cancel"}
@@ -509,7 +520,7 @@ export default function EasyModeSlots({
                 </ScrollView>
             </XbrwSheet>
             <XbrwSheet open={helpOpen} onOpenChange={setHelp} title="ABOUT EASY MODE" heightPercent={70}>
-                <ScrollView contentContainerStyle={{gap: 16, paddingBottom: insets.bottom}}>
+                <ScrollView contentContainerStyle={{gap: 16}}>
                     <Text color={palette.text}>Assign all three recipes. Your choices are kept on this phone immediately.</Text>
                     <Text color={palette.text}>Writing replaces A, B and C and switches the machine to EASY.</Text>
                     <Text color={palette.text}>Scale ON automatically tares the scale when that slot is started.</Text>

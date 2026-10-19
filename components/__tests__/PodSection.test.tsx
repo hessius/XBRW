@@ -32,6 +32,27 @@ function linked(over: Partial<Recipe> = {}): Recipe {
 }
 
 describe("PodSection", () => {
+    it("lists what the pod carries directly under the pod line", async () => {
+        await renderWithProviders(
+            <PodSection {...props({recipe: linked({
+                coffee: {name: "Ethiopia Guji", roaster: "Some Roastery", processing: "Natural"}
+            })})}/>
+        );
+
+        expect(screen.getAllByTestId(/^pod-(linked|coffee)$/).map((node) => node.props.testID))
+            .toEqual(["pod-linked", "pod-coffee"]);
+        expect(screen.getByLabelText("Roaster, Some Roastery")).toBeTruthy();
+        expect(screen.getByLabelText("Process, Natural")).toBeTruthy();
+        // The pod line already names it.
+        expect(screen.getAllByText("Ethiopia Guji")).toHaveLength(1);
+    });
+
+    it("adds nothing under the pod line for a recipe without a coffee", async () => {
+        await renderWithProviders(<PodSection {...props({recipe: linked()})}/>);
+
+        expect(screen.queryByTestId("pod-coffee")).toBeNull();
+    });
+
     it("draws the ID field even for a recipe with no pod", async () => {
         // Always there, because someone hunting for the field needs it in a
         // fixed place rather than in a section that appears once they have
@@ -79,6 +100,32 @@ describe("PodSection", () => {
 
         expect(screen.getByTestId("pod-use-name")).toBeTruthy();
         expect(screen.queryByTestId("pod-following")).toBeNull();
+    });
+
+    it("labels a roaster's xBloom profile name and offers no button for it", async () => {
+        // The link named the coffee; xBloom's name is the roaster's own label
+        // for the profile, so swapping to it is not something to offer.
+        const recipe = linked({
+            name: "Ecuador | Vinka Farm", xbloomName: "ecu vinka sidra ana washed 18g",
+            sharedBy: "rhys", source: "import"
+        });
+        recipe.coffee = {name: "Ecuador | Vinka Farm", roaster: "Central Coast Coffee"};
+        await renderWithProviders(<PodSection {...props({recipe})}/>);
+
+        expect(screen.getByTestId("pod-profile-label")).toHaveTextContent("xBloom profile name");
+        expect(screen.getByTestId("pod-name")).toHaveTextContent("ecu vinka sidra ana washed 18g");
+        expect(screen.getByTestId("pod-name")).toHaveStyle({color: palette.dim});
+        expect(screen.queryByTestId("pod-use-name")).toBeNull();
+    });
+
+    it("keeps the button for a link recipe whose coffee names no roaster", async () => {
+        // Same source, no roaster: upstream's way back to xBloom's name stays.
+        const recipe = linked({name: "Sunday", source: "import"});
+        recipe.coffee = {name: "Peru"};
+        await renderWithProviders(<PodSection {...props({recipe})}/>);
+
+        expect(screen.getByTestId("pod-use-name")).toBeTruthy();
+        expect(screen.queryByTestId("pod-profile-label")).toBeNull();
     });
 
     it("follows the pod by clearing the name, never by copying it", async () => {

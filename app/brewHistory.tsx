@@ -3,6 +3,7 @@ import router from "@/hooks/steadyRouter";
 import React, {useRef, useState} from "react";
 import {FlatList} from "react-native-gesture-handler";
 import Swipeable, {type SwipeableMethods} from "react-native-gesture-handler/ReanimatedSwipeable";
+import {useSafeAreaInsets} from "react-native-safe-area-context";
 import {Button, Text, XStack, YStack} from "tamagui";
 
 import BrewHistoryRow from "@/components/BrewHistoryRow";
@@ -23,6 +24,7 @@ import type {StoredBrew} from "@/library/BrewDatabase";
 import {canHandOff} from "@/library/brew/handoff/targets";
 import {queryBrewHistory, type HistorySort, type HistorySortDirection} from "@/library/brew/historyQuery";
 import {UNCLIPPED_LIST} from "@/constants/lists";
+import {STABLE_HOST} from "@/constants/views";
 
 /** How long one push to the record screen refuses a second (same latch as index.tsx). */
 const PUSH_GUARD_MS = 2000;
@@ -289,6 +291,7 @@ function SwipeableBrewRow({
  */
 export default function BrewHistory() {
     const {recipeUuid} = useLocalSearchParams<{recipeUuid?: string}>();
+    const insets = useSafeAreaInsets();
     const {brews, open, remove, refresh} = useBrewHistory();
     const historyQuery = useBrewHistoryQuery(recipeUuid);
     const [sortOpen, setSortOpen] = useState(false);
@@ -448,7 +451,7 @@ export default function BrewHistory() {
             {/* The Android half of what `accessibilityViewIsModal` does on iOS.
                 The sheets sit outside this subtree, so they never hide
                 themselves. */}
-            <YStack flex={1} testID="brew-history-content"
+            <YStack {...STABLE_HOST} flex={1} testID="brew-history-content"
                     accessibilityElementsHidden={screenCovered}
                     importantForAccessibility={screenCovered ? "no-hide-descendants" : "auto"}>
                 <HistoryHeader recipeName={recipeName} count={filtered.length} />
@@ -485,7 +488,10 @@ export default function BrewHistory() {
                             selected={selectedIds.includes(item.id)}
                         />
                     )}
-                    contentContainerStyle={{paddingVertical: 8}}
+                    // The last row scrolls clear of the navigation bar or
+                    // home indicator, the way the library's does. The mini bar
+                    // is silent here, so nothing else takes the inset.
+                    contentContainerStyle={{paddingTop: 8, paddingBottom: 8 + insets.bottom}}
                     ListEmptyComponent={
                         <YStack padding="$4" alignItems="center" gap="$2">
                             <DotMatrixText fontSize={14} weight="bold" letterSpacing={1.6}

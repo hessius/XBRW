@@ -6,9 +6,13 @@ import DigitRoll from "@/components/DigitRoll";
 import DotIcon from "@/components/DotIcon";
 import DotMatrixText, {DOTO_MAX_FONT_SCALE} from "@/components/DotMatrixText";
 import PourProfile, {PROFILE_BLEED} from "@/components/PourProfile";
+import RecipePhoto from "@/components/RecipePhoto";
 import SlotMarker from "@/components/SlotMarker";
 import Recipe from "@/library/Recipe";
 import {evidenceLine, isSet, spokenEvidence} from "@/library/recipeEvidence";
+import {bagBadge, readBag, spokenBag} from "@/library/coffeeBag";
+import {freshnessBadge, spokenFreshness, type Freshness} from "@/library/restPeak";
+import type {StoredBagReading} from "@/library/CoffeeBagDatabase";
 import type {RecipeEvidence} from "@/library/libraryQuery";
 import type {SlotMarkerValue} from "@/library/slots/slotModel";
 import {accentGroupFor, resolveAccent} from "@/library/accent";
@@ -28,6 +32,14 @@ const CARD_HEIGHT = 116;
  */
 const PROFILE_OVERHANG = 2;
 const PROFILE_HEIGHT = 56;
+
+/**
+ * The picture beside the name.
+ *
+ * No taller than the two lines of 17 pt prose it sits beside, so a card with a
+ * picture is exactly as tall as one without and the list keeps its rhythm.
+ */
+export const CARD_PHOTO_SIZE = 40;
 
 /**
  * The smallest comfortable touch target, per the HIG. The action icons are 18px
@@ -125,6 +137,11 @@ type Props = {
     showCoffeeMarker?: boolean;
     /** Fill the pour profile with a dot screen. Owned by the settings screen. */
     dottedProfile?: boolean;
+    /**
+     * `showRecipeAvatars`. On, a recipe with an `imageURL` shows it as a small
+     * square beside its name.
+     */
+    showPicture?: boolean;
     /** Called by the accessibility action that mirrors the swipe tray's BREW tile. */
     onBrew?: () => void;
     /** Called by the accessibility action that mirrors the swipe tray's TUNE tile. */
@@ -174,6 +191,19 @@ type Props = {
      * either.
      */
     evidence?: RecipeEvidence;
+    /**
+     * The recipe's open bag, when this app is the one counting it.
+     *
+     * Drawn in the badge corner as grams left or LOW, so it takes no row of
+     * its own and the card keeps its height. Absent draws nothing.
+     */
+    bag?: StoredBagReading;
+    /**
+     * How fresh the open bag is today: resting, ready, at its peak or past
+     * its best. Drawn beside the bag badge in both tracker modes, in the same
+     * row, so the card keeps its height. Absent draws nothing.
+     */
+    freshness?: Freshness;
     slotMarker?: SlotMarkerValue;
     onEasyMode?: () => void;
 };
@@ -190,10 +220,13 @@ export default function RecipeCard({
     onPress,
     editing = false,
     evidence,
+    bag,
+    freshness,
     onDuplicate,
     onDelete,
     showCoffeeMarker = true,
     dottedProfile = false,
+    showPicture = false,
     onBrew,
     onQuickEdit,
     onShare,
@@ -208,6 +241,7 @@ export default function RecipeCard({
     const isTea = accentGroupFor(recipe) === "tea";
     const marker = isTea ? "TEA" : "COFFEE";
     const showMarker = isTea || showCoffeeMarker;
+    const picture = showPicture ? recipe.imageURL ?? "" : "";
 
     // `accessible` groups the whole subtree into one element on iOS, so nothing
     // inside is announced on its own. Everything the card shows has to be in
@@ -216,6 +250,7 @@ export default function RecipeCard({
     const hasNote = recipe.description.length > 0;
 
     const shownEvidence = evidenceLine(evidence);
+    const bagReading = bag === undefined ? undefined : readBag(bag.bag, bag.usedGrams, recipe.dosage);
 
     const summary = [
         recipe.displayName(),
@@ -233,7 +268,9 @@ export default function RecipeCard({
         // reader would otherwise have the figures conveyed by the glyphs
         // alone. Kept out of the editing case for the same reason the drawn
         // line is: it is not on screen then.
-        ...(editing ? [] : spokenEvidence(evidence))
+        ...(editing ? [] : spokenEvidence(evidence)),
+        bagReading !== undefined ? spokenBag(bagReading) : undefined,
+        freshness !== undefined ? spokenFreshness(freshness) : undefined
     ].filter((part) => part !== undefined).join(", ");
 
     // The row actions are nested inside that same group, so VoiceOver cannot
@@ -378,6 +415,16 @@ export default function RecipeCard({
                         A long title alongside a note truncates, deliberately: a
                         name that needs two lines and an explanation is a name
                         doing the note's job. */}
+                    {/* Leading, so the eye meets the bag before the name, and
+                        clear of the badge corner and the watermark. Dropped
+                        outright if it will not load: the name then takes the
+                        width back, but the card's height never depended on
+                        the picture, so nothing below it moves. */}
+                    {picture.length > 0 && (
+                        <RecipePhoto testID="recipe-card-photo" uri={picture}
+                                     size={CARD_PHOTO_SIZE} radius={8}
+                                     backing={onAccent.key}/>
+                    )}
                     <YStack testID="recipe-card-prose" flex={1} gap="$1">
                         <Text fontSize={17} fontWeight="700"
                               numberOfLines={hasNote ? 1 : 2}
@@ -408,6 +455,20 @@ export default function RecipeCard({
                             already in the card's own label above, and announcing
                             it twice is worse than not at all. */}
                         <SlotMarker marker={slotMarker}/>
+                        {bagReading !== undefined && (
+                            <DotMatrixText testID="recipe-card-bag" fontSize={11}
+                                           weight="bold" letterSpacing={1.4}
+                                           color={onAccent.marker}>
+                                {bagBadge(bagReading)}
+                            </DotMatrixText>
+                        )}
+                        {freshness !== undefined && (
+                            <DotMatrixText testID="recipe-card-freshness" fontSize={11}
+                                           weight="bold" letterSpacing={1.4}
+                                           color={onAccent.marker}>
+                                {freshnessBadge(freshness)}
+                            </DotMatrixText>
+                        )}
                         {recipe.favourite && (
                             <DotIcon testID="recipe-card-favourite" name="favourite"
                                      size={12} color={onAccent.marker}/>

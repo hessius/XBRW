@@ -30,8 +30,11 @@ function countLift(fontSize: number): number {
 type Props = {
     /** Prose, so this is Inter — never rendered in Doto. */
     title: string;
-    /** Rendered as a small superscript. Hidden when absent or zero. */
-    count?: number;
+    /**
+     * Rendered as a small superscript. Hidden when absent, zero or empty. A
+     * string carries a count with words in it, such as `12 OF 30`.
+     */
+    count?: number | string;
     fontSize?: number;
     /**
      * Announces the title as a heading.
@@ -43,6 +46,13 @@ type Props = {
      * the count is a separate fact a reader may want on its own.
      */
     heading?: boolean;
+    /**
+     * How many lines the title may wrap to before it is cut short. One by
+     * default, which suits every fixed screen name. A screen titled with a
+     * recipe's name asks for more, because that name is somebody's prose and
+     * can run to most of a hundred characters.
+     */
+    lines?: number;
 };
 
 /**
@@ -57,8 +67,9 @@ type Props = {
  * the title would go straight through it.
  */
 export default function ScreenTitle({title, count, fontSize = TITLE_FONT_SIZE,
-                                     heading = false}: Props) {
-    const showCount = typeof count === "number" && count > 0;
+                                     heading = false, lines = 1}: Props) {
+    const showCount = typeof count === "string" ? count.length > 0
+        : typeof count === "number" && count > 0;
     const reduced = useReducedMotion();
 
     const size = useSharedValue(fontSize);
@@ -81,14 +92,15 @@ export default function ScreenTitle({title, count, fontSize = TITLE_FONT_SIZE,
             {/* Without flexShrink a long title keeps its full measured width
                 and pushes the count off the edge of the screen. */}
             <Animated.Text
-                numberOfLines={1}
+                testID="screen-title-text"
+                numberOfLines={lines}
                 style={[
                     {fontWeight: "700", color: palette.text, flexShrink: 1},
                     titleStyle
                 ]}>
                 {title}
             </Animated.Text>
-            {showCount && (
+            {showCount && count !== undefined && (
                 <Animated.View testID="screen-title-count-lift" style={countStyle}>
                     <DotMatrixText testID="screen-title-count" fontSize={11}
                                    weight="bold" color={palette.dim}>

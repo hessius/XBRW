@@ -23,6 +23,36 @@ function props(over: Partial<React.ComponentProps<typeof FromSection>> = {}) {
 }
 
 describe("FromSection", () => {
+    it("names the roaster for a recipe a link or catalogue named one for", async () => {
+        const recipe = recipeWith({sharedBy: "rhys", source: "import"});
+        recipe.coffee = {name: "Peru", roaster: "Central Coast Coffee"};
+        await renderWithProviders(<FromSection {...props({recipe})}/>);
+
+        expect(screen.getByTestId("from-roaster").props.children).toBe("From Central Coast Coffee");
+        // The sharer's xBloom account is not where the recipe is from, so it
+        // is not named at all, not even in small print.
+        expect(screen.queryByTestId("from-sharer")).toBeNull();
+        expect(screen.queryByText(/rhys/)).toBeNull();
+    });
+
+    it("names the sharer of a recipe from a link that named no roaster", async () => {
+        const recipe = recipeWith({sharedBy: "rhys", source: "import"});
+        recipe.coffee = {name: "Peru"};
+        await renderWithProviders(<FromSection {...props({recipe})}/>);
+
+        expect(screen.getByText("Arrived from rhys")).toBeTruthy();
+        expect(screen.queryByTestId("from-roaster")).toBeNull();
+    });
+
+    it("keeps the sharer for a recipe whose coffee names no roaster, or a pod", async () => {
+        const pod = recipeWith({sharedBy: "Ana", source: "read"});
+        pod.coffee = {name: "Pod", roaster: "Someone"};
+        await renderWithProviders(<FromSection {...props({recipe: pod})}/>);
+        expect(screen.getByText("Arrived from Ana")).toBeTruthy();
+        expect(screen.queryByTestId("from-roaster")).toBeNull();
+    });
+
+
     it("names who a recipe arrived from, as a claim rather than an identity", async () => {
         // "arrived from", never "by": the name is whatever the person sharing
         // it had typed into xBloom, and nothing here can check it.

@@ -1,10 +1,12 @@
 import React from "react";
-import {Share, StyleSheet, TextInput} from "react-native";
+import {Linking, Platform, Share, StyleSheet, TextInput} from "react-native";
+import {SafeAreaProvider} from "react-native-safe-area-context";
 import {act, fireEvent, screen, waitFor, within} from "@testing-library/react-native";
 
 import EditRecipe, {PROFILE_HEIGHT, stageScrollTarget} from "@/app/editRecipe";
-import {renderWithProviders, SHEET_PRESS_TIMEOUT} from "@/test-utils/render";
+import {renderWithProviders, SHEET_PRESS_TIMEOUT, THREE_BUTTON_METRICS} from "@/test-utils/render";
 import {sharedSlotDatabase} from "@/hooks/useEasyModeSlots";
+import {sharedBagDatabase} from "@/library/CoffeeBagDatabase";
 
 import Pour, {POUR_PATTERN} from "@/library/Pour";
 import Recipe, {CUP_TYPE} from "@/library/Recipe";
@@ -661,6 +663,23 @@ describe("the editor", () => {
         expect(deck().props.importantForAccessibility).toBe("no-hide-descendants");
     });
 
+    it("keeps the deck in the same native parent while a sheet opens and closes", async () => {
+        await renderEditor();
+        const content = () => screen.getByTestId("editor-content", {includeHiddenElements: true});
+        const deck = () => screen.getByTestId("editor-deck", {includeHiddenElements: true});
+
+        // Hiding toggles a stacking context under Fabric. Without a fixed one,
+        // closing the more menu lifted the deck out of `editor-content` into
+        // the screen's host, which crashed Android on Duplicate.
+        expect(content().props.collapsable).toBe(false);
+        expect(deck().props.collapsable).toBe(false);
+
+        await fireEvent.press(screen.getByLabelText("More"));
+        expect(content().props.accessibilityElementsHidden).toBe(true);
+        expect(content().props.collapsable).toBe(false);
+        expect(deck().props.collapsable).toBe(false);
+    });
+
     it("disables the quick edit brew action when the adjusted recipe is refused", async () => {
         mockSettings = {machineDeviceId: "AA:BB:CC:DD:EE:FF"};
         await renderEditor({dosage: 31, ratio: 100});
@@ -671,6 +690,77 @@ describe("the editor", () => {
         expect(action.props.accessibilityState.disabled).toBe(true);
         await fireEvent.press(action);
         expect(mockPush).not.toHaveBeenCalled();
+    });
+
+    describe("dose presets", () => {
+        function savedUpdates(): Recipe[] {
+            const RecipeDatabase = jest.requireMock("@/library/RecipeDatabase").default;
+            return RecipeDatabase.mock.instances.flatMap(
+                (instance: {updateRecipe: {mock: {calls: [string, Recipe][]}}}) =>
+                    instance.updateRecipe.mock.calls.map((call) => call[1])
+            );
+        }
+
+        afterEach(() => {
+            const RecipeDatabase = jest.requireMock("@/library/RecipeDatabase").default;
+            RecipeDatabase.prototype.getRecipe.mockReset();
+        });
+
+        it("brews the scaled recipe and leaves the saved one alone", async () => {
+            const RecipeDatabase = jest.requireMock("@/library/RecipeDatabase").default;
+            RecipeDatabase.prototype.getRecipe.mockReturnValue(fixture());
+            RecipeDatabase.mockClear();
+            await openTheQuickEditPanel();
+
+            await fireEvent.press(screen.getByLabelText("Brew at 15 grams"));
+            await fireEvent.press(screen.getByLabelText("Brew"));
+
+            const params = mockPush.mock.calls[0][0].params;
+            const brewed = JSON.parse(params.recipeJSON);
+            expect(JSON.parse(params.quickEditAdjustments)).toEqual({dose: 15});
+            expect(brewed.dosage).toBe(15);
+            expect(brewed.ratio).toBe(16);
+            expect(new Recipe(undefined, params.recipeJSON).getPourTotalVolume()).toBe(240);
+            expect(savedUpdates()).toEqual([]);
+        });
+
+        it("saves the dose straight away when nothing else is waiting for SAVE", async () => {
+            const RecipeDatabase = jest.requireMock("@/library/RecipeDatabase").default;
+            RecipeDatabase.prototype.getRecipe.mockReturnValue(fixture());
+            RecipeDatabase.mockClear();
+            await openTheQuickEditPanel();
+
+            await fireEvent.press(screen.getByLabelText("Brew at 15 grams"));
+            await fireEvent.press(screen.getByLabelText("Save the recipe at 15 grams"));
+
+            await waitFor(() => expect(savedUpdates()).toHaveLength(1));
+            const saved = savedUpdates()[0];
+            expect(saved.dosage).toBe(15);
+            expect(saved.getPourTotalVolume()).toBe(240);
+            expect(mockNotify).toHaveBeenCalledWith({tone: "success", message: "Saved at 15 g."});
+            // The panel stays open on the saved recipe, now at its new dose.
+            expect(screen.getByTestId("quick-edit-panel")).toBeTruthy();
+            expect(screen.getByLabelText("Brew at 15 grams, the recipe's dose")).toBeTruthy();
+            expect(screen.queryByTestId("quick-edit-save-dose")).toBeNull();
+            expect(mockGoBack).not.toHaveBeenCalled();
+        });
+
+        it("leaves the dose for SAVE when the recipe is not in the library yet", async () => {
+            const RecipeDatabase = jest.requireMock("@/library/RecipeDatabase").default;
+            RecipeDatabase.prototype.getRecipe.mockReturnValue(null);
+            RecipeDatabase.mockClear();
+            await openTheQuickEditPanel();
+
+            await fireEvent.press(screen.getByLabelText("Brew at 20 grams"));
+            await fireEvent.press(screen.getByLabelText("Save the recipe at 20 grams"));
+
+            await waitFor(() => expect(mockNotify).toHaveBeenCalledWith({
+                tone:    "info",
+                message: "Dose set to 20 g. Press SAVE to keep it."
+            }));
+            expect(savedUpdates()).toEqual([]);
+            expect(screen.getByLabelText("Brew at 20 grams, the recipe's dose")).toBeTruthy();
+        });
     });
 
     it("stops writing a recipe the machine would reject, but still saves it", async () => {
@@ -1106,13 +1196,65 @@ describe("renaming from the header", () => {
         jest.useRealTimers();
     });
 
-    it("seeds the field with the recipe's own name, not a borrowed one", async () => {
-        // A recipe following its pod has an empty `name` and a title it borrowed
-        // from `xbloomName`. Seeding with the borrowed one would turn the next
-        // save into a rename nobody asked for, freezing a string the pod can
-        // still change.
+    it("opens a recipe following its pod on the pod name, so there is something to edit", async () => {
+        // An empty field here meant retyping the whole name to change one word.
         jest.useFakeTimers();
         await renderEditor({name: "", xbloomName: "Kenya Nyeri"});
+
+        await openRename();
+
+        expect(screen.getByTestId("rename-field").props.value).toBe("Kenya Nyeri");
+        jest.useRealTimers();
+    });
+
+    it("keeps following the pod when the pod name is saved unchanged", async () => {
+        // Saving what the sheet offered is not a rename. Freezing a copy would
+        // stop a later change to the pod name reaching the recipe.
+        jest.useFakeTimers();
+        await renderEditor({name: "", xid: "CGL12", xbloomName: "Kenya Nyeri"});
+        await openRename();
+
+        await fireEvent.press(screen.getByTestId("rename-confirm"));
+        await act(async () => { jest.advanceTimersByTime(500); });
+        await openAbout();
+
+        expect(screen.getByTestId("pod-following")).toBeTruthy();
+        expect(screen.queryByTestId("pod-use-name")).toBeNull();
+        jest.useRealTimers();
+    });
+
+    it("gives the recipe its own name when the pod name is edited", async () => {
+        jest.useFakeTimers();
+        await renderEditor({name: "", xid: "CGL12", xbloomName: "Kenya Nyeri"});
+        await openRename();
+
+        await fireEvent.changeText(screen.getByTestId("rename-field"), "Kenya Nyeri light");
+        await fireEvent.press(screen.getByTestId("rename-confirm"));
+        await act(async () => { jest.advanceTimersByTime(500); });
+        await openAbout();
+
+        expect(screen.getAllByText("Kenya Nyeri light").length).toBeGreaterThan(0);
+        expect(screen.getByTestId("pod-use-name")).toBeTruthy();
+        jest.useRealTimers();
+    });
+
+    it("opens empty for a recipe with no name from anywhere", async () => {
+        // The header shows a generated placeholder, which is not a name anybody
+        // chose and must not become one by being saved.
+        jest.useFakeTimers();
+        await renderEditor({name: "", xid: "", xbloomName: ""});
+
+        await openRename();
+
+        expect(screen.getByTestId("rename-field").props.value).toBe("");
+        jest.useRealTimers();
+    });
+
+    it("opens empty for a recipe titled only by its Recipe ID", async () => {
+        // Only the pod name is offered. An ID is not a pod name, so the sheet's
+        // advice about following one would not fit a field that held it.
+        jest.useFakeTimers();
+        await renderEditor({name: "", xid: "CGL12", xbloomName: ""});
 
         await openRename();
 
@@ -1172,6 +1314,22 @@ describe("the stages deck", () => {
         expect(
             screen.getByTestId("editor-scroll").props.contentContainerStyle.paddingBottom
         ).toBeGreaterThanOrEqual(200);
+    });
+
+    it("keeps BREW, WRITE and SAVE clear of a three-button navigation bar", async () => {
+        // The bar is pinned to the bottom of a screen drawn under Android's
+        // navigation bar. It used to sink 5 points into the inset everywhere,
+        // which on a 48 point opaque bar hid the bottom of the buttons. iOS
+        // keeps the sink: there the inset is the home indicator.
+        mockRecipeJSON = JSON.stringify(fixture());
+        await renderWithProviders(
+            <SafeAreaProvider initialMetrics={THREE_BUTTON_METRICS}>
+                <EditRecipe key="editor"/>
+            </SafeAreaProvider>
+        );
+        const bar = StyleSheet.flatten(screen.getByTestId("editor-actions").props.style);
+
+        expect(bar.paddingBottom).toBe(Platform.OS === "ios" ? 48 - 5 : 48);
     });
 
     it("opens the stage whose part of the curve was tapped", async () => {
@@ -1756,5 +1914,52 @@ describe("custom overflow protection", () => {
         const params = mockPush.mock.calls[0][0].params;
         expect(params.quickEditAdjustments).toBeDefined();
         expect(JSON.parse(params.recipeJSON).overflowProtection).toEqual(config);
+    });
+});
+
+describe("the bag on the about deck", () => {
+    function uuidInHand(): string {
+        return (JSON.parse(mockRecipeJSON) as {uuid: string}).uuid;
+    }
+
+    async function addBagFromSection(): Promise<void> {
+        await openAbout();
+        await fireEvent.press(screen.getByLabelText("I bought a bag"));
+        await waitFor(async () => {
+            if (sharedBagDatabase().openFor(uuidInHand()) === null) {
+                await fireEvent.press(screen.getByTestId("bag-save"));
+            }
+            expect(sharedBagDatabase().openFor(uuidInHand())).not.toBeNull();
+        }, {timeout: SHEET_PRESS_TIMEOUT});
+    }
+
+    it("offers a bag from the recipe menu", async () => {
+        await renderEditor();
+        await fireEvent.press(screen.getByLabelText("More"));
+        expect(screen.getByLabelText("I bought a bag")).toBeTruthy();
+    });
+
+    it("counts a bag down here when this app tracks bags", async () => {
+        mockSettings = {};
+        await renderEditor();
+        await addBagFromSection();
+        const bag = sharedBagDatabase().openFor(uuidInHand())!.bag;
+        expect(bag.sizeGrams).toBe(250);
+        expect(bag.beanName).toBeUndefined();
+        expect(screen.getByTestId("bag-remaining")).toHaveTextContent("250 g left, about 13 brews.");
+    });
+
+    it("hands a new bag to Beanconqueror when Beanconqueror tracks bags", async () => {
+        mockSettings = {bagTracker: "beanconqueror"};
+        const openURL = jest.spyOn(Linking, "openURL").mockResolvedValue(true);
+        await renderEditor({name: "Ethiopia Guji - Drop"});
+        await addBagFromSection();
+
+        const bag = sharedBagDatabase().openFor(uuidInHand())!.bag;
+        expect(bag.beanName).toBe("Ethiopia Guji");
+        expect(openURL).toHaveBeenCalledWith(expect.stringMatching(/^beanconqueror:\/\/ADD_USER_BEAN\?shareUserBean0=/));
+        expect(screen.getByTestId("bag-elsewhere")).toHaveTextContent("Bag tracked in Beanconqueror.");
+        expect(screen.queryByTestId("bag-remaining")).toBeNull();
+        openURL.mockRestore();
     });
 });

@@ -4,6 +4,10 @@ import React, {useState} from "react";
 import {ScrollView, Text, YStack} from "tamagui";
 
 import DeleteAllSheet from "@/components/DeleteAllSheet";
+import MachineAddSheet from "@/components/MachineAddSheet";
+import ForgetMachineSheet from "@/components/ForgetMachineSheet";
+import MachineDetailSheet from "@/components/MachineDetailSheet";
+import {useMachineAdder} from "@/hooks/useMachineAdder";
 import CardReadDiagnostic from "@/components/CardReadDiagnostic";
 import MachineSection from "@/components/MachineSection";
 import RestoreSheet, {type RestoreChoice} from "@/components/RestoreSheet";
@@ -22,15 +26,25 @@ import {useCloudSession} from "@/hooks/useCloudSession";
 import {useRecipeLibrary} from "@/hooks/useRecipeLibrary";
 import {useSetting} from "@/hooks/useSetting";
 import {useLiveBrew} from "@/hooks/useLiveBrew";
+import {useScrollEndPadding} from "@/hooks/useBottomInset";
 import {type BackupPayload} from "@/library/backup";
 import type {BrewRecord} from "@/library/brew/BrewRecord";
 import {RATING_PROMPT_WINDOW_MS} from "@/library/brew/ratingPrompt";
+import {sharedBagDatabase} from "@/library/CoffeeBagDatabase";
+import {
+    isBagTrackerSetting,
+    resolveBagTracker,
+    type CoffeeBag
+} from "@/library/coffeeBag";
 import type {BackupExcluded, Settings, SettingKey} from "@/library/Settings";
 import {isMachineModel} from "@/library/machine/machineModel";
 import {isSortAxis, isSortDirection} from "@/library/librarySort";
 import {isHistorySort, isHistorySortDirection} from "@/library/brew/historyQuery";
 import {isLibraryView} from "@/library/libraryView";
+import {parseFeedOptOut} from "@/library/roasterFeed";
+import {parseSubscriptions} from "@/library/roasterSubscription";
 import {asTemperatureUnit} from "@/library/units";
+import {STABLE_HOST} from "@/constants/views";
 
 type Props = {
     /** Injected by tests. The route renders with the shared store. */
@@ -71,6 +85,18 @@ function brewHistory(): BrewRecord[] {
 }
 
 /**
+ * Every bag, for the backup. Same reasoning as `brewHistory`: a bag table that
+ * will not read is not worth losing the recipes' backup over.
+ */
+function bagHistory(): CoffeeBag[] {
+    try {
+        return sharedBagDatabase().all();
+    } catch {
+        return [];
+    }
+}
+
+/**
  * What a restore did, in one sentence.
  *
  * Both halves are named when both happened, because they land in different
@@ -99,11 +125,15 @@ function restoredMessage(recipes: number, brews: number): string {
  * decision in place.
  */
 export default function SettingsScreen({settings}: Props) {
+    // The end of the scroll clears whatever is under the screen: the
+    // navigation bar on Android, the home indicator on iOS.
+    const scrollEnd = useScrollEndPadding(48);
     const router = useSteadyRouter();
     const {ratingNoteOpen} = useLiveBrew();
     const [labsUnlocked, setLabsUnlocked] = useSetting("labsUnlocked", settings);
     const [beanconquerorHandoff, setBeanconquerorHandoff] =
         useSetting("beanconquerorHandoff", settings);
+    const [bagTracker, setBagTracker] = useSetting("bagTracker", settings);
     const cloud = useCloudSession();
 
     async function signOutOfCloud() {
@@ -139,8 +169,8 @@ export default function SettingsScreen({settings}: Props) {
         useSetting("machineConsoleAcknowledged", settings);
     const [machineConsoleConfirmations, setMachineConsoleConfirmations] =
         useSetting("machineConsoleConfirmations", settings);
-    // Shown as rows inside MachineSection, not here. Read anyway, because a
-    // backup carries every preference and these are two.
+    // Shown inside MachineSection, not here. Read anyway, because a backup
+    // carries every preference and this is one.
     const [machineModel, setMachineModel] = useSetting("machineModel", settings);
     const [machineAutoStart, setMachineAutoStart] = useSetting("machineAutoStart", settings);
     const [animateBrewChart, setAnimateBrewChart] = useSetting("animateBrewChart", settings);
@@ -170,6 +200,22 @@ export default function SettingsScreen({settings}: Props) {
     // shelf is promoted from its own tile in the grid, which is where the user
     // is standing when they decide it is one.
     const [myShelves, setMyShelves] = useSetting("myShelves", settings);
+    // Not a row here either: it is answered on the roaster shelf prompt.
+    const [roasterFeedOptOut, setRoasterFeedOptOut] =
+        useSetting("roasterFeedOptOut", settings);
+    const [roasterSubscriptions, setRoasterSubscriptions] =
+        useSetting("roasterSubscriptions", settings);
+    // A row on the Roaster feeds screen, read here for the backup.
+    const [showRoastersOnHome, setShowRoastersOnHome] =
+        useSetting("showRoastersOnHome", settings);
+    const subscriptionCount = parseSubscriptions(roasterSubscriptions).length;
+    // The row only exists once there is something to manage: a subscription,
+    // or a "don't ask again" to take back. Most people never meet a roaster
+    // feed, and a "None yet." row would advertise a feature they can't start
+    // from here (a feed only arrives through a roaster's import link).
+    const optOutCount = parseFeedOptOut(roasterFeedOptOut).length;
+    const showSubscriptions = subscriptionCount > 0 || optOutCount > 0;
+    const [importFingerprints, setImportFingerprints] = useSetting("importFingerprints", settings);
 
     // Deliberately given no query: this screen's questions are all about the
     // whole library, never about a view of it. That is what lets the restore
@@ -185,6 +231,13 @@ export default function SettingsScreen({settings}: Props) {
     // way out; the next pick replaces it.
     const [pending, setPending] = useState<BackupPayload | null>(null);
     const [restoreOpen, setRestoreOpen] = useState(false);
+    /** The saved machine whose sheet is open, or null. */
+    const [machineSheetId, setMachineSheetId] = useState<string | null>(null);
+    const [forgetSheetId, setForgetSheetId] = useState<string | null>(null);
+    // A newly added machine opens its own sheet, so it can be named at once.
+    const machineAdder = useMachineAdder(setMachineSheetId, settings);
+    const machineSheetOpen = machineSheetId !== null || machineAdder.open
+        || forgetSheetId !== null;
     const [confirmingDeleteAll, setConfirmingDeleteAll] = useState(false);
     // Asked once, on arrival, because answering it parses every blob in the
     // table (#124). Kept in state rather than taken at render so that cost is
@@ -210,7 +263,8 @@ export default function SettingsScreen({settings}: Props) {
             brewTraceBudgetMB, storyCardHidden,
             brewHistorySort, brewHistorySortDirection,
             librarySort, librarySortDirection, libraryFavouritesFirst,
-            libraryView, invertAutoShelves, hiddenShelves, myShelves
+            libraryView, invertAutoShelves, hiddenShelves, myShelves,
+            roasterFeedOptOut, roasterSubscriptions, showRoastersOnHome, importFingerprints
         };
     }
 
@@ -238,7 +292,7 @@ export default function SettingsScreen({settings}: Props) {
             return;
         }
         const outcome = await exportBackup(
-            everything, settingsSnapshot(), VERSION, brewHistory()
+            everything, settingsSnapshot(), VERSION, brewHistory(), bagHistory()
         );
         if (!outcome.ok) notify({tone: "error", message: outcome.reason});
     }
@@ -357,6 +411,24 @@ export default function SettingsScreen({settings}: Props) {
         if (typeof incoming.myShelves === "string") {
             setMyShelves(incoming.myShelves);
         }
+        // Read back through `parseFeedOptOut` wherever it is used, which keeps
+        // only strings, so a malformed value costs a forgotten answer and no
+        // more.
+        if (typeof incoming.roasterFeedOptOut === "string") {
+            setRoasterFeedOptOut(incoming.roasterFeedOptOut);
+        }
+        if (typeof incoming.showRoastersOnHome === "boolean") {
+            setShowRoastersOnHome(incoming.showRoastersOnHome);
+        }
+        // Validated on read by `parseSubscriptions`; an unreadable record is
+        // dropped there rather than here, the same as every other reader.
+        if (typeof incoming.roasterSubscriptions === "string") {
+            setRoasterSubscriptions(incoming.roasterSubscriptions);
+        }
+        // Validated on read by `parsePrints`.
+        if (typeof incoming.importFingerprints === "string") {
+            setImportFingerprints(incoming.importFingerprints);
+        }
     }
 
     function applyRestore(payload: BackupPayload, choice: RestoreChoice) {
@@ -388,6 +460,17 @@ export default function SettingsScreen({settings}: Props) {
             brews = 0;
         }
 
+        // After the brews, which are what a bag's grams left are counted
+        // from, and only for recipes now in the library. Not counted in the
+        // message: a bag is a detail of a recipe, and the recipe count already
+        // says the recipes came back.
+        try {
+            const known = new Set(library.allRecipes().map((recipe) => recipe.uuid));
+            sharedBagDatabase().restore(payload.bags, known);
+        } catch {
+            // A bag table that will not take the restore costs the bags only.
+        }
+
         // A restore that took only the settings did happen, and reporting it as
         // "0 recipes restored" reads as a failure the app is being coy about.
         if (outcome.added === 0 && brews === 0 && choice.includeSettings) {
@@ -406,6 +489,14 @@ export default function SettingsScreen({settings}: Props) {
                 message: payload.skippedBrews === 1
                     ? "One brew in that backup could not be read."
                     : `${payload.skippedBrews} brews in that backup could not be read.`
+            });
+        }
+        if (payload.skippedBags > 0) {
+            notify({
+                tone: "error",
+                message: payload.skippedBags === 1
+                    ? "One bag in that backup could not be read."
+                    : `${payload.skippedBags} bags in that backup could not be read.`
             });
         }
     }
@@ -444,56 +535,67 @@ export default function SettingsScreen({settings}: Props) {
             as looking "exactly like a control that did nothing", and it is what
             made Delete all appear to do nothing at all. `app/index.tsx` and
             `app/editRecipe.tsx` both already use this shape. */}
-        <YStack testID="settings-screen" flex={1} backgroundColor={palette.base}
-                accessibilityElementsHidden={restoreOpen || confirmingDeleteAll || ratingNoteOpen}
+        <YStack {...STABLE_HOST} testID="settings-screen" flex={1} backgroundColor={palette.base}
+                accessibilityElementsHidden={restoreOpen || confirmingDeleteAll || ratingNoteOpen
+                    || machineSheetOpen}
                 importantForAccessibility={restoreOpen || confirmingDeleteAll || ratingNoteOpen
+                    || machineSheetOpen
                     ? "no-hide-descendants"
                     : "auto"}>
             <ScreenHeader title="Settings" onBack={() => router.back()}/>
             <ScrollView testID="settings-scroll"
-                        contentContainerStyle={{padding: 16, paddingBottom: 48}}>
+                        contentContainerStyle={{padding: 16, paddingBottom: scrollEnd}}>
             <YStack>
-                {/* At the top rather than the conventional bottom. The row
-                    carries the app's name and version, so it reads as the
-                    screen's identity rather than its footnote — the shape iOS
-                    uses for the Apple ID row — and it is the row an App Store
-                    reviewer comes here looking for. */}
-                <SettingsSection>
-                    <SettingsActionRow label="About XBRW++"
-                                       detail={`Version ${VERSION}`}
-                                       onPress={() => router.push("/about")}/>
-                </SettingsSection>
+                {/* Ordered by what people open Settings for. The machines come
+                    first: connecting one, or checking which is in use, is the
+                    common errand. Brewing preferences next, then how the app
+                    looks, then the library's housekeeping. The rows about the
+                    app itself, and anything diagnostic, go to the bottom. A
+                    machine's own readings are folded inside its card. */}
+                <MachineSection settings={settings} onOpenMachine={setMachineSheetId}
+                                onAddMachine={machineAdder.start}
+                                onForgetMachine={setForgetSheetId}/>
 
-                {/* Beside About rather than buried under Library, because it is
-                    the same kind of row: something about the app itself rather
-                    than a preference. High on the screen on purpose. A privacy
-                    claim nobody can find is a privacy claim nobody can check,
-                    and this screen is what makes the claim checkable. */}
-                <SettingsSection>
-                    <SettingsActionRow label="What leaves this device"
-                                       detail="Every request the app can make, and what it carries."
-                                       onPress={() => router.push("/network")}/>
-                </SettingsSection>
-
-                {/* Its own section rather than a line in Library. Everything
-                    else under Library is about the recipes you hold; a brew
-                    history is a record of what the machine did, and burying it
-                    among backup and delete made the app's own diary read as
-                    file management. */}
-                <SettingsSection>
+                {/* What the app does around a brew, on any machine. Kept apart
+                    from the machines so a second machine does not repeat them,
+                    and so they are not mistaken for settings stored on one. */}
+                <SettingsSection title="Brewing">
+                    <SettingsToggleRow
+                        label="Start brewing automatically"
+                        description="Off, BREW loads the recipe onto the machine and waits for you to press START. On, it starts grinding the moment the recipe lands."
+                        value={machineAutoStart}
+                        onChange={setMachineAutoStart}/>
+                    <SettingsToggleRow
+                        label="Animate the brew chart"
+                        description="When off, each phase change holds its end state immediately. The system Reduced Motion switch also disables animation independently."
+                        value={animateBrewChart}
+                        onChange={setAnimateBrewChart}/>
+                    <SettingsToggleRow
+                        label="Ask how a brew was"
+                        description={`On, the last brew XBRW++ watched can ask how it was along the bottom for up to ${ratingPromptHours} hours. Off, ratings are only given on the brew itself.`}
+                        value={askForRatings} onChange={setAskForRatings}/>
+                    <SettingsChoiceRow
+                        label="Brew detail storage"
+                        description="Brew traces are the detailed charts. When they pass this limit, the oldest are dropped first. Rated and noted brews, and the newest brews of each recipe, go last. Summaries are always kept."
+                        value={String(brewTraceBudgetMB)}
+                        options={BUDGET_OPTIONS}
+                        onChange={(value) => setBrewTraceBudgetMB(Number(value))}/>
+                    {/* A record of what the machine did, so it sits with the
+                        brewing rows rather than with backup and delete, where
+                        the app's own diary read as file management. */}
                     <SettingsActionRow label="Brew history"
                                        detail="Every brew you have recorded."
                                        onPress={() => router.push("/brewHistory")}/>
                 </SettingsSection>
 
-                {/* Between Brew history and the preferences, not down with
-                    About. Almost nobody opens an About screen, and the ask is
-                    worth more than the rows under it are. Not wrapped in
-                    `SettingsSection`: that draws a `surface` card and rules
-                    hairlines between its children, and this is one filled tile
-                    rather than a list of rows. It carries the section's own
-                    `$4` top gap so the rhythm of the screen is unbroken. */}
-                <SupportTile/>
+                <SettingsSection title="Units">
+                    <SettingsChoiceRow
+                        label="Temperature"
+                        description="What the editor shows and takes. The card always stores Celsius, so switching back and forth changes nothing that is written."
+                        value={temperatureUnit}
+                        options={TEMPERATURE_OPTIONS}
+                        onChange={(value) => setTemperatureUnit(asTemperatureUnit(value))}/>
+                </SettingsSection>
 
                 <SettingsSection title="Recipe list">
                     <SettingsToggleRow
@@ -513,37 +615,9 @@ export default function SettingsScreen({settings}: Props) {
                         onChange={setInvertAutoShelves}/>
                     <SettingsToggleRow
                         label="Show recipe pictures"
-                        description="Draw the pod photo or the sharer's picture where a recipe arrived with one."
+                        description="Draw the pod or coffee photo, or the sharer's picture, where a recipe arrived with one."
                         value={showRecipeAvatars}
                         onChange={setShowRecipeAvatars}/>
-                </SettingsSection>
-
-                <SettingsSection title="Units">
-                    <SettingsChoiceRow
-                        label="Temperature"
-                        description="What the editor shows and takes. The card always stores Celsius, so switching back and forth changes nothing that is written."
-                        value={temperatureUnit}
-                        options={TEMPERATURE_OPTIONS}
-                        onChange={(value) => setTemperatureUnit(asTemperatureUnit(value))}/>
-                </SettingsSection>
-
-                <MachineSection settings={settings}/>
-
-                <SettingsSection title="Brewing">
-                    <SettingsToggleRow
-                        label="Animate the brew chart"
-                        description="When off, each phase change holds its end state immediately. The system Reduced Motion switch also disables animation independently."
-                        value={animateBrewChart} onChange={setAnimateBrewChart}/>
-                    <SettingsToggleRow
-                        label="Ask how a brew was"
-                        description={`On, the last brew XBRW++ watched can ask how it was along the bottom for up to ${ratingPromptHours} hours. Off, ratings are only given on the brew itself.`}
-                        value={askForRatings} onChange={setAskForRatings}/>
-                    <SettingsChoiceRow
-                        label="Brew detail storage"
-                        description="Brew traces are the detailed charts. When they pass this limit, the oldest are dropped first. Rated and noted brews, and the newest brews of each recipe, go last. Summaries are always kept."
-                        value={String(brewTraceBudgetMB)}
-                        options={BUDGET_OPTIONS}
-                        onChange={(value) => setBrewTraceBudgetMB(Number(value))}/>
                 </SettingsSection>
 
                 {/* Its own section above Library, not a line inside it: Library
@@ -577,6 +651,18 @@ export default function SettingsScreen({settings}: Props) {
                 </SettingsSection>
 
                 <SettingsSection title="Library">
+                    {/* Where roaster subscriptions are managed. Hidden until
+                        there is a subscription or a "don't ask again" to take
+                        back (`showSubscriptions`). */}
+                    {showSubscriptions && (
+                        <SettingsActionRow label="Roaster feeds"
+                                           detail={subscriptionCount === 0
+                                               ? "None. Roasters you said no to are listed here."
+                                               : subscriptionCount === 1
+                                                   ? "1 roaster."
+                                                   : `${subscriptionCount} roasters.`}
+                                           onPress={() => router.push("/subscriptions")}/>
+                    )}
                     {unreadableCount > 0 && (
                         // Bought off here: `queryRecipes` skips a blob it cannot
                         // read so the library still opens (#124), and this is
@@ -615,6 +701,32 @@ export default function SettingsScreen({settings}: Props) {
                                        onPress={() => setConfirmingDeleteAll(true)}/>
                 </SettingsSection>
 
+                {/* The rows about the app itself, at the bottom where they are
+                    looked for. The version is the row an App Store reviewer
+                    comes for, and the end of the screen is where it is sought. */}
+                <SettingsSection>
+                    <SettingsActionRow label="About XBRW++"
+                                       detail={`Version ${VERSION}`}
+                                       onPress={() => router.push("/about")}/>
+                </SettingsSection>
+
+                {/* Beside About, because it is the same kind of row: something
+                    about the app itself rather than a preference. A privacy
+                    claim nobody can find is a privacy claim nobody can check,
+                    and this screen is what makes the claim checkable. */}
+                <SettingsSection>
+                    <SettingsActionRow label="What leaves this device"
+                                       detail="Every request the app can make, and what it carries."
+                                       onPress={() => router.push("/network")}/>
+                </SettingsSection>
+
+                {/* Not wrapped in `SettingsSection`: that draws a `surface`
+                    card and rules hairlines between its children, and this is
+                    one filled tile rather than a list of rows. It carries the
+                    section's own `$4` top gap so the rhythm of the screen is
+                    unbroken. Its fill is loud enough to be seen down here. */}
+                <SupportTile/>
+
                 {/* Last, under everything a user came here for, and absent
                     until seven taps on the version line open it.
 
@@ -639,6 +751,22 @@ export default function SettingsScreen({settings}: Props) {
                         label="Send brews to Beanconqueror"
                         description="Needs a version of Beanconqueror that can read the link. Older ones will say they do not recognise it."
                         value={beanconquerorHandoff} onChange={setBeanconquerorHandoff}/>
+                    {/* Beside the handoff because it is the same question seen
+                        from the bag's side: Beanconqueror subtracts every brew
+                        it is handed, so only one app may count a bag. Shows the
+                        resolved choice; picking one stores it explicitly, and
+                        until then it follows the handoff switch above. */}
+                    <SettingsChoiceRow
+                        label="Track bags in"
+                        description="The app that counts down what is left in a bag. Beanconqueror already does this for the brews it receives, so pick one and the two never disagree."
+                        value={resolveBagTracker(bagTracker, beanconquerorHandoff)}
+                        options={[
+                            {value: "xbrw", label: "XBRW++"},
+                            {value: "beanconqueror", label: "Beanconqueror"}
+                        ]}
+                        onChange={(next) => {
+                            if (isBagTrackerSetting(next)) setBagTracker(next);
+                        }}/>
                     <SettingsActionRow label="Hide Labs"
                                        detail="Anything you switched on here stays on."
                                        onPress={() => setLabsUnlocked(false)}/>
@@ -648,6 +776,15 @@ export default function SettingsScreen({settings}: Props) {
             </YStack>
             </ScrollView>
         </YStack>
+
+            <MachineDetailSheet machineId={machineSheetId} settings={settings}
+                                onClose={() => setMachineSheetId(null)}
+                                onForget={setForgetSheetId}/>
+
+            <ForgetMachineSheet machineId={forgetSheetId} settings={settings}
+                                onClose={() => setForgetSheetId(null)}/>
+
+            <MachineAddSheet adder={machineAdder}/>
 
             <RestoreSheet open={restoreOpen} payload={pending} existing={library.recipes}
                           onCancel={() => setRestoreOpen(false)}

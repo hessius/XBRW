@@ -13,11 +13,12 @@ import EasyModeSlots, {slotWriteAvailability} from "@/components/EasyModeSlots";
 import {slotOverlayVisible} from "@/components/EasyModeWriteOverlay";
 import XbrwSheet from "@/components/XbrwSheet";
 import ScreenHeader from "@/components/ScreenHeader";
-import {onAccent, palette} from "@/constants/colors";
+import {palette, primary} from "@/constants/colors";
 import DotMatrixText from "@/components/DotMatrixText";
 import {isActiveBrewPhase} from "@/library/machine/Machine";
 import {unavailableSlotPort} from "@/library/slots/slotWriter";
 import {unwrittenSlotCount} from "@/library/slots/slotModel";
+import {STABLE_HOST} from "@/constants/views";
 
 export default function EasyModeScreen() {
     const {recipeJSON} = useLocalSearchParams<{recipeJSON?: string | string[]}>();
@@ -116,10 +117,10 @@ export default function EasyModeScreen() {
     }
 
     return (
-        <YStack flex={1} backgroundColor={palette.base}
+        <YStack {...STABLE_HOST} flex={1} backgroundColor={palette.base}
                 accessibilityElementsHidden={ratingNoteOpen}
                 importantForAccessibility={ratingNoteOpen ? "no-hide-descendants" : "auto"}>
-            <YStack testID="easy-mode-screen" flex={1}
+            <YStack {...STABLE_HOST} testID="easy-mode-screen" flex={1}
                 accessibilityElementsHidden={departureOpen || ratingNoteOpen}
                 importantForAccessibility={departureOpen || ratingNoteOpen ? "no-hide-descendants" : "auto"}
                 pointerEvents={departureOpen ? "none" : "auto"}>
@@ -147,7 +148,7 @@ export default function EasyModeScreen() {
             </YStack>
             <XbrwSheet open={departureOpen} onOpenChange={open => { if (!open) stay(); }}
                 title="BEFORE YOU LEAVE" heightPercent={60}>
-                <ScrollView contentContainerStyle={{gap: 16}}
+                <ScrollView {...STABLE_HOST} contentContainerStyle={{gap: 16}}
                     accessibilityElementsHidden={!departureOpen}
                     importantForAccessibility={departureOpen ? "auto" : "no-hide-descendants"}
                     pointerEvents={departureOpen ? "auto" : "none"}>
@@ -157,10 +158,11 @@ export default function EasyModeScreen() {
                     </Text>
                     {availability !== null && <Text color={palette.dim}>{availability}</Text>}
                     <Button height="auto" minHeight="$4" paddingVertical="$3"
-                        backgroundColor={palette.text} color={onAccent.text}
-                        disabledStyle={{backgroundColor: palette.text, opacity: 0.45}}
+                        backgroundColor={primary.fill} color={primary.ink}
+                        disabledStyle={{backgroundColor: primary.disabledFill}}
                         disabled={availability !== null} onPress={write}>
-                        <DotMatrixText fontSize={12} weight="bold" color={onAccent.text}>WRITE TO MACHINE</DotMatrixText>
+                        <DotMatrixText fontSize={12} weight="bold"
+                            color={availability !== null ? primary.disabledInk : primary.ink}>WRITE TO MACHINE</DotMatrixText>
                     </Button>
                     <Button height="auto" minHeight="$4" paddingVertical="$3"
                         backgroundColor={palette.raised} color={palette.text} borderWidth={1} borderColor={palette.line}

@@ -1,7 +1,7 @@
 import React from "react";
 import {act, fireEvent, screen, within} from "@testing-library/react-native";
 
-import RecipeCard from "@/components/RecipeCard";
+import RecipeCard, {CARD_PHOTO_SIZE} from "@/components/RecipeCard";
 import {PROFILE_BLEED} from "@/components/PourProfile";
 import Recipe, {CUP_TYPE} from "@/library/Recipe";
 import Pour, {POUR_PATTERN} from "@/library/Pour";
@@ -10,6 +10,7 @@ import {DOT_ICONS, litCells} from "@/constants/dotIcons";
 import {AA_LARGE, contrast} from "@/test-utils/contrast";
 import {DOTO_MAX_FONT_SCALE} from "@/components/DotMatrixText";
 import {renderWithProviders} from "@/test-utils/render";
+import {newBag} from "@/library/coffeeBag";
 
 /** The colour a dot icon's dots are drawn in. */
 function dotColourOf(testID: string): string {
@@ -1135,5 +1136,127 @@ describe("the evidence a card carries", () => {
 
         expect(screen.getByTestId("recipe-card").props.accessibilityLabel)
             .toContain("brewed once");
+    });
+});
+
+
+describe("the picture a card carries", () => {
+    const PHOTO = "https://example.com/bag.jpg";
+
+    function photo() {
+        return screen.queryByTestId("recipe-card-photo", {includeHiddenElements: true});
+    }
+
+    function surfaceMinHeight(): unknown {
+        return (screen.getByTestId("recipe-card-surface").props.style as
+            Record<string, unknown>).minHeight;
+    }
+
+    it("draws the picture beside the name when the setting is on", async () => {
+        await renderWithProviders(
+            <RecipeCard recipe={makeRecipe({imageURL: PHOTO})} onPress={jest.fn()} showPicture/>
+        );
+
+        expect(photo()?.props.source).toEqual({uri: PHOTO});
+        // Decorative: the name is in the card's own label already.
+        expect(photo()?.props.accessible).toBe(false);
+        expect(photo()?.props.importantForAccessibility).toBe("no");
+    });
+
+    it("draws no picture while the setting is off", async () => {
+        await renderWithProviders(
+            <RecipeCard recipe={makeRecipe({imageURL: PHOTO})} onPress={jest.fn()}/>
+        );
+
+        expect(photo()).toBeNull();
+    });
+
+    it("draws no picture for a recipe without one", async () => {
+        await renderWithProviders(
+            <RecipeCard recipe={makeRecipe()} onPress={jest.fn()} showPicture/>
+        );
+
+        expect(photo()).toBeNull();
+    });
+
+    it("drops a picture that will not load and keeps the name", async () => {
+        await renderWithProviders(
+            <RecipeCard recipe={makeRecipe({imageURL: PHOTO})} onPress={jest.fn()} showPicture/>
+        );
+
+        await fireEvent(photo()!, "error");
+
+        expect(photo()).toBeNull();
+        expect(screen.getByText("Ethiopia Guji")).toBeTruthy();
+    });
+
+    it("keeps the card's height and its two lines of prose", async () => {
+        // The picture sits beside the prose, no taller than the two lines the
+        // name and note share, so a card with one is a card of the same size.
+        await renderWithProviders(
+            <RecipeCard recipe={makeRecipe()} onPress={jest.fn()} showPicture/>
+        );
+        const plainHeight = surfaceMinHeight();
+        const plainLines = screen.getByText("Ethiopia Guji").props.numberOfLines;
+        await act(async () => { screen.unmount(); });
+
+        await renderWithProviders(
+            <RecipeCard recipe={makeRecipe({imageURL: PHOTO, description: "Good for mornings"})}
+                        onPress={jest.fn()} showPicture/>
+        );
+        expect(surfaceMinHeight()).toBe(plainHeight);
+        expect(screen.getByText("Ethiopia Guji").props.numberOfLines
+            + screen.getByTestId("recipe-card-note", {includeHiddenElements: true})
+                .props.numberOfLines).toBe(plainLines);
+        await act(async () => { screen.unmount(); });
+
+        await renderWithProviders(
+            <RecipeCard recipe={makeRecipe({imageURL: PHOTO})} onPress={jest.fn()} showPicture/>
+        );
+        expect(surfaceMinHeight()).toBe(plainHeight);
+        expect(screen.getByText("Ethiopia Guji").props.numberOfLines).toBe(plainLines);
+
+        const nameSize = styleValueOf(screen.getByText("Ethiopia Guji"), "fontSize") as number;
+        const style = photo()?.props.style as {width: number; height: number};
+        expect(style.height).toBe(CARD_PHOTO_SIZE);
+        expect(style.width).toBe(CARD_PHOTO_SIZE);
+        // Two lines of the name at a normal 1.2 line height.
+        expect(CARD_PHOTO_SIZE).toBeLessThanOrEqual(2 * nameSize * 1.2);
+    });
+});
+
+describe("RecipeCard bag badge", () => {
+    function guji(): Recipe {
+        const recipe = new Recipe();
+        recipe.name = "Guji";
+        recipe.dosage = 18;
+        return recipe;
+    }
+    const bag = {...newBag("r1", {sizeGrams: 250}, 1_760_000_000_000), id: "bag-1"};
+
+    it("shows grams left in the badge corner, not a new row", async () => {
+        await renderWithProviders(
+            <RecipeCard recipe={guji()} onPress={jest.fn()} bag={{bag, usedGrams: 38}}/>
+        );
+        expect(within(screen.getByTestId("recipe-card-badges"))
+            .getByTestId("recipe-card-bag")).toHaveTextContent("212G");
+        expect(screen.getByLabelText(/212 grams of coffee left/)).toBeTruthy();
+    });
+
+    it("says LOW once a reorder is due", async () => {
+        await renderWithProviders(
+            <RecipeCard recipe={guji()} onPress={jest.fn()} bag={{bag, usedGrams: 220}}/>
+        );
+        expect(screen.getByTestId("recipe-card-bag")).toHaveTextContent("LOW");
+    });
+
+    it("shows the bag's freshness in the same corner, with or without grams", async () => {
+        await renderWithProviders(
+            <RecipeCard recipe={guji()} onPress={jest.fn()} freshness="peak"/>
+        );
+        expect(within(screen.getByTestId("recipe-card-badges"))
+            .getByTestId("recipe-card-freshness")).toHaveTextContent("PEAK");
+        expect(screen.queryByTestId("recipe-card-bag")).toBeNull();
+        expect(screen.getByLabelText(/coffee at its peak/)).toBeTruthy();
     });
 });

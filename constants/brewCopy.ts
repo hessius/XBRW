@@ -52,7 +52,7 @@ export const PHASE_COPY: Record<string, string> = {
     paused:      "Paused.",
     done:        "Enjoy.",
     // Every other ending here is a sentence saying what happened --
-    // "The machine ran out of water.", "Lost contact. …". This one said
+    // "No water detected. …", "Lost contact. …". This one said
     // only "Stopped.", so the mini bar's "Stopped: you stopped it" was
     // explaining more than the full screen it stands in for.
     cancelled:   "You stopped the brew.",
@@ -62,8 +62,12 @@ export const PHASE_COPY: Record<string, string> = {
 export const FAILURE_COPY: Record<string, string> = {
     // The machine stopped mid-brew. Rare, and not the same event as a refusal:
     // this one costs a dose.
-    noWater:      "The machine ran out of water.",
-    noBeans:      "The machine stopped during grinding. Check there are beans in the hopper.",
+    // No TRY AGAIN here on purpose (NO_RETRY): the dose may already be ground
+    // and some water spent, so the copy must not point at a button.
+    noWater:      "No water detected. Fill the tank before brewing again.",
+    // The machine reports this itself (state 0x0F, no_beans), so it is said
+    // as a fact rather than a guess.
+    noBeans:      "No beans detected. Fill the hopper and tap TRY AGAIN.",
     gearPosition: "The grinder could not find its gear position.",
     doseMismatch: "The machine would not accept that dose and water volume.",
     idling:       "The machine went idle before the brew started.",

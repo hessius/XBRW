@@ -1,10 +1,14 @@
 import React, {useEffect, useState} from "react";
 import {Sheet, XStack, YStack} from "tamagui";
 import {InteractionManager, Pressable, View} from "react-native";
+import {useSafeAreaFrame} from "react-native-safe-area-context";
 
 import DotMatrixText from "@/components/DotMatrixText";
 import {palette} from "@/constants/colors";
+import {SCREEN_PADDING} from "@/constants/layout";
 import {DURATION} from "@/constants/motion";
+import {STABLE_HOST} from "@/constants/views";
+import {useBottomInset} from "@/hooks/useBottomInset";
 
 type Props = {
     open: boolean;
@@ -57,11 +61,36 @@ type Props = {
  */
 export const EXIT_GRACE = DURATION.deliberate;
 
+/**
+ * The tallest a sheet grows to make room for the bottom inset, as a percentage.
+ *
+ * Only the growth is capped: a caller that asks for more than this gets it.
+ * Above this the sheet starts to cover the screen header it was opened from.
+ */
+const INSET_GROWTH_CAP = 95;
+
+/**
+ * The snap point that gives a sheet's content the room `heightPercent` asked
+ * for once its frame has padded by the bottom inset.
+ *
+ * The percentages were tuned with nothing under the frame. Padding by a 48
+ * point navigation bar without growing the sheet took those points off the
+ * content, and the recipe sheet's last row, DELETE, went under the frame's
+ * end. Growing the sheet by the inset keeps the rows where they were tuned.
+ */
+export function insetSnapPoint(heightPercent: number, inset: number, screenHeight: number): number {
+    if (inset <= 0 || screenHeight <= 0) return heightPercent;
+    const grown = heightPercent + (inset / screenHeight) * 100;
+    return Math.min(grown, Math.max(heightPercent, INSET_GROWTH_CAP));
+}
+
 /** The house sheet: a bottom sheet with a dot-matrix title and CLOSE affordance. */
 export default function XbrwSheet({
     open, onOpenChange, title, showTitle = true, heightPercent = 70,
     prewarm = false, children
 }: Props) {
+    const bottomInset = useBottomInset();
+    const {height: screenHeight} = useSafeAreaFrame();
     // The sheet is put in the tree closed, and opened on the frame after.
     //
     // Tamagui animates the entrance by transitioning from closed to open, so a
@@ -158,16 +187,22 @@ export default function XbrwSheet({
     // Doto here, and Inter for whatever the caller puts inside. This is the
     // sheet's own chrome — the same register as the deck switch and the toast —
     // rather than copy about the recipe.
+    //
+    // A long title wraps rather than pushing CLOSE off the edge. Doto is wide,
+    // and "Subscribe to Central Coast Coffee?" alone overran a 360 pt cover
+    // screen with CLOSE cut in half. The title shrinks and wraps; CLOSE keeps
+    // its width and stays level with the title's first line.
     const heading = (
-        <XStack alignItems="center" justifyContent={showTitle ? "space-between" : "flex-end"}
+        <XStack alignItems="flex-start" justifyContent={showTitle ? "space-between" : "flex-end"}
                 gap="$3">
             {showTitle && (
-                <DotMatrixText fontSize={11} weight="bold" letterSpacing={2}
-                               color={palette.dim}>
+                <DotMatrixText testID="sheet-title" fontSize={11} weight="bold" letterSpacing={2}
+                               color={palette.dim} style={{flexShrink: 1}}>
                     {title}
                 </DotMatrixText>
             )}
             <Pressable accessibilityRole="button" accessibilityLabel="Close"
+                       style={{flexShrink: 0}}
                        onPress={() => onOpenChange(false)} hitSlop={12}>
                 <DotMatrixText fontSize={11} weight="bold" letterSpacing={2}
                                color={palette.dim}>
@@ -200,7 +235,8 @@ export default function XbrwSheet({
         <Sheet transition="sheet" zIndex={200000} dismissOnSnapToBottom
                moveOnKeyboardChange
                open={shown} onOpenChange={onOpenChange}
-               snapPointsMode="percent" snapPoints={[heightPercent]}>
+               snapPointsMode="percent"
+               snapPoints={[insetSnapPoint(heightPercent, bottomInset, screenHeight)]}>
             <Sheet.Overlay transition="quick"
                            enterStyle={{opacity: 0}} exitStyle={{opacity: 0}}/>
             {/* The name and the modal flag go on the body, not on the frame:
@@ -208,7 +244,14 @@ export default function XbrwSheet({
                 sibling views that each claim to be the modal one make a screen
                 reader treat the other as hidden -- including the one with the
                 content in it. */}
-            <Sheet.Frame padding="$4" backgroundColor={palette.surface}>
+            {/* The bottom padding adds the inset. The frame reaches the
+                bottom of the display, which on Android 15+ is behind the
+                navigation bar, so a sheet whose content filled its height put
+                the end of it under the bar. The snap point grows by the same
+                amount, so the content keeps the room it was tuned for. */}
+            <Sheet.Frame testID="sheet-frame" padding="$4"
+                         paddingBottom={SCREEN_PADDING + bottomInset}
+                         backgroundColor={palette.surface}>
                 {/* Modal only while it is actually up. It stays in the tree
                     through its exit, and a sheet on its way out must not go on
                     hiding the screen it is uncovering.
@@ -224,7 +267,7 @@ export default function XbrwSheet({
                     separates rows within the content. The heading is a label
                     for the sheet rather than its first row, and at `$3` it
                     crowded the first control enough to read as part of it. */}
-                <YStack flex={1} gap="$5" aria-label={title} accessibilityViewIsModal={shown}>
+                <YStack {...STABLE_HOST} flex={1} gap="$5" aria-label={title} accessibilityViewIsModal={shown}>
                     {heading}
                     {children}
                 </YStack>

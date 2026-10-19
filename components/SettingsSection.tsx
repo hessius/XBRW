@@ -11,6 +11,21 @@ type Props = {
 };
 
 /**
+ * A section heading on its own, for a group that draws its own cards.
+ *
+ * Settings → Machines is one card per machine rather than rows in one card,
+ * and it still needs the same heading as every other section.
+ */
+export function SettingsSectionTitle({title}: {title: string}) {
+    return (
+        <DotMatrixText testID="settings-section-title" fontSize={11}
+                       weight="bold" letterSpacing={1.6} color={palette.dim}>
+            {title.toUpperCase()}
+        </DotMatrixText>
+    );
+}
+
+/**
  * A group of settings rows under a heading.
  *
  * The heading is Doto because it is a machine label rather than prose — the same
@@ -40,12 +55,7 @@ export default function SettingsSection({title, children}: Props) {
 
     return (
         <YStack gap="$2" paddingTop="$4">
-            {title !== undefined && (
-                <DotMatrixText testID="settings-section-title" fontSize={11}
-                               weight="bold" letterSpacing={1.6} color={palette.dim}>
-                    {title.toUpperCase()}
-                </DotMatrixText>
-            )}
+            {title !== undefined && <SettingsSectionTitle title={title}/>}
             <YStack backgroundColor={palette.surface} borderRadius="$5" overflow="hidden">
                 {rows.map((row, index) => (
                     // Keyed by index, honestly. `toArray` hands out positional

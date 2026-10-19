@@ -1,5 +1,6 @@
 import {buildType1, buildType1Bytes, buildType2, crc16Kermit, parseNotification, parseNotifications} from "@/library/machine/protocol";
 
+import {olderFirmwareInfoFrame} from "./FakeTransport";
 import {event, float32, hex, kermit, notification, status, type1, type1Bytes, type2} from "./protocolFixtures";
 
 describe("the frame codec", () => {
@@ -37,6 +38,18 @@ describe("the frame codec", () => {
 });
 
 describe("reading what the machine says", () => {
+    it("reads 4B 1F with no payload as event 8011, not as a weight", () => {
+        // Seen right after the handshake on V12.0D.500 (owner log,
+        // 2026-10-19), verbatim: 58 02 07 4B 1F 0C 00 00 00 C1 FC 83.
+        const bytes = Uint8Array.from([0x58, 0x02, 0x07, 0x4B, 0x1F, 0x0C, 0x00, 0x00, 0x00, 0xC1, 0xFC, 0x83]);
+        expect(parseNotification(bytes)).toEqual({kind: "event", code: 8011});
+    });
+
+    it("still reads a 4B frame with a float as water weight", () => {
+        expect(parseNotification(Uint8Array.from(notification(0x4B, 0x9E, float32(12000)))))
+            .toMatchObject({kind: "waterWeight"});
+    });
+
     it("reads a machine state", () => {
         expect(parseNotification(Uint8Array.from(status(0x1F))))
             .toEqual({kind: "status", state: 0x1F});
@@ -106,11 +119,40 @@ describe("reading what the machine says", () => {
             0x00, 0x00, 0x00, 0x39, 0x34
         ]);
 
+        // Bytes 13-18 of the payload are six 0xFF, so a real Studio's blob
+        // names no model, and the settings row has to cope with that rather
+        // than draw an empty value.
         expect(parseNotification(captured)).toMatchObject({
             kind: "info",
+            serial: "J15A02A45H038",
+            model: "",
+            firmware: "V12.0D.500",
             waterEnough: false,
             waterFeed: "tap"
         });
+    });
+
+    it("reads the shorter info blob firmware V12.0D.210 sends", () => {
+        // A whole frame (its own length byte says 0x43) with a 55-byte
+        // payload. Refusing it as an event left the machine with no serial
+        // and no vitals, and every brew relinked.
+        const frame = olderFirmwareInfoFrame();
+        expect(frame[5]).toBe(0x43);
+        expect(parseNotification(Uint8Array.from(frame))).toEqual({
+            kind: "info",
+            serial: "J15A01D48G023",
+            model: "",
+            firmware: "V12.0D.210",
+            waterEnough: true,
+            waterFeed: "tank",
+            grindSize: 55,
+            mode: "PRO"
+        });
+    });
+
+    it("still refuses an info payload that stops before the mode field", () => {
+        const parsed = parseNotification(Uint8Array.from(notification(0x49, 0x9E, new Array(54).fill(0x4A))));
+        expect(parsed).toEqual({kind: "event", code: 40521, value: 0x4A});
     });
 
     it("hands back a code it has no name for rather than dropping it", () => {

@@ -84,7 +84,7 @@ export const OUTBOUND_CALLS: OutboundCall[] = [
     {
         id:      "import",
         title:   "Look up a shared recipe",
-        trigger: "You paste an xBloom link or a pod code, or share a link into the app.",
+        trigger: "You paste an xBloom link or a pod code, or share a link into the app, or open, brew or add a coffee in a roaster's catalogue.",
         host:    "client-api.xbloom.com",
         hostPinned: true,
         owner:   "xBloom",
@@ -95,6 +95,21 @@ export const OUTBOUND_CALLS: OutboundCall[] = [
             "Nothing about you, and nothing from your library."
         ],
         source:  ["library/XBloomRecipe.ts", "library/importInput.ts"]
+    },
+    {
+        id:      "roasterFeed",
+        title:   "Check a roaster's list of coffees",
+        trigger: "You open a roaster's import link that names a list of its coffees. If you subscribe, the app reads that list again when you open the app, at most once every 12 hours, and whenever you tap Refresh. Pausing or ending the subscription stops it.",
+        host:    "whichever roaster the import link named",
+        hostPinned: false,
+        owner:   "The roaster who made the link",
+        carries: [
+            "Nothing but the request itself: your IP address, and the address of the list.",
+            "No recipe, no account and nothing from your library. XBRW++ drops any address that is not https.",
+            "Only while the app is open. There is no background fetch, and a phone in a pocket asks nobody for anything.",
+            "Only the list is read. Checking it never asks xBloom anything and never changes your library. A coffee's recipe is fetched from xBloom only when you open, brew or add that coffee, which is the Look up a shared recipe entry. Its picture is the Load a photo entry."
+        ],
+        source:  ["library/roasterFeed.ts", "library/roasterSync.ts", "hooks/useRoasterOffer.ts"]
     },
     {
         id:      "brewMind",
@@ -195,7 +210,7 @@ export const OUTBOUND_CALLS: OutboundCall[] = [
     {
         id:      "images",
         title:   "Load a photo",
-        trigger: "You open the hub, an import preview, or a saved recipe that carries a pod photo or the avatar of whoever shared it.",
+        trigger: "You open the hub, a roaster's catalogue, an import preview, or a saved recipe that carries a pod photo or the avatar of whoever shared it. With Show recipe pictures on, also your library list, shelf rooms, the shelf covers in the grid and the home screen's Ready to brew card. And the home screen while you subscribe to a roaster.",
         host:    "whichever host xBloom named in its own reply",
         hostPinned: false,
         owner:   "xBloom, or whoever xBloom points at",
@@ -203,16 +218,25 @@ export const OUTBOUND_CALLS: OutboundCall[] = [
             "Nothing but the request itself: your IP address, and the address of the picture.",
             "No recipe, no account and nothing you have typed.",
             "The address comes from xBloom's reply rather than from this app, so it is not a fixed one. XBRW++ drops any address that is not https, and sends it nothing.",
-            "This is the one request that can happen while you are only looking at your own library, because a recipe imported from xBloom remembers the photo that came with it."
+            "A roaster's list of coffees names a picture for each coffee too, under the same https rule, and the catalogue shows it.",
+            "This is the one request that can happen while you are only looking at your own library, because a recipe imported from xBloom remembers the photo that came with it.",
+            "If you subscribe to a roaster, the home screen also shows a few of its coffee photos beside its name, and its coffees' photos in a search. They come from the roaster's cached list, so the list itself is not fetched again."
         ],
         source:  [
             "library/podCoffee.ts",
             "library/hub/hubRow.ts",
             "components/PodSection.tsx",
+            "components/RecipePhoto.tsx",
+            "components/ShelfPhotoMark.tsx",
+            "components/PhotoViewer.tsx",
             "components/FromSection.tsx",
             "components/HubRow.tsx",
             "components/ImportResult.tsx",
-            "app/hubRecipe.tsx"
+            "components/CatalogueParts.tsx",
+            "components/RoasterCoffeeRow.tsx",
+            "components/RoasterStrip.tsx",
+            "components/RoasterSearchRow.tsx",
+            "components/ReadyToBrewCard.tsx"
         ]
     }
 ];
@@ -240,7 +264,7 @@ export const SILENT_CAPABILITIES: SilentCapability[] = [
     {
         id:     "library",
         title:  "Your library",
-        detail: "Recipes, tags, shelves and notes are stored in a database on this phone. There is no sync, no account of our own, and no server that holds a copy. The one exception is a photo: a recipe imported from xBloom remembers where its picture came from, and opening that recipe fetches it. The Load a photo entry below says what that carries."
+        detail: "Recipes, tags, shelves and notes are stored in a database on this phone. There is no sync, no account of our own, and no server that holds a copy. The one exception is a photo: a recipe imported from xBloom remembers where its picture came from, and opening that recipe, or seeing it in the list with Show recipe pictures on, fetches it. The Load a photo entry below says what that carries."
     },
     {
         id:     "brewing",

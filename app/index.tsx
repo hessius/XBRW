@@ -1,9 +1,8 @@
 import React, {useEffect, useRef, useState} from "react";
-import {BackHandler, Platform, Share} from "react-native";
+import {AppState, BackHandler, Platform, Share} from "react-native";
 // gesture-handler's FlatList, not React Native's: it keeps the list scroll
 // gesture and each row's swipe gesture from fighting each other on Android.
 import {FlatList} from "react-native-gesture-handler";
-import {useSafeAreaInsets} from "react-native-safe-area-context";
 import {useFocusEffect, useNavigation} from "expo-router";
 import {useShareIntentContext} from "expo-share-intent";
 import {Button, Text, XStack, YStack} from "tamagui";
@@ -19,6 +18,7 @@ import ImportTile from "@/components/ImportTile";
 import BrewMindBrowser from "@/components/BrewMindBrowser";
 import LibraryRail, {type RailFilter} from "@/components/LibraryRail";
 import MachinePanel from "@/components/MachinePanel";
+import MachinePickerSheet from "@/components/MachinePickerSheet";
 import NewRecipeSheet from "@/components/NewRecipeSheet";
 import NfcOverlay from "@/components/NfcOverlay";
 import QuickEditPanel from "@/components/QuickEditPanel";
@@ -28,13 +28,15 @@ import XbrwSheet from "@/components/XbrwSheet";
 import {notify} from "@/components/XbrwToast";
 import type {MachineVitals} from "@/components/MachinePanel";
 import {OVER} from "@/constants/brewCopy";
-import {ALREADY_IN_LIBRARY, CARD_READ_FAILED, HOLD_CARD} from "@/constants/copy";
-import {onAccent, palette, type AccentGroup} from "@/constants/colors";
+import {ALREADY_IN_LIBRARY, CARD_READ_FAILED, HOLD_CARD, UPDATED_TO_LATEST} from "@/constants/copy";
+import {onAccent, palette, primary, type AccentGroup} from "@/constants/colors";
+import {useBottomInset} from "@/hooks/useBottomInset";
 import {useCollapsibleHeader} from "@/hooks/useCollapsibleHeader";
 import {useShelfPicker} from "@/hooks/useShelfPicker";
 import {useCardWriter} from "@/hooks/useCardWriter";
 import {useBeanFilters, type BeanVocabularyStore} from "@/hooks/useBeanFilters";
 import {useMachine} from "@/hooks/useMachine";
+import {useMachinePicker} from "@/hooks/useMachinePicker";
 import {openEasyModeRecipe, useSlotRecord} from "@/hooks/useEasyModeSlots";
 import {slotMarkers} from "@/library/slots/slotModel";
 import {useLibraryQuery} from "@/hooks/useLibraryQuery";
@@ -54,9 +56,13 @@ import {blankRecipe} from "@/library/newRecipe";
 import {assignAccent, resolveAccent} from "@/library/accent";
 import NameShelfSheet from "@/components/NameShelfSheet";
 import RemoveShelfSheet from "@/components/RemoveShelfSheet";
+import RoasterOfferSheet from "@/components/RoasterOfferSheet";
+import RoasterSearchRow from "@/components/RoasterSearchRow";
+import RoasterStrip from "@/components/RoasterStrip";
 import SelectableRecipeRow from "@/components/SelectableRecipeRow";
 import ShelfGrid from "@/components/ShelfGrid";
 import ShelfOverflowSheet from "@/components/ShelfOverflowSheet";
+import {withShelfPhotos} from "@/components/ShelfPhotoMark";
 import ShelfPickerHeader from "@/components/ShelfPickerHeader";
 import ShelfPickerBar, {PICKER_BAR_HEIGHT} from "@/components/ShelfPickerBar";
 import ShelfRoom, {type RoomRecipeActions} from "@/components/ShelfRoom";
@@ -65,6 +71,9 @@ import {resolveOnOpen} from "@/library/duplicates";
 import {BREWMIND_SOURCE, type BrewMindLink} from "@/library/brewmindLink";
 import {useBrewMindCreate} from "@/hooks/useBrewMindCreate";
 import {useImportLink} from "@/hooks/useImportLink";
+import {useRoasterOffer} from "@/hooks/useRoasterOffer";
+import {useHomeRoasters} from "@/hooks/useHomeRoasters";
+import {browseLabel, type RoasterMatch} from "@/library/roasterHome";
 
 import {parseImportInput} from "@/library/importInput";
 import {
@@ -88,13 +97,34 @@ import {canWriteToCard} from "@/library/cardLimits";
 import {
     applyQuickEdit,
     quickEditProblems,
+    withoutDose,
     type QuickEditAdjustments
 } from "@/library/quickEdit";
 import {asTemperatureUnit, type TemperatureUnit} from "@/library/units";
 import {tagKey} from "@/library/tagKey";
 import {shareBlockReason} from "@/library/shareLink";
 import {type Settings} from "@/library/Settings";
+import {dayOf, resolveBagTracker} from "@/library/coffeeBag";
+import {
+    brewEmphasised,
+    dismissedToday,
+    moreReadyLine,
+    readyBagLine,
+    readyFreshnessLine,
+    readyName,
+    readyToBrew,
+    runningLowLine
+} from "@/library/readyToBrew";
+import ReadyToBrewCard from "@/components/ReadyToBrewCard";
+import {openLink} from "@/components/openLink";
+import {freshnessOf, type Freshness} from "@/library/restPeak";
+import {useNow} from "@/hooks/useNow";
+import type {StoredBagReading} from "@/library/CoffeeBagDatabase";
 import {UNCLIPPED_LIST} from "@/constants/lists";
+import {STABLE_HOST} from "@/constants/views";
+
+/** No bags to draw, one object so a render does not mint a new empty map. */
+const NO_BAGS: Readonly<Record<string, StoredBagReading>> = {};
 
 /**
  * How long one import link stays claimed after it is acted on.
@@ -142,7 +172,8 @@ let lastEditorPushAt = 0;
 
 type RecipeListItem =
     | {kind: "heading"; id: string; label: string}
-    | {kind: "recipe"; recipe: Recipe; recipeIndex: number};
+    | {kind: "recipe"; recipe: Recipe; recipeIndex: number}
+    | {kind: "roaster"; match: RoasterMatch};
 
 type HomeQuickEditState = {
     recipe: Recipe;
@@ -201,8 +232,8 @@ function EmptyQuery({
                 )}
             </YStack>
             <Button accessibilityLabel="Clear search and filters"
-                    backgroundColor={palette.text}
-                    color={onAccent.text}
+                    backgroundColor={primary.fill}
+                    color={primary.ink}
                     borderRadius="$4"
                     onPress={onClear}>
                 CLEAR SEARCH AND FILTERS
@@ -239,12 +270,14 @@ function HomeQuickEditSheet({
     onOpenChange,
     onChange,
     onBrew,
+    onSaveDose,
     temperatureUnit
 }: {
     state: HomeQuickEditState | null;
     onOpenChange: (open: boolean) => void;
     onChange: (adjustments: QuickEditAdjustments) => void;
     onBrew: () => void;
+    onSaveDose: (dose: number) => void;
     temperatureUnit: TemperatureUnit;
 }) {
     const recipe = state?.recipe ?? null;
@@ -253,7 +286,7 @@ function HomeQuickEditSheet({
 
     return (
         <XbrwSheet open={recipe !== null} onOpenChange={onOpenChange}
-                   title="QUICK EDIT" heightPercent={72}>
+                   title="QUICK EDIT" heightPercent={84}>
             {recipe !== null && (
                 <QuickEditPanel
                     recipe={recipe}
@@ -261,6 +294,7 @@ function HomeQuickEditSheet({
                     accent={accent}
                     temperatureUnit={temperatureUnit}
                     onChange={onChange}
+                    onSaveDose={onSaveDose}
                     renderBrewAction={(brewability) => (
                         <Button
                             testID="home-quick-edit-brew"
@@ -282,7 +316,7 @@ function HomeQuickEditSheet({
 }
 
 export default function HomeScreen({db, beanStore, settings}: Props) {
-    const insets = useSafeAreaInsets();
+    const bottomInset = useBottomInset();
     const router = useSteadyRouter();
     const navigation = useNavigation();
 
@@ -290,6 +324,9 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
     const [myShelves, setMyShelves] = useSetting("myShelves", settings);
     const library = useRecipeLibrary(db, libraryQuery.query, parseHidden(myShelves));
     const {collapsed, onScroll} = useCollapsibleHeader();
+    // The roasters the user subscribed to, from their cached feeds. Everything
+    // it adds to this screen is drawn only while there is a subscription.
+    const homeRoasters = useHomeRoasters(settings);
     // The picker's selection lives apart from the library's query, which is
     // what lets a ticked recipe survive a change of lens: filter to tea, tick
     // three, clear the filter, and the three are still ticked.
@@ -310,7 +347,34 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
     const [deletingShelf, setDeletingShelf] = useState<string | null>(null);
     const [onlySelected, setOnlySelected] = useState(false);
     const [showCoffeeMarker] = useSetting("showCoffeeMarker", settings);
+    const [bagTrackerSetting] = useSetting("bagTracker", settings);
+    const [beanconquerorHandoff] = useSetting("beanconquerorHandoff", settings);
+    // Grams left are this app's estimate only while this app is the tracker.
+    // With Beanconqueror counting the bag, a badge here would be a second,
+    // drifting answer, so the cards draw none.
+    const bagTracker = resolveBagTracker(bagTrackerSetting, beanconquerorHandoff);
+    const shownBags = bagTracker === "xbrw" ? library.bags : NO_BAGS;
+    // Freshness is the roast day's, not a count, so it shows in both modes.
+    const now = useNow();
+    const bagFreshness: Record<string, Freshness> = {};
+    for (const [uuid, stored] of Object.entries(library.bags)) {
+        const reading = freshnessOf(stored.bag, now);
+        if (reading !== null) bagFreshness[uuid] = reading.state;
+    }
+    // The "Ready to brew" card: the one open bag worth brewing now. Nothing
+    // at all without an open bag, and nothing for the rest of a day it was
+    // closed on. `readyShown` is the good candidate "+2 more ready" stepped
+    // to, discarded at render once it is no longer a good candidate.
+    const [readyDismissedOn, setReadyDismissedOn] = useSetting("readyToBrewDismissedOn", settings);
+    const [readyShown, setReadyShown] = useState<string | null>(null);
+    const ready = dismissedToday(readyDismissedOn, dayOf(now))
+        ? null
+        : readyToBrew(library.bagRecipes, library.bags, library.evidence, bagTracker, now);
+    const readyEntry = ready === null ? null
+        : ready.good.find((entry) => entry.recipe.uuid === readyShown) ?? ready.entries[0];
+
     const [dottedProfile] = useSetting("dotMatrixProfile", settings);
+    const [showRecipeAvatars] = useSetting("showRecipeAvatars", settings);
     const [invertAutoShelves] = useSetting("invertAutoShelves", settings);
     const [hiddenShelves, setHiddenShelves] = useSetting("hiddenShelves", settings);
     const [rawTemperatureUnit] = useSetting("temperatureUnit", settings);
@@ -322,6 +386,9 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
 
     const {machine, status: machineStatus, connect: connectMachine, remembered} =
         useMachine();
+    // The same picker the editor's chip opens. Only with two or more saved:
+    // one machine has nothing to choose between.
+    const machinePicker = useMachinePicker(settings);
     const slotRecord = useSlotRecord(remembered);
     // Seeded from machine.info so a machine that is already connected when the
     // screen mounts does not show "Not in range" while the header dot says
@@ -785,7 +852,18 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
         setShelfActions(null);
     }
 
-    const listItems: RecipeListItem[] = drawSections
+    // A subscribed roaster's coffees that answer the search, after the
+    // library's own: the library is what the user has, the roasters what they
+    // could add. Not while picking, because a roaster's coffee cannot be ticked
+    // onto a shelf until it is in the library.
+    const roasterMatches = picker.active
+        ? []
+        : homeRoasters.search(libraryQuery.query.search);
+    const roasterItems: RecipeListItem[] = roasterMatches.length === 0 ? [] : [
+        {kind: "heading", id: "roasters", label: "FROM YOUR ROASTERS"},
+        ...roasterMatches.map((match) => ({kind: "roaster" as const, match}))
+    ];
+    const libraryItems: RecipeListItem[] = drawSections
         ? [
             {kind: "heading", id: "favourites", label: "STARRED"},
             ...favouriteRecipes.map((recipe, recipeIndex) => (
@@ -799,6 +877,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
         : shownRecipes.map((recipe, recipeIndex) => (
             {kind: "recipe" as const, recipe, recipeIndex}
         ));
+    const listItems: RecipeListItem[] = [...libraryItems, ...roasterItems];
     // The empty branch gates on what the list actually draws, not on the
     // query's count. While picking with SELECTED on, the rows come from the
     // whole table rather than the query, so `library.recipes.length` and the
@@ -883,22 +962,63 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
     // caught nothing. `+native-intent` stops that pair from forming; this is
     // what holds if anything ever mounts a second one again.
 
+    // The offer that follows an import link naming a roaster feed. Asked only
+    // while this screen is in front: the link's own recipe opens in the
+    // editor first, and the question waits for the user to come back.
+    const roasterOffer = useRoasterOffer({
+        canAsk:   () => navigation.isFocused(),
+        settings
+    });
+
+    // Subscribed catalogues stay fresh while the app is in use and no longer:
+    // once on open, then each time the app comes back to the foreground. The
+    // twelve hour limit is applied inside, so this can fire freely. No
+    // background fetch: a phone in a pocket asks nobody for anything.
+    useEffect(() => {
+        roasterOffer.syncDue();
+        const sub = AppState.addEventListener("change", (next) => {
+            if (next === "active") roasterOffer.syncDue();
+        });
+        return () => sub.remove();
+        // Subscribed once. The hook reads everything through refs and the
+        // settings store, so the first render's handle stays correct.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     const importer = useRecipeImport({
         stored:       () => library.allRecipes(),
-        onOpenRecipe: (recipe, isExisting) => {
+        onOpenRecipe: (recipe, isExisting, refreshed) => {
             setImportOpen(false);
+            // The import worked, so a roaster feed the link named can now be
+            // followed up. Whatever the push below decides, the recipe arrived.
+            roasterOffer.imported();
             // Ask to navigate first: a recipe that arrives while an editor is
             // already opening is dropped whole, and a dropped arrival must not
             // announce itself either.
             if (!openRecipe(recipe)) {
                 return;
             }
-            if (isExisting) {
+            if (refreshed) {
+                notify({tone: "info", message: UPDATED_TO_LATEST});
+            } else if (isExisting) {
                 // The same words a card read already uses when it turns out the
                 // library has this one. `resolveOnOpen` never makes a copy, so
                 // opening the existing recipe is the whole reveal.
                 notify({tone: "info", message: ALREADY_IN_LIBRARY});
             }
+        },
+        // An import changed a recipe already held: a link filled its blanks
+        // (its picture, its coffee), or a re-import took the author's latest
+        // brewing content. Best-effort, like the minted share link below: the
+        // editor opens on the changed recipe either way, and saving there
+        // writes it too.
+        onSaveExisting: recipe => {
+            try {
+                new RecipeDatabase().updateRecipe(recipe.uuid, recipe);
+            } catch {
+                // The filled recipe is still what the editor opens.
+            }
+            library.refresh();
         }
     });
 
@@ -947,6 +1067,9 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
             // the share guard is forgotten -- an explicit return by the user,
             // not the absence of an intent, which we cause ourselves.
             handledShareUrl.current = null;
+            // Back from the recipe an import link opened: if that link named a
+            // roaster feed and it has loaded, this is when to ask about it.
+            roasterOffer.ask();
             // Refreshing on focus is how a recipe saved in the editor appears
             // here. `library` is rebuilt every render, so depending on it would
             // re-run this on every render instead of on every focus.
@@ -1032,9 +1155,16 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
         // in the app they came from. That is the same situation, so it gets
         // the same answer.
         setImportOpen(true);
+        // Before the lookup starts, so its success can find it. A link with no
+        // feed clears one left by an earlier link.
+        if (link.feed !== undefined) roasterOffer.arm(link.feed);
+        else roasterOffer.disarm();
         importer.resolveNow(source, "shared", {
             coffee: link.coffee,
+            tags: link.tags,
             recipeUrl: link.recipeUrl,
+            recipeName: link.recipeName,
+            colour: link.colour,
             // Only a stated `brewmind` source earns the provenance. Anything
             // else still imports and reads as an ordinary import, because the
             // link is useful to anyone who can mint one.
@@ -1065,10 +1195,14 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
         // its own.
         if (importStatus === "error") {
             handledShareUrl.current = null;
+            // A failed import has nothing to follow up.
+            roasterOffer.disarm();
             // An import link needs nothing here: each delivery is an event, so
             // opening the same link again after a failure is heard again on
             // its own. See `useImportLink`.
         }
+        // `roasterOffer` is rebuilt every render, and `disarm` only clears a ref.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [importStatus]);
 
     async function progressCallback(progress: number): Promise<string | undefined> {
@@ -1226,6 +1360,19 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
         }
     }
 
+    function saveQuickEditDose(dose: number): void {
+        if (quickEdit === null) return;
+        const saved = library.saveAtDose(quickEdit.recipe, dose);
+        if (saved === null) {
+            notify({tone: "error", message: "Could not save the recipe."});
+            return;
+        }
+        // The sheet now edits the saved recipe, so the dose is no longer an
+        // adjustment; anything else moved for this brew stays moved.
+        setQuickEdit({recipe: saved, adjustments: withoutDose(quickEdit.adjustments)});
+        notify({tone: "success", message: `Saved at ${dose} g.`});
+    }
+
     function openBrew(recipe: Recipe, adjustments?: QuickEditAdjustments): boolean {
         // There is one machine, and `LiveBrewProvider.start` refuses a second
         // run while the first is still going. Without this the tap would push
@@ -1296,7 +1443,8 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
         || namingShelf || renamingShelf !== null || shelfActions !== null
         || deletingShelf !== null || beanFilterOpen
         || removingShelf !== null || overflowRecipe !== null || quickEdit !== null
-        || ratingNoteOpen;
+        || ratingNoteOpen || machinePicker.open
+        || roasterOffer.state.phase !== "idle";
 
     // The sheet's own row, reachable without the long press that opens it. A
     // reader cannot make that gesture, so every verb the sheet offers is also an
@@ -1335,6 +1483,12 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
     // is settling, and what is on screen is the honest answer.
     const openShelf = shelves.find((shelf) => shelf.id === libraryQuery.openShelfId);
 
+    // The "Ready to brew" card. Not while picking, editing or standing in a
+    // shelf, where the screen is about something else.
+    const readyCard = ready === null || readyEntry === null || picker.active || inShelfRoom
+        || editing || wholeLibraryEmpty
+        ? null : {entry: readyEntry, good: ready.good, low: ready.low};
+
     return (
         <>
             {/* The NFC ceremony is a modal moment, and an absolutely positioned
@@ -1348,7 +1502,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                 — the Android half of what `accessibilityViewIsModal` does on
                 iOS. The sheets are rendered outside this guarded subtree, so
                 they never hide themselves. */}
-            <YStack testID="home-content" flex={1} backgroundColor={palette.base}
+            <YStack {...STABLE_HOST} testID="home-content" flex={1} backgroundColor={palette.base}
                     accessibilityElementsHidden={screenCovered}
                     importantForAccessibility={screenCovered ? "no-hide-descendants" : "auto"}>
                 {picker.active ? (
@@ -1400,12 +1554,25 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                             onRefreshWater={refreshWater}
                             onConnect={connectMachine}
                             onEasyMode={() => router.push("/easyMode")}
+                            machineLabel={machinePicker.available ? machinePicker.label : undefined}
+                            machineModel={machinePicker.model}
+                            machineColour={machinePicker.colour.ink}
+                            onChooseMachine={machinePicker.show}
                         />
                     )}
+                    // Only with two or more saved. One machine draws the
+                    // green it always has, and a hold does what a tap does.
+                    machine={machinePicker.available
+                        ? {name: machinePicker.label, colour: machinePicker.colour}
+                        : undefined}
                     onMachinePress={() => {
                         setPopoverNow(Date.now());
                         setPopoverOpen((open) => !open);
                     }}
+                    // Straight to the picker, past the panel: the switch is
+                    // the one thing the hold is for. The picker's own guard
+                    // locks its rows during a brew, so this needs none.
+                    onMachineLongPress={machinePicker.available ? machinePicker.show : undefined}
                     onMachineConnect={connectMachine}
                     onScan={readCard}
                     onImport={() => setImportOpen(true)}
@@ -1437,6 +1604,17 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                                  accessibilityLabel="Create a recipe"
                                  onPress={() => setNewOpen(true)}/>
                     </XStack>
+                    {/* Inside the tiles' row so it folds away with them as the
+                        list scrolls. Draws nothing without a subscription. */}
+                    <RoasterStrip strip={homeRoasters.strip}
+                                  // A roaster with no cached feed yet has an
+                                  // empty list to open, so its row goes to its
+                                  // feed screen, where the sync status and
+                                  // REFRESH NOW are.
+                                  onOpen={(row) => row.cached
+                                      ? router.push({pathname: "/roaster", params: {feed: row.feedUrl}})
+                                      : router.push({pathname: "/subscription", params: {feed: row.feedUrl}})}
+                                  onAll={() => router.push("/roasters")}/>
                 </Collapsible>
 
                 {!wholeLibraryEmpty && (
@@ -1475,8 +1653,50 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                         }/>
                 )}
 
+                {/* Under the rail, at the top of the library, and folded
+                    away with the header on scroll like the tiles above.
+                    `openRecipe` and `openBrew` are passed as they are, with
+                    the recipe as the card's item: wrapped in an arrow here,
+                    the compiler's purity check reads their Date.now() as
+                    called during render. */}
+                {readyCard !== null && (
+                    <Collapsible open={!collapsed}>
+                        <ReadyToBrewCard
+                            item={readyCard.entry.recipe}
+                            name={readyName(readyCard.entry.recipe)}
+                            accent={resolveAccent(readyCard.entry.recipe)}
+                            imageUri={showRecipeAvatars ? readyCard.entry.recipe.imageURL : undefined}
+                            freshnessLine={readyFreshnessLine(readyCard.entry.freshness)}
+                            bagLine={readyBagLine(readyCard.entry.reading)}
+                            emphasised={brewEmphasised(readyCard.entry)}
+                            onOpen={openRecipe}
+                            // The row tray's rule: no BREW without a machine.
+                            onBrew={remembered !== "" ? openBrew : undefined}
+                            low={readyCard.low === null ? null : {
+                                line: runningLowLine(readyCard.low.name),
+                                reorderUrl: readyCard.low.reorderUrl
+                            }}
+                            onReorder={openLink}
+                            moreLine={readyCard.good.includes(readyCard.entry)
+                                ? moreReadyLine(readyCard.good.length - 1) : null}
+                            onMore={() => {
+                                const {good, entry} = readyCard;
+                                setReadyShown(good[(good.indexOf(entry) + 1) % good.length].recipe.uuid);
+                            }}
+                            onDismiss={() => setReadyDismissedOn(dayOf(now))}/>
+                    </Collapsible>
+                )}
+
                 {wholeLibraryEmpty ? (
-                    <EmptyLibrary/>
+                    // Only with a roaster whose coffees are cached: a button
+                    // onto a list still loading would open an empty screen.
+                    <EmptyLibrary browse={homeRoasters.browsable.length > 0 ? {
+                        label:   browseLabel(homeRoasters.browsable),
+                        onPress: () => homeRoasters.browsable.length === 1
+                            ? router.push({pathname: "/roaster",
+                                           params: {feed: homeRoasters.browsable[0].feed}})
+                            : router.push("/roasters")
+                    } : undefined}/>
                 ) : inShelfRoom && !picker.active ? (
                     // A shelf opened into itself, ahead of the grid branch it
                     // replaces: same view, same rail, but the squares now carry
@@ -1492,10 +1712,13 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                         onScroll={onScroll}
                         actionsFor={roomActionsFor}
                         evidence={library.evidence}
+                        bags={shownBags}
+                        freshness={bagFreshness}
                         showCoffeeMarker={showCoffeeMarker}
                         dottedProfile={dottedProfile}
+                        showPicture={showRecipeAvatars}
                         editing={editing}
-                        paddingBottom={insets.bottom + 8}/>
+                        paddingBottom={bottomInset + 8}/>
                 ) : libraryQuery.view === "shelves" && !picker.active ? (
                     // The grid steps aside while picking without changing the
                     // remembered view, so cancelling puts the user back where
@@ -1506,7 +1729,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                     // that showed NO MATCHES instead of the shelves would hide
                     // the control the user came to it for.
                     <ShelfGrid shelves={shelves}
-                               marks={library.shelfMarks}
+                               marks={withShelfPhotos(library.shelfMarks, showRecipeAvatars)}
                                invertAuto={invertAutoShelves}
                                hidden={parseHidden(hiddenShelves)}
                                onOpen={libraryQuery.openShelf}
@@ -1516,7 +1739,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                                onHideShelf={(id) =>
                                    setHiddenShelves(toggleHidden(hiddenShelves, id))}
                                onScroll={onScroll}
-                               paddingBottom={insets.bottom + 8}/>
+                               paddingBottom={bottomInset + 8}/>
                 ) : listEmpty ? (
                     nothingTicked ? (
                         <EmptySelection/>
@@ -1541,7 +1764,9 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                         keyExtractor={(item: RecipeListItem) =>
                             item.kind === "heading"
                                 ? `heading:${item.id}`
-                                : `recipe:${item.recipe.key}`}
+                                : item.kind === "roaster"
+                                    ? `roaster:${item.match.feedUrl}#${item.match.ref}`
+                                    : `recipe:${item.recipe.key}`}
                         onScroll={onScroll}
                         scrollEventThrottle={16}
                         showsVerticalScrollIndicator={false}
@@ -1549,11 +1774,18 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                         // last card scrolls clear of the home indicator, rather
                         // than the whole screen stopping short of it.
                         contentContainerStyle={{
-                            paddingBottom: insets.bottom + 8
+                            paddingBottom: bottomInset + 8
                                 + (picker.active ? PICKER_BAR_HEIGHT : 0)
                         }}
                         renderItem={({item}: {item: RecipeListItem}) => item.kind === "heading" ? (
                             <SectionHeading id={item.id} label={item.label}/>
+                        ) : item.kind === "roaster" ? (
+                            <RoasterSearchRow
+                                match={item.match}
+                                onPress={() => router.push({
+                                    pathname: "/roasterCoffee",
+                                    params:   {feed: item.match.feedUrl, coffee: item.match.ref}
+                                })}/>
                         ) : picker.active ? (
                             <SelectableRecipeRow
                                 recipe={item.recipe}
@@ -1561,14 +1793,18 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                                 selected={picker.selected.has(item.recipe.uuid)}
                                 onToggle={() => picker.toggle(item.recipe.uuid)}
                                 showCoffeeMarker={showCoffeeMarker}
-                                dottedProfile={dottedProfile}/>
+                                dottedProfile={dottedProfile}
+                                showPicture={showRecipeAvatars}/>
                         ) : (
                             <SwipeableRecipeRow
                                 recipe={item.recipe}
                                 editing={editing}
                                 showCoffeeMarker={showCoffeeMarker}
                                 dottedProfile={dottedProfile}
+                                showPicture={showRecipeAvatars}
                                 evidence={library.evidence[item.recipe.uuid]}
+                                bag={shownBags[item.recipe.uuid]}
+                                freshness={bagFreshness[item.recipe.uuid]}
                                 slotMarker={slotMarkers(slotRecord, item.recipe)}
                                 onEasyMode={remembered !== ""
                                     ? () => openEasyModeRecipe(item.recipe, remembered) : undefined}
@@ -1618,7 +1854,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
             {picker.active && !screenCovered && (
                 <ShelfPickerBar count={picker.count}
                                 editing={picker.mode.kind === "editing"}
-                                paddingBottom={insets.bottom}
+                                paddingBottom={bottomInset}
                                 onCancel={stopPicking}
                                 onDone={finishPicking}/>
             )}
@@ -1640,6 +1876,10 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                                   setRemovingShelf(null);
                                   stopPicking();
                               }}/>
+
+            <RoasterOfferSheet state={roasterOffer.state}
+                               onAccept={roasterOffer.accept}
+                               onDecline={roasterOffer.decline}/>
 
             <NameShelfSheet open={namingShelf} count={picker.count}
                             onOpenChange={setNamingShelf}
@@ -1789,11 +2029,23 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                 }}
                 onChange={onQuickEditChange}
                 onBrew={brewQuickEdit}
+                onSaveDose={saveQuickEditDose}
                 temperatureUnit={temperatureUnit}/>
+
+            <MachinePickerSheet open={machinePicker.open}
+                                onOpenChange={machinePicker.setOpen}
+                                machines={machinePicker.machines}
+                                activeId={machinePicker.activeId}
+                                connected={machinePicker.connected}
+                                survey={machinePicker.survey}
+                                onRescan={machinePicker.rescan}
+                                blocker={machinePicker.blocker}
+                                onChoose={machinePicker.choose}/>
 
             <ImportSheet
                 open={importOpen}
                 importer={importer}
+                hasRoasters={homeRoasters.subscribed}
                 onOpenChange={(open) => {
                     setImportOpen(open);
                     if (!open) {

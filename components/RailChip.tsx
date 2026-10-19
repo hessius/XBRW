@@ -4,7 +4,7 @@ import {XStack} from "tamagui";
 
 import DotIcon from "@/components/DotIcon";
 import DotMatrixText from "@/components/DotMatrixText";
-import {onAccent, palette} from "@/constants/colors";
+import {onAccent, palette, primary} from "@/constants/colors";
 import type {DotIconName} from "@/constants/dotIcons";
 import {DURATION, EASING, useReducedMotion} from "@/constants/motion";
 
@@ -89,9 +89,9 @@ type Props = {
      */
     caretOpen?: boolean;
     /**
-     * The active fill. Defaults to `palette.text`, the house "selected with no
-     * recipe accent" fill that `SegmentedControl` also uses, so the rail reads as
-     * on without borrowing the brand colour, which never means a state.
+     * The active fill. Defaults to `primary.fill`, the house "selected with no
+     * recipe accent" fill that `SegmentedControl` also uses. `primary` says why
+     * that fill is currently the brand magenta, and how to take it back.
      */
     accent?: string;
     testID?: string;
@@ -147,7 +147,7 @@ function RailCaret({open, color}: {open: boolean; color: string}) {
  */
 export default function RailChip({
     active, onPress, accessibilityLabel, icon, label, expanded, caretOpen,
-    accent = palette.text, testID, dimmed = false, unavailable = false
+    accent = primary.fill, testID, dimmed = false, unavailable = false
 }: Props) {
     const iconOnly = label === undefined;
     // Ink only agrees with the fill; it does not carry the state itself.

@@ -3,10 +3,10 @@ import {grindBand, grindValueMeansOff} from "@/library/grindBands";
 
 /** The part of `Machine` this needs. Narrow, so a test can be a literal. */
 export type DialMachine = {
-    /** Refresh the vitals. Resolves to whether the machine actually answered. */
-    askHowItIsDoing: () => Promise<boolean>;
-    /** The vitals, as they stand after the request above. */
+    /** The vitals as last heard. */
     info: {grindSize: number} | null;
+    /** When they were heard, by wall clock. */
+    infoAt: number;
 };
 
 /**
@@ -23,10 +23,11 @@ export type DialMachine = {
  * earlier; the post-brew reading is the one the machine has certainly caught
  * up with.
  *
- * That is not free. Machine info only answers inside a live session and the
- * session expires, so renewing it sends a handshake, which beeps. The beep is
- * accepted: it happens once, after the brew is over, and it is a far smaller
- * cost than a recorded number that quietly contradicts what the machine did.
+ * It is not asked for. The machine sends its vitals only after a handshake,
+ * which beeps, and a bare request is ignored (V12.0D.500, 2026-10-19): the
+ * post-brew ask sent three of those into silence after every brew. So this
+ * keeps a reading only when one arrived after the pour began by some other
+ * route, such as a Refresh. Otherwise the field stays absent.
  *
  * Two rules keep it honest:
  *
@@ -34,10 +35,10 @@ export type DialMachine = {
  *   the pour phase opens, which the machine announces on GRINDER_STOP, so it
  *   is exactly the record's own answer to "did this brew get past the grind".
  *   A brew cancelled before that, or refused for want of water, never beeps.
- * - **Only a reading the machine confirmed.** `askHowItIsDoing` returning
- *   false leaves `info` holding the pre-brew value, which is the one number
- *   this whole path exists to avoid recording. Nothing is written then, and
- *   an absent `dialAfter` is how the record says the reading was not taken.
+ * - **Only a reading heard after the pour began.** `info` otherwise holds the
+ *   pre-brew value, which is the one number this whole path exists to avoid
+ *   recording. Nothing is written then, and an absent `dialAfter` is how the
+ *   record says the reading was not taken.
  *
  * Deliberately not awaited by the brew: the record is written first and this
  * lands as an update to that row, so a reading that never arrives just leaves
@@ -55,8 +56,7 @@ export async function readDialAfterBrew(
         || record.pouringAt <= 0) {
         return null;
     }
-    const answered = await machine.askHowItIsDoing();
-    if (!answered) return null;
+    if (machine.info === null || !(machine.infoAt >= record.pouringAt)) return null;
     const dial = machine.info?.grindSize ?? 0;
     if (dial <= 0) return null;
     save(record.id, dial);
