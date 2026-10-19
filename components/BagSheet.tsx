@@ -164,6 +164,11 @@ function BagForm({
         bag?.restDays === undefined ? advised.level : null);
     const [rest, setRest] = useState(String(startRest));
     const [peak, setPeak] = useState(String(startPeak));
+    const [windowBase, setWindowBase] = useState<RoastFigures>({
+        restDays: startRest,
+        peakDay: startPeak,
+        bestUntilDay: bag?.bestUntilDay ?? advised.figures.bestUntilDay
+    });
 
     const sizeGrams = wholeNumber(size);
     const sizeOk = isBagGrams(sizeGrams);
@@ -176,20 +181,21 @@ function BagForm({
     const leftOk = !editingLeft || isGramsLeft(leftValue);
     const nameValue = (beanNameFixed ? beanName : name).trim();
     const nameOk = tracker === "xbrw" || nameValue !== "";
-    // The roaster's word is shown, not asked for; otherwise the person sets it.
-    const fromRoaster = advised.source === "coffee";
+    // New bags show the roaster's advice. Saved bags keep their own figures.
+    const fromRoaster = bag === null && advised.source === "coffee";
     const restValue = roastDays(rest);
     const peakValue = roastDays(peak);
     const figuresError = fromRoaster ? null : figuresProblem(restValue, peakValue);
     const figures: RoastFigures | undefined = roastedOn === undefined ? undefined
         : fromRoaster ? advised.figures
         : figuresError === null && restValue !== undefined && peakValue !== undefined
-            ? figuresFrom(restValue, peakValue, level ?? advised.level) : undefined;
+            ? figuresFrom(restValue, peakValue, windowBase) : undefined;
     const figuresOk = roastedOn === undefined || figures !== undefined;
     const valid = sizeOk && roastOk && priceOk && leftOk && nameOk && figuresOk;
 
     function pickLevel(key: RoastLevelKey) {
         setLevel(key);
+        setWindowBase(ROAST_LEVEL_DEFAULTS[key]);
         setRest(String(ROAST_LEVEL_DEFAULTS[key].restDays));
         setPeak(String(ROAST_LEVEL_DEFAULTS[key].peakDay));
     }
