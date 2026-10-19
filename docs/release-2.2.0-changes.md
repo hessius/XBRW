@@ -107,6 +107,12 @@ the author still serves the originally imported content (#237). Link imports
 and catalogue saves keep the local copy and its original import fingerprint;
 a genuinely changed author version still asks before replacing local edits.
 
+Restoring subscriptions also clears their old sync timestamps because the
+catalogue cache is not included in backups. The next normal sync can fetch
+coffees immediately; paused subscriptions remain paused. An orchestration
+regression restores settings, runs the real sync path with an injected feed
+response and checks the populated catalogue.
+
 ## Imported proposal notes
 
 Moved from additions to the shipped 2.1.0 ledger without rewriting that ledger.
