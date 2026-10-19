@@ -3,13 +3,15 @@
 This is the source for the full release-testing checklist, not a claim that
 device testing is complete. Update it whenever release scope or behaviour changes.
 
-## No beans, said plainly (2026-10-19)
+## No beans and no water, said plainly (2026-10-19)
 
-When a brew stops because the machine reports no beans (state 0x0F), the brew
-screen now says "No beans detected. Fill the hopper and tap TRY AGAIN." instead
-of "The machine stopped during grinding. Check there are beans in the hopper."
-The machine names the fault itself, so the copy no longer reads as a guess.
-Device check: start a brew with an empty hopper.
+When a brew stops because the machine reports no beans (state 0x0F) or no water
+(state 0x0C), the brew screen now names it and says what to do: "No beans
+detected. Fill the hopper and tap TRY AGAIN." and "No water detected. Fill the
+tank before brewing again." The water copy names no button because NO_RETRY
+keeps TRY AGAIN off after a water fault (the dose may be spent). The beans copy
+used to read as a guess ("stopped during grinding"), and the water copy gave no
+next step. Device check: start a brew with an empty hopper, then an empty tank.
 
 ## Brew history trace storage (2026-10-15)
 

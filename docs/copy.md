@@ -576,7 +576,7 @@ can be kept parallel.
 
 | ID | Source | Context — when the user sees this | Current text |
 |----|--------|-----------------------------------|--------------|
-| `brew.failure.noWater` | `constants/brewCopy.ts:37` (`noWater`) | Brew failed: out of water. | `No water detected. Fill the tank and tap TRY AGAIN.` |
+| `brew.failure.noWater` | `constants/brewCopy.ts:37` (`noWater`) | Brew failed: out of water. | `No water detected. Fill the tank before brewing again.` |
 | `brew.failure.noBeans` | `constants/brewCopy.ts:38` (`noBeans`) | Brew failed: the machine reported no beans (state 0x0F). | `No beans detected. Fill the hopper and tap TRY AGAIN.` |
 | `brew.failure.gearPosition` | `constants/brewCopy.ts:39` (`gearPosition`) | Brew failed: grinder gear position. | `The grinder could not find its gear position.` |
 | `brew.failure.doseMismatch` | `constants/brewCopy.ts:40` (`doseMismatch`) | Brew failed: dose/volume refused. | `The machine would not accept that dose and water volume.` |
