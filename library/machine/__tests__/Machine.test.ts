@@ -352,14 +352,15 @@ describe("brewing", () => {
 
             const brewing = machine.brew(brewable());
             // Let the "how are you doing" question every brew opens with settle.
+            // The link handshook a moment ago, so the brew does not again.
             await jest.advanceTimersByTimeAsync(0);
-            expect(brewFrames(transport)).toEqual([8100]);
+            expect(brewFrames(transport)).toEqual([8102]);
 
             await jest.advanceTimersByTimeAsync(FRAME_GAP_MS);
-            expect(brewFrames(transport)).toEqual([8100, 8102]);
+            expect(brewFrames(transport)).toEqual([8102, 8104]);
 
-            await jest.advanceTimersByTimeAsync(FRAME_GAP_MS * 3);
-            expect(brewFrames(transport)).toEqual([8100, 8102, 8104, 8001, 8002]);
+            await jest.advanceTimersByTimeAsync(FRAME_GAP_MS * 2);
+            expect(brewFrames(transport)).toEqual([8102, 8104, 8001, 8002]);
 
             await brewing;
         } finally {
@@ -384,7 +385,7 @@ describe("brewing", () => {
 
             const brewing = machine.brew(brewable());
             await jest.advanceTimersByTimeAsync(FRAME_GAP_MS);
-            expect(brewFrames(transport)).toEqual([8100, 8102]);
+            expect(brewFrames(transport)).toEqual([8102, 8104]);
 
             const cancelling = machine.cancelBrew();
             await jest.advanceTimersByTimeAsync(FRAME_GAP_MS * 4);
@@ -392,7 +393,7 @@ describe("brewing", () => {
             await brewing;
 
             // The stop and the home frame, and nothing of the recipe after them.
-            expect(brewFrames(transport)).toEqual([8100, 8102, 40519, 8022]);
+            expect(brewFrames(transport)).toEqual([8102, 8104, 40519, 8022]);
         } finally {
             jest.useRealTimers();
         }
@@ -534,7 +535,7 @@ describe("brewing", () => {
         const {transport, machine} = await readyMachine();
         const phases: string[] = [];
         machine.onPhase((phase) => phases.push(phase.name));
-        transport.failWriteOf = {code: 8100, reason: "the radio is busy"};
+        transport.failWriteOf = {code: 8102, reason: "the radio is busy"};
 
         await expect(machine.brew(brewable())).rejects.toThrow(/radio is busy/i);
 
@@ -553,11 +554,12 @@ describe("brewing", () => {
         expect(brewFrames(transport)).toEqual([]);
     });
 
-    it("sends the handshake, dose, cup range, recipe and commit, in that order", async () => {
+    it("sends the dose, cup range, recipe and commit, in that order", async () => {
+        // No handshake: the link was opened with one a moment ago.
         const {transport, machine} = await readyMachine();
         await machine.brew(brewable());
 
-        expect(brewFrames(transport)).toEqual([8100, 8102, 8104, 8001, 8002]);
+        expect(brewFrames(transport)).toEqual([8102, 8104, 8001, 8002]);
     });
 
     it("uses the no-grind opcode for a recipe that does not grind", async () => {
@@ -579,7 +581,7 @@ describe("brewing", () => {
         tea.pours[0].pauseTime = 60;
         await machine.brew(tea);
 
-        expect(brewFrames(transport)).toEqual([8100, 8102, 4513, 4512]);
+        expect(brewFrames(transport)).toEqual([8102, 4513, 4512]);
     });
 
     it("walks the happy path to ENJOY", async () => {
@@ -1123,7 +1125,7 @@ describe("brewing", () => {
 
         await machine.brew(brewable());
 
-        expect(brewFrames(transport)).toEqual([8100, 8102, 8104, 8001, 8002]);
+        expect(brewFrames(transport)).toEqual([8102, 8104, 8001, 8002]);
     });
 
     it("offers a mode switch only when a send goes nowhere on an EASY machine", async () => {
@@ -1188,7 +1190,7 @@ describe("waiting for the user to start the brew", () => {
         await machine.brew(brewable());
 
         // Everything but the one frame that sets a burr spinning.
-        expect(brewFrames(transport)).toEqual([8100, 8102, 8104, 8001]);
+        expect(brewFrames(transport)).toEqual([8102, 8104, 8001]);
         expect(machine.phase.name).toBe("readyToStart");
     });
 
@@ -1214,7 +1216,7 @@ describe("waiting for the user to start the brew", () => {
         tea.pours[0].pauseTime = 60;
 
         await machine.brew(tea);
-        expect(brewFrames(transport)).toEqual([8100, 8102, 4513]);
+        expect(brewFrames(transport)).toEqual([8102, 4513]);
 
         transport.written = [];
         await machine.startBrew();
@@ -1635,10 +1637,38 @@ describe("the handshake the machine wants before it will answer", () => {
     // 8100 first, then the same 40521, produced the answer. The session goes
     // stale, and asking without renewing it is asking into a void.
 
-    it("renews the session before asking, on a link that has been sitting idle", async () => {
+    it("renews the session before asking again, when a question goes unanswered", async () => {
+        const transport = new FakeTransport();
+        const machine = new Machine(transport, {frameGapMs: 0, handshakeFreshMs: 0, infoWaitMs: 5});
+        await machine.connect("AA:BB");
+        transport.written = [];
+        // A session that has gone stale: the quiet question is ignored.
+        transport.ignoreInfoRequests = 1;
+
+        await machine.askHowItIsDoing();
+
+        expect(transport.sent).toEqual([40521, 8100, 40521]);
+    });
+
+    it("asks without a handshake first, on a link that has had one", async () => {
+        // The handshake beeps. An answer to a question asked without one is
+        // proof the session is still good, so it needs no renewing.
         const transport = new FakeTransport();
         const machine = new Machine(transport, {frameGapMs: 0, handshakeFreshMs: 0});
         await machine.connect("AA:BB");
+        transport.written = [];
+
+        await machine.askHowItIsDoing();
+
+        expect(transport.sent).toEqual([40521]);
+    });
+
+    it("handshakes before asking when silence has already said the session is gone", async () => {
+        const transport = new FakeTransport();
+        transport.infoReply = null;
+        const machine = new Machine(transport, {frameGapMs: 0, infoWaitMs: 5});
+        await machine.connect("AA:BB");
+        transport.infoReply = machineInfoFrame();
         transport.written = [];
 
         await machine.askHowItIsDoing();
@@ -1660,19 +1690,97 @@ describe("the handshake the machine wants before it will answer", () => {
         expect(transport.sent).toEqual([40521]);
     });
 
-    it("counts the brew's own handshake as a renewal", async () => {
-        // `brewOnce` opens with 8100 for exactly this reason. A brew must not
-        // make the machine beep twice.
+    it("does not make a brew on a fresh link beep", async () => {
+        // Owner report, 2026-10-19: the official app beeps once at connect and
+        // brews without another, while XBRW++ beeped "like connecting" on
+        // BREW. The brew re-sent 8100 even though the link had just opened.
         const transport = new FakeTransport();
         const machine = new Machine(transport, {frameGapMs: 0, handshakeFreshMs: 60_000});
         await machine.connect("AA:BB");
         transport.emit(status(0x01));
-        await machine.brew(brewable());
         transport.written = [];
 
-        await machine.askHowItIsDoing();
+        await machine.brew(brewable());
 
-        expect(transport.sent).toEqual([40521]);
+        expect(transport.sent).not.toContain(8100);
+        expect(transport.sent).toEqual([40521, 8102, 8104, 8001, 8002]);
+    });
+
+    describe("on a link that has been up for a while", () => {
+        let now = 0;
+        beforeEach(() => {
+            now = Date.now();
+            jest.spyOn(Date, "now").mockImplementation(() => now);
+        });
+        afterEach(() => {
+            jest.restoreAllMocks();
+        });
+
+        /** Connected six minutes ago: the age the stale session was seen at. */
+        async function heldLink(transport: FakeTransport): Promise<Machine> {
+            const machine = new Machine(transport, {frameGapMs: 0, infoWaitMs: 5});
+            await machine.connect("AA:BB");
+            now += 6 * 60_000;
+            transport.emit(status(0x01));
+            transport.written = [];
+            return machine;
+        }
+
+        it("brews without a handshake when the machine still answers", async () => {
+            const transport = new FakeTransport();
+            const machine = await heldLink(transport);
+
+            await machine.brew(brewable());
+
+            expect(transport.sent).toEqual([40521, 8102, 8104, 8001, 8002]);
+        });
+
+        it("renews the session once when the quiet question goes unanswered", async () => {
+            const transport = new FakeTransport();
+            const machine = await heldLink(transport);
+            transport.ignoreInfoRequests = 1;
+
+            await machine.brew(brewable());
+
+            expect(transport.sent).toEqual([40521, 8100, 40521, 8102, 8104, 8001, 8002]);
+        });
+
+        it("still refuses on a low tank it heard about before, if it hears nothing new", async () => {
+            const transport = new FakeTransport();
+            transport.infoReply = machineInfoFrame({waterEnough: 0});
+            const machine = await heldLink(transport);
+            transport.infoReply = null;
+
+            await expect(machine.brew(brewable())).rejects.toThrow(/water tank is low/i);
+
+            expect(machine.phase).toMatchObject({name: "failed", block: "notEnoughWater"});
+            expect(transport.sent.filter((code) => code === 8100)).toEqual([8100]);
+            expect(transport.sent.filter((code) => code !== 40521 && code !== 8100)).toEqual([]);
+        });
+
+        it("refuses on a low tank the quiet answer reports", async () => {
+            const transport = new FakeTransport();
+            const machine = await heldLink(transport);
+            transport.infoReply = machineInfoFrame({waterEnough: 0});
+
+            await expect(machine.brew(brewable())).rejects.toThrow(/water tank is low/i);
+
+            expect(transport.sent).toEqual([40521]);
+        });
+    });
+
+    it("writes the handshake and the question into the frame log", async () => {
+        // Both went straight to the radio, so a beep the owner heard had no
+        // line in the log to explain it.
+        const transport = new FakeTransport();
+        const machine = new Machine(transport, {frameGapMs: 0});
+
+        await machine.connect("AA:BB");
+
+        const sent = machine.frameHistory
+            .filter((entry) => entry.direction === "sent")
+            .map((entry) => entry.frame[3] | (entry.frame[4] << 8));
+        expect(sent).toEqual([8100, 40521]);
     });
 });
 

@@ -5,6 +5,7 @@ import {ScrollView, Text, YStack} from "tamagui";
 
 import DeleteAllSheet from "@/components/DeleteAllSheet";
 import MachineAddSheet from "@/components/MachineAddSheet";
+import ForgetMachineSheet from "@/components/ForgetMachineSheet";
 import MachineDetailSheet from "@/components/MachineDetailSheet";
 import {useMachineAdder} from "@/hooks/useMachineAdder";
 import CardReadDiagnostic from "@/components/CardReadDiagnostic";
@@ -232,9 +233,11 @@ export default function SettingsScreen({settings}: Props) {
     const [restoreOpen, setRestoreOpen] = useState(false);
     /** The saved machine whose sheet is open, or null. */
     const [machineSheetId, setMachineSheetId] = useState<string | null>(null);
+    const [forgetSheetId, setForgetSheetId] = useState<string | null>(null);
     // A newly added machine opens its own sheet, so it can be named at once.
     const machineAdder = useMachineAdder(setMachineSheetId, settings);
-    const machineSheetOpen = machineSheetId !== null || machineAdder.open;
+    const machineSheetOpen = machineSheetId !== null || machineAdder.open
+        || forgetSheetId !== null;
     const [confirmingDeleteAll, setConfirmingDeleteAll] = useState(false);
     // Asked once, on arrival, because answering it parses every blob in the
     // table (#124). Kept in state rather than taken at render so that cost is
@@ -550,7 +553,8 @@ export default function SettingsScreen({settings}: Props) {
                     app itself, and anything diagnostic, go to the bottom. A
                     machine's own readings are folded inside its card. */}
                 <MachineSection settings={settings} onOpenMachine={setMachineSheetId}
-                                onAddMachine={machineAdder.start}/>
+                                onAddMachine={machineAdder.start}
+                                onForgetMachine={setForgetSheetId}/>
 
                 {/* What the app does around a brew, on any machine. Kept apart
                     from the machines so a second machine does not repeat them,
@@ -778,7 +782,11 @@ export default function SettingsScreen({settings}: Props) {
         </YStack>
 
             <MachineDetailSheet machineId={machineSheetId} settings={settings}
-                                onClose={() => setMachineSheetId(null)}/>
+                                onClose={() => setMachineSheetId(null)}
+                                onForget={setForgetSheetId}/>
+
+            <ForgetMachineSheet machineId={forgetSheetId} settings={settings}
+                                onClose={() => setForgetSheetId(null)}/>
 
             <MachineAddSheet adder={machineAdder}/>
 
