@@ -459,6 +459,22 @@ The machine pushes the following data unprompted on FFE2:
 > The handshake makes the machine **beep**, which rules out sending it
 > speculatively or on a timer.
 
+> **So XBRW++ asks quietly first (2026-10-19).** Owner report on a Studio
+> (V12.0D.210): the official app beeps once when it connects and sends a recipe
+> without beeping again, while XBRW++ beeped "like it's connecting" on every
+> BREW. Two 8100s caused it: the pre-brew 40521 renewed the session whenever
+> the last handshake was over 20 s old, and the brew burst opened with another
+> 8100 regardless. Now, on a link that has had its handshake, the 40521 is sent
+> once *without* one. An answer proves the session is good (and refreshes the
+> water level); silence costs one `INFO_WAIT_MS` window and then renews the
+> session, once. The brew burst carries an 8100 only if the session is still
+> not known to be good, which after that question is never in practice. A mode
+> switch (`11511`) still renews before the retry.
+> **Unverified on hardware:** that 40521 does not beep (no source says it does),
+> and that a session which answers 40521 also takes a recipe without a fresh
+> 8100. If the second is wrong, the recipe is not acknowledged and the brew
+> fails as `rejected` after `RECIPE_ACK_MS` with nothing poured.
+
 > **The info blob is not a heartbeat.** Sources describe 40521 as streaming
 > periodically. On hardware (2026-09-01, V12.0D.500) it does not: a tank
 > refilled after connect still read Low in XBRW++ until the app asked again.
@@ -480,7 +496,8 @@ The machine pushes the following data unprompted on FFE2:
 >
 > Renewing the session to ask beeps, which is accepted here: the brew is over,
 > nothing is interrupted, and it happens once, only on a brew that got as far
-> as the pour. `askHowItIsDoing` returning false leaves `info` holding the
+> as the pour. Since 2026-10-19 the question is asked once without renewing
+> first, so a session that is still good answers without a beep. `askHowItIsDoing` returning false leaves `info` holding the
 > pre-brew value, so an unconfirmed reading is stored as nothing at all.
 >
 > **Still unsettled, and it needs hardware.** Nobody has checked whether the
@@ -532,6 +549,49 @@ The machine allows **one BLE link at a time**. The official app holds the link w
 
 ### Multiple Simultaneous Clients
 **Not possible.** Single connection architecture. `spec`
+
+> **But on Android two apps can share the one link (owner log, 2026-10-19,
+> Galaxy Z Fold, machine "Work" V12.0D.210 updated to V12.0D.500).** XBRW++
+> held the link with a brew loaded, went to the back, and the owner opened the
+> official app and ran a firmware update. Android keeps one physical connection
+> per device and hands notifications to every app subscribed to the
+> characteristic, so XBRW++'s log recorded the official app's side of the
+> conversation without having sent anything:
+>
+> ```
+> 04:14:55.968  active brew went to the back, keeping the link
+> 04:15:13.176  <-ffe2  event 8100 + 40521 info   (no send logged: the official app's connect handshake)
+> 04:15:13.722  state 0x1d / 04:15:13.976 event 8022 / 04:15:14.924 state 0x01
+>                         (8022 "back to home" is what the official app sends on connect;
+>                          XBRW++ only sends 8022 after a 40519, and none was logged)
+> 04:15:38.474  <-ffe2  event 8101
+> 04:15:39.000  <-ffe2  06 43
+> 04:15:39.517 .. 04:16:06.542  <-ffe2  06   (one every ~0.6 s)
+> 04:17:21.795-.803  <-ffe2  06 x ~60 (burst), 15, 06 43, 06
+> 04:17:21.858  link dropped by the radio
+> ```
+>
+> The official app's screenshots put "Update Success, Version 12.0D.500" at
+> 15:17:14 local (04:17:14 UTC), and the machine came back on V12.0D.500. The
+> single bytes match XMODEM-CRC flow control from a bootloader (inferred):
+> `43` ('C') asks the sender to start with CRC blocks, `06` (ACK) accepts a
+> block, `15` (NAK) asks for one again. The burst and the drop are the end of
+> the transfer and the reboot. So `8101` is very probably the official app's
+> "enter firmware update" command (inferred, one observation, payload not
+> seen because the official app's writes are not visible to us). The `06`
+> stream is not the machine waiting for XBRW++, and it is unrelated to the
+> brew the owner stopped.
+>
+> The parser is fine with these: a frame under 12 bytes or without the
+> `58 02 07` header comes back as `unknown` with its bytes intact, which is how
+> they reached the log.
+>
+> **TODO, not fixed:** XBRW++ cannot tell its own link from a shared one, and
+> anything it wrote during that transfer (a settings-screen refresh, a cancel)
+> would have landed in the middle of a firmware image. Nothing was written
+> this time. A guard that goes quiet once raw `06`/`15`/`43` frames appear
+> would be the obvious shape, but it needs a capture of an update to design
+> against, not one log.
 
 ### Keepalive
 No periodic keepalive is needed. The machine maintains the connection without pings. The app sends none. `corroborated`
