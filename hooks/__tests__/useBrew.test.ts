@@ -13,7 +13,9 @@ import {AppState, type AppStateStatus} from "react-native";
 import {PAUSE_ACK_MS} from "@/constants/machine";
 import {useBrew} from "@/hooks/useBrew";
 import {useBrewRun} from "@/hooks/useBrewRun";
-import {BluetoothPermissionError, RadioUnavailableError} from "@/library/machine/errors";
+import {
+    BluetoothPermissionError, NoSavedMachineError, RadioUnavailableError, WrongMachineError
+} from "@/library/machine/errors";
 import Machine from "@/library/machine/Machine";
 import type {BrewPhase} from "@/library/machine/Machine";
 import {FakeTransport, machineInfoFrame} from "@/library/machine/__tests__/FakeTransport";
@@ -104,6 +106,36 @@ beforeEach(() => {
     mockConnect.mockClear();
     mockAutoStart = true;
     jest.mocked(notify).mockClear();
+});
+
+it.each([
+    new NoSavedMachineError("None of your saved machines answered."),
+    new WrongMachineError("This is not the selected machine.")
+])("retires an app-owned run after $name without sending cancellation", async error => {
+    const radio = new FakeTransport();
+    const machine = new Machine(radio, {frameGapMs: 0});
+    mockSharedMachine = machine;
+    mockConnect.mockRejectedValueOnce(error);
+    const store = {insert: jest.fn(), sweepWhenReady: jest.fn(async () => {})};
+    const {result} = await renderHook(() => useBrewRun(coffee(), store));
+
+    await act(async () => { await result.current.brew(coffee()); });
+
+    expect(result.current.phase).toMatchObject({
+        name: "failed", reason: "blocked", detail: error.message
+    });
+    expect(machine.phase.name).toBe("idle");
+    expect(radio.sent).toEqual([]);
+    expect(store.insert).not.toHaveBeenCalled();
+    expect(mockConnect).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+        await machine.connect("external");
+        radio.emit(event(40510, 1));
+        radio.emit(status(0x41));
+    });
+    expect(result.current.phase).toMatchObject({name: "failed", detail: error.message});
+    expect(store.insert).not.toHaveBeenCalled();
 });
 
 it("never relinks and retries after a recipe write loses its connection", async () => {

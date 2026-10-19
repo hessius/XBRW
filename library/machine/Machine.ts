@@ -1263,18 +1263,19 @@ export default class Machine {
      *
      * Resolves once the machine has been committed to, not once the brew is
      * over — the brew's progress arrives as phases.
+     * `verifyTarget` rechecks the caller's selected machine after fresh vitals.
      */
-    async brew(recipe: Recipe): Promise<void> {
+    async brew(recipe: Recipe, verifyTarget?: () => Promise<void>): Promise<void> {
         this.assertOrdinaryOperation();
         const finish = this.beginOrdinaryOperation();
         try {
-            await this.brewAttempt(recipe);
+            await this.brewAttempt(recipe, verifyTarget);
         } finally {
             finish();
         }
     }
 
-    private async brewAttempt(recipe: Recipe): Promise<void> {
+    private async brewAttempt(recipe: Recipe, verifyTarget?: () => Promise<void>): Promise<void> {
         // Pinned to the link this attempt started on, as `connectAttempt` and
         // `shakeHands` are. The pre-flight below can take several seconds of
         // asking, and a machine picked by hand meanwhile replaces the link: the
@@ -1322,6 +1323,13 @@ export default class Machine {
             throw new Error("The machine connection changed.");
         }
         if (ticket !== this.cancelTicket) return;
+        if (verifyTarget !== undefined) {
+            await verifyTarget();
+            if (ticket !== this.cancelTicket) return;
+            if (generation !== this.generation && this.isConnected()) {
+                throw new Error("The machine connection changed.");
+            }
+        }
         await this.brewOnce(recipe);
     }
 
@@ -1479,7 +1487,7 @@ export default class Machine {
     }
 
     /** Switch the machine to PRO, then send the recipe again. Once. */
-    async switchToProAndRetry(recipe: Recipe): Promise<void> {
+    async switchToProAndRetry(recipe: Recipe, verifyTarget?: () => Promise<void>): Promise<void> {
         this.assertOrdinaryOperation();
         const generation = this.generation;
         const ticket = this.cancelTicket;
@@ -1488,6 +1496,10 @@ export default class Machine {
             if (generation !== this.generation) throw new Error("The machine connection changed.");
             return true;
         };
+        if (verifyTarget !== undefined) {
+            await verifyTarget();
+            if (!canContinue()) return;
+        }
         this.retriedInPro = true;
         // Byte-exact, confirmed on hardware: "00000000" is PRO, "91327856" EASY.
         await this.send(buildType2(11511, ascii("00000000")));
@@ -1502,6 +1514,10 @@ export default class Machine {
         await this.shakeHands();
         await this.gap();
         if (!canContinue()) return;
+        if (verifyTarget !== undefined) {
+            await verifyTarget();
+            if (!canContinue()) return;
+        }
         await this.brewOnce(recipe);
     }
 

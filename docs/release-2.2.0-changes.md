@@ -56,6 +56,20 @@ sorting, dial figures, brew notes and handoff grinder details have regression
 coverage for values below 40. No NFC limits, card encoding or stored records
 change. This corrects a shipped 2.1.0 defect only on the 2.2.0 preview.
 
+### Selected machine and refused runs
+
+The saved-machine identity check now runs after preflight learns fresh vitals,
+and before PRO retry commands as well as before its recipe upload. The original
+selection is captured for each request; cancellation and replacement-link guards
+remain in force across the asynchronous check. Tests reproduce a stranger whose
+serial arrives only during preflight and refuse it without recipe frames.
+
+Wrong-machine and no-saved-machine refusals now use the existing local terminal
+refusal path: stop the recorder, release overflow ownership and allow a new run,
+without sending cancellation to the other machine or writing brew history.
+These preview fixes address the shared findings on #227, #228 and #231, not the
+unreproduced same-machine A/B report or those contributor branches.
+
 ## Imported proposal notes
 
 Moved from additions to the shipped 2.1.0 ledger without rewriting that ledger.

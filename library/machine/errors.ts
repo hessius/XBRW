@@ -81,3 +81,10 @@ export class NoSavedMachineError extends Error {
         this.name = "NoSavedMachineError";
     }
 }
+
+export type BrewRefusal = SlotOperationError | WrongMachineError | NoSavedMachineError;
+
+export function isBrewRefusal(error: unknown): error is BrewRefusal {
+    return error instanceof SlotOperationError || error instanceof WrongMachineError
+        || error instanceof NoSavedMachineError;
+}

@@ -12,6 +12,7 @@ import {useBrew} from "@/hooks/useBrew";
 import {__resetSharedMachine} from "@/hooks/useMachine";
 import {sharedSettings} from "@/hooks/useSetting";
 import {FakeTransport} from "@/library/machine/__tests__/FakeTransport";
+import {WrongMachineError} from "@/library/machine/errors";
 import Machine from "@/library/machine/Machine";
 import {serialiseSavedMachines, type SavedMachine} from "@/library/machine/savedMachines";
 import {DEFAULTS} from "@/library/Settings";
@@ -76,8 +77,9 @@ it("refuses to send, and says why, when the connect lands on a machine the scree
     transport.devices = [{id: "HOME", name: "XBLOOM"}];
     const machine = new Machine(transport, {frameGapMs: 0});
     const {result} = await renderHook(() => useBrew(machine));
+    const refused = jest.fn();
 
-    await act(async () => { await result.current.brew(coffee()); });
+    await act(async () => { await result.current.brew(coffee(), undefined, refused); });
 
     expect(result.current.error).toBe(
         "Found Home, not Work, so nothing was sent. Check Work is on and nearby, or pick Home, then press BREW again."
@@ -89,6 +91,7 @@ it("refuses to send, and says why, when the connect lands on a machine the scree
     // The screen goes on naming Work, and the link to Home is let go.
     expect(sharedSettings().get("machineDeviceId")).toBe("WORK");
     expect(transport.connectedTo).toBeNull();
+    expect(refused).toHaveBeenCalledWith(expect.any(WrongMachineError));
 });
 
 describe("one machine saved", () => {
@@ -120,6 +123,43 @@ describe("one machine saved", () => {
         expect(sharedSettings().get("machineDeviceId")).toBe("HOME");
         expect(sharedSettings().get("savedMachines")).toContain("J15HOME00001");
         expect(sharedSettings().get("savedMachines")).not.toContain("STRANGER");
+    });
+
+    it("checks a stranger's serial learned only during brew preflight", async () => {
+        const connectOnly = await connectOnlyFrames();
+        const transport = new FakeTransport();
+        transport.refuseIds = ["HOME"];
+        transport.devices = [{id: "STRANGER", name: "XBLOOM"}];
+        transport.ignoreInfoRequests = 1;
+        const machine = new Machine(transport, {frameGapMs: 0, infoWaitMs: 10});
+        const {result} = await renderHook(() => useBrew(machine));
+        const refused = jest.fn();
+
+        await act(async () => { await result.current.brew(coffee(), undefined, refused); });
+
+        expect(BREW_COMMANDS_SEEN(transport, connectOnly)).toEqual([]);
+        expect(result.current.error).toMatch(/not your saved machine/);
+        expect(refused).toHaveBeenCalledWith(expect.any(WrongMachineError));
+        expect(transport.connectedTo).toBeNull();
+        expect(sharedSettings().get("machineDeviceId")).toBe("HOME");
+        expect(sharedSettings().get("savedMachines")).not.toContain("STRANGER");
+    });
+
+    it("checks the saved serial before any PRO retry command", async () => {
+        const transport = new FakeTransport();
+        const machine = new Machine(transport, {frameGapMs: 0});
+        await machine.connect("STRANGER");
+        transport.written = [];
+        const {result} = await renderHook(() => useBrew(machine));
+        const refused = jest.fn();
+
+        await act(async () => { await result.current.switchToProAndRetry(coffee(), refused); });
+
+        expect(transport.sent).toEqual([]);
+        expect(result.current.error).toMatch(/not your saved machine/);
+        expect(refused).toHaveBeenCalledWith(expect.any(WrongMachineError));
+        expect(transport.connectedTo).toBeNull();
+        expect(sharedSettings().get("machineDeviceId")).toBe("HOME");
     });
 
     it("still brews when the rescan finds the same machine under a new id", async () => {

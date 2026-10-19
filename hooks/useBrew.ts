@@ -7,6 +7,8 @@ import {isActiveBrewPhase, type BrewPhase} from "@/library/machine/Machine";
 import {
     BluetoothPermissionError,
     BrewUploadError,
+    type BrewRefusal,
+    isBrewRefusal,
     NoSavedMachineError,
     RadioUnavailableError,
     SlotOperationError,
@@ -32,9 +34,9 @@ export type Brewer = {
     error: string | null;
     /** The link itself, for a recorder that needs the raw notification stream. */
     machine: Machine;
-    /** Retry re-arms ownership; a slot refusal retires only the app's unsent attempt. */
+    /** Retry re-arms ownership; a refusal retires only the app's unsent attempt. */
     brew: (recipe: Recipe, onPreflightRetry?: () => void,
-           onSlotRefusal?: (error: SlotOperationError) => void) => Promise<void>;
+           onRefusal?: (error: BrewRefusal) => void) => Promise<void>;
     /**
      * Commit a recipe that was uploaded but held back, because the user has
      * auto-start off. Only meaningful in the `readyToStart` phase.
@@ -51,7 +53,7 @@ export type Brewer = {
      */
     canOfferProMode: () => boolean;
     switchToProAndRetry: (recipe: Recipe,
-                          onSlotRefusal?: (error: SlotOperationError) => void) => Promise<void>;
+                          onRefusal?: (error: BrewRefusal) => void) => Promise<void>;
 };
 
 /**
@@ -87,10 +89,7 @@ export function useBrew(injected?: Machine): Brewer {
      *   relink cannot move it.
      * @param saved The saved machines at that moment, for names.
      */
-    async function attempt(recipe: Recipe, shown: string, saved: SavedMachine[]): Promise<void> {
-        // Lazy connect: this is the first moment the user has actually
-        // reached for the machine, and it is the beep they are expecting.
-        if (!machine.isConnected()) await connect();
+    async function checkMachine(shown: string, saved: SavedMachine[]): Promise<void> {
         // The hard guarantee. With several machines saved, the connect picks
         // by scan, and when the machine on screen is out of range it can land
         // on another. Nothing has been sent yet, and nothing is: the recipe
@@ -124,10 +123,17 @@ export function useBrew(injected?: Machine): Brewer {
                 + `so nothing was sent. Check yours is on and nearby, then press BREW again.`
             );
         }
+    }
+
+    async function attempt(recipe: Recipe, shown: string, saved: SavedMachine[]): Promise<void> {
+        // Lazy connect: this is the first moment the user has actually
+        // reached for the machine, and it is the beep they are expecting.
+        if (!machine.isConnected()) await connect();
+        await checkMachine(shown, saved);
         // A refused ambient update is applied only on an explicit new brew.
         machine.setBypassTempEncoding(bypassTempEncoding as BypassTempEncoding);
         machine.setAutoStart(autoStart);
-        await machine.brew(recipe);
+        await machine.brew(recipe, () => checkMachine(shown, saved));
     }
 
     /**
@@ -175,7 +181,7 @@ export function useBrew(injected?: Machine): Brewer {
     }
 
     async function brew(recipe: Recipe, onPreflightRetry?: () => void,
-                        onSlotRefusal?: (error: SlotOperationError) => void): Promise<void> {
+                        onRefusal?: (error: BrewRefusal) => void): Promise<void> {
         setError(null);
         // What the screen named when BREW was pressed. See `attempt`.
         const shown = remembered;
@@ -186,7 +192,7 @@ export function useBrew(injected?: Machine): Brewer {
         } catch (e) {
             if (!worthRelinking(e)) {
                 setError((e as Error).message);
-                if (e instanceof SlotOperationError) onSlotRefusal?.(e);
+                if (isBrewRefusal(e)) onRefusal?.(e);
                 return;
             }
         }
@@ -199,7 +205,7 @@ export function useBrew(injected?: Machine): Brewer {
             await attempt(recipe, shown, saved);
         } catch (e) {
             setError((e as Error).message);
-            if (e instanceof SlotOperationError) onSlotRefusal?.(e);
+            if (isBrewRefusal(e)) onRefusal?.(e);
         }
     }
 
@@ -248,20 +254,17 @@ export function useBrew(injected?: Machine): Brewer {
     }
 
     async function switchToProAndRetry(recipe: Recipe,
-                                      onSlotRefusal?: (error: SlotOperationError) => void): Promise<void> {
+                                      onRefusal?: (error: BrewRefusal) => void): Promise<void> {
         setError(null);
         // The same rule as BREW: the retry goes to the machine on screen, or
         // nowhere. It sends a recipe, so it gets the same check.
-        const linked = machine.linkedDeviceId;
-        if (machines.length >= 2 && remembered !== "" && linked !== null && linked !== remembered) {
-            setError("The machine connection changed, so nothing was sent. Press BREW again.");
-            return;
-        }
+        const shown = remembered;
+        const saved = machines;
         try {
-            await machine.switchToProAndRetry(recipe);
+            await machine.switchToProAndRetry(recipe, () => checkMachine(shown, saved));
         } catch (e) {
             setError((e as Error).message);
-            if (e instanceof SlotOperationError) onSlotRefusal?.(e);
+            if (isBrewRefusal(e)) onRefusal?.(e);
         }
     }
 

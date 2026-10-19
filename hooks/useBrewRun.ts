@@ -15,7 +15,7 @@ import {pauseSeconds, pourSeconds} from "@/library/brew/brewShape";
 import {stageOriginMl, stageWaterFrom, stalledNow, stallsInStage, type Stall}
     from "@/library/brew/stalls";
 import type {BrewPhase} from "@/library/machine/Machine";
-import type {SlotOperationError} from "@/library/machine/errors";
+import type {BrewRefusal} from "@/library/machine/errors";
 import type {QuickEditRecordAdjustments} from "@/library/quickEdit";
 import type Recipe from "@/library/Recipe";
 
@@ -371,7 +371,7 @@ export function useBrewRun(
             })
           };
 
-    function refuseAttempt(error: SlotOperationError): void {
+    function refuseAttempt(error: BrewRefusal): void {
         const held = owner.current;
         if (held === null || held.machine !== machine || held.runId !== runId) return;
         // Nothing was sent: retire app ownership without a machine failure or history row.
