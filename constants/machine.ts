@@ -102,6 +102,17 @@ export const INFO_WAIT_MS = 2000;
  */
 export const FRAME_GAP_MS = 2000;
 
+/**
+ * How long to wait for the machine to report its state after a cancel
+ * (40519) or a back-to-home (8022), before going on without the report.
+ *
+ * Each 40519 beeps, so the app waits for the answer rather than sending
+ * another. On V12.0D.500 the startable state follows a cancel in about 0.8 s
+ * (owner logs 2026-10-19: 40519 at 09:38:26.426, state 0x41 at 27.267;
+ * 09:08:42.362 to 43.187; 09:40:10.026 to 10.842; 09:40:21.866 to 22.693).
+ */
+export const STATE_REPLY_MS = 3000;
+
 /** UNMEASURED conservative slot budgets; dispatch includes its pacing gap. */
 export const SLOT_DISPATCH_MS = 15_000;
 export const SLOT_RECEIPT_MS = 15_000;
