@@ -6,7 +6,7 @@
  * link, and the recipe must not go to the new machine instead.
  */
 import Machine from "@/library/machine/Machine";
-import {FakeTransport} from "@/library/machine/__tests__/FakeTransport";
+import {FakeTransport, machineInfoFrame} from "@/library/machine/__tests__/FakeTransport";
 import {coffee} from "@/library/slots/__tests__/fixtures";
 
 async function connectOnlyCodes(): Promise<Set<number>> {
@@ -20,14 +20,14 @@ it("refuses to send when the link is replaced during the pre-flight", async () =
     const transport = new FakeTransport();
     transport.devices = [{id: "WORK", name: "XBLOOM"}, {id: "HOME", name: "XBLOOM"}];
     const machine = new Machine(transport, {frameGapMs: 0, infoWaitMs: 40});
+    // No vitals on this link, so the pre-flight handshakes and waits.
+    transport.infoReply = null;
     await machine.connect("WORK");
-    // The machine misses the brew's question, so the pre-flight waits.
-    transport.ignoreInfoRequests = 100;
 
     const brewing = machine.brew(coffee());
     await new Promise((resolve) => setTimeout(resolve, 10));
     const before = transport.sent.length;
-    transport.ignoreInfoRequests = 0;
+    transport.infoReply = machineInfoFrame();
     await machine.connect("HOME");
 
     await expect(brewing).rejects.toThrow();

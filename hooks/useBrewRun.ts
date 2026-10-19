@@ -170,10 +170,9 @@ export function useBrewRun(
                 } catch (error) {
                     console.warn("Could not sweep brew traces after a brew", error);
                 }
-                // After the insert, and not awaited. The reading is a BLE
-                // round trip that beeps, and the brew is over: holding the
-                // record back for it would delay the one thing that must not
-                // be lost for the sake of the one thing that may be.
+                // After the insert, and not awaited. It sends nothing: it keeps
+                // the dial only if the machine reported one after the pour
+                // began (see `readDialAfterBrew`).
                 const store = database.current;
                 if (store?.recordDialAfter === undefined) return;
                 const writeDial = store.recordDialAfter.bind(store);

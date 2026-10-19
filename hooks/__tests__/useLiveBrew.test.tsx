@@ -26,7 +26,7 @@ declare global {
         & {machine: import("@/library/brew/BrewRecorder").RecorderMachine
             & {phase: BrewPhase}
             & Pick<import("@/library/machine/Machine").default, "pauseBrew" | "resumeBrew">
-            & {info?: {grindSize: number} | null;
+            & {info?: {grindSize: number} | null; infoAt?: number;
                askHowItIsDoing?: () => Promise<boolean>}};
 }
 
