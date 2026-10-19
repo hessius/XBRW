@@ -16,6 +16,7 @@ import ScreenHeader from "@/components/ScreenHeader";
 import {palette} from "@/constants/colors";
 import {UNCLIPPED_LIST} from "@/constants/lists";
 import router from "@/hooks/steadyRouter";
+import {useLiveBrew} from "@/hooks/useLiveBrew";
 import {useRailSearch, type RailSearch} from "@/hooks/useRailSearch";
 import {sharedSettings, useSetting} from "@/hooks/useSetting";
 import {coffeeBadge, readAlerts, recordListViewed} from "@/library/roasterAlerts";
@@ -144,6 +145,7 @@ export default function RoasterScreen({settings, feedUrl, now}: {
     feedUrl?: string;
     now?: () => number;
 } = {}) {
+    const {ratingNoteOpen} = useLiveBrew();
     const params = useLocalSearchParams<{feed: string}>();
     const feed = feedUrl ?? params.feed ?? "";
     const store = settings ?? sharedSettings();
@@ -184,7 +186,9 @@ export default function RoasterScreen({settings, feedUrl, now}: {
 
     if (cached === null) {
         return (
-            <YStack flex={1} backgroundColor={palette.base}>
+            <YStack flex={1} backgroundColor={palette.base}
+                    accessibilityElementsHidden={ratingNoteOpen}
+                    importantForAccessibility={ratingNoteOpen ? "no-hide-descendants" : "auto"}>
                 <ScreenHeader title="ROASTER" onBack={() => router.back()}/>
                 <CatalogueStatus testID="roaster-missing" title="NOT IN THE CATALOGUE"
                                  body="This roaster's coffees are not in the catalogue. Subscribe from one of its import links."/>
@@ -197,7 +201,7 @@ export default function RoasterScreen({settings, feedUrl, now}: {
     const offered = availableFilters(all);
     const coffees = filterCoffees(all, query);
     const filtered = isFiltered(query, offered);
-    const covered = openFacet !== null;
+    const covered = ratingNoteOpen || openFacet !== null;
     const ref = (coffee: FeedCoffee) => coffeeRef(catalogue, coffee);
 
     function clear() {
