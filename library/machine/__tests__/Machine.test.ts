@@ -395,12 +395,18 @@ describe("brewing", () => {
 
         await machine.brew(brewable()).catch(() => undefined);
         machine.phase = {name: "failed", reason: "noBeans"} as typeof machine.phase;
+        // The machine is still showing its warning.
+        transport.emit(status(0x0F));
         transport.written = [];
         transport.sent.length = 0;
 
         await machine.brew(brewable()).catch(() => undefined);
-        // Stop and go home, ahead of anything the new brew has to say.
-        expect(brewFrames(transport).slice(0, 2)).toEqual([40519, 8022]);
+        // One stop, ahead of anything the new brew has to say, and the
+        // machine's startable answer to it instead of an 8022.
+        const frames = brewFrames(transport);
+        expect(frames.filter((code) => code === 40519)).toHaveLength(1);
+        expect(frames.indexOf(40519)).toBeLessThan(frames.indexOf(8102));
+        expect(frames.slice(0, frames.indexOf(8102))).not.toContain(8022);
     });
 
     it("does not clear the screen for a brew that never reached the machine", async () => {
@@ -416,13 +422,14 @@ describe("brewing", () => {
         expect(brewFrames(transport)).not.toContain(8022);
     });
 
-    it("leaves a gap between the two frames of a cancel", async () => {
-        // Unpaced they are exactly the burst that the brew sequence had to be
-        // paced to survive -- and this is the pair whose job is to stop a
-        // spinning burr.
+    it("holds a cancel's 8022 until the machine says it has stopped", async () => {
+        // Unpaced the two are exactly the burst that the brew sequence had to
+        // be paced to survive. The machine's own startable report is the
+        // pacing now, rather than a fixed gap it had no say in.
         jest.useFakeTimers();
         try {
             const transport = new FakeTransport();
+            transport.cancelReply = null;
             const machine = new Machine(transport);
             const connecting = machine.connect("AA:BB");
             await jest.advanceTimersByTimeAsync(FRAME_GAP_MS + 10);
@@ -430,12 +437,14 @@ describe("brewing", () => {
             transport.written = [];
 
             const cancelling = machine.cancelBrew();
-            await jest.advanceTimersByTimeAsync(0);
+            await jest.advanceTimersByTimeAsync(FRAME_GAP_MS);
             expect(brewFrames(transport)).toEqual([40519]);
 
-            await jest.advanceTimersByTimeAsync(FRAME_GAP_MS);
+            transport.emit(status(0x41));
+            await jest.advanceTimersByTimeAsync(0);
             expect(brewFrames(transport)).toEqual([40519, 8022]);
             await cancelling;
+            expect(machine.phase.name).toBe("cancelled");
         } finally {
             jest.useRealTimers();
         }
@@ -1968,5 +1977,173 @@ describe("the retained frame history", () => {
         transport.drop();
 
         expect(machine.frameHistory.length).toBe(kept);
+    });
+});
+
+/**
+ * Every 40519 beeps. Owner logs of 2026-10-19 (Galaxy Z Fold, Studio
+ * V12.0D.500) caught two cancels a second apart before a retry, after the
+ * machine had already answered the first with 0x41, and three for one CANCEL.
+ */
+describe("one cancel per brew start", () => {
+    const count = (transport: FakeTransport, code: number) =>
+        transport.sent.filter((sent) => sent === code).length;
+    const tick = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+    /** A machine whose last brew failed on it, last reporting `state`. */
+    async function failedOn(state: number | null, options: {stateReplyMs?: number} = {}) {
+        const transport = new FakeTransport();
+        const machine = new Machine(transport, {frameGapMs: 0, ...options});
+        await machine.connect("AA:BB");
+        transport.emit(machineInfoFrame());
+        if (state !== null) transport.emit(status(state));
+        machine.phase = {name: "failed", reason: "noWater"} as typeof machine.phase;
+        transport.written = [];
+        transport.sent.length = 0;
+        return {transport, machine};
+    }
+
+    it("sends no cancel on a retry when the machine already reports 0x41", async () => {
+        const {transport, machine} = await failedOn(0x41);
+
+        await machine.brew(brewable());
+
+        expect(count(transport, 40519)).toBe(0);
+        expect(count(transport, 8022)).toBe(0);
+        expect(transport.sent).toContain(8102);
+    });
+
+    it("sends exactly one cancel on a retry from a state that is not startable", async () => {
+        const {transport, machine} = await failedOn(0x0C);
+
+        await machine.brew(brewable());
+
+        expect(count(transport, 40519)).toBe(1);
+        expect(transport.sent.indexOf(40519)).toBeLessThan(transport.sent.indexOf(8102));
+    });
+
+    it("waits for the startable report after its one cancel, rather than cancelling again", async () => {
+        const {transport, machine} = await failedOn(0x0C);
+        transport.cancelReply = null;
+
+        const brewing = machine.brew(brewable());
+        await tick();
+        expect(transport.sent).toEqual([40519]);
+        // Nothing more while the machine has not answered.
+        await tick();
+        expect(transport.sent).toEqual([40519]);
+
+        transport.emit(status(0x41));
+        await brewing;
+        expect(count(transport, 40519)).toBe(1);
+        expect(transport.sent).toContain(8102);
+    });
+
+    it("asks with 8022 after a reconnect, and sends no cancel when the answer is startable", async () => {
+        const {transport, machine} = await failedOn(null);
+        transport.homeReply = status(0x41);
+
+        await machine.brew(brewable());
+
+        expect(count(transport, 40519)).toBe(0);
+        expect(transport.sent.indexOf(8022)).toBeLessThan(transport.sent.indexOf(8102));
+    });
+
+    it("cancels once after a reconnect when the 8022 brings no answer", async () => {
+        const {transport, machine} = await failedOn(null, {stateReplyMs: 0});
+
+        await machine.brew(brewable());
+
+        expect(count(transport, 8022)).toBe(1);
+        expect(count(transport, 40519)).toBe(1);
+        expect(transport.sent.indexOf(40519)).toBeLessThan(transport.sent.indexOf(8102));
+    });
+
+    it("sends one 40519 and one 8022 for a CANCEL tapped three times", async () => {
+        const {transport, machine} = await readyMachine();
+        transport.emit(status(0x1F));
+        transport.cancelReply = null;
+
+        const first = machine.cancelBrew();
+        await tick();
+        const second = machine.cancelBrew();
+        await tick();
+        const third = machine.cancelBrew();
+        transport.emit(status(0x41));
+        await Promise.all([first, second, third]);
+
+        expect(count(transport, 40519)).toBe(1);
+        expect(count(transport, 8022)).toBe(1);
+        expect(machine.phase.name).toBe("cancelled");
+    });
+
+    it("shares the retry's cancel with a CANCEL pressed meanwhile, and sends no recipe", async () => {
+        const {transport, machine} = await failedOn(0x0C);
+        transport.cancelReply = null;
+
+        const brewing = machine.brew(brewable());
+        await tick();
+        const cancelling = machine.cancelBrew();
+        transport.emit(status(0x41));
+        await Promise.all([brewing, cancelling]);
+
+        expect(count(transport, 40519)).toBe(1);
+        expect(transport.sent).not.toContain(8102);
+        expect(machine.phase.name).toBe("cancelled");
+    });
+});
+
+/**
+ * Event 40522 is the tank's flag: `(0)` arrived right before `0x0C no_water`
+ * twice, and `(1)` once the owner refilled the tank (2026-10-19).
+ */
+describe("the tank flag, 40522", () => {
+    it("refuses a brew before sending anything when the tank flag says empty", async () => {
+        const {transport, machine} = await readyMachine();
+        transport.emit(event(40522, 0));
+
+        await expect(machine.brew(brewable())).rejects.toThrow(/water tank is empty/);
+
+        expect(transport.sent).not.toContain(8102);
+        expect(machine.phase).toMatchObject({
+            name: "failed", reason: "blocked", block: "notEnoughWater"
+        });
+    });
+
+    it("brews again once the flag says the tank was filled", async () => {
+        const {transport, machine} = await readyMachine();
+        transport.emit(event(40522, 0));
+        transport.emit(event(40522, 1));
+
+        await machine.brew(brewable());
+
+        expect(transport.sent).toContain(8102);
+    });
+
+    it("leaves a tap-fed machine alone", async () => {
+        const transport = new FakeTransport();
+        transport.infoReply = machineInfoFrame({waterFeed: 1});
+        const machine = new Machine(transport, {frameGapMs: 0});
+        await machine.connect("AA:BB");
+        transport.emit(machineInfoFrame({waterFeed: 1}));
+        transport.emit(status(0x01));
+        transport.emit(event(40522, 0));
+
+        await machine.brew(brewable());
+
+        expect(transport.sent).toContain(8102);
+    });
+
+    it("forgets the flag with the link", async () => {
+        const {transport, machine} = await readyMachine();
+        transport.emit(event(40522, 0));
+        transport.drop();
+        await machine.connect("AA:BB");
+        transport.emit(machineInfoFrame());
+        transport.emit(status(0x01));
+
+        await machine.brew(brewable());
+
+        expect(transport.sent).toContain(8102);
     });
 });
