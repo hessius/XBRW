@@ -29,6 +29,15 @@ numbers are unchanged. This version bump does not build, submit or deploy an app
 
 ## Verified preview follow-ups
 
+### Catalogue content behind sheets
+
+The roaster list, a roaster's coffees and a coffee page now leave the screen-reader
+tree while the global brew-note sheet covers them, including empty and missing
+catalogue states (#237). A coffee page also hides its background while its bag
+sheet is open. Regression coverage checks that the content stays mounted but
+inaccessible, then returns after closing or completing the sheet. TalkBack and
+VoiceOver still need a device pass.
+
 ### Freshness and daily dismissal across midnight
 
 The shared freshness clock now refreshes at local midnight and on foregrounding,

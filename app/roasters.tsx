@@ -9,6 +9,7 @@ import ScreenHeader from "@/components/ScreenHeader";
 import {palette} from "@/constants/colors";
 import router from "@/hooks/steadyRouter";
 import {useScrollEndPadding} from "@/hooks/useBottomInset";
+import {useLiveBrew} from "@/hooks/useLiveBrew";
 import {useNow} from "@/hooks/useNow";
 import {sharedSettings, useSetting} from "@/hooks/useSetting";
 import {alertSummary, readAlerts} from "@/library/roasterAlerts";
@@ -28,6 +29,7 @@ export default function RoastersScreen({settings, now}: {
     settings?: Settings;
     now?: () => number;
 } = {}) {
+    const {ratingNoteOpen} = useLiveBrew();
     const store = settings ?? sharedSettings();
     const [stored] = useSetting("roasterSubscriptions", store);
     // Subscribed so the counts follow a sync that lands while this is open.
@@ -39,7 +41,9 @@ export default function RoastersScreen({settings, now}: {
     const subscriptions = parseSubscriptions(stored);
 
     return (
-        <YStack testID="roasters-screen" flex={1} backgroundColor={palette.base}>
+        <YStack testID="roasters-screen" flex={1} backgroundColor={palette.base}
+                accessibilityElementsHidden={ratingNoteOpen}
+                importantForAccessibility={ratingNoteOpen ? "no-hide-descendants" : "auto"}>
             <ScreenHeader title="ROASTERS" count={subscriptions.length} onBack={() => router.back()}/>
             {subscriptions.length === 0 ? (
                 <CatalogueStatus testID="roasters-empty" title="NO ROASTERS YET"

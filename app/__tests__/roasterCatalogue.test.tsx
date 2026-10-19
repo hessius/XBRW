@@ -23,6 +23,14 @@ jest.mock("expo-router", () => ({
 }));
 
 const mockNotify = jest.fn();
+let mockRatingNoteOpen = false;
+jest.mock("@/hooks/useLiveBrew", () => {
+    const actual = jest.requireActual("@/hooks/useLiveBrew");
+    return {
+        ...actual,
+        useLiveBrew: () => ({...actual.useLiveBrew(), ratingNoteOpen: mockRatingNoteOpen})
+    };
+});
 jest.mock("@/components/XbrwToast", () => ({
     __esModule: true,
     notify: (...args: unknown[]) => mockNotify(...args)
@@ -62,7 +70,37 @@ const rowIds = () => screen.queryAllByTestId(/^roaster-coffee-/, {includeHiddenE
 beforeEach(() => {
     forgetQueriesForTests();
     mockNotify.mockReset();
+    mockRatingNoteOpen = false;
     (router.push as jest.Mock).mockReset();
+});
+
+describe("catalogue screen-reader coverage", () => {
+    it.each([
+        ["roaster list", () => <RoastersScreen settings={subscribed()}/>, "roasters-scroll"],
+        ["empty roaster list", () => <RoastersScreen settings={memorySettings()}/>, "roasters-empty"],
+        ["roaster's coffees", () => <RoasterScreen settings={subscribed()} feedUrl={FEED_URL}/>,
+         "roaster-list"],
+        ["missing roaster", () => <RoasterScreen settings={memorySettings()} feedUrl={FEED_URL}/>,
+         "roaster-missing"],
+        ["coffee page", () =>
+            <RoasterCoffeeScreen settings={subscribed()} feedUrl={FEED_URL} coffeeId="b"
+                                 library={memoryLibrary().deps}/>, "roaster-coffee-scroll"],
+        ["missing coffee", () =>
+            <RoasterCoffeeScreen settings={subscribed()} feedUrl={FEED_URL} coffeeId="missing"
+                                 library={memoryLibrary().deps}/>, "roaster-coffee-missing"]
+    ])("hides and restores the %s while the live brew note is open", async (_name, page, content) => {
+        const {rerender} = await renderWithProviders(page());
+        expect(screen.getByTestId(content)).toBeTruthy();
+
+        mockRatingNoteOpen = true;
+        await rerender(page());
+        expect(screen.queryByTestId(content)).toBeNull();
+        expect(screen.getByTestId(content, {includeHiddenElements: true})).toBeTruthy();
+
+        mockRatingNoteOpen = false;
+        await rerender(page());
+        expect(screen.getByTestId(content)).toBeTruthy();
+    });
 });
 
 describe("the roaster list", () => {
@@ -327,6 +365,8 @@ describe("adding to a shelf with a bag", () => {
 
         // The catalogue's sizes, not the usual presets, and the price follows.
         await waitFor(() => expect(screen.getByTestId("bag-size-160")).toBeTruthy());
+        expect(screen.queryByTestId("roaster-coffee-scroll")).toBeNull();
+        expect(screen.getByTestId("roaster-coffee-scroll", {includeHiddenElements: true})).toBeTruthy();
         expect(screen.queryByTestId("bag-size-250")).toBeNull();
         expect(screen.getByTestId("bag-price-field").props.value).toBe("53");
         await pressUntil("bag-size-160",
@@ -349,6 +389,7 @@ describe("adding to a shelf with a bag", () => {
             recipeUuid: library.find("b-18g")!.uuid, sizeGrams: 160, price: 28, roastedOn: "2026-10-12"
         });
         expect(saved[0].beanName).toBeUndefined();
+        expect(screen.getByTestId("roaster-coffee-scroll")).toBeTruthy();
     });
 
     it("hands the bag to Beanconqueror in that mode, as the editor does", async () => {

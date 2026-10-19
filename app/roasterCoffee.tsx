@@ -18,6 +18,7 @@ import {palette, primary as primaryButton} from "@/constants/colors";
 import {SCREEN_PADDING} from "@/constants/layout";
 import router from "@/hooks/steadyRouter";
 import {useScrollEndPadding} from "@/hooks/useBottomInset";
+import {useLiveBrew} from "@/hooks/useLiveBrew";
 import {sharedSettings, useSetting} from "@/hooks/useSetting";
 import type {BagStore} from "@/hooks/useCoffeeBag";
 import {assignAccent, resolveAccent} from "@/library/accent";
@@ -117,6 +118,7 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
     shelves?: () => string[];
     bagStore?: Pick<BagStore, "save">;
 } = {}) {
+    const {ratingNoteOpen} = useLiveBrew();
     const params = useLocalSearchParams<{feed: string; coffee: string}>();
     const feed = feedUrl ?? params.feed ?? "";
     const ref = coffeeId ?? params.coffee ?? "";
@@ -181,7 +183,9 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
 
     if (cached === null || coffee === undefined || chosen === undefined) {
         return (
-            <YStack flex={1} backgroundColor={palette.base}>
+            <YStack flex={1} backgroundColor={palette.base}
+                    accessibilityElementsHidden={ratingNoteOpen}
+                    importantForAccessibility={ratingNoteOpen ? "no-hide-descendants" : "auto"}>
                 <ScreenHeader title="Coffee" onBack={() => router.back()}/>
                 <CatalogueStatus testID="roaster-coffee-missing" title="NOT IN THE CATALOGUE"
                                  body="This coffee is no longer in the roaster's list."/>
@@ -200,7 +204,7 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
     const buying = buyOptions(cached.feed.roaster, coffee);
     const title = detailTitle(coffee.name);
     const taste = tasteOf(coffee);
-    const covered = naming || (pending !== null && pending.kind === "shelf");
+    const covered = ratingNoteOpen || bagOpen || naming || (pending !== null && pending.kind === "shelf");
     const watched = new Set(alerts?.watch ?? []);
     const watchingCoffee = watched.has(coffeeKey(coffee));
     // The bags being watched, by bag key, for the BUY section's switches.
