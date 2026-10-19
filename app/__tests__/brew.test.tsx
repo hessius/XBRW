@@ -674,7 +674,7 @@ describe("brew route", () => {
         // press costs.
         mockPhase = {name: "failed", reason: "noWater"} as BrewPhase;
         const {queryByLabelText, getByText} = await renderWithProviders(<Brew />);
-        expect(getByText("The machine ran out of water.")).toBeTruthy();
+        expect(getByText("No water detected. Fill the tank and tap TRY AGAIN.")).toBeTruthy();
         expect(queryByLabelText("Try again")).toBeNull();
     });
 
