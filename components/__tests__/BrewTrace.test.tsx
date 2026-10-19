@@ -40,6 +40,19 @@ async function draw(props: Partial<React.ComponentProps<typeof BrewTrace>> = {})
     );
 }
 
+it("keeps tea's intermediate cup peak inside the stroke inset", async () => {
+    const rows = samples([0, 0, 0], [20_000, 270, 400], [30_000, 270, 200]);
+    await draw({
+        beverageKind: "tea", samples: rows, compact: true, pours: [],
+        plannedSeconds: 10
+    });
+    const path = screen.getByTestId("trace-cup").props.d as string;
+    const points = [...path.matchAll(/[ML]([0-9.-]+) ([0-9.-]+)/g)];
+    expect(points).toHaveLength(3);
+    expect(Number(points[1][2])).toBeGreaterThan(0);
+    expect(lastPathPoint(path).x).toBe(300);
+});
+
 function svgTextContent(node: {props: {children?: unknown}}): string | undefined {
     const child = node.props.children;
     if (typeof child === "string") return child;

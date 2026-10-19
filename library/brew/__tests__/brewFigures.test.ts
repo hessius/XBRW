@@ -1,4 +1,24 @@
-import {brewFigures} from "@/library/brew/brewFigures";
+import {brewFigureDetails, brewFigures} from "@/library/brew/brewFigures";
+
+describe("brewFigureDetails", () => {
+    const observations = {
+        grind: {kind: "dial" as const, dial: 53, recipe: 50, savedRecipe: 48},
+        drawdown: 0, drawdownRate: 0, delay: 0, reserveDrawdown: true
+    };
+
+    it("projects tea details without mutating the persisted observations", () => {
+        const original = {...observations};
+        expect(brewFigureDetails("tea", observations)).toEqual({
+            grind: null, drawdown: null, drawdownRate: null, delay: null,
+            reserveDrawdown: false
+        });
+        expect(observations).toEqual(original);
+    });
+
+    it.each(["coffee", undefined] as const)("preserves %s figures exactly", (kind) => {
+        expect(brewFigureDetails(kind, observations)).toBe(observations);
+    });
+});
 
 describe("brewFigures", () => {
     it("times from the first drop and weighs the cup", () => {

@@ -1,4 +1,4 @@
-import {unobservedBrew} from "@/library/brew/BrewRecord";
+import {isBeverageKind, unobservedBrew} from "@/library/brew/BrewRecord";
 
 /**
  * The brew nobody watched.
@@ -13,6 +13,24 @@ describe("unobservedBrew", () => {
         recipeUuid: "uuid-1", recipeName: "Ethiopia", accent: "#ff0000",
         rating: 4, at: 5_000, id: "hand-1"
     };
+
+    it.each(["tea", "coffee"] as const)("forwards an explicit %s kind", (beverageKind) => {
+        expect(unobservedBrew({...input, beverageKind})).toHaveProperty("beverageKind", beverageKind);
+    });
+
+    it("does not invent a beverage kind for legacy narrow inputs", () => {
+        expect(unobservedBrew(input)).not.toHaveProperty("beverageKind");
+        expect(JSON.parse(JSON.stringify(unobservedBrew(input))))
+            .not.toHaveProperty("beverageKind");
+    });
+
+    it.each([
+        ["tea", true], ["coffee", true], ["Tea", false], ["COFFEE", false],
+        ["", false], [" tea", false], ["tea ", false], ["water", false],
+        [null, false], [undefined, false], [0, false], [{}, false], [[], false]
+    ])("validates only literal beverage kinds (%p)", (value, expected) => {
+        expect(isBeverageKind(value)).toBe(expected);
+    });
 
     it("says it was not watched", () => {
         // An explicit field rather than a figure of zero. A brew refused for

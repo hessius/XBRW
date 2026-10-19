@@ -2,6 +2,7 @@ import {useRef, useState} from "react";
 import {Linking} from "react-native";
 
 import {notify} from "@/components/XbrwToast";
+import {HANDOFF_TEA_UNSUPPORTED} from "@/constants/brewCopy";
 import {buildEnvelope} from "@/library/brew/handoff/envelope";
 import {encodeHandoff} from "@/library/brew/handoff/encode";
 import {backfillFromRecipe} from "@/library/brew/handoff/backfill";
@@ -44,6 +45,10 @@ export function useBrewHandoff(
         if (isSendingRef.current) return null;
         const opened = source();
         if (opened === null) return null;
+        if (opened.record.beverageKind === "tea") {
+            notify({tone: "error", message: HANDOFF_TEA_UNSUPPORTED});
+            return null;
+        }
         isSendingRef.current = true;
         setBusy(true);
         try {

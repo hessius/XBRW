@@ -11,7 +11,7 @@ import {
     LONGEST_ACTIVE_HEADLINE, OVERFLOW_FOREGROUND_CAUTION, OVERFLOW_MANUAL_OVERRIDE,
     PAUSED_NOTE, RATING_CAN_WAIT
 } from "@/constants/brewCopy";
-import {renderWithProviders} from "@/test-utils/render";
+import {renderWithProviders, SHEET_PRESS_TIMEOUT} from "@/test-utils/render";
 import type {BrewPhase} from "@/library/machine/Machine";
 import type {OverflowSnapshot} from "@/library/brew/OverflowController";
 import type {StoredBrew} from "@/library/BrewDatabase";
@@ -367,7 +367,7 @@ describe("brew route", () => {
         }
     );
 
-    it("keeps tea dose and ratio independent of partial measured yield", async () => {
+    it("keeps tea leaf dose independent of yield and hides coffee ratio", async () => {
         mockRecipe.cupType = CUP_TYPE.TEA;
         mockRecipe.dosage = 5;
         mockRecipe.ratio = 18;
@@ -376,9 +376,38 @@ describe("brew route", () => {
         await renderWithProviders(<Brew />);
 
         expect(screen.getByText("5 G")).toBeOnTheScreen();
-        expect(screen.getByText("1:18")).toBeOnTheScreen();
-        expect(screen.getByLabelText("Recipe ratio, 1 to 18")).toBeOnTheScreen();
+        expect(screen.getByText("LEAF")).toBeOnTheScreen();
+        expect(screen.queryByText("1:18")).toBeNull();
+        expect(screen.queryByText("DRAWDOWN")).toBeNull();
+        expect(screen.queryByText("DELAY")).toBeNull();
     });
+
+    it("uses finished tea identity even when the owner's recipe is coffee", async () => {
+        mockRecord = {...record, beverageKind: "tea", dose: 5, ratio: 18,
+            grinderUsed: false, drawdownAt: 0};
+        await drawDone();
+        expect(screen.getByText("LEAF")).toBeOnTheScreen();
+        expect(screen.getByText("HOW WAS THE TEA")).toBeOnTheScreen();
+        for (const label of ["GRIND", "OFF", "RATIO", "DRAWDOWN", "DELAY"]) {
+            expect(screen.queryByText(label)).toBeNull();
+        }
+        expect(screen.getByLabelText("Save as image")).toBeTruthy();
+        expect(screen.getByLabelText("Export the data")).toBeTruthy();
+        expect(screen.queryByLabelText(HANDOFF_TARGETS[0].buttonLabel)).toBeNull();
+    });
+
+    it.each(["coffee", undefined] as const)(
+        "keeps finished %s identity when the current recipe is tea",
+        async (beverageKind) => {
+            mockRecipe.cupType = CUP_TYPE.TEA;
+            mockRecord = {...record, beverageKind, dose: 15, ratio: 16};
+            await drawDone();
+            expect(screen.getByText("HOW WAS IT")).toBeTruthy();
+            expect(screen.getByText("DOSE")).toBeTruthy();
+            expect(screen.getByText("1:16")).toBeTruthy();
+            expect(screen.queryByText("LEAF")).toBeNull();
+        }
+    );
 
     it("retains context rows and spacing from pouring through settling", async () => {
         mockRecipe.dosage = 16;
@@ -1565,6 +1594,57 @@ describe("Beanconqueror handoff on the finished brew", () => {
         all: () => [brew], samples: () => [], markSent: jest.fn()
     });
 
+    it("never offers tea handoff or bean naming when the live run finishes", async () => {
+        mockRecipe.cupType = CUP_TYPE.TEA;
+        mockPhase = {name: "pouring"} as BrewPhase;
+        const history = store({...record, beverageKind: "tea"});
+        const {rerender} = await renderWithProviders(<Brew historyStore={history} />);
+        mockPhase = {name: "done"} as BrewPhase;
+        await rerender(<Brew historyStore={history} />);
+        expect(screen.queryByLabelText(handoffTarget.buttonLabel)).toBeNull();
+        expect(screen.queryByTestId("bean-name-field")).toBeNull();
+        expect(screen.getByLabelText("Export the data")).toBeTruthy();
+        expect(screen.getByLabelText("Save as image")).toBeTruthy();
+        expect(openURL).not.toHaveBeenCalled();
+        expect(history.markSent).not.toHaveBeenCalled();
+    });
+
+    it("uses a known tea record to gate handoff even if the active recipe says coffee", async () => {
+        mockRecord = {...record, beverageKind: "tea"};
+        await renderWithProviders(<Brew historyStore={store(mockRecord)} />);
+        expect(screen.queryByLabelText(handoffTarget.buttonLabel)).toBeNull();
+        expect(screen.queryByTestId("bean-name-field")).toBeNull();
+        expect(openURL).not.toHaveBeenCalled();
+    });
+
+    it.each(["coffee", undefined] as const)(
+        "hands off a finished %s record even if the current recipe says tea",
+        async (beverageKind) => {
+            mockRecord = {...record, beverageKind, coffee: {name: "Kenya Sakami"}};
+            mockRecipe.cupType = CUP_TYPE.TEA;
+            const history = store(mockRecord);
+            await renderWithProviders(<Brew historyStore={history} />);
+
+            await fireEvent.press(screen.getByLabelText(handoffTarget.buttonLabel));
+
+            await waitFor(() => expect(openURL).toHaveBeenCalledTimes(1));
+            expect(history.markSent).toHaveBeenCalledWith(record.id, expect.any(Number));
+            expect(screen.queryByTestId("bean-name-field")).toBeNull();
+        }
+    );
+
+    it("rechecks the current recipe on press while no finished snapshot exists", async () => {
+        const history = store({...record, coffee: {name: "Kenya Sakami"}});
+        await renderWithProviders(<Brew historyStore={history} />);
+        mockRecipe.cupType = CUP_TYPE.TEA;
+
+        await fireEvent.press(screen.getByLabelText(handoffTarget.buttonLabel));
+
+        expect(screen.queryByTestId("bean-name-field")).toBeNull();
+        expect(openURL).not.toHaveBeenCalled();
+        expect(history.markSent).not.toHaveBeenCalled();
+    });
+
     it("offers the handoff when the gate is on", async () => {
         const {getByLabelText} = await renderWithProviders(
             <Brew historyStore={store()} />
@@ -1607,7 +1687,7 @@ describe("Beanconqueror handoff on the finished brew", () => {
         await waitFor(async () => {
             await fireEvent.press(getByTestId("bean-name-send"));
             expect(openURL).toHaveBeenCalledTimes(1);
-        });
+        }, {timeout: SHEET_PRESS_TIMEOUT});
     });
 
     it("opens Beanconqueror straight away for a pod brew, which knows its coffee", async () => {

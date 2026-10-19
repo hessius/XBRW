@@ -99,6 +99,75 @@ function pair(over: Parameters<typeof makeBrewRecordFixture>[0] = {}) {
 }
 
 describe("the comparison screen", () => {
+    it("compares tea leaf, water, cup and time without coffee metrics", async () => {
+        const tea = {beverageKind: "tea" as const, dose: 5, ratio: 18,
+            grindSize: 81, grinderRpm: 120, drawdownAt: 0};
+        pair(tea);
+        setRecords({
+            a: {record: makeBrewRecordFixture({id: "a", plan: comparisonPlan, ...tea}),
+                samples: makeBrewRecordSamples(comparisonSamples)},
+            b: {record: makeBrewRecordFixture({id: "b", plan: comparisonPlan, ...tea}),
+                samples: makeBrewRecordSamples(comparisonSamples)}
+        });
+        const {getByTestId} = await renderWithProviders(<BrewCompareScreen/>);
+        const table = within(getByTestId("compare-table"));
+        for (const label of ["LEAF", "WATER", "CUP", "POUR"]) {
+            expect(table.getByText(label)).toBeTruthy();
+        }
+        for (const label of ["DOSE", "RATIO", "GRIND", "RPM", "DRAWDOWN"]) {
+            expect(table.queryByText(label)).toBeNull();
+        }
+    });
+
+    it("subtracts the recorded pause from a tea steep in comparison", async () => {
+        const tea = makeBrewRecordFixture({
+            id: "a", beverageKind: "tea",
+            pouringAt: 1_000, endedAt: 81_000,
+            plan: planFromPours([new Pour(1, 90, 92, 35, 0, 0, 45)]),
+            teaCycles: [{
+                index: 0, steepStartedAt: 10_000, steepEndedAt: 65_000,
+                endingEndedAt: 80_000, fillMl: 90
+            }],
+            pauseIntervals: [{from: 20_000, to: 30_000, pour: 1, reason: "manual"}]
+        });
+        setRecords({
+            a: {record: tea, samples: []},
+            b: {record: {...tea, id: "b"}, samples: []}
+        });
+        setParams({a: "a", b: "b"});
+        const {getAllByText} = await renderWithProviders(<BrewCompareScreen/>);
+        expect(getAllByText("STEEP · 0:45 planned · 0:45 elapsed")).toHaveLength(2);
+    });
+
+    it("shows each tea brew's retained steep cycles even without sample streams", async () => {
+        const teaPlan = planFromPours([
+            ...comparisonPours,
+            new Pour(3, 90, 80, 40, AGITATION.ALL_OFF, POUR_PATTERN.CENTERED, 90)
+        ]);
+        const teaCycles = [
+            {index: 0, steepStartedAt: 100, steepEndedAt: 45_000, endingEndedAt: 80_000},
+            {index: 1, steepStartedAt: 80_000, steepEndedAt: 140_000, endingEndedAt: 170_000},
+            {index: 2, steepStartedAt: 170_000, steepEndedAt: 260_000}
+        ];
+        const a = makeBrewRecordFixture({
+            id: "a", beverageKind: "tea", plan: teaPlan, teaCycles
+        });
+        const b = makeBrewRecordFixture({
+            id: "b", beverageKind: "tea", plan: teaPlan, teaCycles, hasStream: false
+        });
+        setRecords({
+            a: {record: a, samples: []},
+            b: {record: b, samples: []}
+        });
+        setParams({a: "a", b: "b"});
+
+        const {getByTestId, getAllByText} = await renderWithProviders(<BrewCompareScreen/>);
+        expect(getByTestId("compare-tea-this")).toBeTruthy();
+        expect(getByTestId("compare-tea-that")).toBeTruthy();
+        expect(getAllByText("STEEP 03")).toHaveLength(2);
+        expect(getAllByText("STEEP · 1:30 planned · 1:30 elapsed")).toHaveLength(2);
+    });
+
     beforeEach(() => {
         setRecords({});
         setJudgementStore(undefined);
@@ -159,11 +228,12 @@ describe("the comparison screen", () => {
                 .toBe(polygons.map((run) => `${toPath(run, box)} Z`).join(" "));
             await fireEvent.press(getByLabelText("Show the brews separately"));
             const runs = [[0, 1, 2], [8, 9, 10]];
+            const separateBox = {...box, height: 34, maxV: 100};
             function separatePath(sign: number): string {
                 return runs.map((times) => {
                     const top = times.map((t) => ({t, v: 50 + sign * t * 5}));
                     const bottom = [...times].reverse().map((t) => ({t, v: 50}));
-                    return `${toPath([...top, ...bottom], {...box, height: 34})} Z`;
+                    return `${toPath([...top, ...bottom], separateBox)} Z`;
                 }).join(" ");
             }
             expect(getByTestId("compare-cup-gap-separate").props.d).toBe(separatePath(1));
@@ -229,12 +299,15 @@ describe("the comparison screen", () => {
                 .toBe(polygons.map((run) => `${toPath(run, box)} Z`).join(" "));
             await fireEvent.press(getByLabelText("Show the brews separately"));
             expect(getByTestId("compare-cup-gap-separate").props.d).toBe(
-                separatePolygons.map((run) => `${toPath(run, {...box, height: 34})} Z`).join(" ")
+                separatePolygons.map((run) =>
+                    `${toPath(run, {...box, height: 34, maxV: 100})} Z`
+                ).join(" ")
             );
             await fireEvent.press(getByLabelText("Swap which brew leads"));
             expect(getByTestId("compare-cup-gap-separate").props.d).toBe(
                 separatePolygons.map((run) => `${toPath(
-                    run.map(({t, v}) => ({t, v: 100 - v})), {...box, height: 34}
+                    run.map(({t, v}) => ({t, v: 100 - v})),
+                    {...box, height: 34, maxV: 100}
                 )} Z`).join(" ")
             );
             await fireEvent.press(getByLabelText("Show the brews overlaid"));

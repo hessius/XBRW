@@ -279,7 +279,7 @@ describe("brew history batch selection", () => {
         expect(screen.queryByLabelText("Delete brew")).toBeNull();
     });
 
-    it("blocks the send when a selected brew did not finish", async () => {
+    it("does not offer send when the only selected brew did not finish", async () => {
         mockBrews = makeBrews();
         mockBrews[1] = {...mockBrews[1], outcome: "cancelled"};
         await renderWithProviders(<BrewHistory />);
@@ -288,7 +288,31 @@ describe("brew history batch selection", () => {
         await fireEvent.press(screen.getByLabelText(/^Kenya Nyeri,/));
 
         expect(screen.getByTestId("selection-blocked")).toBeTruthy();
-        expect(screen.getByLabelText("Send selected brews to Beanconqueror")).toBeDisabled();
+        expect(screen.queryByLabelText("Send selected brews to Beanconqueror")).toBeNull();
+    });
+
+    it("offers only eligible coffee from a mixed tea selection and says how many", async () => {
+        mockBrews[1].beverageKind = "tea";
+        await renderWithProviders(<BrewHistory />);
+        await fireEvent.press(screen.getByLabelText("Edit brews"));
+        await fireEvent.press(screen.getByLabelText(/^Ethiopia Guji,/));
+        await fireEvent.press(screen.getByLabelText(/^Kenya Nyeri,/));
+        expect(screen.getByText("1 of 2 selected brews can be sent to Beanconqueror.")).toBeTruthy();
+        await fireEvent.press(screen.getByLabelText("Send selected brews to Beanconqueror"));
+        expect(mockSend).toHaveBeenCalledWith(["a"]);
+    });
+
+    it("keeps all-tea selection available for compare and delete, without send", async () => {
+        mockBrews = sameRecipe().map((brew) => ({...brew, beverageKind: "tea"}));
+        await renderWithProviders(<BrewHistory />);
+        await fireEvent.press(screen.getByLabelText("Edit brews"));
+        for (const row of screen.getAllByLabelText(/^Ethiopia Guji,/)) {
+            await fireEvent.press(row);
+        }
+        expect(screen.queryByLabelText("Send selected brews to Beanconqueror")).toBeNull();
+        expect(screen.getByLabelText("Compare the selected brews")).not.toBeDisabled();
+        expect(screen.getByLabelText("Delete selected brews")).not.toBeDisabled();
+        expect(mockSend).not.toHaveBeenCalled();
     });
 
     it("still lets an unfinished brew be selected so it can be deleted", async () => {

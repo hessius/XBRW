@@ -11,6 +11,7 @@ import BrewStorySheet from "@/components/BrewStorySheet";
 import BrewSummary from "@/components/BrewSummary";
 import CompareWithSheet from "@/components/CompareWithSheet";
 import StageDetail from "@/components/StageDetail";
+import TeaStageDetail from "@/components/TeaStageDetail";
 import DotMatrixText from "@/components/DotMatrixText";
 
 import ExportButton from "@/components/ExportButton";
@@ -27,13 +28,14 @@ import {sharedBrewDatabase, useBrewHistory, useBrewJudgement, type JudgementStor
 import {useSetting} from "@/hooks/useSetting";
 import {bypassViewFromRecord} from "@/library/brew/bypassState";
 import {formatBrewDate, formatBrewTime} from "@/library/brew/brewFormat";
-import {brewFigures, brewFigureAdjustments} from "@/library/brew/brewFigures";
+import {brewFigures, brewFigureAdjustments, brewFigureDetails} from "@/library/brew/brewFigures";
 import {poursFromPlan} from "@/library/brew/BrewRecord";
 import {dialNote, grindRecipeBadges, type GrindFigure} from "@/library/brew/dialAfterBrew";
 import {drawdownFigures, retrospectiveFlowSeries} from "@/library/brew/flowRate";
 import {hasDrawableRateRun} from "@/library/brew/rateChartGeometry";
 import {canHandOff, HANDOFF_TARGETS} from "@/library/brew/handoff/targets";
 import {ladderFrontier} from "@/library/brew/ladderState";
+import {buildTeaCycleViews} from "@/library/brew/teaCycle";
 import {
     offeredStoryContent,
     storyCoffeeLine,
@@ -264,7 +266,7 @@ export default function BrewRecord({recipeLookup}: Props) {
     // The record screen renders the first target only; adding a second target
     // means revisiting this selection rather than assuming it appears here.
     const [handoffTarget] = HANDOFF_TARGETS;
-    const showHandoff = handoffEnabled && canHandOff(record.outcome);
+    const showHandoff = handoffEnabled && canHandOff(record);
     const accent = record.accent;
 
     // Measured from the first drop, because that is where the sample stream is
@@ -300,6 +302,14 @@ export default function BrewRecord({recipeLookup}: Props) {
     // what it always did and is only ever right for a brew that finished.
     const delivered = record.stageWater
         ?? stages.map((pour) => Math.max(pour.volume, 0));
+    const teaStages = record.beverageKind === "tea"
+        ? buildTeaCycleViews(stages, record.teaCycles ?? [], {
+            now: durationSeconds * 1000,
+            pauseIntervals: record.pauseIntervals,
+            finished: true,
+            outcome: record.outcome
+        })
+        : undefined;
 
     const bypass = bypassViewFromRecord(record.bypass);
     // The scale's running total includes the bypass, so the brew water is the
@@ -347,8 +357,10 @@ export default function BrewRecord({recipeLookup}: Props) {
     // story card adds its own width and nothing else. Neither works the
     // figures out a second time.
     const summary = {
+        beverageKind:      record.beverageKind,
         recipeName:        record.recipeName,
         recipeInputs:      {
+            beverageKind:      record.beverageKind,
             dose:              record.dose,
             ratio:             record.ratio,
             adjustedFromDose:  record.adjustedFromDose,
@@ -368,6 +380,7 @@ export default function BrewRecord({recipeLookup}: Props) {
         activeIndex:       ladderFrontier(record.outcome, delivered),
         stageWater:        delivered,
         stalls:            record.stalls ?? stages.map(() => []),
+        teaStages,
         // A paused brew's clock runs long and its trace holds a flat stretch
         // nothing else on the screen accounts for. Ending on the machine is
         // the louder fact, so it keeps the slot where both are true.
@@ -376,19 +389,21 @@ export default function BrewRecord({recipeLookup}: Props) {
             : pausedNote(record.pausedSeconds),
         stagesUnavailable: snapshot.length === 0 && recipe === null,
         bypass,
-        drawdown:          drawdown?.seconds ?? null,
-        drawdownRate:      drawdown?.rate ?? null,
         rateSeries:        record.hasStream && samples.length > 0
             ? retrospectiveFlowSeries(samples, record.pours)
             : [],
-        delay:             pourEndDelaySeconds(
-            durationSeconds,
-            drawdown?.seconds ?? null,
-            plannedSecs,
-            pausedBeforeDrawdownSeconds(
-                record.pauseIntervals, record.drawdownAt, record.pausedSeconds)
-        ),
-        grind,
+        ...brewFigureDetails(record.beverageKind, {
+            drawdown:     drawdown?.seconds ?? null,
+            drawdownRate: drawdown?.rate ?? null,
+            delay:        pourEndDelaySeconds(
+                durationSeconds,
+                drawdown?.seconds ?? null,
+                plannedSecs,
+                pausedBeforeDrawdownSeconds(
+                    record.pauseIntervals, record.drawdownAt, record.pausedSeconds)
+            ),
+            grind
+        }),
         adjustments
     };
     const pauseReasons = pauseReasonsNote(record.pauseIntervals);
@@ -552,12 +567,17 @@ export default function BrewRecord({recipeLookup}: Props) {
             {/* Below the figures rather than over them: the panel explains a
                 stage that stays highlighted above it, and a sheet would cover
                 the very highlight that opened it. */}
-            {selectedIndex !== null && stages[selectedIndex] !== undefined && (
+            {record.beverageKind === "tea" && selectedIndex !== null
+                && teaStages?.[selectedIndex] !== undefined ? (
+                <TeaStageDetail stage={teaStages[selectedIndex]} accent={accent}
+                                onClose={() => setSelectedIndex(null)}/>
+            ) : selectedIndex !== null && stages[selectedIndex] !== undefined && (
                 <StageDetail
                     index={selectedIndex}
                     stage={stages[selectedIndex]}
                     deliveredMl={delivered[selectedIndex] ?? 0}
-                    stalls={(record.stalls ?? [])[selectedIndex] ?? []}
+                    stalls={(record.beverageKind === "tea"
+                        ? [] : (record.stalls ?? [])[selectedIndex] ?? [])}
                     samples={samples}
                     hasStream={record.hasStream}
                     outcome={record.outcome}
@@ -571,6 +591,7 @@ export default function BrewRecord({recipeLookup}: Props) {
             <YStack paddingHorizontal={SCREEN_PADDING} gap="$2"
                     marginBottom={JUDGEMENT_ACTION_GAP}>
                 <BrewJudgement rating={judgement.rating} note={judgement.note}
+                               beverageKind={record.beverageKind}
                                onRate={handoff.rateBrew}
                                onNote={handoff.annotateBrew}
                                onNoteDraft={handoff.setNoteDraft}/>
@@ -607,6 +628,7 @@ export default function BrewRecord({recipeLookup}: Props) {
                 onDone={handoff.continueSend}
                 figures={figures}
                 recipeName={record.recipeName}
+                beverageKind={record.beverageKind}
                 rating={judgement.rating}
                 note={judgement.note}
                 onRate={handoff.rateBrew}

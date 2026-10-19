@@ -141,6 +141,37 @@ The existing main ruleset additionally enables code quality and Copilot review.
 No second automatic review target is added for develop. Documentation alone
 cannot guarantee an agent or administrator never bypasses the process.
 
+### CI jobs, caches and failure reports
+
+`.github/workflows/ci.yml` runs independent Ubuntu jobs: `quality` runs
+typecheck, lint, worktree-audit tests and Expo Doctor (10-minute timeout);
+`tests` runs the existing iOS and Android Jest projects on separate runners
+(20 minutes each, matrix fail-fast disabled). All use `npm ci` and setup-node's
+npm cache. Jest worker limits, test discovery and coverage settings are unchanged.
+
+The `check` aggregate (2-minute timeout) retains the exact required status
+`Typecheck, lint and test`, GitHub Actions app ID 15368, on main and develop.
+It runs even after dependency failures and passes only when quality and the
+entire test matrix both report success. Failed, skipped or cancelled validation
+cannot pass it; whole-workflow cancellation may cancel the gate, never turn it
+green. Existing push/PR triggers and concurrency cancellation remain unchanged.
+
+Jest restores only `.jest-cache/ios` or `.jest-cache/android`. Cache keys
+include schema `jest-v1`, runner OS/architecture, resolved Node version,
+platform, dependency/configuration hash and commit SHA. The restore prefix
+omits only the SHA; successful Jest runs save the primary key unless already
+an exact hit. No cross-platform/configuration fallback, secret or workspace
+cache is allowed. These caches contain derived data, including transformed
+source, and are not a place for credentials. The workflow uses read-only
+contents permission and does not use `pull_request_target`.
+
+A failed Jest step still runs `scripts/name-failing-tests.mjs`; when its JSON
+report exists, it is uploaded as `jest-results-ios` or `jest-results-android`
+for 14 days. Missing reports do not turn failures or cancellations into passes.
+Remote timing, cache restore/save, artifact delivery and cancellation behavior
+need observation in a separately authorized PR run; local validation is not
+evidence of those Actions runtime outcomes.
+
 ## Preserve before cleaning
 
 A Git bundle preserves referenced committed history, not every loose file or

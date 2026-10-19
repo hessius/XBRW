@@ -85,6 +85,23 @@ function pathPoints(path: string): {x: number; y: number}[] {
 }
 
 describe("BrewSummary", () => {
+    it("shows tea leaf and neutral figures without coffee context in a capture", async () => {
+        await draw({
+            beverageKind: "tea", recipeInputs: {dose: 5, ratio: 18,
+                adjustedFromDose: 4, adjustedFromRatio: 16},
+            grind: {kind: "dial", dial: 53, recipe: 50, savedRecipe: 48},
+            drawdown: 0, delay: 0, drawdownRate: 0
+        });
+        for (const label of ["LEAF", "5 G", "RECIPE 4", "WATER", "CUP", "TIME"]) {
+            expect(screen.getAllByText(label).length).toBeGreaterThan(0);
+        }
+        for (const label of ["RATIO", "GRIND", "DRAWDOWN", "DELAY", "0:00",
+            "RECIPE 48", "RECIPE 50", "1:18"]) {
+            expect(screen.queryByText(label)).toBeNull();
+        }
+        expect(screen.getByTestId("ladder")).toBeTruthy();
+    });
+
     it("draws the trace when the brew kept a stream", async () => {
         const {getByLabelText} = await draw({hasStream: true});
         expect(getByLabelText("Brew trace, 93 then 93 then 93 degrees")).toBeTruthy();
@@ -440,8 +457,8 @@ describe("BrewSummary pause intervals", () => {
         expect(slot.getByTestId("trace-pause-manual-1")).toBeTruthy();
     });
 
-    it("sizes the trace and the rate chart to the intervals, not the last sample", async () => {
-        await draw({samples: rows, pauseIntervals: intervals, plannedSeconds: 50, rateSeries});
+    it.each(["tea", "coffee"] as const)("sizes the %s trace and rate chart to the same interval extent", async beverageKind => {
+        await draw({beverageKind, samples: rows, pauseIntervals: intervals, plannedSeconds: 50, rateSeries});
         // The final pause ends at 90 s, thirty seconds after the last sample.
         const manual = screen.getByTestId("trace-pause-manual-1");
         expect(Number(manual.props.x) + Number(manual.props.width)).toBeCloseTo(traceWidth, 1);

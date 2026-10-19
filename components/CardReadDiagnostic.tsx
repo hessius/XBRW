@@ -21,7 +21,7 @@ function Line({label, value}: {label: string; value: string}) {
 }
 
 /**
- * Settings → Card diagnostics.
+ * Settings → Labs → Card diagnostics.
  *
  * The evidence half of the bypass-card investigation. A genuine "bypass water"
  * card read to apparent success and then crashed the app, and the raw bytes are
@@ -29,16 +29,14 @@ function Line({label, value}: {label: string; value: string}) {
  * read path now persists them to `lastCardRead`; this hands them back as text a
  * user can copy out of a phone that has no console.
  *
- * Gated behind `machineConsoleAcknowledged` rather than a switch of its own:
- * that flag already governs the app's developer area (the machine console), so
- * a user being walked through this over text opens the console once and this
- * appears with it, while everyone else's settings screen stays uncluttered.
+ * Read-only diagnostics belong with the other Labs tools. Opening the machine
+ * console still requires its separate acknowledgement before commands appear.
  */
 export default function CardReadDiagnostic({settings}: {settings?: Settings}) {
-    const [acknowledged] = useSetting("machineConsoleAcknowledged", settings);
+    const [labsUnlocked] = useSetting("labsUnlocked", settings);
     const [lastCardRead] = useSetting("lastCardRead", settings);
 
-    if (!acknowledged) {
+    if (!labsUnlocked) {
         return null;
     }
 

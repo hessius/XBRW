@@ -3,6 +3,26 @@
 This is the source for the full release-testing checklist, not a claim that
 device testing is complete. Update it whenever release scope or behaviour changes.
 
+## Consolidated beta candidate (2026-10-16)
+
+`chore/beta-consolidation-20261016` combines trace retention from #221,
+platform-separated CI, settings and machine-panel refinements, grinder-position
+startup tracking, BLE grind 1–80 with NFC 40–80 unchanged, and tea-cycle
+recording/presentation. The approved develop merge of #221 is included by
+ancestry; no shared history was rewritten.
+
+Software verification at `af5c217aae925c22137760ea0b77ec1e8b3905f6`:
+746 dual-platform Jest suites passed, with 14,988 tests passed, 24 skipped and
+two snapshots passed. Typecheck and repository lint passed (29 existing
+warnings); Expo Doctor passed all 21 checks, and all 12 local capture-analysis
+tests passed. Integration review found no further issues after fixes.
+
+No new beta artifact has been built or submitted from this candidate.
+Physical tea UI/interruption qualification, the reported recipe's startup
+retest, settings visual acceptance and existing native/external-app release
+gates remain open. The earlier truncated tea recording is still unexplained.
+The new CI runtime/cache benefit also awaits an actual Actions run.
+
 ## Brew history trace storage (2026-10-15)
 
 Brew traces are compressed and managed under a configurable storage budget. When
@@ -10,6 +30,25 @@ the budget is exceeded, older traces without a rating or note are removed first.
 The two newest traces for each recipe and rated or noted traces go last. Brew
 records and summaries remain available when their detailed trace is removed.
 Unlimited disables budget-based trace removal.
+
+## Tea-cycle observations and presentation (2026-10-16)
+
+Known-tea brews now retain compact, explicitly observed fill, steep and
+combined release/drain cycle boundaries independently of the sample-retention
+window. Live, finished, record/story and comparison views distinguish the
+programmed fill from measured fill and later measured water; the cycle view
+does not claim that the latter is overflow, a fixed amount, or a measured drain
+duration. Coffee stall/held/drawdown semantics remain separate. This feature
+does not explain or resolve the earlier report of a truncated tea recording.
+
+**Physical-device qualification remains open.** Replay of one sanitized
+three-steep capture verifies the mapped event sequence, not the new live
+rendering or every interruption path. On real iOS and Android hardware, verify
+all three stages, timer updates, pause/resume, manual stop, link loss, a brew
+ending short, history after sample expiry, and completed PNG/JSON exports.
+Confirm that unknown release/drain boundaries remain unknown. The captured
+machine model and app build were not established; do not infer them from this
+evidence.
 
 ## Development workflow migration (2026-10-11)
 

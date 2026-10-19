@@ -203,6 +203,24 @@ describe("SettingsScreen", () => {
         mockBrewStore.restore.mockReturnValue(0);
     });
 
+    it("groups app brew preferences separately and preserves their settings", async () => {
+        const settings = new Settings(memoryStorage());
+        const rendered = await renderWithProviders(<SettingsScreen settings={settings}/>);
+        const order = renderOrder(rendered.toJSON());
+        const brewing = order.indexOf("BREWING");
+        expect(brewing).toBeGreaterThan(order.indexOf("MACHINE"));
+        for (const label of ["Animate the brew chart", "Ask how a brew was", "Brew detail storage"]) {
+            expect(order.indexOf(label)).toBeGreaterThan(brewing);
+            expect(order.indexOf(label)).toBeLessThan(order.indexOf("XBLOOM ACCOUNT"));
+        }
+        await fireEvent.press(screen.getByRole("switch", {name: "Animate the brew chart"}));
+        expect(settings.get("animateBrewChart")).toBe(false);
+        await fireEvent.press(screen.getByRole("switch", {name: "Ask how a brew was"}));
+        expect(settings.get("askForRatings")).toBe(false);
+        await fireEvent.press(screen.getByRole("radio", {name: "50 MB"}));
+        expect(settings.get("brewTraceBudgetMB")).toBe(50);
+    });
+
     it("shows the coffee marker toggle in its stored state", async () => {
         const settings = new Settings(memoryStorage());
         settings.set("showCoffeeMarker", false);
@@ -1042,9 +1060,24 @@ describe("SettingsScreen", () => {
         });
 
         it("hides Labs until somebody has gone looking for it", async () => {
-            await renderWithProviders(<SettingsScreen settings={new Settings(memoryStorage())}/>);
+            const settings = new Settings(memoryStorage());
+            settings.set("machineConsoleAcknowledged", true);
+            await renderWithProviders(<SettingsScreen settings={settings}/>);
 
             expect(screen.queryByText("LABS")).toBeNull();
+            expect(screen.queryByText("CARD DIAGNOSTICS")).toBeNull();
+            expect(screen.queryByRole("button", {name: /^Machine console/})).toBeNull();
+        });
+
+        it("offers card diagnostics and the guarded console from Labs", async () => {
+            const settings = new Settings(memoryStorage());
+            settings.set("labsUnlocked", true);
+            const rendered = await renderWithProviders(<SettingsScreen settings={settings}/>);
+            const order = renderOrder(rendered.toJSON());
+            expect(order.indexOf("CARD DIAGNOSTICS")).toBeGreaterThan(order.indexOf("LABS"));
+            await fireEvent.press(screen.getByRole("button", {name: /^Machine console/}));
+            expect(mockPush).toHaveBeenCalledWith("/machine");
+            expect(settings.get("machineConsoleAcknowledged")).toBe(false);
         });
 
         it("offers a way back out once Labs is open", async () => {
@@ -1088,6 +1121,7 @@ describe("SettingsScreen", () => {
 
             expect(settings.get("labsUnlocked")).toBe(false);
             expect(screen.queryByText("LABS")).toBeNull();
+            expect(screen.queryByText("CARD DIAGNOSTICS")).toBeNull();
             // The section closing does not take the rest of the screen with it.
             expect(screen.getByText("XBLOOM ACCOUNT")).toBeTruthy();
         });
