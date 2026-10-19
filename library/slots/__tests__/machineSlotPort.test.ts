@@ -1043,8 +1043,12 @@ it("does not renew the current session with a late old handshake completion", as
             await new Promise<void>((resolve) => { release = resolve; });
         }
     };
+    // The quiet question goes unanswered, so the old query renews the session.
+    radio.ignoreInfoRequests = 1;
     const oldQuery = machine.askHowItIsDoing().catch((error: Error) => error);
+    await jest.advanceTimersByTimeAsync(5);
     await flush();
+    expect(blocked).toBe(true);
     await machine.disconnect();
     await machine.connect("one");
     await jest.advanceTimersByTimeAsync(20_001);

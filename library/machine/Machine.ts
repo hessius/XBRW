@@ -616,7 +616,11 @@ export default class Machine {
     private infoWaitMs: number;
     private handshakeFreshMs: number;
     private settleCapMs: number;
-    /** When the session was last renewed, so it is not renewed needlessly. */
+    /**
+     * When the session was last known to be good, so it is not renewed
+     * needlessly: a handshake, or the machine answering a question asked
+     * without one. Zero means it has to be renewed before anything is asked.
+     */
     private lastHandshakeAt = 0;
 
     /**
@@ -849,9 +853,14 @@ export default class Machine {
      */
     private async shakeHands(): Promise<void> {
         const generation = this.generation;
-        await this.transport.write(buildType1(8100, [185, 1]));
+        const frame = buildType1(8100, [185, 1]);
+        await this.transport.write(frame);
         if (generation !== this.generation) throw new Error("The machine connection changed during the handshake.");
         this.lastHandshakeAt = Date.now();
+        // Logged like every other send. It used to go straight to the radio,
+        // so the frame that makes the machine beep was the one frame missing
+        // from the log that somebody reads to find out why it beeped.
+        this.emitFrame("sent", frame, {kind: "unknown", raw: frame});
     }
 
     /** Whether the machine still counts us as being in a session. */
@@ -873,37 +882,32 @@ export default class Machine {
         const generation = this.generation;
         const infoBeforeRequest = this.info;
         // The machine will not answer a question asked outside a session, and
-        // the session goes stale on its own — settled on hardware, where a
+        // the session goes stale on its own -- settled on hardware, where a
         // 40521 six minutes into a live link was ignored and the same frame
-        // after an 8100 was answered at once. Renewing costs a beep, so it is
-        // skipped when something else has renewed it recently.
+        // after an 8100 was answered at once. But renewing beeps, and how long
+        // a session lasts is not known: the official app holds its link and
+        // brews without beeping again. So on a link that has had its
+        // handshake, the question is asked once without one. An answer proves
+        // the session is still good; silence costs one wait and then renews
+        // it, which is what used to happen on every brew.
+        if (!this.sessionIsFresh() && this.lastHandshakeAt > 0) {
+            const quiet = await this.askOnce(generation, infoBeforeRequest);
+            if (quiet === "unsent") return false;
+            if (quiet) {
+                this.lastHandshakeAt = Date.now();
+                return true;
+            }
+            this.lastHandshakeAt = 0;
+        }
         if (!this.sessionIsFresh()) {
             await this.shakeHands();
             await this.gap();
         }
         for (let attempt = 0; attempt < INFO_ATTEMPTS; attempt++) {
             if (attempt > 0) await this.gap();
-            if (generation !== this.generation) throw new Error("The machine connection changed.");
-            // A late answer to the previous attempt can land in the gap, when
-            // no per-attempt listener is mounted. It is still an answer to this
-            // refresh and must not leave the control waiting for another frame.
-            if (this.info !== infoBeforeRequest) return true;
-            // Listening before asking, not after. The answer can arrive inside
-            // the write — the radio delivers on its own thread — and a listener
-            // attached afterwards would miss it and wait out the whole window
-            // for a reply that had already come.
-            const answered = this.waitForInfo();
-            try {
-                await this.writeInfo();
-            } catch {
-                // A question the radio would not carry is not a reason to
-                // abandon what the caller was actually doing. The brew decides
-                // on the last thing it heard, and fails on its own first frame
-                // if the radio is really gone — with a phase, which this has no
-                // business setting.
-                return false;
-            }
-            if (await answered || this.info !== infoBeforeRequest) return true;
+            const answered = await this.askOnce(generation, infoBeforeRequest);
+            if (answered === "unsent") return false;
+            if (answered) return true;
         }
         // Silence is evidence, and it outranks the clock. The session is
         // renewed on a timer because renewing beeps -- but a machine that has
@@ -913,6 +917,38 @@ export default class Machine {
         // until twenty seconds had passed and the clock happened to agree.
         this.lastHandshakeAt = 0;
         return false;
+    }
+
+    /**
+     * Ask once and wait out one window for the answer.
+     *
+     * @returns whether it was answered, or "unsent" when the radio would not
+     *     carry the question.
+     */
+    private async askOnce(
+        generation: number, infoBeforeRequest: MachineInfo | null
+    ): Promise<boolean | "unsent"> {
+        if (generation !== this.generation) throw new Error("The machine connection changed.");
+        // A late answer to the previous attempt can land in the gap, when
+        // no per-attempt listener is mounted. It is still an answer to this
+        // refresh and must not leave the control waiting for another frame.
+        if (this.info !== infoBeforeRequest) return true;
+        // Listening before asking, not after. The answer can arrive inside
+        // the write -- the radio delivers on its own thread -- and a listener
+        // attached afterwards would miss it and wait out the whole window
+        // for a reply that had already come.
+        const answered = this.waitForInfo();
+        try {
+            await this.writeInfo();
+        } catch {
+            // A question the radio would not carry is not a reason to
+            // abandon what the caller was actually doing. The brew decides
+            // on the last thing it heard, and fails on its own first frame
+            // if the radio is really gone -- with a phase, which this has no
+            // business setting.
+            return "unsent";
+        }
+        return await answered || this.info !== infoBeforeRequest;
     }
 
     /**
@@ -934,7 +970,10 @@ export default class Machine {
     }
 
     private async writeInfo(): Promise<void> {
-        await this.transport.write(buildType1(EVENT.MACHINE_INFO));
+        const frame = buildType1(EVENT.MACHINE_INFO);
+        await this.transport.write(frame);
+        // Logged, for the same reason the handshake is.
+        this.emitFrame("sent", frame, {kind: "unknown", raw: frame});
     }
 
     async disconnect(): Promise<void> {
@@ -1274,8 +1313,9 @@ export default class Machine {
         // Asked until it answers, not once. The machine loses the question
         // rather than refusing it, and there is nothing a user's second press
         // does that this cannot do for them -- so the presses happen here.
-        // Each round opens a fresh session, which beeps; that is the price of
-        // the answer, and the phase says what the beeping is for.
+        // The first round asks without a handshake when the link has had one;
+        // a round that has to open a fresh session beeps, which is the price
+        // of the answer, and the phase says what the beeping is for.
         for (let round = 0; this.isConnected(); round++) {
             if (round > 0) {
                 this.setPhase({name: "waking"});
@@ -1323,15 +1363,19 @@ export default class Machine {
         this.pendingCommit = null;
         this.committed = false;
 
+        // The handshake only when the session is not known to be good. The
+        // reference re-sends it at the start of every brew, but the reference
+        // connects for each brew, so that is its connect handshake. On a held
+        // link the pre-flight question has just been answered inside a live
+        // session (or renewed one to get its answer), and a second 8100 here
+        // was the beep the official app does not make when it brews.
+        const renew = !this.sessionIsFresh();
         try {
             // This whole sequence, gaps and all, mirrors `run_brew` in the
             // reference implementation, which is the only brew sequence we have
             // that is known to work on real hardware.
             await this.sendPaced([
-                // The handshake again, immediately before the recipe. The one
-                // sent at connect may be many minutes old by now, and the
-                // reference re-sends it at the start of every brew.
-                buildType1(8100, [185, 1]),
+                ...(renew ? [buildType1(8100, [185, 1])] : []),
                 // The dose has to travel whether or not there is a bypass: the
                 // machine needs it to grind correctly, and skipping this frame
                 // makes the grind drift. Tea sends no bypass at all -- the
@@ -1367,9 +1411,9 @@ export default class Machine {
                 // the one the user may want to keep for themselves.
                 ...(this.autoStart ? [commit] : [])
             ]);
-            // The first frame of that burst was a handshake, so the session is
-            // good again and the next question does not need to beep for one.
-            this.lastHandshakeAt = Date.now();
+            // When the first frame of that burst was a handshake, the session
+            // is good again and the next question does not need to beep for one.
+            if (renew) this.lastHandshakeAt = Date.now();
             // The burst carried the commit when auto-start is on, so from here
             // the machine is starting itself and needs nothing from the user.
             this.committed = this.autoStart;
@@ -1448,6 +1492,10 @@ export default class Machine {
         // handshake would tread on the mode frame -- the one unpaced seam in
         // the whole sequence, at the position where a lost frame costs most.
         await this.gap();
+        // Renewed after a mode change, as it always was. Nobody has looked at
+        // whether a session survives one, and this path is rare enough that a
+        // beep is the cheaper risk.
+        this.lastHandshakeAt = 0;
         await this.brewOnce(recipe);
     }
 
