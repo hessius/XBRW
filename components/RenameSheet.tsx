@@ -76,13 +76,14 @@ export default function RenameSheet({open, onOpenChange, name, borrowedName, onR
         // A name is one line. Return submits rather than breaking the line, but
         // a pasted name can still carry a line break, and the header and the
         // library row have nowhere to put one.
-        const next = draft.replace(/\s*[\r\n]+\s*/g, " ").trim();
+        const oneLine = (value: string) => value.replace(/\s*[\r\n]+\s*/g, " ").trim();
+        const next = oneLine(draft);
         // The borrowed title saved untouched keeps the recipe on its pod, so a
         // later change to the pod name still reaches it. Compared after Unicode
         // normalisation, so the same name typed with a different keyboard's
         // accents still counts, but not case-folded: a recased name is a rename.
         const unchanged = following
-            && next.normalize() === borrowedName.trim().normalize();
+            && next.normalize() === oneLine(borrowedName).normalize();
         onRename(unchanged ? "" : next);
         // Saving a following recipe as empty leaves its name, and so the seed,
         // where they were. Without this the next opening would offer back the

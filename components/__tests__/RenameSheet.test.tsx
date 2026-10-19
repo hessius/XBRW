@@ -145,6 +145,19 @@ describe("RenameSheet", () => {
             expect(onRename).toHaveBeenCalledWith("");
         });
 
+        it.each(["Kenya\nNyeri", "Kenya\r\n  Nyeri", "Caf\u00e9\nColombia"])(
+            "keeps following a multiline pod name saved untouched: %j", async borrowedName => {
+                const onRename = jest.fn();
+                await renderWithProviders(<RenameSheet {...props({
+                    name: "", borrowedName, onRename
+                })}/>);
+
+                await fireEvent.press(screen.getByTestId("rename-confirm"));
+
+                expect(onRename).toHaveBeenCalledWith("");
+            }
+        );
+
         it("still counts the borrowed name as unchanged with stray spaces", async () => {
             const onRename = jest.fn();
             await renderWithProviders(<RenameSheet {...props({...following, onRename})}/>);
