@@ -405,7 +405,7 @@ export function heroNameLayout(
         // Beside the watermark only when no word has to be split to get
         // there. A column that cannot hold "hydrohoney" whole is one Android
         // breaks mid-word, which is the device report this rule answers.
-        if (beside > 0 && estimateLines(name, beside - FIT_SLACK, size) <= HERO_NAME_MAX_LINES
+        if (beside > FIT_SLACK && estimateLines(name, beside - FIT_SLACK, size) <= HERO_NAME_MAX_LINES
             && wordsFit(name, beside - FIT_SLACK, size)) {
             return {
                 ...step, lines: HERO_NAME_MAX_LINES, maxWidth: beside, reserve: 0,

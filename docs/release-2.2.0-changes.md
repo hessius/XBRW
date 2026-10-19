@@ -70,6 +70,15 @@ without sending cancellation to the other machine or writing brew history.
 These preview fixes address the shared findings on #227, #228 and #231, not the
 unreproduced same-machine A/B report or those contributor branches.
 
+### Name identity and narrow layouts
+
+Saving an untouched borrowed pod name now compares both names with the same
+line-break normalization, so a multiline upstream name does not become a fixed
+local rename (#224). Long-name layout refuses a zero/negative usable column
+beside the profile instead of entering a non-terminating wrapping loop at
+257-260 pt window widths (#234). Regression coverage runs on both platforms;
+the loop regression has a VM deadline rather than hanging the test process.
+
 ## Imported proposal notes
 
 Moved from additions to the shipped 2.1.0 ledger without rewriting that ledger.
