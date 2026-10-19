@@ -1,5 +1,5 @@
 import React from "react";
-import {fireEvent, screen} from "@testing-library/react-native";
+import {act, fireEvent, screen} from "@testing-library/react-native";
 
 import HomeScreen from "@/app/index";
 import Recipe from "@/library/Recipe";
@@ -168,6 +168,10 @@ beforeEach(() => {
     mockRemembered = "AA:BB:CC";
 });
 
+afterEach(() => {
+    jest.useRealTimers();
+});
+
 describe("Ready to brew card", () => {
     it("is not drawn without an open bag", async () => {
         await renderHome([named("Vinka")], {});
@@ -249,5 +253,27 @@ describe("Ready to brew card", () => {
         const bags = {[vinka.uuid]: peakBag(vinka)};
         await renderHome([vinka], bags, {readyToBrewDismissedOn: dayOf(Date.now() - DAY)});
         expect(screen.getByTestId("ready-to-brew")).toBeTruthy();
+    });
+
+    it("comes back at midnight without requiring the app to leave the foreground", async () => {
+        const before = new Date(2026, 9, 19, 23, 59, 50).getTime();
+        jest.useFakeTimers({now: before});
+        const vinka = named("Vinka");
+        await renderHome([vinka], {[vinka.uuid]: peakBag(vinka)},
+            {readyToBrewDismissedOn: dayOf(before)});
+        expect(screen.queryByTestId("ready-to-brew")).toBeNull();
+        await act(async () => { jest.advanceTimersByTime(10_000); });
+        expect(screen.getByTestId("ready-to-brew")).toBeTruthy();
+    });
+
+    it("records the new day when hidden after a mounted midnight rollover", async () => {
+        const before = new Date(2026, 9, 19, 23, 59, 50).getTime();
+        jest.useFakeTimers({now: before});
+        const vinka = named("Vinka");
+        const memory = await renderHome([vinka], {[vinka.uuid]: peakBag(vinka)});
+        await act(async () => { jest.advanceTimersByTime(10_000); });
+        await fireEvent.press(screen.getByLabelText("Hide until tomorrow"));
+        expect(JSON.parse(memory.values.get("readyToBrewDismissedOn") ?? "\"\""))
+            .toBe("2026-10-20");
     });
 });
