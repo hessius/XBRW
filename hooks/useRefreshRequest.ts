@@ -8,9 +8,8 @@ export const NO_ANSWER_MS = 4000;
 /**
  * A bug net, not part of the normal path.
  *
- * `Machine.askHowItIsDoing` has a ceiling of its own: a handshake, a frame gap,
- * three attempts each waiting `INFO_WAIT_MS`, and a gap between them -- about
- * 12.2 s in the worst case. This sits comfortably above that, so it only ever
+ * `Machine.askHowItIsDoing` has a ceiling of its own: one handshake and one
+ * wait of `INFO_WAIT_MS`. This sits comfortably above that, so it only ever
  * fires for a promise that never settles at all, which would otherwise leave
  * the control saying `CHECKING…` for good.
  */

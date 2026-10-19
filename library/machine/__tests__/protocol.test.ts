@@ -38,6 +38,18 @@ describe("the frame codec", () => {
 });
 
 describe("reading what the machine says", () => {
+    it("reads 4B 1F with no payload as event 8011, not as a weight", () => {
+        // Seen right after the handshake on V12.0D.500 (owner log,
+        // 2026-10-19), verbatim: 58 02 07 4B 1F 0C 00 00 00 C1 FC 83.
+        const bytes = Uint8Array.from([0x58, 0x02, 0x07, 0x4B, 0x1F, 0x0C, 0x00, 0x00, 0x00, 0xC1, 0xFC, 0x83]);
+        expect(parseNotification(bytes)).toEqual({kind: "event", code: 8011});
+    });
+
+    it("still reads a 4B frame with a float as water weight", () => {
+        expect(parseNotification(Uint8Array.from(notification(0x4B, 0x9E, float32(12000)))))
+            .toMatchObject({kind: "waterWeight"});
+    });
+
     it("reads a machine state", () => {
         expect(parseNotification(Uint8Array.from(status(0x1F))))
             .toEqual({kind: "status", state: 0x1F});

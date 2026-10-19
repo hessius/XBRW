@@ -728,7 +728,6 @@ it("blocks public probes while a durable recovery journal exists, but permits re
     const {store, machine, port, radio} = await ready();
     radio.behavior = "refused";
     await expect(writeSlots(store, identity, port)).rejects.toThrow();
-    await expect(machine.requestInfo()).rejects.toThrow(/Easy Mode/i);
     await expect(machine.askHowItIsDoing()).rejects.toThrow(/Easy Mode/i);
     await machine.disconnect();
     await machine.connect("one");

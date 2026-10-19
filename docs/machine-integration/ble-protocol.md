@@ -435,7 +435,7 @@ The machine pushes the following data unprompted on FFE2:
 | Coffee/cup weight | ~10×/s | float32 LE, grams | Frame type 0x15. Same timing. |
 | Machine status | Event-driven | State byte after 0xC1 in 0x57 frame | State transitions: idle, loading, armed, awaiting_confirm, starting, brewing, complete, etc. |
 | Machine activity | Periodic + on-event | LE uint32 in 8023 notification | 1=Pro idle, 65=Easy idle, 34=brewing active, 36=brew done. |
-| Machine info | **On request only** (see note) | 61-byte blob in 40521 notification | Contains all persistent machine settings: firmware ver, grinder size, water level, temp unit, weight unit, water source, mode, LED brightness, pour radius, vibration amplitude. |
+| Machine info | **After each 8100 handshake** (see note) | 61-byte blob in 40521 notification | Contains all persistent machine settings: firmware ver, grinder size, water level, temp unit, weight unit, water source, mode, LED brightness, pour radius, vibration amplitude. |
 | Water volume | ~100ms | float32 LE in 40523 notification | Tank water level. |
 
 > **The machine offers a third characteristic, `ffe3`.** Read off hardware
@@ -459,46 +459,75 @@ The machine pushes the following data unprompted on FFE2:
 > The handshake makes the machine **beep**, which rules out sending it
 > speculatively or on a timer.
 
-> **So XBRW++ asks quietly first (2026-10-19).** Owner report on a Studio
-> (V12.0D.210): the official app beeps once when it connects and sends a recipe
-> without beeping again, while XBRW++ beeped "like it's connecting" on every
-> BREW. Two 8100s caused it: the pre-brew 40521 renewed the session whenever
-> the last handshake was over 20 s old, and the brew burst opened with another
-> 8100 regardless. Now, on a link that has had its handshake, the 40521 is sent
-> once *without* one. An answer proves the session is good (and refreshes the
-> water level); silence costs one `INFO_WAIT_MS` window and then renews the
-> session, once. The brew burst carries an 8100 only if the session is still
-> not known to be good, which after that question is never in practice. A mode
-> switch (`11511`) still renews before the retry.
-> **Unverified on hardware:** that 40521 does not beep (no source says it does),
-> and that a session which answers 40521 also takes a recipe without a fresh
-> 8100. If the second is wrong, the recipe is not acknowledged and the brew
-> fails as `rejected` after `RECIPE_ACK_MS` with nothing poured.
+> **A bare 40521 request is ignored; the vitals follow an 8100 (2026-10-19,
+> V12.0D.500).** Device log on preview 329229b, machine "Work" just updated to
+> V12.0D.500, with every send logged:
+>
+> ```
+> 05:31:02.480  ->  8100                         (connect handshake, beep 1)
+> 05:31:02.538  <-  event 8100
+> 05:31:03.161  <-  58 02 07 4B 1F 0C 00 00 00 C1 FC 83   (event 8011, see below)
+> 05:31:03.624  <-  state 0x1d
+> 05:31:03.689  <-  40521 info (75 bytes, V12.0D.500 PRO)   (no request sent)
+> 05:31:04.564  <-  state 0x01
+> 05:31:09.653  ->  58 01 01 49 9E 0C 00 00 00 01 74 B8   (40521 request)  no reply
+> 05:31:13.658  ->  40521 request  no reply
+> 05:31:17.692  ->  40521 request  no reply
+> 05:31:19.781  ->  8100                         (beep 2)
+> 05:31:20.087  <-  event 8100
+> 05:31:20.189  <-  40521 info                   (no request sent)
+> 05:31:21.789  ->  8102, 8104, 8001 ... the brew (stopped at 0x0f, no beans)
+> 05:31:40.147  ->  40521 request  no reply      (the post-brew dial read)
+> 05:31:44.118  ->  40521 request  no reply
+> 05:31:48.128  ->  40521 request  no reply
+> ```
+>
+> The machine sends 40521 by itself, 0.4 to 1.2 s after acknowledging an 8100,
+> and ignores a 40521 request on its own even seven seconds into a fresh
+> session. So the 2026-09-01 "stale session" reading above was most likely
+> this: the 40521 that "worked" at connect was the one the handshake pushed.
+> V12.0D.210 has not been tested this way; its earlier logs show the same
+> 8100-then-info pairing, with requests that were not logged at the time.
+>
+> What XBRW++ does now:
+> - Connect sends one 8100 and waits up to `INFO_WAIT_MS` (3 s) for the info
+>   it pushes. No 40521, and no second handshake if none comes.
+> - BREW uses the vitals this link already heard if they are under
+>   `INFO_FRESH_MS` (10 minutes) old, with no handshake and no question, and
+>   the brew burst never carries an 8100. Older or missing vitals, or a cached
+>   low tank (which may have been filled since), get one 8100 and one wait.
+>   A mode switch (`11511`) still renews before the retry.
+> - Refresh on the home screen is the only other sender: one 8100.
+> - Nothing sends a bare 40521. Settings no longer asks when it opens.
+>
+> **Unverified on hardware:** that a session opened at connect still takes a
+> recipe ten minutes later without a fresh 8100. The official app appears to
+> work this way (one beep at connect, none at brew). If it does not, the
+> recipe is not acknowledged and the brew fails as `rejected` after
+> `RECIPE_ACK_MS` with nothing poured.
+>
+> The `4B 1F` frame with no payload is event **8011**, which the table above
+> names "Machine Awake". It arrives right after the handshake. The parser used
+> to read every `0x4B` frame as a water weight and logged this one as
+> unreadable; it now reads a `0x4B` frame with no float as an event.
 
 > **The info blob is not a heartbeat.** Sources describe 40521 as streaming
 > periodically. On hardware (2026-09-01, V12.0D.500) it does not: a tank
 > refilled after connect still read Low in XBRW++ until the app asked again.
-> XBRW++ therefore sends 40521 before every brew and whenever the settings
-> screen opens, rather than trusting the reading taken at connect.
+> (Superseded 2026-10-19: "asked again" was a handshake, which pushes the
+> blob. XBRW++ now refreshes only on Refresh, on a stale or missing reading
+> at BREW, and on a cached low tank at BREW. See the note above.)
 
-> **The grind dial is read again after a brew, and that costs a beep.**
+> **The grind dial after a brew is no longer asked for (2026-10-19).**
 > The dial is an override: where it is set changes how the machine grinds
-> without the app being told, with no event and no characteristic, and setting
-> it is how a recipe gets nudged to suit a bean. It is turned before a brew,
-> not during one: the machine takes its position when it starts grinding and
-> there is no point after that at which moving it does anything. The reading
-> taken before the recipe is sent can therefore still be stale, because the
-> app asks for it at the moment it is about to brew and the hand that moved
-> the dial was there a second earlier. XBRW++ takes a second reading once the
-> brew has ended and stores it as `dialAfter` on the record, keeping the
-> pre-send one as `dialBefore`; the two normally agree, and a difference is a
-> positive observation that the first reading was taken too early.
->
-> Renewing the session to ask beeps, which is accepted here: the brew is over,
-> nothing is interrupted, and it happens once, only on a brew that got as far
-> as the pour. Since 2026-10-19 the question is asked once without renewing
-> first, so a session that is still good answers without a beep. `askHowItIsDoing` returning false leaves `info` holding the
-> pre-brew value, so an unconfirmed reading is stored as nothing at all.
+> without the app being told, and it is turned before a brew, not during one.
+> XBRW++ used to read it again once a brew ended and store it as `dialAfter`
+> beside the pre-send `dialBefore`. That read sent bare 40521s, which
+> V12.0D.500 ignores (the three requests at 05:31:40-48 above), and the only
+> working alternative is a handshake, which beeps after every brew. So
+> `readDialAfterBrew` sends nothing now: it keeps a `dialAfter` only when the
+> machine reported its vitals after the pour began by some other route, and
+> otherwise leaves the field absent, which records already read as "not taken".
 >
 > **Still unsettled, and it needs hardware.** Nobody has checked whether the
 > blob reports the *physical dial* or the value the app last sent in the recipe

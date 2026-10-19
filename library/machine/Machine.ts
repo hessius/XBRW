@@ -1,6 +1,6 @@
 import {
-    BREW_INFO_ROUNDS, ECHO_FRAMES, FRAME_GAP_MS, FRAME_HISTORY_LIMIT, HANDSHAKE_FRESH_MS,
-    HANDSHAKE_WINDOW_MS, INFO_ATTEMPTS, INFO_WAIT_MS, PAUSE_ACK_MS, RECIPE_ACK_MS, SETTLE_CAP_MS,
+    ECHO_FRAMES, FRAME_GAP_MS, FRAME_HISTORY_LIMIT, HANDSHAKE_FRESH_MS,
+    HANDSHAKE_WINDOW_MS, INFO_FRESH_MS, INFO_WAIT_MS, PAUSE_ACK_MS, RECIPE_ACK_MS, SETTLE_CAP_MS,
     SETTLE_CEILING_MS, STATE_FRESH_MS
 } from "@/constants/machine";
 import {brewProblems} from "@/library/cardLimits";
@@ -261,6 +261,8 @@ const LINK_HISTORY_LIMIT = 200;
  */
 export default class Machine {
     public info: MachineInfo | null = null;
+    /** When `info` arrived, by wall clock. 0 while there is none. */
+    public infoAt = 0;
     public state: number | null = null;
     /** When `state` was last heard, as a wall clock. 0 means never. */
     private stateAt = 0;
@@ -755,6 +757,9 @@ export default class Machine {
         // had not beeped, no vitals ever arrived, and the connection log had
         // nothing to say about any of it. The handshake is the one frame that
         // has to land, so its failure is worth a line of its own.
+        // Listening before the handshake: the machine sends its vitals by
+        // itself right after acknowledging it, and nothing else asks for them.
+        const heard = this.waitForInfo();
         try {
             await this.shakeHands();
         } catch (e) {
@@ -762,17 +767,15 @@ export default class Machine {
             throw e;
         }
         this.announceLink();
-        // The gap matters as much here as anywhere. Writing the info request
-        // straight after the handshake is a two-frame burst on a channel with
-        // no flow control, and on hardware the question was simply lost: the
-        // link came up, the machine beeped, and no vitals ever arrived.
-        await this.gap();
         // Connecting is not finished until the machine has said who it is and
         // how much water it has. Waiting here rather than at the brew means a
         // recipe is never sent into the gap, and the settings screen shows
-        // vitals rather than blanks the moment it says "connected".
+        // vitals rather than blanks the moment it says "connected". No 40521:
+        // on V12.0D.500 a bare request is ignored (2026-10-19), and a second
+        // handshake would beep twice for one connect. A machine that stays
+        // quiet is asked once more, with a handshake, at the first BREW.
+        if (!await heard && this.info === null) this.note("machine did not say how it is doing");
         if (generation !== this.generation) throw new Error("Connection was superseded.");
-        if (this.info === null) await this.askInfo();
     }
 
     private matchesConnection(generation: number, scope?: ConnectionScope): boolean {
@@ -804,6 +807,7 @@ export default class Machine {
      */
     async ensureInfo(): Promise<boolean> {
         if (this.info !== null) return true;
+        // One handshake. See `askHowItIsDoing`.
         await this.askHowItIsDoing();
         if (this.info === null) this.note("machine did not say how it is doing");
         return this.info !== null;
@@ -836,17 +840,6 @@ export default class Machine {
     }
 
     /**
-     * Ask the machine how it is doing, and wait for the answer.
-     *
-     * Asked again before every decision that depends on it, rather than once at
-     * connect. The water level is the reason: somebody who connects, sees the
-     * tank is low, fills it and comes back was told the tank was still low,
-     * because the app was answering from a reading taken minutes earlier while
-     * the machine had long since stopped complaining.
-     *
-     * @returns whether the machine answered.
-     */
-    /**
      * Send the session handshake, and remember when.
      *
      * The machine beeps at this, so it is not sent for its own sake.
@@ -868,6 +861,31 @@ export default class Machine {
         return Date.now() - this.lastHandshakeAt < this.handshakeFreshMs;
     }
 
+    /**
+     * Whether the vitals heard on this link are recent enough to brew on.
+     *
+     * The water flag and the grind dial change only by hand at the machine,
+     * and the official app brews on the reading it took when it connected.
+     * See `INFO_FRESH_MS` for the bound.
+     */
+    private infoIsFresh(): boolean {
+        return this.info !== null && Date.now() - this.infoAt < INFO_FRESH_MS;
+    }
+
+    /**
+     * Renew the session and wait for the vitals the machine sends after it.
+     *
+     * One handshake (one beep) and one wait, never a bare 40521. Settled on
+     * hardware (2026-10-19, V12.0D.500): the machine sends 40521 by itself
+     * right after acknowledging an 8100, and ignores a 40521 request on its
+     * own, even seconds into a fresh session. Every "the session goes stale"
+     * observation before that was this.
+     *
+     * For a user's Refresh, and for a brew with no recent vitals. Nothing
+     * calls it on a timer or on a screen opening, because it beeps.
+     *
+     * @returns whether the machine answered.
+     */
     async askHowItIsDoing(): Promise<boolean> {
         this.assertOrdinaryOperation();
         const finish = this.beginOrdinaryOperation();
@@ -881,99 +899,19 @@ export default class Machine {
     private async askInfo(): Promise<boolean> {
         const generation = this.generation;
         const infoBeforeRequest = this.info;
-        // The machine will not answer a question asked outside a session, and
-        // the session goes stale on its own -- settled on hardware, where a
-        // 40521 six minutes into a live link was ignored and the same frame
-        // after an 8100 was answered at once. But renewing beeps, and how long
-        // a session lasts is not known: the official app holds its link and
-        // brews without beeping again. So on a link that has had its
-        // handshake, the question is asked once without one. An answer proves
-        // the session is still good; silence costs one wait and then renews
-        // it, which is what used to happen on every brew.
-        if (!this.sessionIsFresh() && this.lastHandshakeAt > 0) {
-            const quiet = await this.askOnce(generation, infoBeforeRequest);
-            if (quiet === "unsent") return false;
-            if (quiet) {
-                this.lastHandshakeAt = Date.now();
-                return true;
-            }
-            this.lastHandshakeAt = 0;
-        }
-        if (!this.sessionIsFresh()) {
-            await this.shakeHands();
-            await this.gap();
-        }
-        for (let attempt = 0; attempt < INFO_ATTEMPTS; attempt++) {
-            if (attempt > 0) await this.gap();
-            const answered = await this.askOnce(generation, infoBeforeRequest);
-            if (answered === "unsent") return false;
-            if (answered) return true;
-        }
-        // Silence is evidence, and it outranks the clock. The session is
-        // renewed on a timer because renewing beeps -- but a machine that has
-        // ignored a whole round of questions is not in a session with us,
-        // whatever the timer says. Leaving the timer alone meant every later
-        // attempt asked into the same dead session and got the same silence,
-        // until twenty seconds had passed and the clock happened to agree.
-        this.lastHandshakeAt = 0;
-        return false;
-    }
-
-    /**
-     * Ask once and wait out one window for the answer.
-     *
-     * @returns whether it was answered, or "unsent" when the radio would not
-     *     carry the question.
-     */
-    private async askOnce(
-        generation: number, infoBeforeRequest: MachineInfo | null
-    ): Promise<boolean | "unsent"> {
-        if (generation !== this.generation) throw new Error("The machine connection changed.");
-        // A late answer to the previous attempt can land in the gap, when
-        // no per-attempt listener is mounted. It is still an answer to this
-        // refresh and must not leave the control waiting for another frame.
-        if (this.info !== infoBeforeRequest) return true;
-        // Listening before asking, not after. The answer can arrive inside
-        // the write -- the radio delivers on its own thread -- and a listener
-        // attached afterwards would miss it and wait out the whole window
-        // for a reply that had already come.
+        // Listening before the handshake, not after: the info can arrive
+        // inside the write, since the radio delivers on its own thread.
         const answered = this.waitForInfo();
         try {
-            await this.writeInfo();
-        } catch {
-            // A question the radio would not carry is not a reason to
-            // abandon what the caller was actually doing. The brew decides
-            // on the last thing it heard, and fails on its own first frame
-            // if the radio is really gone -- with a phase, which this has no
-            // business setting.
-            return "unsent";
+            await this.shakeHands();
+        } catch (error) {
+            if (generation !== this.generation) throw error;
+            // A handshake the radio would not carry is not a reason to abandon
+            // what the caller was doing. The brew decides on what it last
+            // heard, and fails on its own first frame if the radio is gone.
+            return false;
         }
         return await answered || this.info !== infoBeforeRequest;
-    }
-
-    /**
-     * Ask the machine to describe itself. The reply arrives as a frame.
-     *
-     * 40521 is documented as a *notification*, and no source records a command
-     * that requests it — the machine may well send it unprompted after the
-     * handshake. Sending it costs nothing if it is ignored, and step 2 of the
-     * hardware checklist is what settles whether it was ever needed.
-     */
-    async requestInfo(): Promise<void> {
-        this.assertOrdinaryOperation();
-        const finish = this.beginOrdinaryOperation();
-        try {
-            await this.writeInfo();
-        } finally {
-            finish();
-        }
-    }
-
-    private async writeInfo(): Promise<void> {
-        const frame = buildType1(EVENT.MACHINE_INFO);
-        await this.transport.write(frame);
-        // Logged, for the same reason the handshake is.
-        this.emitFrame("sent", frame, {kind: "unknown", raw: frame});
     }
 
     async disconnect(): Promise<void> {
@@ -1118,6 +1056,7 @@ export default class Machine {
         }
         if (parsed.kind === "info") {
             this.info = parsed;
+            this.infoAt = Date.now();
             this.announceLink();
         }
         if (parsed.kind === "event") this.onEvent(parsed.code, parsed.value);
@@ -1305,30 +1244,21 @@ export default class Machine {
         // after a no-beans stop did nothing until the warning was dismissed by
         // hand. Send it home first -- it is the same pair `cancelBrew` sends.
         if (this.mayBeShowingAWarning()) await this.sendHome();
-        // Ask how it is doing *now*, every time. Not only when the vitals are
-        // missing: they go stale, and the tank is the whole point of asking.
-        // Telling the user to reconnect is also asking them to do something the
-        // app can do for itself — and on hardware reconnecting did not help,
-        // because the question was being lost rather than refused.
-        // Asked until it answers, not once. The machine loses the question
-        // rather than refusing it, and there is nothing a user's second press
-        // does that this cannot do for them -- so the presses happen here.
-        // The first round asks without a handshake when the link has had one;
-        // a round that has to open a fresh session beeps, which is the price
-        // of the answer, and the phase says what the beeping is for.
-        for (let round = 0; this.isConnected(); round++) {
-            if (round > 0) {
-                this.setPhase({name: "waking"});
-                await this.gap();
-            }
-            const answered = await this.askHowItIsDoing();
-            // A machine that has introduced itself before is asked once and no
-            // more: the ask is for the water level, which goes stale, and it
-            // is not worth another round of beeping to refresh what we already
-            // roughly know. Only a machine we have never heard from at all is
-            // worth pestering, because without it the brew cannot start.
-            if (answered || this.info !== null) break;
-            if (round + 1 >= BREW_INFO_ROUNDS) break;
+        // The vitals this link already heard are used as they are: the
+        // official app brews on its connect-time reading, and asking again
+        // costs a handshake, which beeps (2026-10-19 owner report). Only a
+        // link with no vitals, vitals older than `INFO_FRESH_MS`, or a cached
+        // low tank (which may have been filled since, and would otherwise
+        // refuse the brew on a stale reading) gets one handshake and one wait
+        // for the vitals that follow it. Never a bare 40521: V12.0D.500
+        // ignores it, and three of them cost ten seconds before the beep.
+        const lowTank = this.info !== null
+            && this.info.waterFeed === "tank" && !this.info.waterEnough;
+        // No `waking` phase for it: that is an active brew phase, and a link
+        // dropped during this one wait must be refused as `notConnected`
+        // (which keeps `useBrew`'s one relink), not reported as lost contact.
+        if (this.isConnected() && (!this.infoIsFresh() || lowTank)) {
+            await this.askHowItIsDoing();
         }
         // Replaced, not merely lost: a link that dropped is left to
         // `brewBlock`, which refuses it as `notConnected` and so keeps the
@@ -1363,19 +1293,16 @@ export default class Machine {
         this.pendingCommit = null;
         this.committed = false;
 
-        // The handshake only when the session is not known to be good. The
-        // reference re-sends it at the start of every brew, but the reference
-        // connects for each brew, so that is its connect handshake. On a held
-        // link the pre-flight question has just been answered inside a live
-        // session (or renewed one to get its answer), and a second 8100 here
-        // was the beep the official app does not make when it brews.
-        const renew = !this.sessionIsFresh();
+        // No handshake in the burst. The reference re-sends one at the start
+        // of every brew, but the reference connects for each brew, so that
+        // is its connect handshake. On a held link the session opened at
+        // connect (or by the pre-flight above) is the one the official app
+        // brews in, without a second beep.
         try {
             // This whole sequence, gaps and all, mirrors `run_brew` in the
             // reference implementation, which is the only brew sequence we have
             // that is known to work on real hardware.
             await this.sendPaced([
-                ...(renew ? [buildType1(8100, [185, 1])] : []),
                 // The dose has to travel whether or not there is a bypass: the
                 // machine needs it to grind correctly, and skipping this frame
                 // makes the grind drift. Tea sends no bypass at all -- the
@@ -1411,9 +1338,6 @@ export default class Machine {
                 // the one the user may want to keep for themselves.
                 ...(this.autoStart ? [commit] : [])
             ]);
-            // When the first frame of that burst was a handshake, the session
-            // is good again and the next question does not need to beep for one.
-            if (renew) this.lastHandshakeAt = Date.now();
             // The burst carried the commit when auto-start is on, so from here
             // the machine is starting itself and needs nothing from the user.
             this.committed = this.autoStart;
@@ -1495,7 +1419,8 @@ export default class Machine {
         // Renewed after a mode change, as it always was. Nobody has looked at
         // whether a session survives one, and this path is rare enough that a
         // beep is the cheaper risk.
-        this.lastHandshakeAt = 0;
+        await this.shakeHands();
+        await this.gap();
         await this.brewOnce(recipe);
     }
 
@@ -1857,6 +1782,7 @@ export default class Machine {
         // tank is full and the mode is PRO about a machine it is no longer
         // talking to.
         this.info = null;
+        this.infoAt = 0;
         this.state = null;
         this.stateAt = 0;
         // Last, so a listener reading `isConnected()` or `info` sees the link

@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from "react";
+import React, {useState} from "react";
 import {Pressable} from "react-native";
 import router from "@/hooks/steadyRouter";
 import {Text, XStack, YStack} from "tamagui";
@@ -167,15 +167,6 @@ export default function MachineSection({settings, onOpenMachine, onAddMachine, o
     // blank means "did not learn", and an empty row reads as a fault.
     const model = info === null ? ""
         : info.model !== "" ? info.model : machine.modelNumber;
-
-    // The vitals are a snapshot taken at connect. Left alone, a tank refilled
-    // since then still reads Low here, and only a relaunch clears it.
-    useEffect(() => {
-        if (status !== "connected") return;
-        machine.askHowItIsDoing().catch((error: unknown) => {
-            notify({tone: "error", message: error instanceof Error ? error.message : String(error)});
-        });
-    }, [machine, status]);
 
     function onSecretPress() {
         const next = taps + 1;

@@ -26,7 +26,7 @@ declare global {
         & {machine: import("@/library/brew/BrewRecorder").RecorderMachine
             & {phase: BrewPhase}
             & Pick<import("@/library/machine/Machine").default, "pauseBrew" | "resumeBrew">
-            & {info?: {grindSize: number} | null;
+            & {info?: {grindSize: number} | null; infoAt?: number;
                askHowItIsDoing?: () => Promise<boolean>}};
 }
 
@@ -44,9 +44,10 @@ function harness() {
     const phaseListeners: ((p: BrewPhase) => void)[] = [];
     const written: {record: BrewRecord; samples: BrewSample[]}[] = [];
     const dials: [string, number][] = [];
-    // The machine answers by default, with a dial that has been turned since
-    // the recipe went out. A test that wants silence sets `answers` to false.
-    const vitals = {answers: true, asked: 0, grindSize: 52};
+    // Vitals heard before the brew by default, as every real brew now has:
+    // nothing asks after it (2026-10-19). A test that wants a reading heard
+    // after the pour sets `heardAt` later. `asked` counts any question.
+    const vitals = {answers: true, asked: 0, grindSize: 52, heardAt: 0};
     global.__brewer = {
         phase: {name: "idle"} as BrewPhase,
         error: null,
@@ -62,6 +63,7 @@ function harness() {
             pauseBrew: jest.fn(async () => {}),
             resumeBrew: jest.fn(async () => {}),
             info: {get grindSize() { return vitals.grindSize; }},
+            get infoAt() { return vitals.heardAt; },
             askHowItIsDoing: async () => {
                 vitals.asked++;
                 return vitals.answers;
@@ -484,6 +486,7 @@ describe("useBrewRun", () => {
         const h = harness();
         const error = new Error("sweep unavailable");
         h.store.sweepWhenReady.mockImplementation(async () => { throw error; });
+        h.vitals.heardAt = Number.MAX_SAFE_INTEGER;
         const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
         const {result} = await renderHook(() => useBrewRun(recipe(), h.store));
         await h.setPhase({name: "pouring", pour: 1, pours: 2});
@@ -549,10 +552,9 @@ describe("useBrewRun", () => {
         });
     });
 
-    it("reads the machine's dial after the brew and keeps it", async () => {
-        // The dial is an override the app is never told about, so the reading
-        // that answers the question is the one taken after the grind. The
-        // record is written first and this lands as an update to that row.
+    it("asks nothing after the brew, and keeps no dial it did not hear", async () => {
+        // The post-brew read sent bare 40521s, which V12.0D.500 ignores, and
+        // the only working ask is a handshake, which beeps (2026-10-19).
         const h = harness();
         const {result} = await renderHook(() => useBrewRun(recipe(), h.store));
         await h.setPhase({name: "sending"});
@@ -560,49 +562,24 @@ describe("useBrewRun", () => {
         await h.water(40);
         await h.setPhase({name: "done"});
         await act(async () => {});
-        expect(h.dials).toEqual([[h.written[0].record.id, 52]]);
-        expect(result.current.record?.dialAfter).toBe(52);
+        expect(h.vitals.asked).toBe(0);
+        expect(h.written).toHaveLength(1);
+        expect(h.dials).toEqual([]);
+        expect(result.current.record?.dialAfter).toBeUndefined();
     });
 
-    it("keeps no reading when the machine did not answer after the brew", async () => {
-        // `info` still holds the pre-brew value, which is the number the whole
-        // path exists to avoid recording.
+    it("keeps a dial the machine reported after the pour began", async () => {
         const h = harness();
-        h.vitals.answers = false;
-        await renderHook(() => useBrewRun(recipe(), h.store));
+        h.vitals.heardAt = Number.MAX_SAFE_INTEGER;
+        const {result} = await renderHook(() => useBrewRun(recipe(), h.store));
+        await h.setPhase({name: "sending"});
         await h.setPhase({name: "pouring", pour: 1, pours: 2});
         await h.water(40);
         await h.setPhase({name: "done"});
         await act(async () => {});
-        expect(h.written).toHaveLength(1);
-        expect(h.dials).toEqual([]);
-    });
-
-    it("does not put a late previous dial reading onto the next finished run", async () => {
-        const h = harness();
-        let answer: (value: boolean) => void = () => { throw new Error("No pending reading"); };
-        global.__brewer.machine.askHowItIsDoing = () => new Promise<boolean>((resolve) => {
-            answer = resolve;
-        });
-        const r = recipe();
-        const {result, rerender} = await renderHook<ReturnType<typeof useBrewRun>, {runId: number}>(
-            ({runId}) => useBrewRun(r, h.store, runId), {initialProps: {runId: 1}}
-        );
-        await h.setPhase({name: "pouring", pour: 1, pours: 2});
-        await h.water(40);
-        await h.setPhase({name: "done"});
-        const oldAnswer = answer;
-        const oldId = result.current.record?.id;
-        await act(async () => { rerender({runId: 2}); });
-        await h.setPhase({name: "pouring", pour: 1, pours: 2});
-        await h.water(40);
-        await h.setPhase({name: "done"});
-        const newId = result.current.record?.id;
-        expect(newId).not.toBe(oldId);
-        await act(async () => { oldAnswer(true); });
-        expect(result.current.record?.id).toBe(newId);
-        expect(result.current.record?.dialAfter).toBeUndefined();
-        expect(h.dials).toEqual([[oldId, 52]]);
+        expect(h.vitals.asked).toBe(0);
+        expect(h.dials).toEqual([[h.written[0].record.id, 52]]);
+        expect(result.current.record?.dialAfter).toBe(52);
     });
 
     it("does not beep a brew that never got past the grind", async () => {
