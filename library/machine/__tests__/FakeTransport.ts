@@ -1,6 +1,6 @@
 import type {FoundMachine, MachineTransport, ScanDecider} from "@/library/machine/Transport";
 
-import {notification} from "./protocolFixtures";
+import {notification, status} from "./protocolFixtures";
 
 /**
  * The frame a machine sends to describe itself.
@@ -124,6 +124,17 @@ export class FakeTransport implements MachineTransport {
      * frames does to it.
      */
     public ignoreInfoRequests = 0;
+    /**
+     * What the machine answers a cancel (40519) with. On V12.0D.500 it is the
+     * startable state 0x41 about 0.8 s later (owner logs 2026-10-19), so the
+     * fake answers with it by default. Null plays a machine that stays quiet.
+     */
+    public cancelReply: number[] | null = status(0x41);
+    /**
+     * What the machine answers a back-to-home (8022) with. Nothing by default:
+     * whether it always reports a state is not established.
+     */
+    public homeReply: number[] | null = null;
 
     private frameListeners = new Set<(frame: Uint8Array, source?: string) => void>();
     private disconnectListeners = new Set<() => void>();
@@ -186,6 +197,8 @@ export class FakeTransport implements MachineTransport {
         }
         this.written.push(frame);
         const code = frame[3] | (frame[4] << 8);
+        if (code === 40519 && this.cancelReply !== null) this.emit(this.cancelReply);
+        if (code === 8022 && this.homeReply !== null) this.emit(this.homeReply);
         // As V12.0D.500 does (2026-10-19): the vitals follow a handshake by
         // themselves, and a bare 40521 request is ignored.
         if (code === 8100 && this.infoReply !== null) {
