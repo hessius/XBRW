@@ -114,13 +114,18 @@ export const HANDSHAKE_FRESH_MS = 20_000;
 /**
  * How long to wait, after the handshake, for the machine to describe itself.
  *
+ * The machine sends its 40521 vitals by itself right after acknowledging an
+ * 8100: 1.2 s after it at connect and 0.4 s after it at a brew, on V12.0D.500
+ * (owner log, 2026-10-19). A bare 40521 request is ignored, so this wait is
+ * the only one there is, and three seconds leaves room above both.
+ *
  * Nothing may be brewed until it has: the info frame is the only place the
  * water level is reported, and sending a recipe to a machine whose tank state
  * is unknown is how water ends up on the counter. Connecting still succeeds if
  * this elapses — the console is useful on a machine that will not introduce
  * itself, and the brew path refuses on its own.
  */
-export const INFO_WAIT_MS = 2000;
+export const INFO_WAIT_MS = 3000;
 
 /**
  * How long to leave between the frames of a brew sequence.
@@ -171,24 +176,17 @@ export const PAUSE_ACK_MS = 3000;
 export const GRINDING_TIMEOUT_MS = null;
 
 /**
- * How many times to ask the machine to describe itself before giving up.
+ * How long the vitals heard on a link are good enough to brew on.
  *
- * More than one, because the question can be lost. It is written immediately
- * after the handshake, and the radio drops frames sent in a burst — a link that
- * came up perfectly then reported no vitals at all, and the brew refused with
- * "reconnect and try again", which reconnecting did not fix.
+ * The water flag and the grind dial change only by hand at the machine, and
+ * the official app brews on the reading it took when it connected, without
+ * asking again. Refreshing costs a handshake, which beeps, so a brew within
+ * this window uses what it has. Ten minutes bounds how old a "tank OK" can be;
+ * a cached low tank is always refreshed before it refuses a brew, so a tank
+ * filled since is not refused on an old reading. A tank that ran low inside
+ * the window is still caught by the machine's own no-water stop.
  */
-export const INFO_ATTEMPTS = 3;
-
-/**
- * How many times a brew opens a fresh session to ask an unanswered machine.
- *
- * `INFO_ATTEMPTS` retries the question inside one session; this retries the
- * session itself, which is what a machine that has stopped listening needs.
- * Bounded because a machine that is switched off is silent in exactly the same
- * way, and somebody has to be told.
- */
-export const BREW_INFO_ROUNDS = 3;
+export const INFO_FRESH_MS = 10 * 60_000;
 
 /**
  * How long to wait before each attempt at opening a link.

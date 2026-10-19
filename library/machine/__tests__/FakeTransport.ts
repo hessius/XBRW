@@ -118,7 +118,7 @@ export class FakeTransport implements MachineTransport {
      */
     public infoReply: number[] | null = machineInfoFrame();
     /**
-     * How many info requests to swallow before answering.
+     * How many handshakes to leave without the vitals that follow them.
      *
      * A machine that misses the question, which is what a burst of unpaced
      * frames does to it.
@@ -186,7 +186,9 @@ export class FakeTransport implements MachineTransport {
         }
         this.written.push(frame);
         const code = frame[3] | (frame[4] << 8);
-        if (code === 40521 && this.infoReply !== null) {
+        // As V12.0D.500 does (2026-10-19): the vitals follow a handshake by
+        // themselves, and a bare 40521 request is ignored.
+        if (code === 8100 && this.infoReply !== null) {
             if (this.ignoreInfoRequests > 0) this.ignoreInfoRequests--;
             else this.emit(this.infoReply);
         }

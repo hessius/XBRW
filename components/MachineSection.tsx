@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from "react";
+import React, {useState} from "react";
 import {Pressable} from "react-native";
 import router from "@/hooks/steadyRouter";
 import {Text, XStack, YStack} from "tamagui";
@@ -7,7 +7,6 @@ import SettingsActionRow from "@/components/SettingsActionRow";
 import SettingsChoiceRow from "@/components/SettingsChoiceRow";
 import SettingsSection from "@/components/SettingsSection";
 import SettingsToggleRow from "@/components/SettingsToggleRow";
-import {notify} from "@/components/XbrwToast";
 import {palette} from "@/constants/colors";
 import {useMachine} from "@/hooks/useMachine";
 import {useSetting} from "@/hooks/useSetting";
@@ -91,15 +90,6 @@ export default function MachineSection({settings}: {settings?: Settings}) {
         : remembered === "" ? "No machine paired"
             : status === "idle" ? `Not connected · ${remembered}`
                 : `Not in range · ${remembered}`;
-
-    // The vitals are a snapshot taken at connect. Left alone, a tank refilled
-    // since then still reads Low here, and only a relaunch clears it.
-    useEffect(() => {
-        if (status !== "connected") return;
-        machine.askHowItIsDoing().catch((error: unknown) => {
-            notify({tone: "error", message: error instanceof Error ? error.message : String(error)});
-        });
-    }, [machine, status]);
 
     function onSecretPress() {
         const next = taps + 1;
