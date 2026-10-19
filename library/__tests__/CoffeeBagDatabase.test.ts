@@ -140,6 +140,43 @@ describe("one open bag per recipe", () => {
 });
 
 describe("restoring bags", () => {
+    it.each([false, true])("preserves a retained recipe's newer local bag during replace (finished: %s)", finished => {
+        const recipes = new RecipeDatabase();
+        const retained = new Recipe();
+        retained.uuid = "r1";
+        const removed = new Recipe();
+        removed.uuid = "r2";
+        recipes.insertRecipes([retained, removed]);
+        const bags = new CoffeeBagDatabase();
+        bags.save(bagAt({gramsAtCount: 90}));
+        if (finished) bags.finish("bag-1", T0 + 100);
+        const local = bags.get("bag-1");
+        bags.save({...newBag("r2", {sizeGrams: 160}, T0), id: "removed-bag"});
+
+        recipes.replaceAllRecipes([retained]);
+        bags.restore([bagAt({gramsAtCount: 250})], new Set(["r1"]));
+
+        expect(bags.get("bag-1")).toEqual(local);
+        expect(bags.get("removed-bag")).toBeNull();
+    });
+
+    it("rolls recipe and bag deletion back when replacement fails", () => {
+        const recipes = new RecipeDatabase();
+        const recipe = new Recipe();
+        recipe.uuid = "r1";
+        recipes.insertRecipe(recipe);
+        const bags = new CoffeeBagDatabase();
+        bags.save(bagAt());
+        const local = bags.all();
+        const incoming = new Recipe();
+
+        expect(() => recipes.replaceAllRecipes([incoming, incoming])).toThrow();
+
+        expect(recipes.getRecipe(recipe.uuid)?.uuid).toBe(recipe.uuid);
+        expect(recipes.getRecipe(incoming.uuid)).toBeNull();
+        expect(bags.all()).toEqual(local);
+    });
+
     it("adds missing bags and never overwrites one already here", () => {
         const bags = new CoffeeBagDatabase();
         bags.save(bagAt({gramsAtCount: 90}));

@@ -79,6 +79,19 @@ beside the profile instead of entering a non-terminating wrapping loop at
 257-260 pt window widths (#234). Regression coverage runs on both platforms;
 the loop regression has a VM deadline rather than hanging the test process.
 
+### Bag restore conflict policy and reporting
+
+Replacing the recipe library now preserves newer local bags for recipe UUIDs
+that remain in the replacement. Bags belonging to removed recipes are deleted;
+an insertion failure rolls the whole replacement back. A backup cannot reset
+the remaining grams or reopen a locally finished bag merely because the user
+chose replacement (#238). Real SQLite regressions cover both states and rollback.
+
+The non-destructive restore action also accepts bags or brew history when all
+recipes already exist, without requiring settings or replacement. Restore
+messages count the bags that actually landed, report bag-store failures and
+retain unreadable-entry warnings even when only settings were restored.
+
 ## Imported proposal notes
 
 Moved from additions to the shipped 2.1.0 ledger without rewriting that ledger.

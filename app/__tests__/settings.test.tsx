@@ -9,6 +9,7 @@ import SettingsScreen from "@/app/settings";
 import {SUPPORT_TITLE} from "@/components/SupportTile";
 import {palette} from "@/constants/colors";
 import Recipe from "@/library/Recipe";
+import {newBag, type CoffeeBag} from "@/library/coffeeBag";
 import {feedKey, serialiseFeedOptOut} from "@/library/roasterFeed";
 import {serialiseSubscriptions} from "@/library/roasterSubscription";
 import {DEFAULTS, NOT_IN_BACKUP, Settings, type SettingKey, type SettingsStorage} from "@/library/Settings";
@@ -93,6 +94,15 @@ const mockBrewStore = {
     restore: jest.fn(() => 0)
 };
 
+const mockBagStore = {
+    all: jest.fn(() => []),
+    restore: jest.fn(() => 0)
+};
+jest.mock("@/library/CoffeeBagDatabase", () => ({
+    ...jest.requireActual("@/library/CoffeeBagDatabase"),
+    sharedBagDatabase: () => mockBagStore
+}));
+
 jest.mock("@/hooks/useBrewHistory", () => ({
     sharedBrewDatabase: () => mockBrewStore
 }));
@@ -155,6 +165,8 @@ function backupOf(
                 settings,
                 skipped: 0,
                 skippedBrews,
+                bags: [] as CoffeeBag[],
+                skippedBags: 0,
                 appVersion: "2.6.0",
                 exportedAt: "2026-08-26T21:00:00.000Z"
             }
@@ -210,6 +222,7 @@ describe("SettingsScreen", () => {
         mockSignOut.mockResolvedValue(undefined);
         mockBrewStore.all.mockReturnValue([]);
         mockBrewStore.restore.mockReturnValue(0);
+        mockBagStore.restore.mockReturnValue(0);
     });
 
     it("groups app brew preferences separately and preserves their settings", async () => {
@@ -849,6 +862,64 @@ describe("SettingsScreen", () => {
         expect(mockBrewStore.restore).toHaveBeenCalledWith([{id: "b1"}, {id: "b2"}]);
         expect(mockNotify).toHaveBeenCalledWith(expect.objectContaining({
             tone: "success", message: "1 recipe and 2 brews restored"
+        }));
+    });
+
+    it("restores and reports missing bags when all recipes are already present", async () => {
+        mockLibraryRecipes = [recipeNamed("A", "u1")];
+        const picked = backupOf(mockLibraryRecipes);
+        picked.result.payload.bags.push(newBag("u1", {sizeGrams: 250}));
+        mockPickBackup.mockResolvedValue(picked);
+        mockApplyRestore.mockReturnValue({status: "restored", added: 0});
+        mockBagStore.restore.mockReturnValue(1);
+        await renderWithProviders(<SettingsScreen settings={new Settings(memoryStorage())}/>);
+
+        await fireEvent.press(screen.getByRole("button",
+            {name: "Restore from a backup, Adds anything your library does not already have."}));
+        await settleSheet();
+        await fireEvent.press(screen.getByRole("button", {name: /add to my library/i}));
+
+        expect(mockBagStore.restore).toHaveBeenCalledWith(picked.result.payload.bags, new Set(["u1"]));
+        expect(mockNotify).toHaveBeenCalledWith(expect.objectContaining({
+            tone: "success", message: "1 bag restored"
+        }));
+    });
+
+    it("reports unreadable bags even when only settings were restored", async () => {
+        mockLibraryRecipes = [recipeNamed("A", "u1")];
+        const picked = backupOf(mockLibraryRecipes);
+        picked.result.payload.skippedBags = 1;
+        mockPickBackup.mockResolvedValue(picked);
+        mockApplyRestore.mockReturnValue({status: "restored", added: 0});
+        await renderWithProviders(<SettingsScreen settings={new Settings(memoryStorage())}/>);
+
+        await fireEvent.press(screen.getByRole("button",
+            {name: "Restore from a backup, Adds anything your library does not already have."}));
+        await settleSheet();
+        await fireEvent(screen.getByLabelText(/settings from this backup/i), "checkedChange", true);
+        await fireEvent.press(screen.getByRole("button", {name: /take the settings/i}));
+
+        expect(mockNotify).toHaveBeenCalledWith(expect.objectContaining({
+            tone: "error", message: "One bag in that backup could not be read."
+        }));
+    });
+
+    it("reports a bag-store failure without hiding the restored recipes", async () => {
+        mockPickBackup.mockResolvedValue(backupOf([recipeNamed("A", "u1")]));
+        mockApplyRestore.mockReturnValue({status: "restored", added: 1});
+        mockBagStore.restore.mockImplementationOnce(() => { throw new Error("Bag table is unavailable"); });
+        await renderWithProviders(<SettingsScreen settings={new Settings(memoryStorage())}/>);
+
+        await fireEvent.press(screen.getByRole("button",
+            {name: "Restore from a backup, Adds anything your library does not already have."}));
+        await settleSheet();
+        await fireEvent.press(screen.getByRole("button", {name: /add to my library/i}));
+
+        expect(mockNotify).toHaveBeenCalledWith(expect.objectContaining({
+            tone: "success", message: "1 recipe restored"
+        }));
+        expect(mockNotify).toHaveBeenCalledWith(expect.objectContaining({
+            tone: "error", message: "Bags could not be restored."
         }));
     });
 

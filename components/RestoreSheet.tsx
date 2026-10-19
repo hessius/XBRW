@@ -75,8 +75,9 @@ export default function RestoreSheet({open, payload, existing, onCancel, onResto
     // only non-destructive button disabled, so the sole way to take its
     // settings was to replace the entire library -- destroying recipes in order
     // to accept a preference.
-    const canAdd = toAdd.length > 0 || includeSettings;
-    const addLabel = toAdd.length === 0 && includeSettings
+    const hasDetails = (payload?.bags.length ?? 0) > 0 || (payload?.brews.length ?? 0) > 0;
+    const canAdd = toAdd.length > 0 || hasDetails || includeSettings;
+    const addLabel = toAdd.length === 0 && !hasDetails && includeSettings
         ? "Take the settings"
         : "Add to my library";
     // The honest figure for the replace confirmation: a replace inserts the
