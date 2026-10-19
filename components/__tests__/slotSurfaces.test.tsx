@@ -74,12 +74,12 @@ it("offers the canonical screen from the machine panel even while disconnected",
         onEasyMode={onEasyMode}/>);
     await fireEvent.press(screen.getByRole("button", {name: "Easy Mode slots"}));
     expect(onEasyMode).toHaveBeenCalledTimes(1);
-    expect(screen.getByText("A B C")).toBeOnTheScreen();
-    expect(screen.getByText("EASY MODE")).toBeOnTheScreen();
+    expect(screen.getByText("A B C · EASY MODE")).toBeOnTheScreen();
     expect(screen.getByTestId("easy-mode-entry")).toHaveStyle({
         borderTopWidth: 1, borderBottomWidth: 1, borderLeftWidth: 1, borderRightWidth: 1,
-        borderTopColor: palette.line, borderBottomColor: palette.line,
-        borderLeftColor: palette.line, borderRightColor: palette.line
+        borderTopColor: palette.text, borderBottomColor: palette.text,
+        borderLeftColor: palette.text, borderRightColor: palette.text,
+        minHeight: 44
     });
-    expect(screen.getByTestId("easy-mode-entry-chevron", {includeHiddenElements: true})).toBeOnTheScreen();
+    expect(screen.queryByTestId("easy-mode-entry-chevron", {includeHiddenElements: true})).toBeNull();
 });

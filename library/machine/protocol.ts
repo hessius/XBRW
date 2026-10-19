@@ -157,7 +157,9 @@ export const MACHINE_STATE = {
     BREWING_ALT:      0x3B,
     COMPLETE:         0x41,
     SAVING_SLOTS:     0x43,
-    SLOTS_SAVED:      0x25
+    SLOTS_SAVED:      0x25,
+    /** Tea steeping state, observed in one three-stage V12.0D.500 capture. */
+    TEA_STEEPING:     0x45
 } as const;
 
 /**
@@ -190,9 +192,12 @@ export function frameCommand(frame: Uint8Array): number | null {
 /** Notification codes the brew state machine reacts to. */
 export const EVENT = {
     COFFEE_STARTING:  40502,
+    GRINDER_POSITION: 40505,
     BREWER_START:     40506,
     GRINDER_STOP:     40507,
     POUR_START:       40510,
+    /** Tea fill boundary, observed immediately before state `TEA_STEEPING`. */
+    TEA_FILL_END:      9012,
     /**
      * 40520. The bypass firing.
      *

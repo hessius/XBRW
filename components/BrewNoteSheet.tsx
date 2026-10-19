@@ -7,6 +7,7 @@ import DotMatrixText from "@/components/DotMatrixText";
 import XbrwSheet from "@/components/XbrwSheet";
 import {RATING_SHEET_DONE, RATING_SHEET_TITLE} from "@/constants/brewCopy";
 import {onAccent, palette} from "@/constants/colors";
+import type {BeverageKind} from "@/library/brew/BrewRecord";
 
 /**
  * Somewhere to say more, once the stars have already been given.
@@ -25,7 +26,7 @@ import {onAccent, palette} from "@/constants/colors";
  */
 export default function BrewNoteSheet({
     open, onOpenChange, onDone, figures, recipeName, rating, note, onRate, onNote, onNoteDraft,
-    footer
+    footer, beverageKind
 }: {
     open: boolean;
     onOpenChange: (open: boolean) => void;
@@ -35,6 +36,7 @@ export default function BrewNoteSheet({
     recipeName: string;
     rating: number;
     note: string;
+    beverageKind?: BeverageKind;
     onRate: (rating: number) => void;
     onNote: (note: string) => void;
     onNoteDraft?: (note: string) => void;
@@ -68,6 +70,7 @@ export default function BrewNoteSheet({
                 </YStack>
 
                 <BrewJudgement rating={rating} note={note}
+                               beverageKind={beverageKind}
                                onRate={onRate} onNote={onNote} onNoteDraft={onNoteDraft}
                                showHeading={false} clearable={false}/>
 

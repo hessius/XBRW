@@ -4,11 +4,13 @@ import {Text, XStack, YStack} from "tamagui";
 import DotMatrixText from "@/components/DotMatrixText";
 import {palette} from "@/constants/colors";
 import type {CompareRow} from "@/library/brew/compare";
+import type {BeverageKind} from "@/library/brew/BrewRecord";
 import {referenceCupColour} from "@/library/brew/traceStyle";
 
 type Props = {
     rows: CompareRow[];
     accent: string;
+    beverageKinds?: readonly (BeverageKind | undefined)[];
 };
 
 function rowLabel(row: CompareRow): string {
@@ -27,7 +29,13 @@ function rowLabel(row: CompareRow): string {
  * value is dimmer than either, because it is the thing they are not looking
  * for.
  */
-export default function CompareTable({rows, accent}: Props) {
+export default function CompareTable({rows: recordedRows, accent, beverageKinds = []}: Props) {
+    const hasTea = beverageKinds.includes("tea");
+    const rows = hasTea ? recordedRows
+        .filter((row) => !["GRIND", "RPM", "RATIO", "DRAWDOWN", "DELAY"].includes(row.label))
+        .map((row) => row.label === "DOSE"
+            ? {...row, label: beverageKinds.every((kind) => kind === "tea") ? "LEAF" : "DOSE / LEAF"}
+            : row) : recordedRows;
     if (rows.length === 0) {
         return (
             <Text testID="compare-table-empty" color={palette.dim} fontSize={13}>

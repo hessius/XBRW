@@ -3,6 +3,7 @@ import {useRef, useState} from "react";
 import {useBrewHandoff} from "@/hooks/useBrewHandoff";
 import type {BrewExportSource} from "@/hooks/useBrewExport";
 import {handoffCoffee} from "@/library/brew/handoff/backfill";
+import {canHandOff} from "@/library/brew/handoff/targets";
 import type Recipe from "@/library/Recipe";
 
 type RecordJudgement = {
@@ -62,12 +63,13 @@ export function useBrewRecordHandoff(
     }
 
     async function sendNow(beanName?: string): Promise<void> {
+        if (opened === null || !canHandOff(opened.record)) return;
         const nextSentAt = await sendHandoff(beanName);
         if (nextSentAt !== null) setSentAt(nextSentAt);
     }
 
     function continueSend(): void {
-        if (opened === null) return;
+        if (opened === null || !canHandOff(opened.record)) return;
         commitNoteDraft();
         setRatingBeforeSend(false);
         if (handoffCoffee(opened.record, recipe) === undefined) {
@@ -78,7 +80,7 @@ export function useBrewRecordHandoff(
     }
 
     function requestSend(): void {
-        if (opened === null) return;
+        if (opened === null || !canHandOff(opened.record)) return;
         commitNoteDraft();
         if (judgement.rating === 0) {
             setNoteDraft(verdictRef.current.note);

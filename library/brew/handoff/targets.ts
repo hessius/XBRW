@@ -1,4 +1,4 @@
-import type {BrewOutcome} from "@/library/brew/BrewRecord";
+import type {BrewOutcome, BrewRecord} from "@/library/brew/BrewRecord";
 
 // Describes where a finished brew can be sent from the record screen. The URL
 // scheme stays in encode.ts because it is transport, while this module is the
@@ -35,6 +35,8 @@ const CAN_HAND_OFF: Record<BrewOutcome, boolean> = {
 /**
  * Only a brew that produced a drink is safe to hand over: anything else would
  * create a row in someone's coffee diary for coffee they never drank.
+ * Known tea is excluded. An absent beverage kind keeps the legacy outcome rule;
+ * a mutable recipe cannot establish what was brewed in the past.
  *
  * `endedOnMachine` passes. It is a brew the machine called complete that
  * delivered materially less water than the plan asked for, which is what a
@@ -44,6 +46,6 @@ const CAN_HAND_OFF: Record<BrewOutcome, boolean> = {
  * true. The three that fail are the ones where nothing was drunk or where the
  * app stopped watching and cannot say what happened.
  */
-export function canHandOff(outcome: BrewOutcome): boolean {
-    return CAN_HAND_OFF[outcome];
+export function canHandOff(brew: Pick<BrewRecord, "outcome" | "beverageKind">): boolean {
+    return brew.beverageKind !== "tea" && CAN_HAND_OFF[brew.outcome];
 }

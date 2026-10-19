@@ -10,7 +10,7 @@ import DotMatrixText from "@/components/DotMatrixText";
 import {MINI_FAILURE_WHY, OVER, OVERFLOW_PAUSED_HEADLINE} from "@/constants/brewCopy";
 import {palette} from "@/constants/colors";
 import {DURATION} from "@/constants/motion";
-import type {BrewSample} from "@/library/brew/BrewRecord";
+import type {BeverageKind, BrewSample} from "@/library/brew/BrewRecord";
 import type {BypassView} from "@/library/brew/bypassState";
 import type {PauseInterval} from "@/library/brew/pauseIntervals";
 import {formatBrewClock} from "@/library/brew/brewFormat";
@@ -23,6 +23,7 @@ type Props = {
     dose: number;
     pours: Pour[];
     samples: BrewSample[];
+    beverageKind?: BeverageKind;
     pauseIntervals?: readonly PauseInterval[];
     bypass?: BypassView;
     accent: string;
@@ -146,7 +147,7 @@ function say(props: Props): {title: string; detail: string; line: string} {
  * record and the bar is the way into it.
  */
 export default function BrewMiniBar(props: Props) {
-    const {pours, samples, pauseIntervals, bypass, phase, holding, onOpen, onDismiss} = props;
+    const {pours, samples, beverageKind, pauseIntervals, bypass, phase, holding, onOpen, onDismiss} = props;
     const {title, detail, line} = say(props);
     const over = OVER.has(phase.name);
     const insets = useSafeAreaInsets();
@@ -181,6 +182,7 @@ export default function BrewMiniBar(props: Props) {
                     style={{flexDirection: "row", alignItems: "center", flex: 1, gap: 12}}
                 >
                     <BrewTrace
+                        beverageKind={beverageKind}
                         pours={pours}
                         samples={samples}
                         pauseIntervals={pauseIntervals}

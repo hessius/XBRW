@@ -25,7 +25,7 @@ import {
     type BrewRecordOpenResult
 } from "@/test-utils/brewRecordMocks";
 import type {StoredBrew} from "@/library/BrewDatabase";
-import Recipe from "@/library/Recipe";
+import Recipe, {CUP_TYPE} from "@/library/Recipe";
 import Pour, {AGITATION, POUR_PATTERN} from "@/library/Pour";
 import {planFromPours} from "@/library/brew/BrewRecord";
 import {HANDOFF_TARGETS} from "@/library/brew/handoff/targets";
@@ -1407,14 +1407,14 @@ describe("brew record's story card", () => {
     });
 
     /** Give the sheet a stage to draw in; nothing is drawn until it has one. */
-    async function openCard(width = 360): Promise<void> {
+    async function openCard(width = 360, height = Math.ceil(width * 16 / 9) + 100): Promise<void> {
         // Pressed once, not in a retry loop: the sheet hides the screen behind
         // it from a screen reader, so the button this press found is gone by
         // the time a second attempt would look for it.
         await fireEvent.press(screen.getByLabelText("Share this brew as a story card"));
         await waitFor(() => expect(screen.getByTestId("story-stage")).toBeTruthy());
         await fireEvent(screen.getByTestId("story-stage"), "layout", {
-            nativeEvent: {layout: {width, height: Math.ceil(width * 16 / 9) + 100, x: 0, y: 0}}
+            nativeEvent: {layout: {width, height, x: 0, y: 0}}
         });
         await waitFor(() => expect(screen.getByTestId("brew-story-card")).toBeTruthy());
     }
@@ -1431,6 +1431,77 @@ describe("brew record's story card", () => {
             {timeout: SHEET_PRESS_TIMEOUT}
         );
     }
+
+    it("subtracts the recorded pause from a tea steep in record and story", async () => {
+        mockOpened = {
+            record: makeBrewRecordFixture({
+                beverageKind: "tea", pouringAt: 1_000, endedAt: 81_000,
+                plan: planFromPours([new Pour(1, 90, 92, 35, 0, 0, 45)]),
+                teaCycles: [{
+                    index: 0, steepStartedAt: 10_000, steepEndedAt: 65_000,
+                    endingEndedAt: 80_000, fillMl: 90
+                }],
+                pauseIntervals: [{from: 20_000, to: 30_000, pour: 1, reason: "manual"}]
+            }),
+            samples: []
+        };
+        await renderWithProviders(<BrewRecord recipeLookup={lookup}/>);
+        expect(within(screen.getByTestId("brew-capture"))
+            .getByText("STEEP · 0:45 planned · 0:45 elapsed")).toBeTruthy();
+        await openCard();
+        expect(within(screen.getByTestId("story-capture"))
+            .getByText("STEEP · 0:45 planned · 0:45 elapsed")).toBeTruthy();
+    });
+
+    it.each([
+        {orientation: "portrait", width: 393, height: 852, stageHeight: 740},
+        {orientation: "landscape", width: 852, height: 393, stageHeight: 360}
+    ])("keeps tea figures in record and story in $orientation", async ({width, height, stageHeight}) => {
+        const window = {...mockWindow, width, height};
+        Dimensions.set({screen: window, window});
+        mockOpened = {
+            record: makeBrewRecordFixture({
+                beverageKind: "tea", dose: 5, ratio: 18, grinderUsed: false,
+                grindSize: 81, grinderRpm: 120, adjustedFromGrind: 50,
+                adjustedFromDose: 4, adjustedFromRatio: 16, adjustedTempOffset: -2,
+                drawdownAt: 0, plan: planFromPours(twoPours.pours)
+            }),
+            samples: []
+        };
+        await renderWithProviders(<BrewRecord recipeLookup={lookup}/>);
+        expect(screen.getByText("HOW WAS THE TEA")).toBeTruthy();
+        expect(screen.getByLabelText("Export the data")).toBeTruthy();
+        expect(screen.getByTestId("record-action-export")).toBeTruthy();
+        expect(screen.queryByLabelText(HANDOFF_TARGETS[0].buttonLabel)).toBeNull();
+        const assertTea = (capture: ReturnType<typeof within>) => {
+            for (const label of ["LEAF", "5 G", "WATER", "CUP", "TIME"]) {
+                expect(capture.getAllByText(label).length).toBeGreaterThan(0);
+            }
+            for (const label of ["RATIO", "GRIND", "OFF", "RPM", "DRAWDOWN", "DELAY",
+                "RECIPE 50", "1:18"]) {
+                expect(capture.queryByText(label)).toBeNull();
+            }
+        };
+        assertTea(within(screen.getByTestId("brew-capture")));
+        expect(screen.getByText("TEMP")).toBeTruthy();
+        expect(screen.getByText("RECIPE 4")).toBeTruthy();
+        expect(screen.getByText("OFFSET -2")).toBeTruthy();
+        await openCard(width, stageHeight);
+        assertTea(within(screen.getByTestId("story-capture")));
+    });
+
+    it("keeps legacy record copy and figures when its saved recipe is now tea", async () => {
+        mockOpened = {record: makeBrewRecordFixture({dose: 15, ratio: 16}), samples: []};
+        const teaRecipe = new Recipe();
+        teaRecipe.cupType = CUP_TYPE.TEA;
+        await renderWithProviders(
+            <BrewRecord recipeLookup={{getRecipe: () => teaRecipe}}/>
+        );
+        expect(screen.getByText("HOW WAS IT")).toBeTruthy();
+        expect(screen.getByText("DOSE")).toBeTruthy();
+        expect(screen.getByText("1:16")).toBeTruthy();
+        expect(screen.queryByText("LEAF")).toBeNull();
+    });
 
     it.each([
         {recipeState: "deleted", from: 40_700, to: 55_700, delay: 10},

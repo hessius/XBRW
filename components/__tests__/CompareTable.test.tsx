@@ -16,6 +16,19 @@ async function draw(rows = ROWS) {
 }
 
 describe("CompareTable", () => {
+    it.each(["coffee", undefined] as const)(
+        "omits coffee-only rows for mixed tea/%s comparisons without guessing legacy kind",
+        async (otherKind) => {
+            const {getByText, queryByText} = await renderWithProviders(
+                <CompareTable rows={ROWS} accent="#C86A3B"
+                              beverageKinds={["tea", otherKind]}/>
+            );
+            expect(getByText("DOSE / LEAF")).toBeTruthy();
+            expect(getByText("RATING")).toBeTruthy();
+            expect(queryByText("GRIND")).toBeNull();
+        }
+    );
+
     it("writes a shared value once, down the middle", async () => {
         const {getByTestId, queryByTestId} = await draw();
         expect(getByTestId("compare-shared-DOSE").props.children).toBe("18 g");

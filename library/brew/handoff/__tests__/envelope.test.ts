@@ -13,6 +13,18 @@ function hasUndefined(value: unknown): boolean {
 }
 
 describe("buildEnvelope", () => {
+    it("refuses known tea at the envelope boundary", () => {
+        expect(() => buildEnvelope(brew({beverageKind: "tea"}), samples))
+            .toThrow("Tea brews cannot be sent to Beanconqueror.");
+    });
+
+    it("preserves coffee and legacy envelopes even for failed brews", () => {
+        for (const beverageKind of ["coffee", undefined] as const) {
+            expect(() => buildEnvelope(brew({beverageKind, outcome: "failed"}), samples))
+                .not.toThrow();
+        }
+    });
+
     /**
      * A rating the user typed is a verdict, and dropping it would hand the
      * other app a brew nobody had an opinion about. Absent rather than 0 when

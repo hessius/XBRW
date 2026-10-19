@@ -1,5 +1,23 @@
 import {formatBrewClock} from "@/library/brew/brewFormat";
-import type {BrewRecord} from "@/library/brew/BrewRecord";
+import type {BeverageKind, BrewRecord} from "@/library/brew/BrewRecord";
+import type {GrindFigure} from "@/library/brew/dialAfterBrew";
+
+/**
+ * Tea's drain cycles are not yet established on hardware. Keep the recorded
+ * observations, but do not present a coffee final-bed interval as a tea figure.
+ */
+export function brewFigureDetails<T extends {
+    grind?: GrindFigure | null;
+    drawdown?: number | null;
+    drawdownRate?: number | null;
+    delay?: number | null;
+    reserveDrawdown?: boolean;
+}>(beverageKind: BeverageKind | undefined, details: T) {
+    return beverageKind === "tea"
+        ? {...details, grind: null, drawdown: null, drawdownRate: null,
+            delay: null, reserveDrawdown: false}
+        : details;
+}
 
 export type BrewFigureAdjustments = {
     temperature?: {offset: number; temperatures: number[]};

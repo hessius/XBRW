@@ -52,6 +52,7 @@ let mockBrewSummary = {
     timed: 0, meanBrewSeconds: 0, measured: 0, meanCupMl: 0, abandoned: 0, lastDial: null
 };
 const mockRate = jest.fn();
+const mockRecipeRatingInput = jest.fn();
 const mockRefreshBeanProfile = jest.fn();
 let mockBeanProfile: BeanProfile = {
     rows: [],
@@ -60,7 +61,10 @@ let mockBeanProfile: BeanProfile = {
 };
 jest.mock("@/hooks/useBrewHistory", () => ({
     ...jest.requireActual("@/hooks/useBrewHistory"),
-    useRecipeRating: () => ({summary: mockBrewSummary, rate: mockRate}),
+    useRecipeRating: (recipe: unknown) => {
+        mockRecipeRatingInput(recipe);
+        return {summary: mockBrewSummary, rate: mockRate};
+    },
     useBeanProfile: () => ({profile: mockBeanProfile, refresh: mockRefreshBeanProfile})
 }));
 
@@ -184,6 +188,7 @@ beforeEach(() => {
     mockPush.mockClear();
     mockNotify.mockClear();
     mockRefreshBeanProfile.mockClear();
+    mockRecipeRatingInput.mockClear();
     mockBeanProfile = {
         rows: [],
         untagged: {brews: 0, rated: 0, avgRating: 0},
@@ -293,6 +298,16 @@ function fillsWithin(element: unknown): string[] {
 }
 
 describe("the editor", () => {
+    it.each([
+        [CUP_TYPE.TEA, "tea"],
+        [CUP_TYPE.XPOD, "coffee"]
+    ])("passes beverage identity to recipe ratings for cup type %s", async (cupType, beverageKind) => {
+        await renderEditor({cupType});
+        expect(mockRecipeRatingInput).toHaveBeenLastCalledWith(
+            expect.objectContaining({beverageKind})
+        );
+    });
+
     it("opens on the recipe, not on a form", async () => {
         await renderEditor();
 
@@ -1517,16 +1532,27 @@ describe("grind-too-fine banner", () => {
         expect(screen.queryByTestId("grind-too-fine")).toBeNull();
     });
 
-    it("does not let the stepper raise a below-minimum grind through Decrease", async () => {
-        // With a fixed floor of 40, `stepped()` clamped 11 *up* to 40, so the
-        // control announced as Decrease raised the value -- and the stepper
-        // advertised a minimum of 40 while reporting 12.
+    it("allows decreasing a BLE grind below the card minimum", async () => {
         await renderEditor({grindSize: 12});
 
         await fireEvent.press(screen.getByLabelText("Decrease Grind size"));
 
-        expect(screen.getByLabelText(/^Grind size, 12/)).toBeTruthy();
+        expect(screen.getByLabelText(/^Grind size, 11/)).toBeTruthy();
         expect(screen.getByTestId("grind-too-fine")).toBeTruthy();
+    });
+
+    it("lets a card-range recipe cross into the BLE-only grind range", async () => {
+        await renderEditor({grindSize: 40});
+        await fireEvent.press(screen.getByLabelText("Decrease Grind size"));
+        expect(screen.getByLabelText(/^Grind size, 39/)).toBeTruthy();
+        expect(screen.getByTestId("grind-too-fine")).toBeTruthy();
+        expect(screen.queryByTestId("range-problems")).toBeNull();
+    });
+
+    it("stops the grind stepper at the BLE minimum", async () => {
+        await renderEditor({grindSize: 1});
+        await fireEvent.press(screen.getByLabelText("Decrease Grind size"));
+        expect(screen.getByLabelText(/^Grind size, 1 /)).toBeTruthy();
     });
 
     it("speaks the band with the value, because the label is only visual", async () => {
