@@ -32,6 +32,13 @@ numbers are unchanged. This version bump does not build, submit or deploy an app
 Moved from additions to the shipped 2.1.0 ledger without rewriting that ledger.
 Dates and claims below retain the contributor's original wording.
 
+Integration follow-ups: the machine panel imports its existing chevron component;
+the native configuration regression now pins 2.2.0. Price tests select a fixture
+locale rather than assuming the host is English, and separately exercise Swedish
+currency placement. Production formatting still follows the phone's locale.
+The bean-filter clear test advances the existing search debounce explicitly,
+instead of fitting a 600 ms debounce and rendering into a one-second polling budget.
+
 ## No beans and no water, said plainly (2026-10-19)
 
 When a brew stops because the machine reports no beans (state 0x0F) or no water

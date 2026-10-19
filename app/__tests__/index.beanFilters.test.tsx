@@ -3,6 +3,7 @@ import {AccessibilityInfo} from "react-native";
 import {act, fireEvent, screen, waitFor, within} from "@testing-library/react-native";
 
 import HomeScreen from "@/app/index";
+import {TYPING_DEBOUNCE_MS} from "@/constants/motion";
 import Recipe from "@/library/Recipe";
 import {beanFilterId, parseBeanFilterId} from "@/library/beanFilters";
 import type {ProfileField} from "@/library/beanProfile";
@@ -286,15 +287,21 @@ describe("HomeScreen bean filters", () => {
         await fireEvent.press(screen.getByLabelText("Close"));
         await waitFor(() => expect(screen.getByLabelText("Settings")).toBeTruthy());
 
-        await fireEvent.press(screen.getByTestId("rail-search"));
-        await fireEvent.changeText(screen.getByTestId("rail-search-input"), "missing");
+        jest.useFakeTimers();
+        try {
+            await fireEvent.press(screen.getByTestId("rail-search"));
+            await fireEvent.changeText(screen.getByTestId("rail-search-input"), "missing");
+            await act(async () => { jest.advanceTimersByTime(TYPING_DEBOUNCE_MS); });
 
-        await waitFor(() => expect(screen.getByText("NO MATCHES")).toBeTruthy());
+            expect(screen.getByText("NO MATCHES")).toBeTruthy();
 
-        await fireEvent.press(screen.getByLabelText("Clear search and filters"));
+            await fireEvent.press(screen.getByLabelText("Clear search and filters"));
 
-        expect(screen.getAllByTestId("recipe-card")).toHaveLength(2);
-        expect(screen.queryByTestId(`rail-filter-${id("process", "Natural")}`)).toBeNull();
+            expect(screen.getAllByTestId("recipe-card")).toHaveLength(2);
+            expect(screen.queryByTestId(`rail-filter-${id("process", "Natural")}`)).toBeNull();
+        } finally {
+            jest.useRealTimers();
+        }
     });
 });
 

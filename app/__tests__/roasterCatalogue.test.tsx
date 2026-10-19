@@ -211,6 +211,18 @@ describe("searching and filtering a roaster's coffees", () => {
 });
 
 describe("buying a bag", () => {
+    const NativeNumberFormat = Intl.NumberFormat;
+
+    beforeEach(() => {
+        jest.spyOn(Intl, "NumberFormat").mockImplementation((locales, options) =>
+            new NativeNumberFormat(locales ?? "en-AU", options)
+        );
+    });
+
+    afterEach(() => {
+        jest.restoreAllMocks();
+    });
+
     function shop() {
         const parsed = JSON.parse(feedJson([{id: "b"}]));
         parsed.roaster.add_to_cart = "https://roaster.example/cart/add?id={variant_id}&quantity=1";

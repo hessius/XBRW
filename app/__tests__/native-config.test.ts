@@ -4,41 +4,11 @@ type PluginEntry = string | [string, Record<string, unknown>];
 
 describe("native release configuration", () => {
     /**
-     * 2.1.0.
-     *
-     * The ladder in issue #76 put M5 at 1.7.0 and reserved the major for the
-     * account import, the release in which credentials leave the device for the
-     * first time. Both are now in the same tree, so the major is what ships:
-     * a user upgrading gets the shelves, the brew evidence and the account
-     * import together, and one of those three is the one that changes what the
-     * app does with their password.
-     *
-     * The public store release is 1.5.0, so 2.0.0 was the next version a user
-     * would ever see. It was briefly carried to 2.1.0 on the reasoning that
-     * the BrewMind import (#159) added browser native code and so changed the
-     * binary, and then spent back, because every 2.0.0 build had reached
-     * TestFlight only and a minor spent on a release that never happened is a
-     * minor wasted.
-     *
-     * It is 2.1.0 again now, and this time it stays. The reason is not the
-     * size of the change but that the name is already outside the building:
-     * `2.1.0-android-beta.1` is a published pre-release, so a tester holding
-     * that artifact and a tree calling itself 2.0.0 disagree about which is
-     * newer. The argument above only ever held while nothing outside the
-     * repository carried the number.
-     *
-     * `runtimeVersion.policy` is `appVersion`, so the version string is also
-     * the runtime version, which is why a native affecting change has to bump
-     * it. The belt and braces part is that `expo-updates` is not a dependency
-     * of this app at all, so nothing is ever delivered over the air and
-     * `runtimeVersion` names a mechanism that is not in the build. That is also
-     * why reusing 2.0.0 across TestFlight builds costs nothing: there is no
-     * update channel for the older builds to be caught by. If OTA updates are
-     * ever adopted, that stops being true and the paragraph above carries the
-     * whole weight.
+     * The 2.2.0 preview adds a native date picker and navigation bar plugin.
+     * Keep its appVersion runtime separate from the shipped 2.1.0 binary.
      */
-    it("ships as 2.1.0, on the appVersion runtime policy", () => {
-        expect(appConfig.expo.version).toBe("2.1.0");
+    it("targets 2.2.0, on the appVersion runtime policy", () => {
+        expect(appConfig.expo.version).toBe("2.2.0");
         expect(appConfig.expo.runtimeVersion.policy).toBe("appVersion");
     });
 

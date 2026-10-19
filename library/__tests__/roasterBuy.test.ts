@@ -6,6 +6,7 @@ import {subscribe} from "@/library/roasterSync";
 import {FEED_URL, feedJson, memorySettings} from "@/test-utils/roasterFeed";
 
 const TEMPLATE = "https://shop.example/cart/add?id={variant_id}&quantity=1";
+const NativeNumberFormat = Intl.NumberFormat;
 
 /** The test feed with a roaster block and per-coffee variants patched in. */
 function body(roaster: Record<string, unknown>, variants: unknown, coffee: Record<string, unknown> = {}) {
@@ -79,6 +80,16 @@ describe("buy links", () => {
 });
 
 describe("the BUY rows", () => {
+    beforeEach(() => {
+        jest.spyOn(Intl, "NumberFormat").mockImplementation((locales, options) =>
+            new NativeNumberFormat(locales ?? "en-AU", options)
+        );
+    });
+
+    afterEach(() => {
+        jest.restoreAllMocks();
+    });
+
     it("labels each bag with its size and price, and its link", () => {
         const feed = read({add_to_cart: TEMPLATE}, [
             {id: "1", grams: 1000, price: 146, currency: "AUD", available: true},
@@ -104,6 +115,14 @@ describe("the BUY rows", () => {
         expect(formatPrice(28, "ZZZ")).toMatch(/28/);
         expect(formatPrice(28)).toBe("$28");
         expect(bagGramsLabel(480)).toBe("480 g");
+    });
+
+    it("keeps the phone's locale for currency placement and decimals", () => {
+        jest.spyOn(Intl, "NumberFormat").mockImplementation((locales, options) => {
+            expect(locales).toBeUndefined();
+            return new NativeNumberFormat("sv-SE", options);
+        });
+        expect(formatPrice(28.5, "AUD")).toBe("28,50\u00a0$");
     });
 });
 
