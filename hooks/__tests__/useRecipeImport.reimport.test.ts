@@ -75,6 +75,17 @@ describe("importing a held link again", () => {
         expect(onSaveExisting).not.toHaveBeenCalled();
     });
 
+    it("opens local edits without offering an unchanged author version as newer", async () => {
+        const mine = stored();
+        const originalPrints = sharedSettings().get("importFingerprints");
+        mine.grindSize = 55;
+        const {onOpenRecipe, onSaveExisting} = await importAgain([mine]);
+        await waitFor(() => expect(onOpenRecipe).toHaveBeenCalledWith(mine, true, false));
+        expect(mine.grindSize).toBe(55);
+        expect(onSaveExisting).not.toHaveBeenCalled();
+        expect(sharedSettings().get("importFingerprints")).toBe(originalPrints);
+    });
+
     it("updates an untouched copy quietly and keeps the name, notes and tags", async () => {
         const mine = stored();
         mockGetRecipe.mockImplementation(() => fromXBloom(62));

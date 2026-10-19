@@ -100,6 +100,13 @@ Typed rest/peak edits retain the window chosen by the last roast preset, and
 partial coffee advice keeps its stated best-until day. Derived windows stay
 inside the same 0-540 day range that storage and restore accept (#241, #242).
 
+### Reimports distinguish local edits from author updates
+
+A locally edited recipe no longer prompts to use the roaster's latest when
+the author still serves the originally imported content (#237). Link imports
+and catalogue saves keep the local copy and its original import fingerprint;
+a genuinely changed author version still asks before replacing local edits.
+
 ## Imported proposal notes
 
 Moved from additions to the shipped 2.1.0 ledger without rewriting that ledger.

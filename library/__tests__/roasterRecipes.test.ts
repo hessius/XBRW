@@ -94,6 +94,22 @@ describe("addToLibrary", () => {
         expect(library.all()).toHaveLength(1);
     });
 
+    it("keeps local edits when adding the author's unchanged recipe again", async () => {
+        const settings = memorySettings();
+        const library = memoryLibrary();
+        addToLibrary(await fetchCoffeeRecipe(coffees[0], undefined, library.deps), library.deps, settings);
+        const mine = library.all()[0];
+        const originalPrints = readPrints(settings);
+        mine.grindSize = 55;
+        library.deps.save(mine);
+
+        const again = addToLibrary(await fetchCoffeeRecipe(coffees[0], undefined, library.deps),
+                                   library.deps, settings);
+        expect(again.kind).toBe("already");
+        expect(library.find("a-18g")?.grindSize).toBe(55);
+        expect(readPrints(settings)).toEqual(originalPrints);
+    });
+
     it("updates an untouched copy quietly when the roaster changed the recipe", async () => {
         const settings = memorySettings();
         const library = memoryLibrary();
