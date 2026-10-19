@@ -225,6 +225,23 @@
 > AGAIN log is not proven from the log alone: only the pre-flight and CANCEL
 > send 40519, and the fix holds whichever it was. None of this has been run
 > on the machine yet.
+>
+> **Every continuation answers to its own attempt (review, 2026-10-19).** The
+> waits above outlive the things that started them, so each one carries the
+> connection generation and cancel ticket it began under and checks them
+> before it writes or sets a phase. A cancel whose link dropped and came back
+> while it waited for the startable report sends no 8022 on the new link and
+> sets no phase there; a state report heard on the new link ends the old wait
+> empty. An upload a CANCEL interrupted, or that a new link outlived, offers
+> no START for the recipe the machine may be holding, and CANCEL withdraws an
+> offered START at once rather than when the machine answers. A late write
+> error from a cancelled upload or START changes nothing. A PRO retry stops
+> in its pacing gap after a cancel or a new link. A vitals round the brew was
+> waiting on when CANCEL finished leaves `cancelled` alone rather than
+> writing `waking` over it. And an upload that failed after its first frame
+> went out is reported as a non-retryable upload error: a lost link is no
+> proof the machine missed the recipe, so the pre-flight relink must not send
+> it again.
 
 ### Event 40522 is the tank flag `hardware 2026-10-19, V12.0D.500`
 

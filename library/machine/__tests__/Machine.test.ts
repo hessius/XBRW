@@ -2153,6 +2153,210 @@ describe("one cancel per brew start", () => {
         expect(transport.sent).not.toContain(8102);
         expect(machine.phase.name).toBe("cancelled");
     });
+
+    it("keeps cancellation terminal when unanswered preflight vitals time out", async () => {
+        // A machine that has never introduced itself is asked in rounds, and
+        // every round after the first announces itself as `waking`. A CANCEL
+        // that lands while a round is still waiting must be the last word on
+        // the phase: no later round may write `waking` over `cancelled`.
+        jest.useFakeTimers();
+        try {
+            const transport = new FakeTransport();
+            transport.infoReply = null;
+            const machine = new Machine(transport, {frameGapMs: 0, infoWaitMs: 100});
+            const connecting = machine.connect("AA:BB");
+            await jest.advanceTimersByTimeAsync(1000);
+            await connecting;
+            transport.emit(status(0x01));
+            transport.written = [];
+
+            const brewing = machine.brew(brewable());
+            await jest.advanceTimersByTimeAsync(0);
+            expect(transport.sent).toContain(40521);
+            await machine.cancelBrew();
+            expect(machine.phase.name).toBe("cancelled");
+
+            await jest.advanceTimersByTimeAsync(1000);
+            await brewing;
+            expect(count(transport, 40519)).toBe(1);
+            expect(transport.sent).not.toContain(8102);
+            expect(machine.phase.name).toBe("cancelled");
+        } finally {
+            jest.useRealTimers();
+        }
+    });
+
+    it("cannot offer START after cancelling a partial manual-start upload", async () => {
+        jest.useFakeTimers();
+        try {
+            const transport = new FakeTransport();
+            const machine = new Machine(transport);
+            const connecting = machine.connect("AA:BB");
+            await jest.advanceTimersByTimeAsync(FRAME_GAP_MS + 10);
+            await connecting;
+            transport.emit(status(0x01));
+            machine.setAutoStart(false);
+            transport.written = [];
+
+            const brewing = machine.brew(brewable());
+            await jest.advanceTimersByTimeAsync(FRAME_GAP_MS);
+            // The vitals question, then the burst's handshake and its first
+            // recipe frame: the upload is under way and far from complete.
+            expect(transport.sent).toEqual([40521, 8100, 8102]);
+            const cancelling = machine.cancelBrew();
+            await jest.advanceTimersByTimeAsync(FRAME_GAP_MS * 4);
+            await Promise.all([brewing, cancelling]);
+
+            expect(transport.sent).toEqual([40521, 8100, 8102, 40519, 8022]);
+            expect(machine.phase.name).toBe("cancelled");
+            await expect(machine.startBrew()).rejects.toThrow("There is no recipe waiting");
+        } finally {
+            jest.useRealTimers();
+        }
+    });
+
+    it.each([true, false])(
+        "never finishes an old cancel on a replacement connection (new state: %s)", async (reply) => {
+            jest.useFakeTimers();
+            try {
+                const transport = new FakeTransport();
+                const machine = new Machine(transport, {frameGapMs: 0, stateReplyMs: 100});
+                await machine.connect("AA:BB");
+                transport.cancelReply = null;
+                const cancelled = machine.cancelBrew().catch((error: unknown) => error);
+                await jest.advanceTimersByTimeAsync(0);
+                expect(transport.sent).toContain(40519);
+
+                transport.drop();
+                await machine.connect("CC:DD");
+                transport.written = [];
+                if (reply) transport.emit(status(0x41));
+                const phase = machine.phase;
+                await jest.advanceTimersByTimeAsync(100);
+                const outcome = await cancelled;
+
+                expect(transport.sent).toEqual([]);
+                expect(machine.phase).toEqual(phase);
+                expect(outcome).toBeInstanceOf(Error);
+            } finally {
+                jest.useRealTimers();
+            }
+        }
+    );
+
+    it("never sends a retry's stale preflight cancel on a replacement connection", async () => {
+        jest.useFakeTimers();
+        try {
+            const {transport, machine} = await failedOn(null, {stateReplyMs: 100});
+            const brewing = machine.brew(brewable()).catch((error: unknown) => error);
+            await jest.advanceTimersByTimeAsync(0);
+            expect(transport.sent).toEqual([8022]);
+
+            transport.drop();
+            await machine.connect("CC:DD");
+            transport.written = [];
+            transport.emit(status(0x0F));
+            await jest.advanceTimersByTimeAsync(100);
+            const outcome = await brewing;
+
+            expect(transport.sent).toEqual([]);
+            expect(outcome).toBeInstanceOf(Error);
+        } finally {
+            jest.useRealTimers();
+        }
+    });
+
+    it("clears the manual START immediately while cancellation still awaits a state", async () => {
+        const {transport, machine} = await readyMachine();
+        machine.setAutoStart(false);
+        await machine.brew(brewable());
+        transport.cancelReply = null;
+        const cancelling = machine.cancelBrew();
+        await tick();
+
+        await expect(machine.startBrew()).rejects.toThrow("There is no recipe waiting");
+        transport.emit(status(0x41));
+        await cancelling;
+        expect(transport.sent).not.toContain(8002);
+    });
+
+    it.each(["cancel", "replace"] as const)(
+        "does not apply a late manual START write error after %s", async (action) => {
+            const {transport, machine} = await readyMachine();
+            machine.setAutoStart(false);
+            await machine.brew(brewable());
+            let rejectCommit: (error: Error) => void = () => { throw new Error("Commit was not dispatched"); };
+            const held = new Promise<void>((_resolve, reject) => { rejectCommit = reject; });
+            const write = transport.write.bind(transport);
+            jest.spyOn(transport, "write").mockImplementation(async (frame) => {
+                await write(frame);
+                if ((frame[3] | (frame[4] << 8)) === 8002) await held;
+            });
+            const started = machine.startBrew().catch((error: unknown) => error);
+            await tick();
+
+            if (action === "cancel") await machine.cancelBrew();
+            else {
+                transport.drop();
+                await machine.connect("CC:DD");
+            }
+            const phase = machine.phase;
+            rejectCommit(new Error("Old commit write failed"));
+            const outcome = await started;
+
+            expect(machine.phase).toEqual(phase);
+            if (action === "replace") expect(outcome).toBeInstanceOf(Error);
+            else expect(outcome).toBeUndefined();
+        }
+    );
+
+    it.each([
+        {action: "cancel", afterHandshake: false},
+        {action: "cancel", afterHandshake: true},
+        {action: "replace", afterHandshake: false},
+        {action: "replace", afterHandshake: true}
+    ])("does not continue a PRO retry after $action (handshake sent: $afterHandshake)", async ({
+        action, afterHandshake
+    }) => {
+        jest.useFakeTimers();
+        try {
+            const transport = new FakeTransport();
+            const machine = new Machine(transport);
+            const connecting = machine.connect("AA:BB");
+            await jest.advanceTimersByTimeAsync(FRAME_GAP_MS + 10);
+            await connecting;
+            transport.written = [];
+
+            const retrying = machine.switchToProAndRetry(brewable()).catch((error: unknown) => error);
+            await jest.advanceTimersByTimeAsync(afterHandshake ? FRAME_GAP_MS : 0);
+            // After the gap the retry's burst has begun with its handshake.
+            const before = afterHandshake ? [11511, 8100] : [11511];
+            expect(transport.sent).toEqual(before);
+            if (action === "cancel") await machine.cancelBrew();
+            else {
+                transport.drop();
+                const reconnecting = machine.connect("CC:DD");
+                await jest.advanceTimersByTimeAsync(FRAME_GAP_MS + 10);
+                await reconnecting;
+                transport.written = [];
+            }
+            const phase = machine.phase;
+            await jest.advanceTimersByTimeAsync(FRAME_GAP_MS * 5);
+            const outcome = await retrying;
+
+            expect(machine.phase).toEqual(phase);
+            if (action === "cancel") {
+                expect(transport.sent).toEqual([...before, 40519, 8022]);
+                expect(machine.phase.name).toBe("cancelled");
+                expect(outcome).toBeUndefined();
+            } else {
+                expect(transport.sent).toEqual([]);
+                expect(outcome).toBeInstanceOf(Error);
+            }
+        } finally {
+            jest.useRealTimers();
+        }
+    });
 });
 
 /**

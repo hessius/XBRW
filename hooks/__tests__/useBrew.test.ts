@@ -105,6 +105,32 @@ beforeEach(() => {
     jest.mocked(notify).mockClear();
 });
 
+it("never relinks and retries after a recipe write loses its connection", async () => {
+    class Radio extends FakeTransport {
+        async write(frame: Uint8Array): Promise<void> {
+            await super.write(frame);
+            if ((frame[3] | (frame[4] << 8)) === 8001) {
+                this.drop();
+                throw new Error("Receipt is unknown");
+            }
+        }
+    }
+    const radio = new Radio();
+    const machine = new Machine(radio, {frameGapMs: 0});
+    await machine.connect("one");
+    radio.emit(status(0x01));
+    const disconnect = jest.spyOn(machine, "disconnect");
+    const {result} = await renderHook(() => useBrew(machine));
+
+    await act(async () => { await result.current.brew(coffee()); });
+
+    expect(radio.sent.filter((code) => code === 8001)).toHaveLength(1);
+    expect(disconnect).not.toHaveBeenCalled();
+    expect(mockConnect).not.toHaveBeenCalled();
+    expect(result.current.error).toBe("Receipt is unknown");
+    expect(machine.phase.name).toBe("lostContact");
+});
+
 async function reserved() {
     class Radio extends FakeTransport {
         get connectedDeviceId() { return this.connectedTo; }
