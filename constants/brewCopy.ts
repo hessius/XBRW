@@ -62,7 +62,9 @@ export const PHASE_COPY: Record<string, string> = {
 export const FAILURE_COPY: Record<string, string> = {
     // The machine stopped mid-brew. Rare, and not the same event as a refusal:
     // this one costs a dose.
-    noWater:      "No water detected. Fill the tank and tap TRY AGAIN.",
+    // No TRY AGAIN here on purpose (NO_RETRY): the dose may already be ground
+    // and some water spent, so the copy must not point at a button.
+    noWater:      "No water detected. Fill the tank before brewing again.",
     // The machine reports this itself (state 0x0F, no_beans), so it is said
     // as a fact rather than a guess.
     noBeans:      "No beans detected. Fill the hopper and tap TRY AGAIN.",
