@@ -3,6 +3,14 @@
 This is the source for the full release-testing checklist, not a claim that
 device testing is complete. Update it whenever release scope or behaviour changes.
 
+## No beans, said plainly (2026-10-19)
+
+When a brew stops because the machine reports no beans (state 0x0F), the brew
+screen now says "No beans detected. Fill the hopper and tap TRY AGAIN." instead
+of "The machine stopped during grinding. Check there are beans in the hopper."
+The machine names the fault itself, so the copy no longer reads as a guess.
+Device check: start a brew with an empty hopper.
+
 ## Primary buttons in the brand colour (2026-10-18, proposal)
 
 Primary buttons that do not run a recipe (SAVE NAME, CREATE SHELF, SEND, DONE,
