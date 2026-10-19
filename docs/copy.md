@@ -1032,6 +1032,12 @@ text, so a crash on an unusual card can be diagnosed from a phone with no consol
 | `machine.colour.names` | `constants/colors.ts` (`machineColours`) | (a11y) Each swatch, read as a radio button. | `Green`, `Blue`, `Violet`, `Cyan` |
 | `machine.panel.choice.state` | `components/MachinePanel.tsx` (`MachineChoiceRow`) | Doto line under the machine's name in the panel's switcher, with two or more saved. `${MODEL}` is STUDIO or ORIGINAL. | `${MODEL} · CONNECTED` / `${MODEL} · SELECTED` |
 | `machine.panel.choice.hint` | `components/MachinePanel.tsx` (a11y hint) | (a11y) Hint on the switcher row. | `Choose another saved machine` |
+| `machine.forget.title` | `components/ForgetMachineSheet.tsx` | Title of the sheet that asks before a machine is forgotten, from the Forget row on Settings or in a machine's sheet. Forget used to act on the tap. `${name}` is the machine's name, or `xBloom N` when it has none. | `Forget ${name}?` |
+| `machine.forget.body` | `components/ForgetMachineSheet.tsx` | The sheet's body. Says how to get the machine back, because there is no undo. | `It comes off your list. To use it again, switch it on nearby and add it again.` |
+| `machine.forget.confirm` | `components/ForgetMachineSheet.tsx` | Doto label on the red button that forgets it. Refused with the usual toast while a brew holds the link. | `FORGET` |
+| `machine.forget.confirm.a11y` | `components/ForgetMachineSheet.tsx` (a11y) | (a11y) The red button. | `Forget ${name}` |
+| `machine.forget.keep` | `components/ForgetMachineSheet.tsx` | Doto label on the outlined button that closes the sheet and keeps the machine. | `KEEP IT` |
+| `machine.forget.keep.a11y` | `components/ForgetMachineSheet.tsx` (a11y) | (a11y) The keep button. | `Keep ${name}` |
 
 ### The machine panel (`components/MachinePanel.tsx`)
 

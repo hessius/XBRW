@@ -498,22 +498,27 @@ describe("one card per saved machine", () => {
         expect(mockLink.choose).not.toHaveBeenCalled();
     });
 
-    it("forgets the machine from its card", async () => {
-        await renderWithProviders(<MachineSection/>);
+    it("asks before forgetting the machine on its card", async () => {
+        // It used to forget on the tap. The screen's ForgetMachineSheet asks.
+        const onForgetMachine = jest.fn();
+        await renderWithProviders(<MachineSection onForgetMachine={onForgetMachine}/>);
         await openCard(/^Home, /);
 
         await fireEvent.press(card("HOME").getByText("Forget this machine"));
 
-        expect(mockLink.forgetMachine).toHaveBeenCalledWith("HOME");
+        expect(onForgetMachine).toHaveBeenCalledWith("HOME");
+        expect(mockLink.forgetMachine).not.toHaveBeenCalled();
     });
 
     it("will not forget a machine while a brew owns the link, and says why", async () => {
         mockLink.changeBlocker = "A brew is running. Stop it or let it finish before changing machines.";
-        await renderWithProviders(<MachineSection/>);
+        const onForgetMachine = jest.fn();
+        await renderWithProviders(<MachineSection onForgetMachine={onForgetMachine}/>);
         await openCard(/^Work, /);
 
         await fireEvent.press(screen.getByText("Forget this machine"));
 
+        expect(onForgetMachine).not.toHaveBeenCalled();
         expect(mockLink.forgetMachine).not.toHaveBeenCalled();
         expect(screen.getAllByText(/A brew is running/).length).toBeGreaterThan(0);
     });
@@ -632,13 +637,15 @@ describe("a single saved machine", () => {
         expect(mockPush).toHaveBeenCalledWith("/machine");
     });
 
-    it("offers to forget the machine it remembers", async () => {
-        await renderWithProviders(<MachineSection/>);
+    it("offers to forget the machine it remembers, asking first", async () => {
+        const onForgetMachine = jest.fn();
+        await renderWithProviders(<MachineSection onForgetMachine={onForgetMachine}/>);
         await openCard(/^xBloom 1, /);
 
         await fireEvent.press(screen.getByText("Forget this machine"));
 
-        expect(mockLink.forgetMachine).toHaveBeenCalledWith("AA:BB");
+        expect(onForgetMachine).toHaveBeenCalledWith("AA:BB");
+        expect(mockLink.forgetMachine).not.toHaveBeenCalled();
     });
 
     it("connects from its card when the link is down", async () => {

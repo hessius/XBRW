@@ -118,7 +118,7 @@ function machineSummary(
  * the only place a failed connection can be read about, and the firmware row is
  * not rendered when there is no connection to report the firmware of.
  */
-export default function MachineSection({settings, onOpenMachine, onAddMachine}: {
+export default function MachineSection({settings, onOpenMachine, onAddMachine, onForgetMachine}: {
     settings?: Settings;
     /**
      * Open one saved machine's sheet, for its name and its place in the
@@ -128,13 +128,15 @@ export default function MachineSection({settings, onOpenMachine, onAddMachine}: 
     onOpenMachine?: (id: string) => void;
     /** Open the add-a-machine sheet, which the screen owns for the same reason. */
     onAddMachine?: () => void;
+    /** Ask whether to forget a machine. The screen owns that sheet too. */
+    onForgetMachine?: (id: string) => void;
 }) {
     // The injected store matters: the link writes `machineModel` through it
     // when it recognises a Studio, and a test that injected a store while the
     // hook wrote to the shared one would watch the correction land somewhere
     // this row cannot see.
     const {machine, status, error, remembered, connect, canOpenSettings, openSettings,
-           machines, changeBlocker, choose, forgetMachine}
+           machines, changeBlocker, choose}
         = useMachine(undefined, {settings});
     const {setModel} = useSavedMachines(settings);
     const several = machines.length >= 2;
@@ -327,8 +329,11 @@ export default function MachineSection({settings, onOpenMachine, onAddMachine}: 
                                 detail={changeBlocker ?? (several
                                     ? "Takes it off the list. Add it again to get it back."
                                     : "XBRW++ will scan again next time.")}
+                                // Asks first, in the screen's sheet: it used
+                                // to forget on the tap, and a machine forgotten
+                                // by accident has to be found by a scan again.
                                 onPress={() => {
-                                    if (changeBlocker === null) void forgetMachine(entry.id);
+                                    if (changeBlocker === null) onForgetMachine?.(entry.id);
                                 }}/>
                         )}>
                         {active && statusLine}

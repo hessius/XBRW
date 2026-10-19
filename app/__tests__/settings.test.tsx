@@ -121,6 +121,8 @@ jest.mock("@/hooks/useMachine", () => {
         remembered: "",
         connect:    jest.fn(),
         forget:     jest.fn(),
+        forgetMachine: jest.fn(async () => true),
+        changeBlocker: null,
         machines:   []
     };
     return {__esModule: true, default: () => link, useMachine: () => link};
@@ -835,6 +837,90 @@ describe("SettingsScreen", () => {
             .queryByText(/deletes 1 recipe/i)).toBeNull();
         expect(within(screen.getByTestId("settings-screen", {includeHiddenElements: true}))
             .queryByText(/deletes 1 recipe/i)).toBeNull();
+    });
+
+    describe("forgetting a machine", () => {
+        // Owner report, 2026-10-19: Forget acted on the tap, and a machine was
+        // forgotten by accident. It now asks first, in a sheet the screen owns.
+        type Link = {
+            remembered: string; status: string; changeBlocker: string | null;
+            machines: unknown[]; forget: jest.Mock; forgetMachine: jest.Mock;
+        };
+        const link = (): Link => jest.requireMock("@/hooks/useMachine").useMachine() as Link;
+        const saved = {id: "WORK", label: "Work", model: "studio", modelString: "",
+                       advertisedName: "", serial: ""};
+
+        beforeEach(() => {
+            Object.assign(link(), {
+                remembered: "WORK", status: "disconnected", changeBlocker: null, machines: [saved]
+            });
+            link().forget.mockClear();
+            link().forgetMachine.mockClear();
+        });
+        afterEach(() => {
+            Object.assign(link(), {
+                remembered: "", status: "disconnected", changeBlocker: null, machines: []
+            });
+        });
+
+        /** The machine's card folds; Forget is inside it. */
+        async function openWork(): Promise<void> {
+            const header = screen.getByRole("button", {name: /^Work, /});
+            if (header.props.accessibilityState?.expanded !== true) await fireEvent.press(header);
+        }
+
+        it("asks first, and forgets nothing until the answer is Forget", async () => {
+            await renderWithProviders(<SettingsScreen settings={new Settings(memoryStorage())}/>);
+            await openWork();
+
+            await fireEvent.press(screen.getByText("Forget this machine"));
+            await settleSheet();
+
+            expect(screen.getByText("Forget Work?")).toBeTruthy();
+            expect(screen.getByTestId("settings-screen", {includeHiddenElements: true})
+                .props.accessibilityElementsHidden).toBe(true);
+            expect(screen.getByText(
+                "It comes off your list. To use it again, switch it on nearby and add it again."
+            )).toBeTruthy();
+            expect(link().forgetMachine).not.toHaveBeenCalled();
+            expect(link().forget).not.toHaveBeenCalled();
+
+            await fireEvent.press(screen.getByRole("button", {name: "Forget Work"}));
+
+            expect(link().forgetMachine).toHaveBeenCalledWith("WORK");
+        });
+
+        it("keeps the machine when the answer is Keep it", async () => {
+            await renderWithProviders(<SettingsScreen settings={new Settings(memoryStorage())}/>);
+            await openWork();
+
+            await fireEvent.press(screen.getByText("Forget this machine"));
+            await settleSheet();
+            await fireEvent.press(screen.getByRole("button", {name: "Keep Work"}));
+            await settleSheet();
+
+            expect(link().forgetMachine).not.toHaveBeenCalled();
+            expect(link().forget).not.toHaveBeenCalled();
+            // Closed: the screen behind it is back in the reader's path, and
+            // the row is still there to tap.
+            expect(screen.getByTestId("settings-screen").props.accessibilityElementsHidden)
+                .toBe(false);
+            expect(screen.getByText("Forget this machine")).toBeTruthy();
+        });
+
+        it("does not ask while a brew holds the link, and says why on the card", async () => {
+            link().changeBlocker = "A brew is running. Stop it or let it finish before changing machines.";
+            await renderWithProviders(<SettingsScreen settings={new Settings(memoryStorage())}/>);
+            await openWork();
+
+            await fireEvent.press(screen.getByText("Forget this machine"));
+            await settleSheet();
+
+            expect(screen.queryByText("Forget Work?")).toBeNull();
+            expect(screen.getAllByText(/A brew is running/).length).toBeGreaterThan(0);
+            expect(link().forget).not.toHaveBeenCalled();
+            expect(link().forgetMachine).not.toHaveBeenCalled();
+        });
     });
 
     it("deletes the whole library, on the real count, only after confirming", async () => {
