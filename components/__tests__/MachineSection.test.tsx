@@ -6,8 +6,6 @@ import MachineSection from "@/components/MachineSection";
 import {machineColours} from "@/constants/colors";
 import {renderWithProviders} from "@/test-utils/render";
 import {palette} from "@/constants/colors";
-import {notify} from "@/components/XbrwToast";
-import {SlotOperationError} from "@/library/machine/errors";
 import type {SavedMachine} from "@/library/machine/savedMachines";
 
 jest.mock("@/components/XbrwToast", () => ({notify: jest.fn()}));
@@ -123,29 +121,21 @@ function resetLink(): void {
 describe("the machine section", () => {
     beforeEach(resetLink);
 
-    it("asks the machine how it is doing when the settings screen opens", async () => {
-        // Otherwise the water level on show is whatever it was at connect. Fill
-        // the tank and Settings still says Low until the app is relaunched.
+    it("does not ask the machine how it is doing when the settings screen opens", async () => {
+        // Asking is a handshake, and the handshake beeps: V12.0D.500 ignores a
+        // bare 40521 and sends its vitals only after an 8100 (2026-10-19).
+        // Settings shows the vitals heard on this link; Refresh asks.
         mockLink.status = "connected";
         mockLink.remembered = "AA:BB";
         mockLink.machines = [entry("AA:BB", "")];
         await renderWithProviders(<MachineSection/>);
-        expect(mockAsk).toHaveBeenCalled();
+        expect(mockAsk).not.toHaveBeenCalled();
     });
 
     it("does not ask a machine it has no link to", async () => {
         // Asking would mean writing to a transport that is not there.
         await renderWithProviders(<MachineSection/>);
         expect(mockAsk).not.toHaveBeenCalled();
-    });
-
-    it("surfaces a slot-lock refresh refusal instead of silently hiding it in Settings", async () => {
-        mockLink.status = "connected";
-        const message = "Finish the incomplete Easy Mode write before using the machine.";
-        mockAsk.mockRejectedValueOnce(new SlotOperationError(message));
-        await renderWithProviders(<MachineSection/>);
-        await waitFor(() => expect(notify).toHaveBeenCalledWith({tone: "error", message}));
-        expect(mockAsk).toHaveBeenCalledTimes(1);
     });
 
     it("is there before a machine has ever been paired", async () => {

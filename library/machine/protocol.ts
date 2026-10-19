@@ -395,8 +395,10 @@ export function parseNotification(bytes: Uint8Array): Notification {
         return {kind: "status", state: payload[0] ?? 0};
     }
 
-    if (type === 0x4B || type === 0x15) {
-        if (payload.length < 4) return unknown;
+    // Only with a float to read. `4B 1F` with no payload is event 8011,
+    // documented as "machine awake", seen right after the handshake on
+    // V12.0D.500 (2026-10-19), and was logged as an unreadable frame.
+    if ((type === 0x4B || type === 0x15) && payload.length >= 4) {
         const view = new DataView(payload.buffer, payload.byteOffset, 4);
         const value = view.getFloat32(0, true);
         // The water stream is milligrams; the cup stream is already grams.

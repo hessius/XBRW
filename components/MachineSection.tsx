@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from "react";
+import React, {useState} from "react";
 import {Pressable} from "react-native";
 import router from "@/hooks/steadyRouter";
 import {Text, XStack, YStack} from "tamagui";
@@ -158,15 +158,6 @@ export default function MachineSection({settings, onOpenMachine, onAddMachine, o
         : remembered === "" ? "No machine paired"
             : status === "idle" ? "Not connected"
                 : "Not found. It may be off, out of range or connected to another phone.";
-
-    // The vitals are a snapshot taken at connect. Left alone, a tank refilled
-    // since then still reads Low here, and only a relaunch clears it.
-    useEffect(() => {
-        if (status !== "connected") return;
-        machine.askHowItIsDoing().catch((error: unknown) => {
-            notify({tone: "error", message: error instanceof Error ? error.message : String(error)});
-        });
-    }, [machine, status]);
 
     function onSecretPress() {
         const next = taps + 1;
