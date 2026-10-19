@@ -166,6 +166,9 @@ function DosePresets({presets, dose, savedDose, accent, onPick}: {
 export default function QuickEditPanel({
     recipe, adjustments, accent, temperatureUnit, onChange, renderBrewAction, onSaveDose
 }: QuickEditPanelProps) {
+    "use no memo";
+
+    // SAVE AS mutates this recipe in place; its reference cannot key derived values.
     const {fontScale} = useWindowDimensions();
     const bounds = quickEditBounds(recipe);
     const savedDose = recipe.dosage;

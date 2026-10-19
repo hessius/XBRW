@@ -346,6 +346,26 @@ describe("QuickEditPanel", () => {
             expect(screen.getByLabelText("Brew at 20 grams")).toBeTruthy();
         });
 
+        it("replaces the saved-dose chip when the same recipe is edited in place", async () => {
+            const recipe = coffeeRecipe({dosage: 12});
+            recipe.autoFixPourVolumes();
+            const {onChange, rerender} = await draw({dose: 16}, recipe);
+            expect(screen.getByLabelText("Brew at 12 grams, the recipe's dose")).toBeTruthy();
+
+            recipe.dosage = 16;
+            recipe.autoFixPourVolumes();
+            await rerender(
+                <QuickEditPanel recipe={recipe} adjustments={{}}
+                                accent={palette.brand} temperatureUnit="C" onChange={onChange}/>
+            );
+
+            expect(screen.queryByTestId("quick-edit-dose-preset-12")).toBeNull();
+            expect(screen.getByLabelText("Brew at 16 grams, the recipe's dose"))
+                .toHaveProp("accessibilityState", expect.objectContaining({selected: true}));
+            await fireEvent.press(screen.getByLabelText("Brew at 16 grams, the recipe's dose"));
+            expect(onChange).toHaveBeenLastCalledWith({});
+        });
+
         it("sets the dose for this brew, and the recipe's chip takes it back", async () => {
             const {onChange, rerender} = await draw();
 
