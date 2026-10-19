@@ -252,5 +252,39 @@ describe("BagSheet", () => {
             expect(screen.getByTestId("bag-rest-field").props.value).toBe("9");
             expect(screen.getByTestId("bag-peak-field").props.value).toBe("21");
         });
+
+        it.each([
+            {label: "Nordic", figures: {restDays: 14, peakDay: 35, bestUntilDay: 52}, coffee: undefined},
+            {label: "Light", figures: {restDays: 11, peakDay: 28, bestUntilDay: 42}, coffee: undefined},
+            {label: "saved over new coffee advice", figures: {restDays: 9, peakDay: 21, bestUntilDay: 30},
+                coffee: {restDays: 14, peakDay: 35, bestUntilDay: 52}}
+        ])("keeps $label freshness when only grams left change", async ({figures, coffee}) => {
+            const onSave = jest.fn();
+            await open({bag: {...BAG, ...figures}, gramsLeft: 200, coffee, onSave});
+            await fireEvent.changeText(screen.getByTestId("bag-left-field"), "150");
+            await fireEvent.press(screen.getByTestId("bag-save"));
+            expect(onSave).toHaveBeenCalledWith(expect.objectContaining({gramsLeft: 150, figures}));
+        });
+
+        it("keeps partial coffee advice on an unchanged save", async () => {
+            const onSave = jest.fn();
+            await open({coffee: {bestUntilDay: 50}, onSave});
+            await fireEvent.press(screen.getByTestId("bag-save"));
+            expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
+                figures: {restDays: 7, peakDay: 18, bestUntilDay: 50}
+            }));
+        });
+
+        it.each([
+            {field: "bag-peak-field", value: "36", figures: {restDays: 14, peakDay: 36, bestUntilDay: 53}},
+            {field: "bag-rest-field", value: "15", figures: {restDays: 15, peakDay: 35, bestUntilDay: 52}}
+        ])("keeps the chosen roast window when typing $field", async ({field, value, figures}) => {
+            const onSave = jest.fn();
+            await open({onSave});
+            await fireEvent.press(screen.getByTestId("bag-roast-nordic"));
+            await fireEvent.changeText(screen.getByTestId(field), value);
+            await fireEvent.press(screen.getByTestId("bag-save"));
+            expect(onSave).toHaveBeenCalledWith(expect.objectContaining({figures}));
+        });
     });
 });

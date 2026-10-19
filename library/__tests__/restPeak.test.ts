@@ -138,6 +138,21 @@ describe("roast level defaults", () => {
         expect(figuresProblem(18, 7)).toBe("The peak day is on or after the rest ends.");
         expect(figuresProblem(undefined, 7)).toBe("Enter whole days, 0 to 540.");
     });
+
+    it("keeps derived advice in the storage range at the maximum peak", () => {
+        const {figures} = startingFigures({restDays: 14, peakDay: 540});
+        expect(figures.bestUntilDay).toBe(540);
+        const bag = newBag("r1", {sizeGrams: 250, roastedOn: "2024-01-01", ...figures}, at(2024, 1, 1));
+        expect(reviveBag(JSON.parse(JSON.stringify(bag)))?.bestUntilDay).toBe(540);
+        expect(freshnessOf(bag, at(2026, 1, 1))?.state).toBe("past");
+    });
+
+    it("moves a saved window with the peak without leaving the storage range", () => {
+        expect(figuresFrom(14, 36, ROAST_LEVEL_DEFAULTS.nordic))
+            .toEqual({restDays: 14, peakDay: 36, bestUntilDay: 53});
+        expect(figuresFrom(14, 540, ROAST_LEVEL_DEFAULTS.nordic).bestUntilDay).toBe(540);
+        expect(figuresFrom(0, 0, {restDays: 0, peakDay: 30, bestUntilDay: 5}).bestUntilDay).toBe(0);
+    });
 });
 
 describe("roast advice validation", () => {

@@ -92,6 +92,14 @@ recipes already exist, without requiring settings or replacement. Restore
 messages count the bags that actually landed, report bag-store failures and
 retain unreadable-entry warnings even when only settings were restored.
 
+### Stable bag freshness
+
+Editing grams left or another unrelated bag field no longer recalculates the
+bag's saved best-until day or replaces its figures with newer coffee advice.
+Typed rest/peak edits retain the window chosen by the last roast preset, and
+partial coffee advice keeps its stated best-until day. Derived windows stay
+inside the same 0-540 day range that storage and restore accept (#241, #242).
+
 ## Imported proposal notes
 
 Moved from additions to the shipped 2.1.0 ledger without rewriting that ledger.

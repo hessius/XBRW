@@ -110,7 +110,7 @@ export function startingFigures(coffee: AdvisedCoffee | undefined): {
     const base = ROAST_LEVEL_DEFAULTS[level];
     const restDays = coffee?.restDays ?? base.restDays;
     const peakDay = coffee?.peakDay ?? base.peakDay;
-    const bestUntilDay = coffee?.bestUntilDay ?? peakDay + (base.bestUntilDay - base.peakDay);
+    const bestUntilDay = coffee?.bestUntilDay ?? figuresFrom(restDays, peakDay, level).bestUntilDay;
     const source: AdviceSource = coffee?.restDays !== undefined && coffee.peakDay !== undefined
         ? "coffee" : "level";
     return {figures: {restDays, peakDay, bestUntilDay}, level, source};
@@ -119,12 +119,15 @@ export function startingFigures(coffee: AdvisedCoffee | undefined): {
 /**
  * Figures from a rest and a peak a person typed.
  *
- * Best-until follows the peak by the level's own gap, so moving the peak
+ * Best-until follows the peak by the level's or saved figures' own gap, so moving the peak
  * moves the end of the window with it rather than leaving it behind.
  */
-export function figuresFrom(restDays: number, peakDay: number, level: RoastLevelKey): RoastFigures {
-    const base = ROAST_LEVEL_DEFAULTS[level];
-    const bestUntilDay = Math.min(ROAST_DAYS.max, peakDay + (base.bestUntilDay - base.peakDay));
+export function figuresFrom(
+    restDays: number, peakDay: number, level: RoastLevelKey | RoastFigures
+): RoastFigures {
+    const base = typeof level === "string" ? ROAST_LEVEL_DEFAULTS[level] : level;
+    const bestUntilDay = Math.max(ROAST_DAYS.min,
+        Math.min(ROAST_DAYS.max, peakDay + (base.bestUntilDay - base.peakDay)));
     return {restDays, peakDay, bestUntilDay};
 }
 
