@@ -1,6 +1,7 @@
 import RecipeDatabase from "@/library/RecipeDatabase";
 import Recipe, {CUP_TYPE} from "@/library/Recipe";
 import {resolveLibraryFilter} from "@/library/libraryFilters";
+import {appDatabase} from "@/library/appDatabase";
 // The `mock` prefix is what lets a jest.mock factory close over this binding:
 // the factory is hoisted above the imports, so Jest rejects any out-of-scope
 // reference that is not named as a mock. Same reason as mockBacking in
@@ -248,7 +249,39 @@ describe("RecipeDatabase.shelfMembers", () => {
     });
 });
 
-describe("RecipeDatabase.shelfPhotos", () => {
+describe("RecipeDatabase actual-member covers", () => {
+    it("uses UUID ties and a bound real-SQL read without seeking a fifth photo", () => {
+        const db = freshDatabase();
+        for (const uuid of ["e", "d", "c", "b", "a"]) {
+            const recipe = pictured("Same", 1, uuid === "e" ? "https://example.com/fifth.jpg" : undefined);
+            recipe.uuid = uuid;
+            db.insertRecipe(recipe);
+        }
+        const query = jest.spyOn(appDatabase(), "getAllSync");
+        const members = db.shelfMembers(["tea"], resolveLibraryFilter, 4).tea;
+        expect(members.map(recipe => recipe.uuid)).toEqual(["a", "b", "c", "d"]);
+        expect(members.every(recipe => !recipe.imageURL)).toBe(true);
+        expect(query).toHaveBeenCalledWith(
+            expect.stringMatching(/ORDER BY sortName ASC, uuid ASC LIMIT \?/), [4 + 3]
+        );
+        query.mockRestore();
+    });
+
+    it("keeps the guarded unreadable allowance within the SQL bound", () => {
+        const db = freshDatabase();
+        ["A", "B", "C", "D", "E"].forEach(name => db.insertRecipe(pictured(name, 1)));
+        appDatabase().runSync("INSERT INTO recipes (uuid, recipeJSON) VALUES (?, ?);",
+            ["broken", '{"name":5}']);
+        const warning = jest.spyOn(console, "warn").mockImplementation(() => {});
+        const query = jest.spyOn(appDatabase(), "getAllSync");
+        expect(db.shelfMembers(["all"], () => ({where: "1=1"}), 4).all.map(recipe => recipe.name))
+            .toEqual(["A", "B", "C", "D"]);
+        expect(query).toHaveBeenCalledWith(expect.stringContaining("LIMIT ?"), [7]);
+        expect(warning).toHaveBeenCalled();
+        query.mockRestore();
+        warning.mockRestore();
+    });
+
     function pictured(name: string, at: number, url?: string): Recipe {
         const recipe = recipeNamed(name);
         recipe.cupType = CUP_TYPE.TEA;
@@ -257,26 +290,25 @@ describe("RecipeDatabase.shelfPhotos", () => {
         return recipe;
     }
 
-    it("reads the newest members' pictures, skipping recipes without one", () => {
+    it("reads actual members alphabetically including unpictured recipes", () => {
         const db = freshDatabase();
         db.insertRecipe(pictured("Old", 1, "https://example.com/old.jpg"));
         db.insertRecipe(pictured("Bare", 5));
         db.insertRecipe(pictured("New", 9, "https://example.com/new.jpg"));
         db.insertRecipe(recipeNamed("Not tea"));
 
-        expect(db.shelfPhotos(["tea"], resolveLibraryFilter)).toEqual({
-            tea: ["https://example.com/new.jpg", "https://example.com/old.jpg"]
-        });
+        expect(db.shelfMembers(["tea"], resolveLibraryFilter, 4).tea.map(r => r.name))
+            .toEqual(["Bare", "New", "Old"]);
     });
 
-    it("stops at the cap and leaves out a shelf with no pictures", () => {
+    it("stops at four instead of hunting for newer pictures", () => {
         const db = freshDatabase();
         [1, 2, 3, 4, 5, 6].forEach((n) =>
             db.insertRecipe(pictured(`T${n}`, n, `https://example.com/${n}.jpg`)));
 
-        const photos = db.shelfPhotos(["tea", "singlePour"], resolveLibraryFilter, 4);
-        expect(photos.tea).toEqual([6, 5, 4, 3].map((n) => `https://example.com/${n}.jpg`));
-        expect(photos.singlePour).toBeUndefined();
+        const members = db.shelfMembers(["tea", "singlePour"], resolveLibraryFilter, 4);
+        expect(members.tea.map(r => r.name)).toEqual(["T1", "T2", "T3", "T4"]);
+        expect(members.singlePour).toEqual([]);
     });
 });
 
