@@ -516,9 +516,13 @@ class RecipeDatabase {
         if (source.hasName()) copy.name = copyName(source.displayName(), names);
         copy.source = "duplicate";
         copy.createdAt = Date.now();
-        // Cleared so the copy is assigned its own colour on insert rather
-        // than sitting on the original's.
-        copy.accentIndex = undefined;
+        // A recipe that carries its coffee wears that coffee's colour: a
+        // roaster's link or feed picked the accent for the coffee, and a copy
+        // is the same coffee, so two Ecuadors read as two Ecuadors. Any other
+        // recipe's accent is only a tiebreaker between cards, so the copy is
+        // cleared and assigned its own colour on insert rather than sitting
+        // on the original's.
+        if (source.coffee === undefined) copy.accentIndex = undefined;
         // A duplicate is a new local recipe, not a second copy of the account
         // recipe. Carrying the id over would leave two rows both claiming to
         // be the same xBloom recipe, and the import matches on exactly that

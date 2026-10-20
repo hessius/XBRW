@@ -151,6 +151,29 @@ describe("duplicating a recipe", () => {
         expect(kept?.cloudFingerprint).toBe("abc123");
     });
 
+    it("keeps the coffee's colour on a copy, and only then", () => {
+        // A roaster's colour picked the accent for the coffee, so a copy of
+        // that coffee wears the same colour. A recipe with no coffee has an
+        // accent that only tells cards apart, and a copy takes its own.
+        const database = new RecipeDatabase();
+        const ecuador = imported();
+        ecuador.coffee = {name: "Ecuador Vinka Farm"};
+        ecuador.accentIndex = 3;
+        database.insertRecipe(ecuador);
+        const plain = imported();
+        plain.accentIndex = 3;
+        database.insertRecipe(plain);
+
+        database.duplicateRecipe(ecuador);
+        database.duplicateRecipe(plain);
+
+        const all = database.retrieveAllRecipes() ?? [];
+        const copyOf = (uuid: string) => all.find((r) => r.uuid !== uuid && r.source === "duplicate"
+            && r.coffee?.name === database.getRecipe(uuid)!.coffee?.name)!;
+        expect(copyOf(ecuador.uuid).accentIndex).toBe(3);
+        expect(copyOf(plain.uuid).accentIndex).not.toBe(3);
+    });
+
     it("numbers further copies instead of repeating one name", () => {
         const database = new RecipeDatabase();
         const original = imported();
