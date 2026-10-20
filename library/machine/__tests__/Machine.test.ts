@@ -1869,7 +1869,7 @@ describe("the machine's pour index", () => {
 });
 
 describe("event 40517", () => {
-    it("means beans when it arrives during grinding", async () => {
+    it("does not claim confirmed no beans when it arrives during grinding", async () => {
         const {transport, machine} = await readyMachine();
         await machine.brew(brewable());
 
@@ -1878,7 +1878,7 @@ describe("event 40517", () => {
         expect(machine.phase.name).toBe("grinding");
         transport.emit(notification(40517 & 0xFF, 40517 >> 8, [0]));
 
-        expect(machine.phase).toMatchObject({name: "failed", reason: "noBeans"});
+        expect(machine.phase).toMatchObject({name: "failed", reason: "grindingStopped"});
     });
 
     it("still means idling when it arrives before grinding", async () => {

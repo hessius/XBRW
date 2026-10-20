@@ -100,6 +100,15 @@ describe("BrewMiniBar", () => {
         expect(beans.getByText("Stopped: no beans")).toBeTruthy();
     });
 
+    it("does not call an inferred grinding stop confirmed no beans", async () => {
+        const {getByText, queryByText} = await draw({
+            phase: {name: "failed", reason: "grindingStopped"}
+        });
+
+        expect(getByText("Stopped: grinding stopped")).toBeTruthy();
+        expect(queryByText("Stopped: no beans")).toBeNull();
+    });
+
     it("draws a stopped brew in danger", async () => {
         const {getByTestId} = await draw({
             phase: {name: "failed", reason: "noWater"},
