@@ -3665,10 +3665,14 @@ describe("switching machines from the home screen", () => {
         await fireEvent.press(screen.getByLabelText("Connected to Home"));
         await fireEvent.press(screen.getByLabelText(/^Machine, Home/));
 
-        await waitFor(() => expect(screen.getByLabelText(/^Work, Original/)).toBeTruthy());
-        await fireEvent.press(screen.getByLabelText(/^Work, Original/));
-
-        expect(mockChooseMachine).toHaveBeenCalledWith(expect.anything(), expect.anything(), "WORK");
+        // The row mounts before the sheet accepts presses.
+        await waitFor(async () => {
+            if (mockChooseMachine.mock.calls.length === 0) {
+                await fireEvent.press(screen.getByLabelText(/^Work, Original/));
+            }
+            expect(mockChooseMachine).toHaveBeenCalledWith(expect.anything(), expect.anything(), "WORK");
+        }, {timeout: SHEET_PRESS_TIMEOUT});
+        expect(mockChooseMachine).toHaveBeenCalledTimes(1);
     });
 
     it("opens the picker straight from a hold on the machine glyph", async () => {

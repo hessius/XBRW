@@ -75,6 +75,12 @@ Focused follow-up checks passed 162 tests across both platforms, typecheck and
 lint (zero errors, 35 existing warnings). Final-head CI is still required.
 No second review round is requested after the fixes.
 
+The first post-review CI run exposed a machine-picker test pressing a mounted
+row before its sheet accepted input. Controlled timers reproduced the missed
+press on both platforms. The test now retries until the existing choose handler
+receives the selection, asserting exactly one call; production code is unchanged.
+Both full home-screen suites passed locally (368 tests, 4 skipped).
+
 Red evidence is not uniformly behavioral: the initial settings, cover and pure
 layout runs failed on missing new modules, and header-absence coverage followed
 the header removal. Compact/list/Ready placement and the shared metadata-spacer
