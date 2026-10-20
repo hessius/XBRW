@@ -324,15 +324,30 @@ describe("SettingsScreen", () => {
         // back to the accent mark.
         await renderWithProviders(<SettingsScreen settings={new Settings(memoryStorage())}/>);
 
-        expect(screen.getByLabelText("Show recipe pictures")
+        expect(screen.getByLabelText("Pictures in ABOUT")
             .props.accessibilityState.checked).toBe(true);
+        expect(screen.getByLabelText("Recipe card photos").props.accessibilityState.checked).toBe(false);
+        expect(screen.getByLabelText("Shelf photo previews").props.accessibilityState.checked).toBe(true);
+    });
+
+    it("changes each picture surface independently", async () => {
+        const settings = new Settings(memoryStorage());
+        await renderWithProviders(<SettingsScreen settings={settings}/>);
+        await fireEvent(screen.getByLabelText("Pictures in ABOUT"), "checkedChange", false);
+        expect(settings.get("showShelfPhotoPreviews")).toBe(true);
+        expect(settings.get("showRecipeCardPhotos")).toBe(false);
+        await fireEvent(screen.getByLabelText("Recipe card photos"), "checkedChange", true);
+        await fireEvent(screen.getByLabelText("Shelf photo previews"), "checkedChange", false);
+        expect(settings.get("showRecipeAvatars")).toBe(false);
+        expect(settings.get("showRecipeCardPhotos")).toBe(true);
+        expect(settings.get("showShelfPhotoPreviews")).toBe(false);
     });
 
     it("persists recipe pictures turned off", async () => {
         const storage = memoryStorage();
 
         await renderWithProviders(<SettingsScreen settings={new Settings(storage)}/>);
-        await fireEvent(screen.getByLabelText("Show recipe pictures"), "checkedChange", false);
+        await fireEvent(screen.getByLabelText("Pictures in ABOUT"), "checkedChange", false);
 
         expect(new Settings(storage).get("showRecipeAvatars")).toBe(false);
     });
@@ -345,7 +360,7 @@ describe("SettingsScreen", () => {
 
         await renderWithProviders(<SettingsScreen settings={settings}/>);
 
-        expect(screen.getByLabelText("Show recipe pictures")
+        expect(screen.getByLabelText("Pictures in ABOUT")
             .props.accessibilityState.checked).toBe(false);
     });
 
@@ -608,6 +623,24 @@ describe("SettingsScreen", () => {
             if (NOT_IN_BACKUP.includes(key)) continue;
             expect({[key]: restored.get(key)}).toEqual({[key]: all[key]});
         }
+    });
+
+    it.each([false, true])("restores legacy picture %s over newer independent settings", async legacy => {
+        const storage = memoryStorage();
+        const settings = new Settings(storage);
+        settings.set("showRecipeCardPhotos", true);
+        settings.set("showShelfPhotoPreviews", !legacy);
+        mockPickBackup.mockResolvedValue(backupOf([recipeNamed("A", "u1")], {showRecipeAvatars: legacy}));
+        mockApplyRestore.mockReturnValue({status: "restored", added: 1});
+        await renderWithProviders(<SettingsScreen settings={settings}/>);
+        await fireEvent.press(screen.getByRole("button",
+            {name: "Restore from a backup, Adds anything your library does not already have."}));
+        await settleSheet();
+        await fireEvent(screen.getByLabelText(/settings from this backup/i), "checkedChange", true);
+        await fireEvent.press(screen.getByRole("button", {name: /add to my library/i}));
+        expect(settings.get("showRecipeAvatars")).toBe(legacy);
+        expect(settings.get("showRecipeCardPhotos")).toBe(false);
+        expect(settings.get("showShelfPhotoPreviews")).toBe(legacy);
     });
 
     it("restores which machine you own, not just the default", async () => {

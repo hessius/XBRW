@@ -27,22 +27,10 @@ export const DEFAULTS = {
      * is a matter of taste, so the quieter one is what arrives unasked for.
      */
     dotMatrixProfile: false,
-    /**
-     * Draw the picture a recipe arrived with, where there is one.
-     *
-     * On by default. It started off, because it was here to find out whether a
-     * face or a pod photo helps at all, and at the time most recipes had
-     * neither. They usually have one now: a pod recipe carries its artwork, a
-     * shared one its sharer's picture, and an import link its coffee's photo.
-     * Off, all of that arrives and is never drawn, which is a quiet way to
-     * answer the question in the negative.
-     *
-     * The promise is still small. It is a 40 pt mark, not the recipe images
-     * the roadmap deferred, and anything that will not load falls back to the
-     * accent mark without saying a word about it, so a recipe with no picture
-     * looks exactly as it did.
-     */
+    /** Coffee, pod and author pictures in ABOUT only; retain the legacy key. */
     showRecipeAvatars: true,
+    showRecipeCardPhotos: false,
+    showShelfPhotoPreviews: true,
     /**
      * Draw the one-line hint under every label on the BREW deck.
      *
@@ -554,6 +542,9 @@ export class Settings {
 
     constructor(storage: SettingsStorage = new SqliteSettingsStorage()) {
         this.storage = storage;
+        if (storage.read("showShelfPhotoPreviews") === null) {
+            this.set("showShelfPhotoPreviews", this.get("showRecipeAvatars"));
+        }
     }
 
     /**

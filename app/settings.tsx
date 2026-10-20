@@ -1,4 +1,5 @@
 import * as Application from "expo-application";
+import {pictureSettingsFromBackup} from "@/library/pictureSettings";
 
 import React, {useState} from "react";
 import {ScrollView, Text, YStack} from "tamagui";
@@ -158,6 +159,8 @@ export default function SettingsScreen({settings}: Props) {
         useSetting("dotMatrixProfile", settings);
     const [showRecipeAvatars, setShowRecipeAvatars] =
         useSetting("showRecipeAvatars", settings);
+    const [showRecipeCardPhotos, setShowRecipeCardPhotos] = useSetting("showRecipeCardPhotos", settings);
+    const [showShelfPhotoPreviews, setShowShelfPhotoPreviews] = useSetting("showShelfPhotoPreviews", settings);
     // Not shown as a row on this screen -- the hints switch lives on the editor's
     // own caret, which is where a user is when they want it. Read here anyway,
     // because a backup carries every preference and this is one.
@@ -256,7 +259,7 @@ export default function SettingsScreen({settings}: Props) {
     // a key someone forgot.
     function settingsSnapshot(): Record<Exclude<SettingKey, BackupExcluded>, unknown> {
         return {
-            showCoffeeMarker, dotMatrixProfile, showRecipeAvatars, showHints,
+            showCoffeeMarker, dotMatrixProfile, showRecipeAvatars, showRecipeCardPhotos, showShelfPhotoPreviews, showHints,
             temperatureUnit,
             bypassTempEncoding,
             firstBrewDone, machineConsoleAcknowledged, machineConsoleConfirmations,
@@ -332,9 +335,10 @@ export default function SettingsScreen({settings}: Props) {
         if (typeof incoming.dotMatrixProfile === "boolean") {
             setDotMatrixProfile(incoming.dotMatrixProfile);
         }
-        if (typeof incoming.showRecipeAvatars === "boolean") {
-            setShowRecipeAvatars(incoming.showRecipeAvatars);
-        }
+        const pictures = pictureSettingsFromBackup(incoming);
+        if (pictures.showRecipeAvatars !== undefined) setShowRecipeAvatars(pictures.showRecipeAvatars);
+        if (pictures.showRecipeCardPhotos !== undefined) setShowRecipeCardPhotos(pictures.showRecipeCardPhotos);
+        if (pictures.showShelfPhotoPreviews !== undefined) setShowShelfPhotoPreviews(pictures.showShelfPhotoPreviews);
         if (typeof incoming.showHints === "boolean") {
             setShowHints(incoming.showHints);
         }
@@ -619,8 +623,18 @@ export default function SettingsScreen({settings}: Props) {
                         value={invertAutoShelves}
                         onChange={setInvertAutoShelves}/>
                     <SettingsToggleRow
-                        label="Show recipe pictures"
-                        description="Draw the pod or coffee photo, or the sharer's picture, where a recipe arrived with one."
+                        label="Recipe card photos"
+                        description="Show coffee or pod photos on recipe cards and Ready to brew."
+                        value={showRecipeCardPhotos}
+                        onChange={setShowRecipeCardPhotos}/>
+                    <SettingsToggleRow
+                        label="Shelf photo previews"
+                        description="Show coffee photos in your own shelves and tag shelves."
+                        value={showShelfPhotoPreviews}
+                        onChange={setShowShelfPhotoPreviews}/>
+                    <SettingsToggleRow
+                        label="Pictures in ABOUT"
+                        description="Show coffee, pod and author pictures in recipe details."
                         value={showRecipeAvatars}
                         onChange={setShowRecipeAvatars}/>
                 </SettingsSection>
