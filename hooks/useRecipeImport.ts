@@ -11,7 +11,7 @@ import {
 import {parseImportInput, type ImportSource} from "@/library/importInput";
 import {planReimport, readPrints, rememberPrint, takeLatest} from "@/library/importRefresh";
 import {asMachineModel} from "@/library/machine/machineModel";
-import type Recipe from "@/library/Recipe";
+import Recipe from "@/library/Recipe";
 import {XBloomRecipe} from "@/library/XBloomRecipe";
 
 /**
@@ -41,13 +41,9 @@ const DEBOUNCE_MS = TYPING_DEBOUNCE_MS;
 const ABANDONED_MS = 2500;
 
 /**
- * Why a lookup failed.
- *
- * Three reasons rather than one, because "something went wrong" is not worth
- * writing. Each names the thing the reader can act on: their connection, their
- * input, or nothing at all.
+ * Lookup and local persistence failures have different remedies.
  */
-export type ImportErrorReason = "network" | "notFound" | "unusable";
+export type ImportErrorReason = "network" | "notFound" | "unusable" | "storage";
 
 /** What the found panel draws. Everything it needs, and nothing else. */
 export type ImportPreview = {
@@ -125,8 +121,10 @@ type Options = {
      * Write a stored recipe back after an import changed it: an import link
      * filled its blanks (`fillImportBlanks`), or a re-import took the author's
      * latest (`library/importRefresh.ts`). Called only when something changed,
-     * and before the recipe is opened. Optional: without it the change still
-     * opens, it just is not saved until the editor saves it.
+     * once with all changes staged, before the held recipe is mutated or opened.
+     * Throw on failure so the import can report it without changing the held
+     * copy or its baseline. Optional: without it the change still opens, it just
+     * is not saved until the editor saves it.
      */
     onSaveExisting?: (recipe: Recipe) => void;
 };
@@ -395,8 +393,10 @@ export function useRecipeImport({stored, onOpenRecipe, onSaveExisting}: Options)
         }
         let refreshed = false;
         if (again.kind === "replace") {
-            takeLatest(again.held, candidate);
-            onSaveRef.current?.(again.held);
+            const updated = new Recipe(undefined, JSON.stringify(again.held));
+            takeLatest(updated, candidate);
+            if (decoration !== undefined) fillImportBlanks(updated, decoration);
+            if (!saveExisting(again.held, updated)) return;
             rememberPrint(sharedSettings(), again.held);
             refreshed = true;
         }
@@ -414,10 +414,11 @@ export function useRecipeImport({stored, onOpenRecipe, onSaveExisting}: Options)
         // re-imported. Empty places only; see `fillImportBlanks`.
         if (
             isExisting &&
-            decoration !== undefined &&
-            fillImportBlanks(recipe, decoration)
+            !refreshed &&
+            decoration !== undefined
         ) {
-            onSaveRef.current?.(recipe);
+            const updated = new Recipe(undefined, JSON.stringify(recipe));
+            if (fillImportBlanks(updated, decoration) && !saveExisting(recipe, updated)) return;
         }
 
         // A paste into the field and a share intent both navigate on their own.
@@ -571,13 +572,31 @@ export function useRecipeImport({stored, onOpenRecipe, onSaveExisting}: Options)
         reset();
     }
 
+    function saveExisting(held: Recipe, updated: Recipe): boolean {
+        try {
+            onSaveRef.current?.(updated);
+        } catch {
+            setShowField(true);
+            setFocusField(false);
+            setState({
+                status: "error",
+                reason: "storage",
+                message: "Couldn't save the recipe. Try importing it again."
+            });
+            return false;
+        }
+        Object.assign(held, updated);
+        return true;
+    }
+
     function acceptLatest() {
         if (state.status !== "newer") return;
         const {held, latest, decoration} = state;
-        takeLatest(held, latest);
+        const updated = new Recipe(undefined, JSON.stringify(held));
+        takeLatest(updated, latest);
         // Blanks are filled whichever version the user keeps (#223).
-        if (decoration !== undefined) fillImportBlanks(held, decoration);
-        onSaveRef.current?.(held);
+        if (decoration !== undefined) fillImportBlanks(updated, decoration);
+        if (!saveExisting(held, updated)) return;
         rememberPrint(sharedSettings(), held);
         handOff(held, true, true);
     }
@@ -586,8 +605,9 @@ export function useRecipeImport({stored, onOpenRecipe, onSaveExisting}: Options)
         if (state.status !== "newer") return;
         const {held, decoration} = state;
         // Keeping their brew is not refusing a picture they never had (#223).
-        if (decoration !== undefined && fillImportBlanks(held, decoration)) {
-            onSaveRef.current?.(held);
+        if (decoration !== undefined) {
+            const updated = new Recipe(undefined, JSON.stringify(held));
+            if (fillImportBlanks(updated, decoration) && !saveExisting(held, updated)) return;
         }
         handOff(held, true);
     }

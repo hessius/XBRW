@@ -153,10 +153,15 @@ describe("with #223's fill-blanks", () => {
     it("still fills a blank picture when an untouched copy takes the latest", async () => {
         const mine = stored();
         mockGetRecipe.mockImplementation(() => fromXBloom(62));
-        const {onOpenRecipe} = await importWithCoffee([mine]);
+        const {onOpenRecipe, onSaveExisting} = await importWithCoffee([mine]);
         await waitFor(() => expect(onOpenRecipe).toHaveBeenCalled());
         expect(mine).toMatchObject({grindSize: 62, imageURL: "https://roaster.example/peru.png",
                                     name: "My Monday coffee"});
+        expect(onSaveExisting).toHaveBeenCalledTimes(1);
+        expect(onSaveExisting.mock.calls[0][0]).toMatchObject({
+            grindSize: 62,
+            imageURL: "https://roaster.example/peru.png"
+        });
     });
 
     it("still fills a blank picture when the user keeps their edited copy", async () => {
@@ -168,5 +173,119 @@ describe("with #223's fill-blanks", () => {
         await act(async () => result.current.keepMine());
         expect(mine).toMatchObject({grindSize: 50, imageURL: "https://roaster.example/peru.png"});
         expect(onSaveExisting).toHaveBeenCalledWith(mine);
+    });
+});
+
+describe("when saving an existing import fails", () => {
+    const decoration = {coffee: {name: "Peru", imageUrl: "https://roaster.example/peru.png"}};
+
+    async function failingImport(mine: Recipe) {
+        const onOpenRecipe = jest.fn();
+        const onSaveExisting = jest.fn((_recipe: Recipe): void => {
+            throw new Error("database write failed");
+        });
+        const hook = await renderHook(() => useRecipeImport({
+            stored: [mine], onOpenRecipe, onSaveExisting
+        }));
+        const resolve = async () => {
+            await act(async () => hook.result.current.resolveNow(
+                {kind: "share", id: "share-1"}, "shared", decoration
+            ));
+        };
+        await resolve();
+        return {...hook, onOpenRecipe, onSaveExisting, resolve};
+    }
+
+    it("reports a failed author refresh without changing the held copy or its baseline", async () => {
+        const mine = stored();
+        const before = JSON.stringify(mine);
+        const prints = sharedSettings().get("importFingerprints");
+        mockGetRecipe.mockImplementation(() => fromXBloom(62));
+
+        const {result, onOpenRecipe, onSaveExisting, resolve} = await failingImport(mine);
+
+        await waitFor(() => expect(result.current.state).toMatchObject({
+            status: "error", reason: "storage", message: expect.stringContaining("save")
+        }));
+        expect(JSON.stringify(mine)).toBe(before);
+        expect(sharedSettings().get("importFingerprints")).toBe(prints);
+        expect(onOpenRecipe).not.toHaveBeenCalled();
+        expect(result.current.showField).toBe(true);
+        expect(result.current.focusField).toBe(false);
+
+        onSaveExisting.mockImplementation(() => undefined);
+        await resolve();
+        await waitFor(() => expect(onOpenRecipe).toHaveBeenCalledWith(mine, true, true));
+        expect(mine).toMatchObject({grindSize: 62, imageURL: decoration.coffee.imageUrl});
+        expect(JSON.parse(sharedSettings().get("importFingerprints"))[mine.uuid])
+            .toBe(contentPrint(mine));
+    });
+
+    it("does not open or retain blank-field enrichment after a failed save", async () => {
+        const mine = stored();
+        const before = JSON.stringify(mine);
+        const prints = sharedSettings().get("importFingerprints");
+
+        const {result, onOpenRecipe, onSaveExisting, resolve} = await failingImport(mine);
+
+        await waitFor(() => expect(result.current.state).toMatchObject({
+            status: "error", reason: "storage"
+        }));
+        expect(JSON.stringify(mine)).toBe(before);
+        expect(sharedSettings().get("importFingerprints")).toBe(prints);
+        expect(onOpenRecipe).not.toHaveBeenCalled();
+
+        onSaveExisting.mockImplementation(() => undefined);
+        await resolve();
+        await waitFor(() => expect(onOpenRecipe).toHaveBeenCalledWith(mine, true, false));
+        expect(mine.imageURL).toBe(decoration.coffee.imageUrl);
+    });
+
+    it("keeps an edited copy intact when saving the chosen author version fails", async () => {
+        const mine = stored();
+        mine.dosage = 16;
+        const before = JSON.stringify(mine);
+        const prints = sharedSettings().get("importFingerprints");
+        mockGetRecipe.mockImplementation(() => fromXBloom(62));
+        const {result, onOpenRecipe, onSaveExisting, resolve} = await failingImport(mine);
+        await waitFor(() => expect(result.current.state.status).toBe("newer"));
+
+        await act(async () => result.current.acceptLatest());
+
+        expect(result.current.state).toMatchObject({status: "error", reason: "storage"});
+        expect(JSON.stringify(mine)).toBe(before);
+        expect(sharedSettings().get("importFingerprints")).toBe(prints);
+        expect(onOpenRecipe).not.toHaveBeenCalled();
+
+        onSaveExisting.mockImplementation(() => undefined);
+        await resolve();
+        await waitFor(() => expect(result.current.state.status).toBe("newer"));
+        await act(async () => result.current.acceptLatest());
+        expect(onOpenRecipe).toHaveBeenCalledWith(mine, true, true);
+        expect(mine.grindSize).toBe(62);
+    });
+
+    it("does not open KEEP MINE when its blank-field save failed", async () => {
+        const mine = stored();
+        mine.dosage = 16;
+        const before = JSON.stringify(mine);
+        const prints = sharedSettings().get("importFingerprints");
+        mockGetRecipe.mockImplementation(() => fromXBloom(62));
+        const {result, onOpenRecipe, onSaveExisting, resolve} = await failingImport(mine);
+        await waitFor(() => expect(result.current.state.status).toBe("newer"));
+
+        await act(async () => result.current.keepMine());
+
+        expect(result.current.state).toMatchObject({status: "error", reason: "storage"});
+        expect(JSON.stringify(mine)).toBe(before);
+        expect(sharedSettings().get("importFingerprints")).toBe(prints);
+        expect(onOpenRecipe).not.toHaveBeenCalled();
+
+        onSaveExisting.mockImplementation(() => undefined);
+        await resolve();
+        await waitFor(() => expect(result.current.state.status).toBe("newer"));
+        await act(async () => result.current.keepMine());
+        expect(onOpenRecipe).toHaveBeenCalledWith(mine, true, false);
+        expect(mine).toMatchObject({grindSize: 50, dosage: 16, imageURL: decoration.coffee.imageUrl});
     });
 });

@@ -140,6 +140,43 @@ No native/device picture checks were performed in this session. Keep all
 Package A BLE, physical NFC and external-app release gates open; no software
 picture result waives them.
 
+## Package C: shared layout and recipe identity
+
+The maintainer accepted #232, #234, #230 and #223's recommended scope on
+2026-10-20, including correcting the silently ignored import-save failure.
+#235's original picture placements are superseded by the approved design and
+the later shelf/list refinements. No contributor PR was merged by this decision.
+
+Both-platform regressions reproduce the home screen swallowing a thrown save,
+then verify an accessible storage error without navigation or a success toast.
+Hook regressions cover unchanged held data and import baselines, retry after
+failure, automatic author refresh, fill-only-blank enrichment, USE THE ROASTER'S
+LATEST and KEEP MINE. Author content and missing metadata are saved once
+together, not as two partially successful writes.
+
+- [ ] On a rebuilt Android 2.2.0 client, check three-button and gesture
+  navigation in light and dark system modes. CANCEL/START, editor actions,
+  sheet endings and the last settings control must stay clear of system bars.
+  Check the brew title/close control against the status bar too.
+- [ ] Repeat navigation and keyboard checks with the live brew bar, the rating
+  bar and neither visible. Insets must not be applied twice; note entry must
+  stay above the keyboard on iOS and Android.
+- [ ] Check long names in editor, brew and catalogue headers at narrow widths,
+  including 257-260 pt where available, and large text. Expansion/collapse,
+  rename and back/menu actions must remain reachable, with no header photo.
+- [ ] In ABOUT, check absent and populated coffee metadata, long wrapping
+  values, duplicate names/product links and folded notes. A late pod-name
+  update must remove a newly duplicated coffee name without reopening.
+- [ ] Import a producer-named recipe, then repeat after editing the stored
+  name, coffee fields and tags. Existing values must win; an empty recipe
+  name must still follow the pod. Missing metadata may fill, and existing
+  pod artwork must beat an incoming coffee photo.
+
+These native, layout and user-workflow checks remain open. The SQLite-failure
+regressions use injected failures; do not damage a device database to test them.
+Final combined software evidence is recorded on #252 separately from these
+manual gates.
+
 ## Later packages
 
 - [ ] After a catalogue photo fails, refresh that coffee with a different image

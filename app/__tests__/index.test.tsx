@@ -6,6 +6,7 @@ import * as Clipboard from "expo-clipboard";
 import HomeScreen, {EDITOR_PUSH_GUARD_MS} from "@/app/index";
 import {measureTilePicture} from "@/test-utils/pictureLayout";
 import Recipe, {CUP_TYPE} from "@/library/Recipe";
+import RecipeDatabase from "@/library/RecipeDatabase";
 import Pour, {POUR_PATTERN} from "@/library/Pour";
 import {XBloomRecipe} from "@/library/XBloomRecipe";
 import {renderWithProviders, SHEET_PRESS_TIMEOUT} from "@/test-utils/render";
@@ -3111,6 +3112,34 @@ describe("the import deep link", () => {
         for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
         return url.toString();
     };
+
+    it("reports a failed enrichment save without opening or changing the held recipe", async () => {
+        const held = writable("My coffee");
+        held.shareId = "abc123";
+        const before = JSON.stringify(held);
+        const db = store([held]);
+        const save = jest.mocked(RecipeDatabase.prototype.updateRecipe).mockClear()
+            .mockImplementationOnce(() => {
+                throw new Error("database write failed");
+            });
+        mockGetRecipe = () => new Recipe(undefined, before);
+        mockImportUrl = link({
+            "bean.name": "Peru",
+            "bean.image": "https://roaster.example/peru.png"
+        });
+
+        await renderWithProviders(
+            <HomeScreen db={db} settings={new Settings(memoryStorage())}/>
+        );
+
+        await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+        await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(
+            "Couldn't save the recipe. Try importing it again."
+        ));
+        expect(mockPush).not.toHaveBeenCalled();
+        expect(JSON.stringify(held)).toBe(before);
+        expect(mockNotify).not.toHaveBeenCalledWith(expect.objectContaining({tone: "info"}));
+    });
 
     it("imports the recipe the link points at", async () => {
         mockFetchRecipeDetail = () => new Promise<void>(() => {});

@@ -33,6 +33,22 @@ numbers are unchanged. This version bump does not build, submit or deploy an app
 
 ## Verified preview follow-ups
 
+### Existing-import persistence failures
+
+Package C's #223 naming and fill-blank behavior is accepted with explicit save
+failure handling. An existing recipe's author update and missing metadata are
+staged together and written once before changing the held object or its import
+baseline. If the write fails, the import sheet reports a storage error, retains
+the previous copy and baseline, and does not navigate or announce an update.
+Importing again can retry. The same rule applies to USE THE ROASTER'S LATEST
+and KEEP MINE when either needs to save.
+
+The maintainer also accepted #232's safe-area/native-theme fixes, #234's long
+names without restoring header photos, and #230's optional XPOD details.
+#235's original placements are superseded by the approved picture design and
+its later refinements. Acceptance is not a contributor PR merge or a native
+device pass; the grouped checks remain in the testing checklist.
+
 ### Single cumulative review follow-ups
 
 The single Copilot round on #252 reported two reproducible catalogue defects.
