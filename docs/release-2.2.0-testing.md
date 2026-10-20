@@ -41,6 +41,74 @@ No mitigation is implemented or accepted. Hardware must establish the
 failure mechanism, state/ack freshness and whether cancellation clears the
 loaded recipe before any conditional-cancel design is chosen.
 
+## Package B: small UI and recipe pictures
+
+Draft evaluation PR #252 is not a contributor merge or release qualification.
+Its starting-head CI at `b63602eb` was green before this redesign; record final
+implementation-head CI separately. The approved 2026-10-20 picture design
+replaces the preview treatment from #225/#235, not #234's later header photo
+layout. Package B's functional fixes and #229's switches remain distinct from
+the unaccepted broader #243 colours.
+
+Software coverage on both Jest platforms includes scoped default/upgrade and
+real-screen legacy restore/export, bounded real-SQL member selection with UUID
+ties and unreadable rows, duplicate/fifth-picture exclusion, actual membership
+counts, retained auto glyph inversion, image failures/new URLs, editor-header
+absence and distinct ABOUT images. Native-event tests cover exact compact fit,
+matching visible/intrinsic child gaps, stale badge/size/font-scale readings,
+normal 390 pt real-pour list cards with a photo, busy-card omissions and separate
+Ready to brew controls. These are software checks, not native geometry proof.
+
+Local gates passed serially at implementation commit `07ab330b` (subsequent
+changes are documentation only): typecheck; lint with zero errors and the
+existing 35 warnings; both Jest projects with 854 suites and 17,332 tests
+passing (2 suites / 26 tests skipped); Expo Doctor, 21/21 checks.
+The first full run exposed a read-only machine-settings test counting the new
+constructor migration write. Its assertion now compares writes immediately
+before and after the read; no machine transport or brewing logic changed.
+Final PR-head CI remains a separate, pending parent-owned gate.
+
+Red evidence is not uniformly behavioral: the initial settings, cover and pure
+layout runs failed on missing new modules, and header-absence coverage followed
+the header removal. Compact/list/Ready placement and the shared metadata-spacer
+regression did observe behavioral failures before their fixes. Do not treat the
+passing suite or plan checkboxes as proof of a stricter chronology.
+
+- [ ] **#233 Android Fabric gate:** duplicate a recipe on a real Android native
+  build; confirm the card and all controls render and no flattened-view failure
+  occurs. A Jest renderer cannot qualify Fabric.
+- [ ] On iOS and Android, test narrow widths (including Fold cover/inner where
+  available), long names and notes, default and accessibility Dynamic Type.
+  Keep the name-line budget, figures and tile height; omit decoration first.
+- [ ] With all badge combinations (evidence, bag, freshness, star, beverage),
+  Easy Mode slots, tea, editing/actions and selection mode, verify no metadata
+  wraps because of an admitted compact photo and no badge/action disappears.
+- [ ] Check #236's compact profile shrink/hide behavior after text changes;
+  the profile must never cross names or figures.
+- [ ] For list photos, verify the 36 pt right-centred frame clears every
+  occupied badge/figure/action and the actual silhouette. The photo rail moves
+  the existing silhouette left without resizing it; inspect its relation to
+  the figures as well. Long prose or busy geometry should omit the photo.
+- [ ] Confirm no arrival reflow, aggressive crop, blank image hole or error
+  toast with slow loading, offline first view, failure and a changed image URL.
+  Shelf cells keep their accents/geometry; a lone photo in a larger shelf must
+  not enlarge to a single-recipe cover.
+- [ ] Exercise independent card, shelf and ABOUT preferences, upgrading a legacy
+  OFF install and restoring old/new backups over previously configured choices.
+  Automatic/author shelves must remain glyphs even with previews ON.
+- [ ] Expand/collapse the editor with short and long names, rename, HELP and
+  menu. There must be no header image, viewing action or picture-only space.
+  ABOUT keeps separate coffee/pod and author circles.
+- [ ] In Ready to brew, verify open, BREW (at least 44 pt), dismiss, reorder
+  and next-coffee controls with large text and no safe photo space.
+- [ ] With VoiceOver and TalkBack, no decorative photo or hidden measurement
+  copy becomes a focus stop or repeats a label. Existing accessible card
+  actions, slot information and independent Ready controls stay reachable.
+
+No native/device picture checks were performed in this session. Keep all
+Package A BLE, physical NFC and external-app release gates open; no software
+picture result waives them.
+
 ## Later packages
 
 Add focused checks when each package is reviewed. Keep the existing BLE, NFC,

@@ -185,8 +185,6 @@ from `library/Recipe.ts`.
 | `editor.hero.help` | `components/RecipeHero.tsx:124` (a11y) | (a11y) Help button in the editor header. | `Help` |
 | `editor.hero.help.visible` | `components/RecipeHero.tsx:130` | Doto label on the help button. | `HELP` |
 | `editor.hero.more` | `components/RecipeHero.tsx:135` (a11y) | (a11y) Overflow ("More") button in the editor header. | `More` |
-| `editor.hero.photo` | `components/RecipePhoto.tsx` (a11y) | (a11y) The header's recipe picture, its own button; hint "Opens the photo full screen". Never the rename button. | `Coffee photo` |
-| `photoViewer.close` | `components/PhotoViewer.tsx` | Doto button top right of the full-screen photo; the backdrop is also a button. Both spoken "Close". The image is spoken "Coffee photo". | `CLOSE` |
 | `recipe.name.read` | `library/Recipe.ts:311` (`read`) | Placeholder display name for a card-read recipe with no name, joined with a date (e.g. `Read 5 Jan`). | `Read` |
 | `recipe.name.import` | `library/Recipe.ts:312` (`import`) | Placeholder display name for an imported recipe with no name, joined with a date. | `Imported Recipe` |
 | `recipe.name.duplicate` | `library/Recipe.ts:313` (`duplicate`) | Placeholder display name for a duplicated recipe. | `Copy` |
@@ -1424,6 +1422,12 @@ messages from `hooks/useBackup.ts` and `library/backup.ts`.
 | `settings.coffeeMarker.desc` | `app/settings.tsx:248` | Toggle description. | `The TEA marker is always shown. COFFEE is redundant in a mostly-coffee library.` |
 | `settings.dotMatrix.label` | `app/settings.tsx:252` | Toggle label. | `Dot matrix pour profile` |
 | `settings.dotMatrix.desc` | `app/settings.tsx:253` | Toggle description. | `Fill the graph behind each recipe with a screen of dots instead of a flat tint.` |
+| `settings.cardPhotos.label` | `app/settings.tsx` | Toggle, default OFF. List/compact/selection cards and Ready to brew; coffee/pod photos only, omitted when crowded. | `Recipe card photos` |
+| `settings.cardPhotos.desc` | `app/settings.tsx` | Toggle description. | `Show coffee or pod photos on recipe cards and Ready to brew.` |
+| `settings.shelfPhotos.label` | `app/settings.tsx` | Toggle, default ON unless an absent choice inherits legacy OFF once. Personal/tag actual-member covers only; never automatic/author glyphs. | `Shelf photo previews` |
+| `settings.shelfPhotos.desc` | `app/settings.tsx` | Toggle description. | `Show coffee photos in your own shelves and tag shelves.` |
+| `settings.aboutPictures.label` | `app/settings.tsx` | Existing `showRecipeAvatars`, now ABOUT-only. The header photo/viewing action and its copy were removed by the 2026-10-20 replacement design for #225/#235. | `Pictures in ABOUT` |
+| `settings.aboutPictures.desc` | `app/settings.tsx` | Toggle description. | `Show coffee, pod and author pictures in recipe details.` |
 | `settings.brewOnRows.label` | `app/settings.tsx:257` | Toggle label. | `Show BREW on recipe rows` |
 | `settings.brewOnRows.desc` | `app/settings.tsx:258` | Toggle description. | `Add a BREW shortcut to every recipe card. Turn it off if you brew rarely and prefer a quieter list.` |
 | `settings.brewShape.label` | `app/settings.tsx:264` | Choice label. | `BREW shortcut shape` |

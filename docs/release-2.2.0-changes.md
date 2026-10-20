@@ -5,6 +5,9 @@ come from the contributor proposals and describe intended behavior, not complete
 hardware acceptance. The 24 proposal heads at the integration checkpoint are
 included for testing; later contributor rebases need comparison before acceptance.
 No contributor PR has been merged into develop or main.
+Draft cumulative evaluation PR [#252](https://github.com/hessius/XBRW/pull/252)
+targets develop. Its initial green CI at `b63602eb` predates the picture
+redesign below and is not verification of that implementation.
 
 Issue [#249](https://github.com/hessius/XBRW/issues/249) owns package order, review
 findings and acceptance gates. Home roasters (#240), Ready to brew (#242) and
@@ -207,8 +210,9 @@ brewed most recently; a resting bag is offered only when nothing else is open
 for another brew comes after any that can still be brewed. Ties go to the
 recipe brewed most recently, then the newest bag.
 
-The card shows the pod photo (when "Show recipe pictures" is on and the recipe
-has one), the coffee's name on up to two lines, a short freshness line and, in
+The card optionally shows a 36 pt circular coffee/pod photo when Recipe card
+photos is on and native text measurements leave room. It shows the coffee's
+name on up to two lines, a short freshness line and, in
 this app's bag mode, "212 g left, about 11 brews". BREW pushes the same brew
 route as the row's BREW and is drawn only with a machine remembered; tapping
 the name opens the recipe. In this app's bag mode, an open bag under two doses
@@ -380,43 +384,66 @@ reads MANAGE FEEDS. Subscribe and Unsubscribe keep their names. Device checks:
 Back from a roaster's screen to the list, unsubscribing after arriving from the
 coffee list, and a long roaster name in the header on the cover screen.
 
-## Recipe picture in the header, on list cards and on shelf tiles (2026-10-18)
+## Scoped recipe pictures (2026-10-20, replacement preview design)
 
-With Show recipe pictures on, a recipe's `imageURL` (pod artwork, or a coffee
-photo an import link carried) now appears where people look, not only in
-ABOUT > XPOD. The open editor header draws it as a 56 pt rounded square in the
-top right corner, under HELP and the menu, clear of the name's column and
-folded away with the slab. Library cards draw a 40 pt square before the name,
-no taller than the two lines of prose, so card height and the name's line
-budget do not change. Shelf tiles draw it as a 48 pt rounded square in the top
-left corner, level with the badge row. On preview/all, where tiles also carry
-the two-line name, the bag and freshness badges and the profile below the text,
-the badges and the name sit in a column beside the picture and the figures and
-profile run full width underneath, so nothing overlaps. Badges that do not fit
-one row wrap to a second, right-aligned. Tile height is unchanged; a failed
-picture is dropped and the column takes the width back.
+The approved [picture placement design](superpowers/specs/2026-10-20-recipe-picture-placement-design.md)
+replaces the #225/#235 combined defaults and placement proposal on this
+cumulative preview. It does not mean those contributor PRs were merged.
 
-In the shelf grid, a shelf whose recipes have pictures is covered with them in
-place of its glyph or accent mosaic: one picture fills the 44 pt square, two or
-more make a 2x2 mosaic of the newest. User, tag and auto shelves all take a
-cover. If none of the pictures load, the shelf's own mark is drawn. The
-pictures are read newest first, and only from rows that carry one.
+- **Recipe card photos**, default OFF: 36 pt circles at the right of list cards
+  and alongside Ready to brew text, plus 20 pt circles at the start of compact
+  metadata rows, including selection mode.
+- **Shelf photo previews**, default ON: coffee photos in personal/tag covers
+  only. Automatic and author shelves retain their existing glyph and inversion.
+- **Pictures in ABOUT**, default ON: the existing `showRecipeAvatars` preference
+  now controls only coffee/pod and separate author pictures in recipe details.
+  The editor header has no photo, viewing button or photo reservation in either
+  collapse state. Rename, HELP/menu and the profile watermark remain.
 
-Every picture is drawn whole (`contain`) on a dark rounded backing rather than
-cropped to fill, so a bag shot keeps its label. In the editor header the picture
-is its own button, "Coffee photo": it opens the photo full screen on a dark
-backdrop (`components/PhotoViewer.tsx`), closed by CLOSE, a tap, or Android's
-back. It sits above the rename button and outside the name's row, so tapping it
-never opens the rename sheet; the name and pencil still do.
+A stored legacy OFF choice initializes an absent shelf choice OFF once; later
+ABOUT toggles are independent. Legacy backups restore ABOUT and shelf choices,
+but set card photos OFF even over an already configured device. Valid explicit
+new keys win, and a backup without picture keys changes none of these choices.
+Both new preferences are exported. No backup version or recipe schema changes.
 
-Elsewhere the picture is decorative and hidden from screen readers, since the
-name is already announced. A picture that fails to load draws nothing. In the header the
-name keeps the room set aside for it, so a failure does not rewrap the title.
-With the setting off nothing is drawn and no room is kept. The network screen's
-Load a photo entry now says the library list, shelf rooms and shelf covers can
-fetch a picture when the setting is on. No recipe data,
-backup or card bytes change. Device checks still to do: large text, a narrow
-cover screen, offline first view and a slow network.
+Personal/tag covers read the first four actual members alphabetically by
+`sortName`, then UUID, using bounded SQL plus the existing unreadable allowance.
+Unpictured members still occupy cells. Multi-member covers keep a fixed 2x2
+grid inside 44 pt, with circular whole-product images on each member's accent.
+Duplicate URLs are drawn once; spare cells repeat accents, not photos. Only an
+actually single-member shelf can use one 44 pt circle. A fifth pictured member
+does not replace one of the selected four. Image failures leave cell colours
+and geometry intact. Existing three-member fallback art is unchanged.
+
+Compact photos wait for current intrinsic badge and available-row measurements;
+the measuring copy includes the visible row's zero-width spacer and its gaps,
+but no duplicate badge IDs or actions. If the photo would wrap metadata, it is
+omitted before any badge is sacrificed. Names and figures keep their full width,
+tile height remains fixed, and #236's shrinking/hiding profile behavior stays.
+
+List photos use current native occupied-region measurements and a reserved
+36+8 pt trailing rail. To clear the existing 200x56 silhouette at an ordinary
+116 pt card height, the silhouette moves left by that rail plus the 16 pt
+content inset only while the photo rail is allocated; its size is unchanged.
+Profile clearance uses `profileHeightAt` and the actual drawing offset, not the
+transparent SVG box. Prose fit is conservative: intrinsic name/note width must
+fit the reserved column without introducing a new wrap. Busy figures, badges,
+actions or insufficient prose room omit the photo and release the rail.
+This allocation is provisional pending native visual qualification, particularly
+the shifted watermark's relation to figures. Photos do not shrink text or add
+card height. Loading reserves the admitted frame; failure releases it, and a
+changed URL can retry. Ready to brew similarly omits its circle before text
+would be crowded and keeps its independent controls and 44 pt BREW target.
+
+All browsing images are decorative coffee/pod images with whole-product
+`contain` fitting; author portraits are not coffee fallbacks. The shared image
+renderer owns failure handling, and the obsolete full-screen header viewer is
+removed. The network inventory describes the three independent preferences.
+Software tests cover both platforms, real SQLite membership, restore/export,
+exact fit and identical gap geometry, current/stale layout events, failures,
+changed URLs, normal 390 pt real-pour cards and busy omissions. Native narrow
+widths, Dynamic Type and screen-reader behavior are **not yet verified**; see
+the [testing checklist](release-2.2.0-testing.md). No NFC/BLE logic changes.
 
 ## Import link name, picture and fill-blanks (2026-10-18)
 
@@ -425,8 +452,8 @@ recipe's own name (the one a rename writes), whitespace folded, fitted under the
 rename sheet's 100 characters (trailing bracketed groups first, then whole
 words with "…", always keeping a " - 18g" size suffix); `xbloomName` stays, so USE THIS NAME still goes
 back to xBloom's. The link's `bean.image` becomes the recipe's picture when the
-recipe has none of its own; pod artwork wins. The picture is drawn only with
-"Show recipe pictures" on.
+recipe has none of its own; pod artwork wins. Its display follows the scoped
+ABOUT, card and shelf preferences described above.
 
 A link that points at a recipe already in the library opens the stored recipe
 as before, and now fills its blanks: the picture when it has none, the coffee
@@ -599,10 +626,11 @@ or a placeholder still opens empty. A pod name lookup that lands while the
 sheet is open replaces the field only if it has not been edited.
 Not yet checked on a device.
 
-## Recipe pictures on by default (2026-10-17)
+## Recipe pictures on by default (2026-10-17, superseded)
 
-`showRecipeAvatars` defaults to true; stored choices and restored backups are
-unchanged; no card, BLE or native changes.
+The broad default proposal in #225 is replaced by the 2026-10-20 scoped
+picture design above. `showRecipeAvatars` remains true for ABOUT only, card
+photos default OFF, and shelf previews initialize from a legacy choice once.
 
 ## Machine model from the serial, and link wording (2026-10-18)
 

@@ -106,7 +106,7 @@ it("changing ABOUT later does not change the initialized shelf preference", () =
 npx jest --runTestsByPath library/__tests__/Settings.test.ts --watch=false
 ```
 
-- [ ] **3. Add the defaults and initialize only a missing shelf key.**
+- [x] **3. Add the defaults and initialize only a missing shelf key.**
 
 Replace the old broad picture comment with an ABOUT-only description. Keep
 `showRecipeAvatars: true` and add:
@@ -164,7 +164,7 @@ export function pictureSettingsFromBackup(
 }
 ```
 
-- [ ] **5. Wire settings and restore in the same checkpoint so typecheck stays valid.**
+- [x] **5. Wire settings and restore in the same checkpoint so typecheck stays valid.**
 
 Bind both new keys with `useSetting(key, settings)` and include both in
 `settingsSnapshot()`'s existing typed object. At the beginning of
@@ -203,7 +203,7 @@ true. Assert the resulting settings, not just the helper call. Assert a backup
 with all three explicit keys preserves their independent values. Extend the
 existing export test to inspect both new values; do not bump `BACKUP_VERSION`.
 
-- [ ] **6. Run the focused group and typecheck, then commit only these paths.**
+- [x] **6. Run the focused group and typecheck, then commit only these paths.**
 
 ```sh
 npx jest --runTestsByPath library/__tests__/Settings.test.ts library/__tests__/pictureSettings.test.ts library/__tests__/backup.test.ts app/__tests__/settings.test.tsx --watch=false
@@ -271,7 +271,7 @@ expect(cells.filter(cell => cell.imageURL !== undefined)).toHaveLength(1);
 expect(cells.map(cell => cell.accent)).toEqual(["a", "b", "c", "a"]);
 ```
 
-- [ ] **2. Establish actual SQL ordering with the real database harness.**
+- [x] **2. Establish actual SQL ordering with the real database harness.**
 
 Copy the `createTestDatabase`/`mockBacking` import setup from
 `RecipeDatabase.unreadable.test.ts`, not the array-matching SQL mock.
@@ -290,7 +290,7 @@ assert `"a"` precedes `"b"`. Change the existing shelf-members SQL ordering to
 `ORDER BY sortName ASC, uuid ASC`; retain parameter binding, the SQL cap and
 `UNREADABLE_ALLOWANCE`/hydration guard. Do not add a schema.
 
-- [ ] **3. Replace independent photo arrays with corresponding members.**
+- [x] **3. Replace independent photo arrays with corresponding members.**
 
 Change `ShelfMarkMembers` to:
 
@@ -364,7 +364,7 @@ Fire `"error"` on that image and assert four cells remain. Test changed URLs
 retry. Assert automatic tiles keep their existing glyph even if their supplied
 member data contains images, with inversion on and off.
 
-- [ ] **5. Run the complete shelf group, typecheck, then commit.**
+- [x] **5. Run the complete shelf group, typecheck, then commit.**
 
 ```sh
 npx jest --runTestsByPath library/__tests__/shelfCover.test.ts library/__tests__/RecipeDatabase.shelfCovers.test.ts library/__tests__/RecipeDatabase.unreadable.test.ts library/__tests__/RecipeDatabase.test.ts hooks/__tests__/useRecipeLibrary.test.ts components/__tests__/ShelfPhotoMark.test.tsx components/__tests__/ShelfMark.test.tsx components/__tests__/ShelfGrid.test.tsx app/__tests__/index.test.tsx --watch=false
@@ -379,7 +379,7 @@ git commit -m "fix: compose shelf photos from actual members" -m "Co-authored-by
 `components/__tests__/RecipeHero.test.tsx`,
 `components/__tests__/DetailPhoto.test.tsx`, `app/__tests__/editRecipe.test.tsx`.
 
-- [ ] **1. Replace photo-acceptance tests with the approved absence assertion.**
+- [x] **1. Replace photo-acceptance tests with the approved absence assertion.**
 
 Render a pictured recipe through the existing editor harness. Assert no
 `hero-photo`, no `hero-photo-button`, and no header PhotoViewer. Open ABOUT
@@ -392,7 +392,7 @@ Keep existing author-picture, rename, long-name and collapse assertions.
 npx jest --runTestsByPath components/__tests__/RecipeHero.test.tsx components/__tests__/DetailPhoto.test.tsx app/__tests__/editRecipe.test.tsx --watch=false
 ```
 
-- [ ] **3. Remove only photo-specific header code.**
+- [x] **3. Remove only photo-specific header code.**
 
 Drop `imageURL`/`showPicture` from `RecipeHero` props and call sites, `picture`
 and viewing state, `RecipePhoto`/`PhotoViewer` imports and rendering, photo
@@ -468,7 +468,7 @@ export function overlaps(a: Rect, b: Rect): boolean {
 Add rectangle tests for clear, touching-edge, overlapping and contained shapes.
 Use actual layout rectangles in Task 5; do not compare font sizes as a proxy.
 
-- [ ] **2. Extract the metadata content, preserving all existing badge behaviour.**
+- [x] **2. Extract the metadata content, preserving all existing badge behaviour.**
 
 Move the existing badges from `recipe-tile-badges` into the module-scope
 `RecipeTileMetadata` component. Pass already-derived primitive strings and
@@ -499,7 +499,7 @@ non-empty image URL exists. The host is not a second actionable badge row.
 Test the native `"contentSizeChange"` event using RNTL and verify it is absent
 when photos are off.
 
-- [ ] **3. Key layout readings by what was measured, not an effect.**
+- [x] **3. Key layout readings by what was measured, not an effect.**
 
 Store intrinsic readings with a signature built from the derived badge values,
 font scale and editing state. Store available width with its layout context.
@@ -520,7 +520,7 @@ Remove the old leading photo column and `TILE_PHOTO_GAP` reservation beside
 the name. Keep the name outside the metadata row and full-width; preserve the
 existing text-first profile-room measurement and fixed tile-height contract.
 
-- [ ] **4. Exercise native measurement events and all degradation cases.**
+- [x] **4. Exercise native measurement events and all degradation cases.**
 
 Update the old top-left photo test to assert the photo is inside
 `recipe-tile-badges`, not beside the name. Drive available width through
@@ -534,7 +534,7 @@ measurement host; a failed photo keeps the name and action semantics.
 Use `includeHiddenElements` only for decorative images, not to treat the
 measurement copy as accessible content.
 
-- [ ] **5. Run the compact group, typecheck and targeted lint, then commit.**
+- [x] **5. Run the compact group, typecheck and targeted lint, then commit.**
 
 ```sh
 npx jest --runTestsByPath library/__tests__/recipePictureLayout.test.ts components/__tests__/RecipeTileMetadata.test.tsx components/__tests__/RecipeShelfTilePhoto.test.tsx components/__tests__/RecipeShelfTile.test.tsx components/__tests__/RecipePhoto.test.tsx --watch=false
@@ -565,7 +565,7 @@ For Ready to brew, assert a 36 pt circle and separately press open, BREW and
 dismiss. Preserve reorder/more tests. Assert the photo yields when space is
 insufficient without making BREW unreachable.
 
-- [ ] **2. Reserve and measure the list photo's trailing space.**
+- [x] **2. Reserve and measure the list photo's trailing space.**
 
 Remove the photo from the leading title row. Reserve a 44 pt trailing rail
 (36 pt frame plus 8 pt clearance) for the optional picture candidate; keep
@@ -605,7 +605,7 @@ ineligible geometry, reclaim it; do not increase card height or reduce the
 existing name/note line allowance. Verify portrait and landscape transitions
 do not leave a previously valid picture overlapping content.
 
-- [ ] **3. Convert Ready to brew's image to the shared circular rendering.**
+- [x] **3. Convert Ready to brew's image to the shared circular rendering.**
 
 Replace its 56 pt square with `RecipePhoto` at `CARD_PHOTO_SIZE`, radius
 `CARD_PHOTO_SIZE / 2`, backed by the existing palette. Keep the photo inside
@@ -616,7 +616,7 @@ slot when the text and separate 44 pt-minimum BREW control fit. Use the same
 keyed-reading pattern, with the photo omitted before measurements are current.
 Do not cap or truncate freshness/bag lines to preserve decoration.
 
-- [ ] **4. Wire the independent preferences at every home consumer.**
+- [x] **4. Wire the independent preferences at every home consumer.**
 
 Add:
 
@@ -642,7 +642,7 @@ marks={withShelfPhotos(library.shelfMarks, showShelfPhotoPreviews)}
 Remove the now-unused home ABOUT preference binding. Do not change image
 placement on catalogue/import screens that this spec does not cover.
 
-- [ ] **5. Run targeted components/screens, then commit.**
+- [x] **5. Run targeted components/screens, then commit.**
 
 ```sh
 npx jest --runTestsByPath components/__tests__/RecipeCard.test.tsx components/__tests__/ReadyToBrewCard.test.tsx components/__tests__/ShelfRoom.test.tsx app/__tests__/index.test.tsx app/__tests__/index.readyToBrew.test.tsx --watch=false
@@ -670,7 +670,7 @@ In the settings-screen restore harness, repeat the approved precedence against
 an already-configured device, not only an empty store. Tests must observe
 persisted results after a fresh Settings instance.
 
-- [ ] **2. Update the existing release/copy records.**
+- [x] **2. Update the existing release/copy records.**
 
 Record that #225/#235's combined preview design was replaced by this approved
 placement policy, not that contributor PRs were merged. Copy the three settings
@@ -683,7 +683,7 @@ collapse/rename; VoiceOver/TalkBack; Ready controls. Keep #233's Android Fabric
 crash qualification and Package A hardware checklist open. Do not check a
 native item merely because Jest passed.
 
-- [ ] **3. Run software gates serially, using existing tooling.**
+- [x] **3. Run software gates serially, using existing tooling.**
 
 ```sh
 npm run typecheck
