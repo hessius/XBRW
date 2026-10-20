@@ -404,6 +404,9 @@ describe("adding to a shelf with a bag", () => {
         );
         await waitFor(() => expect(screen.queryByTestId("roaster-coffee-loading")).toBeNull());
         await fireEvent.press(screen.getByTestId("roaster-coffee-shelf"));
+        await waitFor(() => expect(screen.getByTestId("bag-save")).toBeTruthy());
+        expect(screen.queryByTestId("bag-bean-name-field")).toBeNull();
+        expect(screen.getByTestId("bag-bean-name")).toHaveTextContent("Coffee b");
         await pressUntil("bag-save", shelfOffered);
         await waitFor(async () => {
             await fireEvent.press(screen.getByTestId("shelf-choice-Pantry"));

@@ -1,4 +1,4 @@
-import {bagBeanName, bagShareBean} from "@/library/brew/handoff/bagBean";
+import {bagBeanName, bagBeanNameFixed, bagShareBean} from "@/library/brew/handoff/bagBean";
 import {beanLink} from "@/library/brew/handoff/beanLink";
 import {newBag, type BagTracker, type CoffeeBag} from "@/library/coffeeBag";
 import type Recipe from "@/library/Recipe";
@@ -22,12 +22,13 @@ export type CatalogueBagInput = {
 export function catalogueBag(
     recipe: Recipe, input: CatalogueBagInput, tracker: BagTracker, now: number = Date.now()
 ): CoffeeBag {
+    const beanName = bagBeanNameFixed(recipe) ? bagBeanName(recipe) : input.beanName ?? bagBeanName(recipe);
     return newBag(recipe.uuid, {
         sizeGrams: input.sizeGrams,
         roastedOn: input.roastedOn,
         price: input.price,
         ...input.figures,
-        beanName: tracker === "beanconqueror" ? (input.beanName ?? bagBeanName(recipe)) : undefined
+        beanName: tracker === "beanconqueror" ? beanName : undefined
     }, now);
 }
 

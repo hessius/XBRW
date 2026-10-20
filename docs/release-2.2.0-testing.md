@@ -68,6 +68,13 @@ constructor migration write. Its assertion now compares writes immediately
 before and after the read; no machine transport or brewing logic changed.
 Final PR-head CI remains a separate, pending parent-owned gate.
 
+The single Copilot round on #252 reviewed `af80b88e`. Both reported catalogue
+defects were reproduced and corrected: replacement photo URLs are retried after
+a failure, and a bag's fixed coffee name agrees with later brew handoffs.
+Focused follow-up checks passed 162 tests across both platforms, typecheck and
+lint (zero errors, 35 existing warnings). Final-head CI is still required.
+No second review round is requested after the fixes.
+
 Red evidence is not uniformly behavioral: the initial settings, cover and pure
 layout runs failed on missing new modules, and header-absence coverage followed
 the header removal. Compact/list/Ready placement and the shared metadata-spacer
@@ -110,6 +117,12 @@ Package A BLE, physical NFC and external-app release gates open; no software
 picture result waives them.
 
 ## Later packages
+
+- [ ] After a catalogue photo fails, refresh that coffee with a different image
+  URL and confirm the replacement loads without recreating its search row.
+- [ ] In Beanconqueror mode, add a catalogue coffee to a shelf with a bag.
+  Confirm the bean name is read-only when coffee metadata fixes it, then send
+  a subsequent brew and verify it matches that bag in the external app.
 
 Add focused checks when each package is reviewed. Keep the existing BLE, NFC,
 both-platform and external-app release gates; this checklist does not waive them.

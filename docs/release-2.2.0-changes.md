@@ -33,6 +33,18 @@ numbers are unchanged. This version bump does not build, submit or deploy an app
 
 ## Verified preview follow-ups
 
+### Single cumulative review follow-ups
+
+The single Copilot round on #252 reported two reproducible catalogue defects.
+A failed search-row photo now suppresses only that URL, so a replacement image
+from a refreshed feed is attempted without remounting the coffee row.
+
+Catalogue bags now use the existing fixed-name rule when recipe coffee metadata
+determines the name sent with brews. The sheet shows that name read-only, and
+bag creation enforces the same rule; recipes without coffee metadata retain
+editable bean names. Both-platform regressions cover the row, form and stored
+name. Beanconqueror matching still needs an external-app pass.
+
 ### Confirmed and inferred missing beans
 
 An explicit no-beans state (`0x0F`) keeps #246's "No beans detected" message.

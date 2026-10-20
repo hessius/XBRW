@@ -30,6 +30,20 @@ describe("the bag form for a catalogue coffee", () => {
 });
 
 describe("the bag made on shelving", () => {
+    it("keeps a known coffee's name aligned with subsequent brew handoffs", () => {
+        const recipe = new Recipe();
+        recipe.coffee = {name: "Peru El Palto"};
+        const bag = catalogueBag(recipe, {sizeGrams: 160, beanName: "A different bean"}, "beanconqueror", 1000);
+        expect(bag.beanName).toBe(recipe.coffee.name);
+    });
+
+    it("retains an editable bean name when the recipe has no coffee metadata", () => {
+        const recipe = new Recipe();
+        recipe.name = "Peru - 18g";
+        expect(catalogueBag(recipe, {sizeGrams: 160, beanName: "My bean"}, "beanconqueror", 1000).beanName)
+            .toBe("My bean");
+    });
+
     it("is the editor's bag, named for Beanconqueror only in that mode", () => {
         const recipe = new Recipe();
         recipe.uuid = "r1";

@@ -22,7 +22,7 @@ import {useLiveBrew} from "@/hooks/useLiveBrew";
 import {sharedSettings, useSetting} from "@/hooks/useSetting";
 import type {BagStore} from "@/hooks/useCoffeeBag";
 import {assignAccent, resolveAccent} from "@/library/accent";
-import {bagBeanName} from "@/library/brew/handoff/bagBean";
+import {bagBeanName, bagBeanNameFixed} from "@/library/brew/handoff/bagBean";
 import {sharedBagDatabase} from "@/library/CoffeeBagDatabase";
 import {resolveBagTracker} from "@/library/coffeeBag";
 import {withRoastAdvice} from "@/library/restPeak";
@@ -482,7 +482,7 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
                       tracker={tracker} bag={null} gramsLeft={null}
                       coffee={withRoastAdvice(coffee.coffee, coffee.roast ?? {})}
                       beanName={recipe === null ? coffee.name : bagBeanName(recipe)}
-                      beanNameFixed={false}
+                      beanNameFixed={bagBeanNameFixed(recipe ?? {coffee: coffee.coffee})}
                       epoch={bagEpoch}
                       {...bagFormFor(coffee)}
                       onSave={(result) => {

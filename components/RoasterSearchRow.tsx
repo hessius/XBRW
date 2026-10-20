@@ -20,7 +20,7 @@ export default function RoasterSearchRow({match, onPress}: {
     match: RoasterMatch;
     onPress: () => void;
 }) {
-    const [failed, setFailed] = useState(false);
+    const [failed, setFailed] = useState<string | null>(null);
     const {coffee, roaster} = match;
     const image = coffee.image ?? null;
     const roast = coffee.roast?.level;
@@ -37,8 +37,8 @@ export default function RoasterSearchRow({match, onPress}: {
                    style={({pressed}) => ({opacity: pressed ? 0.7 : 1})}>
             <XStack alignItems="center" gap="$3" paddingHorizontal="$3" paddingVertical="$2"
                     opacity={coffee.available ? 1 : 0.6}>
-                {image !== null && !failed ? (
-                    <Image source={{uri: image}} onError={() => setFailed(true)}
+                {image !== null && failed !== image ? (
+                    <Image testID="roaster-result-photo" source={{uri: image}} onError={() => setFailed(image)}
                            style={{width: PHOTO, height: PHOTO, borderRadius: PHOTO_RADIUS}}/>
                 ) : (
                     <YStack width={PHOTO} height={PHOTO} borderRadius={PHOTO_RADIUS}

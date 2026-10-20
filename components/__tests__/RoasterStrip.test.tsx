@@ -108,6 +108,26 @@ describe("RoasterStrip", () => {
 });
 
 describe("RoasterSearchRow", () => {
+    it("attempts a replacement photo after the same coffee's previous URL failed", async () => {
+        const match = {
+            feedUrl: "https://roaster.example/feed", roaster: "Test Roaster",
+            coffee: feed([{id: "a"}]).coffees[0], ref: "a"
+        };
+        const onPress = jest.fn();
+        const view = await renderWithProviders(<RoasterSearchRow match={match} onPress={onPress}/>);
+        const photo = () => screen.queryByTestId("roaster-result-photo", {includeHiddenElements: true});
+        expect(photo()?.props.source.uri).toBe(match.coffee.image);
+        await fireEvent(photo()!, "error");
+        expect(photo()).toBeNull();
+        await view.rerender(<RoasterSearchRow match={match} onPress={onPress}/>);
+        expect(photo()).toBeNull();
+        const refreshed = {...match, coffee: {...match.coffee, image: "https://roaster.example/replacement.png"}};
+        await view.rerender(<RoasterSearchRow match={refreshed} onPress={onPress}/>);
+        expect(photo()?.props.source.uri).toBe(refreshed.coffee.image);
+        await fireEvent.press(screen.getByTestId("roaster-result-a"));
+        expect(onPress).toHaveBeenCalledTimes(1);
+    });
+
     it("names the coffee, its roaster and roast, and opens on a tap", async () => {
         const parsed = feed([{id: "a", name: "Peru El Palto"}]);
         const onPress = jest.fn();
