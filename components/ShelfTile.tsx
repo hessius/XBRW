@@ -10,6 +10,7 @@ import {onAccent, palette} from "@/constants/colors";
 import {shelfGlyph} from "@/constants/shelfGlyphs";
 import type {ShelfMarkMembers} from "@/hooks/useRecipeLibrary";
 import type {Shelf} from "@/library/shelves";
+import {COVER_MEMBERS, hasStockPhotoCover, stockPhotoCover} from "@/library/shelfCover";
 
 /**
  * The tile's height: the mark's 44 pt square, two lines of type, and padding.
@@ -100,6 +101,10 @@ export default function ShelfTile({
     const field = members?.accents?.[0] ?? palette.surface;
     const mark = <ShelfMark kind={shelf.kind} glyph={shelfGlyph(shelf.id)}
                             accents={members?.accents} inverted={inverted}/>;
+    const cover = shelf.kind === "auto"
+        ? (hasStockPhotoCover(shelf.id) && shelf.count >= COVER_MEMBERS
+            ? stockPhotoCover(members?.coverMembers ?? []) : [])
+        : members?.coverMembers ?? [];
     const actions = [
         ...(onActions !== undefined
             ? [{name: "edit", label: `Actions for the ${shelf.label} shelf`}]
@@ -139,8 +144,8 @@ export default function ShelfTile({
                     borderWidth={manual || inverted ? 0 : 1}
                     borderColor={palette.line}>
                 <XStack alignItems="flex-start" justifyContent="space-between">
-                    {shelf.kind === "auto" ? mark : <ShelfPhotoMark members={members?.coverMembers ?? []}
-                        count={shelf.count} fallback={mark}/>}
+                    <ShelfPhotoMark members={cover}
+                        count={shelf.count} fallback={mark}/>
                     {onActions && (
                         <Pressable accessibilityRole="button"
                                    accessibilityLabel={`Actions for the ${shelf.label} shelf`}

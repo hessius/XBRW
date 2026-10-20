@@ -328,6 +328,7 @@ describe("SettingsScreen", () => {
             .props.accessibilityState.checked).toBe(true);
         expect(screen.getByLabelText("Recipe card photos").props.accessibilityState.checked).toBe(false);
         expect(screen.getByLabelText("Shelf photo previews").props.accessibilityState.checked).toBe(true);
+        expect(screen.getByText("Show coffee photos in your own, tag and eligible automatic shelves.")).toBeTruthy();
     });
 
     it("changes each picture surface independently", async () => {

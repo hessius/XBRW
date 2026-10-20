@@ -402,11 +402,13 @@ The approved [picture placement design](superpowers/specs/2026-10-20-recipe-pict
 replaces the #225/#235 combined defaults and placement proposal on this
 cumulative preview. It does not mean those contributor PRs were merged.
 
-- **Recipe card photos**, default OFF: 36 pt circles at the right of list cards
-  and alongside Ready to brew text, plus 20 pt circles at the start of compact
-  metadata rows, including selection mode.
-- **Shelf photo previews**, default ON: coffee photos in personal/tag covers
-  only. Automatic and author shelves retain their existing glyph and inversion.
+- **Recipe card photos**, default OFF: 20 pt circles at the bottom right of list
+  cards beside brew evidence, 36 pt alongside Ready to brew text, and 20 pt at
+  the start of compact metadata rows, including selection mode.
+- **Shelf photo previews**, default ON: mixed personal/tag covers plus four-photo
+  grids for XBLOOM RECIPES, STARRED, XBLOOM PODS, MOST BREWED and RECENTLY ADDED
+  only when four distinct usable actual-member coffee/pod URLs exist. Below that
+  threshold and for every other automatic/author shelf, retain the glyph/inversion.
 - **Pictures in ABOUT**, default ON: the existing `showRecipeAvatars` preference
   now controls only coffee/pod and separate author pictures in recipe details.
   The editor header has no photo, viewing button or photo reservation in either
@@ -427,24 +429,30 @@ actually single-member shelf can use one 44 pt circle. A fifth pictured member
 does not replace one of the selected four. Image failures leave cell colours
 and geometry intact. Existing three-member fallback art is unchanged.
 
+The five stock exceptions separately select the first four distinct photographed
+matching members in stable name/UUID order, not the first four recipes or the
+visible query. SQL guards JSON, deduplicates before the limit, and returns at
+most seven candidates (four plus the existing unreadable allowance), then the
+normal guarded hydrate/HTTPS validation applies. Excessive corrupt candidates
+leave glyph fallback, not an unbounded recovery read. No schema change is needed.
+
 Compact photos wait for current intrinsic badge and available-row measurements;
 the measuring copy includes the visible row's zero-width spacer and its gaps,
 but no duplicate badge IDs or actions. If the photo would wrap metadata, it is
 omitted before any badge is sacrificed. Names and figures keep their full width,
 tile height remains fixed, and #236's shrinking/hiding profile behavior stays.
 
-List photos use current native occupied-region measurements and a reserved
-36+8 pt trailing rail. To clear the existing 200x56 silhouette at an ordinary
-116 pt card height, the silhouette moves left by that rail plus the 16 pt
-content inset only while the photo rail is allocated; its size is unchanged.
-Profile clearance uses `profileHeightAt` and the actual drawing offset, not the
-transparent SVG box. Prose fit is conservative: intrinsic name/note width must
-fit the reserved column without introducing a new wrap. Busy figures, badges,
-actions or insufficient prose room omit the photo and release the rail.
-This allocation is provisional pending native visual qualification, particularly
-the shifted watermark's relation to figures. Photos do not shrink text or add
-card height. Loading reserves the admitted frame; failure releases it, and a
-changed URL can retry. Ready to brew similarly omits its circle before text
+The approved list follow-up places the 20 pt circle at the trailing end of the
+bottom metadata row beside brew evidence. It may overlay the decorative graph,
+whose original 200x56 geometry/corner position never changes. No photo rail,
+60 pt shift, profile collision or name-width gate remains: long names and notes
+keep their existing width. Measured bottom-row/figure/evidence widths admit the
+photo only without wrapping; editing or large accessibility text omits it first.
+The bottom strip uses the existing shaded profile wash, and the circle uses the
+actual lighter card accent. Photos do not shrink text or add card height.
+Loading reserves the admitted frame; failure releases it, and a changed URL can
+retry. Native visual qualification remains open.
+Ready to brew similarly omits its circle before text
 would be crowded and keeps its independent controls and 44 pt BREW target.
 
 All browsing images are decorative coffee/pod images with whole-product

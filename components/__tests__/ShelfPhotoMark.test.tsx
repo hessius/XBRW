@@ -44,3 +44,56 @@ it.each([false, true])("never replaces an automatic glyph, inverted %s, with mem
     expect(screen.getByTestId(inverted ? "shelf-mark-glyph-inverted" : "shelf-mark-glyph")).toBeTruthy();
     expect(photos()).toHaveLength(0);
 });
+
+const fourPhotos = Array.from({length: 4}, (_, index) => ({
+    uuid: `recipe-${index}`, accent: members[0].accent, imageURL: `https://coffee.example/${index}.jpg`
+}));
+
+it.each(["xbloom", "favourites", "pods", "mostBrewed", "recentlyAdded"])(
+    "uses four distinct coffee photos for the approved %s auto shelf", async id => {
+        await renderWithProviders(<ShelfTile shelf={{id, label: id, kind: "auto", count: 12}}
+            members={{accents: ["red"], coverMembers: fourPhotos}} onPress={jest.fn()}/>);
+        expect(photos()).toHaveLength(4);
+        expect(photos().every(photo => photo.props.style.width === 21)).toBe(true);
+    }
+);
+
+it.each([false, true])("keeps eligible cover inversion and preference-off glyph fallback (%s)", async inverted => {
+    const mark = {accents: ["red"], coverMembers: fourPhotos};
+    const shelf = {id: "pods", label: "XBLOOM PODS", kind: "auto" as const, count: 4};
+    const view = await renderWithProviders(<ShelfTile shelf={shelf} members={mark}
+        inverted={inverted} onPress={jest.fn()}/>);
+    expect(photos()).toHaveLength(4);
+    await view.rerender(<ShelfTile shelf={shelf} members={withShelfPhotos({pods: mark}, false).pods}
+        inverted={inverted} onPress={jest.fn()}/>);
+    expect(photos()).toHaveLength(0);
+    expect(screen.getByTestId(inverted ? "shelf-mark-glyph-inverted" : "shelf-mark-glyph")).toBeTruthy();
+});
+
+it.each([
+    fourPhotos.slice(0, 3),
+    [...fourPhotos.slice(0, 3), {...fourPhotos[0], uuid: "duplicate"}],
+    [...fourPhotos.slice(0, 3), {uuid: "blank", accent: "red", imageURL: " "}],
+    [...fourPhotos.slice(0, 3), {uuid: "portrait-only", accent: "red"}]
+].map(cover => ({cover})))("keeps the stock glyph when four actual photos are unavailable (%j)", async ({cover}) => {
+    await renderWithProviders(<ShelfTile shelf={{id: "xbloom", label: "XBLOOM", kind: "auto", count: 20}}
+        members={{accents: ["red"], coverMembers: cover}} onPress={jest.fn()}/>);
+    expect(photos()).toHaveLength(0);
+    expect(screen.getByTestId("shelf-mark-glyph")).toBeTruthy();
+});
+
+it.each(["tea", "allRecipes", "mine", "neverBrewed", "sharedBy:Someone"])(
+    "does not replace other auto/author shelf %s even with four photos", async id => {
+        await renderWithProviders(<ShelfTile shelf={{id, label: id, kind: "auto", count: 4}}
+            members={{accents: ["red"], coverMembers: fourPhotos}} onPress={jest.fn()}/>);
+        expect(photos()).toHaveLength(0);
+        expect(screen.getByTestId("shelf-mark-glyph")).toBeTruthy();
+    }
+);
+
+it.each(["manual", "tag"] as const)("preserves mixed %s covers with just one photo", async kind => {
+    await renderWithProviders(<ShelfTile shelf={{id: "tag:coffee", label: "Coffee", kind, count: 4}}
+        members={{accents: ["red"], coverMembers: members}} onPress={jest.fn()}/>);
+    expect(photos()).toHaveLength(1);
+    expect(screen.getAllByTestId("shelf-cover-cell", {includeHiddenElements: true})).toHaveLength(4);
+});

@@ -12,6 +12,7 @@ import {buildLibraryQuery, type FilterResolver, type LibraryQuery,
         type RecipeEvidence} from './libraryQuery';
 import {columnDefinitions, indexStatements, INDEX_COLUMNS, type IndexValue,
         projectRecipe, schemaHash} from './recipeIndex';
+import {COVER_MEMBERS, hasStockPhotoCover} from './shelfCover';
 
 /**
  * Turn one stored row into a `Recipe`, or `null` if its blob cannot be read.
@@ -764,6 +765,54 @@ class RecipeDatabase {
                 if (recipe !== null) drawable.push(recipe);
             }
             members[id] = drawable;
+        }
+        return members;
+    }
+
+    /**
+     * Only the five photo-capable stock shelves seek beyond the first members.
+     * Deduplicate URLs before the SQL limit, so a hundred recipes sharing one
+     * pod shot cannot hide the fourth different photograph. JSON is guarded
+     * before extraction; hydration and URL validation still own the read boundary.
+     * Like fallback art, each shelf returns at most four plus the unreadable
+     * allowance, never an unbounded set of recipe blobs.
+     */
+    public shelfPhotoMembers(
+        ids: readonly string[], resolveFilter: FilterResolver = () => null
+    ): Record<string, Recipe[]> {
+        const members: Record<string, Recipe[]> = {};
+        for (const id of ids) {
+            if (!hasStockPhotoCover(id)) continue;
+            const clause = resolveFilter(id);
+            if (clause === null) continue;
+            const rows = this.db.getAllSync(
+                `WITH pictured AS (
+                    SELECT uuid, sortName,
+                        CASE WHEN json_valid(recipeJSON) THEN
+                            CASE WHEN json_type(recipeJSON, '$.imageURL') = 'text'
+                                THEN trim(json_extract(recipeJSON, '$.imageURL')) END
+                        END AS photoURL
+                    FROM recipes WHERE (${clause.where})
+                ), distinctPhotos AS (
+                    SELECT *, ROW_NUMBER() OVER (
+                        PARTITION BY photoURL ORDER BY sortName ASC, uuid ASC
+                    ) AS photoRank FROM pictured WHERE lower(photoURL) GLOB 'https://?*'
+                )
+                SELECT recipes.uuid, recipes.recipeJSON FROM distinctPhotos
+                JOIN recipes ON recipes.uuid = distinctPhotos.uuid WHERE photoRank = 1
+                ORDER BY distinctPhotos.sortName ASC, distinctPhotos.uuid ASC LIMIT ?;`,
+                [...(clause.params ?? []), COVER_MEMBERS + UNREADABLE_ALLOWANCE]
+            ) as {uuid: string; recipeJSON: string}[];
+            const selected: Recipe[] = [];
+            const seen = new Set<string>();
+            for (const row of rows) {
+                const recipe = hydrateRow(row.uuid, row.recipeJSON);
+                if (!recipe?.imageURL || seen.has(recipe.imageURL)) continue;
+                selected.push(recipe);
+                seen.add(recipe.imageURL);
+                if (selected.length === COVER_MEMBERS) break;
+            }
+            members[id] = selected;
         }
         return members;
     }

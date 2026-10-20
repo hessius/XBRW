@@ -7,6 +7,7 @@ import {createTestDatabase as mockCreateTestDatabase} from "@/test-utils/sqlite"
 import {useRecipeLibrary} from "@/hooks/useRecipeLibrary";
 import RecipeDatabase from "@/library/RecipeDatabase";
 import Recipe from "@/library/Recipe";
+import type {LibraryQuery} from "@/library/libraryQuery";
 
 jest.mock("expo-sqlite", () => ({
     openDatabaseSync: () => mockCreateTestDatabase()
@@ -28,6 +29,47 @@ function named(name: string): Recipe {
 }
 
 describe("useRecipeLibrary against a real database", () => {
+    it("keeps stock photo covers independent of visible search/sort and refreshes them with the revision", async () => {
+        const db = new RecipeDatabase();
+        for (let n = 0; n < 8; n++) {
+            const recipe = named(`Coffee ${n}`);
+            recipe.uuid = `coffee-${n}`;
+            recipe.favourite = true;
+            recipe.setTags(["Coffee"]);
+            if (n >= 4) recipe.imageURL = `https://coffee.example/${n}.jpg`;
+            db.insertRecipe(recipe);
+        }
+        const outsider = named("Visible outsider");
+        outsider.imageURL = "https://coffee.example/outsider.jpg";
+        db.insertRecipe(outsider);
+        const allRecipes = jest.spyOn(db, "retrieveAllRecipes");
+        const photos = jest.spyOn(db, "shelfPhotoMembers");
+        const initial: LibraryQuery = {
+            search: "Visible", filters: [], sort: "name", direction: "desc", favouritesFirst: false
+        };
+        const {result, rerender} = await renderHook(
+            ({query}: {query: LibraryQuery}) => useRecipeLibrary(db, query), {initialProps: {query: initial}}
+        );
+        expect(result.current.recipes.map(r => r.name)).toEqual(["Visible outsider"]);
+        const cover = () => result.current.shelfMarks.favourites.coverMembers;
+        expect(cover()?.map(r => r.uuid)).toEqual(["coffee-4", "coffee-5", "coffee-6", "coffee-7"]);
+        expect(result.current.shelfMarks["tag:Coffee"].coverMembers?.map(r => r.uuid))
+            .toEqual(["coffee-0", "coffee-1", "coffee-2", "coffee-3"]);
+        expect(result.current.shelfMarks["tag:Coffee"].coverMembers?.every(r => !r.imageURL)).toBe(true);
+        expect(photos).toHaveBeenCalledWith(
+            ["favourites", "pods", "xbloom", "mostBrewed", "recentlyAdded"],
+            expect.any(Function)
+        );
+        await rerender({query: {...initial, search: "Coffee", direction: "asc"}});
+        expect(cover()?.map(r => r.uuid)).toEqual(["coffee-4", "coffee-5", "coffee-6", "coffee-7"]);
+        const changed = db.getRecipe("coffee-4")!;
+        changed.imageURL = "https://coffee.example/changed.jpg";
+        db.updateRecipe(changed.uuid, changed);
+        await act(async () => result.current.refresh());
+        expect(cover()?.[0].imageURL).toBe(changed.imageURL);
+        expect(allRecipes).not.toHaveBeenCalled();
+    });
+
     it("empties the library and reports the count it removed", async () => {
         const db = new RecipeDatabase();
         db.insertRecipe(named("Morning"));

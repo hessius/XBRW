@@ -87,6 +87,20 @@ the header removal. Compact/list/Ready placement and the shared metadata-spacer
 regression did observe behavioral failures before their fixes. Do not treat the
 passing suite or plan checkboxes as proof of a stricter chronology.
 
+The explicitly approved picture follow-up supersedes the earlier list rail and
+automatic-glyph-only acceptance rules. Its five eligible stock-shelf tests first
+failed behaviorally on both platforms (10 expected failures: no photos drawn).
+Final focused checks cover the four-distinct-photo threshold, duplicate/blank/
+portrait rejection, real SQLite membership and deterministic URL-ranking bounds,
+query-independent revision updates, unchanged personal/tag selection, inversion/
+OFF fallback, 20 pt list metadata placement, original 200x56 graph/corner geometry,
+long names, exact row-fit boundaries, crowded/large-text omission, URL retry,
+Settings copy and preserved preference/migration/backup behavior.
+The focused iOS/Android run passes 36 suites / 1,260 tests; typecheck passes and
+repository lint has zero errors (35 existing warnings). These are targeted local
+checks, not another full-suite/CI claim or another Copilot review round.
+Native visual checks below remain unverified.
+
 - [ ] **#233 Android Fabric gate:** duplicate a recipe on a real Android native
   build; confirm the card and all controls render and no flattened-view failure
   occurs. A Jest renderer cannot qualify Fabric.
@@ -98,17 +112,21 @@ passing suite or plan checkboxes as proof of a stricter chronology.
   wraps because of an admitted compact photo and no badge/action disappears.
 - [ ] Check #236's compact profile shrink/hide behavior after text changes;
   the profile must never cross names or figures.
-- [ ] For list photos, verify the 36 pt right-centred frame clears every
-  occupied badge/figure/action and the actual silhouette. The photo rail moves
-  the existing silhouette left without resizing it; inspect its relation to
-  the figures as well. Long prose or busy geometry should omit the photo.
+- [ ] For list photos, verify the 20 pt bottom-right circle sits beside brew
+  evidence without wrapping metadata or moving/resizing the 200x56 graph.
+  Decorative graph overlap is now allowed. Long names/notes retain their width
+  and photos; crowded evidence, editing controls and large text omit decoration
+  first. Check the lighter accent circle against the consistently shaded strip.
 - [ ] Confirm no arrival reflow, aggressive crop, blank image hole or error
   toast with slow loading, offline first view, failure and a changed image URL.
   Shelf cells keep their accents/geometry; a lone photo in a larger shelf must
   not enlarge to a single-recipe cover.
 - [ ] Exercise independent card, shelf and ABOUT preferences, upgrading a legacy
   OFF install and restoring old/new backups over previously configured choices.
-  Automatic/author shelves must remain glyphs even with previews ON.
+  Only XBLOOM RECIPES, STARRED, XBLOOM PODS, MOST BREWED and RECENTLY ADDED may
+  replace glyphs with four distinct actual-member coffee/pod photos. Verify
+  three photos, duplicates, blanks and OFF retain glyph/inversion; every other
+  automatic/author shelf stays a glyph. Personal/tag mixed covers are unchanged.
 - [ ] Expand/collapse the editor with short and long names, rename, HELP and
   menu. There must be no header image, viewing action or picture-only space.
   ABOUT keeps separate coffee/pod and author circles.

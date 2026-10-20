@@ -4,11 +4,32 @@
 
 **Goal:** Replace the preview's all-or-nothing pictures with the approved circular, placement-specific treatment without sacrificing recipe information.
 
-**Architecture:** Keep preferences in `Settings`, membership queries in `RecipeDatabase`, and layout in existing components. Pass bounded, corresponding member records into personal/tag cover art; automatic shelves retain glyphs. Native layout measurements decide whether optional card photos fit, with pure arithmetic separated from measurement state.
+**Architecture:** Keep preferences in `Settings`, membership queries in `RecipeDatabase`, and layout in existing components. Pass bounded, corresponding member records into cover art. The approved follow-up below supersedes the original automatic-glyph-only and list-rail steps. Native layout measurements decide whether optional card photos fit, with pure arithmetic separated from measurement state.
 
 **Tech Stack:** Expo SDK 57, React Native 0.86, React Compiler, Tamagui, expo-sqlite, Jest iOS/Android projects, async React Native Testing Library.
 
 ---
+
+## Implemented follow-up (2026-10-20)
+
+The maintainer explicitly revised two placements after the initial implementation:
+
+- Only `xbloom`, `favourites`, `pods`, `mostBrewed`, `recentlyAdded` may use four
+  distinct usable actual-member coffee/pod photos. Their separate bounded SQL
+  query ranks URLs before limiting, in stable name/UUID order; no visible-query
+  data or author portrait is used. Three photos, duplicates or previews OFF keep
+  the glyph and inversion. Personal/tag first-four mixed covers are unchanged.
+- Home list photos now use 20 pt circles beside bottom-row brew evidence, over
+  a shaded strip with the actual lighter card accent behind the circle. Keep
+  the original 200x56 graph and corner position, permitting decorative overlap.
+  Remove the 36 pt rail, 60 pt shift, silhouette and name-width gates.
+  Current bottom-row/figures/evidence measurements omit crowded or large-text
+  decoration before controls/text; long names retain photos when metadata fits.
+
+The original implementation steps below are historical, not instructions to
+restore the superseded policy. Preferences, migration/backup behavior, compact
+cards, Ready to brew, editor and ABOUT remain unchanged. Native layout checks
+remain unverified; no production/native build is part of this follow-up.
 
 ## Approved contract and execution boundaries
 

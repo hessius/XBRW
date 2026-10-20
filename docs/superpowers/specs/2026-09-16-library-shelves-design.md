@@ -480,6 +480,15 @@ setting key and the losing candidate are gone, and what is left is the rule:
 - **Nothing is fetched and nothing is stored** in the mark, so it cannot go
   stale against the shelf it sits on.
 
+**Approved picture exception (2026-10-20):** the later
+[picture-placement design](2026-10-20-recipe-picture-placement-design.md)
+retains this fallback grammar, but allows XBLOOM RECIPES, STARRED, XBLOOM PODS,
+MOST BREWED and RECENTLY ADDED to show the four-cell coffee/pod grid when four
+distinct usable actual-member photos exist and previews are enabled. Other
+automatic/author shelves keep glyphs; manual/tag mixed covers keep their separate
+first-four-member selection. The unconditional auto-glyph statements below are
+historical, not a reason to remove that approved exception.
+
 The art carries meaning, which was always the point: a glyph says the app found
 this shelf, a mosaic says you built it.
 

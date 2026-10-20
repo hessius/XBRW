@@ -1424,8 +1424,8 @@ messages from `hooks/useBackup.ts` and `library/backup.ts`.
 | `settings.dotMatrix.desc` | `app/settings.tsx:253` | Toggle description. | `Fill the graph behind each recipe with a screen of dots instead of a flat tint.` |
 | `settings.cardPhotos.label` | `app/settings.tsx` | Toggle, default OFF. List/compact/selection cards and Ready to brew; coffee/pod photos only, omitted when crowded. | `Recipe card photos` |
 | `settings.cardPhotos.desc` | `app/settings.tsx` | Toggle description. | `Show coffee or pod photos on recipe cards and Ready to brew.` |
-| `settings.shelfPhotos.label` | `app/settings.tsx` | Toggle, default ON unless an absent choice inherits legacy OFF once. Personal/tag actual-member covers only; never automatic/author glyphs. | `Shelf photo previews` |
-| `settings.shelfPhotos.desc` | `app/settings.tsx` | Toggle description. | `Show coffee photos in your own shelves and tag shelves.` |
+| `settings.shelfPhotos.label` | `app/settings.tsx` | Toggle, default ON unless an absent choice inherits legacy OFF once. Mixed personal/tag covers; XBLOOM RECIPES, STARRED, XBLOOM PODS, MOST BREWED and RECENTLY ADDED only with four distinct usable actual-member coffee/pod photos. Other automatic/author shelves retain glyphs. | `Shelf photo previews` |
+| `settings.shelfPhotos.desc` | `app/settings.tsx` | Toggle description. | `Show coffee photos in your own, tag and eligible automatic shelves.` |
 | `settings.aboutPictures.label` | `app/settings.tsx` | Existing `showRecipeAvatars`, now ABOUT-only. The header photo/viewing action and its copy were removed by the 2026-10-20 replacement design for #225/#235. | `Pictures in ABOUT` |
 | `settings.aboutPictures.desc` | `app/settings.tsx` | Toggle description. | `Show coffee, pod and author pictures in recipe details.` |
 | `settings.brewOnRows.label` | `app/settings.tsx:257` | Toggle label. | `Show BREW on recipe rows` |

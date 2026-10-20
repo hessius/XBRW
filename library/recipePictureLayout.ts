@@ -9,8 +9,3 @@ export function metadataPhotoFits(available?: number, content?: number): boolean
         && available > 0 && content >= 0
         && Math.ceil(content + PHOTO_GAP + TILE_PHOTO_SIZE) <= Math.floor(available);
 }
-
-export function overlaps(a: Rect, b: Rect): boolean {
-    return a.x < b.x + b.width && a.x + a.width > b.x
-        && a.y < b.y + b.height && a.y + a.height > b.y;
-}

@@ -12,12 +12,11 @@ export async function measureTilePicture(available = 170, content = 70) {
 
 export async function measureCardPicture() {
     await pictureLayout("recipe-card-surface", 390, 116);
-    await pictureLayout("recipe-card-title-row", 358, 40, 16, 16);
-    await pictureLayout("recipe-card-badges", 54, 15, 260, 0);
     await pictureLayout("recipe-card-bottom-row", 358, 34, 16, 66);
     await pictureLayout("recipe-card-figures", 190, 34);
-    await fireEvent(screen.getByTestId("recipe-card-prose-measure", {includeHiddenElements: true}),
-                    "contentSizeChange", 120, 25);
+    if (screen.queryByTestId("recipe-card-evidence")) {
+        await pictureLayout("recipe-card-evidence", 70, 15);
+    }
 }
 
 export async function measureReadyPicture() {
