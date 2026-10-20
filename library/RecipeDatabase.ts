@@ -715,9 +715,9 @@ class RecipeDatabase {
      *
      * At most `perShelf` recipes, taken in the shelf's own order, which is the
      * grid's order: a shelf of forty drawn as forty staircases is a solid block,
-     * and the design caps the read at three. The cap is applied in SQL rather
-     * than by slicing afterwards, so a large shelf costs the same as a small
-     * one.
+     * and callers cap fallback art at three or photo covers at four. The cap
+     * is applied in SQL rather than by slicing afterwards, so a large shelf
+     * costs the same as a small one.
      *
      * One small query per shelf rather than one clever query for all of them.
      * The alternative is a UNION of per-shelf limited subqueries, which is the

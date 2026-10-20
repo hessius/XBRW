@@ -1,13 +1,25 @@
 import React, {useState} from "react";
-import {Image, Pressable} from "react-native";
+import {Pressable, ScrollView, useWindowDimensions} from "react-native";
 import {Text, XStack, YStack} from "tamagui";
 
 import DotIcon from "@/components/DotIcon";
 import DotMatrixText from "@/components/DotMatrixText";
+import RecipePhoto from "@/components/RecipePhoto";
+import {CARD_PHOTO_SIZE, PHOTO_GAP} from "@/library/recipePictureLayout";
 import {onAccent, palette} from "@/constants/colors";
 
-/** The photo's side, in points. Fixed so the card never reflows when it loads. */
-const PHOTO_SIZE = 56;
+function ReadyText({name, freshnessLine, bagLine, measuring = false}: {
+    name: string; freshnessLine?: string | null; bagLine?: string | null; measuring?: boolean;
+}) {
+    return <YStack flex={measuring ? undefined : 1} minWidth={0} gap="$1">
+        <Text testID={measuring ? undefined : "ready-to-brew-name"} fontSize={16} fontWeight="600"
+            color={palette.text} numberOfLines={measuring ? undefined : 2}>{name}</Text>
+        {freshnessLine && <Text testID={measuring ? undefined : "ready-to-brew-freshness"}
+            fontSize={13} color={palette.dim}>{freshnessLine}</Text>}
+        {bagLine && <Text testID={measuring ? undefined : "ready-to-brew-bag"}
+            fontSize={13} color={palette.dim}>{bagLine}</Text>}
+    </YStack>;
+}
 
 export type ReadyToBrewCardProps<T> = {
     /**
@@ -70,6 +82,14 @@ export default function ReadyToBrewCard<T>({
     const [failed, setFailed] = useState<string | null>(null);
     const photo = imageUri !== undefined && imageUri !== "" && failed !== imageUri
         ? imageUri : undefined;
+    const {width, fontScale} = useWindowDimensions();
+    const signature = JSON.stringify([name, freshnessLine, bagLine, imageUri, width, fontScale, !!onBrew]);
+    const [available, setAvailable] = useState<{key: string; width: number}>();
+    const [intrinsic, setIntrinsic] = useState<{key: string; width: number}>();
+    const availableWidth = available?.key === signature ? available.width : undefined;
+    const naturalKey = JSON.stringify([signature, availableWidth]);
+    const fits = availableWidth !== undefined && intrinsic?.key === naturalKey
+        && Math.ceil(intrinsic.width + CARD_PHOTO_SIZE + PHOTO_GAP) <= Math.floor(availableWidth);
 
     const spoken = ["Ready to brew", name, freshnessLine, bagLine]
         .filter((part): part is string => typeof part === "string" && part !== "")
@@ -93,39 +113,27 @@ export default function ReadyToBrewCard<T>({
             </XStack>
 
             <XStack alignItems="center" gap="$3">
-                <XStack testID="ready-to-brew-open" flex={1} minWidth={0}
-                        alignItems="center" gap="$3"
+                <XStack key={signature} testID="ready-to-brew-open" flex={1} minWidth={0}
+                        alignItems="center" gap={PHOTO_GAP}
+                        onLayout={event => setAvailable({key: signature, width: event.nativeEvent.layout.width})}
                         accessible accessibilityRole="button"
                         accessibilityLabel={spoken}
                         accessibilityHint="Opens the recipe."
                         onPress={() => onOpen(item)}
                         pressStyle={{opacity: 0.7}}>
-                    {photo !== undefined && (
-                        <Image testID="ready-to-brew-photo" source={{uri: photo}}
-                               onError={() => setFailed(photo)}
-                               accessibilityIgnoresInvertColors
-                               style={{
-                                   width: PHOTO_SIZE, height: PHOTO_SIZE,
-                                   borderRadius: 8, backgroundColor: palette.raised
-                               }}/>
+                    {photo !== undefined && fits && (
+                        <RecipePhoto testID="ready-to-brew-photo" uri={photo}
+                            size={CARD_PHOTO_SIZE} radius={CARD_PHOTO_SIZE / 2}
+                            onError={() => setFailed(photo)}/>
                     )}
-                    <YStack flex={1} minWidth={0} gap="$1">
-                        <Text testID="ready-to-brew-name" fontSize={16} fontWeight="600"
-                              color={palette.text} numberOfLines={2}>
-                            {name}
-                        </Text>
-                        {typeof freshnessLine === "string" && freshnessLine !== "" && (
-                            <Text testID="ready-to-brew-freshness" fontSize={13}
-                                  color={palette.dim}>
-                                {freshnessLine}
-                            </Text>
-                        )}
-                        {typeof bagLine === "string" && bagLine !== "" && (
-                            <Text testID="ready-to-brew-bag" fontSize={13} color={palette.dim}>
-                                {bagLine}
-                            </Text>
-                        )}
-                    </YStack>
+                    <ReadyText name={name} freshnessLine={freshnessLine} bagLine={bagLine}/>
+                    {photo !== undefined && <ScrollView key={naturalKey} horizontal
+                        testID="ready-to-brew-text-measure" pointerEvents="none" accessible={false}
+                        accessibilityElementsHidden importantForAccessibility="no-hide-descendants"
+                        style={{height: 0, opacity: 0, position: "absolute", width: "100%"}}
+                        onContentSizeChange={value => setIntrinsic({key: naturalKey, width: value})}>
+                        <ReadyText name={name} freshnessLine={freshnessLine} bagLine={bagLine} measuring/>
+                    </ScrollView>}
                 </XStack>
 
                 {onBrew !== undefined && (

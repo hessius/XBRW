@@ -210,7 +210,7 @@ export const OUTBOUND_CALLS: OutboundCall[] = [
     {
         id:      "images",
         title:   "Load a photo",
-        trigger: "You open the hub, a roaster's catalogue, an import preview, or a saved recipe that carries a pod photo or the avatar of whoever shared it. With Show recipe pictures on, also your library list, shelf rooms, the shelf covers in the grid and the home screen's Ready to brew card. And the home screen while you subscribe to a roaster.",
+        trigger: "You open the hub, a roaster's catalogue or an import preview. Pictures in ABOUT controls coffee, pod and author pictures in recipe details. Recipe card photos controls coffee or pod photos in your library list, shelf rooms and Ready to brew. Shelf photo previews controls coffee photos in your own and tag shelf covers, never automatic shelves. The home screen also loads coffee photos while you subscribe to a roaster.",
         host:    "whichever host xBloom named in its own reply",
         hostPinned: false,
         owner:   "xBloom, or whoever xBloom points at",
@@ -227,16 +227,13 @@ export const OUTBOUND_CALLS: OutboundCall[] = [
             "library/hub/hubRow.ts",
             "components/PodSection.tsx",
             "components/RecipePhoto.tsx",
-            "components/ShelfPhotoMark.tsx",
-            "components/PhotoViewer.tsx",
             "components/FromSection.tsx",
             "components/HubRow.tsx",
             "components/ImportResult.tsx",
             "components/CatalogueParts.tsx",
             "components/RoasterCoffeeRow.tsx",
             "components/RoasterStrip.tsx",
-            "components/RoasterSearchRow.tsx",
-            "components/ReadyToBrewCard.tsx"
+            "components/RoasterSearchRow.tsx"
         ]
     }
 ];
@@ -264,7 +261,7 @@ export const SILENT_CAPABILITIES: SilentCapability[] = [
     {
         id:     "library",
         title:  "Your library",
-        detail: "Recipes, tags, shelves and notes are stored in a database on this phone. There is no sync, no account of our own, and no server that holds a copy. The one exception is a photo: a recipe imported from xBloom remembers where its picture came from, and opening that recipe, or seeing it in the list with Show recipe pictures on, fetches it. The Load a photo entry below says what that carries."
+        detail: "Recipes, tags, shelves and notes are stored in a database on this phone. There is no sync, no account of our own, and no server that holds a copy. The one exception is a photo: an imported recipe remembers where its picture came from. Pictures in ABOUT, Recipe card photos and Shelf photo previews control its display on their respective surfaces. The Load a photo entry below says what that carries."
     },
     {
         id:     "brewing",

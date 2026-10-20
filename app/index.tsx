@@ -374,7 +374,8 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
         : ready.good.find((entry) => entry.recipe.uuid === readyShown) ?? ready.entries[0];
 
     const [dottedProfile] = useSetting("dotMatrixProfile", settings);
-    const [showRecipeAvatars] = useSetting("showRecipeAvatars", settings);
+    const [showRecipeCardPhotos] = useSetting("showRecipeCardPhotos", settings);
+    const [showShelfPhotoPreviews] = useSetting("showShelfPhotoPreviews", settings);
     const [invertAutoShelves] = useSetting("invertAutoShelves", settings);
     const [hiddenShelves, setHiddenShelves] = useSetting("hiddenShelves", settings);
     const [rawTemperatureUnit] = useSetting("temperatureUnit", settings);
@@ -1670,7 +1671,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                             item={readyCard.entry.recipe}
                             name={readyName(readyCard.entry.recipe)}
                             accent={resolveAccent(readyCard.entry.recipe)}
-                            imageUri={showRecipeAvatars ? readyCard.entry.recipe.imageURL : undefined}
+                            imageUri={showRecipeCardPhotos ? readyCard.entry.recipe.imageURL : undefined}
                             freshnessLine={readyFreshnessLine(readyCard.entry.freshness)}
                             bagLine={readyBagLine(readyCard.entry.reading)}
                             emphasised={brewEmphasised(readyCard.entry)}
@@ -1721,7 +1722,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                         freshness={bagFreshness}
                         showCoffeeMarker={showCoffeeMarker}
                         dottedProfile={dottedProfile}
-                        showPicture={showRecipeAvatars}
+                        showPicture={showRecipeCardPhotos}
                         editing={editing}
                         paddingBottom={bottomInset + 8}/>
                 ) : libraryQuery.view === "shelves" && !picker.active ? (
@@ -1734,7 +1735,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                     // that showed NO MATCHES instead of the shelves would hide
                     // the control the user came to it for.
                     <ShelfGrid shelves={shelves}
-                               marks={withShelfPhotos(library.shelfMarks, showRecipeAvatars)}
+                               marks={withShelfPhotos(library.shelfMarks, showShelfPhotoPreviews)}
                                invertAuto={invertAutoShelves}
                                hidden={parseHidden(hiddenShelves)}
                                onOpen={libraryQuery.openShelf}
@@ -1799,14 +1800,14 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                                 onToggle={() => picker.toggle(item.recipe.uuid)}
                                 showCoffeeMarker={showCoffeeMarker}
                                 dottedProfile={dottedProfile}
-                                showPicture={showRecipeAvatars}/>
+                                showPicture={showRecipeCardPhotos}/>
                         ) : (
                             <SwipeableRecipeRow
                                 recipe={item.recipe}
                                 editing={editing}
                                 showCoffeeMarker={showCoffeeMarker}
                                 dottedProfile={dottedProfile}
-                                showPicture={showRecipeAvatars}
+                                showPicture={showRecipeCardPhotos}
                                 evidence={library.evidence[item.recipe.uuid]}
                                 bag={shownBags[item.recipe.uuid]}
                                 freshness={bagFreshness[item.recipe.uuid]}

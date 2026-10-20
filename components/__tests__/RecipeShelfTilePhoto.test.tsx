@@ -1,9 +1,11 @@
 import React from "react";
-import {fireEvent, screen, within} from "@testing-library/react-native";
+import {act, fireEvent, screen, within} from "@testing-library/react-native";
+import {Dimensions} from "react-native";
 
 import RecipeShelfTile, {
-    TILE_PHOTO_GAP, TILE_PHOTO_SIZE
+    TILE_PHOTO_SIZE
 } from "@/components/RecipeShelfTile";
+import {measureTilePicture} from "@/test-utils/pictureLayout";
 import {TILE_HEIGHT} from "@/components/ShelfTile";
 import Recipe, {CUP_TYPE} from "@/library/Recipe";
 import Pour, {POUR_PATTERN} from "@/library/Pour";
@@ -44,11 +46,12 @@ describe("RecipeShelfTile picture", () => {
         return screen.queryByTestId("recipe-tile-photo", {includeHiddenElements: true});
     }
 
-    it("shows it at the top left, beside the badges and the name", async () => {
+    it("shows it only in the metadata row, never beside the name", async () => {
         await renderWithProviders(
             <RecipeShelfTile recipe={pictured("Ecuador | Vinka Farm Washed")}
                              {...HANDLERS} showPicture/>
         );
+        await measureTilePicture();
 
         expect(photo()?.props.source).toEqual({uri: PHOTO});
         const style = photo()?.props.style as {width: number; height: number};
@@ -64,13 +67,15 @@ describe("RecipeShelfTile picture", () => {
         expect(top.getByText("Ecuador | Vinka Farm Washed").props.numberOfLines).toBe(2);
         expect(top.queryByTestId("recipe-tile-figures")).toBeNull();
         expect(screen.getByTestId("recipe-tile-figures")).toHaveTextContent("15G · 1:15 · 60");
-        expect(screen.getByTestId("recipe-tile-top")).toHaveStyle({gap: TILE_PHOTO_GAP});
+        expect(within(screen.getByTestId("recipe-tile-metadata-width"))
+            .getByTestId("recipe-tile-photo", {includeHiddenElements: true})).toBeTruthy();
     });
 
     it("is decorative: the name is already in the tile's label", async () => {
         await renderWithProviders(
             <RecipeShelfTile recipe={pictured("Ethiopia")} {...HANDLERS} showPicture/>
         );
+        await measureTilePicture();
 
         expect(photo()?.props.accessible).toBe(false);
         expect(photo()?.props.importantForAccessibility).toBe("no");
@@ -95,11 +100,52 @@ describe("RecipeShelfTile picture", () => {
         await renderWithProviders(
             <RecipeShelfTile recipe={pictured("Ethiopia")} {...HANDLERS} showPicture/>
         );
+        await measureTilePicture();
         await fireEvent(photo()!, "error");
 
         expect(photo()).toBeNull();
         expect(within(screen.getByTestId("recipe-tile-top")).getByText("Ethiopia"))
             .toBeTruthy();
+    });
+
+    it("remeasures a changed URL, mutable badge or recipe identity rather than keeping stale fit", async () => {
+        const recipe = pictured("Ethiopia");
+        const view = await renderWithProviders(<RecipeShelfTile recipe={recipe} {...HANDLERS} showPicture/>);
+        await measureTilePicture();
+        await fireEvent(photo()!, "error");
+        expect(photo()).toBeNull();
+        recipe.imageURL = "https://example.com/new.jpg";
+        await view.rerender(<RecipeShelfTile recipe={recipe} {...HANDLERS} showPicture/>);
+        expect(photo()).toBeNull();
+        await measureTilePicture();
+        expect(photo()?.props.source.uri).toBe(recipe.imageURL);
+        recipe.favourite = true;
+        await view.rerender(<RecipeShelfTile recipe={recipe} {...HANDLERS} showPicture/>);
+        expect(photo()).toBeNull();
+        await measureTilePicture();
+        expect(photo()).toBeTruthy();
+        await view.rerender(<RecipeShelfTile recipe={pictured("Ethiopia")} {...HANDLERS} showPicture/>);
+        expect(photo()).toBeNull();
+    });
+
+    it("invalidates intrinsic metadata on Dynamic Type changes without hiding any badges", async () => {
+        const window = Dimensions.get("window");
+        const display = Dimensions.get("screen");
+        await renderWithProviders(<RecipeShelfTile recipe={pictured("Ethiopia")} {...HANDLERS} showPicture editing
+            slotMarker={{slots: ["A"], label: "Easy Mode A"}}/>);
+        await measureTilePicture();
+        expect(photo()).toBeTruthy();
+        try {
+            await act(async () => Dimensions.set({window: {...window, fontScale: 1.8}, screen: display}));
+            expect(photo()).toBeNull();
+            expect(screen.getByTestId("slot-marker", {includeHiddenElements: true})).toHaveTextContent("A");
+            expect(screen.getByTestId("recipe-tile-actions", {includeHiddenElements: true})).toBeTruthy();
+            await measureTilePicture(120, 140);
+            expect(photo()).toBeNull();
+            expect(screen.getByTestId("recipe-tile-figures")).toHaveTextContent("15G · 1:15 · 60");
+        } finally {
+            await act(async () => Dimensions.set({window, screen: display}));
+        }
     });
 
     it("does not change the tile's height", async () => {
@@ -123,6 +169,7 @@ describe("RecipeShelfTile picture", () => {
         await fireEvent(screen.getByTestId("recipe-tile-profile-room"), "layout", {
             nativeEvent: {layout: {x: 0, y: 0, width: 160, height: 30}}
         });
+        await measureTilePicture(160, 220);
 
         const badges = within(screen.getByTestId("recipe-tile-badges"));
         expect(badges.getByTestId("recipe-tile-evidence")).toBeTruthy();
@@ -135,7 +182,7 @@ describe("RecipeShelfTile picture", () => {
         // than run off the edge.
         expect(screen.getByTestId("recipe-tile-badges"))
             .toHaveStyle({flexWrap: "wrap", justifyContent: "flex-end"});
-        expect(photo()).toBeTruthy();
+        expect(photo()).toBeNull();
         expect(screen.getByTestId("recipe-tile-figures")).toBeTruthy();
         expect(within(screen.getByTestId("recipe-tile-profile-room"))
             .getByTestId("recipe-tile-profile")).toBeTruthy();

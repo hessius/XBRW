@@ -3,9 +3,50 @@ import {fireEvent, screen} from "@testing-library/react-native";
 
 import ReadyToBrewCard, {type ReadyToBrewCardProps} from "@/components/ReadyToBrewCard";
 import {renderWithProviders} from "@/test-utils/render";
+import {measureReadyPicture} from "@/test-utils/pictureLayout";
 
 const ITEM = {uuid: "r1"};
 const URL = "https://roaster.example/vinka";
+
+it("omits its circle until text and controls have measured room", async () => {
+    await renderWithProviders(<ReadyToBrewCard {...props({imageUri: URL})}/>);
+    expect(screen.queryByTestId("ready-to-brew-photo", {includeHiddenElements: true})).toBeNull();
+    await fireEvent(screen.getByTestId("ready-to-brew-open"), "layout",
+                    {nativeEvent: {layout: {x: 0, y: 0, width: 260, height: 60}}});
+    await fireEvent(screen.getByTestId("ready-to-brew-text-measure", {includeHiddenElements: true}),
+                    "contentSizeChange", 200, 50);
+    expect(screen.getByTestId("ready-to-brew-photo", {includeHiddenElements: true}).props.style.width).toBe(36);
+    await fireEvent(screen.getByTestId("ready-to-brew-open"), "layout",
+                    {nativeEvent: {layout: {x: 0, y: 0, width: 230, height: 60}}});
+    expect(screen.queryByTestId("ready-to-brew-photo", {includeHiddenElements: true})).toBeNull();
+    expect(screen.getByLabelText("Brew Vinka")).toBeTruthy();
+});
+
+it("keeps all Ready controls after failure and retries only with current text measurements", async () => {
+    const input = props({imageUri: URL, low: {line: "Running low", reorderUrl: URL},
+        moreLine: "+1 more ready", onMore: jest.fn()});
+    const view = await renderWithProviders(<ReadyToBrewCard {...input}/>);
+    await measureReadyPicture();
+    await fireEvent(screen.getByTestId("ready-to-brew-photo", {includeHiddenElements: true}), "error");
+    expect(screen.queryByTestId("ready-to-brew-photo", {includeHiddenElements: true})).toBeNull();
+    await view.rerender(<ReadyToBrewCard {...input} imageUri={`${URL}/new`}/>);
+    expect(screen.queryByTestId("ready-to-brew-photo", {includeHiddenElements: true})).toBeNull();
+    await measureReadyPicture();
+    expect(screen.getByTestId("ready-to-brew-photo", {includeHiddenElements: true}).props.resizeMode).toBe("contain");
+    await view.rerender(<ReadyToBrewCard {...input} imageUri={`${URL}/new`} name="A different coffee"/>);
+    expect(screen.queryByTestId("ready-to-brew-photo", {includeHiddenElements: true})).toBeNull();
+    await fireEvent.press(screen.getByLabelText("Brew A different coffee"));
+    await fireEvent.press(screen.getByLabelText("Hide until tomorrow"));
+    await fireEvent.press(screen.getByTestId("ready-to-brew-open"));
+    await fireEvent.press(screen.getByTestId("ready-to-brew-reorder"));
+    await fireEvent.press(screen.getByTestId("ready-to-brew-more"));
+    expect(input.onBrew).toHaveBeenCalledWith(ITEM);
+    expect(input.onOpen).toHaveBeenCalledWith(ITEM);
+    expect(input.onReorder).toHaveBeenCalledWith(URL);
+    expect(input.onMore).toHaveBeenCalled();
+    expect(input.onDismiss).toHaveBeenCalled();
+    expect(screen.getByTestId("ready-to-brew-brew")).toHaveStyle({minHeight: 44});
+});
 
 function props(over: Partial<ReadyToBrewCardProps<typeof ITEM>> = {}): ReadyToBrewCardProps<typeof ITEM> {
     return {
@@ -89,7 +130,8 @@ describe("ReadyToBrewCard", () => {
         const {rerender} = await renderWithProviders(
             <ReadyToBrewCard {...props({imageUri: "https://img.example/pod.png"})}/>
         );
-        expect(screen.getByTestId("ready-to-brew-photo")).toBeTruthy();
+        await measureReadyPicture();
+        expect(screen.getByTestId("ready-to-brew-photo", {includeHiddenElements: true})).toBeTruthy();
         await rerender(<ReadyToBrewCard {...props({imageUri: undefined})}/>);
         expect(screen.queryByTestId("ready-to-brew-photo")).toBeNull();
     });

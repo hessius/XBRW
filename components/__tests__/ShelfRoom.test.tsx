@@ -1,4 +1,5 @@
 import React from "react";
+import {measureTilePicture} from "@/test-utils/pictureLayout";
 import {StyleSheet} from "react-native";
 import {fireEvent, screen} from "@testing-library/react-native";
 
@@ -138,6 +139,7 @@ describe("ShelfRoom", () => {
             <ShelfRoom label="MORNINGS" recipes={[recipe]}
                        onBack={jest.fn()} actionsFor={actionsFor()} showPicture/>
         );
+        await measureTilePicture();
         expect(screen.getByTestId("recipe-tile-photo", {includeHiddenElements: true})
             .props.source).toEqual({uri: "https://example.com/bag.jpg"});
     });

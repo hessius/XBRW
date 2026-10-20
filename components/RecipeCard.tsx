@@ -1,11 +1,12 @@
 import React from "react";
-import {Pressable, View} from "react-native";
+import {Pressable, ScrollView, View, useWindowDimensions, type LayoutChangeEvent} from "react-native";
 import {XStack, YStack, Text} from "tamagui";
 
 import DigitRoll from "@/components/DigitRoll";
 import DotIcon from "@/components/DotIcon";
 import DotMatrixText, {DOTO_MAX_FONT_SCALE} from "@/components/DotMatrixText";
-import PourProfile, {PROFILE_BLEED} from "@/components/PourProfile";
+import PourProfile, {PROFILE_BLEED, PROFILE_STROKE_WIDTH, profileHeightAt} from "@/components/PourProfile";
+import {CARD_PHOTO_SIZE, overlaps, type Rect} from "@/library/recipePictureLayout";
 import RecipePhoto from "@/components/RecipePhoto";
 import SlotMarker from "@/components/SlotMarker";
 import Recipe from "@/library/Recipe";
@@ -33,13 +34,9 @@ const CARD_HEIGHT = 116;
 const PROFILE_OVERHANG = 2;
 const PROFILE_HEIGHT = 56;
 
-/**
- * The picture beside the name.
- *
- * No taller than the two lines of 17 pt prose it sits beside, so a card with a
- * picture is exactly as tall as one without and the list keeps its rhythm.
- */
-export const CARD_PHOTO_SIZE = 40;
+export {CARD_PHOTO_SIZE} from "@/library/recipePictureLayout";
+const PHOTO_RAIL = CARD_PHOTO_SIZE + 8;
+const CARD_PADDING = 16;
 
 /**
  * The smallest comfortable touch target, per the HIG. The action icons are 18px
@@ -251,6 +248,63 @@ export default function RecipeCard({
 
     const shownEvidence = evidenceLine(evidence);
     const bagReading = bag === undefined ? undefined : readBag(bag.bag, bag.usedGrams, recipe.dosage);
+    const {width, fontScale} = useWindowDimensions();
+    const signature = JSON.stringify([
+        recipe.uuid, recipe.displayName(), recipe.description, recipe.favourite, recipe.dosage,
+        recipe.ratio, recipe.grindSize, recipe.grinder, recipe.pours.map(pour => pour.volume),
+        isTea, showMarker, shownEvidence, bagReading && bagBadge(bagReading),
+        freshness && freshnessBadge(freshness), slotMarker?.slots, editing,
+        !!onDuplicate, !!onDelete, picture, width, fontScale
+    ]);
+    const [regions, setRegions] = React.useState<Record<string, {key: string; rect: Rect}>>({});
+    const [natural, setNatural] = React.useState<{key: string; width: number}>();
+    const [failed, setFailed] = React.useState<string>();
+    const requested = picture.length > 0 && failed !== picture;
+    const surface = regions.surface?.key === signature ? regions.surface.rect : undefined;
+    const geometryKey = JSON.stringify([signature, surface?.width, surface?.height]);
+    const region = (id: string) => regions[id]?.key === geometryKey ? regions[id].rect : undefined;
+    const measure = (id: string) => !requested ? undefined : (event: LayoutChangeEvent) => {
+        const rect = event.nativeEvent.layout;
+        setRegions(was => ({...was, [id]: {key: id === "surface" ? signature : geometryKey, rect}}));
+    };
+    const title = region("title");
+    const badges = region("badges");
+    const bottom = region("bottom");
+    const figures = region("figures");
+    const end = region("end");
+    const needsEnd = editing || shownEvidence !== null;
+    const measured = surface && title && badges && bottom && figures && (!needsEnd || end)
+        && natural?.key === geometryKey;
+    const candidate: Rect | undefined = surface ? {
+        x: surface.width - CARD_PADDING - CARD_PHOTO_SIZE,
+        y: (surface.height - CARD_PHOTO_SIZE) / 2,
+        width: CARD_PHOTO_SIZE, height: CARD_PHOTO_SIZE
+    } : undefined;
+    const proseWidth = surface && badges
+        ? surface.width - 2 * CARD_PADDING - PHOTO_RAIL - badges.width - 8 : 0;
+    const proseFits = natural?.key === geometryKey && natural.width <= Math.floor(proseWidth)
+        && proseWidth > 0;
+    let eligible = false;
+    if (measured && candidate) {
+        const occupied = [
+            {...badges, x: title.x + badges.x, y: title.y + badges.y},
+            {...figures, x: bottom.x + figures.x, y: bottom.y + figures.y},
+            ...(end ? [{...end, x: bottom.x + end.x, y: bottom.y + end.y}] : [])
+        ];
+        // Keep the existing silhouette's size, moving its drawing out of the reserved rail.
+        const profileRight = surface.width + PROFILE_OVERHANG - PHOTO_RAIL - CARD_PADDING;
+        const profileX = profileRight - 200;
+        const along = Math.min(200, candidate.x + candidate.width - profileX);
+        const profileHeight = profileHeightAt(recipe.pours, 200, PROFILE_HEIGHT, along);
+        const profileTop = surface.height + PROFILE_OVERHANG - profileHeight - PROFILE_STROKE_WIDTH;
+        const profileCollision = candidate.x < profileRight + PROFILE_STROKE_WIDTH
+            && candidate.x + candidate.width > profileX && profileHeight > 0
+            && candidate.y + candidate.height > profileTop;
+        eligible = proseFits
+            && !occupied.some(rect => overlaps(candidate, rect)) && !profileCollision;
+    }
+    const reservePhoto = requested && proseFits && (!measured || eligible);
+    const showPhoto = requested && eligible;
 
     const summary = [
         recipe.displayName(),
@@ -375,7 +429,9 @@ export default function RecipeCard({
                 transform: [{scale: pressed ? 0.99 : 1}]
             })}>
             <YStack
+                key={signature}
                 testID="recipe-card-surface"
+                onLayout={requested ? measure("surface") : undefined}
                 // React Native does not promote a View to an accessibility element
                 // implicitly, and the label lives on the Pressable above; this stack
                 // is the card's paint.
@@ -394,16 +450,18 @@ export default function RecipeCard({
                 <View pointerEvents="none"
                       style={{
                           position: "absolute",
-                          right:    -(PROFILE_BLEED + PROFILE_OVERHANG),
+                          right:    -(PROFILE_BLEED + PROFILE_OVERHANG)
+                              + (reservePhoto ? PHOTO_RAIL + CARD_PADDING : 0),
                           bottom:   -(PROFILE_BLEED + PROFILE_OVERHANG)
                       }}>
                     <PourProfile testID="recipe-card-profile" pours={recipe.pours}
                                  width={200} height={PROFILE_HEIGHT} dotted={dottedProfile}/>
                 </View>
 
-                <XStack testID="recipe-card-title-row"
+                <XStack key={`title-${geometryKey}`} testID="recipe-card-title-row"
+                        onLayout={measure("title")}
                         justifyContent="space-between" alignItems="flex-start" gap="$2"
-                        paddingRight={0}>
+                        paddingRight={reservePhoto ? PHOTO_RAIL : 0}>
                     {/* Bounded to the same scale Doto is, so the two halves of the
                         card grow together rather than the prose swamping the data.
 
@@ -415,16 +473,6 @@ export default function RecipeCard({
                         A long title alongside a note truncates, deliberately: a
                         name that needs two lines and an explanation is a name
                         doing the note's job. */}
-                    {/* Leading, so the eye meets the bag before the name, and
-                        clear of the badge corner and the watermark. Dropped
-                        outright if it will not load: the name then takes the
-                        width back, but the card's height never depended on
-                        the picture, so nothing below it moves. */}
-                    {picture.length > 0 && (
-                        <RecipePhoto testID="recipe-card-photo" uri={picture}
-                                     size={CARD_PHOTO_SIZE} radius={8}
-                                     backing={onAccent.key}/>
-                    )}
                     <YStack testID="recipe-card-prose" flex={1} gap="$1">
                         <Text fontSize={17} fontWeight="700"
                               numberOfLines={hasNote ? 1 : 2}
@@ -446,7 +494,7 @@ export default function RecipeCard({
                             </Text>
                         )}
                     </YStack>
-                    <XStack testID="recipe-card-badges" alignItems="center" gap="$1.5">
+                    <XStack testID="recipe-card-badges" alignItems="center" gap="$1.5" onLayout={measure("badges")}>
                         {/* The card's badge corner: the star joins the marker
                             rather than the stats row, so the numbers keep their
                             full width for the library view to build on.
@@ -482,8 +530,9 @@ export default function RecipeCard({
                     </XStack>
                 </XStack>
 
-                <XStack justifyContent="space-between" alignItems="flex-end" gap="$4">
-                    <XStack gap="$5" alignItems="flex-end">
+                <XStack key={`bottom-${geometryKey}`} testID="recipe-card-bottom-row" onLayout={measure("bottom")}
+                        justifyContent="space-between" alignItems="flex-end" gap="$4">
+                    <XStack testID="recipe-card-figures" onLayout={measure("figures")} gap="$5" alignItems="flex-end">
                         <Stat label="DOSE" value={recipe.dosage} suffix="g"/>
                         <Stat label="RATIO" value={recipe.ratio}
                               text={isSet(recipe.ratio) && !Number.isInteger(recipe.ratio)
@@ -500,6 +549,7 @@ export default function RecipeCard({
                         // in Doto, which has no glyph for one, and the app's
                         // star is a dot icon everywhere else it appears.
                         <XStack testID="recipe-card-evidence"
+                                onLayout={measure("end")}
                                 alignItems="center" gap={3}>
                             {(evidence?.avgRating ?? 0) > 0 && (
                                 <DotIcon name="favourite" size={9}
@@ -515,7 +565,7 @@ export default function RecipeCard({
                     )}
 
                     {editing && (
-                        <XStack gap="$1">
+                        <XStack testID="recipe-card-actions" gap="$1" onLayout={measure("end")}>
                             {onDuplicate !== undefined && (
                                 <Action label="Duplicate recipe" icon="duplicate"
                                         tone={palette.success}
@@ -530,6 +580,27 @@ export default function RecipeCard({
                         </XStack>
                     )}
                 </XStack>
+                {requested && <ScrollView key={geometryKey} horizontal testID="recipe-card-prose-measure"
+                    pointerEvents="none" accessible={false} accessibilityElementsHidden
+                    importantForAccessibility="no-hide-descendants"
+                    style={{position: "absolute", height: 0, opacity: 0, width: "100%"}}
+                    onContentSizeChange={value => setNatural({key: geometryKey, width: value})}>
+                    <YStack>
+                        <Text fontSize={17} fontWeight="700" maxFontSizeMultiplier={DOTO_MAX_FONT_SCALE}>
+                            {recipe.displayName()}
+                        </Text>
+                        {hasNote && <Text fontSize={13} maxFontSizeMultiplier={DOTO_MAX_FONT_SCALE}>
+                            {recipe.description}
+                        </Text>}
+                    </YStack>
+                </ScrollView>}
+                {showPhoto && candidate && <View pointerEvents="none" style={{
+                    position: "absolute", left: candidate.x, top: candidate.y
+                }}>
+                    <RecipePhoto testID="recipe-card-photo" uri={picture}
+                        size={CARD_PHOTO_SIZE} radius={CARD_PHOTO_SIZE / 2} backing={onAccent.key}
+                        onError={() => setFailed(picture)}/>
+                </View>}
             </YStack>
         </Pressable>
     );

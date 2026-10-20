@@ -8,6 +8,7 @@ import type {StoredBagReading} from "@/library/CoffeeBagDatabase";
 import type {SettingsStorage} from "@/library/Settings";
 import {Settings} from "@/library/Settings";
 import {renderWithProviders} from "@/test-utils/render";
+import {measureReadyPicture} from "@/test-utils/pictureLayout";
 
 const mockPush = jest.fn();
 let mockRemembered = "AA:BB:CC";
@@ -173,6 +174,21 @@ afterEach(() => {
 });
 
 describe("Ready to brew card", () => {
+    it.each([false, true])("uses card preference %s independently of ABOUT and shelves", async enabled => {
+        const vinka = named("Vinka");
+        vinka.imageURL = "https://coffee.example/bag.jpg";
+        await renderHome([vinka], {[vinka.uuid]: peakBag(vinka)}, {
+            showRecipeCardPhotos: enabled, showRecipeAvatars: !enabled, showShelfPhotoPreviews: !enabled
+        });
+        if (enabled) {
+            await measureReadyPicture();
+            expect(screen.getByTestId("ready-to-brew-photo", {includeHiddenElements: true})).toBeTruthy();
+        } else {
+            expect(screen.queryByTestId("ready-to-brew-text-measure", {includeHiddenElements: true})).toBeNull();
+        }
+        expect(screen.getByTestId("ready-to-brew-brew")).toBeTruthy();
+        expect(screen.getByTestId("ready-to-brew-dismiss")).toBeTruthy();
+    });
     it("is not drawn without an open bag", async () => {
         await renderHome([named("Vinka")], {});
         expect(screen.getByText("Vinka")).toBeTruthy();

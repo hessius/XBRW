@@ -1,4 +1,4 @@
-import React, {useState} from "react";
+import React from "react";
 import {Pressable, View, useWindowDimensions} from "react-native";
 import {useSafeAreaInsets} from "react-native-safe-area-context";
 import {Text, XStack, YStack} from "tamagui";
@@ -6,75 +6,14 @@ import {Text, XStack, YStack} from "tamagui";
 import Collapsible from "@/components/Collapsible";
 import DotIcon from "@/components/DotIcon";
 import DotMatrixText, {DOTO_MAX_FONT_SCALE} from "@/components/DotMatrixText";
-import PhotoViewer from "@/components/PhotoViewer";
 import PourProfile, {
     PROFILE_BLEED, PROFILE_STROKE_WIDTH, profileHeightAt
 } from "@/components/PourProfile";
-import RecipePhoto from "@/components/RecipePhoto";
 import {onAccent} from "@/constants/colors";
 import type Pour from "@/library/Pour";
 
 /** How far the watermark runs past the slab before it is clipped. */
 const PROFILE_OVERHANG = 2;
-
-/**
- * The recipe's picture in the open slab: a rounded square in the top right
- * corner, under the HELP and menu wells.
- *
- * That corner is the one stretch of the slab nothing else uses. The name's row
- * stops `HERO_PHOTO_RESERVE` short of it, or for a long name only the lines
- * that start beside it do (`heroNameLayout`), and the pour profile owns the
- * bottom right, so the picture neither covers the name nor pushes the
- * watermark down. It is drawn out of the flow, so a picture that fails to load
- * leaves the slab exactly as tall as it was with nothing to draw. Beside a
- * long name it may be drawn smaller (`HERO_PHOTO_SIZES`).
- */
-export const HERO_PHOTO_SIZE = 56;
-
-/**
- * How much of the name's row the picture keeps for itself, picture and gap.
- *
- * Set aside whenever a picture is due, loaded or not. Reserving it only once
- * the picture arrived would rewrap the name a moment after the screen opened.
- */
-export const HERO_PHOTO_RESERVE = HERO_PHOTO_SIZE + 8;
-
-/**
- * The picture's sizes beside a long name, largest first.
- *
- * Only the lines that start above the picture's foot are narrowed for it, and
- * the rest of the name runs the slab's full width under it. At 56 the picture
- * reaches past the top of the name's second line, so a 98 character name on a
- * 360 point phone gets two narrowed lines and still needs 15 pt. At 40 it
- * clears the second line and the same name fits at 18. So the slab takes the
- * largest name size any of these allows, then the largest picture that keeps
- * it.
- */
-export const HERO_PHOTO_SIZES = [HERO_PHOTO_SIZE, 48, 40] as const;
-
-/** The space between the name's row and the picture. */
-const HERO_PHOTO_GAP = 8;
-
-/** The picture's top, under the chrome row, in the band layout and otherwise. */
-const HERO_PHOTO_TOP_TIGHT = 3;
-const HERO_PHOTO_TOP = 8;
-
-/**
- * Where the name's first line starts in the band layout, below the top of the
- * open slab's content: the beverage row and its margins.
- *
- * Measured on the Fold's cover screen at 1x text (19.3 points). The beverage
- * row only grows with the text size, so this is the earliest the name starts,
- * and the picture is never estimated to clear a line it reaches.
- */
-const HERO_NAME_TOP = 19;
-
-/**
- * How far a line's box may start above the picture's foot and still count as
- * clear of it: the box's top is half leading, and the glyphs start a few
- * points lower.
- */
-const HERO_PHOTO_OVERLAP = 2;
 
 /** The watermark's drawing size, before its stroke. */
 const PROFILE_WIDTH = 190;
@@ -148,9 +87,6 @@ export const HERO_NAME_MAX_LINES = 3;
  * point phone at 1.15x text. A name that does not fit even at 15 (only at the
  * largest text sizes) is cut after three lines with an ellipsis.
  */
-/** A short name's own size, which a pictured short name tries first. */
-export const HERO_NAME_SHORT_STEP = {fontSize: 26, lineHeight: 31} as const;
-
 export const HERO_NAME_STEPS = [
     {fontSize: 22, lineHeight: 27},
     {fontSize: 20, lineHeight: 25},
@@ -277,15 +213,6 @@ export type HeroNameLayout = {
     profileHeight: number;
     /** Closes up the space under the chrome row when the band is used. */
     tight: boolean;
-    /** The picture's size, when the slab draws one, else 0. */
-    photoSize: number;
-    /**
-     * A long name beside a picture, set as two pieces: `head`, the words on
-     * the lines that start beside the picture, in a column `headWidth` wide
-     * that stops short of it, then `tail`, the rest, `maxWidth` wide under it.
-     * `headLines` is how many lines `head` was estimated to take.
-     */
-    split?: {head: string; headLines: number; headWidth: number; tail: string};
 };
 
 /**
@@ -313,41 +240,23 @@ export type HeroNameLayout = {
  * `minimumFontScale` is honoured only on iOS), it shrinks to any size rather
  * than a step on the type scale, and the band and the header's collapse both
  * need the size before the first layout.
- *
- * `photo` is true when the slab draws the recipe's picture in its top right
- * corner. A short name keeps its two lines at 26 in the row the picture leaves
- * it (`HERO_PHOTO_RESERVE` narrower), or is laid out as a long one. The column
- * beside the watermark is not narrowed: it ends left of the watermark, well
- * before the picture's corner. In the band layout only the lines that start
- * beside the picture are narrowed for it (`split`), and the rest of the name
- * runs the slab's full width under it. The picture is 56 points tall and a
- * three-line name is taller, so narrowing every line cost a size step or two
- * and still cut the device report's name off. The picture also shrinks
- * (`HERO_PHOTO_SIZES`) when that lets the name be larger.
  */
 export function heroNameLayout(
     name: string, windowWidth: number, fontScale = 1,
-    {pours, photo = false}: {pours?: Pour[]; photo?: boolean} = {}
+    {pours}: {pours?: Pour[]} = {}
 ): HeroNameLayout {
     const scale = Math.min(Math.max(fontScale, 1), DOTO_MAX_FONT_SCALE);
     const content = windowWidth - 2 * SLAB_PADDING_X;
-    const photoSize = photo ? HERO_PHOTO_SIZE : 0;
-    // The short-name column is a share of the slab, set aside for the picture
-    // and the pencil as well. With a picture that left "col Java hydrohoney
-    // -18g" a column too narrow for "hydrohoney", which Android then broke
-    // mid-word. So a named recipe with a picture always takes the measured,
-    // word-wrapped path below, which gives the name the full width under the
-    // picture and steps the size down rather than splitting a word.
-    if (name.length <= HERO_NAME_LONG && !photo) {
+    if (name.length <= HERO_NAME_LONG) {
         return {
             fontSize: 26, lineHeight: 31, lines: 2, maxWidth: "72%",
-            reserve: 0, profileHeight: PROFILE_HEIGHT, tight: false, photoSize
+            reserve: 0, profileHeight: PROFILE_HEIGHT, tight: false
         };
     }
     const beside = Math.floor(content - PENCIL_WIDTH - PROFILE_VISIBLE_WIDTH - PROFILE_GAP);
     const full = Math.floor(content - PENCIL_WIDTH);
 
-    // The band layout with no picture: one column, the pencil beside it.
+    // The band layout: one column, the pencil beside it.
     const plain = (step: typeof HERO_NAME_STEPS[number], last: boolean): HeroNameLayout | null => {
         const wrapped = wrapLines(name, full - FIT_SLACK, step.fontSize * scale);
         if (wrapped.length > HERO_NAME_MAX_LINES && !last) {
@@ -358,45 +267,7 @@ export function heroNameLayout(
         return {
             ...step, lines: HERO_NAME_MAX_LINES, maxWidth: full,
             reserve: bandReserve(drawn, step.lineHeight * scale, box, windowWidth, pours),
-            profileHeight: PROFILE_BAND_HEIGHT, tight: true, photoSize: 0
-        };
-    };
-
-    // The band layout with a picture `size` points square in the corner: the
-    // lines that start beside it narrowed for it and the pencil, the rest the
-    // slab's full width.
-    const pictured = (
-        step: {readonly fontSize: number; readonly lineHeight: number}, size: number, last: boolean
-    ): HeroNameLayout | null => {
-        const fontSize = step.fontSize * scale;
-        const lineHeight = step.lineHeight * scale;
-        const foot = HERO_PHOTO_TOP_TIGHT + size - HERO_NAME_TOP;
-        let narrowed = 1;
-        while (narrowed < HERO_NAME_MAX_LINES
-               && narrowed * lineHeight < foot - HERO_PHOTO_OVERLAP) {
-            narrowed++;
-        }
-        const headWidth = Math.floor(content - size - HERO_PHOTO_GAP - PENCIL_WIDTH);
-        const wide = Math.floor(content);
-        const headBreaks = breakLines(name, headWidth - FIT_SLACK, fontSize).slice(0, narrowed);
-        const words = name.split(" ").filter(Boolean);
-        const headCount = headBreaks[headBreaks.length - 1].words;
-        const head = words.slice(0, headCount).join(" ");
-        const tail = words.slice(headCount).join(" ");
-        // A word too long for the narrowed column ends on a later line than it
-        // starts, and goes whole to `tail`.
-        const headDrawn = headBreaks.filter(line => line.words > 0).map(line => line.width);
-        const tailDrawn = tail === "" ? [] : wrapLines(tail, wide - FIT_SLACK, fontSize);
-        if (headDrawn.length + tailDrawn.length > HERO_NAME_MAX_LINES && !last) {
-            return null;
-        }
-        const drawn = [...headDrawn, ...tailDrawn].slice(0, HERO_NAME_MAX_LINES);
-        const box = Math.min(headWidth, Math.max(0, ...headDrawn) + FIT_SLACK);
-        return {
-            ...step, lines: HERO_NAME_MAX_LINES, maxWidth: wide,
-            reserve: bandReserve(drawn, lineHeight, box, windowWidth, pours, foot),
-            profileHeight: PROFILE_BAND_HEIGHT, tight: true, photoSize: size,
-            split: {head, headLines: headDrawn.length, headWidth, tail}
+            profileHeight: PROFILE_BAND_HEIGHT, tight: true
         };
     };
 
@@ -409,31 +280,11 @@ export function heroNameLayout(
             && wordsFit(name, beside - FIT_SLACK, size)) {
             return {
                 ...step, lines: HERO_NAME_MAX_LINES, maxWidth: beside, reserve: 0,
-                profileHeight: PROFILE_HEIGHT, tight: false, photoSize
+                profileHeight: PROFILE_HEIGHT, tight: false
             };
         }
-        if (!photo) {
-            return plain(step, last);
-        }
-        for (const picture of HERO_PHOTO_SIZES) {
-            const layout = pictured(step, picture, false);
-            if (layout !== null) {
-                return layout;
-            }
-        }
-        return last ? pictured(step, HERO_PHOTO_SIZES[HERO_PHOTO_SIZES.length - 1], true) : null;
+        return plain(step, last);
     };
-
-    // A short name with a picture first tries its own 26 pt beside the
-    // picture and under it, whole words only, before stepping down.
-    if (photo && name.length <= HERO_NAME_LONG) {
-        for (const picture of HERO_PHOTO_SIZES) {
-            const layout = pictured(HERO_NAME_SHORT_STEP, picture, false);
-            // A word too wide for the column beside the picture goes whole to
-            // the full-width lines under it, so no word is split here.
-            if (layout !== null) return layout;
-        }
-    }
 
     for (let i = 0; i < HERO_NAME_STEPS.length; i++) {
         const layout = fitted(HERO_NAME_STEPS[i], i === HERO_NAME_STEPS.length - 1);
@@ -454,15 +305,9 @@ export function heroNameLayout(
  * `PROFILE_AIR` above) and how far above the slab's bottom edge it already is
  * without a band. The band is the largest shortfall. The watermark only climbs,
  * so its height where a line ends is the highest it gets under that line.
- *
- * `photoFoot` is how far below the top of the name's first line the picture
- * ends, when there is one. The picture sits over the watermark's high end, so
- * the band keeps the watermark under it too: whichever ends lower, the name or
- * the picture, decides.
  */
 function bandReserve(
-    drawn: number[], lineHeight: number, box: number, windowWidth: number, pours?: Pour[],
-    photoFoot?: number
+    drawn: number[], lineHeight: number, box: number, windowWidth: number, pours?: Pour[]
 ): number {
     // How high the watermark's line stands above the slab's bottom edge, under
     // a point `x` points along from the name's left edge.
@@ -484,12 +329,6 @@ function bandReserve(
     });
     const pencilAbove = SLAB_PADDING_BOTTOM + count * lineHeight - PENCIL_FOOT;
     reserve = Math.max(reserve, stand(box + PENCIL_WIDTH) + PROFILE_AIR - pencilAbove);
-    if (photoFoot !== undefined) {
-        const photoAbove = SLAB_PADDING_BOTTOM + count * lineHeight - photoFoot;
-        reserve = Math.max(
-            reserve, stand(windowWidth - 2 * SLAB_PADDING_X) + PROFILE_AIR - photoAbove
-        );
-    }
     return Math.max(0, Math.ceil(reserve));
 }
 
@@ -501,21 +340,14 @@ function bandReserve(
  * the name and the band kept for the watermark. A deliberate overestimate, so
  * it assumes the largest text size, three lines at the largest step, the
  * untightened gaps and the whole band.
- *
- * `photo` is true when the header draws a picture. The name's row is narrower
- * then and even a short name may take the long layout, so it is counted as
- * one. The band also keeps the watermark under the picture, so the slab is at
- * least the picture's foot plus the whole band. Three lines at the largest
- * size are taller than that, so today that only matters if the sizes change.
  */
-export function heroFoldAway(name: string, photo = false): number {
+export function heroFoldAway(name: string): number {
     const beverageRow = 7 + 24;
-    if (name.length <= HERO_NAME_LONG && !photo) {
+    if (name.length <= HERO_NAME_LONG) {
         return Math.ceil(beverageRow + 7 + 2 * 31 * DOTO_MAX_FONT_SCALE);
     }
     const nameBlock = 7 + HERO_NAME_MAX_LINES * HERO_NAME_STEPS[0].lineHeight * DOTO_MAX_FONT_SCALE;
-    const pictureFoot = photo ? HERO_PHOTO_TOP + HERO_PHOTO_SIZE : 0;
-    return Math.ceil(Math.max(beverageRow + nameBlock, pictureFoot) + HERO_PROFILE_RESERVE);
+    return Math.ceil(beverageRow + nameBlock + HERO_PROFILE_RESERVE);
 }
 
 /** A control in the header's chrome row, drawn in a well cut out of the accent. */
@@ -559,10 +391,6 @@ type Props = {
      * happens to be tappable is hidden.
      */
     onRename: () => void;
-    /** `recipe.imageURL`: pod artwork, or a photo an import link carried. */
-    imageURL?: string;
-    /** `showRecipeAvatars`. Off, no picture is drawn and no room is kept. */
-    showPicture?: boolean;
 };
 
 /**
@@ -586,7 +414,7 @@ type Props = {
  */
 export default function RecipeHero({
     name, named, xid, accent, beverage, pours, collapsed,
-    onBack, onMore, onHelp, onRename, imageURL, showPicture = false
+    onBack, onMore, onHelp, onRename
 }: Props) {
     "use no memo";
 
@@ -595,12 +423,7 @@ export default function RecipeHero({
     // above a coloured card.
     const insets = useSafeAreaInsets();
     const {width, fontScale} = useWindowDimensions();
-    const picture = showPicture ? imageURL ?? "" : "";
-    // The name is sized for the row the picture leaves it, so a long name is
-    // never estimated into the corner the picture covers.
-    const nameLayout = heroNameLayout(name, width, fontScale, {pours, photo: picture.length > 0});
-    const split = nameLayout.split;
-    const [viewing, setViewing] = useState(false);
+    const nameLayout = heroNameLayout(name, width, fontScale, {pours});
 
     // `pours` is the recipe's own array, mutated in place, and the watermark
     // reads each pour through a getter rather than a property — so there is
@@ -710,16 +533,9 @@ export default function RecipeHero({
                            accessibilityHint="Opens a sheet to rename this recipe"
                            testID="hero-rename"
                            onPress={onRename} hitSlop={8}>
-                    {/* Clear of the picture: the row stops short of it, and a
-                        long name beside it is set as two pieces, the lines that
-                        start beside the picture in this row and the rest under
-                        it at the slab's full width. */}
                     <View testID="hero-name-row"
                           style={{
-                              flexDirection: "row", alignItems: "flex-start", gap: 8,
-                              marginRight: picture.length > 0
-                                  ? nameLayout.photoSize + HERO_PHOTO_GAP
-                                  : 0
+                              flexDirection: "row", alignItems: "flex-start", gap: 8
                           }}>
                         {/* Never across the watermark: `heroNameLayout` puts a
                             long name beside it or above it. `simple` breaks
@@ -731,54 +547,21 @@ export default function RecipeHero({
                               maxFontSizeMultiplier={DOTO_MAX_FONT_SCALE}
                               textBreakStrategy="simple"
                               color={named ? onAccent.text : onAccent.label}
-                              numberOfLines={split ? split.headLines + 1 : nameLayout.lines}
-                              maxWidth={split ? split.headWidth : nameLayout.maxWidth}>
-                            {split ? split.head : name}
+                              numberOfLines={nameLayout.lines}
+                              maxWidth={nameLayout.maxWidth}>
+                            {name}
                         </Text>
                         <YStack marginTop="$3">
                             <DotIcon name="edit" size={15} color={onAccent.label}/>
                         </YStack>
                     </View>
-                    {/* One line of slack on the head above: a head the phone
-                        wraps a line later than estimated pushes this down
-                        rather than cutting a word off mid-name. */}
-                    {split && split.tail !== "" && (
-                        <Text testID="hero-name-rest" fontSize={nameLayout.fontSize}
-                              fontWeight="700" lineHeight={nameLayout.lineHeight}
-                              maxFontSizeMultiplier={DOTO_MAX_FONT_SCALE}
-                              textBreakStrategy="simple"
-                              color={named ? onAccent.text : onAccent.label}
-                              numberOfLines={Math.max(1, nameLayout.lines - split.headLines)}
-                              maxWidth={nameLayout.maxWidth}>
-                            {split.tail}
-                        </Text>
-                    )}
                 </Pressable>
                 {nameLayout.reserve > 0 && (
                     <View testID="hero-profile-reserve" pointerEvents="none"
                           style={{height: nameLayout.reserve}}/>
                 )}
 
-                {/* Only in the open slab, top aligned with the beverage row and
-                    moving up with it when a long name closes that gap.
-                    Its own button, opening the photo full screen. Drawn after
-                    the name so it sits above the rename button (whose second
-                    piece runs full width under it) and its hit slop: a tap on
-                    the photo never renames. Drawn whole, not cropped, on the
-                    dark key the header buttons use. */}
-                {picture.length > 0 && (
-                    <View style={{
-                              position: "absolute", right: 0,
-                              top: nameLayout.tight ? HERO_PHOTO_TOP_TIGHT : HERO_PHOTO_TOP
-                          }}>
-                        <RecipePhoto testID="hero-photo" uri={picture}
-                                     size={nameLayout.photoSize} radius={10}
-                                     backing={onAccent.key}
-                                     onPress={() => setViewing(true)}/>
-                    </View>
-                )}
             </Collapsible>
-            <PhotoViewer uri={picture} visible={viewing} onClose={() => setViewing(false)}/>
         </YStack>
     );
 }
