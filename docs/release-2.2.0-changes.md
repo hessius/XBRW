@@ -2,8 +2,9 @@
 
 This is an evaluation branch, not an approved release candidate. The notes below
 come from the contributor proposals and describe intended behavior, not completed
-hardware acceptance. All 24 proposal heads are included for testing; no contributor
-PR has been merged into develop or main.
+hardware acceptance. The 24 proposal heads at the integration checkpoint are
+included for testing; later contributor rebases need comparison before acceptance.
+No contributor PR has been merged into develop or main.
 
 Issue [#249](https://github.com/hessius/XBRW/issues/249) owns package order, review
 findings and acceptance gates. Home roasters (#240), Ready to brew (#242) and
@@ -19,7 +20,7 @@ numbers are unchanged. This version bump does not build, submit or deploy an app
 
 | Package | Proposals | Acceptance focus |
 | --- | --- | --- |
-| Brew correctness | #247, #246, wrong-recipe report | Cancel/upload/reconnect ownership; A then B on real hardware |
+| Brew correctness | #247, #246 | Cancel/upload/reconnect ownership; wrong-recipe investigation deferred to #251 |
 | Small UI fixes | #233, #224, #236, #225, #229, #226 | Duplicate on Android; names, tiles, defaults and model evidence |
 | Shared layout and identity | #232, #234, #235, #230, #223 | Insets, long names, pictures, import and reimport |
 | Multiple machines | #227, #228, #231 | Selection, connection ownership and saved identity |
@@ -28,6 +29,21 @@ numbers are unchanged. This version bump does not build, submit or deploy an app
 | Brand proposal | #243 | Contrast and explicit visual approval |
 
 ## Verified preview follow-ups
+
+### Confirmed and inferred missing beans
+
+An explicit no-beans state (`0x0F`) keeps #246's "No beans detected" message.
+A generic idle event (`40517`) during grinding instead records `grindingStopped`
+and asks the user to check the hopper without claiming an empty-hopper report.
+The brew screen and mini bar distinguish both cases, history keeps the distinct
+reason, and both retain TRY AGAIN. Existing history is not reclassified.
+
+The maintainer provisionally accepted #247 based on the contributor's reported
+machine verification. The remaining device checks are in
+[the 2.2.0 testing checklist](release-2.2.0-testing.md); they are not recorded as
+passed locally. The wrong-recipe hypothesis is deferred to
+[#251](https://github.com/hessius/XBRW/issues/251) for hardware investigation,
+not treated as fixed by cancellation changes.
 
 ### Mutable recipes and compiler caches
 

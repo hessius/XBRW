@@ -68,6 +68,7 @@ export const FAILURE_COPY: Record<string, string> = {
     // The machine reports this itself (state 0x0F, no_beans), so it is said
     // as a fact rather than a guess.
     noBeans:      "No beans detected. Fill the hopper and tap TRY AGAIN.",
+    grindingStopped: "The machine stopped during grinding. Check there are beans in the hopper, then tap TRY AGAIN.",
     gearPosition: "The grinder could not find its gear position.",
     doseMismatch: "The machine would not accept that dose and water volume.",
     idling:       "The machine went idle before the brew started.",
@@ -286,6 +287,7 @@ export const NO_RETRY: ReadonlySet<string> = new Set(["noWater", "stopped"]);
 export const MINI_FAILURE_WHY: Record<string, string> = {
     noWater:      "no water",
     noBeans:      "no beans",
+    grindingStopped: "grinding stopped",
     gearPosition: "the grinder jammed",
     doseMismatch: "the dose was refused",
     idling:       "it went idle",
