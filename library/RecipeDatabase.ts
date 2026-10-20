@@ -711,42 +711,6 @@ class RecipeDatabase {
     }
 
     /**
-     * The pictures a shelf's cover is drawn from: the newest members that have
-     * one, up to `perShelf`, distinct.
-     *
-     * Newest rather than in shelf order, unlike `shelfMembers`, because a cover
-     * is a glance at what was added lately, and the alphabetical first three of
-     * a large shelf rarely change. Only rows that carry a picture are read.
-     */
-    public shelfPhotos(
-        ids: readonly string[],
-        resolveFilter: FilterResolver = () => null,
-        perShelf = 4
-    ): Record<string, string[]> {
-        const photos: Record<string, string[]> = {};
-        for (const id of ids) {
-            const clause = resolveFilter(id);
-            if (clause === null) continue;
-            // The LIKE is a coarse cut so a large shelf is not read whole; the
-            // hydrated recipe's own validated `imageURL` is what is kept.
-            const rows = this.db.getAllSync(
-                `SELECT uuid, recipeJSON FROM recipes WHERE (${clause.where})
-                 AND recipeJSON LIKE '%"imageURL":"https:%'
-                 ORDER BY createdAt DESC, sortName ASC LIMIT ?;`,
-                [...(clause.params ?? []), perShelf + UNREADABLE_ALLOWANCE]
-            ) as {uuid: string; recipeJSON: string}[];
-            const found: string[] = [];
-            for (const row of rows) {
-                if (found.length >= perShelf) break;
-                const url = hydrateRow(row.uuid, row.recipeJSON)?.imageURL ?? "";
-                if (url.length > 0 && !found.includes(url)) found.push(url);
-            }
-            if (found.length > 0) photos[id] = found;
-        }
-        return photos;
-    }
-
-    /**
      * A few members of each shelf, for the art on its tile.
      *
      * At most `perShelf` recipes, taken in the shelf's own order, which is the
@@ -790,7 +754,7 @@ class RecipeDatabase {
             if (clause === null) continue;
             const rows = this.db.getAllSync(
                 `SELECT uuid, recipeJSON FROM recipes WHERE (${clause.where})
-                 ORDER BY sortName ASC LIMIT ?;`,
+                 ORDER BY sortName ASC, uuid ASC LIMIT ?;`,
                 [...(clause.params ?? []), perShelf + UNREADABLE_ALLOWANCE]
             ) as {uuid: string; recipeJSON: string}[];
             const drawable: Recipe[] = [];

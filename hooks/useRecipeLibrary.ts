@@ -2,6 +2,7 @@ import {useEffect, useRef, useState} from "react";
 
 import {mergeRecipes, type BackupPayload} from "@/library/backup";
 import {MARK_MEMBERS} from "@/components/ShelfMark";
+import {COVER_MEMBERS, type ShelfCoverMember} from "@/library/shelfCover";
 import {resolveAccent} from "@/library/accent";
 import {
     authorFilterId, MIN_COUNT, resolveLibraryFilter, resolveStockFilter,
@@ -84,12 +85,6 @@ export type RecipeStore = {
         resolveFilter?: FilterResolver,
         perShelf?: number
     ) => Record<string, Recipe[]>;
-    /** The newest members' pictures, for a shelf's cover. Optional as above. */
-    shelfPhotos?: (
-        ids: readonly string[],
-        resolveFilter?: FilterResolver,
-        perShelf?: number
-    ) => Record<string, string[]>;
     deleteRecipe: (uuid: string) => void;
     cloneRecipe: (uuid: string) => void;
     updateRecipe: (uuid: string, recipe: Recipe) => void;
@@ -195,11 +190,8 @@ export type ShelfWriteOutcome = {
 /** What a shelf's mark is drawn from: its first few members, in shelf order. */
 export type ShelfMarkMembers = {
     accents: string[];
-    /**
-     * The newest members' pictures, newest first, at most four. Absent when no
-     * member has one. Drawn only while `showRecipeAvatars` is on.
-     */
-    photos?: string[];
+    /** First four actual members, for personal/tag covers only. */
+    coverMembers?: ShelfCoverMember[];
 };
 
 export type RecipeLibrary = {
@@ -805,31 +797,25 @@ function readAuthorCounts(
  * Read on the same revision counter as the list, so a recipe joining a shelf
  * changes the shelf's picture without a reload.
  */
-/** How many pictures a shelf's cover can show: a 2x2 mosaic. */
-const SHELF_PHOTOS = 4;
-
 function readShelfMarks(
     db: RecipeStore, ids: string, revision: number
 ): Record<string, ShelfMarkMembers> {
     void revision;
-    const members = db.shelfMembers?.(
-        JSON.parse(ids) as string[], resolveLibraryFilter, MARK_MEMBERS
-    ) ?? {};
-
-    const photos = db.shelfPhotos?.(
-        JSON.parse(ids) as string[], resolveLibraryFilter, SHELF_PHOTOS
-    ) ?? {};
+    const allIds = JSON.parse(ids) as string[];
+    const members = {
+        ...db.shelfMembers?.(allIds.filter(id => !id.startsWith("tag:")), resolveLibraryFilter, MARK_MEMBERS),
+        ...db.shelfMembers?.(allIds.filter(id => id.startsWith("tag:")), resolveLibraryFilter, COVER_MEMBERS)
+    };
 
     const marks: Record<string, ShelfMarkMembers> = {};
     for (const [id, recipes] of Object.entries(members)) {
         if (recipes.length === 0) continue;
-        marks[id] = photos[id] === undefined
-            ? {accents: recipes.map(resolveAccent)}
-            : {accents: recipes.map(resolveAccent), photos: photos[id]};
-    }
-    // A store that answers pictures but not members still gets its covers.
-    for (const [id, found] of Object.entries(photos)) {
-        if (marks[id] === undefined && found.length > 0) marks[id] = {accents: [], photos: found};
+        marks[id] = {
+            accents: recipes.slice(0, MARK_MEMBERS).map(resolveAccent),
+            ...(id.startsWith("tag:") ? {coverMembers: recipes.map(recipe => ({
+                uuid: recipe.uuid, accent: resolveAccent(recipe), imageURL: recipe.imageURL || undefined
+            }))} : {})
+        };
     }
     return marks;
 }

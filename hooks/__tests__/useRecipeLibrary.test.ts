@@ -502,6 +502,31 @@ describe("the store it reads through", () => {
     });
 
     describe("the art each shelf tile draws", () => {
+        it("separates four actual tag members from three-member auto fallback art across revisions", async () => {
+            const members = ["A", "B", "C", "D"].map(name => tagged(name, ["Mornings"]));
+            members[1].imageURL = "https://example.com/bag.jpg";
+            const db = stubDb(members);
+            db.queryRecipes.mockReturnValue([members[3]]);
+            db.countRecipesByTag.mockReturnValue([{tag: "Mornings", count: 4}]);
+            db.shelfMembers.mockImplementation((ids, _resolve, limit = 3) => Object.fromEntries(
+                ids.filter(id => id === "tag:Mornings" || id === "tea")
+                    .map(id => [id, members.slice(0, limit)])
+            ));
+            const {result} = await renderHook(() => useRecipeLibrary(db));
+            expect(result.current.recipes).toEqual([members[3]]);
+            expect(result.current.shelfMarks["tag:Mornings"].coverMembers?.map(member => member.uuid))
+                .toEqual(members.map(member => member.uuid));
+            expect(result.current.shelfMarks["tag:Mornings"].accents).toHaveLength(3);
+            expect(result.current.shelfMarks.tea.coverMembers).toBeUndefined();
+            expect(db.shelfMembers).toHaveBeenCalledWith(
+                expect.arrayContaining(["tag:Mornings"]), resolveLibraryFilter, 4);
+            expect(db.shelfMembers).toHaveBeenCalledWith(
+                expect.not.arrayContaining(["tag:Mornings"]), resolveLibraryFilter, 3);
+            members[1].imageURL = "https://example.com/new.jpg";
+            await act(async () => result.current.refresh());
+            expect(result.current.shelfMarks["tag:Mornings"].coverMembers?.[1].imageURL)
+                .toBe("https://example.com/new.jpg");
+        });
         it("reads art for a shelf the user made, however small", async () => {
             // A marked tag is drawn at any count, so withholding its art leaves
             // a blank square claiming to be a collection. This was the original
@@ -530,7 +555,7 @@ describe("the store it reads through", () => {
 
             const {result} = await renderHook(() => useRecipeLibrary(db));
 
-            const [asked] = db.shelfMembers.mock.calls[0] as unknown as [string[]];
+            const asked = db.shelfMembers.mock.calls.flatMap(call => call[0]);
             expect(asked).not.toContain("tag:Mornings");
             expect(result.current.shelfMarks["tag:Mornings"]).toBeUndefined();
         });
@@ -563,7 +588,7 @@ describe("the store it reads through", () => {
 
             await renderHook(() => useRecipeLibrary(db));
 
-            const [asked] = db.shelfMembers.mock.calls[0] as unknown as [string[]];
+            const asked = db.shelfMembers.mock.calls.flatMap(call => call[0]);
             expect(asked).toContain("tea");
             expect(asked).toContain("tag:morning");
         });
@@ -583,7 +608,7 @@ describe("the store it reads through", () => {
 
             await renderHook(() => useRecipeLibrary(db));
 
-            const [asked] = db.shelfMembers.mock.calls[0] as unknown as [string[]];
+            const asked = db.shelfMembers.mock.calls.flatMap(call => call[0]);
             expect(asked).toContain("tag:morning");
             expect(asked).toContain("sharedBy:Anna");
             expect(asked).not.toContain("tag:once");
@@ -601,7 +626,7 @@ describe("the store it reads through", () => {
 
             await renderHook(() => useRecipeLibrary(db));
 
-            const [asked] = db.shelfMembers.mock.calls[0] as unknown as [string[]];
+            const asked = db.shelfMembers.mock.calls.flatMap(call => call[0]);
             expect(asked).toContain("sharedBy:Anna\nBo");
             expect(asked).toContain("sharedBy:Cal");
             expect(asked).not.toContain("sharedBy:Anna");
@@ -663,7 +688,7 @@ describe("the store it reads through", () => {
 
             await renderHook(() => useRecipeLibrary(db));
 
-            const [asked] = db.shelfMembers.mock.calls[0] as unknown as [string[]];
+            const asked = db.shelfMembers.mock.calls.flatMap(call => call[0]);
             expect(asked).toContain("sharedBy:BrewMind");
         });
 

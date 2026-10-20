@@ -98,6 +98,8 @@ export default function ShelfTile({
     // out here, so the two have to read it from the same place or the tile and
     // its square would disagree about which colour this shelf is.
     const field = members?.accents?.[0] ?? palette.surface;
+    const mark = <ShelfMark kind={shelf.kind} glyph={shelfGlyph(shelf.id)}
+                            accents={members?.accents} inverted={inverted}/>;
     const actions = [
         ...(onActions !== undefined
             ? [{name: "edit", label: `Actions for the ${shelf.label} shelf`}]
@@ -137,13 +139,8 @@ export default function ShelfTile({
                     borderWidth={manual || inverted ? 0 : 1}
                     borderColor={palette.line}>
                 <XStack alignItems="flex-start" justifyContent="space-between">
-                    <ShelfPhotoMark photos={members?.photos ?? []}
-                                    fallback={(
-                                        <ShelfMark kind={shelf.kind}
-                                                   glyph={shelfGlyph(shelf.id)}
-                                                   accents={members?.accents}
-                                                   inverted={inverted}/>
-                                    )}/>
+                    {shelf.kind === "auto" ? mark : <ShelfPhotoMark members={members?.coverMembers ?? []}
+                        count={shelf.count} fallback={mark}/>}
                     {onActions && (
                         <Pressable accessibilityRole="button"
                                    accessibilityLabel={`Actions for the ${shelf.label} shelf`}
