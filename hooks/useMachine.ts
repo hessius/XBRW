@@ -1,8 +1,14 @@
 import {useEffect, useState} from "react";
 import {AppState, Linking} from "react-native";
 
-import {CONNECT_DELAYS_MS, STUDIO_MODEL_STRINGS} from "@/constants/machine";
+import {
+    ADD_SCAN_SECONDS,
+    CONNECT_DELAYS_MS,
+    STUDIO_MODEL_STRINGS,
+    SURVEY_SECONDS
+} from "@/constants/machine";
 import {sharedSettings, useSetting} from "@/hooks/useSetting";
+import {useSavedMachines} from "@/hooks/useSavedMachines";
 import {sharedSlotDatabase} from "@/hooks/useEasyModeSlots";
 import {installMachineSlotPort} from "@/library/slots/machineSlotPort";
 import {unavailableSlotPort, type SlotPort} from "@/library/slots/slotWriter";
@@ -13,11 +19,34 @@ import Machine, {
 } from "@/library/machine/Machine";
 import {asMachineModel, type MachineModel} from "@/library/machine/machineModel";
 import type {Settings} from "@/library/Settings";
-import {BluetoothPermissionError, RadioUnavailableError, SlotOperationError} from "@/library/machine/errors";
+import {
+    BluetoothPermissionError,
+    NoSavedMachineError,
+    RadioUnavailableError,
+    SlotOperationError
+} from "@/library/machine/errors";
+import {
+    bestSavedMachine,
+    machineLabel,
+    scanVerdict,
+    unsavedMachines,
+    type SavedMachine
+} from "@/library/machine/savedMachines";
+import {
+    activateSavedMachine,
+    addAndActivateMachine,
+    forgetSavedMachine,
+    loadSavedMachines,
+    recordSerial,
+    rememberMachine,
+    restoreMachineInUse
+} from "@/library/machine/savedMachineSettings";
 import {
     BleTransport,
     ensureBluetoothPermission,
-    type BluetoothPermissionResult
+    type BluetoothPermissionResult,
+    type FoundMachine,
+    type ScanDecider
 } from "@/library/machine/Transport";
 
 export type LinkStatus = "idle" | "disconnected" | "connecting" | "connected" | "failed";
@@ -38,17 +67,53 @@ export function sharedMachine(): Machine {
         const machine = new Machine(new BleTransport());
         sharedPort = installMachineSlotPort(machine, sharedSlotDatabase());
         stopSharedLifecycle = holdLinkAcrossAppState(machine, () => openLink(machine, settingsStore()));
+        // Whenever the machine describes itself, keep its serial against the
+        // saved entry it belongs to. By `slotIdentity`, which names the
+        // peripheral actually connected, never by `machineDeviceId`: during a
+        // switch that already names the next machine while the old link is
+        // still being let go.
+        //
+        // Link events are frequent (every console note is one), so the pair
+        // last kept is remembered and the store is only read when it changes.
+        let kept = "";
+        machine.onLink(() => {
+            const identity = machine.slotIdentity;
+            if (identity?.serial == null) return;
+            const pair = `${identity.deviceId}|${identity.serial}`;
+            if (pair === kept) return;
+            kept = pair;
+            try {
+                recordSerial(sharedSettings(), identity.deviceId, identity.serial);
+            } catch (error) {
+                machine.note(`could not keep the serial — ${(error as Error).message}`);
+            }
+        });
         shared = machine;
     }
     return shared;
 }
 
-/** The remembered-machine half of the settings store, as the link needs it. */
-function settingsStore(): LinkStore {
+/**
+ * The machine the user picked by hand in this run of the app, or "".
+ *
+ * A pick outranks the priority order until the app is closed. Without it, a
+ * trip to another app in a cafe would hand the link back on the way out and
+ * take it again, on the way in, from whichever saved machine ranks highest:
+ * somebody who had just switched to the machine in front of them would be
+ * switched back without being asked. Not persisted, because the next launch
+ * is a new place, and the order is how the user said to handle a new place.
+ */
+let chosenThisSession = "";
+
+/** The remembered-machine half of the settings store, as the link needs it. Exported for tests. */
+export function settingsStore(settings: Settings = sharedSettings()): LinkStore {
     return {
-        rememberedId: () => sharedSettings().get("machineDeviceId"),
-        rememberId: (id) => sharedSettings().set("machineDeviceId", id),
-        recordMachine: (reading) => applyMachineReading(sharedSettings(), reading)
+        rememberedId: () => settings.get("machineDeviceId"),
+        rememberId: (id) => rememberMachine(settings, id),
+        recordMachine: (reading) => applyMachineReading(settings, reading),
+        savedMachines: () => loadSavedMachines(settings),
+        chosenId: () => chosenThisSession,
+        recordSerial: (id, serial) => recordSerial(settings, id, serial)
     };
 }
 
@@ -69,10 +134,31 @@ export type LinkStore = {
      * Returns whether it overruled the user's machine setting.
      */
     recordMachine: (reading: MachineReading) => boolean;
+    /**
+     * The saved machines, default first.
+     *
+     * Optional, and a store without it is a one-machine store, which is what
+     * every store was before the list. With fewer than two saved the link
+     * behaves exactly as it always has.
+     */
+    savedMachines?: () => SavedMachine[];
+    /** The machine picked by hand this session, or "". See `chosenThisSession`. */
+    chosenId?: () => string;
+    /** Keep the serial a machine reported against its saved entry. */
+    recordSerial?: (id: string, serial: string) => void;
 };
 
 /** How a caller overrides the retrying, which is only ever a test. */
 export type RetryOptions = {delays?: number[]; wait?: (ms: number) => Promise<void>};
+
+/**
+ * What `openLink` lets a caller fix in advance.
+ *
+ * `target` is a peripheral the link must connect to and nothing else: no
+ * priority scan and no stale-id rescan. Choosing and adding a machine both
+ * need it, because a rescan there could land on a machine nobody picked.
+ */
+export type LinkOptions = RetryOptions & {target?: string};
 
 /** What `useMachine` lets a test replace. */
 export type MachineOptions = RetryOptions & {settings?: Settings};
@@ -316,6 +402,9 @@ export function startMachineLink(): void {
 
 /** Tests only. */
 export function __resetSharedMachine(): void {
+    chosenThisSession = "";
+    lastSurvey = null;
+    scanQueue = Promise.resolve();
     stopSharedLifecycle?.();
     stopSharedLifecycle = undefined;
     shared = undefined;
@@ -332,11 +421,72 @@ export async function openLink(
     machine: Machine,
     store: LinkStore,
     ensurePermission: () => Promise<BluetoothPermissionResult> = ensureBluetoothPermission,
-    options: RetryOptions = {}
+    options: LinkOptions = {}
 ): Promise<void> {
     if (machine.isConnected()) return;
+    const startedWith = store.rememberedId();
     // Outside the retrying on purpose. Waiting fourteen seconds to be told the
     // app needs permission it has already been denied helps nobody.
+    await requirePermission(ensurePermission);
+
+    // Which machine, decided once, before the retrying (see the spec's
+    // "Connection algorithm"). With fewer than two saved, `target` stays
+    // undefined and the loop below is exactly the single-machine path it has
+    // always been, stale-id rescan included. With two or more, in order:
+    //
+    // 1. A brew the link lost (`lostContact`) pins the machine in use. That
+    //    machine is assumed to be still pouring, and `Machine.brewBlock` has
+    //    no `lostContact` check, so letting a scan pick another machine here
+    //    would let a BREW on another recipe start somewhere else while the
+    //    first may still be running.
+    // 2. A machine picked by hand this session.
+    // 3. One scan, which prefers the machine in use when it is heard and
+    //    otherwise follows the priority order.
+    let target = options.target;
+    const saved = target === undefined ? store.savedMachines?.() ?? [] : [];
+    if (saved.length >= 2) {
+        const active = store.rememberedId();
+        const chosen = store.chosenId?.() ?? "";
+        if (machine.phase.name === "lostContact" && active !== "") {
+            machine.note(`a brew lost contact — reconnecting to ${active} only`);
+            target = active;
+        } else if (chosen !== "" && saved.some((entry) => entry.id === chosen)) {
+            target = chosen;
+        } else {
+            target = await findSavedMachine(machine, saved, active);
+        }
+    }
+
+    const delays = options.delays ?? CONNECT_DELAYS_MS;
+    const wait = options.wait ?? sleep;
+    let lastFailure: Error | null = null;
+    for (const delay of delays) {
+        if (delay > 0) await wait(delay);
+        // The retrying takes the better part of fifteen seconds. Somebody who
+        // gives up on it and presses "forget this machine" has said what they
+        // want, and connecting anyway would be the app arguing with them. The
+        // same goes for picking another machine meanwhile, which moves the
+        // active machine rather than emptying it: hence "changed", not "empty".
+        if (startedWith !== "" && store.rememberedId() !== startedWith) {
+            throw lastFailure ?? new Error("Connecting was cancelled.");
+        }
+        try {
+            await attemptLink(machine, store, target);
+            return;
+        } catch (e) {
+            if (e instanceof RadioUnavailableError) throw e;
+            lastFailure = e as Error;
+        }
+    }
+    // The reason has to survive the retrying: "the machine is already in use by
+    // another app" is far more use to somebody than "could not connect".
+    throw lastFailure ?? new Error("Could not connect to the machine.");
+}
+
+/** The permission check `openLink` runs first, shared with adding a machine. */
+async function requirePermission(
+    ensurePermission: () => Promise<BluetoothPermissionResult>
+): Promise<void> {
     const permission = await ensurePermission();
     if (!permission.granted) {
         // Two different refusals on Android, and only one of them can be
@@ -353,43 +503,121 @@ export async function openLink(
                 false
             );
     }
-
-    const delays = options.delays ?? CONNECT_DELAYS_MS;
-    const wait = options.wait ?? sleep;
-    const startedWith = store.rememberedId();
-    let lastFailure: Error | null = null;
-    for (const delay of delays) {
-        if (delay > 0) await wait(delay);
-        // The retrying takes the better part of fifteen seconds. Somebody who
-        // gives up on it and presses "forget this machine" has said what they
-        // want, and connecting anyway would be the app arguing with them.
-        if (startedWith !== "" && store.rememberedId() === "") {
-            throw lastFailure ?? new Error("Connecting was cancelled.");
-        }
-        try {
-            await attemptLink(machine, store);
-            return;
-        } catch (e) {
-            if (e instanceof RadioUnavailableError) throw e;
-            lastFailure = e as Error;
-        }
-    }
-    // The reason has to survive the retrying: "the machine is already in use by
-    // another app" is far more use to somebody than "could not connect".
-    throw lastFailure ?? new Error("Could not connect to the machine.");
 }
 
-/** One go at it: remembered identifier first, a scan if that has gone stale. */
-async function attemptLink(machine: Machine, store: LinkStore): Promise<void> {
+/** What the last full scan heard, and when. Read by the picker for "Nearby". */
+export type Survey = {at: number; heard: FoundMachine[]};
+
+let lastSurvey: Survey | null = null;
+const surveyListeners = new Set<() => void>();
+/** The tail of the scan queue. See `exclusiveScan`. */
+let scanQueue: Promise<unknown> = Promise.resolve();
+
+/** The last survey, or null if nothing has been heard in this run of the app. */
+export function latestSurvey(): Survey | null {
+    return lastSurvey;
+}
+
+/** Be told when a scan finishes. Returns the unsubscribe. */
+export function onSurvey(listener: () => void): () => void {
+    surveyListeners.add(listener);
+    return () => { surveyListeners.delete(listener); };
+}
+
+/**
+ * Every scan in this file, one at a time.
+ *
+ * The radio has one scanner. A picker that looks around while the launch
+ * connect is still listening would call `BleManager.scan` a second time, and
+ * the second call's `stopScan` would end the first one's window early. So
+ * scans queue behind each other instead.
+ *
+ * Only a scan that listened for its whole window is kept as the latest
+ * survey (`publish`). A connect's scan stops as soon as it hears the machine
+ * it wants, so what it heard is not a fair answer to "which machines are
+ * nearby", and the picker would mark machines in the room as not nearby.
+ *
+ * Exported for tests.
+ */
+export async function exclusiveScan(
+    machine: Pick<Machine, "scan">, decide?: ScanDecider, seconds?: number, publish = false
+): Promise<FoundMachine[]> {
+    const run = scanQueue.then(() => machine.scan(decide, seconds));
+    scanQueue = run.catch(() => undefined);
+    const found = await run;
+    if (publish) {
+        lastSurvey = {at: Date.now(), heard: found};
+        surveyListeners.forEach((listener) => listener());
+    }
+    return found;
+}
+
+/**
+ * Listen for every xBloom in range, for the picker's "Nearby".
+ *
+ * A short scan that never stops early, because the point is to hear all of
+ * them, and that sends nothing to any machine. `SURVEY_SECONDS` long, and
+ * only ever run because somebody opened the picker or asked to rescan.
+ */
+export function surveyMachines(machine: Machine): Promise<FoundMachine[]> {
+    machine.note("looking for saved machines nearby");
+    return exclusiveScan(machine, () => "continue", SURVEY_SECONDS, true);
+}
+
+/**
+ * Listen once for every saved machine and take the highest-priority one heard.
+ *
+ * One scan rather than a connect to each in turn, because a connect to a
+ * machine that is not there does not fail fast. Core Bluetooth never times a
+ * connection out by itself, and `BleTransport.connect` only gives up at
+ * `CONNECT_TIMEOUT_MS`; with `openLink`'s retrying on top, an absent Home
+ * would cost about a minute before Work was even tried. A scan hears every
+ * advertising xBloom in the same few seconds, and the list picks.
+ *
+ * Not retried. A scan that heard none of them has already listened for all of
+ * them, so the reason is reported straight away and by name.
+ */
+async function findSavedMachine(
+    machine: Machine, saved: SavedMachine[], preferred: string
+): Promise<string> {
+    const priority = saved.map((entry) => entry.id);
+    machine.note(`${saved.length} machines saved — scanning, the machine in use first, then the order`);
+    const found = await exclusiveScan(machine, (heard) => scanVerdict(heard, priority, preferred));
+    const best = bestSavedMachine(found, saved, preferred);
+    if (best === null) {
+        // Never a fallback to an xBloom that is not saved. In a cafe that is
+        // somebody else's machine, and connecting to it makes it beep.
+        const names = saved.map((entry, index) => machineLabel(entry, index)).join(", ");
+        throw new NoSavedMachineError(
+            `None of your saved machines is nearby (${names}). Check one is switched on, then try again.`
+        );
+    }
+    const heardSaved = found.filter((entry) => priority.includes(entry.id)).length;
+    machine.note(heardSaved > 1
+        ? `${heardSaved} saved machines in range — taking ${best.id}`
+        : `found the saved machine ${best.id}`);
+    return best.id;
+}
+
+/**
+ * One go at it: remembered identifier first, a scan if that has gone stale.
+ *
+ * With a `target` there is no scan at all. The target was picked from the
+ * saved list or picked by hand, and a stale-id rescan takes whatever xBloom
+ * answers first, which with several saved is quite possibly not the one that
+ * was meant, and in a cafe possibly not one of the user's at all.
+ */
+async function attemptLink(machine: Machine, store: LinkStore, target?: string): Promise<void> {
     const scanForMachine = async (): Promise<string> => {
-        const found = await machine.scan();
+        const found = await exclusiveScan(machine);
         if (found.length === 0) {
             throw new Error("Could not find a machine. Check it is switched on and nearby.");
         }
         return found[0].id;
     };
 
-    const remembered = store.rememberedId();
+    const active = store.rememberedId();
+    const remembered = target ?? active;
     machine.note(remembered === ""
         ? "no machine remembered — scanning"
         : `using the remembered machine ${remembered}`);
@@ -399,6 +627,7 @@ async function attemptLink(machine: Machine, store: LinkStore): Promise<void> {
         await machine.connect(id);
     } catch (e) {
         if (e instanceof RadioUnavailableError) throw e;
+        if (target !== undefined) throw e;
         // A remembered id can go stale — settings restored onto another phone,
         // or a machine that changed its identifier. Falling back to a scan
         // means the user is never stuck retrying a dead id with "forget this
@@ -408,21 +637,11 @@ async function attemptLink(machine: Machine, store: LinkStore): Promise<void> {
         if (id === remembered) throw e;
         await machine.connect(id);
     }
-    // Every successful connect, not only a new machine: firmware can change
-    // under an identifier that did not.
-    try {
-        const corrected = store.recordMachine({
-            model: machine.modelNumber, name: machine.advertisedName
-        });
-        if (corrected) machine.note(`recognised a Studio — machine setting corrected`);
-    } catch (error) {
-        // Best effort, like every other self-description step in this path.
-        // The link is already open and usable; throwing here would skip
-        // remembering a newly scanned id and report a failure over a machine
-        // that is in fact connected.
-        machine.note(`could not write down what the machine is — ${(error as Error).message}`);
-    }
-    if (id !== remembered) {
+    // Remembering now comes before the reading. Remembering is what makes this
+    // machine the active one, and the reading is written to the active
+    // machine's keys: in the old order, a switch from Home to Work would have
+    // filed Work's model string under Home.
+    if (id !== active) {
         store.rememberId(id);
         // Written to the history because the consequence of it not happening is
         // invisible until much later: a ten-second scan on every connect, and
@@ -430,6 +649,144 @@ async function attemptLink(machine: Machine, store: LinkStore): Promise<void> {
         // to reach for.
         machine.note(`remembering ${id}`);
     }
+    // Every successful connect, not only a new machine: firmware can change
+    // under an identifier that did not.
+    try {
+        const corrected = store.recordMachine({
+            model: machine.modelNumber, name: machine.advertisedName
+        });
+        if (corrected) machine.note(`recognised a Studio — machine setting corrected`);
+        // The serial is what tells two machines with one name apart. Read off
+        // the description the connect just asked for; a machine that did not
+        // answer leaves it for `sharedMachine`'s listener to pick up later.
+        const serial = machine.info?.serial.trim() ?? "";
+        if (serial !== "") store.recordSerial?.(id, serial);
+    } catch (error) {
+        // Best effort, like every other self-description step in this path.
+        // The link is already open and usable; throwing here would report a
+        // failure over a machine that is in fact connected.
+        machine.note(`could not write down what the machine is — ${(error as Error).message}`);
+    }
+}
+
+/**
+ * Why the machine cannot be changed right now, or null if it can.
+ *
+ * A brew under way, or one the link lost in the middle of (`lostContact`
+ * means the machine is assumed to still be brewing), owns the link. Moving it
+ * would leave a dose on one machine and the recorder, the wake lock and the
+ * only STOP button pointing at another. An Easy Mode slot operation owns it
+ * too, which `assertCanForgetDevice` already knows how to say.
+ */
+export function machineChangeBlocker(machine: Machine, activeId: string): string | null {
+    if (isActiveBrewPhase(machine.phase) || machine.phase.name === "lostContact") {
+        return "A brew is running. Stop it or let it finish before changing machines.";
+    }
+    try {
+        const actual = machine.slotIdentity;
+        if (actual !== null) machine.assertCanForgetDevice(actual.deviceId);
+        if (activeId !== "") machine.assertCanForgetDevice(activeId);
+    } catch (failure) {
+        if (failure instanceof SlotOperationError) return failure.message;
+        throw failure;
+    }
+    return null;
+}
+
+/**
+ * Switch to a saved machine, by hand.
+ *
+ * Makes it the active machine first, so its model takes over at once (the
+ * importers follow the machine the user is standing at, whether or not it
+ * answers), then gives up the current link and connects to this one alone.
+ * Sends nothing but the connect and the handshake every connect sends: no
+ * recipe and no brew.
+ *
+ * Throws if it cannot change, or if the machine does not answer. The pick
+ * stands either way, so a later Connect or BREW keeps trying the machine the
+ * user asked for rather than drifting back to the default.
+ */
+export async function chooseMachine(
+    machine: Machine,
+    settings: Settings,
+    id: string,
+    ensurePermission: () => Promise<BluetoothPermissionResult> = ensureBluetoothPermission,
+    options: RetryOptions = {}
+): Promise<void> {
+    const blocker = machineChangeBlocker(machine, settings.get("machineDeviceId"));
+    if (blocker !== null) throw new Error(blocker);
+    if (!loadSavedMachines(settings).some((entry) => entry.id === id)) {
+        throw new Error("That machine is not saved any more.");
+    }
+    chosenThisSession = id;
+    if (settings.get("machineDeviceId") === id && machine.isConnected()) return;
+    activateSavedMachine(settings, id);
+    machine.note(`switching to the saved machine ${id}`);
+    if (machine.isConnected()) await machine.disconnect();
+    await openLink(machine, settingsStore(settings), ensurePermission, {...options, target: id});
+}
+
+/**
+ * Every xBloom in range that is not saved yet, for the user to pick one to add.
+ *
+ * A full scan with no early stop, `ADD_SCAN_SECONDS` long, because with
+ * several unsaved machines in a room taking the first one heard would be a
+ * guess, and connecting to the wrong one makes somebody else's machine beep.
+ * Sends nothing to any machine.
+ */
+export async function findUnsavedMachines(
+    machine: Machine,
+    settings: Settings,
+    ensurePermission: () => Promise<BluetoothPermissionResult> = ensureBluetoothPermission
+): Promise<FoundMachine[]> {
+    await requirePermission(ensurePermission);
+    machine.note("adding a machine — looking for ones that are not saved");
+    const found = await exclusiveScan(machine, () => "continue", ADD_SCAN_SECONDS, true);
+    return unsavedMachines(found, loadSavedMachines(settings));
+}
+
+/**
+ * Connect to the unsaved xBloom the user picked, and save it.
+ *
+ * The pairing path, not a second one: the same retrying `openLink` and the
+ * same reading. The connect is pinned to the picked id, so a retry can never
+ * wander onto a machine that is already saved. The new machine goes on the
+ * end of the order with the model currently chosen, and becomes the machine in
+ * use, because the user is standing in front of it.
+ */
+export async function addMachine(
+    machine: Machine,
+    settings: Settings,
+    id: string,
+    ensurePermission: () => Promise<BluetoothPermissionResult> = ensureBluetoothPermission,
+    options: RetryOptions = {}
+): Promise<void> {
+    const blocker = machineChangeBlocker(machine, settings.get("machineDeviceId"));
+    if (blocker !== null) throw new Error(blocker);
+    if (loadSavedMachines(settings).some((entry) => entry.id === id)) {
+        throw new Error("That machine is already saved.");
+    }
+    await requirePermission(ensurePermission);
+    const entry: SavedMachine = {
+        id,
+        label: "",
+        model: asMachineModel(settings.get("machineModel")),
+        modelString: "",
+        advertisedName: "",
+        serial: ""
+    };
+    const store: LinkStore = {
+        rememberedId: () => settings.get("machineDeviceId"),
+        // Not `rememberMachine`: with one machine saved it would read a new id
+        // as the stale-id case and rename the existing machine.
+        rememberId: () => addAndActivateMachine(settings, entry),
+        recordMachine: (reading) => applyMachineReading(settings, reading),
+        recordSerial: (machineId, serial) => recordSerial(settings, machineId, serial)
+    };
+    if (machine.isConnected()) await machine.disconnect();
+    machine.note(`adding the machine ${id}`);
+    await openLink(machine, store, ensurePermission, {...options, target: id});
+    chosenThisSession = id;
 }
 
 export type MachineLink = {
@@ -437,7 +794,7 @@ export type MachineLink = {
     slotPort?: SlotPort;
     status: LinkStatus;
     error: string | null;
-    /** The remembered device id, or "" if no machine has ever connected. */
+    /** The active machine's device id, or "" if no machine has ever connected. */
     remembered: string;
     /**
      * Connect, and **throw** if it did not work.
@@ -448,7 +805,36 @@ export type MachineLink = {
      * "not connected" it would otherwise hit one line later.
      */
     connect: () => Promise<void>;
+    /** Forget the active machine. */
     forget: () => Promise<void>;
+    /**
+     * Forget one saved machine. The active one hands over to the new default.
+     *
+     * Resolves to whether it was forgotten. An Easy Mode slot operation on
+     * that machine refuses it, and the reason lands in `error` and a toast.
+     */
+    forgetMachine: (id: string) => Promise<boolean>;
+    /**
+     * Switch to a saved machine. Throws, with the reason also in `error`, if
+     * it cannot change or the machine does not answer.
+     */
+    choose: (id: string) => Promise<void>;
+    /**
+     * After a brew refused to follow the link to another machine: drop that
+     * link and make the machine that was on screen the machine in use again.
+     */
+    keepMachineInUse: (shown: string, linked: string) => Promise<void>;
+    /** Connect to and save an unsaved machine the user picked from a scan. */
+    add: (id: string) => Promise<void>;
+    /** The saved machines, default first. */
+    machines: SavedMachine[];
+    /**
+     * Whether the machine can be changed now, and if not, why.
+     *
+     * Read at render, so a picker can say so before anybody taps, rather than
+     * after. See `machineChangeBlocker`.
+     */
+    changeBlocker: string | null;
     /**
      * Whether the failure in `error` is one only the system settings can undo.
      *
@@ -478,7 +864,10 @@ export type MachineLink = {
  */
 export function useMachine(injected?: Machine, options: MachineOptions = {}): MachineLink {
     const machine = injected ?? sharedMachine();
-    const [remembered, setRemembered] = useSetting("machineDeviceId", options.settings);
+    // A function, not a value: reaching for the shared store at render would
+    // open it in every screen test that draws a machine without connecting.
+    const store = () => options.settings ?? sharedSettings();
+    const {machines, activeId: remembered} = useSavedMachines(options.settings);
     const [machineModelSetting] = useSetting("machineModel", options.settings);
     const [status, setStatus] = useState<LinkStatus>(
         // If already connected (e.g. the hook remounts with a live machine),
@@ -523,46 +912,94 @@ export function useMachine(injected?: Machine, options: MachineOptions = {}): Ma
         return () => { offLink(); offPhase(); };
     }, [machine]);
 
-    async function connect(): Promise<void> {
-        if (machine.isConnected()) {
-            setStatus("connected");
-            return;
-        }
+    /** Run one link operation with the status and error bookkeeping around it. */
+    async function linking<T>(operation: () => Promise<T>): Promise<T> {
         setStatus("connecting");
         setError(null);
         setCanOpenSettings(false);
         try {
-            await openLink(machine, {
-                rememberedId: () => remembered,
-                rememberId: setRemembered,
-                recordMachine: (reading) =>
-                    applyMachineReading(options.settings ?? sharedSettings(), reading)
-            }, ensureBluetoothPermission, options);
+            const result = await operation();
             setStatus("connected");
+            return result;
         } catch (e) {
             setError((e as Error).message);
             setCanOpenSettings(
                 e instanceof BluetoothPermissionError && e.canOpenSettings
             );
-            setStatus("failed");
+            setStatus(machine.isConnected() ? "connected" : "failed");
             throw e;
         }
     }
 
-    async function forget(): Promise<void> {
+    async function connect(): Promise<void> {
+        if (machine.isConnected()) {
+            setStatus("connected");
+            return;
+        }
+        await linking(() =>
+            openLink(machine, settingsStore(store()), ensureBluetoothPermission, options));
+    }
+
+    async function choose(id: string): Promise<void> {
+        await linking(() => chooseMachine(machine, store(), id, ensureBluetoothPermission, options));
+    }
+
+    async function add(id: string): Promise<void> {
+        await linking(() => addMachine(machine, store(), id, ensureBluetoothPermission, options));
+    }
+
+    async function forgetMachine(id: string): Promise<boolean> {
+        const settings = store();
+        const active = settings.get("machineDeviceId");
+        // Forgetting is a change of machine too: forgetting the machine in use
+        // makes the next one active, and the next BREW would go there while
+        // the first may still be pouring.
+        const blocker = machineChangeBlocker(machine, active);
+        if (blocker !== null) {
+            setError(blocker);
+            notify({tone: "error", message: blocker});
+            return false;
+        }
         try {
-            const actual = machine.slotIdentity;
-            if (actual !== null) machine.assertCanForgetDevice(actual.deviceId);
-            if (remembered !== "") machine.assertCanForgetDevice(remembered);
+            if (id === active) {
+                const actual = machine.slotIdentity;
+                if (actual !== null) machine.assertCanForgetDevice(actual.deviceId);
+            }
+            machine.assertCanForgetDevice(id);
         } catch (failure) {
             if (!(failure instanceof SlotOperationError)) throw failure;
             setError(failure.message);
             notify({tone: "error", message: failure.message});
+            return false;
+        }
+        if (id === active) await machine.disconnect();
+        if (chosenThisSession === id) chosenThisSession = "";
+        forgetSavedMachine(settings, id);
+        if (id === active) {
+            setError(null);
+            setCanOpenSettings(false);
+            setStatus("idle");
+        }
+        return true;
+    }
+
+    async function keepMachineInUse(shown: string, linked: string): Promise<void> {
+        await machine.disconnect();
+        restoreMachineInUse(store(), shown, linked);
+        setStatus("idle");
+    }
+
+    async function forget(): Promise<void> {
+        const settings = store();
+        const active = settings.get("machineDeviceId");
+        if (active !== "") {
+            await forgetMachine(active);
             return;
         }
+        // Nothing saved: the old unpairing, which still drops any link and
+        // any stray reading rather than leaving them to describe nothing.
         await machine.disconnect();
-        setRemembered("");
-        forgetMachineReadings(options.settings ?? sharedSettings());
+        forgetMachineReadings(settings);
         setError(null);
         setCanOpenSettings(false);
         setStatus("idle");
@@ -570,7 +1007,9 @@ export function useMachine(injected?: Machine, options: MachineOptions = {}): Ma
 
     return {
         machine, slotPort: injected === undefined ? sharedPort : unavailableSlotPort,
-        status, error, remembered, connect, forget,
+        status, error, remembered, connect, forget, forgetMachine, choose, add, machines,
+        keepMachineInUse,
+        changeBlocker: machineChangeBlocker(machine, remembered),
         canOpenSettings,
         /** Send the user to the app's own page in the system settings. */
         openSettings: () => { void Linking.openSettings(); },

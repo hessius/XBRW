@@ -23,29 +23,24 @@ function record(overrides: Partial<BrewRecord> = {}): BrewRecord {
 }
 
 /**
- * A machine that answers, or does not, and reports a dial.
+ * A machine whose last vitals were, or were not, heard after the pour began.
  *
- * `answers` is kept separate from `grindSize` on purpose: the failure this
- * whole path exists to prevent is a machine that stays silent while `info`
- * goes on holding a perfectly plausible pre-brew number.
+ * Kept separate from `grindSize` on purpose: the failure this whole path
+ * exists to prevent is `info` holding a perfectly plausible pre-brew number.
+ * Nothing here can ask: the path no longer sends anything (2026-10-19).
  */
 function machineThat(
-    answers: boolean,
+    heardAfterPour: boolean,
     grindSize: number | null = 47
-): DialMachine & {asked: number} {
-    const fake = {
-        asked: 0,
+): DialMachine {
+    return {
         info: grindSize === null ? null : {grindSize},
-        askHowItIsDoing: async () => {
-            fake.asked++;
-            return answers;
-        }
+        infoAt: heardAfterPour ? 1_100_000 : 900_000
     };
-    return fake;
 }
 
 describe("readDialAfterBrew", () => {
-    it("keeps a reading the machine confirmed", async () => {
+    it("keeps a reading heard after the pour began", async () => {
         const machine = machineThat(true, 47);
         const saved: [string, number][] = [];
         const got = await readDialAfterBrew(machine, record(), (id, dial) => {
@@ -55,10 +50,9 @@ describe("readDialAfterBrew", () => {
         expect(saved).toEqual([["brew-1", 47]]);
     });
 
-    it("keeps nothing when the machine did not answer", async () => {
-        // `info` still holds the pre-brew value here, which is exactly the
-        // number this path exists to avoid recording. Silence has to be
-        // stored as an absence, or nothing downstream could tell them apart.
+    it("keeps nothing when the last reading is the pre-brew one", async () => {
+        // The number this path exists to avoid recording. It has to be stored
+        // as an absence, or nothing downstream could tell them apart.
         const machine = machineThat(false, 47);
         const saved: [string, number][] = [];
         const got = await readDialAfterBrew(machine, record(), (id, dial) => {
@@ -68,9 +62,7 @@ describe("readDialAfterBrew", () => {
         expect(saved).toEqual([]);
     });
 
-    it("does not ask a brew that never got past the grind", async () => {
-        // A brew cancelled before the pour opened. Asking would beep for a
-        // reading about a grind that never happened.
+    it("keeps nothing for a brew that never got past the grind", async () => {
         const machine = machineThat(true, 47);
         const saved: [string, number][] = [];
         const got = await readDialAfterBrew(
@@ -79,11 +71,10 @@ describe("readDialAfterBrew", () => {
             (id, dial) => { saved.push([id, dial]); }
         );
         expect(got).toBeNull();
-        expect(machine.asked).toBe(0);
         expect(saved).toEqual([]);
     });
 
-    it("asks once on a brew that poured and was then cancelled", async () => {
+    it("keeps a reading on a brew that poured and was then cancelled", async () => {
         // The grinder ran and the dose is spent. The reading is about the
         // grind, not about how the brew ended.
         const machine = machineThat(true, 52);
@@ -93,11 +84,10 @@ describe("readDialAfterBrew", () => {
             record({outcome: "cancelled"}),
             (id, dial) => { saved.push([id, dial]); }
         );
-        expect(machine.asked).toBe(1);
         expect(saved).toEqual([["brew-1", 52]]);
     });
 
-    it("keeps nothing when the machine answered without a dial", async () => {
+    it("keeps nothing when there are no vitals at all", async () => {
         const machine = machineThat(true, null);
         const saved: [string, number][] = [];
         const got = await readDialAfterBrew(machine, record(), (id, dial) => {
