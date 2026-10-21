@@ -671,7 +671,7 @@ Describe the adaptation and source PRs briefly. Include the agreed design and
 remaining physical/native limitations. Do not close source PRs or merge them
 before the focused integration is approved.
 
-- [ ] **Step 2: Check automatic Copilot activity before requesting a review.**
+- [x] **Step 2: Check automatic Copilot activity before requesting a review.**
 
 If the new PR already has an automatic Copilot round, use it. Otherwise request
 one. Inspect all findings and implement justified fixes with regressions;
@@ -702,8 +702,13 @@ Stop ready to merge. No merge or cumulative integration is implied by green CI.
   recorded at `2026-10-21T22:04:12Z`; review `5606882137` completed once.
   Its six findings cover missing-route screen-reader coverage, row photo URI
   recovery, offer checkbox lifetime, two non-scrolling sheets and duplicate-
-  name feed diagnostics. Corrections and regression coverage are in progress.
-  Do not request a second round.
+  name feed diagnostics. `e34015e7` corrects all six, with red-to-green
+  regressions and independent local approval. Controller verification passes
+  the eight affected Jest platform suites (92 tests); checker subprocess tests
+  remain separately platform-gated. No second round was requested.
 - Final review-fix evidence and exact final-head CI will be recorded in #263,
   #249 and the session handoff. This owned worktree remains for the pending
   merge decision; the cumulative preview remains separate and unchanged.
+  These checkboxes are the publication-time snapshot; the linked PR's final
+  checks and handoff are the authoritative completion evidence, avoiding a
+  documentation-only push merely to record that same push's CI result.
