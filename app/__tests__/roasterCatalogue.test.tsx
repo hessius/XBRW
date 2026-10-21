@@ -124,19 +124,19 @@ describe("a roaster's coffees", () => {
     it("hides sold-out coffees until IN STOCK is turned off, from the cache alone", async () => {
         const library = memoryLibrary();
         await renderWithProviders(<RoasterScreen settings={subscribed()} feedUrl={FEED_URL}/>);
-        expect(rowIds()).toEqual(["roaster-coffee-b"]);
+        expect(rowIds()).toEqual(["roaster-coffee-id:b"]);
         expect(screen.getByTestId("screen-header-subtitle").props.children).toBe("1 coffee");
         // The count is a line of its own, not a superscript a long name clips.
         expect(screen.queryByTestId("screen-title-count")).toBeNull();
 
         await fireEvent.press(screen.getByTestId("roaster-filter-in-stock"));
-        expect(rowIds()).toEqual(["roaster-coffee-b", "roaster-coffee-a"]);
+        expect(rowIds()).toEqual(["roaster-coffee-id:b", "roaster-coffee-id:a"]);
         expect(screen.getAllByTestId("roaster-row-sold-out")).toHaveLength(1);
         expect(library.fetched).toEqual([]);
 
-        await fireEvent.press(screen.getByTestId("roaster-coffee-b"));
+        await fireEvent.press(screen.getByTestId("roaster-coffee-id:b"));
         expect(router.push).toHaveBeenCalledWith({
-            pathname: "/roasterCoffee", params: {feed: FEED_URL, coffee: "b"}
+            pathname: "/roasterCoffee", params: {feed: FEED_URL, coffee: "id:b"}
         });
     });
 
@@ -183,7 +183,7 @@ describe("searching and filtering a roaster's coffees", () => {
             // take the value off again.
             const row = screen.getByLabelText("Peru, 1 coffee");
             if (!row.props.accessibilityState?.selected) await fireEvent.press(row);
-            expect(rowIds()).toEqual(["roaster-coffee-b"]);
+            expect(rowIds()).toEqual(["roaster-coffee-id:b"]);
         }, {timeout: SHEET_PRESS_TIMEOUT});
         expect(screen.getByTestId("screen-header-subtitle", {includeHiddenElements: true})
             .props.children).toBe("1 of 3 coffees");
@@ -214,7 +214,7 @@ describe("searching and filtering a roaster's coffees", () => {
     it("toggles decaf", async () => {
         await renderWithProviders(<RoasterScreen settings={shelf()} feedUrl={FEED_URL}/>);
         await fireEvent.press(screen.getByTestId("roaster-filter-decaf"));
-        expect(rowIds()).toEqual(["roaster-coffee-b"]);
+        expect(rowIds()).toEqual(["roaster-coffee-id:b"]);
     });
 
     it("searches the producer and says when nothing matches, with a way out", async () => {
@@ -224,13 +224,13 @@ describe("searching and filtering a roaster's coffees", () => {
             await fireEvent.press(screen.getByTestId("rail-search"));
             await fireEvent.changeText(screen.getByTestId("rail-search-input"), "vergara");
             await act(async () => { jest.runAllTimers(); });
-            expect(rowIds()).toEqual(["roaster-coffee-a"]);
+            expect(rowIds()).toEqual(["roaster-coffee-id:a"]);
 
             await fireEvent.changeText(screen.getByTestId("rail-search-input"), "nothing like it");
             await act(async () => { jest.runAllTimers(); });
             expect(screen.getByText("No coffees match.")).toBeTruthy();
             await fireEvent.press(screen.getByTestId("roaster-no-matches-action"));
-            expect(rowIds()).toEqual(["roaster-coffee-a", "roaster-coffee-b", "roaster-coffee-c"]);
+            expect(rowIds()).toEqual(["roaster-coffee-id:a", "roaster-coffee-id:b", "roaster-coffee-id:c"]);
         } finally {
             jest.useRealTimers();
         }
@@ -242,7 +242,7 @@ describe("searching and filtering a roaster's coffees", () => {
         await fireEvent.press(screen.getByTestId("roaster-filter-decaf"));
         await first.unmount();
         await renderWithProviders(<RoasterScreen settings={settings} feedUrl={FEED_URL}/>);
-        expect(rowIds()).toEqual(["roaster-coffee-b"]);
+        expect(rowIds()).toEqual(["roaster-coffee-id:b"]);
     });
 });
 

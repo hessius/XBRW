@@ -22,10 +22,32 @@ describe("the cached catalogue", () => {
         const settings = memorySettings();
         writeCatalogue(settings, FEED_URL, JSON.stringify(body), 1);
         const read = readCatalogue(settings, FEED_URL)!.feed;
-        expect(read.coffees.map((coffee) => coffeeRef(read, coffee))).toEqual(["a", "#1"]);
-        expect(findCoffee(read, "#1")?.name).toBe("Coffee b");
+        expect(read.coffees.map((coffee) => coffeeRef(read, coffee))).toEqual(["id:a", "index:1"]);
+        expect(findCoffee(read, "index:1")?.name).toBe("Coffee b");
+        expect(findCoffee(read, "id:a")?.name).toBe("Coffee a");
         expect(findCoffee(read, "a")?.name).toBe("Coffee a");
         expect(findCoffee(read, "nope")).toBeUndefined();
+    });
+
+    it("round-trips opaque ids without confusing them with positional references", () => {
+        const ids = ["#1", "#ethiopia", "1", "id:a", "index:1", "café", "a"];
+        const catalogue = feed(ids.map(id => ({id})));
+        catalogue.coffees.push({...catalogue.coffees[0], id: undefined, name: "No id"});
+        for (const coffee of catalogue.coffees) {
+            expect(findCoffee(catalogue, coffeeRef(catalogue, coffee))).toBe(coffee);
+        }
+        expect(new Set(catalogue.coffees.map(coffee => coffeeRef(catalogue, coffee))).size)
+            .toBe(catalogue.coffees.length);
+    });
+
+    it.each(["index:-1", "index:1.5", "index: 1", "index:1e0", "index:", "index:999"])(
+        "refuses invalid positional references: %s", ref => {
+            expect(findCoffee(feed([{id: "a"}, {id: "b"}]), ref)).toBeUndefined();
+        }
+    );
+
+    it("does not resolve positional references to coffees with explicit identities", () => {
+        expect(findCoffee(feed([{id: "a"}]), "index:0")).toBeUndefined();
     });
 });
 

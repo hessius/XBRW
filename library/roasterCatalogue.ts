@@ -68,17 +68,25 @@ export function dropCatalogue(settings: Settings, feedUrl: string): void {
 }
 
 /**
- * How a screen names a coffee in a route: its feed id, or its place in the
- * feed when the roaster gave it no id.
+ * Separate namespaces keep opaque feed ids from being read as positions.
  */
 export function coffeeRef(feed: RoasterFeed, coffee: FeedCoffee): string {
-    return coffee.id ?? `#${feed.coffees.indexOf(coffee)}`;
+    return coffee.id === undefined
+        ? `index:${feed.coffees.indexOf(coffee)}`
+        : `id:${coffee.id}`;
 }
 
 export function findCoffee(feed: RoasterFeed, ref: string): FeedCoffee | undefined {
-    if (ref.startsWith("#")) {
-        const index = Number(ref.slice(1));
-        return Number.isInteger(index) ? feed.coffees[index] : undefined;
+    if (ref.startsWith("id:")) {
+        return feed.coffees.find((coffee) => coffee.id === ref.slice(3));
+    }
+    if (ref.startsWith("index:")) {
+        const position = ref.slice(6);
+        if (!/^(0|[1-9]\d*)$/.test(position)) return undefined;
+        const index = Number(position);
+        if (!Number.isSafeInteger(index)) return undefined;
+        const coffee = feed.coffees[index];
+        return coffee?.id === undefined ? coffee : undefined;
     }
     return feed.coffees.find((coffee) => coffee.id === ref);
 }
