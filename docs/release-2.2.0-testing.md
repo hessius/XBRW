@@ -207,3 +207,17 @@ manual gates.
 
 Add focused checks when each package is reviewed. Keep the existing BLE, NFC,
 both-platform and external-app release gates; this checklist does not waive them.
+
+## A-C integration review follow-ups
+
+- [ ] During a held brew preflight, select a replacement link, including one
+  still connecting. The old attempt must not disconnect or retry it.
+- [ ] Interrupt startup and fail either cancellation write. START must stay
+  withdrawn, the local record must finish once as `cancelUnconfirmed`, and the
+  UI must say to check the machine rather than claim it stopped or offer retry.
+- [ ] A late failed cancellation must not finish a replacement run; an observed
+  active pour must remain observed when its cancellation fails.
+
+These are open device checks, not proof that cancellation clears recipe memory
+or a mitigation for deferred #251. The integrated A-C software gates and review
+status are recorded in #249.

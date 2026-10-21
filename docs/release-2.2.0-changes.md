@@ -791,3 +791,24 @@ the palette accent nearest that colour's hue, so the card stays in the app's
 palette and keeps its dark ink at AA. Greys and hues far from every accent fall
 back to the usual accent assignment. A recipe already in the library keeps its
 accent on re-import. The colour itself is never stored. No card bytes change.
+
+## Accepted A-C integration, 2026-10-21
+
+Focused integration PRs #254, #255 and #256 are merged serially into develop
+at `9ff154c89f5805894df078c16f569fbf261af041`. All 13 accepted source PRs are
+marked merged, with their exact live heads rechecked before each package merge.
+Each integration received one Copilot round. A's two findings and B's privacy
+finding were reproduced, fixed and resolved; C reported no open issues.
+All four exact-head CI gates passed for each package.
+
+The cumulative preview now includes that integrated history while preserving
+the unaccepted D-G proposals and its richer import/name/native layouts. A's
+replacement-link ownership and unconfirmed-cancel fixes are adapted to the
+preview's multi-machine/cached-vitals path. B's photo privacy disclosure now
+states that shelf requests can happen with card photos off, including eligible
+automatic covers. C's staged-save behavior remains in the richer preview
+importer, with the new standalone regression cases adapted to its callback.
+
+This does not merge draft #252, promote main, accept later product choices,
+prove the wrong-recipe hypothesis in #251, or close photo-performance #253.
+Native, external-app and physical-device checks remain open.

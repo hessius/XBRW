@@ -77,6 +77,70 @@ beforeEach(() => {
     sharedSettings().set("machineModel", "studio");
 });
 
+describe("persisting existing import decoration", () => {
+    const decoration = {
+        coffee: {name: "Ethiopia Guji", imageUrl: "https://example.com/bag.png"}
+    };
+
+    it("saves a staged copy before changing the held recipe", async () => {
+        const existing = importedRecipe();
+        const before = JSON.stringify(existing);
+        let heldAtSave: string | undefined;
+        const onSaveExisting = jest.fn<void, [Recipe]>(() => { heldAtSave = JSON.stringify(existing); });
+        const onOpenRecipe = jest.fn();
+        const {result} = await renderHook(() => useRecipeImport({
+            stored: [existing], onOpenRecipe, onSaveExisting
+        }));
+
+        await act(async () => result.current.resolveNow(
+            {kind: "xid", xid: "ETH120"}, "shared", decoration
+        ));
+
+        await waitFor(() => expect(onOpenRecipe).toHaveBeenCalledWith(existing, true, false));
+        expect(heldAtSave).toBe(before);
+        expect(onSaveExisting.mock.calls[0][0]).not.toBe(existing);
+        expect(onSaveExisting).toHaveBeenCalledTimes(1);
+        expect(existing.imageURL).toBe(decoration.coffee.imageUrl);
+    });
+
+    it.each(["shared", "atomic", "shortcut"] as const)(
+        "keeps a failed %s enrichment unchanged and permits retry", async intent => {
+            const existing = importedRecipe();
+            const before = JSON.stringify(existing);
+            const onOpenRecipe = jest.fn();
+            const onSaveExisting = jest.fn<void, [Recipe]>(() => { throw new Error("database write failed"); });
+            const {result} = await renderHook(() => useRecipeImport({
+                stored: [existing], onOpenRecipe, onSaveExisting
+            }));
+            const resolve = async () => {
+                await act(async () => result.current.resolveNow(
+                    {kind: "xid", xid: "ETH120"}, intent, decoration
+                ));
+            };
+
+            await resolve();
+
+            await waitFor(() => expect(result.current.state).toMatchObject({
+                status: "error", reason: "storage", message: expect.stringContaining("save")
+            }));
+            expect(JSON.stringify(existing)).toBe(before);
+            expect(onOpenRecipe).not.toHaveBeenCalled();
+            expect(result.current.showField).toBe(true);
+            expect(result.current.focusField).toBe(false);
+
+            onSaveExisting.mockImplementation(() => undefined);
+            await resolve();
+            if (intent === "shortcut") {
+                await waitFor(() => expect(result.current.state.status).toBe("found"));
+                await act(async () => result.current.openFound());
+            }
+            await waitFor(() => expect(onOpenRecipe).toHaveBeenCalledWith(existing, true, false));
+            expect(existing.imageURL).toBe(decoration.coffee.imageUrl);
+            expect(onSaveExisting).toHaveBeenCalledTimes(2);
+        }
+    );
+});
+
 describe("a paste", () => {
     it("resolves and navigates without waiting to be asked", async () => {
         // Atomic: the whole value arrived in one event, chosen deliberately.

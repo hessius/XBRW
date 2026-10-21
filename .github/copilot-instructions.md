@@ -215,7 +215,7 @@ RNTL v14 has removed both `UNSAFE_getAllByType` and `root.findAllByType`. A test
 ## Platform notes
 
 - `NfcOverlay.tsx` is the scanning ceremony for both platforms. On iOS it sits above the system NFC sheet; on Android, where there is no system sheet at all, it *is* the entire experience. (It replaced the old Android-only `AndroidNFCDialog`.) NFC code paths check `nfc.getIsClosed()` before surfacing errors, since a user-cancelled Android scan throws.
-- Version lives in `app.json` (`expo.version`, currently `2.1.0`); `runtimeVersion.policy` is `appVersion`, so a native-affecting change needs a version bump. EAS build profiles: `development`, `preview`, `production`. Note `eas.json` sets `appVersionSource: "remote"`, so EAS holds the build number server-side.
+- Version lives in `app.json` (`expo.version`, currently `2.2.0`); `runtimeVersion.policy` is `appVersion`, so a native-affecting change needs a version bump. EAS build profiles: `development`, `preview`, `production`. Note `eas.json` sets `appVersionSource: "remote"`, so EAS holds the build number server-side.
 - **`app.json` `scheme` is an array and the order matters.** `expo-share-intent` builds the share extension's handoff key from the *first* entry, and the native extension is compiled against it, so reordering silently breaks sharing. `xbrecipewriter` stays first; `xbrw` is an alias. A test in `app/__tests__/native-intent.test.ts` fails if anyone reorders it.
 - Licensing: all three repos in the fork chain are unlicensed upstream, so `LICENSE` grants MIT over *this* repo's contributions only, and `NOTICE` draws that line. Don't relabel the tree as plain MIT.
 
