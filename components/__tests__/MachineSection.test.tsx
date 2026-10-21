@@ -3,11 +3,18 @@ import {StyleSheet} from "react-native";
 import {fireEvent, screen, waitFor, within} from "@testing-library/react-native";
 
 import MachineSection from "@/components/MachineSection";
+import {notify} from "@/components/XbrwToast";
 import {machineColours, palette} from "@/constants/colors";
+import {chooseMachine, __resetSharedMachine} from "@/hooks/useMachine";
+import {FakeTransport} from "@/library/machine/__tests__/FakeTransport";
+import Machine from "@/library/machine/Machine";
+import {Settings} from "@/library/Settings";
+import {serialiseSavedMachines} from "@/library/machine/savedMachines";
 import {renderWithProviders} from "@/test-utils/render";
 import type {SavedMachine} from "@/library/machine/savedMachines";
 
 jest.mock("@/components/XbrwToast", () => ({notify: jest.fn()}));
+jest.mock("react-native-ble-manager", () => ({__esModule: true, default: {}}));
 
 // Jest forbids a `jest.mock` factory from closing over a variable unless its
 // name is `mock`-prefixed, so the plan's `push`/`link` are named `mockPush` and
@@ -57,7 +64,8 @@ jest.mock("@/hooks/useMachine", () => {
                 : mockLinkedId
         }
     });
-    return {__esModule: true, default: link, useMachine: link};
+    return {...jest.requireActual("@/hooks/useMachine"),
+        __esModule: true, default: link, useMachine: link};
 });
 
 // The section now carries a preference row, and the shared settings store opens
@@ -103,6 +111,8 @@ function card(id: string) {
 }
 
 function resetLink(): void {
+    __resetSharedMachine();
+    jest.mocked(notify).mockClear();
     mockPush.mockClear();
     mockAsk.mockClear();
     mockLinkedId = undefined;
@@ -113,7 +123,7 @@ function resetLink(): void {
     mockLink.canOpenSettings = false;
     mockLink.openSettings.mockClear();
     mockLink.forgetMachine.mockClear();
-    mockLink.choose.mockClear();
+    mockLink.choose.mockReset().mockResolvedValue(undefined);
     mockLink.connect.mockReset().mockResolvedValue(undefined);
     mockLink.changeBlocker = null;
     mockLink.machines = [];
@@ -535,6 +545,39 @@ describe("one card per saved machine", () => {
         expect(screen.getByRole("button", {name: /^Work, .*Connected$/})).toBeTruthy();
         await openDetails(/^Work, /, "WORK");
         expect(card("WORK").getByText(INFO.firmware)).toBeTruthy();
+    });
+
+    it("Connect switches the actual link to the selected card before announcing success", async () => {
+        mockLink.remembered = "HOME";
+        mockLinkedId = "WORK";
+        const values = new Map<string, string>();
+        const settings = new Settings({
+            read: key => values.get(key) ?? null,
+            write: (key, value) => {values.set(key, value);}
+        });
+        settings.set("machineDeviceId", "HOME");
+        settings.set("savedMachines", serialiseSavedMachines(mockLink.machines));
+        const transport = new FakeTransport();
+        const machine = new Machine(transport, {frameGapMs: 0});
+        await machine.connect("WORK");
+        expect(machine.linkedDeviceId).toBe("WORK");
+        mockLink.choose.mockImplementation(id => chooseMachine(
+            machine, settings, id, async () => ({granted: true}), {wait: async () => {}}
+        ));
+        try {
+            await renderWithProviders(<MachineSection settings={settings}/>);
+            await openCard(/^Home, /);
+            await fireEvent.press(card("HOME").getByRole("button", {name: /^Connect to my machine/}));
+
+            await waitFor(() => expect(notify).toHaveBeenCalledWith({
+                tone: "success", message: "Connected to Home"
+            }));
+            expect(machine.linkedDeviceId).toBe("HOME");
+            expect(transport.connectedTo).toBe("HOME");
+            expect(settings.get("machineDeviceId")).toBe("HOME");
+        } finally {
+            await machine.disconnect();
+        }
     });
 
     it("does not display stale live readings after the link goes away", async () => {

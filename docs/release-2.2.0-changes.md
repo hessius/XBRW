@@ -20,6 +20,13 @@ and readings follow the actual linked device, not a selected device that has
 not connected. Blank reported models retain the accepted fallback. Opening
 Settings still sends no handshake.
 
+The single review round found a selected/linked mismatch in the existing
+selection helper. Connect now skips reconnecting only if that exact selected
+machine is actually linked. A different live link is disconnected before the
+targeted connection; the already-linked case still sends no extra handshake.
+Real-machine/fake-transport regressions cover the helper and the Settings
+button. This is not confirmation of the separate reported mechanism in #251.
+
 App-wide auto-start joins the existing Brewing group, followed by Units,
 Recipe list, account, Library and gated tools. About/version is the final row.
 The labelled support action stays in the fixed header and can wrap onto its

@@ -299,11 +299,21 @@ refreshed through the existing script. Native build/device checks remain open.
   folds and footer order. Full-app screen-reader/sheet and physical BLE checks
   remain on the release checklist; the unavailable idb helper was not repaired
   by changing the user's tooling.
-- [ ] Push the task branch and open a focused PR against develop, explaining the
+- [x] Push the task branch and open a focused PR against develop, explaining the
   adaptation of #231, acceptance gaps and the no-merge boundary.
-- [ ] Inspect existing reviews/requested reviewers before requesting Copilot.
+- [x] Inspect existing reviews/requested reviewers before requesting Copilot.
   If none ran automatically, request `copilot-pull-request-reviewer[bot]` once
   and verify a real request/review exists. Do not use the display-name login.
+
+  #259 received exactly one Copilot review on `1d1b3a05`. Its one finding was
+  reproduced through the real selection helper and Settings button on both
+  platforms: four failures, 146 passes. The fix requires the selected ID to
+  match the actually linked ID before taking the no-op shortcut. The 320
+  affected connection/card/picker regressions then passed. Final push, thread
+  resolution, CI and handoff are tracked on #259/#249 and the session todos;
+  this document records the implementation checkpoint, not a live CI mirror.
+  The combined Settings/native/connection run passes 658 tests across 34
+  platform suites, with typecheck and lint also passing after the correction.
 - [ ] Implement meaningful findings, add regressions, reply and resolve threads,
   push, and wait for all CI jobs on the exact final HEAD. Do not request a second
   review after fixes.

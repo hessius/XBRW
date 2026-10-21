@@ -253,6 +253,34 @@ describe("switching by hand", () => {
         expect(settings.get("machineModel")).toBe("original");
     });
 
+    it("connects to the selected machine when a different machine is actually linked", async () => {
+        const settings = cafe();
+        const {transport, machine} = rig(settings, heard("bar-1", "bar-2"));
+        await machine.connect("bar-2");
+        expect(settings.get("machineDeviceId")).toBe("bar-1");
+        expect(machine.linkedDeviceId).toBe("bar-2");
+
+        await chooseMachine(machine, settings, "bar-1", granted, instant);
+
+        expect(transport.connectedTo).toBe("bar-1");
+        expect(machine.linkedDeviceId).toBe("bar-1");
+        expect(settings.get("machineDeviceId")).toBe("bar-1");
+    });
+
+    it("leaves an already linked selected machine connected without another handshake", async () => {
+        const settings = cafe();
+        const {transport, machine, store} = rig(settings, heard("bar-1"));
+        await openLink(machine, store, granted, instant);
+        const disconnect = jest.spyOn(machine, "disconnect");
+        const sent = [...transport.sent];
+
+        await chooseMachine(machine, settings, "bar-1", granted, instant);
+
+        expect(disconnect).not.toHaveBeenCalled();
+        expect(transport.sent).toEqual(sent);
+        expect(machine.linkedDeviceId).toBe("bar-1");
+    });
+
     it("sends exactly what an ordinary connect sends, and no recipe", async () => {
         const plain = rig(memory({machineDeviceId: "bar-2"}), heard("bar-2"));
         await openLink(plain.machine, plain.store, granted, instant);

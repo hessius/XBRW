@@ -29,6 +29,9 @@ each device result. Software transports do not qualify BLE or NFC hardware.
 - [ ] Connect/Use targets that exact saved machine. Refuse it or switch it off:
   do not announce success for a different machine. Check Android permission
   recovery and visible disabled reasons during connection and a live brew.
+  Include HOME selected with WORK still linked: Connect must actually reach
+  HOME, not merely announce it. Reconnecting an already linked selection must
+  not add a handshake.
 - [ ] Manage machine still renames, colours, reorders and sets eligible models.
   Forget asks first; switching, adding and forgetting respect live brew locks.
   Open/close sheets with keyboard and screen reader on both platforms.
