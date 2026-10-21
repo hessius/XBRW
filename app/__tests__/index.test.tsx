@@ -330,6 +330,7 @@ function store(recipes: Recipe[]) {
         queryRecipes: jest.fn((query: LibraryQuery) => queried(query)),
         retrieveAllRecipes: jest.fn(() => recipes),
         countRecipes: jest.fn(() => recipes.length),
+        countRecipesByRoaster: jest.fn(() => []),
         countRecipesByFilter: jest.fn((ids: readonly string[]) =>
             Object.fromEntries(ids.map((id) => [
                 id,
@@ -1371,6 +1372,8 @@ describe("HomeScreen, opening one editor at a time", () => {
         await waitFor(() => expect(XBloomRecipe).toHaveBeenCalled());
 
         expect(mockPush).toHaveBeenCalledTimes(1);
+        await waitFor(() => expect(screen.getByTestId("home-content", {includeHiddenElements: true})
+            .props.accessibilityElementsHidden).toBe(false));
         expect(mockNotify).not.toHaveBeenCalledWith(
             expect.objectContaining({message: "Already in your library"})
         );

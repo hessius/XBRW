@@ -902,6 +902,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
     const importer = useRecipeImport({
         stored:       () => library.allRecipes(),
         canOpenRecipe,
+        onOpenDeclined: () => setImportOpen(false),
         onFeed: roasterOffer.arm,
         onImported: roasterOffer.imported,
         onDiscard: roasterOffer.disarm,

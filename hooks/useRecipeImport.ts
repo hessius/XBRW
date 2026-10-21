@@ -112,6 +112,7 @@ type Options = {
     onOpenRecipe: (recipe: Recipe, isExisting: boolean) => void | boolean;
     /** Synchronous navigation preflight, checked before any existing-recipe write. */
     canOpenRecipe?: () => boolean;
+    onOpenDeclined?: () => void;
     /**
      * Write a stored recipe back after an import link filled its blanks
      * (`fillImportBlanks`). Called once with a staged copy before the held
@@ -189,7 +190,7 @@ export type RecipeImport = {
 };
 
 export function useRecipeImport({
-    stored, onOpenRecipe, canOpenRecipe, onSaveExisting, onFeed, onImported, onDiscard
+    stored, onOpenRecipe, canOpenRecipe, onOpenDeclined, onSaveExisting, onFeed, onImported, onDiscard
 }: Options): RecipeImport {
     const [value, setValue] = useState("");
     const [state, setState] = useState<ImportState>({status: "idle"});
@@ -593,6 +594,7 @@ export function useRecipeImport({
         // re-enter the hook, and a second tap must never replay a write.
         pending.current = null;
         if (canOpenRecipe?.() === false) {
+            onOpenDeclined?.();
             followUp.current.onDiscard?.();
             clearInteraction();
             return;
