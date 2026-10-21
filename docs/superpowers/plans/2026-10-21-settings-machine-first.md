@@ -41,7 +41,7 @@
 
 ## Task 1: Adopt the contributor presentation without losing A-D
 
-- [ ] **Step 1: Recheck the source and inspect its merge.**
+- [x] **Step 1: Recheck the source and inspect its merge.**
 
 ```bash
 gh pr view 231 --repo hessius/XBRW --json headRefOid,state
@@ -56,7 +56,7 @@ Brewing controls, picture preferences, accessibility locks and native hosts.
 Only the eight Settings-related source files should enter from this proposal.
 Do not carry a new release note into the already shipped 2.1.0 ledger.
 
-- [ ] **Step 2: Add regressions in the existing test harnesses before fixing the adopted cards.**
+- [x] **Step 2: Add regressions in the existing test harnesses before fixing the adopted cards.**
 
 Use the existing typed `mockLink`, saved-machine fixtures, `renderOrder` and
 `memoryStorage` helpers. Add `choose`, `changeBlocker` and `linkedDeviceId` to the
@@ -82,7 +82,7 @@ Add expose `disabled: true`, announce the reason and do not invoke their handler
 Keep zero-machine model/onboarding, Android permission recovery, initial-error
 expansion and the existing no-handshake-on-open tests.
 
-- [ ] **Step 3: Run the targeted tests and observe the intended failures.**
+- [x] **Step 3: Run the targeted tests and observe the intended failures.**
 
 ```bash
 npx jest --runTestsByPath components/__tests__/MachineSection.test.tsx --watch=false
@@ -90,10 +90,11 @@ npx jest --runTestsByPath components/__tests__/MachineSection.test.tsx --watch=f
 
 Expected: failures for duplicate management, wrong readings or unannounced locks,
 not a native-module/mock crash. If tools are missing in the new worktree, first
-verify the unchanged lockfile against the preview's dependencies, then reuse its
-dependency tree with an ignored symlink; do not install a different dependency set.
+compare the manifests and lockfiles before reusing another dependency tree.
+The preview's dependencies differed, so the missing-preset failure was resolved
+with `npm ci` against this task's unchanged lockfile.
 
-- [ ] **Step 4: Simplify the cards and correct ownership.**
+- [x] **Step 4: Simplify the cards and correct ownership.**
 
 Remove inline saved-model selection and Forget from `MachineSection`; retain the
 zero-machine global model preference. Remove the card's destructive footer prop
@@ -133,7 +134,7 @@ Keep model-specific connection guidance in place of `CONNECT_NEEDS_STUDIO` when
 appropriate. Existing `connect` rejection is already surfaced by the hook's
 error; existing `choose` rejection retains its notification.
 
-- [ ] **Step 5: Run the machine, sheet and section tests.**
+- [x] **Step 5: Run the machine, sheet and section tests.**
 
 ```bash
 npx jest --runTestsByPath components/__tests__/MachineSection.test.tsx components/__tests__/MachineDetailSheet.test.tsx components/__tests__/MachineAddSheet.test.tsx components/__tests__/ForgetMachineSheet.test.tsx components/__tests__/SettingsSection.test.tsx --watch=false
@@ -144,7 +145,7 @@ Copilot coauthor trailer after Tasks 2-3 finish resolving the layout merge.
 
 ## Task 2: Persistent support action and responsive header
 
-- [ ] **Step 1: Add failing header and support tests.**
+- [x] **Step 1: Add failing header and support tests.**
 
 Extend `ScreenHeader.test.tsx`, importing `Text` from `react-native`:
 
@@ -165,13 +166,13 @@ and assert the literal `https://buymeacoffee.com/hsus`. Assert browser failure
 reports `LINK_OPEN_FAILED`, the visible full title, browser announcement and a
 minimum 44-point target.
 
-- [ ] **Step 2: Run the two suites to confirm the missing action/export fails.**
+- [x] **Step 2: Run the two suites to confirm the missing action/export fails.**
 
 ```bash
 npx jest --runTestsByPath components/__tests__/ScreenHeader.test.tsx components/__tests__/SupportTile.test.tsx --watch=false
 ```
 
-- [ ] **Step 3: Add the action slot and compact support component.**
+- [x] **Step 3: Add the action slot and compact support component.**
 
 Add `action?: React.ReactNode` to ScreenHeader. Keep the current header subtree
 for callers without an action. The action variant uses an outer wrapping row,
@@ -204,7 +205,7 @@ export function SupportAction() {
 Do not add `numberOfLines`, disable font scaling, or substitute an icon-only label.
 Reuse the existing safe-area header and preserve meta/count for other consumers.
 
-- [ ] **Step 4: Run the two suites and existing title coverage to green.**
+- [x] **Step 4: Run the two suites and existing title coverage to green.**
 
 ```bash
 npx jest --runTestsByPath components/__tests__/ScreenHeader.test.tsx components/__tests__/ScreenTitle.test.tsx components/__tests__/SupportTile.test.tsx --watch=false
@@ -212,7 +213,7 @@ npx jest --runTestsByPath components/__tests__/ScreenHeader.test.tsx components/
 
 ## Task 3: Approved Settings order and documentation
 
-- [ ] **Step 1: Update layout assertions to the approved intentional behaviour.**
+- [x] **Step 1: Update layout assertions to the approved intentional behaviour.**
 
 In `app/__tests__/settings.test.tsx`, assert the section headings appear in order:
 
@@ -234,13 +235,13 @@ Enable Labs using the existing injected Settings helper and additionally assert
 About follows CARD DIAGNOSTICS. Replace the obsolete top-of-page About/tile tests,
 not the persistence, restore, destructive-action or sheet coverage.
 
-- [ ] **Step 2: Run the Settings layout selectors to confirm they fail.**
+- [x] **Step 2: Run the Settings layout selectors to confirm they fail.**
 
 ```bash
 npx jest --runTestsByPath app/__tests__/settings.test.tsx -t 'order|About|support|tip jar|brewing preferences' --watch=false
 ```
 
-- [ ] **Step 3: Reorder unchanged groups and wire the header.**
+- [x] **Step 3: Reorder unchanged groups and wire the header.**
 
 Use `<ScreenHeader title="Settings" onBack={() => router.back()}
 action={<SupportAction/>}/>` and import the named support export. Remove the
@@ -255,7 +256,7 @@ and the 2.2.0 change/testing ledgers. Document correct-device readings, narrow/
 large-text header checks, real BLE gaps and no changes to model or brew logic.
 Keep the shipped 2.1.0 ledger identical to the pinned task base.
 
-- [ ] **Step 4: Run the complete Settings and related navigation suites.**
+- [x] **Step 4: Run the complete Settings and related navigation suites.**
 
 ```bash
 npx jest --runTestsByPath app/__tests__/settings.test.tsx app/__tests__/about.test.tsx components/__tests__/MachineSection.test.tsx components/__tests__/ScreenHeader.test.tsx components/__tests__/SupportTile.test.tsx --watch=false
@@ -268,12 +269,25 @@ Commit the source adoption and approved adaptations with the coauthor trailer.
 
 ## Task 4: Verification, focused PR and exactly one review
 
-- [ ] Inspect the full base-to-head diff and run the smallest combined affected
+Pre-review checkpoint: all 434 affected tests pass across both platforms;
+typecheck and lint pass. Expo Doctor passes 20/21 checks but now requires
+`expo` 57.0.31, `expo-router` 57.0.29 and `expo-sharing` 57.0.24, one patch
+above the unchanged task lockfile. Package comparisons include native Android
+artifacts. Do not suppress the hard gate or silently expand this UI-only task
+into dependency/runtime maintenance; obtain a scope decision first.
+
+- [x] Inspect the full base-to-head diff and run the smallest combined affected
   suites, escalating to the existing full-suite CI for the final branch.
 - [ ] Verify the header's actual flex layout at 320/390 points and font scales
   1/2, long names, card folds and reachable footer. Use a local simulator or
   isolated actual-component browser harness; do not claim a mockup proves RN
   layout or physical BLE safety.
+
+  Actual-component iOS simulator checks passed at 320/390 points with measured
+  font scales 1.00 and 2.14, including the long-name card. Automated tests cover
+  folds and footer order. Full-app screen-reader/sheet and physical BLE checks
+  remain on the release checklist; the unavailable idb helper was not repaired
+  by changing the user's tooling.
 - [ ] Push the task branch and open a focused PR against develop, explaining the
   adaptation of #231, acceptance gaps and the no-merge boundary.
 - [ ] Inspect existing reviews/requested reviewers before requesting Copilot.

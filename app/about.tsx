@@ -88,7 +88,7 @@ const BUILD = Application.nativeBuildVersion ?? "unknown";
 /**
  * About.
  *
- * Reached from the identity row at the top of settings. Every block here is
+ * Reached from the final row in Settings. Every block here is
  * something a user or a reviewer needed and could not find: which build they are
  * running, whose app this is and whose it is not, what leaves the phone, why a
  * blank card will not take a recipe, and where to report a fault.

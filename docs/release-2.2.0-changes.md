@@ -6,6 +6,31 @@ draft #252 also contain proposals that have not been accepted; they must not be
 merged wholesale. Issue #249 records source heads, decisions and integration.
 The shipped 2.1.0 ledger remains unchanged.
 
+## Package D follow-up: machine-first Settings
+
+Source #231 is preserved at
+`437d1d36def383a43b78ab480b72eb2e56d6246a`, with the maintainer-approved
+adaptation rather than its original complete layout.
+
+Settings opens on collapsed saved-machine cards. Expand for a targeted
+Connect/Use action, Manage machine and read-only Details. Naming, colour,
+order, model and confirmed forgetting remain in the existing management sheet.
+The selected card starts open if it already has an error on entry. Connection
+and readings follow the actual linked device, not a selected device that has
+not connected. Blank reported models retain the accepted fallback. Opening
+Settings still sends no handshake.
+
+App-wide auto-start joins the existing Brewing group, followed by Units,
+Recipe list, account, Library and gated tools. About/version is the final row.
+The labelled support action stays in the fixed header and can wrap onto its
+own row with large text. History remains in the home header, and disclosure
+remains under About; their redundant Settings shortcuts are removed.
+
+The existing palette, preferences, persistence, sheet hosts, model rules and
+Package D brew locks are retained. No BLE protocol, native configuration or
+dependency change is included. Implementation and software acceptance are not
+physical-device qualification, and this task does not close #251 or #253.
+
 ## Package D: saved machines and selection
 
 Source heads are preserved in merge history:
@@ -41,8 +66,8 @@ need qualification on the exact integrated build.
 
 Studio serial prefixes have hardware evidence; the Original `J20` mapping
 comes from catalogue model codes and remains unverified on an Original.
-#231's settings reordering, machine cards and diagnostics folding are not
-accepted in this package. About and donation placement remain unchanged.
+#231 was excluded from the original D integration. Its separately approved
+Settings adaptation is described above.
 
 ## Package A: brew correctness
 
