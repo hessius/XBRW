@@ -138,16 +138,29 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
     const [size, setSize] = useState<string | undefined>(undefined);
     const [retry, setRetry] = useState(0);
     const [loaded, setLoaded] = useState<Loaded | null>(null);
-    const [pending, setPending] = useState<Pending | null>(null);
-    const [naming, setNaming] = useState(false);
+    const [pendingAt, setPendingAt] = useState<{request: string; value: Pending} | null>(null);
+    const [namingAt, setNamingAt] = useState<string | null>(null);
+    const action = useRef<AbortController | null>(null);
     const chosen = coffee === undefined ? undefined : chooseRecipe(coffee, size);
-    const request = `${chosen?.share ?? ""}:${retry}`;
+    const request = JSON.stringify([feed, cached?.feed.roaster.name, coffee, chosen?.size, retry]);
+    const pending = pendingAt?.request === request ? pendingAt.value : null;
+    const naming = namingAt === request;
+    if (pendingAt !== null && pendingAt.request !== request) setPendingAt(null);
+    if (namingAt !== null && namingAt !== request) setNamingAt(null);
+
+    function setPending(value: Pending | null) {
+        setPendingAt(value === null ? null : {request, value});
+    }
+
+    function setNaming(open: boolean) {
+        setNamingAt(open ? request : null);
+    }
 
     useEffect(() => {
         if (coffee === undefined || chosen === undefined) return;
         const controller = new AbortController();
         let alive = true;
-        fetchCoffeeRecipe(coffee, chosen.size, deps, controller.signal)
+        fetchCoffeeRecipe(coffee, chosen.size, deps, controller.signal, cached?.feed.roaster.name)
             .then((fetched) => {
                 if (alive) setLoaded({request, fetched, failed: false});
             })
@@ -157,9 +170,9 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
         return () => {
             alive = false;
             controller.abort();
+            action.current?.abort();
         };
-        // `request` is the share and the retry count, which is everything
-        // this fetch depends on.
+        // Include decoration context: two feeds can publish the same share link.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [request]);
 
@@ -196,7 +209,12 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
 
     /** A fresh copy each time, so one action never mutates what another uses. */
     async function latest(): Promise<FetchedCoffee> {
-        return fetchCoffeeRecipe(coffee as FeedCoffee, chosen?.size, deps);
+        action.current?.abort();
+        const controller = new AbortController();
+        action.current = controller;
+        return fetchCoffeeRecipe(
+            coffee as FeedCoffee, chosen?.size, deps, controller.signal, cached?.feed.roaster.name
+        );
     }
 
     /**
@@ -205,11 +223,19 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
      * TO LIBRARY; shelving already does that.
      */
     async function add() {
+        let fresh: FetchedCoffee;
+        try {
+            fresh = await latest();
+        } catch (error) {
+            if (error instanceof Error && error.name === "AbortError") return;
+            notify({tone: "error", message: "Couldn't reach xBloom. Check your connection."});
+            return;
+        }
         let outcome: AddOutcome;
         try {
-            outcome = addToLibrary(await latest(), deps, store);
+            outcome = addToLibrary(fresh, deps, store);
         } catch {
-            notify({tone: "error", message: "Couldn't reach xBloom. Check your connection."});
+            notify({tone: "error", message: "Couldn't save the recipe. Try again."});
             return;
         }
         if (outcome.kind === "ask") {
@@ -221,15 +247,24 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
 
     function answer(takeLatest: boolean) {
         if (pending === null || pending.kind !== "ask") return;
-        const kept = takeLatest
-            ? takeRoasterLatest(pending.held, pending.latest, deps, store)
-            : pending.held;
-        setPending({kind: "shelf", recipe: kept});
+        try {
+            const kept = takeLatest
+                ? takeRoasterLatest(pending.held, pending.latest, deps, store)
+                : pending.held;
+            setPending({kind: "shelf", recipe: kept});
+        } catch {
+            notify({tone: "error", message: "Couldn't save the recipe. Try again."});
+        }
     }
 
     function shelve(shelf: string): boolean {
         if (pending === null || pending.kind !== "shelf") return false;
-        addToShelf(pending.recipe, shelf, deps, store);
+        try {
+            addToShelf(pending.recipe, shelf, deps, store);
+        } catch {
+            notify({tone: "error", message: "Couldn't save the recipe. Try again."});
+            return false;
+        }
         setPending(null);
         setNaming(false);
         notify({tone: "success", message: `Added to ${shelf}.`});
@@ -242,7 +277,8 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
         let fresh: FetchedCoffee;
         try {
             fresh = await latest();
-        } catch {
+        } catch (error) {
+            if (error instanceof Error && error.name === "AbortError") return;
             notify({tone: "error", message: "Couldn't reach xBloom. Check your connection."});
             return;
         }

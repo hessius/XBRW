@@ -23,6 +23,8 @@ export type ImportDecoration = {
     recipeName?: string;
     tags?: readonly string[];
     colour?: string;
+    /** A validated catalogue URL, followed only after this import succeeds. */
+    feed?: string;
 };
 
 /**
@@ -157,9 +159,9 @@ export function fillImportBlanks(recipe: Recipe, decoration: ImportDecoration): 
     } else {
         const held = recipe.coffee as Record<string, unknown>;
         for (const [key, value] of Object.entries(coffee)) {
-            if (value === undefined || value === "") continue;
+            if (value === undefined || (typeof value === "string" && value.trim() === "")) continue;
             const current = held[key];
-            if (current !== undefined && current !== "") continue;
+            if (current !== undefined && !(typeof current === "string" && current.trim() === "")) continue;
             held[key] = value;
             (filled as Record<string, unknown>)[key] = value;
         }

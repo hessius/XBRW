@@ -1,5 +1,6 @@
 import {useLocalSearchParams} from "expo-router";
 import React, {useState} from "react";
+import {useCatalogueNow} from "@/hooks/useCatalogueNow";
 import {useSafeAreaInsets} from "react-native-safe-area-context";
 import {ScrollView, Text, YStack} from "tamagui";
 
@@ -46,9 +47,8 @@ export default function SubscriptionScreen({settings, feedUrl, fetchBody, now: c
     const store = settings ?? sharedSettings();
     const subs = useRoasterSubscriptions({settings: store, fetchBody, now: clock});
     // Read once and again after each action, as the list does.
-    const [now, setNow] = useState(() => (clock ?? Date.now)());
+    const now = useCatalogueNow(clock);
     const [ending, setEnding] = useState(false);
-    const tick = () => setNow((clock ?? Date.now)());
     const insets = useSafeAreaInsets();
     const sub = subscriptionFor(subs.subscriptions, feed);
     const covered = ratingNoteOpen || ending;
@@ -100,13 +100,12 @@ export default function SubscriptionScreen({settings, feedUrl, fetchBody, now: c
                                            detail={`Checks ${sub.roaster} for new and sold-out coffees.`}
                                            onPress={() => {
                                                if (subs.refreshing !== null) return;
-                                               void subs.refresh(sub).then(tick);
+                                               void subs.refresh(sub);
                                            }}/>
                         {sub.paused ? (
                             <SettingsActionRow label="Resume updates"
                                                onPress={() => {
                                                    subs.resume(sub);
-                                                   tick();
                                                }}/>
                         ) : (
                             <SettingsActionRow label="Pause updates"

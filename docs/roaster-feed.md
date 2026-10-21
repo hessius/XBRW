@@ -32,6 +32,9 @@ xbrw://import?v=1&source=<your name>&feed=<https URL of the feed, percent-encode
 - The offer is made after that import, once the person is back in their library:
   "Subscribe to {roaster}?". It is not made if they already subscribe (the app
   refreshes the catalogue quietly instead) or if they ticked "Don't ask again".
+- Cancelling, editing or replacing an import discards its pending feed offer.
+  A feed failure never prevents the recipe from importing; the app reports the
+  failed follow-up and offers the import link as the way to try again.
 - A feed is identified by its origin and path. The query string is ignored, so
   `?view=xbrw&v=2` is the same feed as `?view=xbrw`.
 
@@ -110,6 +113,13 @@ object instead of the theme template, so a feed must never be fetched that way.
 | `coffees[].bean.flavours` | no | A short list of tasting notes, as an array (or comma separated text). Up to 12, each up to 32 characters. Drawn as the coffee's chips in the catalogue, and kept on the recipe's coffee so ABOUT can show them as its flavour (with `aromatics` under them); without it, `aromatics` becomes chips only when it is a short list. |
 | `coffees[].bean.colour` | no | Your own colour for the coffee, such as the one you use for its origin, as `#RRGGBB` (`color` is accepted too). Nothing else is read: no `#RGB`, no alpha, no names. A recipe added from the catalogue takes the app's card colour nearest that colour's hue, so the card stays readable; a grey, or a hue far from every card colour, gets the usual colour instead. A recipe already in the library keeps its colour. |
 | `coffees[].bean.tags` | no | Labels such as "Berry" or "Filter", same limits. Shown quietly under the flavours, searchable, and added to the recipe's tags when it is added to the library (after the person's own tags, never replacing one). |
+
+For a newly fetched catalogue recipe, `bean.roaster` takes precedence. If it is
+missing or blank, the app keeps a roaster already supplied by the recipe's
+xBloom import, otherwise it uses the enclosing `roaster.name`. The result lives
+on the saved recipe's coffee record, survives copies and backup JSON, and does
+not depend on keeping a subscription. Reimporting fills only blank saved
+metadata; it never replaces a roaster the person already saved.
 
 ### Selling bags from any shop
 
@@ -204,6 +214,12 @@ and your recipe on xBloom has changed since:
 - if they have not edited their copy, it takes your new brewing content quietly;
 - if they have, the app asks "The roaster has a newer version" with "Use the
   roaster's latest" or "Keep mine".
+
+Typing a code deliberately only shows a preview: even blank-fill and untouched
+author replacements wait for the person to open it. Failed saves leave the
+existing library copy unchanged and provide storage-specific retry feedback.
+If the author's brewing content has not changed since import, local edits are
+kept without offering that unchanged author version as newer.
 
 Either way their name for it, their notes, tags and brew history stay. To change
 a recipe for everyone, update it on xBloom under the same share link; people get

@@ -1,11 +1,11 @@
 import {assignAccent} from "@/library/accent";
 import {fitName} from "@/library/fitName";
 import {parseHidden, serialiseHidden} from "@/library/hiddenShelves";
-import {decorateImport} from "@/library/importDecoration";
+import {decorateImport, fillImportBlanks} from "@/library/importDecoration";
 import {parseImportInput} from "@/library/importInput";
 import {planReimport, readPrints, rememberPrint, takeLatest} from "@/library/importRefresh";
 import {tagFilterId} from "@/library/libraryFilters";
-import type Recipe from "@/library/Recipe";
+import Recipe from "@/library/Recipe";
 import {chooseRecipe} from "@/library/roasterCatalogue";
 import type {FeedCoffee} from "@/library/roasterFeed";
 import type {Settings} from "@/library/Settings";
@@ -51,10 +51,15 @@ export type FetchedCoffee = {recipe: Recipe; size: string};
  */
 export async function fetchCoffeeRecipe(
     coffee: FeedCoffee, size: string | undefined, deps: Pick<LibraryDeps, "fetchRecipe">,
-    signal?: AbortSignal
+    signal?: AbortSignal, feedRoaster?: string
 ): Promise<FetchedCoffee> {
     const chosen = chooseRecipe(coffee, size);
     const recipe = await deps.fetchRecipe(chosen.share, signal);
+    if (signal?.aborted) {
+        const cancelled = new Error("Catalogue lookup cancelled.");
+        cancelled.name = "AbortError";
+        throw cancelled;
+    }
     if (recipe === null) throw new Error("xBloom has no recipe at that link.");
     // A recipe that cannot produce card bytes would slip past every later
     // check as identity-less, the same rule the import sheet keeps.
@@ -65,9 +70,12 @@ export async function fetchCoffeeRecipe(
     // same way here.
     // The feed keeps its flavours beside the coffee block; the recipe keeps
     // them on its coffee, where ABOUT reads them.
+    const roaster = coffee.coffee.roaster?.trim()
+        || recipe.coffee?.roaster?.trim() || feedRoaster?.trim();
+    const bean = {...coffee.coffee, ...(roaster ? {roaster} : {})};
     const withFlavours = coffee.flavours.length > 0
-        ? {...coffee.coffee, flavours: coffee.flavours}
-        : coffee.coffee;
+        ? {...bean, flavours: coffee.flavours}
+        : bean;
     decorateImport(recipe, {
         coffee: withFlavours, source: "import", tags: coffee.tags, colour: coffee.colour
     });
@@ -95,15 +103,21 @@ export function addToLibrary(
     const stored = deps.stored();
     const plan = planReimport(stored, fetched.recipe, readPrints(settings));
     switch (plan.kind) {
-        case "same":
-            if (adoptName(plan.recipe, fetched.recipe)) deps.save(plan.recipe);
+        case "same": {
+            const staged = new Recipe(undefined, JSON.stringify(plan.recipe));
+            if (adoptMetadata(staged, fetched.recipe)) {
+                deps.save(staged);
+                Object.assign(plan.recipe, staged);
+            }
             return {kind: "already", recipe: plan.recipe};
+        }
         case "replace": {
-            const recipe = takeLatest(plan.held, fetched.recipe);
-            adoptName(recipe, fetched.recipe);
+            const recipe = takeLatest(new Recipe(undefined, JSON.stringify(plan.held)), fetched.recipe);
+            adoptMetadata(recipe, fetched.recipe);
             deps.save(recipe);
+            Object.assign(plan.held, recipe);
             rememberPrint(settings, recipe);
-            return {kind: "updated", recipe};
+            return {kind: "updated", recipe: plan.held};
         }
         case "ask":
             return {kind: "ask", held: plan.held, latest: fetched.recipe};
@@ -138,15 +152,24 @@ export function adoptName(held: Recipe, fetched: Recipe): boolean {
     return true;
 }
 
+function adoptMetadata(held: Recipe, fetched: Recipe): boolean {
+    const renamed = adoptName(held, fetched);
+    const filled = fillImportBlanks(held, {
+        coffee: fetched.coffee, recipeUrl: fetched.recipeUrl
+    });
+    return renamed || filled;
+}
+
 /** "Use the roaster's latest" on an edited copy. Their name, notes and brews stay. */
 export function takeRoasterLatest(
     held: Recipe, latest: Recipe, deps: Pick<LibraryDeps, "save">, settings: Settings
 ): Recipe {
-    const recipe = takeLatest(held, latest);
-    adoptName(recipe, latest);
+    const recipe = takeLatest(new Recipe(undefined, JSON.stringify(held)), latest);
+    adoptMetadata(recipe, latest);
     deps.save(recipe);
+    Object.assign(held, recipe);
     rememberPrint(settings, recipe);
-    return recipe;
+    return held;
 }
 
 /**
@@ -171,8 +194,10 @@ export type BagAttachment = {
 export function addToShelf(
     recipe: Recipe, shelf: string, deps: Pick<LibraryDeps, "save">, settings: Settings
 ): BagAttachment {
-    recipe.setTags([shelf, ...recipe.tags]);
-    deps.save(recipe);
+    const staged = new Recipe(undefined, JSON.stringify(recipe));
+    staged.setTags([shelf, ...recipe.tags]);
+    deps.save(staged);
+    Object.assign(recipe, staged);
     settings.set("myShelves",
         serialiseHidden([...parseHidden(settings.get("myShelves")), tagFilterId(shelf)]));
     return {recipeUuid: recipe.uuid, shelf};

@@ -2,6 +2,7 @@ import {fitSizedName} from "@/library/fitName";
 import {readLabels} from "@/library/coffeeLabels";
 import {MAX_NAME} from "@/library/Recipe";
 import {LEGACY_NAMES, PodCoffee, httpsUrl, podCoffeeFromStored} from "@/library/podCoffee";
+import {readRoasterColour} from "@/library/roasterColour";
 
 /**
  * The deep link a coffee app hands XBRW++ (issue #159).
@@ -117,6 +118,7 @@ export type BrewMindLink = {
     recipeName?: string;
     /** Address of the producer's catalogue; parsing never fetches it. */
     feed?: string;
+    colour?: string;
     flavours?: string[];
     tags?: string[];
 };
@@ -160,6 +162,8 @@ export function parseBrewMindLink(link: string): BrewMindLink | null {
     const result: BrewMindLink = {share};
     const source = params.get("source")?.trim();
     if (source) result.source = source;
+    const colour = readRoasterColour(params.get("bean.colour") ?? params.get("bean.color"));
+    if (colour !== undefined) result.colour = colour;
 
     const coffee = coffeeFrom(params);
     if (coffee !== null) result.coffee = coffee;

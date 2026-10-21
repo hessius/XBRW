@@ -68,10 +68,25 @@ function stubImport(overrides: Partial<RecipeImport> = {}): RecipeImport {
         resolveNow:   jest.fn(),
         onPastedText: jest.fn(),
         openFound:    jest.fn(),
+        acceptLatest: jest.fn(),
+        keepMine:     jest.fn(),
         reset:        jest.fn(),
         ...overrides
     };
 }
+
+it("offers both author-version choices inside the import sheet", async () => {
+    const held = new Recipe();
+    held.name = "My coffee";
+    const importer = stubImport({state: {status: "newer", held, latest: new Recipe()}});
+    await renderWithProviders(<ImportSheet open onOpenChange={jest.fn()} importer={importer}/>);
+    await waitFor(async () => {
+        await fireEvent.press(screen.getByTestId("newer-version-latest"));
+        expect(importer.acceptLatest).toHaveBeenCalled();
+    }, {timeout: SHEET_PRESS_TIMEOUT});
+    await fireEvent.press(screen.getByTestId("newer-version-keep"));
+    expect(importer.keepMine).toHaveBeenCalled();
+});
 
 function foundState() {
     const recipe = new Recipe();

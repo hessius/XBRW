@@ -14,6 +14,12 @@ const valid = (extra: Record<string, string> = {}) =>
     link({v: "1", source: "brewmind", share: SHARE, ...extra});
 
 describe("parseBrewMindLink", () => {
+    it.each(["bean.colour", "bean.color"])("reads a validated %s without needing a bean name", key => {
+        expect(parseBrewMindLink(valid({[key]: "#1d5f96"}))?.colour).toBe("#1D5F96");
+        expect(parseBrewMindLink(valid({[key]: "red"}))?.colour).toBeUndefined();
+        expect(parseBrewMindLink(valid())?.colour).toBeUndefined();
+    });
+
     it("reads a link carrying only a share", () => {
         expect(parseBrewMindLink(valid())).toEqual({share: SHARE, source: "brewmind"});
     });

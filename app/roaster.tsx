@@ -1,5 +1,6 @@
 import {useLocalSearchParams} from "expo-router";
 import React, {useEffect, useRef, useState} from "react";
+import {useCatalogueNow} from "@/hooks/useCatalogueNow";
 import {Pressable} from "react-native";
 import {FlatList} from "react-native-gesture-handler";
 import {useSafeAreaInsets} from "react-native-safe-area-context";
@@ -155,7 +156,7 @@ export default function RoasterScreen({settings, feedUrl, now}: {
     useSetting("roasterAlerts", store);
     const [storedSubscriptions] = useSetting("roasterSubscriptions", store);
     const subscribed = subscriptionFor(parseSubscriptions(storedSubscriptions), feed) !== undefined;
-    const [at] = useState(() => (now ?? Date.now)());
+    const at = useCatalogueNow(now);
     const insets = useSafeAreaInsets();
     const cached = readCatalogue(store, feed);
     const alerts = readAlerts(store, feed);

@@ -1,5 +1,6 @@
 import router from "@/hooks/steadyRouter";
-import React, {useState} from "react";
+import React from "react";
+import {useCatalogueNow} from "@/hooks/useCatalogueNow";
 import {useSafeAreaInsets} from "react-native-safe-area-context";
 import {ScrollView, Text, YStack} from "tamagui";
 
@@ -34,10 +35,7 @@ export default function SubscriptionsScreen({settings, fetchBody, now: clock}: {
     const {ratingNoteOpen} = useLiveBrew();
     const store = settings ?? sharedSettings();
     const subs = useRoasterSubscriptions({settings: store, fetchBody, now: clock});
-    // Read once and again after each action, rather than on every render: a
-    // render must be pure, and "2 h ago" does not need to tick.
-    const [now, setNow] = useState(() => (clock ?? Date.now)());
-    const tick = () => setNow((clock ?? Date.now)());
+    const now = useCatalogueNow(clock);
     const insets = useSafeAreaInsets();
     const active = subs.subscriptions.filter((sub) => !sub.paused);
 
@@ -77,7 +75,7 @@ export default function SubscriptionsScreen({settings, fetchBody, now: clock}: {
                                                    : "Checks every roaster that isn't paused."}
                                                onPress={() => {
                                                    if (subs.refreshing !== null) return;
-                                                   void subs.refreshAll().then(tick);
+                                                   void subs.refreshAll();
                                                }}/>
                         </SettingsSection>
                     )}

@@ -9,6 +9,7 @@ import {
     type ImportDecoration
 } from "@/library/importDecoration";
 import {parseImportInput, type ImportSource} from "@/library/importInput";
+import {planReimport, readPrints, rememberPrint, takeLatest} from "@/library/importRefresh";
 import {asMachineModel} from "@/library/machine/machineModel";
 import Recipe from "@/library/Recipe";
 import {XBloomRecipe} from "@/library/XBloomRecipe";
@@ -60,6 +61,7 @@ export type ImportState =
     | {status: "idle"}
     | {status: "resolving"}
     | {status: "found"; preview: ImportPreview}
+    | {status: "newer"; held: Recipe; latest: Recipe}
     | {status: "error"; reason: ImportErrorReason; message: string};
 
 /**
@@ -106,15 +108,18 @@ export type SelectionChangeEvent = {
 type Options = {
     /** The library, for de-duplication. Passed in rather than re-opened here. */
     stored: Recipe[] | (() => Recipe[]);
-    /** Navigation belongs to the screen; the timing rule belongs here. */
-    onOpenRecipe: (recipe: Recipe, isExisting: boolean) => void;
+    /** Navigation belongs to the screen; false declines a guarded navigation. */
+    onOpenRecipe: (recipe: Recipe, isExisting: boolean) => void | boolean;
     /**
      * Write a stored recipe back after an import link filled its blanks
      * (`fillImportBlanks`). Called once with a staged copy before the held
      * recipe changes or opens. Throw on failure to preserve the held copy.
-     * Optional: without it the filled recipe opens and is saved by the editor.
+     * Optional: without it an isolated filled copy opens for the editor to save.
      */
     onSaveExisting?: (recipe: Recipe) => void;
+    onFeed?: (url: string) => void;
+    onImported?: () => void;
+    onDiscard?: () => void;
 };
 
 export type RecipeImport = {
@@ -175,11 +180,15 @@ export type RecipeImport = {
     onPastedText: (text: string) => void;
     /** Open the recipe the panel is showing. */
     openFound: () => void;
+    acceptLatest: () => void;
+    keepMine: () => void;
     /** Back to an empty field, cancelling anything in flight. */
     reset: () => void;
 };
 
-export function useRecipeImport({stored, onOpenRecipe, onSaveExisting}: Options): RecipeImport {
+export function useRecipeImport({
+    stored, onOpenRecipe, onSaveExisting, onFeed, onImported, onDiscard
+}: Options): RecipeImport {
     const [value, setValue] = useState("");
     const [state, setState] = useState<ImportState>({status: "idle"});
     const [hint, setHint] = useState(false);
@@ -238,6 +247,15 @@ export function useRecipeImport({stored, onOpenRecipe, onSaveExisting}: Options)
      */
     const generation = useRef(0);
     const inFlight = useRef<AbortController | null>(null);
+    const pending = useRef<{
+        generation: number;
+        recipe: Recipe;
+        candidate: Recipe;
+        isExisting: boolean;
+        replace: boolean;
+        decoration?: ImportDecoration;
+        preview?: ImportPreview;
+    } | null>(null);
 
     const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const hintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -259,6 +277,10 @@ export function useRecipeImport({stored, onOpenRecipe, onSaveExisting}: Options)
     useEffect(() => {
         onSaveRef.current = onSaveExisting;
     }, [onSaveExisting]);
+    const followUp = useRef({onFeed, onImported, onDiscard});
+    useEffect(() => {
+        followUp.current = {onFeed, onImported, onDiscard};
+    }, [onFeed, onImported, onDiscard]);
 
     useEffect(() => () => {
         clearTimers();
@@ -292,6 +314,9 @@ export function useRecipeImport({stored, onOpenRecipe, onSaveExisting}: Options)
         // later lookup's field quiet.
         setFocusField(true);
         const mine = ++generation.current;
+        pending.current = null;
+        followUp.current.onDiscard?.();
+        if (decoration?.feed !== undefined) followUp.current.onFeed?.(decoration.feed);
         inFlight.current?.abort();
         const controller = new AbortController();
         inFlight.current = controller;
@@ -314,6 +339,8 @@ export function useRecipeImport({stored, onOpenRecipe, onSaveExisting}: Options)
         // already where the user put it) or wants it back (the shortcut: the
         // user tapped the tile and is now here to type the next code).
         function fail(reason: ImportErrorReason, message: string) {
+            pending.current = null;
+            followUp.current.onDiscard?.();
             setShowField(true);
             if (intent === "shared") setFocusField(false);
             setState({status: "error", reason, message});
@@ -364,26 +391,17 @@ export function useRecipeImport({stored, onOpenRecipe, onSaveExisting}: Options)
         const storedNow = typeof storedRef.current === "function"
             ? storedRef.current()
             : storedRef.current;
-        const {recipe, isExisting} = resolveOnOpen(storedNow, candidate, "brew");
-
-        // A held recipe first imported before the link carried a picture or a
-        // coffee would otherwise never get one, however often it is
-        // re-imported. Empty places only; see `fillImportBlanks`.
-        if (
-            isExisting &&
-            decoration !== undefined
-        ) {
-            const updated = new Recipe(undefined, JSON.stringify(recipe));
-            if (fillImportBlanks(updated, decoration)) {
-                try {
-                    onSaveRef.current?.(updated);
-                } catch {
-                    fail("storage", "Couldn't save the recipe. Try importing it again.");
-                    setFocusField(false);
-                    return;
-                }
-                Object.assign(recipe, updated);
-            }
+        const plan = planReimport(storedNow, candidate, readPrints(sharedSettings()));
+        const {recipe, isExisting} = plan.kind === "new"
+            ? resolveOnOpen(storedNow, candidate, "brew")
+            : {recipe: plan.kind === "same" ? plan.recipe : plan.held, isExisting: true};
+        pending.current = {
+            generation: mine, recipe, candidate, isExisting,
+            replace: plan.kind === "replace", decoration
+        };
+        if (plan.kind === "ask") {
+            setState({status: "newer", held: recipe, latest: candidate});
+            return;
         }
 
         // A paste into the field and a share intent both navigate on their own.
@@ -398,7 +416,7 @@ export function useRecipeImport({stored, onOpenRecipe, onSaveExisting}: Options)
             intent === "shared" ||
             (intent === "shortcut" && !isExisting)
         ) {
-            handOff(recipe, isExisting);
+            commitPending(mine);
             return;
         }
 
@@ -407,18 +425,16 @@ export function useRecipeImport({stored, onOpenRecipe, onSaveExisting}: Options)
         // whole point of the degrade.
         if (intent === "shortcut") setShowField(true);
 
-        setState({
-            status:  "found",
-            preview: {
-                recipe,
-                isExisting,
-                name:     xb.getName(),
-                subtitle: xb.getSubtitle(),
-                // The recipe's own picture first: a held recipe keeps its own,
-                // and may just have been given one by `fillImportBlanks`.
-                imageURL: recipe.imageURL || xb.getImageURL()
-            }
-        });
+        const preview: ImportPreview = {
+            recipe,
+            isExisting,
+            name:     xb.getName(),
+            subtitle: xb.getSubtitle(),
+            // A held picture wins. Filling a blank is still pending until open.
+            imageURL: recipe.imageURL || candidate.imageURL || xb.getImageURL()
+        };
+        pending.current.preview = preview;
+        setState({status: "found", preview});
     }
 
     function resolveNow(
@@ -444,6 +460,7 @@ export function useRecipeImport({stored, onOpenRecipe, onSaveExisting}: Options)
         setValue(next);
         clearTimers();
         setHint(false);
+        followUp.current.onDiscard?.();
 
         // React Native 0.86 has no `onPaste` on `TextInput`, so a paste is
         // inferred from how many characters this change *inserted*: more than
@@ -469,6 +486,7 @@ export function useRecipeImport({stored, onOpenRecipe, onSaveExisting}: Options)
 
         // Any edit invalidates a result or an error on screen.
         generation.current++;
+        pending.current = null;
         inFlight.current?.abort();
         setState({status: "idle"});
 
@@ -501,6 +519,8 @@ export function useRecipeImport({stored, onOpenRecipe, onSaveExisting}: Options)
         clearTimers();
         setHint(false);
         generation.current++;
+        pending.current = null;
+        followUp.current.onDiscard?.();
         inFlight.current?.abort();
         setState({status: "idle"});
 
@@ -532,18 +552,89 @@ export function useRecipeImport({stored, onOpenRecipe, onSaveExisting}: Options)
      * added later cannot forget.
      */
     function handOff(recipe: Recipe, isExisting: boolean) {
-        onOpenRef.current(recipe, isExisting);
-        reset();
+        if (onOpenRef.current(recipe, isExisting) === false) {
+            followUp.current.onDiscard?.();
+        } else {
+            if (!isExisting) {
+                const storedNow = typeof storedRef.current === "function"
+                    ? storedRef.current() : storedRef.current;
+                rememberPrint(sharedSettings(), recipe, storedNow.map(entry => entry.uuid));
+            }
+            followUp.current.onImported?.();
+        }
+        clearInteraction();
     }
 
     function openFound() {
         if (state.status !== "found") return;
-        handOff(state.preview.recipe, state.preview.isExisting);
+        const work = pending.current;
+        if (work?.preview !== state.preview) return;
+        commitPending(work.generation);
+    }
+
+    function acceptLatest() {
+        const work = pending.current;
+        if (state.status !== "newer" || work?.candidate !== state.latest) return;
+        commitPending(work.generation, true);
+    }
+
+    function keepMine() {
+        const work = pending.current;
+        if (state.status !== "newer" || work?.candidate !== state.latest) return;
+        commitPending(work.generation, false);
+    }
+
+    function commitPending(mine: number, replace?: boolean) {
+        const work = pending.current;
+        if (mine !== generation.current || work?.generation !== mine) return;
+        // Consume before calling storage or navigation: both may synchronously
+        // re-enter the hook, and a second tap must never replay a write.
+        pending.current = null;
+        const {recipe, candidate, isExisting, decoration} = work;
+        const replacing = replace ?? work.replace;
+        let opening = recipe;
+        let saved = false;
+        if (isExisting) {
+            const updated = new Recipe(undefined, JSON.stringify(recipe));
+            if (replacing) takeLatest(updated, candidate);
+            const filled = decoration !== undefined && fillImportBlanks(updated, decoration);
+            if (replacing || filled) {
+                const save = onSaveRef.current;
+                if (save === undefined) {
+                    opening = updated;
+                } else {
+                    try {
+                        save(updated);
+                    } catch {
+                        followUp.current.onDiscard?.();
+                        setShowField(true);
+                        setFocusField(false);
+                        setState({
+                            status: "error", reason: "storage",
+                            message: "Couldn't save the recipe. Try importing it again."
+                        });
+                        return;
+                    }
+                    Object.assign(recipe, updated);
+                    saved = true;
+                }
+            }
+        }
+        if (replacing && saved) {
+            rememberPrint(sharedSettings(), recipe);
+        }
+        handOff(opening, isExisting);
     }
 
     function reset() {
+        followUp.current.onDiscard?.();
+        clearInteraction();
+    }
+
+    function clearInteraction() {
         clearTimers();
         generation.current++;
+        pending.current = null;
         inFlight.current?.abort();
         lastValue.current = "";
         setValue("");
@@ -553,5 +644,5 @@ export function useRecipeImport({stored, onOpenRecipe, onSaveExisting}: Options)
         setState({status: "idle"});
     }
 
-    return {state, value, showField, focusField, hint, onChangeText, onSelectionChange, resolveNow, onPastedText, openFound, reset};
+    return {state, value, showField, focusField, hint, onChangeText, onSelectionChange, resolveNow, onPastedText, openFound, reset, acceptLatest, keepMine};
 }

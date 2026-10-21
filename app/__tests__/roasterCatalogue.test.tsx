@@ -8,6 +8,7 @@ import RoasterCoffeeScreen from "@/app/roasterCoffee";
 import RoastersScreen from "@/app/roasters";
 import {parseHidden} from "@/library/hiddenShelves";
 import {contentPrint} from "@/library/importRefresh";
+import type Recipe from "@/library/Recipe";
 import {parseRoasterFeed} from "@/library/roasterFeed";
 import {forgetQueriesForTests} from "@/library/roasterFilters";
 import {subscribe} from "@/library/roasterSync";
@@ -101,6 +102,20 @@ describe("catalogue screen-reader coverage", () => {
 });
 
 describe("the roaster list", () => {
+    it("ages a cached timestamp that arrives after mount and refreshes on a minute", async () => {
+        jest.useFakeTimers();
+        const settings = memorySettings();
+        let now = 300_000;
+        await renderWithProviders(<RoastersScreen settings={settings} now={() => now}/>);
+        const {feed, body} = feedBody([{id: "a"}]);
+        await act(() => subscribe(settings, FEED_URL, feed, body, now));
+        expect(screen.getByLabelText("Test Roaster, 1 coffee · Updated just now")).toBeTruthy();
+        now += 120_000;
+        await act(() => jest.advanceTimersByTime(60_000));
+        expect(screen.getByLabelText(/Updated 2 min ago/)).toBeTruthy();
+        jest.useRealTimers();
+    });
+
     it("explains itself when there are no subscriptions", async () => {
         await renderWithProviders(<RoastersScreen settings={memorySettings()}/>);
         expect(screen.getByTestId("roasters-empty")).toBeTruthy();
@@ -223,11 +238,11 @@ describe("searching and filtering a roaster's coffees", () => {
             await renderWithProviders(<RoasterScreen settings={shelf()} feedUrl={FEED_URL}/>);
             await fireEvent.press(screen.getByTestId("rail-search"));
             await fireEvent.changeText(screen.getByTestId("rail-search-input"), "vergara");
-            await act(async () => { jest.runAllTimers(); });
+            await act(async () => { jest.advanceTimersByTime(1000); });
             expect(rowIds()).toEqual(["roaster-coffee-id:a"]);
 
             await fireEvent.changeText(screen.getByTestId("rail-search-input"), "nothing like it");
-            await act(async () => { jest.runAllTimers(); });
+            await act(async () => { jest.advanceTimersByTime(1000); });
             expect(screen.getByText("No coffees match.")).toBeTruthy();
             await fireEvent.press(screen.getByTestId("roaster-no-matches-action"));
             expect(rowIds()).toEqual(["roaster-coffee-id:a", "roaster-coffee-id:b", "roaster-coffee-id:c"]);
@@ -325,6 +340,114 @@ describe("tasting notes on a coffee", () => {
 });
 
 describe("one coffee", () => {
+    it("does not save a catalogue action whose feed context was cancelled", async () => {
+        const settings = subscribedTo([{id: "b"}], {b: {roaster: ""}});
+        const other = "https://other.example/feed.json";
+        const otherBody = feedBody([{id: "b"}], "Other roaster");
+        subscribe(settings, other, otherBody.feed, otherBody.body, 1000);
+        const library = memoryLibrary();
+        const recipe = await library.deps.fetchRecipe("https://example.com/?id=b-18g");
+        let finish: ((recipe: Recipe | null) => void) | undefined;
+        const fetchRecipe = jest.fn(library.deps.fetchRecipe)
+            .mockImplementationOnce(library.deps.fetchRecipe)
+            .mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+        const deps = {...library.deps, fetchRecipe};
+        const {rerender} = await renderWithProviders(
+            <RoasterCoffeeScreen settings={settings} feedUrl={FEED_URL} coffeeId="b" library={deps}
+                                 shelves={() => ["Pantry"]}/>
+        );
+        await waitFor(() => expect(screen.queryByTestId("roaster-coffee-loading")).toBeNull());
+        await fireEvent.press(screen.getByTestId("roaster-coffee-shelf"));
+        await rerender(
+            <RoasterCoffeeScreen settings={settings} feedUrl={other} coffeeId="b" library={deps}
+                                 shelves={() => ["Pantry"]}/>
+        );
+        await act(async () => finish?.(recipe));
+        expect(library.all()).toEqual([]);
+        expect(mockNotify).not.toHaveBeenCalled();
+    });
+
+    it("cancels the old feed context when another feed has the same share link", async () => {
+        const settings = subscribedTo([{id: "b"}], {b: {roaster: ""}});
+        const other = "https://other.example/feed.json";
+        const parsed = JSON.parse(feedJson([{id: "b"}], "Other roaster"));
+        delete parsed.coffees[0].bean.roaster;
+        const body = JSON.stringify(parsed);
+        subscribe(settings, other, parseRoasterFeed(body)!, body, 1000);
+        const library = memoryLibrary();
+        const fetchRecipe = jest.fn((_share: string, _signal?: AbortSignal) =>
+            new Promise<Recipe | null>(() => {}));
+        const deps = {...library.deps, fetchRecipe};
+        const {rerender} = await renderWithProviders(
+            <RoasterCoffeeScreen settings={settings} feedUrl={FEED_URL} coffeeId="b" library={deps}/>
+        );
+        expect(fetchRecipe).toHaveBeenCalledTimes(1);
+        const first = fetchRecipe.mock.calls[0][1];
+        await rerender(
+            <RoasterCoffeeScreen settings={settings} feedUrl={other} coffeeId="b" library={deps}/>
+        );
+        expect(first?.aborted).toBe(true);
+        expect(fetchRecipe).toHaveBeenCalledTimes(2);
+    });
+
+    it("captures the feed's roaster in the recipe JSON when its bean omitted one", async () => {
+        await open(subscribedTo([{id: "b"}], {b: {roaster: ""}}));
+        await fireEvent.press(screen.getByTestId("roaster-coffee-brew"));
+        await waitFor(() => expect(router.push).toHaveBeenCalled());
+        const call = (router.push as jest.Mock).mock.calls[0][0];
+        expect(JSON.parse(call.params.recipeJSON).coffee.roaster).toBe("Test Roaster");
+    });
+
+    it("reports a storage failure as retryable storage feedback, not a network error", async () => {
+        const library = memoryLibrary();
+        await open(subscribed(), library);
+        library.deps.save = () => { throw new Error("private database detail"); };
+        await fireEvent.press(screen.getByTestId("roaster-coffee-shelf"));
+        await waitFor(() => expect(mockNotify).toHaveBeenCalledWith({
+            tone: "error", message: "Couldn't save the recipe. Try again."
+        }));
+        expect(screen.getByTestId("roaster-coffee-shelf")).toBeTruthy();
+    });
+
+    it("keeps a failed explicit replacement actionable without changing the saved recipe", async () => {
+        const {library} = await open();
+        await shelve();
+        const held = library.find("b-18g")!;
+        held.grindSize = 65;
+        library.deps.save(held);
+        const before = JSON.stringify(library.find("b-18g"));
+        library.serve("b-18g", 61);
+        await fireEvent.press(screen.getByTestId("roaster-coffee-shelf"));
+        await waitFor(() => expect(screen.getByTestId("newer-version")).toBeTruthy());
+        jest.spyOn(library.deps, "save").mockImplementationOnce(() => { throw new Error("disk full"); });
+        await fireEvent.press(screen.getByTestId("newer-version-latest"));
+        expect(mockNotify).toHaveBeenLastCalledWith({
+            tone: "error", message: "Couldn't save the recipe. Try again."
+        });
+        expect(JSON.stringify(library.find("b-18g"))).toBe(before);
+        expect(screen.getByTestId("newer-version")).toBeTruthy();
+        await fireEvent.press(screen.getByTestId("newer-version-latest"));
+        expect(library.find("b-18g")?.grindSize).toBe(61);
+    });
+
+    it("leaves the shelf picker open on a failed shelf save without reporting success", async () => {
+        const {library} = await open();
+        await fireEvent.press(screen.getByTestId("roaster-coffee-shelf"));
+        await waitFor(() => expect(library.all()).toHaveLength(1));
+        const before = JSON.stringify(library.all()[0]);
+        jest.spyOn(library.deps, "save").mockImplementation(() => { throw new Error("disk full"); });
+        await waitFor(async () => {
+            if (mockNotify.mock.calls.length === 0) {
+                await fireEvent.press(screen.getByTestId("shelf-choice-Pantry"));
+            }
+            expect(mockNotify).toHaveBeenLastCalledWith({
+                tone: "error", message: "Couldn't save the recipe. Try again."
+            });
+        }, {timeout: SHEET_PRESS_TIMEOUT});
+        expect(JSON.stringify(library.all()[0])).toBe(before);
+        expect(screen.getByTestId("shelf-choice-Pantry")).toBeTruthy();
+    });
+
     async function open(settings = subscribed(), library = memoryLibrary(), shelves = () => ["Pantry"]) {
         await renderWithProviders(
             <RoasterCoffeeScreen settings={settings} feedUrl={FEED_URL} coffeeId="b"
@@ -471,6 +594,22 @@ describe("one coffee", () => {
 
         expect(library.find("b-18g")).toMatchObject({dosage: 20, grindSize: 50});
         expect(library.all()).toHaveLength(1);
+    });
+
+    it("discards a pending author choice when the catalogue size changes", async () => {
+        const {library} = await open();
+        await shelve();
+        const held = library.find("b-18g")!;
+        held.grindSize = 65;
+        library.deps.save(held);
+        library.serve("b-18g", 61);
+        await fireEvent.press(screen.getByTestId("roaster-coffee-shelf"));
+        await waitFor(() => expect(screen.getByTestId("newer-version")).toBeTruthy());
+        await fireEvent.press(screen.getByTestId("roaster-coffee-size-15g"));
+        expect(screen.queryByTestId("newer-version")).toBeNull();
+        await fireEvent.press(screen.getByTestId("roaster-coffee-size-18g"));
+        expect(screen.queryByTestId("newer-version")).toBeNull();
+        expect(library.find("b-18g")?.grindSize).toBe(65);
     });
 
     it("USE THE ROASTER'S LATEST takes the new recipe and keeps the user's name", async () => {

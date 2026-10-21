@@ -13,6 +13,7 @@ import Recipe, {CUP_TYPE} from "@/library/Recipe";
 import {XBloomRecipe} from "@/library/XBloomRecipe";
 import {sharedSettings} from "@/hooks/useSetting";
 import {useRecipeImport} from "@/hooks/useRecipeImport";
+import {rememberPrint, readPrints} from "@/library/importRefresh";
 
 jest.mock("@/hooks/useSetting", () =>
     require("@/test-utils/settingsMock").settingsMock());
@@ -87,12 +88,284 @@ beforeEach(() => {
     // The mock store outlives each test, so a case that changes the machine
     // would otherwise leave it changed for every case after it.
     sharedSettings().set("machineModel", "studio");
+    sharedSettings().set("importFingerprints", "");
+});
+
+describe("author reimport", () => {
+    it("never stages a superseded out-of-order author response", async () => {
+        const held = importedRecipe();
+        held.shareId = "author";
+        rememberPrint(sharedSettings(), held);
+        const before = JSON.stringify(held);
+        const obsolete = importedRecipe();
+        obsolete.shareId = "author";
+        obsolete.grindSize = 62;
+        let finishOld: (() => void) | undefined;
+        mockGetRecipe.mockReturnValueOnce(obsolete).mockReturnValueOnce(null);
+        mockFetchRecipeDetail.mockImplementationOnce(() => new Promise<void>(resolve => {
+            finishOld = resolve;
+        }));
+        const onSaveExisting = jest.fn();
+        const onOpenRecipe = jest.fn();
+        const {result} = await renderHook(() => useRecipeImport({
+            stored: [held], onSaveExisting, onOpenRecipe
+        }));
+        await act(() => result.current.resolveNow({kind: "share", id: "author"}, "deliberate"));
+        await act(async () => result.current.resolveNow({kind: "share", id: "missing"}, "deliberate"));
+        await act(async () => finishOld?.());
+        await act(() => result.current.openFound());
+        expect(result.current.state).toMatchObject({status: "error", reason: "notFound"});
+        expect(JSON.stringify(held)).toBe(before);
+        expect(onSaveExisting).not.toHaveBeenCalled();
+        expect(onOpenRecipe).not.toHaveBeenCalled();
+    });
+
+    it.each(["latest", "keep", "fail", "cancel"] as const)(
+        "asks before replacing edited brewing data: %s", async answer => {
+            const held = importedRecipe();
+            held.shareId = "author";
+            rememberPrint(sharedSettings(), held);
+            held.grindSize = 64;
+            held.name = "My coffee";
+            const before = JSON.stringify(held);
+            const latest = importedRecipe();
+            latest.shareId = "author";
+            latest.grindSize = 62;
+            mockGetRecipe.mockReturnValueOnce(latest);
+            const onSaveExisting = jest.fn(() => {
+                expect(JSON.stringify(held)).toBe(before);
+                if (answer === "fail") throw new Error("disk full");
+            });
+            const onOpenRecipe = jest.fn();
+            const {result} = await renderHook(() => useRecipeImport({
+                stored: [held], onSaveExisting, onOpenRecipe
+            }));
+            await act(async () => result.current.resolveNow(
+                {kind: "share", id: "author"}, "shared"
+            ));
+            expect(result.current.state.status).toBe("newer");
+            expect(JSON.stringify(held)).toBe(before);
+            expect(onSaveExisting).not.toHaveBeenCalled();
+            const accept = result.current.acceptLatest;
+            await act(() => {
+                if (answer === "cancel") result.current.reset();
+                if (answer === "keep") result.current.keepMine();
+                else accept();
+                accept();
+            });
+            if (answer === "latest") {
+                expect(held).toMatchObject({grindSize: 62, name: "My coffee"});
+                expect(onSaveExisting).toHaveBeenCalledTimes(1);
+            } else {
+                expect(JSON.stringify(held)).toBe(before);
+            }
+            expect(onOpenRecipe).toHaveBeenCalledTimes(answer === "latest" || answer === "keep" ? 1 : 0);
+        }
+    );
+
+    it.each(["open", "cancel", "fail"] as const)(
+        "stages a typed author replacement until %s", async action => {
+            const held = importedRecipe();
+            held.shareId = "author";
+            rememberPrint(sharedSettings(), held);
+            const latest = importedRecipe();
+            latest.shareId = "author";
+            latest.grindSize = 62;
+            mockGetRecipe.mockReturnValueOnce(latest);
+            const before = JSON.stringify(held);
+            const prints = readPrints(sharedSettings());
+            const onSaveExisting = jest.fn(() => {
+                expect(JSON.stringify(held)).toBe(before);
+                if (action === "fail") throw new Error("disk full");
+            });
+            const onOpenRecipe = jest.fn();
+            const {result} = await renderHook(() => useRecipeImport({
+                stored: [held], onSaveExisting, onOpenRecipe
+            }));
+            await act(async () => result.current.resolveNow(
+                {kind: "share", id: "author"}, "deliberate"
+            ));
+            expect(result.current.state.status).toBe("found");
+            expect(onSaveExisting).not.toHaveBeenCalled();
+            expect(JSON.stringify(held)).toBe(before);
+            await act(() => {
+                if (action === "cancel") result.current.reset();
+                result.current.openFound();
+            });
+            if (action === "open") {
+                expect(held.grindSize).toBe(62);
+                expect(onOpenRecipe).toHaveBeenCalledWith(held, true);
+                expect(onSaveExisting).toHaveBeenCalledTimes(1);
+            } else {
+                expect(JSON.stringify(held)).toBe(before);
+                expect(readPrints(sharedSettings())).toEqual(prints);
+                expect(onOpenRecipe).not.toHaveBeenCalled();
+            }
+        }
+    );
+
+    it("keeps local brewing edits when the author's fingerprint has not changed", async () => {
+        const held = importedRecipe();
+        held.shareId = "author";
+        rememberPrint(sharedSettings(), held);
+        held.grindSize = 64;
+        const latest = importedRecipe();
+        latest.shareId = "author";
+        mockGetRecipe.mockReturnValueOnce(latest);
+        const onSaveExisting = jest.fn();
+        const onOpenRecipe = jest.fn();
+        const {result} = await renderHook(() => useRecipeImport({
+            stored: [held], onSaveExisting, onOpenRecipe
+        }));
+        await act(async () => result.current.resolveNow(
+            {kind: "share", id: "author"}, "shared"
+        ));
+        expect(onOpenRecipe).toHaveBeenCalledWith(held, true);
+        expect(onSaveExisting).not.toHaveBeenCalled();
+        expect(held.grindSize).toBe(64);
+    });
+});
+
+describe("generation-bound feed follow-ups", () => {
+    it("does not follow a feed or remember a new import rejected by navigation", async () => {
+        const onImported = jest.fn();
+        const {result} = await renderHook(() => useRecipeImport({
+            stored: [], onOpenRecipe: () => false, onImported
+        }));
+        await act(async () => result.current.resolveNow(
+            {kind: "share", id: "author"}, "shared", {feed: "https://example.com/feed"}
+        ));
+        expect(onImported).not.toHaveBeenCalled();
+        expect(readPrints(sharedSettings())).toEqual({});
+    });
+
+    it("remembers a new author's content only when its preview is opened", async () => {
+        const incoming = importedRecipe();
+        incoming.shareId = "author";
+        mockGetRecipe.mockReturnValueOnce(incoming);
+        const {result} = await renderHook(() => useRecipeImport({
+            stored: [], onOpenRecipe: jest.fn()
+        }));
+        await act(async () => result.current.resolveNow({kind: "share", id: "author"}, "deliberate"));
+        expect(readPrints(sharedSettings())).toEqual({});
+        await act(() => result.current.openFound());
+        expect(Object.keys(readPrints(sharedSettings()))).toEqual([incoming.uuid]);
+    });
+
+    it.each(["shared", "shortcut"] as const)(
+        "discards an earlier feed when replaced by a plain %s", async intent => {
+            const held = importedRecipe();
+            const onFeed = jest.fn();
+            let armed: string | undefined;
+            const imported: (string | undefined)[] = [];
+            const {result} = await renderHook(() => useRecipeImport({
+                stored: [held], onOpenRecipe: jest.fn(),
+                onFeed: url => { onFeed(url); armed = url; },
+                onDiscard: () => { armed = undefined; },
+                onImported: () => imported.push(armed)
+            }));
+            await act(async () => result.current.resolveNow(
+                {kind: "xid", xid: "ETH120"}, "deliberate", {feed: "https://example.com/feed"}
+            ));
+            expect(onFeed).toHaveBeenCalledTimes(1);
+            const oldOpen = result.current.openFound;
+            await act(async () => result.current.resolveNow({kind: "xid", xid: "ETH120"}, intent));
+            await act(() => {
+                oldOpen();
+                if (intent === "shortcut") result.current.openFound();
+            });
+            expect(imported).toEqual([undefined]);
+        }
+    );
 });
 
 describe("persisting existing import decoration", () => {
     const decoration = {
         coffee: {name: "Ethiopia Guji", imageUrl: "https://example.com/bag.png"}
     };
+
+    it("opens an isolated staged copy when no existing-save callback is supplied", async () => {
+        const existing = importedRecipe();
+        const before = JSON.stringify(existing);
+        const onOpenRecipe = jest.fn();
+        const {result} = await renderHook(() => useRecipeImport({stored: [existing], onOpenRecipe}));
+        await act(async () => result.current.resolveNow(
+            {kind: "xid", xid: "ETH120"}, "deliberate", decoration
+        ));
+        await act(() => result.current.openFound());
+        expect(JSON.stringify(existing)).toBe(before);
+        expect(onOpenRecipe.mock.calls[0][0]).not.toBe(existing);
+        expect(onOpenRecipe.mock.calls[0][0]).toMatchObject({
+            uuid: existing.uuid, coffee: decoration.coffee
+        });
+    });
+
+    it("defers a typed blank-fill until openFound and consumes it only once", async () => {
+        const existing = importedRecipe();
+        const before = JSON.stringify(existing);
+        const onSaveExisting = jest.fn();
+        const onOpenRecipe = jest.fn();
+        const {result} = await renderHook(() => useRecipeImport({
+            stored: [existing], onOpenRecipe, onSaveExisting
+        }));
+        await act(async () => result.current.resolveNow(
+            {kind: "xid", xid: "ETH120"}, "deliberate", decoration
+        ));
+        expect(result.current.state.status).toBe("found");
+        expect(onSaveExisting).not.toHaveBeenCalled();
+        expect(JSON.stringify(existing)).toBe(before);
+        await act(() => {
+            result.current.openFound();
+            result.current.openFound();
+        });
+        expect(onSaveExisting).toHaveBeenCalledTimes(1);
+        expect(onOpenRecipe).toHaveBeenCalledTimes(1);
+        expect(existing.coffee?.name).toBe("Ethiopia Guji");
+    });
+
+    it.each(["edit", "reset", "lookup"] as const)(
+        "discards a found pending write after %s, including a stale open handler", async action => {
+            const existing = importedRecipe();
+            const before = JSON.stringify(existing);
+            const onSaveExisting = jest.fn();
+            const {result} = await renderHook(() => useRecipeImport({
+                stored: [existing], onOpenRecipe: jest.fn(), onSaveExisting
+            }));
+            await act(async () => result.current.resolveNow(
+                {kind: "xid", xid: "ETH120"}, "deliberate", decoration
+            ));
+            const openOld = result.current.openFound;
+            await act(async () => {
+                if (action === "edit") result.current.onChangeText("E");
+                if (action === "reset") result.current.reset();
+                if (action === "lookup") {
+                    result.current.resolveNow({kind: "xid", xid: "ETH121"}, "deliberate");
+                }
+                openOld();
+            });
+            expect(onSaveExisting).not.toHaveBeenCalled();
+            expect(JSON.stringify(existing)).toBe(before);
+        }
+    );
+
+    it("keeps a failed typed save unchanged and restores the retry field", async () => {
+        const existing = importedRecipe();
+        const before = JSON.stringify(existing);
+        const onSaveExisting = jest.fn(() => { throw new Error("disk full"); });
+        const onOpenRecipe = jest.fn();
+        const {result} = await renderHook(() => useRecipeImport({
+            stored: [existing], onOpenRecipe, onSaveExisting
+        }));
+        await act(async () => result.current.resolveNow(
+            {kind: "xid", xid: "ETH120"}, "deliberate", decoration
+        ));
+        expect(result.current.state.status).toBe("found");
+        await act(() => result.current.openFound());
+        expect(result.current.state).toMatchObject({status: "error", reason: "storage"});
+        expect(result.current.showField).toBe(true);
+        expect(JSON.stringify(existing)).toBe(before);
+        expect(onOpenRecipe).not.toHaveBeenCalled();
+    });
 
     it("saves a staged copy before changing the held recipe", async () => {
         const existing = importedRecipe();
@@ -131,6 +404,11 @@ describe("persisting existing import decoration", () => {
             };
 
             await resolve();
+            if (intent === "shortcut") {
+                expect(result.current.state.status).toBe("found");
+                expect(onSaveExisting).not.toHaveBeenCalled();
+                await act(() => result.current.openFound());
+            }
 
             await waitFor(() => expect(result.current.state).toMatchObject({
                 status: "error", reason: "storage", message: expect.stringContaining("save")

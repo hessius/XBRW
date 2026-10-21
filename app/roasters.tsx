@@ -1,4 +1,4 @@
-import React, {useState} from "react";
+import React from "react";
 import {Pressable, ScrollView} from "react-native";
 import {useSafeAreaInsets} from "react-native-safe-area-context";
 import {Text, XStack, YStack} from "tamagui";
@@ -10,6 +10,7 @@ import ScreenHeader from "@/components/ScreenHeader";
 import {palette} from "@/constants/colors";
 import router from "@/hooks/steadyRouter";
 import {useLiveBrew} from "@/hooks/useLiveBrew";
+import {useCatalogueNow} from "@/hooks/useCatalogueNow";
 import {sharedSettings, useSetting} from "@/hooks/useSetting";
 import {alertSummary, readAlerts} from "@/library/roasterAlerts";
 import {readCatalogue, scrollEndPadding, updatedAgo} from "@/library/roasterCatalogue";
@@ -35,7 +36,7 @@ export default function RoastersScreen({settings, now}: {
     useSetting("roasterCatalogue", store);
     // And so the dots follow a coffee being opened or a sync flagging one.
     useSetting("roasterAlerts", store);
-    const [at] = useState(() => (now ?? Date.now)());
+    const at = useCatalogueNow(now);
     const insets = useSafeAreaInsets();
     const subscriptions = parseSubscriptions(stored);
 

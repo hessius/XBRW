@@ -19,6 +19,10 @@ import {machineColours} from "@/constants/colors";
 import {TYPING_DEBOUNCE_MS} from "@/constants/motion";
 import {sharedSlotDatabase} from "@/hooks/useEasyModeSlots";
 import {snapshotRecipe} from "@/library/slots/slotModel";
+import * as roasterFeed from "@/library/roasterFeed";
+import {FEED_URL, feedBody} from "@/test-utils/roasterFeed";
+import {rememberPrint} from "@/library/importRefresh";
+import {sharedSettings} from "@/hooks/useSetting";
 
 const mockPush = jest.fn();
 
@@ -3061,6 +3065,107 @@ describe("the low-tank warning on the dot", () => {
 });
 
 describe("the import deep link", () => {
+    it("keeps home inaccessible under a reimport choice and saves only the chosen latest", async () => {
+        const held = writable("My coffee");
+        held.shareId = "abc123";
+        rememberPrint(sharedSettings(), held);
+        held.grindSize = 65;
+        const candidate = new Recipe(undefined, JSON.stringify(held));
+        candidate.uuid = "new-author";
+        candidate.grindSize = 61;
+        mockGetRecipe = () => candidate;
+        mockImportUrl = link();
+        const save = jest.mocked(RecipeDatabase.prototype.updateRecipe).mockClear();
+        await renderWithProviders(
+            <HomeScreen db={store([held])} settings={new Settings(memoryStorage())}/>
+        );
+        await waitFor(() => expect(screen.getByTestId("newer-version")).toBeTruthy());
+        expect(save).not.toHaveBeenCalled();
+        expect(held.grindSize).toBe(65);
+        expect(screen.queryByLabelText("Import a recipe")).toBeNull();
+        await waitFor(async () => {
+            await fireEvent.press(screen.getByTestId("newer-version-latest"));
+            expect(mockPush).toHaveBeenCalled();
+        }, {timeout: SHEET_PRESS_TIMEOUT});
+        expect(save).toHaveBeenCalledTimes(1);
+        expect(JSON.parse(mockPush.mock.calls[0][0].params.recipeJSON))
+            .toMatchObject({uuid: held.uuid, grindSize: 61, name: "My coffee"});
+    });
+
+    it.each(["bean.colour", "bean.color"])("keeps %s through an encoded share and whole-library accent assignment", async colour => {
+        const first = writable("Already blue");
+        first.accentIndex = 0;
+        const candidate = writable("Imported red pod");
+        candidate.pours[0].temperature = 94;
+        mockGetRecipe = () => candidate;
+        mockImportUrl = link({
+            share: "https://share-h5.xbloom.com/r?id=author%2Fid%3D",
+            [colour]: "#1D5F96",
+            "bean.name": "Coffee", "bean.roaster": "Declared roaster"
+        });
+        await renderWithProviders(
+            <HomeScreen db={store([first])} settings={new Settings(memoryStorage())}/>
+        );
+        await waitFor(() => expect(mockPush).toHaveBeenCalled());
+        expect(XBloomRecipe).toHaveBeenCalledWith({kind: "share", id: "author/id="}, "studio");
+        const opened = JSON.parse(mockPush.mock.calls[0][0].params.recipeJSON);
+        expect(opened.accentIndex).toBe(0);
+        expect(opened.coffee.roaster).toBe("Declared roaster");
+    });
+
+    it("follows the feed only after its own recipe imports, then asks on returning home", async () => {
+        const fetchFeed = jest.spyOn(roasterFeed, "fetchRoasterFeedBody")
+            .mockResolvedValue(feedBody([{id: "a"}]));
+        mockGetRecipe = () => new Recipe();
+        mockImportUrl = link({feed: FEED_URL});
+        const db = store([]);
+        const settings = new Settings(memoryStorage());
+        const {rerender} = await renderWithProviders(<HomeScreen db={db} settings={settings}/>);
+        await waitFor(() => expect(mockPush).toHaveBeenCalled());
+        expect(fetchFeed).toHaveBeenCalledTimes(1);
+        expect(screen.queryByTestId("roaster-offer-body")).toBeNull();
+        mockFocusEpoch++;
+        await rerender(<HomeScreen db={db} settings={settings}/>);
+        await waitFor(() => expect(screen.getByTestId("roaster-offer-body")).toBeTruthy());
+        expect(screen.queryByLabelText("Import a recipe")).toBeNull();
+    });
+
+    it.each(["cancelled then pasted", "replaced by a share"] as const)(
+        "does not follow a feed from an import %s", async route => {
+            jest.useFakeTimers();
+            const fetchFeed = jest.spyOn(roasterFeed, "fetchRoasterFeedBody")
+                .mockResolvedValue(feedBody([{id: "a"}]));
+            mockFetchRecipeDetail = () => new Promise<void>(() => {});
+            mockImportUrl = link({feed: FEED_URL});
+            const db = store([]);
+            const settings = new Settings(memoryStorage());
+            const {rerender} = await renderWithProviders(<HomeScreen db={db} settings={settings}/>);
+            await waitFor(() => expect(XBloomRecipe).toHaveBeenCalledTimes(1));
+            await act(() => jest.advanceTimersByTime(500));
+            if (route === "cancelled then pasted") {
+                await fireEvent.press(screen.getAllByLabelText("Close").at(-1)!);
+                await act(() => jest.advanceTimersByTime(500));
+                await fireEvent.press(screen.getByLabelText("Import a recipe"));
+                await act(() => jest.advanceTimersByTime(500));
+            }
+            mockFetchRecipeDetail = () => Promise.resolve();
+            mockGetRecipe = () => new Recipe();
+            const plainShare = "https://share-h5.xbloom.com/r?id=ordinary456";
+            if (route === "cancelled then pasted") {
+                await fireEvent.changeText(screen.getByLabelText("Share link or pod code"), plainShare);
+            } else {
+                mockShareIntentState = {
+                    hasShareIntent: true,
+                    shareIntent: {type: "weburl", webUrl: plainShare},
+                    resetShareIntent: jest.fn()
+                };
+                await rerender(<HomeScreen db={db} settings={settings}/>);
+            }
+            await waitFor(() => expect(mockPush).toHaveBeenCalled());
+            expect(fetchFeed).not.toHaveBeenCalled();
+        }
+    );
+
     const SHARE = "https://share-h5.xbloom.com/r?id=abc123";
 
     const link = (params: Record<string, string> = {}) => {

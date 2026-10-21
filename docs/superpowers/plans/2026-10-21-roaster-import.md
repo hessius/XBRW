@@ -257,7 +257,7 @@ Task 3 offer/re-import/metadata work and Tasks 4–5 shelves remain unimplemente
 `roasterRecipes.ts`, `importDecoration.ts`, `importRefresh.ts`,
 `brewmindLink.ts`, `podCoffee.ts`, related tests and offer wiring in home.
 
-- [ ] **Step 1: Add failing regressions for mutation timing and feed fallback.**
+- [x] **Step 1: Add failing regressions for mutation timing and feed fallback.**
 
 Cover deliberate typing reaching a replacement or blank-fill preview with zero
 save calls and an unchanged held recipe. `openFound` performs the staged save;
@@ -273,7 +273,7 @@ expect(result.current.state.status).toBe("found");
 
 Run the existing import hook, reimport, decoration and roaster recipe suites.
 
-- [ ] **Step 2: Integrate author-version handling without replacing the hook.**
+- [x] **Step 2: Integrate author-version handling without replacing the hook.**
 
 Extend accepted develop's staged importer with `planReimport`, retaining
 `onSaveExisting`, the storage error reason and fill-only-blank decoration.
@@ -286,7 +286,7 @@ to the held object. Preserve corrected original-author fingerprints. Feed offers
 are associated with the current import generation and disarmed on cancellation,
 replacement and failure.
 
-- [ ] **Step 3: Add contextual metadata fallback at the fetch/decorate boundary.**
+- [x] **Step 3: Add contextual metadata fallback at the fetch/decorate boundary.**
 
 Pass the enclosing validated roaster name when fetching a catalogue coffee.
 Resolve new-candidate roaster as explicit coffee value, then valid recipe
@@ -300,14 +300,89 @@ semantics. Do not take its unrelated removal of accepted shelf photo queries.
 Keep ordinary duplicate colour assignment unless the reviewed implementation
 has explicit evidence that a colour is coffee-owned.
 
-- [ ] **Step 4: Fix retained catalogue age readings.**
+- [x] **Step 4: Fix retained catalogue age readings.**
 
 Add `hooks/useCatalogueNow.ts`, a clock read on mount, once per minute and on
 foreground activation, with timer/listener cleanup and injected-clock tests.
 Use it where source code captured a mount-time `now` for relative timestamps.
 This is a status clock, not an animation; do not add a brew-chart timer.
 
-- [ ] **Step 5: Run import/feed/catalogue regressions and commit.**
+- [x] **Step 5: Run import/feed/catalogue regressions and commit.**
+
+### Task 3 integration record
+
+Adapted author-refresh and offer behavior from Rhys Evans's #237
+`27535f8b72fd30febe51d07f7bd2cbd20bf63980` into the accepted importer, not
+the old donor hook. Preserved its author-print comparison (an unchanged author
+fingerprint is SAME even when the local brew differs). The cancellation cases
+from `82472860b8decc4473c8f114e18555d2bb251f20` are adapted to generation-bound
+hook callbacks, covering every lookup, field edit, paste, reset and failure
+rather than duplicating disarm calls across home entry points. A successful
+handoff clears its interaction without cancelling its own feed follow-up.
+
+Reused #245's strict colour reader and hue-to-existing-palette mapping already
+replayed with the foundation, and added its `bean.colour`/`bean.color` link
+decoding from `d306e9c22aa54bf803ec0fb07fc1cea5d3055395`. Accepted name/photo
+decoration and blank filling remain intact; no RecipeDatabase donor or
+coffee-based broadening of ordinary duplicate colour retention is included.
+#240 `25672dfab641116521be313aa650ab788f869994` remains the Task 2 choice
+foundation, unchanged by this task. No cumulative preview head was used.
+
+Typed blank filling and unedited author replacement now stage at preview,
+with no save or held-object mutation until OPEN. Pending actions are bound to
+the preview and request generation, consumed once, and discarded on edits,
+reset, replacement, error and unmount. Explicit latest/keep choices use the
+existing Import sheet; it still owns the field/focus and home coverage.
+Every existing write saves a clone before changing the held recipe; without
+an existing-save callback, the editor receives an isolated staged copy instead.
+A rejected guarded navigation does not follow a feed or remember a new import.
+
+Catalogue same/replace/explicit-latest/shelf writes also stage copies first.
+Failed saves preserve held JSON and fingerprints, leave their controls
+actionable and show storage-specific feedback rather than network copy.
+New saves remember nothing on failure. Metadata adoption fills blanks only.
+The fetch API takes an explicit enclosing feed roaster; precedence is coffee,
+valid underlying recipe import, then feed. Saved roaster metadata survives
+recipe copies and backup JSON independently of a subscription. Cancelled
+contexts do not decorate or save; feed/size changes invalidate pending choices.
+
+Home remains saved-only. Its only new catalogue surface is the post-import
+subscription offer, covered by the existing screen-reader guard; replacement
+choices remain inside the already-covered Import sheet. Opt-outs and pause
+remain authoritative. Failed feed follow-ups have explicit, non-server-text
+feedback and never undo an imported recipe. Root-owned foreground syncing is
+still the only foreground sync owner, and never imports saved recipes.
+
+`useCatalogueNow` refreshes relative status every minute and on foreground,
+with an injected clock and timer/listener cleanup. Retained roaster list,
+roaster detail, subscriptions and subscription detail use it. No brew animation
+clock, dependency or native configuration changed.
+
+Demonstrated red regressions before their fixes: early typed writes,
+failed catalogue writes mutating held objects, missing contextual metadata,
+frozen catalogue age, absent offer/prompt/colour integration, blocked or
+obsolete offers, misleading storage feedback, dropped-navigation follow-ups,
+no-save-callback mutation, obsolete catalogue action saves and revived author
+choices after size changes. Tests additionally cover rapid/stale opens,
+out-of-order responses, encoded shares, whole-library accent assignment,
+author-print preservation, user metadata and backup survival.
+
+Final verification: the focused hook/reimport/decoration/link/coffee/feed/
+catalogue/offer/alerts/subscriptions/home matrix passes **40 suites, 1,226
+tests**, both platforms, with four existing skipped home tests. Typecheck and
+`git diff --check` pass. Lint has zero errors and 32 warnings (the same count
+as the accepted checkpoint). The home harness emits non-failing timer-overflow
+warnings. No heavy full suite, native build, live network, NFC or BLE test was
+performed. No push, PR or automated review was requested; controller publication
+and the eventual focused PR's single review/check gate remain pending.
+
+Self-review: audited write-before-mutation ordering, preview/generation
+invalidation, callback/offer cancellation, a11y coverage, feed context,
+palette retention, and unchanged machine/HTTP/envelope/publication limits.
+Tasks 4–5's SQL identity, roaster shelves and artwork remain untouched.
+Task worktree remains owned by the Task 3/controller session for publication
+and the subsequent tasks; its local branch checkpoint is the recovery pointer,
+not a claimed remote backup.
 
 ## Task 4: Add SQL-backed saved-roaster identity
 
