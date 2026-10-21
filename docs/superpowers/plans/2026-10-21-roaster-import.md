@@ -454,7 +454,11 @@ Round-trip recipe metadata through copy and backup/restore.
 - Owned worktree: `/Users/jesperhessius/Dev/XBRW-220-roaster-import-20261021`;
   branch `feat/2.2.0-roaster-import-20261021`.
 - Accepted base: `4aa7c02d226c1900efb453ab63529172c1801ea7`;
-  implementation parent: `5372223eadce34056966fab68742f70bfd04e101`.
+  starting checkpoint: `5372223eadce34056966fab68742f70bfd04e101`.
+  Controller's concurrent Task 3 guard fix
+  `bc4e429988bc0b09283ca456d5b9ff4860c100c9` touched only its importer/home
+  paths and became the implementation parent. Task 4 implementation checkpoint:
+  `c9ecf98a18afbf76dbcd6e97445491a8163533d3`.
 - TDD red: identity/index/filter/hiding/shelf selection failed on both platforms
   (10 suites; 20 failed assertions, 312 passing; missing identity module).
   The subsequent real-SQL/hook red run failed 6 suites with 16 failed assertions,
