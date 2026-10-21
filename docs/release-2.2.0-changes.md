@@ -1,5 +1,20 @@
 # 2.2.0 preview change ledger
 
+## Focused Package D corrections
+
+The approved scope is #227 (`2f24dc375ff58a9df9330cc1c7cfe20669d3379d`)
+and #228 (`5f4121d6cac5106b3fb264edf031056852e85991`), integrated for review
+in #258 from pinned develop `9ff154c89f5805894df078c16f569fbf261af041`.
+This preview carries its fixes: identity rechecks after preflight and before PRO
+retry, local refusal ownership, stale/forgotten discovery targets, live picker
+state, disabled actions and a persistent editor chip. Accepted A-C behavior
+is preserved. Multi-machine and Original serial checks remain on the hardware
+checklist; #251 remains a separate unconfirmed recipe-buffer investigation.
+
+#231 is not accepted by that integration. Its machine cards and reordered
+Settings remain here only as an evaluation proposal, along with other
+unaccepted later packages. Do not infer acceptance from their presence.
+
 This is an evaluation branch, not an approved release candidate. The notes below
 come from the contributor proposals and describe intended behavior, not completed
 hardware acceptance. The 24 proposal heads at the integration checkpoint are

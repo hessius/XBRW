@@ -1459,6 +1459,10 @@ export default function EditRecipe(
                         onHelp={() => setHelpOpen(true)}
                         onRename={() => setRenameOpen(true)}/>
 
+            {machinePicker.available && (
+                <MachineChip label={machinePicker.label} onPress={machinePicker.show}/>
+            )}
+
             {/* `stickyHeaderIndices` only sticks *direct* children, and it
                 counts slots — so every slot below is always occupied, by an
                 empty `YStack` when it has nothing to show. A conditional that
@@ -1499,15 +1503,7 @@ export default function EditRecipe(
                         onScroll={onScroll} scrollEventThrottle={16}>
                 {recipe.isTea() ? <TeaBanner accent={accent}/> : <YStack/>}
 
-                {/* One slot with the deck switch, not a slot of its own:
-                    `stickyHeaderIndices` counts direct children, and a new
-                    child here would move the stages deck's sticky profile
-                    off index 2. */}
                 <YStack>
-                    {machinePicker.available && (
-                        <MachineChip label={machinePicker.label}
-                                     onPress={machinePicker.show}/>
-                    )}
                     <DeckSwitch deck={deck} stageCount={recipe.pours.length}
                                 accent={accent} onChange={setDeck}/>
                 </YStack>

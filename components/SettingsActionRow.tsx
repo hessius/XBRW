@@ -16,6 +16,7 @@ type Props = {
      * roaster, and the words a screen reader says for it instead.
      */
     mark?: {glyph: React.ReactNode; spoken: string};
+    disabled?: boolean;
     onPress: () => void;
 };
 
@@ -27,7 +28,7 @@ type Props = {
  * like its sibling. The rotation goes on a wrapper because `DotIcon` owns its
  * own style prop.
  */
-export default function SettingsActionRow({label, detail, tone = "default", mark, onPress}: Props) {
+export default function SettingsActionRow({label, detail, tone = "default", mark, disabled = false, onPress}: Props) {
     const ink = tone === "danger" ? palette.danger : palette.text;
     const spoken = [label, mark?.spoken, detail].filter((part) => part !== undefined).join(", ");
 
@@ -44,9 +45,11 @@ export default function SettingsActionRow({label, detail, tone = "default", mark
         // does not drive Tamagui's.
         <Pressable accessibilityRole="button"
                    accessibilityLabel={spoken}
+                   accessibilityState={{disabled}}
+                   disabled={disabled}
                    onPress={onPress}
                    style={({pressed}) => ({
-                       opacity:   pressed ? 0.7 : 1,
+                       opacity:   disabled ? 0.5 : pressed ? 0.7 : 1,
                        transform: [{scale: pressed ? 0.98 : 1}]
                    })}>
             {/* No borderBottom here any more: the card in `SettingsSection`

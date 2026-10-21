@@ -37,6 +37,15 @@ function props(over: Partial<React.ComponentProps<typeof MachinePickerSheet>> = 
 }
 
 describe("the machine picker", () => {
+    it("keeps the connected machine connected before the first survey returns", async () => {
+        await renderWithProviders(<MachinePickerSheet {...props({
+            survey: {heard: null, looking: true, error: null}
+        })}/>);
+
+        expect(screen.getByLabelText(/^BAR-2, .*connected$/)).toBeTruthy();
+        expect(screen.getByTestId("machine-heading-connected")).toBeTruthy();
+    });
+
     it("puts the connected machine first, then the nearby ones, then the rest", async () => {
         await renderWithProviders(<MachinePickerSheet {...props()}/>);
 

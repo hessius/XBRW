@@ -221,7 +221,7 @@ describe("choosing from one scan", () => {
     });
 
     it("marks nothing either way before anybody has looked", () => {
-        const {inRange, away} = splitByRange(CAFE, null, "bar-2");
+        const {inRange, away} = splitByRange(CAFE, null, null);
         expect(inRange).toEqual([]);
         expect(away).toHaveLength(5);
     });

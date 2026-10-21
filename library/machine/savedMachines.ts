@@ -415,8 +415,7 @@ export function splitByRange(
     connectedId: string | null
 ): {inRange: {machine: SavedMachine; index: number}[]; away: {machine: SavedMachine; index: number}[]} {
     const indexed = machines.map((machine, index) => ({machine, index}));
-    if (heard === null) return {inRange: [], away: indexed};
-    const near = new Set(heard);
+    const near = new Set(heard ?? []);
     if (connectedId !== null) near.add(connectedId);
     return {
         inRange: indexed.filter(({machine}) => near.has(machine.id)),

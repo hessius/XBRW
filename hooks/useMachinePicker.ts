@@ -1,4 +1,4 @@
-import {useState} from "react";
+import {useEffect, useState} from "react";
 
 import {MODEL_NAMES, type MachineSurveyState} from "@/components/MachinePickerSheet";
 import {notify} from "@/components/XbrwToast";
@@ -13,6 +13,7 @@ import {useSavedMachines} from "@/hooks/useSavedMachines";
 import {sharedSettings} from "@/hooks/useSetting";
 import type {MachineColour} from "@/constants/colors";
 import {machineColourOf, machineLabel, type SavedMachine} from "@/library/machine/savedMachines";
+import type Machine from "@/library/machine/Machine";
 import type {Settings} from "@/library/Settings";
 
 /** How old a survey may be and still be shown while a fresh one runs. */
@@ -57,6 +58,7 @@ export type MachinePicker = {
 export function useMachinePicker(settings?: Settings): MachinePicker {
     const {machines, activeId} = useSavedMachines(settings);
     const [open, setOpen] = useState(false);
+    const [pickerMachine, setPickerMachine] = useState<Machine | null>(null);
     const [connected, setConnected] = useState(false);
     const [blocker, setBlocker] = useState<string | null>(null);
     const [survey, setSurvey] = useState<MachineSurveyState>(
@@ -64,8 +66,24 @@ export function useMachinePicker(settings?: Settings): MachinePicker {
     );
     const activeIndex = machines.findIndex((machine) => machine.id === activeId);
 
+    useEffect(() => {
+        if (!open || pickerMachine === null) return;
+        const update = () => {
+            setConnected(pickerMachine.isConnected());
+            setBlocker(machineChangeBlocker(pickerMachine, activeId));
+        };
+        const offLink = pickerMachine.onLink(update);
+        const offPhase = pickerMachine.onPhase(update);
+        return () => { offLink(); offPhase(); };
+    }, [open, pickerMachine, activeId]);
+
     function look(): void {
         const machine = sharedMachine();
+        const reason = machineChangeBlocker(machine, activeId);
+        if (reason !== null) {
+            setBlocker(reason);
+            return;
+        }
         setSurvey((previous) => ({...previous, looking: true, error: null}));
         surveyMachines(machine).then(
             (found) => setSurvey({heard: found.map((entry) => entry.id), looking: false, error: null}),
@@ -79,6 +97,7 @@ export function useMachinePicker(settings?: Settings): MachinePicker {
 
     function show(): void {
         const machine = sharedMachine();
+        setPickerMachine(machine);
         const reason = machineChangeBlocker(machine, activeId);
         const recent = latestSurvey();
         setConnected(machine.isConnected());

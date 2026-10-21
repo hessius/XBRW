@@ -15,7 +15,7 @@ import {
 import {FakeTransport, machineInfoFrame} from "@/library/machine/__tests__/FakeTransport";
 import Machine from "@/library/machine/Machine";
 import {NoSavedMachineError} from "@/library/machine/errors";
-import {loadSavedMachines} from "@/library/machine/savedMachineSettings";
+import {forgetSavedMachine, loadSavedMachines} from "@/library/machine/savedMachineSettings";
 import {serialiseSavedMachines, type SavedMachine} from "@/library/machine/savedMachines";
 import {Settings, type SettingsStorage} from "@/library/Settings";
 
@@ -193,6 +193,52 @@ describe("several machines saved, one scan", () => {
 });
 
 describe("switching by hand", () => {
+    it("does not resurrect an inactive machine forgotten while discovery was waiting", async () => {
+        const settings = cafe();
+        settings.set("machineDeviceId", "window");
+        const {transport, machine, store} = rig(settings, heard("bar-1"));
+        let finishScan: (found: {id: string; name: string}[]) => void = () => {
+            throw new Error("The scan has not started");
+        };
+        const scan = jest.spyOn(machine, "scan").mockImplementationOnce(
+            () => new Promise(resolve => { finishScan = resolve; })
+        );
+        const connecting = openLink(machine, store, granted, instant)
+            .catch((error: unknown) => error);
+        for (let index = 0; index < 10; index++) await Promise.resolve();
+        expect(scan).toHaveBeenCalledTimes(1);
+
+        forgetSavedMachine(settings, "bar-1");
+        finishScan(heard("bar-1"));
+
+        expect(await connecting).toBeInstanceOf(Error);
+        expect(transport.connectedTo).toBeNull();
+        expect(settings.get("machineDeviceId")).toBe("window");
+        expect(loadSavedMachines(settings).some(saved => saved.id === "bar-1")).toBe(false);
+    });
+
+    it("keeps a manual choice made while an earlier connection is still scanning", async () => {
+        const settings = cafe();
+        const {transport, machine, store} = rig(settings, heard("window", "back"));
+        let finishScan: (found: {id: string; name: string}[]) => void = () => {
+            throw new Error("The scan has not started");
+        };
+        const scan = jest.spyOn(machine, "scan").mockImplementationOnce(
+            () => new Promise(resolve => { finishScan = resolve; })
+        );
+        const connecting = openLink(machine, store, granted, instant)
+            .catch((error: unknown) => error);
+        for (let index = 0; index < 10; index++) await Promise.resolve();
+        expect(scan).toHaveBeenCalledTimes(1);
+
+        await chooseMachine(machine, settings, "back", granted, instant);
+        finishScan(heard("window"));
+
+        expect(await connecting).toBeInstanceOf(Error);
+        expect(transport.connectedTo).toBe("back");
+        expect(settings.get("machineDeviceId")).toBe("back");
+    });
+
     it("drops the current link and connects to the one picked, model and all", async () => {
         const settings = cafe();
         const {transport, machine, store} = rig(settings, heard("bar-1", "bar-2"));

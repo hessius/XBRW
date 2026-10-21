@@ -14,6 +14,7 @@ import {palette} from "@/constants/colors";
 import {RECIPE_HELP} from "@/constants/recipeHelp";
 import {resolveAccent} from "@/library/accent";
 import type {BeanProfile} from "@/library/beanProfile";
+import {serialiseSavedMachines} from "@/library/machine/savedMachines";
 
 // The words themselves are inventoried in docs/copy.md. These tests assert the
 // wiring, so they read the hint rather than restating it; `String` because the
@@ -224,6 +225,20 @@ async function renderEditor(overrides: Partial<Recipe> = {}) {
     );
     return view;
 }
+
+it("keeps the selected machine outside the scrolling recipe content", async () => {
+    mockSettings = {
+        machineDeviceId: "WORK",
+        savedMachines: serialiseSavedMachines(["Home", "Work"].map(label => ({
+            id: label.toUpperCase(), label, model: "studio" as const,
+            modelString: "", advertisedName: "", serial: ""
+        })))
+    };
+    await renderEditor();
+
+    expect(screen.getByLabelText("Machine, Work")).toBeTruthy();
+    expect(within(screen.getByTestId("editor-scroll")).queryByLabelText("Machine, Work")).toBeNull();
+});
 
 it.each([false, true])("keeps the editor header photo-free with ABOUT preference %s", async show => {
     mockSettings = {showRecipeAvatars: show, showRecipeCardPhotos: true, showShelfPhotoPreviews: true};

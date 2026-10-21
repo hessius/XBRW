@@ -1413,7 +1413,11 @@ export default class Machine {
                 // the one the user may want to keep for themselves.
                 ...(autoStart ? [commit] : [])
             ]);
-            if (!sent || ticket !== this.cancelTicket || generation !== this.generation) return;
+            if (ticket !== this.cancelTicket) return;
+            if (generation !== this.generation) {
+                throw new BrewUploadError(new Error("The machine connection changed."));
+            }
+            if (!sent) return;
             // The burst carried the commit when auto-start is on, so from here
             // the machine is starting itself and needs nothing from the user.
             this.committed = autoStart;

@@ -23,7 +23,8 @@ import {
     BluetoothPermissionError,
     NoSavedMachineError,
     RadioUnavailableError,
-    SlotOperationError
+    SlotOperationError,
+    WrongMachineError
 } from "@/library/machine/errors";
 import {
     bestSavedMachine,
@@ -424,6 +425,7 @@ export async function openLink(
     options: LinkOptions = {}
 ): Promise<void> {
     if (machine.isConnected()) return;
+    const startedWith = store.rememberedId();
     // Outside the retrying on purpose. Waiting fourteen seconds to be told the
     // app needs permission it has already been denied helps nobody.
     await requirePermission(ensurePermission);
@@ -458,7 +460,6 @@ export async function openLink(
 
     const delays = options.delays ?? CONNECT_DELAYS_MS;
     const wait = options.wait ?? sleep;
-    const startedWith = store.rememberedId();
     let lastFailure: Error | null = null;
     for (const delay of delays) {
         if (delay > 0) await wait(delay);
@@ -468,7 +469,12 @@ export async function openLink(
         // same goes for picking another machine meanwhile, which moves the
         // active machine rather than emptying it: hence "changed", not "empty".
         if (startedWith !== "" && store.rememberedId() !== startedWith) {
-            throw lastFailure ?? new Error("Connecting was cancelled.");
+            throw new WrongMachineError("Connecting was cancelled. The machine selection changed.");
+        }
+        if (saved.length >= 2 && !store.savedMachines?.().some(entry => entry.id === target)) {
+            throw new WrongMachineError(
+                "The selected machine is not saved any more. Choose a machine, then try again."
+            );
         }
         try {
             await attemptLink(machine, store, target);

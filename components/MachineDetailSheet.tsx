@@ -189,6 +189,7 @@ export default function MachineDetailSheet({machineId, onClose, onForget, settin
                         {!(active && status === "connected") && (
                             <SettingsActionRow
                                 label="Use this machine now"
+                                disabled={changeBlocker !== null}
                                 detail={changeBlocker ?? "Connects to it until the app is closed."}
                                 onPress={() => {
                                     if (changeBlocker !== null) return;
@@ -223,6 +224,7 @@ export default function MachineDetailSheet({machineId, onClose, onForget, settin
                         )}
                         <SettingsActionRow
                             label="Forget this machine" tone="danger"
+                            disabled={changeBlocker !== null}
                             // Locked like "Use this machine now": forgetting
                             // the machine in use mid-brew would hand the next
                             // BREW to another machine while this one pours.

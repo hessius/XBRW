@@ -37,7 +37,9 @@ function upgradedPhone() {
         machineDeviceId: "HOME", machineModel: "studio",
         machineModelString: "J15", machineName: "XBLOOM HOME"
     });
-    return {settings: new Settings(storage), writes};
+    const settings = new Settings(storage);
+    writes.length = 0;
+    return {settings, writes};
 }
 
 describe("an existing user upgrading", () => {

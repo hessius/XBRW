@@ -174,7 +174,11 @@ const mockSurveyMachines = jest.fn(async () => [{id: "WORK"}]);
 
 jest.mock("@/hooks/useMachine", () => ({
     __esModule:   true,
-    sharedMachine:        () => ({isConnected: () => mockMachineStatus === "connected"}),
+    sharedMachine:        () => ({
+        isConnected: () => mockMachineStatus === "connected",
+        onLink: () => () => {},
+        onPhase: () => () => {}
+    }),
     machineChangeBlocker: () => mockChangeBlocker,
     latestSurvey:         () => null,
     surveyMachines:       () => mockSurveyMachines(),

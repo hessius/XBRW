@@ -9,10 +9,10 @@
 import {act, renderHook} from "@testing-library/react-native";
 
 import {useBrew} from "@/hooks/useBrew";
-import {__resetSharedMachine} from "@/hooks/useMachine";
+import {__resetSharedMachine, chooseMachine} from "@/hooks/useMachine";
 import {sharedSettings} from "@/hooks/useSetting";
 import {FakeTransport} from "@/library/machine/__tests__/FakeTransport";
-import {WrongMachineError} from "@/library/machine/errors";
+import {NoSavedMachineError, WrongMachineError} from "@/library/machine/errors";
 import Machine from "@/library/machine/Machine";
 import {serialiseSavedMachines, type SavedMachine} from "@/library/machine/savedMachines";
 import {DEFAULTS} from "@/library/Settings";
@@ -92,6 +92,50 @@ it("refuses to send, and says why, when the connect lands on a machine the scree
     expect(sharedSettings().get("machineDeviceId")).toBe("WORK");
     expect(transport.connectedTo).toBeNull();
     expect(refused).toHaveBeenCalledWith(expect.any(WrongMachineError));
+});
+
+it("does not relink over a manual selection made during brew discovery", async () => {
+    const transport = new FakeTransport();
+    const machine = new Machine(transport, {frameGapMs: 0});
+    let finishScan: (found: {id: string; name: string}[]) => void = () => {
+        throw new Error("The scan has not started");
+    };
+    const scan = jest.spyOn(machine, "scan").mockImplementationOnce(
+        () => new Promise(resolve => { finishScan = resolve; })
+    );
+    const disconnect = jest.spyOn(machine, "disconnect");
+    const {result} = await renderHook(() => useBrew(machine));
+    const refused = jest.fn();
+
+    await act(async () => {
+        const brewing = result.current.brew(coffee(), undefined, refused);
+        for (let index = 0; index < 10; index++) await Promise.resolve();
+        expect(scan).toHaveBeenCalledTimes(1);
+        await chooseMachine(machine, sharedSettings(), "HOME",
+            async () => ({granted: true}), {wait: async () => {}});
+        finishScan([{id: "HOME", name: "XBLOOM"}]);
+        await brewing;
+    });
+
+    expect(transport.connectedTo).toBe("HOME");
+    expect(sharedSettings().get("machineDeviceId")).toBe("HOME");
+    expect(disconnect).not.toHaveBeenCalled();
+    expect(refused).toHaveBeenCalledWith(expect.any(WrongMachineError));
+    expect(result.current.error).toMatch(/selection changed/i);
+});
+
+it("retires the attempt when none of the saved machines is nearby", async () => {
+    const transport = new FakeTransport();
+    transport.devices = [{id: "STRANGER", name: "XBLOOM"}];
+    const machine = new Machine(transport, {frameGapMs: 0});
+    const {result} = await renderHook(() => useBrew(machine));
+    const refused = jest.fn();
+
+    await act(async () => { await result.current.brew(coffee(), undefined, refused); });
+
+    expect(refused).toHaveBeenCalledWith(expect.any(NoSavedMachineError));
+    expect(transport.connectedTo).toBeNull();
+    expect(transport.scans).toHaveLength(1);
 });
 
 describe("one machine saved", () => {

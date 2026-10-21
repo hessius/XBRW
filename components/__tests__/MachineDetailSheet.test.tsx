@@ -52,6 +52,18 @@ beforeEach(() => {
 });
 
 describe("a saved machine's sheet", () => {
+    it("announces both blocked machine actions as disabled", async () => {
+        mockBlocker = "A brew is running. Stop it or let it finish before changing machines.";
+        await renderWithProviders(
+            <MachineDetailSheet machineId="WORK" onClose={jest.fn()}/>
+        );
+
+        for (const name of [/^Use this machine now/, /^Forget this machine/]) {
+            expect(screen.getByRole("button", {name}).props.accessibilityState)
+                .toMatchObject({disabled: true});
+        }
+    });
+
     it("asks the screen to confirm, and forgets nothing itself", async () => {
         // It used to forget on the tap. The screen's ForgetMachineSheet asks.
         const onForget = jest.fn();
