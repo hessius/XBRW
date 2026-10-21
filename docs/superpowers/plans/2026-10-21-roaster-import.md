@@ -595,13 +595,13 @@ must not poison a new URI or a different mounted shelf.
 `docs/copy.md`, `docs/roaster-feed.md`, `docs/roaster-guide.md`,
 `docs/release-2.2.0-changes.md`, `docs/release-2.2.0-testing.md`.
 
-- [ ] **Step 1: Integrate shared home wiring serially.**
+- [x] **Step 1: Integrate shared home wiring serially.**
 
 Keep only saved recipe search/list/empty states. Wire catalogue offers and
 Import choices without importing source #240's home-strip/search/empty-library
 promotion. Assert the absence of unsaved results even with followed feeds.
 
-- [ ] **Step 2: Run targeted tests together, then all required gates.**
+- [x] **Step 2: Run targeted tests together, then all required gates.**
 
 ```bash
 npm run typecheck
@@ -615,24 +615,57 @@ Run heavy suites serially; do not contend with another session's device client.
 Fix introduced failures rather than weakening tests. Preserve existing
 warnings explicitly instead of claiming a warning-free baseline.
 
-- [ ] **Step 3: Check native presentation when an appropriate existing client is available.**
+- [x] **Step 3: Check native presentation when an appropriate existing client is available.**
 
 Exercise Import idle, selected rows, native paste, scrolling/large text,
 catalogue return and shelf art. Do not rebuild native code or deploy without
 authorization. Record a runtime mismatch or unavailable client as a gap;
 browser sketches and Jest are not device proof.
 
-- [ ] **Step 4: Update copy, feed fallback/choice guidance and release/testing docs.**
+- [x] **Step 4: Update copy, feed fallback/choice guidance and release/testing docs.**
 
 Document the Import-only discovery boundary, selected-only cap, roaster metadata
 inheritance, saved-only shelves and photo exception. Link #261 as non-blocking
 and keep #253 separate. No analytics, new home promotions or native changes.
 
-- [ ] **Step 5: Self-review the final diff against every spec acceptance case and commit.**
+- [x] **Step 5: Self-review the final diff against every spec acceptance case and commit.**
+
+### Task 6 integration record
+
+- Task 3 passed independent specification and quality review after the
+  `bc4e4299` / `6d3b47a5` guard fixes. Rejected navigation cannot persist an
+  existing recipe, remember a replacement or leave Import covering Home.
+- Task 4 passed both reviews after `d20c9861` retained an applied roaster
+  shelf whose final member disappeared. Task 5 `3a1a04e0` passed both reviews.
+- `631f2995` wires whole-library roaster counts into Home, adds saved-only
+  subscription/search/empty-state regressions and updates the publication,
+  copy and release/testing documentation.
+- Final cross-task review found two boundary defects. `8eb56005` keeps feed
+  management reachable from Settings with zero subscriptions and records the
+  original author baseline before catalogue Brew now opens the editor.
+  Both were reproduced, covered by regressions and independently approved.
+  The affected route/Settings/bean-filter group passes 282 tests.
+- The first full suite exposed twelve failures in the bean-filter screen's
+  fake store and missing shared-settings isolation. Its fixtures were updated
+  without weakening production errors or existing assertions. The repeat full
+  run at `8eb56005` passes **842 suites / 17,132 tests**, both platforms;
+  2 suites / 26 tests remain intentionally skipped and 2 snapshots pass.
+  Typecheck passes. Lint has zero errors and the existing 32 warnings.
+  Expo Doctor passes 21/21 checks; worktree tooling tests pass 2/2.
+- Native availability was checked on the iPhone 17 Pro simulator. Expo Go is
+  installed but the full `com.hessius.xbrwplusplus` development client is not.
+  No native build was authorized or performed; the simulator was returned to
+  its original shutdown state. Clipboard consent, keyboard/touch/large-text
+  scrolling, initial centering/non-ASCII fallback and actual image transitions
+  remain explicit native gaps. Software checks do not mark them qualified.
+- No dependency or native-configuration change is introduced. The manifest
+  adds only the publisher's `check-feed` command. #251 remains unconfirmed,
+  #253 remains the photo-performance follow-up, and #261 is non-blocking
+  adoption feedback without new tracking.
 
 ## Task 7: Publish one focused PR and finish ready to merge
 
-- [ ] **Step 1: Push the authorized task branch and open a PR targeting develop.**
+- [x] **Step 1: Push the authorized task branch and open a PR targeting develop.**
 
 Describe the adaptation and source PRs briefly. Include the agreed design and
 remaining physical/native limitations. Do not close source PRs or merge them
@@ -657,3 +690,20 @@ base/head/branch/worktree, cleanliness, push state, review/CI evidence and gaps.
 Retain this owned worktree for pending merge and the cumulative preview for
 remaining evaluation work; do not remove other sessions' worktrees.
 Stop ready to merge. No merge or cumulative integration is implied by green CI.
+
+### Task 7 publication record
+
+- Focused PR #263 targets develop. Code checkpoint `8eb56005` is pushed and
+  CI run `39683688576` passes quality, both Jest platforms and the aggregate
+  required check. Source #237/#240/#245 heads were rechecked unchanged; none
+  is closed or merged by this adaptation.
+- The default-branch automatic review rule does not cover this develop PR.
+  After checking for automatic activity, exactly one Copilot request was
+  recorded at `2026-10-21T22:04:12Z`; review `5606882137` completed once.
+  Its six findings cover missing-route screen-reader coverage, row photo URI
+  recovery, offer checkbox lifetime, two non-scrolling sheets and duplicate-
+  name feed diagnostics. Corrections and regression coverage are in progress.
+  Do not request a second round.
+- Final review-fix evidence and exact final-head CI will be recorded in #263,
+  #249 and the session handoff. This owned worktree remains for the pending
+  merge decision; the cumulative preview remains separate and unchanged.
