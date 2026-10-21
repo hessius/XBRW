@@ -9,6 +9,7 @@ each device result. Software transports do not qualify BLE or NFC hardware.
 - [ ] On both native platforms, open Import with zero subscriptions, then with
   subscriptions and zero/one/three chosen shortcuts. Verify selection order,
   fourth-choice refusal, All roasters access and no automatic slot filling.
+  With none, recover a declined offer through Settings → Library → Roaster feeds.
 - [ ] Check narrow widths, large system text, sheet scrolling, native Paste
   consent and keyboard remaining closed on a plain open. Source choices close
   Import before navigating and disappear during lookup/error/found states.
@@ -23,6 +24,8 @@ each device result. Software transports do not qualify BLE or NFC hardware.
 - [ ] Exercise newer-author choices, local edits and unchanged-author
   fingerprints. Check feed offers on return and cancellation, replacement,
   failed lookup and failed feed without losing a valid imported recipe.
+  Edit and save a catalogue Brew now recipe, then reimport its unchanged author:
+  it must keep the edit without claiming there is a newer author version.
 - [ ] Save catalogue recipes with coffee-, import- and feed-level roaster
   metadata; check precedence and fill-only-blank existing metadata. Copy,
   backup/restore and unsubscribe without losing saved roaster identity.

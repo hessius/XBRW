@@ -25,7 +25,9 @@ the practical version.
   xBloom catalogue. Under **Manage feeds**, each roaster has **Show in Import**:
   customers can choose up to three shortcuts, shown in selection order.
   Subscribing does not select a shortcut automatically; removing one leaves
-  the subscription and saved recipes alone.
+  the subscription and saved recipes alone. **Settings → Library → Roaster
+  feeds** also opens management, including declined offers when no subscriptions
+  remain.
 - **A shelf for saved recipes.** A saved recipe keeps its declared roaster even
   after unsubscribing. Three saved recipes can form an automatic roaster shelf,
   provided they are no more than 80% of the library. Publish `bean.roaster` for

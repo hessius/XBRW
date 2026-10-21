@@ -195,6 +195,15 @@ async function settleSheet(): Promise<void> {
 }
 
 describe("SettingsScreen", () => {
+    it("keeps feed management reachable with no subscriptions", async () => {
+        const settings = new Settings(memoryStorage());
+        await renderWithProviders(<SettingsScreen settings={settings}/>);
+        await fireEvent.press(screen.getByRole("button", {
+            name: "Roaster feeds, Manage subscriptions and declined offers."
+        }));
+        expect(mockPush).toHaveBeenCalledWith("/subscriptions");
+    });
+
     beforeEach(() => {
         jest.clearAllMocks();
         mockLibraryRecipes = [];

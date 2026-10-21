@@ -86,6 +86,8 @@ then the customer's xBloom account and the separate xBloom catalogue.
 |----|--------|---------|--------------|
 | `import.roasters.all` | `components/ImportSheet.tsx:289` | Opens followed independent roasters, even with no chosen shortcut. | `All roasters` |
 | `import.catalogue.caption` | `components/ImportSheet.tsx:27` (`CATALOGUE_CAPTION`) | Attributes the separate xBloom catalogue. | `Recipes from xBloom and the community` |
+| `settings.roasterFeeds.label` | `app/settings.tsx:593` | Feed management, including declined offers with no subscriptions. | `Roaster feeds` |
+| `settings.roasterFeeds.detail` | `app/settings.tsx:594` | Recovery path from Library settings. | `Manage subscriptions and declined offers.` |
 
 ### Saved-library copy
 

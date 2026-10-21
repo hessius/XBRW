@@ -20,6 +20,7 @@ import router from "@/hooks/steadyRouter";
 import {useLiveBrew} from "@/hooks/useLiveBrew";
 import {sharedSettings, useSetting} from "@/hooks/useSetting";
 import {assignAccent, resolveAccent} from "@/library/accent";
+import {rememberPrint} from "@/library/importRefresh";
 import type Recipe from "@/library/Recipe";
 import {
     bagWatchKey, coffeeBadge, coffeeKey, readAlerts, recordOpened, setWatch
@@ -283,6 +284,7 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
             return;
         }
         assignAccent(fresh.recipe, deps.stored());
+        rememberPrint(store, fresh.recipe, deps.stored().map(recipe => recipe.uuid));
         router.push({pathname: "/editRecipe", params: {recipeJSON: JSON.stringify(fresh.recipe)}});
     }
 

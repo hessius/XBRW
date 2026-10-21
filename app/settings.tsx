@@ -590,6 +590,9 @@ export default function SettingsScreen({settings}: Props) {
                 </SettingsSection>
 
                 <SettingsSection title="Library">
+                    <SettingsActionRow label="Roaster feeds"
+                                       detail="Manage subscriptions and declined offers."
+                                       onPress={() => router.push("/subscriptions")}/>
                     {unreadableCount > 0 && (
                         // Bought off here: `queryRecipes` skips a blob it cannot
                         // read so the library still opens (#124), and this is

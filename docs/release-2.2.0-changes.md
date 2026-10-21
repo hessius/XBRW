@@ -29,6 +29,9 @@ coffee's declared roaster, then the underlying import's roaster, then the feed's
 declared name. Feed offers are scoped to their successful import and discarded
 on cancellation, replacement or failure. Relative catalogue ages refresh each
 minute and when the app returns to the foreground.
+Settings keeps feed management reachable with no subscriptions, including
+re-enabling declined offers. Catalogue **Brew now** records the original author
+baseline before editor changes so an unchanged author is not called an update.
 
 Saved `coffee.roaster` metadata forms automatic shelves independently of
 subscriptions. Matching trims and normalizes Unicode and case, without guessing

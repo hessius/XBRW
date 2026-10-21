@@ -7,8 +7,8 @@ import RoasterScreen from "@/app/roaster";
 import RoasterCoffeeScreen from "@/app/roasterCoffee";
 import RoastersScreen from "@/app/roasters";
 import {parseHidden} from "@/library/hiddenShelves";
-import {contentPrint} from "@/library/importRefresh";
-import type Recipe from "@/library/Recipe";
+import {contentPrint, planReimport, readPrints} from "@/library/importRefresh";
+import Recipe from "@/library/Recipe";
 import {parseRoasterFeed} from "@/library/roasterFeed";
 import {forgetQueriesForTests} from "@/library/roasterFilters";
 import {subscribe} from "@/library/roasterSync";
@@ -514,6 +514,19 @@ describe("one coffee", () => {
         expect(call.pathname).toBe("/editRecipe");
         expect(JSON.parse(call.params.recipeJSON).name).toBe("Coffee b - 18g");
         expect(library.all()).toEqual([]);
+    });
+
+    it("preserves the author baseline when a brew-now recipe is edited and saved", async () => {
+        const {settings, library} = await open();
+        await fireEvent.press(screen.getByTestId("roaster-coffee-brew"));
+        await waitFor(() => expect(router.push).toHaveBeenCalled());
+        const call = (router.push as jest.Mock).mock.calls[0][0];
+        const author = new Recipe(undefined, call.params.recipeJSON);
+        const edited = new Recipe(undefined, call.params.recipeJSON);
+        edited.grindSize += 1;
+        library.deps.save(edited);
+        expect(planReimport(library.all(), author, readPrints(settings)))
+            .toEqual({kind: "same", recipe: edited});
     });
 
     it("names a copy that followed xBloom's own name when it is added again", async () => {

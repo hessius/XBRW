@@ -14,6 +14,8 @@ Home and its search show saved recipes only. Open **Import → All roasters** to
 browse subscriptions. **Show in Import** selects up to three roaster shortcuts
 in selection order; the app never fills the remaining slots automatically.
 All roasters stays available with subscriptions even when none is selected.
+**Settings → Library → Roaster feeds** remains reachable with none, so a declined
+offer can be enabled again without subscribing to a different feed first.
 
 Saved recipes form automatic roaster shelves from their `coffee.roaster`,
 independent of subscriptions. The ordinary visibility rules apply: at least
