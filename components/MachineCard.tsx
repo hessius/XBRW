@@ -59,44 +59,28 @@ type Props = {
     connected: boolean;
     /** The summary turns red while the link has an error to show. Wins over `connected`. */
     failed?: boolean;
-    /**
-     * Start open. The machine in use does, so its status, any error and the
-     * way to fix it are on screen without a tap, as they were before cards.
-     */
+    /** Start open when the selected machine already has an error on entry. */
     initiallyOpen?: boolean;
     testID: string;
-    /** Status, connect and model: what somebody opened the card for. */
+    /** Connection, recovery and the management shortcut. */
     children: React.ReactNode;
     /** The machine's own readings, behind a second fold. */
     details: React.ReactNode;
-    /** Below the details, so a destructive row is never the first thing under the header. */
-    footer: React.ReactNode;
 };
 
 /**
  * One saved machine in Settings, which opens in place.
  *
- * The machine in use starts open and the others start closed. Its status line,
- * any error and the Android settings row would otherwise be a tap away, and
- * Connect a tap deeper than it was before there were cards.
+ * Cards start closed unless the selected machine has an error on entry.
+ * Connection stays inline; management opens the existing sheet.
  *
- * In place rather than in a sheet because almost everything in it is a tap
- * and a glance: is it connected, connect it, which model is it. A sheet would
- * put a slide and a dismissal around each of those. Naming and reordering do
- * still open the machine's sheet, from a row in here, because a text field
- * inside the long settings scroll would sit under the keyboard.
- *
- * The readings are a second fold inside the first. Serial, firmware, water
- * and grind size are useful when something is wrong and noise the rest of the
- * time.
- *
- * Three `Collapsible`s in a column rather than one inside another. A nested
+ * Two `Collapsible`s in a column rather than one inside another. A nested
  * one changes its parent's height while the parent is measuring it, and the
  * parent would clip the details in the middle of their animation.
  */
 export default function MachineCard({
     title, summary, isDefault, ranked, colour, connected, failed = false, initiallyOpen = false, testID,
-    children, details, footer
+    children, details
 }: Props) {
     const [open, setOpen] = useState(initiallyOpen);
     const [detailsOpen, setDetailsOpen] = useState(false);
@@ -160,10 +144,6 @@ export default function MachineCard({
                 <YStack testID="machine-card-details" paddingVertical="$1">
                     {details}
                 </YStack>
-            </Collapsible>
-
-            <Collapsible open={open}>
-                <Rows>{footer}</Rows>
             </Collapsible>
         </YStack>
     );

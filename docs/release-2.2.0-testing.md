@@ -4,6 +4,52 @@ Package acceptance is separate from merging and release qualification.
 Record the exact app commit, native build, platform, machine and firmware with
 each result. Leave a box open until its result is captured.
 
+## SDK 57 patch and runtime follow-up
+
+- [ ] Rebuild the native client from the final accepted commit before device
+  acceptance. Expo 57.0.31, Router 57.0.29 and Sharing 57.0.24 replace earlier
+  patch versions; Metro reload does not update their native code.
+- [ ] Record the platform-specific fingerprint with the native artifact and
+  verify its runtime is not the earlier `appVersion` identifier `2.2.0`.
+  Keep native build, release and deployment approvals separate. No OTA package,
+  deployment or hardware pass is introduced by changing the runtime policy.
+
+## Package D follow-up: Settings (#231)
+
+- [ ] Check the header at 320/390-point widths and default/2x text: the full
+  support label remains readable, wraps when needed and opens the same browser
+  destination. Back and Settings remain reachable without overlap.
+- [ ] With zero, one and several saved machines, verify onboarding/model
+  selection, collapsed cards, independent folds and the error-on-entry card.
+  Opening Settings must not produce a handshake beep.
+- [ ] Expand each machine and its Details. Live readings and Connected belong
+  only to the actual linked device, including while another one is selected.
+  Disconnected cards show saved identity, not stale readings or invented zeros.
+  Check blank reported-model fallback and long names/readouts with large text.
+- [ ] Connect/Use targets that exact saved machine. Refuse it or switch it off:
+  do not announce success for a different machine. Check Android permission
+  recovery and visible disabled reasons during connection and a live brew.
+  Include HOME selected with WORK still linked: Connect must actually reach
+  HOME, not merely announce it. Reconnecting an already linked selection must
+  not add a handshake.
+- [ ] Manage machine still renames, colours, reorders and sets eligible models.
+  Forget asks first; switching, adding and forgetting respect live brew locks.
+  Open/close sheets with keyboard and screen reader on both platforms.
+- [ ] Confirm one Brewing group with auto-start, Units before Recipe list, all
+  accepted picture/account/library preferences, gated tools and About/version
+  last. History works from home and network disclosure from About.
+- [ ] Recheck bottom insets and sheet accessibility, including the global brew
+  judgement sheet. Back up/restore preferences without changing their values.
+
+Implementation evidence: the combined affected suites pass on both Jest
+platforms. At the UI-only checkpoint `2ada7e7a`, an isolated harness rendered
+the actual header, support action and
+long-name card on iPhone 17 Pro / iOS 26.4 with Expo Go 57.0.9. Headers at
+320/390 points reflowed without overlap at native font scales 1 and 2.14.
+This is component-layout evidence, not a full-app, Android-native or physical
+BLE pass. The acceptance boxes above remain open for those broader checks;
+the separate wrong-recipe issue #251 is not closed by this work.
+
 ## Package D: multiple machines
 
 - [ ] Migrate an existing single pairing without losing its identity or model.
@@ -33,8 +79,8 @@ each result. Leave a box open until its result is captured.
   Original `J20` serial/model detection is catalogue-derived, not hardware
   verified; confirm it on a real Original before calling it device-qualified.
 
-#231 remains deferred. This checklist does not accept its settings reordering
-or close the separate wrong-recipe investigation in #251.
+#231's separately approved Settings adaptation has its own checklist above;
+the original Package D machine/hardware gates remain open.
 
 ## Package A: brew correctness
 

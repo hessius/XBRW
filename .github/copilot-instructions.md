@@ -215,7 +215,7 @@ RNTL v14 has removed both `UNSAFE_getAllByType` and `root.findAllByType`. A test
 ## Platform notes
 
 - `NfcOverlay.tsx` is the scanning ceremony for both platforms. On iOS it sits above the system NFC sheet; on Android, where there is no system sheet at all, it *is* the entire experience. (It replaced the old Android-only `AndroidNFCDialog`.) NFC code paths check `nfc.getIsClosed()` before surfacing errors, since a user-cancelled Android scan throws.
-- Version lives in `app.json` (`expo.version`, currently `2.2.0`); `runtimeVersion.policy` is `appVersion`, so a native-affecting change needs a version bump. EAS build profiles: `development`, `preview`, `production`. Note `eas.json` sets `appVersionSource: "remote"`, so EAS holds the build number server-side.
+- Marketing version lives in `app.json` (`expo.version`, currently `2.2.0`); `runtimeVersion.policy` is `fingerprint`, so native compatibility follows native inputs rather than that version alone. A native-affecting change requires a new native build and device qualification, never an update to an older runtime. EAS build profiles: `development`, `preview`, `production`. Note `eas.json` sets `appVersionSource: "remote"`, so EAS holds the build number server-side.
 - **`app.json` `scheme` is an array and the order matters.** `expo-share-intent` builds the share extension's handoff key from the *first* entry, and the native extension is compiled against it, so reordering silently breaks sharing. `xbrecipewriter` stays first; `xbrw` is an alias. A test in `app/__tests__/native-intent.test.ts` fails if anyone reorders it.
 - Licensing: all three repos in the fork chain are unlicensed upstream, so `LICENSE` grants MIT over *this* repo's contributions only, and `NOTICE` draws that line. Don't relabel the tree as plain MIT.
 
@@ -225,6 +225,6 @@ RNTL v14 has removed both `UNSAFE_getAllByType` and `root.findAllByType`. A test
 - There is no `metro.config.js` and no `patches/` directory — both were workarounds that SDK 57 made unnecessary. Don't reintroduce them without a reason.
 - Never import from `@react-navigation/*`; SDK 56 forked those into `expo-router`. `ThemeProvider`, `DarkTheme`, `DefaultTheme`, and `useFocusEffect` all come from `expo-router` directly.
 - `ios/` and `android/` are generated (CNG) and gitignored. Change `app.json`, then `npx expo prebuild --clean`.
-- `app.json` `runtimeVersion.policy` is `appVersion`, so a native-affecting change needs an `expo.version` bump.
+- `app.json` `runtimeVersion.policy` is `fingerprint`. Native changes need a fresh native build; do not replace the fingerprint with a reused marketing version or weaken the release gates.
 - Install with `npx expo install <pkg>` so versions stay pinned to the SDK. If npm 12 rejects it with `EALLOWSCRIPTS`, run `npx expo-doctor` to read off the expected versions and write them into `package.json` by hand.
 - Do not change the Hermes version from the SDK default, and do not enable Worklets Bundle Mode.

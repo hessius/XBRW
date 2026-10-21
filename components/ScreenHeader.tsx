@@ -33,20 +33,11 @@ type Props = {
      * which `ScreenTitle` explains.
      */
     titleLines?: number;
-    /**
-     * The title's size, when the screen's own default is too big for it. A
-     * catalogue coffee's name can run to sixty characters, and at the full
-     * size three lines of it fill the top of a cover screen.
-     */
     titleSize?: number;
-    /**
-     * A plain line under the title, set in line with it, such as how many
-     * coffees a list shows. With it, `meta` moves down onto this line too, so
-     * a long title keeps the whole width of its own row. Used where a count
-     * has words in it (`2 of 44 coffees`), which a superscript beside a long
-     * title clipped.
-     */
+    /** Catalogue counts and metadata sit below a long coffee title. */
     subtitle?: string;
+    /** A trailing action that can wrap below the title when space is tight. */
+    action?: React.ReactNode;
     onBack: () => void;
 };
 
@@ -67,8 +58,9 @@ type Props = {
  * it, a screen reader arriving on a pushed screen has nothing for the rotor to
  * land on and no announcement saying where it landed.
  */
-export default function ScreenHeader({title, count, meta, titleLines, titleSize, subtitle, onBack}: Props) {
+export default function ScreenHeader({title, count, meta, titleLines, titleSize, subtitle, action, onBack}: Props) {
     const insets = useSafeAreaInsets();
+    const hasAction = action !== undefined && action !== null;
     const metaText = meta === undefined ? null : (
         <DotMatrixText testID="screen-header-meta" fontSize={11}
                        weight="bold" letterSpacing={1.2}
@@ -77,26 +69,46 @@ export default function ScreenHeader({title, count, meta, titleLines, titleSize,
             {meta}
         </DotMatrixText>
     );
+    const back = (
+        <Pressable accessibilityRole="button" accessibilityLabel="Back"
+                   onPress={onBack} hitSlop={12}>
+            <YStack testID="screen-header-back" backgroundColor={onAccent.key}
+                    borderRadius="$3" width={KEY_SIZE} height={KEY_SIZE}
+                    alignItems="center" justifyContent="center">
+                <DotIcon name="back" size={16} color={palette.text}/>
+            </YStack>
+        </Pressable>
+    );
 
     return (
         <YStack backgroundColor={palette.base} paddingTop={insets.top}>
             <XStack alignItems="center" gap="$3"
+                    testID={hasAction ? "screen-header-action-row" : undefined}
+                    flexWrap={hasAction ? "wrap" : "nowrap"}
                     paddingHorizontal="$4" paddingTop="$2"
                     paddingBottom={subtitle === undefined ? "$3" : "$1"}>
-                <Pressable accessibilityRole="button" accessibilityLabel="Back"
-                           onPress={onBack} hitSlop={12}>
-                    <YStack testID="screen-header-back" backgroundColor={onAccent.key}
-                            borderRadius="$3" width={KEY_SIZE} height={KEY_SIZE}
-                            alignItems="center" justifyContent="center">
-                        <DotIcon name="back" size={16} color={palette.text}/>
+                {hasAction ? (
+                    <XStack alignItems="center" gap="$3" maxWidth="100%" flexShrink={1}>
+                        {back}
+                        <YStack flexShrink={1}>
+                            <ScreenTitle title={title} count={count} heading lines={titleLines ?? 0}
+                                         fontSize={titleSize}/>
+                        </YStack>
+                    </XStack>
+                ) : <>
+                    {back}
+                    <ScreenTitle title={title} count={count} heading lines={titleLines}
+                                 fontSize={titleSize}/>
+                </>}
+                {hasAction && (
+                    <YStack testID="screen-header-action" marginLeft="auto"
+                            maxWidth="100%" flexShrink={1}>
+                        {action}
                     </YStack>
-                </Pressable>
-                <ScreenTitle title={title} count={count} heading lines={titleLines}
-                             fontSize={titleSize}/>
+                )}
                 {subtitle === undefined && metaText}
             </XStack>
             {subtitle !== undefined && (
-                // In line with the title: the back key's width and the gap.
                 <XStack alignItems="center" paddingLeft={16 + KEY_SIZE + 12}
                         paddingRight="$4" paddingBottom="$3">
                     <Text testID="screen-header-subtitle" fontSize={13} color={palette.dim}

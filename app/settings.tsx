@@ -17,7 +17,7 @@ import SettingsActionRow from "@/components/SettingsActionRow";
 import SettingsChoiceRow from "@/components/SettingsChoiceRow";
 import SettingsSection from "@/components/SettingsSection";
 import SettingsToggleRow from "@/components/SettingsToggleRow";
-import SupportTile from "@/components/SupportTile";
+import {SupportAction} from "@/components/SupportTile";
 import {notify} from "@/components/XbrwToast";
 import {palette} from "@/constants/colors";
 import {useBackup} from "@/hooks/useBackup";
@@ -173,8 +173,7 @@ export default function SettingsScreen({settings}: Props) {
         useSetting("machineConsoleAcknowledged", settings);
     const [machineConsoleConfirmations, setMachineConsoleConfirmations] =
         useSetting("machineConsoleConfirmations", settings);
-    // Shown inside MachineSection, not here. Read anyway, because a backup
-    // carries every preference and this is one.
+    // Keep the model binding here so backup and restore include it too.
     const [machineModel, setMachineModel] = useSetting("machineModel", settings);
     const [machineAutoStart, setMachineAutoStart] = useSetting("machineAutoStart", settings);
     const [animateBrewChart, setAnimateBrewChart] = useSetting("animateBrewChart", settings);
@@ -551,34 +550,23 @@ export default function SettingsScreen({settings}: Props) {
                     || machineSheetOpen
                     ? "no-hide-descendants"
                     : "auto"}>
-            <ScreenHeader title="Settings" onBack={() => router.back()}/>
+            <ScreenHeader title="Settings" onBack={() => router.back()}
+                          action={<SupportAction/>}/>
             <ScrollView testID="settings-scroll"
                         contentContainerStyle={{padding: 16, paddingBottom: scrollEnd}}>
             <YStack>
-                {/* Ordered by what people open Settings for. The machines come
-                    first: connecting one, or checking which is in use, is the
-                    common errand. Brewing preferences next, then how the app
-                    looks, then the library's housekeeping. The rows about the
-                    app itself, and anything diagnostic, go to the bottom. A
-                    machine's own readings are folded inside its card. */}
                 <MachineSection settings={settings} onOpenMachine={setMachineSheetId}
-                                onAddMachine={machineAdder.start}
-                                onForgetMachine={setForgetSheetId}/>
+                                onAddMachine={machineAdder.start}/>
 
-                {/* What the app does around a brew, on any machine. Kept apart
-                    from the machines so a second machine does not repeat them,
-                    and so they are not mistaken for settings stored on one. */}
                 <SettingsSection title="Brewing">
                     <SettingsToggleRow
                         label="Start brewing automatically"
                         description="Off, BREW loads the recipe onto the machine and waits for you to press START. On, it starts grinding the moment the recipe lands."
-                        value={machineAutoStart}
-                        onChange={setMachineAutoStart}/>
+                        value={machineAutoStart} onChange={setMachineAutoStart}/>
                     <SettingsToggleRow
                         label="Animate the brew chart"
                         description="When off, each phase change holds its end state immediately. The system Reduced Motion switch also disables animation independently."
-                        value={animateBrewChart}
-                        onChange={setAnimateBrewChart}/>
+                        value={animateBrewChart} onChange={setAnimateBrewChart}/>
                     <SettingsToggleRow
                         label="Ask how a brew was"
                         description={`On, the last brew XBRW++ watched can ask how it was along the bottom for up to ${ratingPromptHours} hours. Off, ratings are only given on the brew itself.`}
@@ -589,12 +577,6 @@ export default function SettingsScreen({settings}: Props) {
                         value={String(brewTraceBudgetMB)}
                         options={BUDGET_OPTIONS}
                         onChange={(value) => setBrewTraceBudgetMB(Number(value))}/>
-                    {/* A record of what the machine did, so it sits with the
-                        brewing rows rather than with backup and delete, where
-                        the app's own diary read as file management. */}
-                    <SettingsActionRow label="Brew history"
-                                       detail="Every brew you have recorded."
-                                       onPress={() => router.push("/brewHistory")}/>
                 </SettingsSection>
 
                 <SettingsSection title="Units">
@@ -720,33 +702,7 @@ export default function SettingsScreen({settings}: Props) {
                                        onPress={() => setConfirmingDeleteAll(true)}/>
                 </SettingsSection>
 
-                {/* The rows about the app itself, at the bottom where they are
-                    looked for. The version is the row an App Store reviewer
-                    comes for, and the end of the screen is where it is sought. */}
-                <SettingsSection>
-                    <SettingsActionRow label="About XBRW++"
-                                       detail={`Version ${VERSION}`}
-                                       onPress={() => router.push("/about")}/>
-                </SettingsSection>
-
-                {/* Beside About, because it is the same kind of row: something
-                    about the app itself rather than a preference. A privacy
-                    claim nobody can find is a privacy claim nobody can check,
-                    and this screen is what makes the claim checkable. */}
-                <SettingsSection>
-                    <SettingsActionRow label="What leaves this device"
-                                       detail="Every request the app can make, and what it carries."
-                                       onPress={() => router.push("/network")}/>
-                </SettingsSection>
-
-                {/* Not wrapped in `SettingsSection`: that draws a `surface`
-                    card and rules hairlines between its children, and this is
-                    one filled tile rather than a list of rows. It carries the
-                    section's own `$4` top gap so the rhythm of the screen is
-                    unbroken. Its fill is loud enough to be seen down here. */}
-                <SupportTile/>
-
-                {/* Last, under everything a user came here for, and absent
+                {/* Near the bottom, before About, and absent
                     until seven taps on the version line open it.
 
                     The rows here are unfinished work that is in the build so it
@@ -792,6 +748,11 @@ export default function SettingsScreen({settings}: Props) {
                 </SettingsSection>
                 <CardReadDiagnostic settings={settings}/>
                 </>}
+                <SettingsSection>
+                    <SettingsActionRow label="About XBRW++"
+                                       detail={`Version ${VERSION}`}
+                                       onPress={() => router.push("/about")}/>
+                </SettingsSection>
             </YStack>
             </ScrollView>
         </YStack>

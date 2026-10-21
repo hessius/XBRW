@@ -13,11 +13,30 @@ export const SUPPORT_TITLE = "Buy me a coffee";
 export const SUPPORT_BODY =
     "Built by one person in his own time. Free and open source. If you want to, I won't refuse.";
 
+export function SupportAction() {
+    return (
+        <Pressable testID="support-action" accessibilityRole="link"
+                   accessibilityLabel={`${SUPPORT_TITLE}. Opens in your browser.`}
+                   onPress={() => openLink(SUPPORT_URL)}
+                   style={({pressed}) => ({
+                       minHeight: 44, maxWidth: "100%",
+                       justifyContent: "center",
+                       paddingHorizontal: 12, paddingVertical: 10,
+                       borderRadius: 12, backgroundColor: palette.brandFill,
+                       opacity: pressed ? 0.7 : 1
+                   })}>
+            <Text color={onBrand.text} fontSize={13} fontWeight="700">
+                {SUPPORT_TITLE}
+            </Text>
+        </Pressable>
+    );
+}
+
 /**
  * The tip jar.
  *
- * A filled tile rather than a settings row, and the only solid `brand` fill in
- * the app. `brand` is documented as marking the app being itself and never a
+ * The full-size counterpart to Settings' compact header action.
+ * `brand` is documented as marking the app being itself and never a
  * state, which is exactly what this is: the author asking, not the app
  * reporting. The one exception is a switch that is on (`switchColours`);
  * position carries the state too, so the colour is reinforcement, not the

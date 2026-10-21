@@ -1,5 +1,27 @@
 # 2.2.0 preview change ledger
 
+## Accepted Settings and required native maintenance
+
+The approved #231 adaptation entered develop through #259 at
+`4aa7c02d226c1900efb453ab63529172c1801ea7`. Its reviewed source head is
+`ccdad218f951aa87396a06f2f7af05f0ee574559`; the contributor's
+`437d1d36def383a43b78ab480b72eb2e56d6246a` is preserved in that history.
+This preview adopts the accepted machine-first layout, collapsed saved-machine
+cards, targeted Connect/Use, Manage machine and independent read-only Details.
+The support action is in the fixed header; About/version is last. Live readings
+and the reconnect shortcut follow the actual linked device, not selection alone.
+The selection correction does not establish the separate reported mechanism in
+#251. Existing preview-only catalogue headers and later-package preferences stay
+available for evaluation, not automatic acceptance.
+
+The separately approved SDK 57 patches are Expo 57.0.31, Router 57.0.29 and
+Sharing 57.0.24. Marketing version remains 2.2.0, with the `fingerprint` runtime
+policy replacing `appVersion`. The preview keeps its date picker and other
+evaluation dependencies. A fresh native client and device qualification are
+required; Metro reload and the earlier component harness do not qualify these
+native changes. No OTA package, native build, submission, deployment, channel
+change or release promotion is included.
+
 ## Focused Package D corrections
 
 The approved scope is #227 (`2f24dc375ff58a9df9330cc1c7cfe20669d3379d`)
@@ -20,9 +42,9 @@ before late serial verification. The correction verifies identity first and
 skips cleanup without vitals. Silent/faulting stranger and verified-machine
 regressions cover this alongside the existing cancellation/replacement guards.
 
-#231 is not accepted by that integration. Its machine cards and reordered
-Settings remain here only as an evaluation proposal, along with other
-unaccepted later packages. Do not infer acceptance from their presence.
+#231 was excluded from that original D integration. Its separately approved
+adaptation is now accepted through #259 as described above. Other later
+packages remain evaluation proposals; do not infer acceptance from their presence.
 
 This is an evaluation branch, not an approved release candidate. The notes below
 come from the contributor proposals and describe intended behavior, not completed

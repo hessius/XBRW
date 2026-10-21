@@ -725,7 +725,8 @@ export async function chooseMachine(
         throw new Error("That machine is not saved any more.");
     }
     chosenThisSession = id;
-    if (settings.get("machineDeviceId") === id && machine.isConnected()) return;
+    if (settings.get("machineDeviceId") === id && machine.isConnected()
+        && machine.linkedDeviceId === id) return;
     activateSavedMachine(settings, id);
     machine.note(`switching to the saved machine ${id}`);
     if (machine.isConnected()) await machine.disconnect();

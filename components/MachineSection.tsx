@@ -11,10 +11,9 @@ import SettingsSection, {SettingsSectionTitle} from "@/components/SettingsSectio
 import {notify} from "@/components/XbrwToast";
 import {palette} from "@/constants/colors";
 import {useMachine} from "@/hooks/useMachine";
-import {useSavedMachines} from "@/hooks/useSavedMachines";
 import {useSetting} from "@/hooks/useSetting";
 import type {Settings} from "@/library/Settings";
-import {MACHINE_MODELS, isMachineModel, modelFromSerial, type MachineModel} from "@/library/machine/machineModel";
+import {MACHINE_MODELS, asMachineModel, isMachineModel, type MachineModel} from "@/library/machine/machineModel";
 import {
     machineColourOf,
     machineLabel,
@@ -61,9 +60,9 @@ const CONNECT_NEEDS_ORIGINAL =
 /** One label-and-value line of the machine's own vitals. */
 function Vital({label, value}: {label: string; value: string}) {
     return (
-        <XStack justifyContent="space-between" paddingVertical="$2" paddingHorizontal="$4">
-            <Text color={palette.dim} fontSize={13}>{label}</Text>
-            <Text color={palette.text} fontSize={13}>{value}</Text>
+        <XStack justifyContent="space-between" gap="$3" paddingVertical="$2" paddingHorizontal="$4">
+            <Text color={palette.dim} fontSize={13} flexShrink={1}>{label}</Text>
+            <Text color={palette.text} fontSize={13} flexShrink={1} textAlign="right" selectable>{value}</Text>
         </XStack>
     );
 }
@@ -87,7 +86,8 @@ function Card({children}: {children: React.ReactNode}) {
  * second machine in use.
  */
 function machineSummary(
-    machine: SavedMachine, index: number, count: number, active: boolean, connected: boolean
+    machine: SavedMachine, index: number, count: number, active: boolean, connected: boolean,
+    connecting: boolean
 ): string {
     const order = machineOrderWord(index, count);
     const parts = [MODEL_NAMES[machine.model], ...(order === null ? [] : [order]),
@@ -95,7 +95,8 @@ function machineSummary(
     // "Selected", not "In use": this phone has no way to tell that another
     // phone holds the machine (it simply stops answering), and "In use" was
     // read as exactly that.
-    if (active) parts.push(connected ? "Connected" : "Selected");
+    if (connected) parts.push("Connected");
+    else if (active) parts.push(connecting ? "Connecting…" : "Selected");
     return parts.join(" · ");
 }
 
@@ -108,17 +109,15 @@ function machineSummary(
  * pairing is possible — and a dead BREW button on every recipe, for the users
  * who will never own a J15, is the worse trade.
  *
- * One card per saved machine (see `MachineCard`). The machine in use starts
- * open, so its status and any error need no tap; the others start closed. With
- * none saved there is nothing to fold, so the model choice and Connect sit in
- * a plain card the way they always did.
+ * Cards start closed unless the selected machine already has an error.
+ * With none saved, model choice and Connect stay in a plain card.
  *
  * The console's hidden entry is seven taps: on the firmware row when a machine
  * is connected, on the status line when it is not. Both, because the console is
  * the only place a failed connection can be read about, and the firmware row is
  * not rendered when there is no connection to report the firmware of.
  */
-export default function MachineSection({settings, onOpenMachine, onAddMachine, onForgetMachine}: {
+export default function MachineSection({settings, onOpenMachine, onAddMachine}: {
     settings?: Settings;
     /**
      * Open one saved machine's sheet, for its name and its place in the
@@ -128,8 +127,6 @@ export default function MachineSection({settings, onOpenMachine, onAddMachine, o
     onOpenMachine?: (id: string) => void;
     /** Open the add-a-machine sheet, which the screen owns for the same reason. */
     onAddMachine?: () => void;
-    /** Ask whether to forget a machine. The screen owns that sheet too. */
-    onForgetMachine?: (id: string) => void;
 }) {
     // The injected store matters: the link writes `machineModel` through it
     // when it recognises a Studio, and a test that injected a store while the
@@ -138,11 +135,12 @@ export default function MachineSection({settings, onOpenMachine, onAddMachine, o
     const {machine, status, error, remembered, connect, canOpenSettings, openSettings,
            machines, changeBlocker, choose}
         = useMachine(undefined, {settings});
-    const {setModel} = useSavedMachines(settings);
     const several = machines.length >= 2;
     const [machineModel, setMachineModel] = useSetting("machineModel", settings);
     const [taps, setTaps] = useState(0);
     const info = machine.info;
+    const actionBlocker = changeBlocker
+        ?? (status === "connecting" ? "A connection is already being made." : null);
 
     /**
      * What the section says when there is no live link.
@@ -158,15 +156,6 @@ export default function MachineSection({settings, onOpenMachine, onAddMachine, o
         : remembered === "" ? "No machine paired"
             : status === "idle" ? "Not connected"
                 : "Not found. It may be off, out of range or connected to another phone.";
-
-    // The info blob's model field (bytes 13-18) is the machine's own blank
-    // filler on real hardware: the captured plumbed-machine frame in
-    // `protocol.test.ts` carries six 0xFF there, which `readInfo` reads as "".
-    // The Device Information Service reading is the other place a model can
-    // come from. When neither says anything the row is left out, because a
-    // blank means "did not learn", and an empty row reads as a fault.
-    const model = info === null ? ""
-        : info.model !== "" ? info.model : machine.modelNumber;
 
     function onSecretPress() {
         const next = taps + 1;
@@ -207,20 +196,17 @@ export default function MachineSection({settings, onOpenMachine, onAddMachine, o
             onPress={openSettings}/>
     );
 
-    const connectRow = (model: string) => (
+    const connectionDetail = (model: MachineModel) => model === "original"
+        ? `${CONNECT_NEEDS_ORIGINAL} Only the Studio has been tested.`
+        : CONNECT_NEEDS_STUDIO;
+
+    const connectRow = (model: MachineModel) => (
         <SettingsActionRow
             label={status === "connected" ? "Connected" : "Connect to my machine"}
-            detail={status === "connected"
+            disabled={actionBlocker !== null || status === "connected"}
+            detail={actionBlocker ?? (status === "connected"
                 ? "The link is held while XBRW++ is open."
-                // Naming the Studio to somebody who just said they own an
-                // original reads as if the app forgot. It is also the one
-                // place worth admitting that a scan will find their machine
-                // and the connection after it probably will not finish: the
-                // Bluetooth protocol here is the Studio's throughout, and
-                // nobody has had an original in front of them to check.
-                : model === "original"
-                    ? `${CONNECT_NEEDS_ORIGINAL} Only the Studio has been tested.`
-                    : CONNECT_NEEDS_STUDIO}
+                : connectionDetail(model))}
             onPress={() => {
                 // The throw is for the brew path, which needs the reason.
                 // Here the reason is already on screen, in `error`.
@@ -230,7 +216,7 @@ export default function MachineSection({settings, onOpenMachine, onAddMachine, o
 
     /** Switch to a machine that is saved but not in use, the way its sheet does. */
     function switchTo(entry: SavedMachine, name: string) {
-        if (changeBlocker !== null) return;
+        if (actionBlocker !== null) return;
         notify({tone: "info", message: `Connecting to ${name}…`});
         choose(entry.id).then(
             () => notify({tone: "success", message: `Connected to ${name}`}),
@@ -259,7 +245,7 @@ export default function MachineSection({settings, onOpenMachine, onAddMachine, o
                     }}/>
                 {statusLine}
                 {openSettingsRow}
-                {connectRow(machineModel)}
+                {connectRow(asMachineModel(machineModel))}
             </SettingsSection>
         );
     }
@@ -269,20 +255,18 @@ export default function MachineSection({settings, onOpenMachine, onAddMachine, o
             <SettingsSectionTitle title="Machines"/>
             {machines.map((entry, index) => {
                 const active = entry.id === remembered;
-                const linked = active && status === "connected";
+                const linked = entry.id === machine.linkedDeviceId;
                 const name = machineLabel(entry, index);
-                // The serial set the model on connect (`recordSerial`), so a
-                // choice could only point imports at the wrong grind scale.
-                // Offered again whenever the serial says nothing, or says
-                // something the saved model does not agree with yet.
-                const modelKnown = modelFromSerial(entry.serial) === entry.model;
+                const liveInfo = linked ? info : null;
+                const reportedModel = liveInfo === null ? ""
+                    : liveInfo.model !== "" ? liveInfo.model : machine.modelNumber;
                 return (
                     <MachineCard
                         key={entry.id}
                         testID={`saved-machine-${entry.id}`}
                         title={name}
                         summary={machineSummary(entry, index, machines.length, active,
-                                                status === "connected")}
+                                                linked, status === "connecting")}
                         isDefault={several && index === 0}
                         ranked={several}
                         // With one machine there is nothing to tell apart, so
@@ -290,25 +274,22 @@ export default function MachineSection({settings, onOpenMachine, onAddMachine, o
                         colour={several ? machineColourOf(entry).ink : undefined}
                         connected={linked}
                         failed={active && error !== null}
-                        // Closed by default: Settings is visited for many things, and an open
-                        // card pushed everything else down every time. A machine
-                        // in use that has a problem still opens, so the fix is in view.
                         initiallyOpen={active && error !== null}
-                        details={active && info !== null ? (
+                        details={liveInfo !== null ? (
                             <>
-                                <Vital label="Serial" value={info.serial}/>
-                                {model !== "" && <Vital label="Model" value={model}/>}
+                                <Vital label="Serial" value={liveInfo.serial}/>
+                                {reportedModel !== "" && <Vital label="Model" value={reportedModel}/>}
                                 <Vital label="Bluetooth ID" value={entry.id}/>
                                 <Pressable accessibilityRole="button"
-                                           accessibilityLabel={`Firmware, ${info.firmware}`}
+                                           accessibilityLabel={`Firmware, ${liveInfo.firmware}`}
                                            onPress={onSecretPress}>
-                                    <Vital label="Firmware" value={info.firmware}/>
+                                    <Vital label="Firmware" value={liveInfo.firmware}/>
                                 </Pressable>
-                                <Vital label="Water" value={info.waterFeed === "tap"
+                                <Vital label="Water" value={liveInfo.waterFeed === "tap"
                                     ? "Plumbed"
-                                    : info.waterEnough ? "OK" : "Low"}/>
-                                <Vital label="Grind size" value={String(info.grindSize)}/>
-                                <Vital label="Mode" value={info.mode}/>
+                                    : liveInfo.waterEnough ? "OK" : "Low"}/>
+                                <Vital label="Grind size" value={String(liveInfo.grindSize)}/>
+                                <Vital label="Mode" value={liveInfo.mode}/>
                             </>
                         ) : (
                             <>
@@ -319,48 +300,24 @@ export default function MachineSection({settings, onOpenMachine, onAddMachine, o
                                     Firmware, water, grind size and mode show here while this machine is connected.
                                 </Text>
                             </>
-                        )}
-                        footer={(
-                            <SettingsActionRow
-                                label="Forget this machine" tone="danger"
-                                // Locked while a brew owns the link: forgetting
-                                // the machine in use mid-brew would hand the next
-                                // BREW to another machine while this one pours.
-                                detail={changeBlocker ?? (several
-                                    ? "Takes it off the list. Add it again to get it back."
-                                    : "XBRW++ will scan again next time.")}
-                                // Asks first, in the screen's sheet: it used
-                                // to forget on the tap, and a machine forgotten
-                                // by accident has to be found by a scan again.
-                                onPress={() => {
-                                    if (changeBlocker === null) onForgetMachine?.(entry.id);
-                                }}/>
                         )}>
                         {active && statusLine}
                         {active && openSettingsRow}
                         {/* Not drawn while connected: the header already says
                             Connected in green, and the row did nothing when
                             pressed. Not connected, it is how to connect. */}
-                        {active ? !linked && connectRow(entry.model) : (
+                        {!linked && (
                             <SettingsActionRow
-                                label="Use this machine now"
-                                detail={changeBlocker ?? "Connects to it until the app is closed."}
+                                label={active ? "Connect to my machine" : "Use this machine now"}
+                                disabled={actionBlocker !== null}
+                                detail={actionBlocker ?? (active
+                                    ? connectionDetail(entry.model)
+                                    : "Connects to it until the app is closed.")}
                                 onPress={() => switchTo(entry, name)}/>
                         )}
-                        {!modelKnown && <SettingsChoiceRow
-                            label="Model"
-                            description={MODEL_DESCRIPTION}
-                            stacked
-                            value={entry.model}
-                            options={MACHINE_MODEL_OPTIONS}
-                            onChange={(value) => {
-                                if (isMachineModel(value)) setModel(entry.id, value);
-                            }}/>}
                         <SettingsActionRow
-                            label={several ? "Name, colour and order" : "Name"}
-                            detail={several
-                                ? "Rename it, pick its colour, try it first or change its place in the list."
-                                : "Give it a name, like Home or Work."}
+                            label="Manage machine"
+                            detail="Name, model, colour and connection order."
                             onPress={() => onOpenMachine?.(entry.id)}/>
                     </MachineCard>
                 );
@@ -369,7 +326,8 @@ export default function MachineSection({settings, onOpenMachine, onAddMachine, o
             <Card>
                 <SettingsActionRow
                     label="Add another machine"
-                    detail="Switch the new one on and keep it nearby. Machines already saved are skipped."
+                    disabled={actionBlocker !== null}
+                    detail={actionBlocker ?? "Switch the new one on and keep it nearby. Machines already saved are skipped."}
                     onPress={() => onAddMachine?.()}/>
             </Card>
         </YStack>
