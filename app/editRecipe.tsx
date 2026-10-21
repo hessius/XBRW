@@ -1302,8 +1302,7 @@ export default function EditRecipe(
                         onBack={async () => { await flushDrafts(); navigation.goBack(); }}
                         onMore={() => setOverflowOpen(true)}
                         onHelp={() => setHelpOpen(true)}
-                        onRename={() => setRenameOpen(true)}
-                        imageURL={recipe.imageURL} showPicture={showRecipeAvatars}/>
+                        onRename={() => setRenameOpen(true)}/>
 
             {/* `stickyHeaderIndices` only sticks *direct* children, and it
                 counts slots — so every slot below is always occupied, by an

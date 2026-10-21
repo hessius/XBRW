@@ -856,6 +856,22 @@ when it was made, not whether anyone chose it, so restoring a backup made under
 the old default turns pictures off again. That is the same for every setting,
 and it is the less surprising error: it keeps what the file says.
 
+### Revision: placement-specific pictures
+
+2026-10-20. The global default-on proposal above is superseded. Recipe card
+photos default OFF and appear as small circles, never at the expense of names,
+figures or controls. List pictures are 20pt circles at the bottom-right beside
+brew evidence; the card keeps its tint and the profile keeps its geometry.
+The editor header has no picture. ABOUT retains `showRecipeAvatars`.
+
+`showShelfPhotoPreviews` defaults ON. Personal/tag covers use the first four
+actual members, mixing photos and accents. Five automatic shelves use a grid
+only with four photographed recipe UUIDs: xBloom recipes, Starred, xBloom pods,
+Most brewed and Recently added. Copies may share a photo URL. Fewer usable
+photos, including image failures, restore the glyph; other automatic and author
+shelves keep glyphs. A legacy stored OFF choice remains OFF, and backup restore
+translates legacy preferences before applying explicit new overrides.
+
 ## Storage
 
 ### New `Recipe` fields
@@ -920,6 +936,8 @@ All in `Settings.DEFAULTS`, which is what carries them into a backup.
 | `librarySortDirection` | `asc` |
 | `libraryFavouritesFirst` | `false` |
 | `showRecipeAvatars` | `true` (was `false`; see "Revision: recipe pictures are on by default") |
+| `showRecipeCardPhotos` | `false` |
+| `showShelfPhotoPreviews` | `true`, with legacy OFF respected |
 | `shelfMarkVariant` | tester-controlled, through LABS |
 | `hiddenShelves` | `""` |
 | `invertAutoShelves` | `false` |

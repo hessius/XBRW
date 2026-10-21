@@ -313,7 +313,8 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
     const [onlySelected, setOnlySelected] = useState(false);
     const [showCoffeeMarker] = useSetting("showCoffeeMarker", settings);
     const [dottedProfile] = useSetting("dotMatrixProfile", settings);
-    const [showRecipeAvatars] = useSetting("showRecipeAvatars", settings);
+    const [showRecipeCardPhotos] = useSetting("showRecipeCardPhotos", settings);
+    const [showShelfPhotoPreviews] = useSetting("showShelfPhotoPreviews", settings);
     const [invertAutoShelves] = useSetting("invertAutoShelves", settings);
     const [hiddenShelves, setHiddenShelves] = useSetting("hiddenShelves", settings);
     const [rawTemperatureUnit] = useSetting("temperatureUnit", settings);
@@ -1497,7 +1498,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                         evidence={library.evidence}
                         showCoffeeMarker={showCoffeeMarker}
                         dottedProfile={dottedProfile}
-                        showPicture={showRecipeAvatars}
+                        showPicture={showRecipeCardPhotos}
                         editing={editing}
                         paddingBottom={insets.bottom + 8}/>
                 ) : libraryQuery.view === "shelves" && !picker.active ? (
@@ -1510,7 +1511,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                     // that showed NO MATCHES instead of the shelves would hide
                     // the control the user came to it for.
                     <ShelfGrid shelves={shelves}
-                               marks={withShelfPhotos(library.shelfMarks, showRecipeAvatars)}
+                               marks={withShelfPhotos(library.shelfMarks, showShelfPhotoPreviews)}
                                invertAuto={invertAutoShelves}
                                hidden={parseHidden(hiddenShelves)}
                                onOpen={libraryQuery.openShelf}
@@ -1566,14 +1567,14 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                                 onToggle={() => picker.toggle(item.recipe.uuid)}
                                 showCoffeeMarker={showCoffeeMarker}
                                 dottedProfile={dottedProfile}
-                                showPicture={showRecipeAvatars}/>
+                                showPicture={showRecipeCardPhotos}/>
                         ) : (
                             <SwipeableRecipeRow
                                 recipe={item.recipe}
                                 editing={editing}
                                 showCoffeeMarker={showCoffeeMarker}
                                 dottedProfile={dottedProfile}
-                                showPicture={showRecipeAvatars}
+                                showPicture={showRecipeCardPhotos}
                                 evidence={library.evidence[item.recipe.uuid]}
                                 slotMarker={slotMarkers(slotRecord, item.recipe)}
                                 onEasyMode={remembered !== ""

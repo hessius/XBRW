@@ -223,6 +223,14 @@ async function renderEditor(overrides: Partial<Recipe> = {}) {
     return view;
 }
 
+it.each([false, true])("keeps the editor header photo-free with ABOUT preference %s", async show => {
+    mockSettings = {showRecipeAvatars: show, showRecipeCardPhotos: true, showShelfPhotoPreviews: true};
+    await renderEditor({imageURL: "https://coffee.example/bag.jpg"});
+    expect(screen.queryByTestId("hero-photo", {includeHiddenElements: true})).toBeNull();
+    expect(screen.queryByTestId("photo-viewer")).toBeNull();
+    expect(screen.queryByRole("imagebutton", {name: "Coffee photo"})).toBeNull();
+});
+
 /**
  * Open the ABOUT deck, where a recipe's identity lives.
  *

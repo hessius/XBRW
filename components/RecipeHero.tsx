@@ -1,4 +1,4 @@
-import React, {useState} from "react";
+import React from "react";
 import {Pressable, View} from "react-native";
 import {useSafeAreaInsets} from "react-native-safe-area-context";
 import {Text, XStack, YStack} from "tamagui";
@@ -6,34 +6,12 @@ import {Text, XStack, YStack} from "tamagui";
 import Collapsible from "@/components/Collapsible";
 import DotIcon from "@/components/DotIcon";
 import DotMatrixText, {DOTO_MAX_FONT_SCALE} from "@/components/DotMatrixText";
-import PhotoViewer from "@/components/PhotoViewer";
 import PourProfile, {PROFILE_BLEED} from "@/components/PourProfile";
-import RecipePhoto from "@/components/RecipePhoto";
 import {onAccent} from "@/constants/colors";
 import type Pour from "@/library/Pour";
 
 /** How far the watermark runs past the slab before it is clipped. */
 const PROFILE_OVERHANG = 2;
-
-/**
- * The recipe's picture in the open slab: a rounded square in the top right
- * corner, under the HELP and menu wells.
- *
- * That corner is the one stretch of the slab nothing else uses. The name keeps
- * to its 72% column on the left and the pour profile owns the bottom right, so
- * the picture neither moves the name nor pushes the watermark down. It is drawn
- * out of the flow, so a picture that fails to load leaves the slab exactly as
- * tall as it was with nothing to draw.
- */
-export const HERO_PHOTO_SIZE = 56;
-
-/**
- * How much of the name's row the picture keeps for itself, picture and gap.
- *
- * Set aside whenever a picture is due, loaded or not. Reserving it only once
- * the picture arrived would rewrap the name a moment after the screen opened.
- */
-export const HERO_PHOTO_RESERVE = HERO_PHOTO_SIZE + 8;
 
 /** A control in the header's chrome row, drawn in a well cut out of the accent. */
 function HeaderButton({label, icon, accent, onPress}: {
@@ -76,10 +54,6 @@ type Props = {
      * happens to be tappable is hidden.
      */
     onRename: () => void;
-    /** `recipe.imageURL`: pod artwork, or a photo an import link carried. */
-    imageURL?: string;
-    /** `showRecipeAvatars`. Off, no picture is drawn and no room is kept. */
-    showPicture?: boolean;
 };
 
 /**
@@ -103,7 +77,7 @@ type Props = {
  */
 export default function RecipeHero({
     name, named, xid, accent, beverage, pours, collapsed,
-    onBack, onMore, onHelp, onRename, imageURL, showPicture = false
+    onBack, onMore, onHelp, onRename
 }: Props) {
     "use no memo";
 
@@ -111,8 +85,6 @@ export default function RecipeHero({
     // it, so the screen has one surface at the top instead of a black strip
     // above a coloured card.
     const insets = useSafeAreaInsets();
-    const picture = showPicture ? imageURL ?? "" : "";
-    const [viewing, setViewing] = useState(false);
 
     // `pours` is the recipe's own array, mutated in place, and the watermark
     // reads each pour through a getter rather than a property — so there is
@@ -186,10 +158,6 @@ export default function RecipeHero({
             </XStack>
 
             <Collapsible open={!collapsed}>
-                {/* Only in the open slab. Folded, the chrome row is a title bar
-                    and a thumbnail there would be one more thing to squeeze the
-                    name against. Top aligned with the beverage row, which is
-                    where the content starts. */}
                 <XStack alignItems="center" gap="$2" marginTop="$2">
                     <DotMatrixText fontSize={11} weight="bold" letterSpacing={2}
                                    color={onAccent.label}>
@@ -216,10 +184,7 @@ export default function RecipeHero({
                 <Pressable accessibilityRole="button" accessibilityLabel={name}
                            accessibilityHint="Opens a sheet to rename this recipe"
                            testID="hero-rename"
-                           style={{
-                               flexDirection: "row", alignItems: "flex-start", gap: 8,
-                               marginRight: picture.length > 0 ? HERO_PHOTO_RESERVE : 0
-                           }}
+                           style={{flexDirection: "row", alignItems: "flex-start", gap: 8}}
                            onPress={onRename} hitSlop={8}>
                     <Text fontSize={26} fontWeight="700" lineHeight={31} marginTop="$2"
                           maxFontSizeMultiplier={DOTO_MAX_FONT_SCALE}
@@ -231,22 +196,7 @@ export default function RecipeHero({
                         <DotIcon name="edit" size={15} color={onAccent.label}/>
                     </YStack>
                 </Pressable>
-
-                {/* Its own button, opening the photo full screen. Drawn after
-                    the name so it sits above the rename button's hit slop, and
-                    the name's row already keeps HERO_PHOTO_RESERVE clear of it:
-                    a tap on the photo never renames. Drawn whole, not cropped,
-                    on the dark key the header buttons use. */}
-                {picture.length > 0 && (
-                    <View style={{position: "absolute", top: 8, right: 0}}>
-                        <RecipePhoto testID="hero-photo" uri={picture}
-                                     size={HERO_PHOTO_SIZE} radius={10}
-                                     backing={onAccent.key}
-                                     onPress={() => setViewing(true)}/>
-                    </View>
-                )}
             </Collapsible>
-            <PhotoViewer uri={picture} visible={viewing} onClose={() => setViewing(false)}/>
         </YStack>
     );
 }

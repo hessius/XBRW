@@ -1,10 +1,10 @@
 import React, {useState} from "react";
-import {Image, Pressable, View} from "react-native";
+import {Image, View} from "react-native";
 
 import {palette} from "@/constants/colors";
 
 type Props = {
-    /** An https URL, already gated on `showRecipeAvatars` by the caller. */
+    /** An https URL, already gated on the surface's preference by the caller. */
     uri: string;
     /** Width and height, in points. The frame is always a square. */
     size: number;
@@ -15,26 +15,21 @@ type Props = {
      * product shots of a bag, and a crop cuts the label off.
      */
     backing?: string;
-    /**
-     * Makes the picture its own button ("Coffee photo"), for opening it full
-     * size. Without it the picture is decorative and hidden from screen
-     * readers.
-     */
-    onPress?: () => void;
+    /** Start loading at the final size without occupying space until layout permits it. */
+    visible?: boolean;
     testID?: string;
+    onError?: () => void;
 };
 
 /**
  * A recipe's picture: pod artwork, or the bag photo a roaster's link carried.
  *
- * Drawn whole inside a rounded square on a neutral backing, never cropped: a
- * square shot fills the square exactly, and anything else is letterboxed
+ * Drawn whole inside its frame on a neutral backing, never cropped: a
+ * square shot fills the frame exactly, and anything else is letterboxed
  * rather than losing its edges.
  *
- * Decorative by default, and hidden from screen readers on both platforms.
- * Every place that draws one already announces the recipe's name. With
- * `onPress` it is a button of its own, which is how the editor's header opens
- * the photo full screen.
+ * Decorative and hidden from screen readers on both platforms.
+ * Every place that draws one already announces the recipe's name.
  *
  * A picture that will not load is dropped rather than left as an empty
  * square, the same rule the pod photo in ABOUT follows: a recipe whose picture
@@ -44,38 +39,33 @@ type Props = {
  * without a state reset in an effect.
  *
  * React Native's own `Image`, as every other picture in the app is, so the
- * platform's HTTP cache serves repeat views. `resizeMethod="resize"` lets
+ * platform's HTTP cache can serve repeat views, subject to response headers
+ * and eviction. `resizeMethod="resize"` lets
  * Android decode a 600 px bag photo at roughly the size it is drawn, which
  * matters in a scrolling list.
  */
-export default function RecipePhoto({uri, size, radius, backing = palette.raised, onPress, testID}: Props) {
+export default function RecipePhoto({
+    uri, size, radius, backing = palette.raised, visible = true, testID, onError
+}: Props) {
     const [failed, setFailed] = useState<string | null>(null);
 
     if (uri.length === 0 || failed === uri) {
         return null;
     }
 
-    const image = (
-        <View style={{width: size, height: size, borderRadius: radius, overflow: "hidden",
+    return (
+        <View pointerEvents="none"
+              style={{width: size, height: size, borderRadius: radius, overflow: "hidden",
+                      opacity: visible ? 1 : 0, position: visible ? undefined : "absolute",
                       backgroundColor: backing}}>
             <Image testID={testID} source={{uri}}
                    accessible={false}
                    accessibilityElementsHidden
                    importantForAccessibility="no"
                    resizeMode="contain" resizeMethod="resize"
-                   onError={() => setFailed(uri)}
+                   onError={() => { setFailed(uri); onError?.(); }}
                    style={{width: size, height: size}}/>
         </View>
     );
 
-    if (onPress === undefined) return image;
-    return (
-        <Pressable testID={testID === undefined ? undefined : `${testID}-button`}
-                   accessibilityRole="imagebutton" accessibilityLabel="Coffee photo"
-                   accessibilityHint="Opens the photo full screen"
-                   onPress={onPress} hitSlop={4}
-                   style={({pressed}) => ({opacity: pressed ? 0.8 : 1})}>
-            {image}
-        </Pressable>
-    );
 }

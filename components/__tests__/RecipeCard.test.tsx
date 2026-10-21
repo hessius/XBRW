@@ -1,8 +1,9 @@
 import React from "react";
 import {act, fireEvent, screen, within} from "@testing-library/react-native";
+import {Dimensions} from "react-native";
 
 import RecipeCard, {CARD_PHOTO_SIZE} from "@/components/RecipeCard";
-import {PROFILE_BLEED} from "@/components/PourProfile";
+import {buildProfilePath, PROFILE_BLEED} from "@/components/PourProfile";
 import Recipe, {CUP_TYPE} from "@/library/Recipe";
 import Pour, {POUR_PATTERN} from "@/library/Pour";
 import {accents, onAccent, palette} from "@/constants/colors";
@@ -10,6 +11,126 @@ import {DOT_ICONS, litCells} from "@/constants/dotIcons";
 import {AA_LARGE, contrast} from "@/test-utils/contrast";
 import {DOTO_MAX_FONT_SCALE} from "@/components/DotMatrixText";
 import {renderWithProviders} from "@/test-utils/render";
+import {measureCardPicture, pictureLayout} from "@/test-utils/pictureLayout";
+
+it("admits a 20pt bottom-right metadata photo without moving or resizing the graph", async () => {
+    const recipe = new Recipe();
+    recipe.name = "Vinka";
+    recipe.dosage = 15;
+    recipe.ratio = 16;
+    recipe.grindSize = 60;
+    recipe.pours = [80, 80, 80].map((volume, i) => new Pour(i, volume));
+    recipe.imageURL = "https://coffee.example/bag.jpg";
+    await renderWithProviders(<RecipeCard recipe={recipe} showPicture onPress={jest.fn()}/>);
+    const photo = () => screen.queryByTestId("recipe-card-photo", {includeHiddenElements: true});
+    expect(photo()).toBeNull();
+    const graphStyle = {...screen.getByTestId("recipe-card-profile").parent!.props.style};
+    const path = profilePath();
+    await measureCardPicture();
+    expect(photo()?.props.style.width).toBe(20);
+    expect(within(screen.getByTestId("recipe-card-metadata"))
+        .getByTestId("recipe-card-photo", {includeHiddenElements: true})).toBeTruthy();
+    expect(screen.getByTestId("recipe-card-profile").parent!.props.style).toEqual(graphStyle);
+    expect(graphStyle.right).toBe(-(PROFILE_BLEED + 2));
+    expect(profilePath()).toContain(buildProfilePath(recipe.pours, 200, 56));
+    expect(profilePath()).toBe(path);
+    expect(screen.queryByTestId("recipe-card-bottom-shade")).toBeNull();
+    expect(photo()!.parent).toHaveStyle({backgroundColor: screen.getByTestId("recipe-card-surface").props.style.backgroundColor});
+    await pictureLayout("recipe-card-figures", 350, 50);
+    expect(photo()).toBeNull();
+    expect(screen.getByTestId("recipe-card-profile").parent!.props.style).toEqual(graphStyle);
+});
+
+it.each([false, true])("keeps the card background uniform with photos enabled %s", async showPicture => {
+    const recipe = makeRecipe({imageURL: "https://coffee.example/bag.jpg"});
+    await renderWithProviders(<RecipeCard recipe={recipe} showPicture={showPicture} onPress={jest.fn()}/>);
+    expect(screen.queryByTestId("recipe-card-bottom-shade")).toBeNull();
+    expect(screen.getByTestId("recipe-card-bottom-row").props.style.backgroundColor).toBeUndefined();
+});
+
+it("discards card measurements after mutable badges or surface size changes, retries new URLs", async () => {
+    const recipe = new Recipe();
+    recipe.name = "Vinka";
+    recipe.imageURL = "https://coffee.example/bag.jpg";
+    const view = await renderWithProviders(<RecipeCard recipe={recipe} showPicture onPress={jest.fn()}/>);
+    const photo = () => screen.queryByTestId("recipe-card-photo", {includeHiddenElements: true});
+    await measureCardPicture();
+    expect(photo()).toBeTruthy();
+    await fireEvent(photo()!, "error");
+    expect(photo()).toBeNull();
+    recipe.imageURL = "https://coffee.example/new.jpg";
+    await view.rerender(<RecipeCard recipe={recipe} showPicture onPress={jest.fn()}/>);
+    expect(photo()).toBeNull();
+    await measureCardPicture();
+    expect(photo()?.props.source.uri).toBe(recipe.imageURL);
+    recipe.favourite = true;
+    await view.rerender(<RecipeCard recipe={recipe} showPicture onPress={jest.fn()}/>);
+    expect(photo()).toBeNull();
+    await measureCardPicture();
+    expect(photo()).toBeTruthy();
+    await pictureLayout("recipe-card-surface", 300, 116);
+    expect(photo()).toBeNull();
+    await view.rerender(<RecipeCard recipe={recipe} onPress={jest.fn()}/>);
+    expect(screen.queryByTestId("recipe-card-prose-measure", {includeHiddenElements: true})).toBeNull();
+});
+
+it("omits metadata photos before editing controls or crowded evidence, not long names or badges", async () => {
+    const recipe = new Recipe();
+    recipe.name = "Vinka";
+    recipe.imageURL = "https://coffee.example/bag.jpg";
+    const view = await renderWithProviders(<RecipeCard recipe={recipe} showPicture onPress={jest.fn()}
+        editing onDelete={jest.fn()} onDuplicate={jest.fn()}/>);
+    const photo = () => screen.queryByTestId("recipe-card-photo", {includeHiddenElements: true});
+    await measureCardPicture();
+    await pictureLayout("recipe-card-actions", 88, 44, 270, 0);
+    expect(photo()).toBeNull();
+    expect(screen.getByLabelText("Delete recipe")).toBeTruthy();
+    await view.rerender(<RecipeCard recipe={recipe} showPicture onPress={jest.fn()}
+        evidence={{brews: 9, avgRating: 4, lastBrewedAt: 0}}/>);
+    await measureCardPicture();
+    await pictureLayout("recipe-card-evidence", 130, 34);
+    expect(photo()).toBeNull();
+    recipe.name = "A very long coffee name that needs both lines and must not suppress its photograph";
+    recipe.description = "A long note also keeps its existing allowance";
+    recipe.favourite = true;
+    await view.rerender(<RecipeCard recipe={recipe} showPicture onPress={jest.fn()}
+        evidence={{brews: 9, avgRating: 4, lastBrewedAt: 0}}/>);
+    await measureCardPicture();
+    expect(photo()).toBeTruthy();
+    expect(screen.getByText(recipe.name)).toBeTruthy();
+    expect(screen.getByTestId("recipe-card-evidence")).toBeTruthy();
+    expect(screen.getByTestId("recipe-card-title-row").props.style.paddingRight).toBeUndefined();
+});
+
+it("admits the exact metadata boundary without wrapping, omits one point below and at large text", async () => {
+    const recipe = makeRecipe({imageURL: "https://coffee.example/bag.jpg"});
+    await renderWithProviders(<RecipeCard recipe={recipe} showPicture onPress={jest.fn()}
+        evidence={{brews: 9, avgRating: 4, lastBrewedAt: 0}}/>);
+    const photo = () => screen.queryByTestId("recipe-card-photo", {includeHiddenElements: true});
+    await measureCardPicture();
+    // 190pt figures + 16pt row gap + 70pt evidence + 6pt photo gap + 20pt photo.
+    await pictureLayout("recipe-card-bottom-row", 302, 34);
+    expect(photo()).toBeTruthy();
+    expect(screen.getByTestId("recipe-card-metadata")).toHaveStyle({flexShrink: 0});
+    expect(screen.getByTestId("recipe-card-bottom-row").props.style.flexWrap).not.toBe("wrap");
+    await pictureLayout("recipe-card-bottom-row", 301, 34);
+    expect(photo()).toBeNull();
+    expect(screen.getByTestId("recipe-card-evidence")).toBeTruthy();
+    const window = Dimensions.get("window");
+    const display = Dimensions.get("screen");
+    try {
+        await act(async () => Dimensions.set({window: {...window, fontScale: 1.8}, screen: display}));
+        expect(photo()).toBeNull();
+        await pictureLayout("recipe-card-surface", 390, 150);
+        await pictureLayout("recipe-card-bottom-row", 358, 48);
+        await pictureLayout("recipe-card-figures", 260, 48);
+        await pictureLayout("recipe-card-evidence", 100, 22);
+        expect(photo()).toBeNull();
+        expect(screen.getByTestId("recipe-card-evidence")).toBeTruthy();
+    } finally {
+        await act(async () => Dimensions.set({window, screen: display}));
+    }
+});
 
 /** The colour a dot icon's dots are drawn in. */
 function dotColourOf(testID: string): string {
@@ -1151,10 +1272,11 @@ describe("the picture a card carries", () => {
             Record<string, unknown>).minHeight;
     }
 
-    it("draws the picture beside the name when the setting is on", async () => {
+    it("draws the decorative picture beside bottom evidence when the setting is on", async () => {
         await renderWithProviders(
             <RecipeCard recipe={makeRecipe({imageURL: PHOTO})} onPress={jest.fn()} showPicture/>
         );
+        await measureCardPicture();
 
         expect(photo()?.props.source).toEqual({uri: PHOTO});
         // Decorative: the name is in the card's own label already.
@@ -1178,10 +1300,18 @@ describe("the picture a card carries", () => {
         expect(photo()).toBeNull();
     });
 
+    it("does not use an author's portrait as a coffee photo", async () => {
+        await renderWithProviders(
+            <RecipeCard recipe={makeRecipe({sharedByAvatar: PHOTO})} onPress={jest.fn()} showPicture/>
+        );
+        expect(photo()).toBeNull();
+    });
+
     it("drops a picture that will not load and keeps the name", async () => {
         await renderWithProviders(
             <RecipeCard recipe={makeRecipe({imageURL: PHOTO})} onPress={jest.fn()} showPicture/>
         );
+        await measureCardPicture();
 
         await fireEvent(photo()!, "error");
 
@@ -1190,8 +1320,7 @@ describe("the picture a card carries", () => {
     });
 
     it("keeps the card's height and its two lines of prose", async () => {
-        // The picture sits beside the prose, no taller than the two lines the
-        // name and note share, so a card with one is a card of the same size.
+        // The picture shares the existing bottom row, not the prose's width.
         await renderWithProviders(
             <RecipeCard recipe={makeRecipe()} onPress={jest.fn()} showPicture/>
         );
@@ -1216,6 +1345,7 @@ describe("the picture a card carries", () => {
         expect(screen.getByText("Ethiopia Guji").props.numberOfLines).toBe(plainLines);
 
         const nameSize = styleValueOf(screen.getByText("Ethiopia Guji"), "fontSize") as number;
+        await measureCardPicture();
         const style = photo()?.props.style as {width: number; height: number};
         expect(style.height).toBe(CARD_PHOTO_SIZE);
         expect(style.width).toBe(CARD_PHOTO_SIZE);

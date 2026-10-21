@@ -312,6 +312,126 @@ describe("RecipeDatabase actual-member covers", () => {
     });
 });
 
+describe("RecipeDatabase stock photo covers (real SQLite)", () => {
+    function add(db: RecipeDatabase, uuid: string, imageURL?: string, favourite = true): Recipe {
+        const recipe = recipeNamed("Same");
+        Object.assign(recipe, {uuid, imageURL, favourite});
+        db.insertRecipe(recipe);
+        return recipe;
+    }
+
+    it("seeks four photographed actual members beyond unpictured members", () => {
+        const db = freshDatabase();
+        add(db, "000-blank");
+        add(db, "001-portrait").sharedByAvatar = "https://example.com/portrait.jpg";
+        for (let n = 0; n < 25; n++) add(db, `repeat-${n}`, "https://example.com/1.jpg");
+        for (const n of [5, 4, 3, 2]) add(db, `photo-${n}`, `https://example.com/${n}.jpg`);
+        add(db, "000-outside", "https://example.com/outside.jpg", false);
+        const query = jest.spyOn(appDatabase(), "getAllSync");
+        const first = db.shelfPhotoMembers(["favourites"], resolveLibraryFilter).favourites;
+        expect(first.map(recipe => recipe.uuid)).toEqual(["photo-2", "photo-3", "photo-4", "photo-5"]);
+        expect(new Set(first.map(recipe => recipe.imageURL)).size).toBe(4);
+        expect(query).toHaveBeenCalledTimes(1);
+        expect(query).toHaveBeenCalledWith(expect.stringContaining("LIMIT ?"), [7]);
+        expect(db.shelfPhotoMembers(["favourites"], resolveLibraryFilter).favourites.map(r => r.uuid))
+            .toEqual(first.map(r => r.uuid));
+        expect(db.shelfMembers(["favourites"], resolveLibraryFilter, 4).favourites.map(r => r.uuid))
+            .toContain("000-blank");
+        query.mockRestore();
+    });
+
+    it("counts shared photos but not blank, missing, portrait-only, non-HTTPS or malformed stored pictures", () => {
+        const db = freshDatabase();
+        add(db, "a", "https://example.com/1.jpg");
+        add(db, "b", " https://example.com/1.jpg ");
+        add(db, "c", " ");
+        add(db, "d", "http://example.com/insecure.jpg");
+        const portrait = add(db, "e");
+        portrait.sharedByAvatar = "https://example.com/portrait.jpg";
+        db.updateRecipe(portrait.uuid, portrait);
+        add(db, "f", "https://example.com/2.jpg");
+        add(db, "g", "https://example.com/3.jpg");
+        appDatabase().runSync("INSERT INTO recipes (uuid, recipeJSON, favourite) VALUES (?, ?, 1);",
+            ["invalid-json", "{"]);
+        appDatabase().runSync("INSERT INTO recipes (uuid, recipeJSON, favourite) VALUES (?, ?, 1);",
+            ["numeric-photo", '{"imageURL":42}']);
+        const selected = db.shelfPhotoMembers(["favourites"], resolveLibraryFilter).favourites;
+        expect(selected.map(r => r.uuid)).toEqual(["a", "b", "f", "g"]);
+    });
+
+    it("keeps four copies sharing one photo in a six-recipe pod shelf", () => {
+        const db = freshDatabase();
+        const recipe = add(db, "original", "https://example.com/pod.jpg");
+        recipe.cupType = CUP_TYPE.XPOD;
+        db.updateRecipe(recipe.uuid, recipe);
+        for (let n = 0; n < 3; n++) db.cloneRecipe(recipe.uuid);
+        for (let n = 0; n < 2; n++) {
+            const blank = add(db, `blank-${n}`);
+            blank.cupType = CUP_TYPE.XPOD;
+            db.updateRecipe(blank.uuid, blank);
+        }
+        const selected = db.shelfPhotoMembers(["pods"], resolveLibraryFilter).pods;
+        expect(selected).toHaveLength(4);
+        expect(new Set(selected.map(r => r.uuid)).size).toBe(4);
+        expect(selected.every(r => r.imageURL === recipe.imageURL)).toBe(true);
+    });
+
+    it("does not query other auto shelves, authors or tags", () => {
+        const db = freshDatabase();
+        const query = jest.spyOn(appDatabase(), "getAllSync");
+        expect(db.shelfPhotoMembers(["tea", "allRecipes", "sharedBy:Person", "tag:Coffee"], resolveLibraryFilter))
+            .toEqual({});
+        expect(query).not.toHaveBeenCalled();
+        query.mockRestore();
+    });
+
+    it("guards unreadable/invalid candidates within the existing bounded allowance", () => {
+        const db = freshDatabase();
+        for (let n = 0; n < 4; n++) add(db, `valid-${n}`, `https://example.com/${n}.jpg`);
+        appDatabase().runSync(
+            "INSERT INTO recipes (uuid, recipeJSON, favourite, sortName) VALUES (?, ?, 1, '0');",
+            ["unreadable", '{"name":5,"imageURL":"https://example.com/broken.jpg"}']
+        );
+        add(db, "invalid-url", "https://?");
+        const warning = jest.spyOn(console, "warn").mockImplementation(() => {});
+        const query = jest.spyOn(appDatabase(), "getAllSync");
+        const members = db.shelfPhotoMembers(["favourites"], resolveLibraryFilter).favourites;
+        expect(members.map(recipe => recipe.uuid)).toEqual(["valid-0", "valid-1", "valid-2", "valid-3"]);
+        expect(warning).toHaveBeenCalled();
+        expect(query).toHaveBeenCalledWith(expect.stringContaining("LIMIT ?"), [7]);
+        query.mockRestore();
+        warning.mockRestore();
+    });
+
+    it.each(["xbloom", "pods", "recentlyAdded", "mostBrewed"])(
+        "respects the actual %s clause and its bound parameters", id => {
+            const db = freshDatabase();
+            const inside = add(db, "member", "https://example.com/member.jpg");
+            const outside = add(db, "outsider", "https://example.com/outside.jpg");
+            inside.xid = "PODCODE";
+            inside.cupType = CUP_TYPE.XPOD;
+            inside.createdAt = Date.now();
+            outside.createdAt = 1;
+            outside.cupType = CUP_TYPE.OMNI;
+            db.updateRecipe(inside.uuid, inside);
+            db.updateRecipe(outside.uuid, outside);
+            for (let n = 0; n < 3; n++) {
+                appDatabase().runSync(`INSERT INTO brews
+                    (id, recipeUuid, recipeName, accent, startedAt, pouringAt, endedAt,
+                     outcome, pours, waterTotal, cupTotal, heldSeconds, hasStream)
+                    VALUES (?, ?, 'member', 'amber', 1, 1, 2, 'done', 1, 100, 90, 0, 0);`,
+                [`brew-${n}`, inside.uuid]);
+            }
+            const clause = resolveLibraryFilter(id)!;
+            const query = jest.spyOn(appDatabase(), "getAllSync");
+            expect(db.shelfPhotoMembers([id], () => clause)[id].map(r => r.uuid)).toEqual(["member"]);
+            const params = clause.params ?? [];
+            expect(query).toHaveBeenCalledWith(expect.stringContaining("LIMIT ?"), [...params, 7]);
+            query.mockRestore();
+        }
+    );
+});
+
 describe("RecipeDatabase.countRecipesByAuthor", () => {
     function from(name: string, author: string | undefined): Recipe {
         const recipe = recipeNamed(name);

@@ -2,7 +2,7 @@ import React from "react";
 import {StyleSheet} from "react-native";
 import {fireEvent, screen} from "@testing-library/react-native";
 
-import RecipeHero, {HERO_PHOTO_RESERVE, HERO_PHOTO_SIZE} from "@/components/RecipeHero";
+import RecipeHero from "@/components/RecipeHero";
 import {onAccent} from "@/constants/colors";
 import Pour from "@/library/Pour";
 import {renderWithProviders, TEST_INSETS} from "@/test-utils/render";
@@ -199,102 +199,5 @@ describe("RecipeHero", () => {
         const style = screen.getByTestId("recipe-hero").props.style;
 
         expect(style.paddingTop).toBeGreaterThanOrEqual(TEST_INSETS.top);
-    });
-});
-
-
-describe("RecipeHero's picture", () => {
-    const PHOTO = "https://example.com/bag.jpg";
-
-    /** The room the name's row leaves on its right for the picture. */
-    function nameReserve(): number {
-        const style = StyleSheet.flatten(screen.getByTestId("hero-rename").props.style);
-        return (style?.marginRight as number | undefined) ?? 0;
-    }
-
-    function photo() {
-        return screen.queryByTestId("hero-photo", {includeHiddenElements: true});
-    }
-
-    it("draws the picture when the setting is on and the recipe has one", async () => {
-        await renderWithProviders(<RecipeHero {...BASE} imageURL={PHOTO} showPicture/>);
-
-        expect(photo()?.props.source).toEqual({uri: PHOTO});
-        const style = StyleSheet.flatten(photo()?.props.style);
-        expect(style.width).toBe(HERO_PHOTO_SIZE);
-        expect(style.height).toBe(HERO_PHOTO_SIZE);
-        expect(nameReserve()).toBe(HERO_PHOTO_RESERVE);
-    });
-
-    it("is one button, Coffee photo, with the image itself kept quiet", async () => {
-        await renderWithProviders(<RecipeHero {...BASE} imageURL={PHOTO} showPicture/>);
-
-        expect(photo()?.props.accessible).toBe(false);
-        expect(photo()?.props.importantForAccessibility).toBe("no");
-        expect(screen.getByRole("imagebutton", {name: "Coffee photo"})).toBeTruthy();
-    });
-
-    it("draws the whole picture rather than cropping it", async () => {
-        await renderWithProviders(<RecipeHero {...BASE} imageURL={PHOTO} showPicture/>);
-        expect(photo()?.props.resizeMode).toBe("contain");
-    });
-
-    it("opens the photo full screen, not the rename sheet, and closes it", async () => {
-        const onRename = jest.fn();
-        await renderWithProviders(
-            <RecipeHero {...BASE} imageURL={PHOTO} showPicture onRename={onRename}/>
-        );
-        expect(screen.queryByTestId("photo-viewer")).toBeNull();
-
-        await fireEvent.press(screen.getByRole("imagebutton", {name: "Coffee photo"}));
-
-        expect(onRename).not.toHaveBeenCalled();
-        expect(screen.getByTestId("photo-viewer-image").props.source).toEqual({uri: PHOTO});
-        expect(screen.getByTestId("photo-viewer-image").props.resizeMode).toBe("contain");
-
-        await fireEvent.press(screen.getByTestId("photo-viewer-close"));
-        expect(screen.queryByTestId("photo-viewer")).toBeNull();
-
-        // A tap on the backdrop closes it too.
-        await fireEvent.press(screen.getByRole("imagebutton", {name: "Coffee photo"}));
-        await fireEvent.press(screen.getByTestId("photo-viewer-backdrop"));
-        expect(screen.queryByTestId("photo-viewer")).toBeNull();
-        expect(onRename).not.toHaveBeenCalled();
-    });
-
-    it("still renames from the name and the pencil when there is a photo", async () => {
-        const onRename = jest.fn();
-        await renderWithProviders(
-            <RecipeHero {...BASE} imageURL={PHOTO} showPicture onRename={onRename}/>
-        );
-        await fireEvent.press(screen.getByTestId("hero-rename"));
-        expect(onRename).toHaveBeenCalledTimes(1);
-        expect(screen.queryByTestId("photo-viewer")).toBeNull();
-    });
-
-    it("draws no picture and keeps no room while the setting is off", async () => {
-        await renderWithProviders(<RecipeHero {...BASE} imageURL={PHOTO}/>);
-
-        expect(photo()).toBeNull();
-        expect(nameReserve()).toBe(0);
-    });
-
-    it("draws no picture for a recipe without one", async () => {
-        await renderWithProviders(<RecipeHero {...BASE} showPicture/>);
-
-        expect(photo()).toBeNull();
-        expect(nameReserve()).toBe(0);
-    });
-
-    it("drops a picture that will not load without moving the name", async () => {
-        // A failed load looks like no picture at all, but the room it was given
-        // stays: taking it back would rewrap the name after the screen opened.
-        await renderWithProviders(<RecipeHero {...BASE} imageURL={PHOTO} showPicture/>);
-
-        await fireEvent(photo()!, "error");
-
-        expect(photo()).toBeNull();
-        expect(nameReserve()).toBe(HERO_PHOTO_RESERVE);
-        expect(screen.getByText("Ethiopia Guji")).toBeTruthy();
     });
 });

@@ -195,7 +195,7 @@ export const OUTBOUND_CALLS: OutboundCall[] = [
     {
         id:      "images",
         title:   "Load a photo",
-        trigger: "You open the hub, an import preview, or a saved recipe that carries a pod photo or the avatar of whoever shared it. With Show recipe pictures on, also your library list, shelf rooms and the shelf covers in the grid.",
+        trigger: "You open the hub, an import preview, or a saved recipe that carries a pod photo or the avatar of whoever shared it. Recipe card photos, Shelf photo previews and Pictures in ABOUT control their respective placements.",
         host:    "whichever host xBloom named in its own reply",
         hostPinned: false,
         owner:   "xBloom, or whoever xBloom points at",
@@ -210,8 +210,6 @@ export const OUTBOUND_CALLS: OutboundCall[] = [
             "library/hub/hubRow.ts",
             "components/PodSection.tsx",
             "components/RecipePhoto.tsx",
-            "components/ShelfPhotoMark.tsx",
-            "components/PhotoViewer.tsx",
             "components/FromSection.tsx",
             "components/HubRow.tsx",
             "components/ImportResult.tsx",

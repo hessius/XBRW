@@ -8,6 +8,7 @@ import {PROFILE_STROKE_WIDTH} from "@/components/PourProfile";
 import Recipe, {CUP_TYPE} from "@/library/Recipe";
 import Pour, {POUR_PATTERN} from "@/library/Pour";
 import {renderWithProviders} from "@/test-utils/render";
+import {StyleSheet} from "react-native";
 
 function named(name: string): Recipe {
     const r = new Recipe();
@@ -34,6 +35,45 @@ const HANDLERS = {
     onDuplicate:       jest.fn(),
     onDelete:          jest.fn()
 };
+
+it("measures the same child gaps as the visible metadata, including its collapsed spacer", async () => {
+    const recipe = writable("Exact fit");
+    recipe.imageURL = "https://coffee.example/bag.jpg";
+    await renderWithProviders(<RecipeShelfTile recipe={recipe} {...HANDLERS} showPicture
+        evidence={{brews: 2, lastBrewedAt: 0, avgRating: 0}} editing/>);
+    const visible = screen.getByTestId("recipe-tile-badges");
+    const intrinsic = screen.getByTestId("recipe-tile-metadata-intrinsic", {includeHiddenElements: true});
+    expect(StyleSheet.flatten(visible.props.style).gap).toBe(6);
+    expect(StyleSheet.flatten(intrinsic.props.style).gap).toBe(6);
+    expect(intrinsic.children).toHaveLength(visible.children.length);
+    const spacer = intrinsic.children[1];
+    if (typeof spacer === "string") throw new Error("Expected a native spacer view");
+    expect(StyleSheet.flatten(spacer.props.style)).toMatchObject({width: 0});
+    const hidden = within(screen.getByTestId("recipe-tile-metadata-measure", {includeHiddenElements: true}));
+    expect(hidden.queryByTestId("recipe-tile-evidence", {includeHiddenElements: true})).toBeNull();
+    expect(hidden.queryByTestId(`recipe-tile-actions-${recipe.uuid}`, {includeHiddenElements: true})).toBeNull();
+});
+
+it("measures intrinsic metadata before admitting a 20pt photo and drops stale readings", async () => {
+    const recipe = writable("Full width name");
+    recipe.imageURL = "https://coffee.example/bag.jpg";
+    const view = await renderWithProviders(<RecipeShelfTile recipe={recipe} {...HANDLERS} showPicture/>);
+    const photo = () => screen.queryByTestId("recipe-tile-photo", {includeHiddenElements: true});
+    expect(photo()?.parent).toHaveStyle({opacity: 0, position: "absolute"});
+    await fireEvent(screen.getByTestId("recipe-tile-metadata-width"), "layout",
+                    {nativeEvent: {layout: {width: 100, height: 20, x: 0, y: 0}}});
+    await fireEvent(screen.getByTestId("recipe-tile-metadata-measure", {includeHiddenElements: true}),
+                    "contentSizeChange", 74, 15);
+    expect(photo()?.props.style.width).toBe(20);
+    expect(photo()?.parent).toHaveStyle({opacity: 1});
+    await fireEvent(screen.getByTestId("recipe-tile-metadata-width"), "layout",
+                    {nativeEvent: {layout: {width: 99, height: 20, x: 0, y: 0}}});
+    expect(photo()?.parent).toHaveStyle({opacity: 0});
+    await view.rerender(<RecipeShelfTile recipe={recipe} {...HANDLERS} showPicture editing/>);
+    expect(photo()?.parent).toHaveStyle({opacity: 0});
+    await view.rerender(<RecipeShelfTile recipe={recipe} {...HANDLERS}/>);
+    expect(screen.queryByTestId("recipe-tile-metadata-measure", {includeHiddenElements: true})).toBeNull();
+});
 
 describe("RecipeShelfTile", () => {
     beforeEach(() => jest.clearAllMocks());

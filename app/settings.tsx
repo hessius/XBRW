@@ -523,7 +523,7 @@ export default function SettingsScreen({settings}: Props) {
                         onChange={setShowRecipeCardPhotos}/>
                     <SettingsToggleRow
                         label="Shelf photo previews"
-                        description="Show coffee photos in your own shelves and tag shelves."
+                        description="Show coffee photos in your own shelves, tag shelves and eligible auto shelves."
                         value={showShelfPhotoPreviews}
                         onChange={setShowShelfPhotoPreviews}/>
                     <SettingsToggleRow

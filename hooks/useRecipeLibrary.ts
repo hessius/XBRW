@@ -2,7 +2,7 @@ import {useEffect, useRef, useState} from "react";
 
 import {mergeRecipes, type BackupPayload} from "@/library/backup";
 import {MARK_MEMBERS} from "@/components/ShelfMark";
-import {COVER_MEMBERS, type ShelfCoverMember} from "@/library/shelfCover";
+import {COVER_MEMBERS, hasStockPhotoCover, type ShelfCoverMember} from "@/library/shelfCover";
 import {resolveAccent} from "@/library/accent";
 import {
     authorFilterId, MIN_COUNT, resolveLibraryFilter, resolveStockFilter,
@@ -11,7 +11,6 @@ import {
 } from "@/library/libraryFilters";
 import type {FilterResolver, LibraryQuery,
               RecipeEvidence} from "@/library/libraryQuery";
-import type Pour from "@/library/Pour";
 import Recipe from "@/library/Recipe";
 import RecipeDatabase from "@/library/RecipeDatabase";
 import {canonicalShelfId} from "@/library/hiddenShelves";
@@ -70,6 +69,9 @@ export type RecipeStore = {
         ids: readonly string[],
         resolveFilter?: FilterResolver,
         perShelf?: number
+    ) => Record<string, Recipe[]>;
+    shelfPhotoMembers?: (
+        ids: readonly string[], resolveFilter?: FilterResolver
     ) => Record<string, Recipe[]>;
     deleteRecipe: (uuid: string) => void;
     cloneRecipe: (uuid: string) => void;
@@ -176,7 +178,7 @@ export type ShelfWriteOutcome = {
 /** What a shelf's mark is drawn from: its first few members, in shelf order. */
 export type ShelfMarkMembers = {
     accents: string[];
-    /** First four actual members, for personal/tag covers only. */
+    /** First four actual members for tags; four photographed members for eligible stock shelves. */
     coverMembers?: ShelfCoverMember[];
 };
 
@@ -724,6 +726,13 @@ function readShelfMarks(
                 uuid: recipe.uuid, accent: resolveAccent(recipe), imageURL: recipe.imageURL || undefined
             }))} : {})
         };
+    }
+    const photoMembers = db.shelfPhotoMembers?.(allIds.filter(hasStockPhotoCover), resolveLibraryFilter) ?? {};
+    for (const [id, recipes] of Object.entries(photoMembers)) {
+        if (!hasStockPhotoCover(id) || !marks[id]) continue;
+        marks[id].coverMembers = recipes.map(recipe => ({
+            uuid: recipe.uuid, accent: resolveAccent(recipe), imageURL: recipe.imageURL
+        }));
     }
     return marks;
 }
