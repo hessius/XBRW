@@ -28,6 +28,11 @@ type Props = {
      * because a timestamp is a machine's fact, not prose.
      */
     meta?: string;
+    /**
+     * Lines the title may wrap to. One unless the title is a recipe's name,
+     * which `ScreenTitle` explains.
+     */
+    titleLines?: number;
     onBack: () => void;
 };
 
@@ -48,7 +53,7 @@ type Props = {
  * it, a screen reader arriving on a pushed screen has nothing for the rotor to
  * land on and no announcement saying where it landed.
  */
-export default function ScreenHeader({title, count, meta, onBack}: Props) {
+export default function ScreenHeader({title, count, meta, titleLines, onBack}: Props) {
     const insets = useSafeAreaInsets();
 
     return (
@@ -63,7 +68,7 @@ export default function ScreenHeader({title, count, meta, onBack}: Props) {
                         <DotIcon name="back" size={16} color={palette.text}/>
                     </YStack>
                 </Pressable>
-                <ScreenTitle title={title} count={count} heading/>
+                <ScreenTitle title={title} count={count} heading lines={titleLines}/>
                 {meta !== undefined && (
                     <DotMatrixText testID="screen-header-meta" fontSize={11}
                                    weight="bold" letterSpacing={1.2}

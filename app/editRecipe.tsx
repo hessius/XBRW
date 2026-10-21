@@ -16,7 +16,7 @@ import FieldRow from "@/components/FieldRow";
 import HelpSheet from "@/components/HelpSheet";
 import LeaveEditorSheet, {type LeaveIntent} from "@/components/LeaveEditorSheet";
 import NfcOverlay from "@/components/NfcOverlay";
-import RecipeHero from "@/components/RecipeHero";
+import RecipeHero, {heroFoldAway} from "@/components/RecipeHero";
 import RecipeOverflowSheet from "@/components/RecipeOverflowSheet";
 import RenameSheet from "@/components/RenameSheet";
 import RevertSheet from "@/components/RevertSheet";
@@ -926,8 +926,6 @@ export default function EditRecipe(
     // this visit only and never writes back, so a user can fold the notes away
     // without changing what the next recipe opens on.
 
-    const {collapsed, onScroll} = useCollapsibleHeader();
-
     const {
         recipe, balance, canBrew, canWrite, canSave, revertSources, inputError,
         rangeProblems,
@@ -941,6 +939,15 @@ export default function EditRecipe(
         temperatureUnit,
         onSaved:    () => navigation.goBack()
     });
+
+    // What a collapse takes back from this page: the slab, sized for this
+    // name, and the stage curve's step down from its tall form to its compact
+    // one (40 of height, 9 of padding above, 6 inside it either side). The home
+    // screen's 140 is short of a three-line name at a large text size.
+    const {collapsed, onScroll} = useCollapsibleHeader(
+        heroFoldAway(recipe?.displayName() ?? "")
+        + PROFILE_HEIGHT.full - PROFILE_HEIGHT.compact + 9 + 12
+    );
 
     const {writeCard, onNFCDialogClose, showNfcOverlay, writeProgress, nfcUnavailable} =
         useCardWriter(setVolumeError);

@@ -33,6 +33,13 @@ export const EXPAND_AT = 24;
  * collapse, so it folds almost nothing away; its persistent height instead
  * enlarges `extent`, which makes a collapse easier to grant, not harder. The
  * fold-away on both screens stays well under 140, so the overestimate stands.
+ *
+ * The editor is the exception, and passes its own figure instead: its slab
+ * folds away a name that can run to three lines plus the room reserved under it
+ * for the pour-profile watermark. At the largest text size that is about 190,
+ * and about 250 with the stage curve. Raising this constant to cover that cost the home screen scroll it never
+ * needed, so the editor's number lives with the slab (`heroFoldAway`) and this
+ * one stays the home screen's.
  */
 export const COLLAPSE_SHRINK = 140;
 
@@ -60,15 +67,17 @@ export const COLLAPSE_SHRINK = 140;
  * that is already near its top.
  *
  * Omitting `extent` asks for the decision without that guard, for callers with
- * no measurement to hand.
+ * no measurement to hand. `shrink` is how much this screen folds away, and
+ * defaults to the home screen's `COLLAPSE_SHRINK`.
  */
 export function nextCollapsed(
-    offset: number, collapsed: boolean, extent: number = Infinity
+    offset: number, collapsed: boolean, extent: number = Infinity,
+    shrink: number = COLLAPSE_SHRINK
 ): boolean {
     if (collapsed) {
         return offset > EXPAND_AT;
     }
-    return offset > COLLAPSE_AT && extent - COLLAPSE_SHRINK > EXPAND_AT;
+    return offset > COLLAPSE_AT && extent - shrink > EXPAND_AT;
 }
 
 export type CollapsibleHeader = {
@@ -77,18 +86,20 @@ export type CollapsibleHeader = {
 };
 
 /**
- * Drives the home screen header from the list's scroll position.
+ * Drives a collapsing header from the list's scroll position.
  *
  * The state lives in React rather than on the UI thread because it switches
- * which components are mounted, not just how they are styled.
+ * which components are mounted, not just how they are styled. `shrink` is read
+ * on every scroll event, so a screen whose fold-away changes (the editor, when
+ * a recipe is renamed) is judged by its current figure.
  */
-export function useCollapsibleHeader(): CollapsibleHeader {
+export function useCollapsibleHeader(shrink: number = COLLAPSE_SHRINK): CollapsibleHeader {
     const [collapsed, setCollapsed] = useState(false);
 
     function onScroll(event: NativeSyntheticEvent<NativeScrollEvent>) {
         const {contentOffset, contentSize, layoutMeasurement} = event.nativeEvent;
         const extent = contentSize.height - layoutMeasurement.height;
-        setCollapsed((current) => nextCollapsed(contentOffset.y, current, extent));
+        setCollapsed((current) => nextCollapsed(contentOffset.y, current, extent, shrink));
     }
 
     return {collapsed, onScroll};

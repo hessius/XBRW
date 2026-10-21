@@ -1,17 +1,325 @@
 import React from "react";
-import {Pressable, View} from "react-native";
+import {Pressable, View, useWindowDimensions} from "react-native";
 import {useSafeAreaInsets} from "react-native-safe-area-context";
 import {Text, XStack, YStack} from "tamagui";
 
 import Collapsible from "@/components/Collapsible";
 import DotIcon from "@/components/DotIcon";
 import DotMatrixText, {DOTO_MAX_FONT_SCALE} from "@/components/DotMatrixText";
-import PourProfile, {PROFILE_BLEED} from "@/components/PourProfile";
+import PourProfile, {
+    PROFILE_BLEED, PROFILE_STROKE_WIDTH, profileHeightAt
+} from "@/components/PourProfile";
 import {onAccent} from "@/constants/colors";
 import type Pour from "@/library/Pour";
 
 /** How far the watermark runs past the slab before it is clipped. */
 const PROFILE_OVERHANG = 2;
+
+/** The watermark's drawing size, before its stroke. */
+const PROFILE_WIDTH = 190;
+const PROFILE_HEIGHT = 74;
+
+/**
+ * The watermark's height when it sits in a band under a long name. Lower than
+ * its usual 74, so the band costs the slab less: it is a silhouette, and it
+ * reads as the same one at two thirds of the height.
+ */
+export const PROFILE_BAND_HEIGHT = 50;
+
+/** The slab's side padding (`$4`) and bottom padding (`$3`), in points. */
+const SLAB_PADDING_X = 18;
+const SLAB_PADDING_BOTTOM = 13;
+
+/** The pencil beside the name, and the gap before it. */
+const PENCIL_WIDTH = 15 + 8;
+
+/**
+ * Points knocked off a column before asking whether a name fits it. The second
+ * device report wrapped a line the estimate put 1 to 2 points inside the
+ * column, so this keeps a fit from depending on a margin that thin.
+ */
+const FIT_SLACK = 4;
+
+/** Clear space kept between the name and the watermark, across. */
+const PROFILE_GAP = 8;
+
+/** Clear space kept between the name and the watermark's line, above it. */
+const PROFILE_AIR = 4;
+
+/**
+ * How far below the top of the name's first line the pencil ends: its 12 pt
+ * margin and 15 pt height, less the name's 6 pt margin in the band layout.
+ */
+const PENCIL_FOOT = 12 + 15 - 6;
+
+/** How much of the slab's right edge the watermark covers. */
+const PROFILE_VISIBLE_WIDTH =
+    PROFILE_WIDTH + PROFILE_STROKE_WIDTH - PROFILE_BLEED - PROFILE_OVERHANG;
+
+/**
+ * The empty band left under a name that runs the slab's full width, so the
+ * watermark sits below the text rather than behind it.
+ *
+ * The watermark is pinned to the slab's bottom edge and the name ends the
+ * slab's padding above it, so this is the band-height watermark less that
+ * padding, plus a few points of air.
+ */
+export const HERO_PROFILE_RESERVE = Math.ceil(
+    PROFILE_BAND_HEIGHT + PROFILE_STROKE_WIDTH - PROFILE_BLEED - PROFILE_OVERHANG
+    - SLAB_PADDING_BOTTOM + PROFILE_AIR
+);
+
+/**
+ * The longest name drawn at the full title size.
+ *
+ * Two lines at 26 hold roughly this many characters in the slab's 72% column
+ * on a narrow phone. A name that fits stays exactly as it always was.
+ */
+export const HERO_NAME_LONG = 28;
+
+/** The most lines a name may take in the open slab. */
+export const HERO_NAME_MAX_LINES = 3;
+
+/**
+ * The sizes a longer name may be set at, largest first, with their line
+ * heights. All are sizes the app already uses (15 is the folded bar's). The
+ * last is the floor: 15 holds a 100 character name in three lines on a 360
+ * point phone at 1.15x text. A name that does not fit even at 15 (only at the
+ * largest text sizes) is cut after three lines with an ellipsis.
+ */
+export const HERO_NAME_STEPS = [
+    {fontSize: 22, lineHeight: 27},
+    {fontSize: 20, lineHeight: 25},
+    {fontSize: 18, lineHeight: 23},
+    {fontSize: 16, lineHeight: 21},
+    {fontSize: 15, lineHeight: 20}
+] as const;
+
+/**
+ * Advance widths of the bold title face, in em, by kind of character.
+ *
+ * Fitted to two device screenshots of the slab (Fold cover screen, about
+ * 360 points wide, OS text at 1x): a mostly lower-case line measured 16.35 em
+ * against 16.38 here, and a line of capitals and asterisks 14.6 against 14.7.
+ * With `FIT_SLACK` the estimate breaks the 98 character name of the second
+ * screenshot at the same three places the phone did. A plain 0.5 em a
+ * character ran about 4% short on capitals.
+ */
+export function glyphEm(char: string): number {
+    if (char === " ") {
+        return 0.25;
+    }
+    if ("MW".includes(char)) {
+        return 0.86;
+    }
+    if (char >= "A" && char <= "Z") {
+        return 0.64;
+    }
+    if ("mw".includes(char)) {
+        return 0.78;
+    }
+    if ("ijlrtf".includes(char)) {
+        return 0.32;
+    }
+    if (char >= "a" && char <= "z") {
+        return 0.54;
+    }
+    if (char >= "0" && char <= "9") {
+        return 0.56;
+    }
+    if ("|.,:;'!-()".includes(char)) {
+        return 0.27;
+    }
+    if (char === "*") {
+        return 0.42;
+    }
+    return 0.62;
+}
+
+function textEm(text: string): number {
+    let em = 0;
+    for (const char of text) {
+        em += glyphEm(char);
+    }
+    return em;
+}
+
+/**
+ * The widths, in points, of the lines `text` wraps to at `fontSize` in
+ * `width` points, breaking greedily at spaces as the simple line breaker does.
+ * A word too long for a line is split across as many as it needs.
+ *
+ * Estimated from the characters rather than measured, on purpose: measuring
+ * needs a first layout to read back, and a title that redraws itself a frame
+ * after the screen opens is a title that visibly jumps. The name is set with
+ * `textBreakStrategy="simple"` so Android wraps the same greedy way.
+ */
+export function wrapLines(text: string, width: number, fontSize: number): number[] {
+    const space = glyphEm(" ") * fontSize;
+    const lines: number[] = [];
+    let used = -1;
+    for (const word of text.split(" ").filter(Boolean)) {
+        let wordWidth = textEm(word) * fontSize;
+        if (used >= 0 && used + space + wordWidth <= width) {
+            used += space + wordWidth;
+            continue;
+        }
+        if (used >= 0) {
+            lines.push(used);
+        }
+        while (wordWidth > width) {
+            lines.push(width);
+            wordWidth -= width;
+        }
+        used = wordWidth;
+    }
+    lines.push(Math.max(used, 0));
+    return lines;
+}
+
+/** How many lines `text` takes; see `wrapLines`. */
+export function estimateLines(text: string, width: number, fontSize: number): number {
+    return wrapLines(text, width, fontSize).length;
+}
+
+export type HeroNameLayout = {
+    fontSize: number;
+    lineHeight: number;
+    /** `numberOfLines`: the most the name may take. */
+    lines: number;
+    /** The name's column: a share of the row, or points. */
+    maxWidth: number | "72%";
+    /** The band kept free under the name for the watermark. */
+    reserve: number;
+    /** The watermark's drawing height. */
+    profileHeight: number;
+    /** Closes up the space under the chrome row when the band is used. */
+    tight: boolean;
+};
+
+/**
+ * Where the slab puts a name, at what size, and how much room it keeps for the
+ * watermark.
+ *
+ * A short name keeps the 26 pt, two-line, 72% column it always had. A longer
+ * one takes the largest step in `HERO_NAME_STEPS` at which it fits three
+ * lines, and is never drawn across the pour profile. At each step it first
+ * tries the column beside the watermark (the Fold's inner screen, where that
+ * column is over 600 points), then the slab's full width with the watermark
+ * moved into a band under it. That is the phone's case, where the column beside
+ * the watermark is 100 to 150 points.
+ *
+ * The band is only as tall as it must be for the watermark to clear the name,
+ * line by line (`bandReserve`). The watermark only climbs, left to right, so a
+ * line that stops over its low end needs less room than one that runs on to
+ * its last plateau, and a short last line that ends before the watermark
+ * starts needs none. `pours` is what the watermark draws. Without it the band
+ * assumes the watermark's full height wherever it reaches.
+ *
+ * `fontScale` is the OS text size, bounded as the name's own is. A size picked
+ * from the width and the character count, rather than `adjustsFontSizeToFit`,
+ * because that prop is typed iOS-only in React Native 0.86 (its
+ * `minimumFontScale` is honoured only on iOS), it shrinks to any size rather
+ * than a step on the type scale, and the band and the header's collapse both
+ * need the size before the first layout.
+ */
+export function heroNameLayout(
+    name: string, windowWidth: number, fontScale = 1, {pours}: {pours?: Pour[]} = {}
+): HeroNameLayout {
+    if (name.length <= HERO_NAME_LONG) {
+        return {
+            fontSize: 26, lineHeight: 31, lines: 2, maxWidth: "72%",
+            reserve: 0, profileHeight: PROFILE_HEIGHT, tight: false
+        };
+    }
+    const scale = Math.min(Math.max(fontScale, 1), DOTO_MAX_FONT_SCALE);
+    const full = Math.floor(windowWidth - 2 * SLAB_PADDING_X - PENCIL_WIDTH);
+    const beside = Math.floor(full - PROFILE_VISIBLE_WIDTH - PROFILE_GAP);
+
+    const fitted = (step: typeof HERO_NAME_STEPS[number], last: boolean): HeroNameLayout | null => {
+        const size = step.fontSize * scale;
+        if (beside > FIT_SLACK && estimateLines(name, beside - FIT_SLACK, size) <= HERO_NAME_MAX_LINES) {
+            return {
+                ...step, lines: HERO_NAME_MAX_LINES, maxWidth: beside, reserve: 0,
+                profileHeight: PROFILE_HEIGHT, tight: false
+            };
+        }
+        const wrapped = wrapLines(name, full - FIT_SLACK, size);
+        if (wrapped.length > HERO_NAME_MAX_LINES && !last) {
+            return null;
+        }
+        const drawn = wrapped.slice(0, HERO_NAME_MAX_LINES);
+        return {
+            ...step, lines: HERO_NAME_MAX_LINES, maxWidth: full,
+            reserve: bandReserve(drawn, step.lineHeight * scale, full, windowWidth, pours),
+            profileHeight: PROFILE_BAND_HEIGHT, tight: true
+        };
+    };
+
+    for (let i = 0; i < HERO_NAME_STEPS.length; i++) {
+        const layout = fitted(HERO_NAME_STEPS[i], i === HERO_NAME_STEPS.length - 1);
+        if (layout !== null) {
+            return layout;
+        }
+    }
+    throw new Error("unreachable: the last step always returns a layout");
+}
+
+/**
+ * The band kept under a long name so the watermark clears it.
+ *
+ * `drawn` is the estimated width of each line, top to bottom, all starting at
+ * the name's left edge, `column` the most the name's box may take. For each
+ * line, and the pencil beside the first, this asks how high the watermark
+ * stands at the point where it ends (plus `PROFILE_GAP` across and
+ * `PROFILE_AIR` above) and how far above the slab's bottom edge it already is
+ * without a band. The band is the largest shortfall. The watermark only climbs,
+ * so its height where a line ends is the highest it gets under that line.
+ */
+function bandReserve(
+    drawn: number[], lineHeight: number, column: number, windowWidth: number, pours?: Pour[]
+): number {
+    // How high the watermark's line stands above the slab's bottom edge, under
+    // a point `x` points along from the name's left edge.
+    const stand = (x: number): number => {
+        const along = SLAB_PADDING_X + x + PROFILE_GAP
+            - (windowWidth - PROFILE_VISIBLE_WIDTH) - PROFILE_BLEED;
+        const height = pours === undefined
+            ? (along > 0 ? PROFILE_BAND_HEIGHT : 0)
+            : profileHeightAt(pours, PROFILE_WIDTH, PROFILE_BAND_HEIGHT, along);
+        return height > 0
+            ? height + PROFILE_STROKE_WIDTH - PROFILE_BLEED - PROFILE_OVERHANG
+            : 0;
+    };
+    const count = drawn.length;
+    let reserve = 0;
+    drawn.forEach((width, i) => {
+        const above = SLAB_PADDING_BOTTOM + (count - 1 - i) * lineHeight;
+        reserve = Math.max(reserve, stand(width + FIT_SLACK) + PROFILE_AIR - above);
+    });
+    const box = Math.min(column, Math.max(...drawn) + FIT_SLACK);
+    const pencilAbove = SLAB_PADDING_BOTTOM + count * lineHeight - PENCIL_FOOT;
+    reserve = Math.max(reserve, stand(box + PENCIL_WIDTH) + PROFILE_AIR - pencilAbove);
+    return Math.max(0, Math.ceil(reserve));
+}
+
+/**
+ * How much the slab folds away for this name, at the largest text size.
+ *
+ * The editor's header refuses to collapse a page too short to stay collapsed
+ * (`nextCollapsed`), and this is the slab's half of that sum: the beverage row,
+ * the name and the band kept for the watermark. A deliberate overestimate, so
+ * it assumes the largest text size, three lines at the largest step, the
+ * untightened gaps and the whole band.
+ */
+export function heroFoldAway(name: string): number {
+    const beverageRow = 7 + 24;
+    if (name.length <= HERO_NAME_LONG) {
+        return Math.ceil(beverageRow + 7 + 2 * 31 * DOTO_MAX_FONT_SCALE);
+    }
+    const nameBlock = 7 + HERO_NAME_MAX_LINES * HERO_NAME_STEPS[0].lineHeight * DOTO_MAX_FONT_SCALE;
+    return Math.ceil(beverageRow + nameBlock + HERO_PROFILE_RESERVE);
+}
 
 /** A control in the header's chrome row, drawn in a well cut out of the accent. */
 function HeaderButton({label, icon, accent, onPress}: {
@@ -85,6 +393,8 @@ export default function RecipeHero({
     // it, so the screen has one surface at the top instead of a black strip
     // above a coloured card.
     const insets = useSafeAreaInsets();
+    const {width, fontScale} = useWindowDimensions();
+    const nameLayout = heroNameLayout(name, width, fontScale, {pours});
 
     // `pours` is the recipe's own array, mutated in place, and the watermark
     // reads each pour through a getter rather than a property — so there is
@@ -94,7 +404,8 @@ export default function RecipeHero({
     return (
         <YStack testID="recipe-hero" backgroundColor={accent}
                 borderBottomLeftRadius="$6" borderBottomRightRadius="$6"
-                paddingHorizontal="$4" paddingTop={insets.top + 6} paddingBottom="$3"
+                paddingHorizontal={SLAB_PADDING_X} paddingTop={insets.top + 6}
+                paddingBottom={SLAB_PADDING_BOTTOM}
                 overflow="hidden">
             {/* No opacity on this wrapper. The stroke colour already carries its
                 own dimming and a group opacity multiplies it — which is how the
@@ -107,7 +418,8 @@ export default function RecipeHero({
                           right:    -(PROFILE_BLEED + PROFILE_OVERHANG),
                           bottom:   -(PROFILE_BLEED + PROFILE_OVERHANG)
                       }}>
-                    <PourProfile pours={pours} width={190} height={74}
+                    <PourProfile pours={pours} width={PROFILE_WIDTH}
+                                 height={nameLayout.profileHeight}
                                  stroke={onAccent.profileStroke} fill={onAccent.profileFill}/>
                 </View>
             )}
@@ -123,14 +435,18 @@ export default function RecipeHero({
                     it does: renaming is reachable from every scroll position and
                     every deck, which it never was while Name was a row near the
                     bottom of BREW. Not a button while the slab is open, where
-                    the pressable would be an empty strip between BACK and HELP. */}
+                    the pressable would be an empty strip between BACK and HELP.
+                    Two lines rather than one: two at this size are no taller
+                    than the 32 pt wells beside them plus their padding, so a
+                    long name costs the folded bar a few points at most. */}
                 {collapsed ? (
                     <Pressable accessibilityRole="button" accessibilityLabel={name}
                                accessibilityHint="Opens a sheet to rename this recipe"
                                testID="hero-rename-collapsed"
                                style={{flex: 1, flexDirection: "row", alignItems: "center"}}
                                onPress={onRename} hitSlop={8}>
-                        <Text flex={1} numberOfLines={1} fontSize={15} fontWeight="700"
+                        <Text testID="hero-name-collapsed" flex={1} numberOfLines={2}
+                              fontSize={15} fontWeight="700"
                               maxFontSizeMultiplier={DOTO_MAX_FONT_SCALE}
                               color={named ? onAccent.text : onAccent.label}>
                             {name}
@@ -158,7 +474,10 @@ export default function RecipeHero({
             </XStack>
 
             <Collapsible open={!collapsed}>
-                <XStack alignItems="center" gap="$2" marginTop="$2">
+                {/* A name with the watermark's band under it closes up the gap
+                    under the chrome row, the one place the slab has room. */}
+                <XStack alignItems="center" gap="$2"
+                        marginTop={nameLayout.tight ? "$1" : "$2"}>
                     <DotMatrixText fontSize={11} weight="bold" letterSpacing={2}
                                    color={onAccent.label}>
                         {beverage}
@@ -186,16 +505,27 @@ export default function RecipeHero({
                            testID="hero-rename"
                            style={{flexDirection: "row", alignItems: "flex-start", gap: 8}}
                            onPress={onRename} hitSlop={8}>
-                    <Text fontSize={26} fontWeight="700" lineHeight={31} marginTop="$2"
+                    {/* Never across the watermark: `heroNameLayout` puts a
+                        long name beside it or above it. `simple` breaks lines
+                        the greedy way `estimateLines` counts them, which the
+                        balanced default on Android does not. */}
+                    <Text testID="hero-name" fontSize={nameLayout.fontSize}
+                          fontWeight="700" lineHeight={nameLayout.lineHeight}
+                          marginTop={nameLayout.tight ? "$1.5" : "$2"}
                           maxFontSizeMultiplier={DOTO_MAX_FONT_SCALE}
+                          textBreakStrategy="simple"
                           color={named ? onAccent.text : onAccent.label}
-                          numberOfLines={2} maxWidth="72%">
+                          numberOfLines={nameLayout.lines} maxWidth={nameLayout.maxWidth}>
                         {name}
                     </Text>
                     <YStack marginTop="$3">
                         <DotIcon name="edit" size={15} color={onAccent.label}/>
                     </YStack>
                 </Pressable>
+                {nameLayout.reserve > 0 && (
+                    <View testID="hero-profile-reserve" pointerEvents="none"
+                          style={{height: nameLayout.reserve}}/>
+                )}
             </Collapsible>
         </YStack>
     );
