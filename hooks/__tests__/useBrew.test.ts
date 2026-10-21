@@ -105,6 +105,80 @@ beforeEach(() => {
     jest.mocked(notify).mockClear();
 });
 
+it("never relinks and retries after a recipe write loses its connection", async () => {
+    class Radio extends FakeTransport {
+        async write(frame: Uint8Array): Promise<void> {
+            await super.write(frame);
+            if ((frame[3] | (frame[4] << 8)) === 8001) {
+                this.drop();
+                throw new Error("Receipt is unknown");
+            }
+        }
+    }
+    const radio = new Radio();
+    const machine = new Machine(radio, {frameGapMs: 0});
+    await machine.connect("one");
+    radio.emit(status(0x01));
+    const disconnect = jest.spyOn(machine, "disconnect");
+    const {result} = await renderHook(() => useBrew(machine));
+
+    await act(async () => { await result.current.brew(coffee()); });
+
+    expect(radio.sent.filter((code) => code === 8001)).toHaveLength(1);
+    expect(disconnect).not.toHaveBeenCalled();
+    expect(mockConnect).not.toHaveBeenCalled();
+    expect(result.current.error).toBe("Receipt is unknown");
+    expect(machine.phase.name).toBe("lostContact");
+});
+
+it.each([true, false])("does not retry preflight on a replacement link, connected %s", async connected => {
+    jest.useFakeTimers();
+    try {
+        let releaseConnection = () => {};
+        const held = new Promise<void>(resolve => { releaseConnection = resolve; });
+        class Radio extends FakeTransport {
+            async connect(id: string): Promise<void> {
+                if (id === "two" && !connected) await held;
+                await super.connect(id);
+            }
+        }
+        const radio = new Radio();
+        const machine = new Machine(radio, {frameGapMs: 0, infoWaitMs: 100});
+        await machine.connect("one");
+        radio.emit(status(0x01));
+        radio.infoReply = null;
+        const disconnect = jest.spyOn(machine, "disconnect");
+        const brew = jest.spyOn(machine, "brew");
+        const retry = jest.fn();
+        const {result} = await renderHook(() => useBrew(machine));
+        let pending: Promise<void>;
+        await act(async () => {
+            pending = result.current.brew(coffee(), retry);
+            await jest.advanceTimersByTimeAsync(0);
+        });
+        await act(async () => {
+            radio.drop();
+            radio.infoReply = machineInfoFrame();
+            const replacement = machine.connect("two").catch((error: unknown) => error);
+            if (connected) await replacement;
+            radio.written = [];
+            await jest.advanceTimersByTimeAsync(200);
+            await pending;
+            releaseConnection();
+            expect(await replacement).toBeUndefined();
+        });
+        expect(disconnect).not.toHaveBeenCalled();
+        expect(brew).toHaveBeenCalledTimes(1);
+        expect(retry).not.toHaveBeenCalled();
+        expect(mockConnect).not.toHaveBeenCalled();
+        expect(radio.sent).not.toContain(8102);
+        expect(radio.connectedTo).toBe("two");
+        expect(result.current.error).toMatch(/connection changed/i);
+    } finally {
+        jest.useRealTimers();
+    }
+});
+
 async function reserved() {
     class Radio extends FakeTransport {
         get connectedDeviceId() { return this.connectedTo; }

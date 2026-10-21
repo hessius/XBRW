@@ -4,7 +4,13 @@ import {useMachine} from "@/hooks/useMachine";
 import {useSetting} from "@/hooks/useSetting";
 import type Machine from "@/library/machine/Machine";
 import {isActiveBrewPhase, type BrewPhase} from "@/library/machine/Machine";
-import {BluetoothPermissionError, RadioUnavailableError, SlotOperationError} from "@/library/machine/errors";
+import {
+    BluetoothPermissionError,
+    BrewOwnershipError,
+    BrewUploadError,
+    RadioUnavailableError,
+    SlotOperationError
+} from "@/library/machine/errors";
 import {notify} from "@/components/XbrwToast";
 import type {BypassTempEncoding} from "@/library/machine/protocol";
 import type Recipe from "@/library/Recipe";
@@ -104,6 +110,8 @@ export function useBrew(injected?: Machine): Brewer {
         // check outside its own retrying so nobody is asked twice.
         if (e instanceof RadioUnavailableError) return false;
         if (e instanceof SlotOperationError) return false;
+        if (e instanceof BrewUploadError) return false;
+        if (e instanceof BrewOwnershipError) return false;
         if (e instanceof BluetoothPermissionError) return false;
         const phase = machine.phase;
         // Every other failed phase is left alone, including `rejected`. The
