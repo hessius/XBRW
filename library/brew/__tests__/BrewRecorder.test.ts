@@ -696,13 +696,15 @@ describe("BrewRecorder", () => {
         expect(records[0].record.pouringAt).toBe(0);
     });
 
-    it("keeps the reason on a failed brew", () => {
-        const {fake, records} = build();
-        fake.phase({name: "pouring", pour: 1, pours: 2});
-        fake.water(40);
-        fake.phase({name: "failed", reason: "noWater"});
-        expect(records[0].record).toMatchObject({outcome: "failed", failure: "noWater"});
-    });
+    it.each(["noWater", "noBeans", "grindingStopped"] as const)(
+        "keeps %s as the reason on a failed brew", (reason) => {
+            const {fake, records} = build();
+            fake.phase({name: "pouring", pour: 1, pours: 2});
+            fake.water(40);
+            fake.phase({name: "failed", reason});
+            expect(records[0].record).toMatchObject({outcome: "failed", failure: reason});
+        }
+    );
 
     it("keeps a brew the machine stopped part way through", () => {
         // #199: the machine walked back to its loaded state two grams short of

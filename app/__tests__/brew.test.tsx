@@ -649,6 +649,17 @@ describe("brew route", () => {
         expect(mockStart).not.toHaveBeenCalled();
     });
 
+    it.each([
+        ["noBeans", "No beans detected. Fill the hopper and tap TRY AGAIN."],
+        ["grindingStopped", "The machine stopped during grinding. Check there are beans in the hopper, then tap TRY AGAIN."]
+    ] as const)("distinguishes %s without changing its retry action", async (reason, message) => {
+        mockPhase = {name: "failed", reason};
+        const {getByText, getByLabelText} = await renderWithProviders(<Brew />);
+
+        expect(getByText(message)).toBeTruthy();
+        expect(getByLabelText("Try again")).toBeTruthy();
+    });
+
     it("names a busy machine instead of blaming the water tank", async () => {
         mockPhase = {
             name: "failed", reason: "blocked", block: "busy",
@@ -703,7 +714,7 @@ describe("brew route", () => {
         // press costs.
         mockPhase = {name: "failed", reason: "noWater"} as BrewPhase;
         const {queryByLabelText, getByText} = await renderWithProviders(<Brew />);
-        expect(getByText("The machine ran out of water.")).toBeTruthy();
+        expect(getByText("No water detected. Fill the tank before brewing again.")).toBeTruthy();
         expect(queryByLabelText("Try again")).toBeNull();
     });
 

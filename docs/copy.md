@@ -579,8 +579,9 @@ can be kept parallel.
 
 | ID | Source | Context — when the user sees this | Current text |
 |----|--------|-----------------------------------|--------------|
-| `brew.failure.noWater` | `constants/brewCopy.ts:37` (`noWater`) | Brew failed: out of water. | `The machine ran out of water.` |
-| `brew.failure.noBeans` | `constants/brewCopy.ts:38` (`noBeans`) | Brew failed: stopped during grinding. | `The machine stopped during grinding. Check there are beans in the hopper.` |
+| `brew.failure.noWater` | `constants/brewCopy.ts:37` (`noWater`) | Brew failed: out of water. | `No water detected. Fill the tank before brewing again.` |
+| `brew.failure.noBeans` | `constants/brewCopy.ts:38` (`noBeans`) | Brew failed: the machine reported no beans (state 0x0F). | `No beans detected. Fill the hopper and tap TRY AGAIN.` |
+| `brew.failure.grindingStopped` | `constants/brewCopy.ts` (`grindingStopped`) | Brew failed: generic idle event 40517 during grinding; missing beans are inferred, not confirmed. | `The machine stopped during grinding. Check there are beans in the hopper, then tap TRY AGAIN.` |
 | `brew.failure.gearPosition` | `constants/brewCopy.ts:39` (`gearPosition`) | Brew failed: grinder gear position. | `The grinder could not find its gear position.` |
 | `brew.failure.doseMismatch` | `constants/brewCopy.ts:40` (`doseMismatch`) | Brew failed: dose/volume refused. | `The machine would not accept that dose and water volume.` |
 | `brew.failure.idling` | `constants/brewCopy.ts:41` (`idling`) | Brew failed: went idle before starting. | `The machine went idle before the brew started.` |
@@ -624,6 +625,7 @@ The persistent live brew bar (`components/LiveBrewBar.tsx` →
 | `brew.mini.why.fallback` | `components/BrewMiniBar.tsx:62` | "Why" clause fallback. | `the machine stopped` |
 | `brew.miniWhy.noWater` | `constants/brewCopy.ts:119` (`noWater`) | Short "why" for the mini bar. | `no water` |
 | `brew.miniWhy.noBeans` | `constants/brewCopy.ts:120` (`noBeans`) | Short "why". | `no beans` |
+| `brew.miniWhy.grindingStopped` | `constants/brewCopy.ts` (`grindingStopped`) | Short "why" for an inferred grinding failure, not a confirmed empty hopper. | `grinding stopped` |
 | `brew.miniWhy.gearPosition` | `constants/brewCopy.ts:121` (`gearPosition`) | Short "why". | `the grinder jammed` |
 | `brew.miniWhy.doseMismatch` | `constants/brewCopy.ts:122` (`doseMismatch`) | Short "why". | `the dose was refused` |
 | `brew.miniWhy.idling` | `constants/brewCopy.ts:123` (`idling`) | Short "why". | `it went idle` |

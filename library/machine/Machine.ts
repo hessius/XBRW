@@ -80,7 +80,7 @@ export type FrameLogEntry = {
 
 /** Why a brew ended badly. Each has its own copy on the brew route. */
 export type BrewFailure =
-    | "noWater" | "noBeans" | "gearPosition" | "doseMismatch" | "idling" | "rejected"
+    | "noWater" | "noBeans" | "grindingStopped" | "gearPosition" | "doseMismatch" | "idling" | "rejected"
     /**
      * The machine went back to its loaded screen with the brew unfinished.
      *
@@ -1928,11 +1928,10 @@ export default class Machine {
         if (code === EVENT.COFFEE_RESUMED) return;
 
         if (code === EVENT.ERROR_IDLING) {
-            // During grinding the machine is almost certainly flashing +BEANS:
-            // it stops the burr and idles rather than reporting an empty
-            // hopper as its own event. Outside grinding it is what it says.
+            // An idle event during grinding suggests missing beans, but only
+            // state 0x0F confirms that. Keep the observation distinct.
             this.setPhase(this.phase.name === "grinding"
-                ? {name: "failed", reason: "noBeans"}
+                ? {name: "failed", reason: "grindingStopped"}
                 : {name: "failed", reason: "idling"});
             return;
         }
