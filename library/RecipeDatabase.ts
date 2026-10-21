@@ -702,6 +702,15 @@ class RecipeDatabase {
         ) as {author: string; count: number}[];
     }
 
+    /** Whole-table saved coffee membership, independent of import subscriptions. */
+    public countRecipesByRoaster(): {roaster: string; count: number}[] {
+        return this.db.getAllSync(
+            `SELECT MIN(roaster) AS roaster, COUNT(*) AS count FROM recipes
+             WHERE roasterKey IS NOT NULL
+             GROUP BY roasterKey ORDER BY count DESC, roasterKey ASC;`
+        ) as {roaster: string; count: number}[];
+    }
+
     /**
      * A few members of each shelf, for the art on its tile.
      *

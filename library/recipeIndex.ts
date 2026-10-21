@@ -1,6 +1,7 @@
 import {plannedSeconds} from "./brew/brewShape";
 import Recipe from "./Recipe";
 import {tagKey} from "./tagKey";
+import {roasterKey} from "./roasterIdentity";
 
 /**
  * The recipe index: every column derived from a recipe's JSON blob.
@@ -44,7 +45,7 @@ export type IndexColumn = {
  * `from` body leaves it identical. Changing a projection therefore fails on
  * the golden values, which is the prompt to bump this number.
  */
-export const INDEX_REVISION = 5;
+export const INDEX_REVISION = 6;
 
 /**
  * The Nordic letters that survive folding unchanged, because they are genuinely
@@ -215,6 +216,14 @@ export const INDEX_COLUMNS: IndexColumn[] = [
         // the way the sharer spelled it.
         name: "sharedByKey", type: "TEXT", indexed: true,
         from: (r) => (r.sharedBy ? tagKey(r.sharedBy) : null)
+    },
+    {
+        name: "roaster", type: "TEXT",
+        from: (r) => r.coffee?.roaster?.trim() || null
+    },
+    {
+        name: "roasterKey", type: "TEXT", indexed: true,
+        from: (r) => r.coffee?.roaster ? roasterKey(r.coffee.roaster) || null : null
     },
     {name: "favourite", type: "INTEGER", indexed: true, from: (r) => (r.favourite ? 1 : 0)},
     // Both the flag and the text, deliberately, because they answer different

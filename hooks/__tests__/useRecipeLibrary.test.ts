@@ -39,7 +39,8 @@ function stubDb(recipes: Recipe[]) {
             ReturnType<NonNullable<RecipeStore["shelfMembers"]>>,
             Parameters<NonNullable<RecipeStore["shelfMembers"]>>
         >(() => ({})),
-        countRecipesByAuthor: jest.fn((): {author: string; count: number}[] => [])
+        countRecipesByAuthor: jest.fn((): {author: string; count: number}[] => []),
+        countRecipesByRoaster: jest.fn((): {roaster: string; count: number}[] => [])
     };
 }
 
@@ -48,6 +49,23 @@ function named(name: string): Recipe {
     r.name = name;
     return r;
 }
+
+describe("saved roaster reads", () => {
+    it("returns whole-table counts and asks the shared resolver for fallback art only", async () => {
+        const db = stubDb([named("Visible unrelated coffee")]);
+        db.countRecipesByRoaster.mockReturnValue([{roaster: "CAFÉ", count: 3}, {roaster: "Small", count: 2}]);
+        const {result} = await renderHook(() => useRecipeLibrary(db));
+        expect(result.current.roasterCounts).toEqual([{roaster: "CAFÉ", count: 3}, {roaster: "Small", count: 2}]);
+        expect(db.shelfMembers).toHaveBeenCalledWith(
+            expect.arrayContaining(["roaster:CAFÉ"]), resolveLibraryFilter, MARK_MEMBERS
+        );
+        expect(db.shelfMembers.mock.calls.flatMap(call => call[0])).not.toContain("roaster:Small");
+    });
+    it("does not silently report no roasters when its store cannot count them", async () => {
+        const {countRecipesByRoaster: _omitted, ...without} = stubDb([]);
+        await expect(renderHook(() => useRecipeLibrary(without))).rejects.toThrow("cannot count roasters");
+    });
+});
 
 function plainRecipe(): Recipe {
     return named("Ethiopia");
@@ -267,6 +285,7 @@ describe("useRecipeLibrary", () => {
                 Object.fromEntries(ids.map((id) => [id, 0]))
             ),
             countRecipesByTag:  jest.fn((): {tag: string; count: number}[] => []),
+            countRecipesByRoaster: jest.fn((): {roaster: string; count: number}[] => []),
             deleteRecipe:       jest.fn(),
             cloneRecipe:        jest.fn(),
             updateRecipe:       jest.fn(() => {
@@ -454,6 +473,7 @@ describe("the store it reads through", () => {
         // settings sheet and for NFC progress.
         const RecipeDatabase = jest.requireMock("@/library/RecipeDatabase").default;
         RecipeDatabase.mockClear();
+        RecipeDatabase.prototype.countRecipesByRoaster.mockReturnValue([]);
 
         const {rerender} = await renderHook(() => useRecipeLibrary());
         await rerender(undefined);

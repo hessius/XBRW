@@ -3,6 +3,38 @@ import {STOCK_FILTERS} from "@/library/libraryFilters";
 
 const NO_TAGS: {tag: string; count: number}[] = [];
 
+describe("saved roaster shelves", () => {
+    const shelves = (count: number, applied: string[] = [], roaster = "Acme") => buildShelves({
+        filterCounts: {}, tagCounts: [], roasterCounts: [{roaster, count}],
+        librarySize: 10, applied
+    });
+    it("uses the shared floor and ceiling including an all-library brand", () => {
+        expect(shelves(2)).toEqual([]);
+        expect(shelves(3)).toEqual([{id: "roaster:Acme", label: "Acme", kind: "auto", count: 3}]);
+        expect(shelves(8)).toHaveLength(1);
+        expect(shelves(9)).toEqual([]);
+        expect(shelves(10)).toEqual([]);
+    });
+    it("keeps an applied shelf across boundaries and display representative changes", () => {
+        expect(shelves(2, ["roaster:cafe\u0301"], "CAFÉ")).toHaveLength(1);
+        expect(shelves(9, ["roaster:Acme"])).toHaveLength(1);
+    });
+    it("leaves author shelves separate and the escape last", () => {
+        expect(buildShelves({
+            filterCounts: {allRecipes: 10, tea: 3}, tagCounts: [],
+            authorCounts: [{author: "Acme", count: 3}],
+            roasterCounts: [{roaster: "Acme", count: 3}], librarySize: 10
+        }).map(s => s.id)).toEqual(["tea", "sharedBy:Acme", "roaster:Acme", "allRecipes"]);
+    });
+    it("does not invent unknown or blank roaster shelves", () => {
+        expect(buildShelves({
+            filterCounts: {}, tagCounts: [],
+            roasterCounts: [{roaster: "  ", count: 3}], librarySize: 10
+        })).toEqual([]);
+        expect(buildShelves({filterCounts: {}, tagCounts: [], librarySize: 10})).toEqual([]);
+    });
+});
+
 describe("building the shelves", () => {
     it("puts the shelves a person made before the ones the app invented", () => {
         const shelves = buildShelves({

@@ -2,6 +2,14 @@ import {
     canonicalShelfId, isHidden, parseHidden, serialiseHidden, toggleHidden
 } from "@/library/hiddenShelves";
 
+it("keeps roaster shelves hidden across case and canonical representative changes", () => {
+    const stored = serialiseHidden(["roaster: CAFÉ ", "future:Unknown"]);
+    expect(canonicalShelfId("roaster:cafe\u0301")).toBe("roaster:café");
+    expect(isHidden(stored, "roaster:cafe\u0301")).toBe(true);
+    expect(isHidden(stored, "sharedBy:CAFÉ")).toBe(false);
+    expect(parseHidden(stored)).toEqual(["roaster:café", "future:Unknown"]);
+});
+
 describe("parseHidden", () => {
     it("reads nothing out of an empty setting", () => {
         // The default. A library that has never hidden anything must not get a

@@ -29,6 +29,38 @@ function named(name: string): Recipe {
 }
 
 describe("useRecipeLibrary against a real database", () => {
+    it("reads whole-table roaster counts and fallback art on the mutation revision, never from the visible query", async () => {
+        const db = new RecipeDatabase();
+        for (let n = 0; n < 3; n++) {
+            const recipe = named(`Roaster ${n}`);
+            recipe.coffee = {name: "Beans", roaster: "Acme"};
+            db.insertRecipe(recipe);
+        }
+        db.insertRecipe(named("Visible outsider"));
+        const allRecipes = jest.spyOn(db, "retrieveAllRecipes");
+        const photos = jest.spyOn(db, "shelfPhotoMembers");
+        const query: LibraryQuery = {
+            search: "Visible", filters: [], sort: "name", direction: "asc", favouritesFirst: false
+        };
+        const {result} = await renderHook(() => useRecipeLibrary(db, query));
+        expect(result.current.recipes).toHaveLength(1);
+        expect(result.current.roasterCounts).toEqual([{roaster: "Acme", count: 3}]);
+        expect(result.current.shelfMarks["roaster:Acme"].accents).toHaveLength(3);
+        expect(result.current.shelfMarks["roaster:Acme"].coverMembers).toBeUndefined();
+        expect(photos.mock.calls.flatMap(call => call[0])).not.toContain("roaster:Acme");
+        const extra = named("Extra");
+        extra.coffee = {name: "Beans", roaster: "Acme"};
+        db.insertRecipe(extra);
+        await act(async () => result.current.refresh());
+        expect(result.current.roasterCounts).toEqual([{roaster: "Acme", count: 4}]);
+        expect(allRecipes).not.toHaveBeenCalled();
+        await act(async () => result.current.duplicateRecipe(extra));
+        expect(result.current.roasterCounts).toEqual([{roaster: "Acme", count: 5}]);
+        await act(async () => result.current.deleteRecipe(extra));
+        expect(result.current.roasterCounts).toEqual([{roaster: "Acme", count: 4}]);
+        expect(result.current.recipes).toHaveLength(1);
+    });
+
     it("keeps stock photo covers independent of visible search/sort and refreshes them with the revision", async () => {
         const db = new RecipeDatabase();
         for (let n = 0; n < 8; n++) {

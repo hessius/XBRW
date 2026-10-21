@@ -390,7 +390,7 @@ not a claimed remote backup.
 `libraryFilters.ts`, `hiddenShelves.ts`, `shelves.ts`,
 `hooks/useRecipeLibrary.ts`, home shelf wiring and SQL tests.
 
-- [ ] **Step 1: Write failing key, resolver and real-SQLite tests.**
+- [x] **Step 1: Write failing key, resolver and real-SQLite tests.**
 
 ```ts
 expect(roasterKey(" CAFÉ ")).toBe(roasterKey("cafe\u0301"));
@@ -404,7 +404,7 @@ RecipeDatabase using existing SQL-suite conventions, insert recipes with
 `coffee.roaster`, and assert grouped counts, filtered UUIDs and shelf members.
 Test schema rebuild from existing JSON and bound hostile names.
 
-- [ ] **Step 2: Implement the canonical key and index columns.**
+- [x] **Step 2: Implement the canonical key and index columns.**
 
 ```ts
 export function roasterKey(name: string): string {
@@ -424,24 +424,79 @@ GROUP BY roasterKey ORDER BY count DESC, roasterKey ASC;
 
 Expose `countRecipesByRoaster(): {roaster: string; count: number}[]`.
 
-- [ ] **Step 3: Wire the namespace through every saved-library surface.**
+- [x] **Step 3: Wire the namespace through saved-library domain surfaces.**
 
 Add `roasterFilterId`/`roasterFromFilterId`, a bound `roasterKey = ?` resolver,
 `asLibraryFilters`, `filterLabel` and canonical hidden-shelf identities.
 Extend `buildShelves` with `roasterCounts` and route them through
 `availableFilters`; keep the usual applied-filter exemption. Extend the
 library store/hook to read counts on the same revision and include roaster IDs
-in shelf mark reads. Pass whole-library counts into home shelf construction
-and rail counts, not the current visible result length.
+in shelf mark reads.
 
-- [ ] **Step 4: Cover boundaries, hiding, copy and backup.**
+- [ ] **Controller Task 6: Pass whole-library counts into home shelf construction.**
+
+`app/index.tsx` remains controller-owned during Task 3 review. Add
+`roasterCounts: library.roasterCounts,` to its existing `buildShelves` input,
+beside `authorCounts`. Applied non-stock chips already use the shared resolver
+and label; do not add unsaved roaster rows or a home discovery strip.
+
+- [x] **Step 4: Cover boundaries, hiding, copy and backup.**
 
 Assert 2/3 members, exactly 80%/over 80%, active shelf passthrough, Unicode
 case changes, blank metadata, unsubscribe independence and existing recipe
 hydration. Exercise opened list, counts and member queries with the same ID.
 Round-trip recipe metadata through copy and backup/restore.
 
-- [ ] **Step 5: Run the identity/index/filter/shelf/query/hook suites and commit.**
+- [x] **Step 5: Run the identity/index/filter/shelf/query/hook suites and commit.**
+
+### Task 4 implementation record
+
+- Owned worktree: `/Users/jesperhessius/Dev/XBRW-220-roaster-import-20261021`;
+  branch `feat/2.2.0-roaster-import-20261021`.
+- Accepted base: `4aa7c02d226c1900efb453ab63529172c1801ea7`;
+  implementation parent: `5372223eadce34056966fab68742f70bfd04e101`.
+- TDD red: identity/index/filter/hiding/shelf selection failed on both platforms
+  (10 suites; 20 failed assertions, 312 passing; missing identity module).
+  The subsequent real-SQL/hook red run failed 6 suites with 16 failed assertions,
+  126 passing (missing count method/namespace and hook output).
+- Final focused green: 13 selected files, both Jest platforms, `--runInBand`:
+  **26 suites / 736 tests passed**. Files cover identity, index descriptors,
+  filters, hidden shelves, shelves, query, RecipeDatabase core/index/migration/
+  unreadable/roaster SQL and both library hook suites.
+- `npm run typecheck`, changed-file ESLint, repository `npm run lint` and
+  `git diff --check` passed. Repository lint retains 32 warnings outside the
+  owned changes, with zero errors. No full-suite or native build was run.
+- Index revision is 6, hash `ac06759b`. Old blob-only and stale indexed databases
+  backfill roaster identity without rewriting recipe JSON. Real SQL tests pin
+  count/query/member agreement, bound hostile names, all saved source variants,
+  missing metadata, canonical Unicode, copy and backup restore; raw card restore
+  bytes remain unchanged.
+- Roaster reads use whole-table SQL and the library revision. Missing store
+  support throws rather than silently reporting empty membership. Fallback art
+  uses the shared resolver and existing member policy; stock photo lookup and
+  roaster artwork remain untouched for Task 5.
+- File manifest:
+  `library/roasterIdentity.ts`,
+  `library/recipeIndex.ts`,
+  `library/RecipeDatabase.ts`,
+  `library/libraryFilters.ts`,
+  `library/hiddenShelves.ts`,
+  `library/shelves.ts`,
+  `hooks/useRecipeLibrary.ts`,
+  `library/__tests__/roasterIdentity.test.ts`,
+  `library/__tests__/recipeIndex.test.ts`,
+  `library/__tests__/RecipeDatabase.roaster.test.ts`,
+  `library/__tests__/libraryFilters.test.ts`,
+  `library/__tests__/hiddenShelves.test.ts`,
+  `library/__tests__/shelves.test.ts`,
+  `hooks/__tests__/useRecipeLibrary.test.ts`,
+  `hooks/__tests__/useRecipeLibrary.realDb.test.ts`,
+  and this plan's Task 4 section only.
+- Preservation: coherent local commit containing this record, retained under the
+  controller's ownership for Tasks 5–6 and eventual authorized publication.
+  No push, PR, review request, merge, deployment or cleanup performed.
+  Home integration is intentionally pending above. No physical-device, native,
+  NFC or BLE qualification is claimed.
 
 ## Task 5: Add mixed-photo roaster marks and initial fallback
 

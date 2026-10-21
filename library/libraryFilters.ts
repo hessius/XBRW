@@ -3,6 +3,7 @@ import {beanFilterLabel, parseBeanFilterId, resolveBeanFilter} from "./beanFilte
 import {COUNTED_SQL} from "./brew/brewPopulation";
 import {CUP_TYPE} from "./Recipe";
 import {tagKey} from "./tagKey";
+import {roasterKey} from "./roasterIdentity";
 
 /**
  * The stock filter vocabulary: the auto shelves the rail's chips are drawn
@@ -519,9 +520,22 @@ export function authorFromFilterId(id: string): string | null {
     return author.length > 0 ? author : null;
 }
 
+export const ROASTER_FILTER_PREFIX = "roaster:";
+
+/** A saved coffee's declared roaster, not the account that shared its recipe. */
+export function roasterFilterId(roaster: string): string {
+    return `${ROASTER_FILTER_PREFIX}${roaster.trim()}`;
+}
+
+export function roasterFromFilterId(id: string): string | null {
+    if (!id.startsWith(ROASTER_FILTER_PREFIX)) return null;
+    const roaster = id.slice(ROASTER_FILTER_PREFIX.length).trim();
+    return roaster.length > 0 ? roaster : null;
+}
+
 /**
  * The resolver for every filter the library can apply: a stock id, a tag, an
- * author or the brew-derived bean namespace.
+ * author, saved roaster or the brew-derived bean namespace.
  *
  * A tag becomes an EXISTS over `recipe_tags` matched on `tagKey`, the folded
  * form, so the shelf holds the same recipes the tag search finds and two
@@ -538,6 +552,10 @@ export function resolveLibraryFilter(id: string): FilterClause | null {
     if (bean !== null) return bean;
     if (parseBeanFilterId(id) !== null) return null;
 
+    const roaster = roasterFromFilterId(id);
+    if (roaster !== null) {
+        return {where: "roasterKey = ?", params: [roasterKey(roaster)]};
+    }
     const author = authorFromFilterId(id);
     if (author !== null) {
         // Matched on the folded column rather than on `sharedBy COLLATE
@@ -576,7 +594,7 @@ export function resolveLibraryFilter(id: string): FilterClause | null {
  * The type is checked before the shape all the same, because the cost is a line
  * and the alternative is `startsWith` on a non-string taking the library down.
  *
- * A tag or author id survives on shape alone rather than on still naming
+ * A tag, author or roaster id survives on shape alone rather than on still naming
  * something in the library. A tag whose last recipe was deleted, or an author
  * whose only recipe was, resolves to a clause matching nothing: an empty shelf
  * the user can see and close, not a crash and not a chip that vanishes without
@@ -595,6 +613,7 @@ export function asLibraryFilters(value: unknown): string[] {
         && (isStockFilter(id)
             || resolveBeanFilter(id) !== null
             || tagFromFilterId(id) !== null
+            || roasterFromFilterId(id) !== null
             || authorFromFilterId(id) !== null));
 }
 
@@ -609,6 +628,8 @@ export function asLibraryFilters(value: unknown): string[] {
 export function filterLabel(id: string): string {
     const bean = beanFilterLabel(id);
     if (bean !== null) return bean;
+    const roaster = roasterFromFilterId(id);
+    if (roaster !== null) return roaster;
     const author = authorFromFilterId(id);
     // "FROM" is the app's word and the name is the sharer's, so only the first
     // half is raised to Doto caps. The design's shelf table spells it this way.
