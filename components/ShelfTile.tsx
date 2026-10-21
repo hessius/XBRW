@@ -5,10 +5,12 @@ import {Text, XStack, YStack} from "tamagui";
 import DotIcon from "@/components/DotIcon";
 import DotMatrixText from "@/components/DotMatrixText";
 import ShelfMark from "@/components/ShelfMark";
+import ShelfPhotoMark from "@/components/ShelfPhotoMark";
 import {onAccent, palette} from "@/constants/colors";
 import {shelfGlyph} from "@/constants/shelfGlyphs";
 import type {ShelfMarkMembers} from "@/hooks/useRecipeLibrary";
 import type {Shelf} from "@/library/shelves";
+import {COVER_MEMBERS, hasStockPhotoCover, stockPhotoCover} from "@/library/shelfCover";
 
 /**
  * The tile's height: the mark's 44 pt square, two lines of type, and padding.
@@ -97,6 +99,12 @@ export default function ShelfTile({
     // out here, so the two have to read it from the same place or the tile and
     // its square would disagree about which colour this shelf is.
     const field = members?.accents?.[0] ?? palette.surface;
+    const mark = <ShelfMark kind={shelf.kind} glyph={shelfGlyph(shelf.id)}
+                            accents={members?.accents} inverted={inverted}/>;
+    const cover = shelf.kind === "auto"
+        ? (hasStockPhotoCover(shelf.id) && shelf.count >= COVER_MEMBERS
+            ? stockPhotoCover(members?.coverMembers ?? []) : [])
+        : members?.coverMembers ?? [];
     const actions = [
         ...(onActions !== undefined
             ? [{name: "edit", label: `Actions for the ${shelf.label} shelf`}]
@@ -136,10 +144,8 @@ export default function ShelfTile({
                     borderWidth={manual || inverted ? 0 : 1}
                     borderColor={palette.line}>
                 <XStack alignItems="flex-start" justifyContent="space-between">
-                    <ShelfMark kind={shelf.kind}
-                               glyph={shelfGlyph(shelf.id)}
-                               accents={members?.accents}
-                               inverted={inverted}/>
+                    <ShelfPhotoMark members={cover}
+                        count={shelf.count} fallback={mark} automatic={shelf.kind === "auto"}/>
                     {onActions && (
                         <Pressable accessibilityRole="button"
                                    accessibilityLabel={`Actions for the ${shelf.label} shelf`}

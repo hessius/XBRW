@@ -40,3 +40,25 @@ result does not qualify this integration or a different built commit.
 reconnect, B-selected capture and fresh state/ack evidence. No conditional-cancel
 mitigation is implemented or accepted. Confirm whether cancellation actually
 clears the recipe buffer before choosing one.
+
+## Package B: grouped native layout and accessibility
+
+- [ ] Android: duplicate a recipe, open and close every affected sheet, and
+  confirm the Fabric host crash is absent on a rebuilt client.
+- [ ] Rename a borrowed multiline name untouched, edit it while details arrive,
+  and check that saving follows the visible name.
+- [ ] Check magenta ON and outlined OFF switches on dark and accent surfaces;
+  confirm disabled states and screen-reader labels.
+- [ ] Check missing/blank machine model display without claiming detection.
+- [ ] Enable card photos: list circles stay bottom-right beside brew evidence;
+  graph size, long-name width and uniform card tint do not change.
+- [ ] At narrow widths and large text, compact photos yield to metadata,
+  actions remain reachable, and profiles never overlap the name or figures.
+- [ ] Four pictured recipes sharing one pod URL fill each eligible auto cover.
+  Below four usable pictures, including failed loads, the glyph returns.
+  Personal/tag shelves retain mixed member accents and photos.
+- [ ] Fresh install defaults card photos OFF and shelf previews ON. Restore
+  legacy OFF and explicit new preferences; confirm ABOUT is independent.
+- [ ] Editor headers remain photo-free with either ABOUT preference.
+- [ ] Measure cold/warm photo-heavy shelf opening under #253. Earlier mounting
+  is not evidence of cache hits or a guaranteed native performance improvement.

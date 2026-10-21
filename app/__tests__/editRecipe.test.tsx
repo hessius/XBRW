@@ -223,6 +223,14 @@ async function renderEditor(overrides: Partial<Recipe> = {}) {
     return view;
 }
 
+it.each([false, true])("keeps the editor header photo-free with ABOUT preference %s", async show => {
+    mockSettings = {showRecipeAvatars: show, showRecipeCardPhotos: true, showShelfPhotoPreviews: true};
+    await renderEditor({imageURL: "https://coffee.example/bag.jpg"});
+    expect(screen.queryByTestId("hero-photo", {includeHiddenElements: true})).toBeNull();
+    expect(screen.queryByTestId("photo-viewer")).toBeNull();
+    expect(screen.queryByRole("imagebutton", {name: "Coffee photo"})).toBeNull();
+});
+
 /**
  * Open the ABOUT deck, where a recipe's identity lives.
  *
@@ -659,6 +667,23 @@ describe("the editor", () => {
         expect(content().props.accessibilityElementsHidden).toBe(false);
         expect(deck().props.accessibilityElementsHidden).toBe(true);
         expect(deck().props.importantForAccessibility).toBe("no-hide-descendants");
+    });
+
+    it("keeps the deck in the same native parent while a sheet opens and closes", async () => {
+        await renderEditor();
+        const content = () => screen.getByTestId("editor-content", {includeHiddenElements: true});
+        const deck = () => screen.getByTestId("editor-deck", {includeHiddenElements: true});
+
+        // Hiding toggles a stacking context under Fabric. Without a fixed one,
+        // closing the more menu lifted the deck out of `editor-content` into
+        // the screen's host, which crashed Android on Duplicate.
+        expect(content().props.collapsable).toBe(false);
+        expect(deck().props.collapsable).toBe(false);
+
+        await fireEvent.press(screen.getByLabelText("More"));
+        expect(content().props.accessibilityElementsHidden).toBe(true);
+        expect(content().props.collapsable).toBe(false);
+        expect(deck().props.collapsable).toBe(false);
     });
 
     it("disables the quick edit brew action when the adjusted recipe is refused", async () => {
@@ -1106,13 +1131,65 @@ describe("renaming from the header", () => {
         jest.useRealTimers();
     });
 
-    it("seeds the field with the recipe's own name, not a borrowed one", async () => {
-        // A recipe following its pod has an empty `name` and a title it borrowed
-        // from `xbloomName`. Seeding with the borrowed one would turn the next
-        // save into a rename nobody asked for, freezing a string the pod can
-        // still change.
+    it("opens a recipe following its pod on the pod name, so there is something to edit", async () => {
+        // An empty field here meant retyping the whole name to change one word.
         jest.useFakeTimers();
         await renderEditor({name: "", xbloomName: "Kenya Nyeri"});
+
+        await openRename();
+
+        expect(screen.getByTestId("rename-field").props.value).toBe("Kenya Nyeri");
+        jest.useRealTimers();
+    });
+
+    it("keeps following the pod when the pod name is saved unchanged", async () => {
+        // Saving what the sheet offered is not a rename. Freezing a copy would
+        // stop a later change to the pod name reaching the recipe.
+        jest.useFakeTimers();
+        await renderEditor({name: "", xid: "CGL12", xbloomName: "Kenya Nyeri"});
+        await openRename();
+
+        await fireEvent.press(screen.getByTestId("rename-confirm"));
+        await act(async () => { jest.advanceTimersByTime(500); });
+        await openAbout();
+
+        expect(screen.getByTestId("pod-following")).toBeTruthy();
+        expect(screen.queryByTestId("pod-use-name")).toBeNull();
+        jest.useRealTimers();
+    });
+
+    it("gives the recipe its own name when the pod name is edited", async () => {
+        jest.useFakeTimers();
+        await renderEditor({name: "", xid: "CGL12", xbloomName: "Kenya Nyeri"});
+        await openRename();
+
+        await fireEvent.changeText(screen.getByTestId("rename-field"), "Kenya Nyeri light");
+        await fireEvent.press(screen.getByTestId("rename-confirm"));
+        await act(async () => { jest.advanceTimersByTime(500); });
+        await openAbout();
+
+        expect(screen.getAllByText("Kenya Nyeri light").length).toBeGreaterThan(0);
+        expect(screen.getByTestId("pod-use-name")).toBeTruthy();
+        jest.useRealTimers();
+    });
+
+    it("opens empty for a recipe with no name from anywhere", async () => {
+        // The header shows a generated placeholder, which is not a name anybody
+        // chose and must not become one by being saved.
+        jest.useFakeTimers();
+        await renderEditor({name: "", xid: "", xbloomName: ""});
+
+        await openRename();
+
+        expect(screen.getByTestId("rename-field").props.value).toBe("");
+        jest.useRealTimers();
+    });
+
+    it("opens empty for a recipe titled only by its Recipe ID", async () => {
+        // Only the pod name is offered. An ID is not a pod name, so the sheet's
+        // advice about following one would not fit a field that held it.
+        jest.useFakeTimers();
+        await renderEditor({name: "", xid: "CGL12", xbloomName: ""});
 
         await openRename();
 

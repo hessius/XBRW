@@ -1,11 +1,12 @@
 import React from "react";
-import {Pressable, View} from "react-native";
+import {Pressable, ScrollView, View, useWindowDimensions} from "react-native";
 import {Text, XStack, YStack} from "tamagui";
 
 import DotIcon from "@/components/DotIcon";
 import DotMatrixText from "@/components/DotMatrixText";
 import PourProfile, {PROFILE_BLEED} from "@/components/PourProfile";
-import SlotMarker from "@/components/SlotMarker";
+import RecipePhoto from "@/components/RecipePhoto";
+import {metadataPhotoFits, TILE_PHOTO_SIZE, PHOTO_GAP} from "@/library/recipePictureLayout";
 import {TILE_HEIGHT} from "@/components/ShelfTile";
 import Recipe from "@/library/Recipe";
 import {accentGroupFor, resolveAccent} from "@/library/accent";
@@ -25,7 +26,42 @@ import {onAccent} from "@/constants/colors";
  * two views that only happen to agree today.
  */
 const PROFILE_OVERHANG = 2;
-const PROFILE_HEIGHT = 44;
+
+/**
+ * The tile's inset, as a number: Tamagui's `$3`, which it used to be written as.
+ * The profile's corner reaches back out through it to the tile's edges, and a
+ * negative margin needs the number.
+ */
+const TILE_PADDING = 13;
+
+/**
+ * The silhouette's tallest height, and the room it keeps from the text above.
+ *
+ * The profile sits in the corner the text leaves free, the way it sits beside
+ * the card's figures rather than under them: badges, a two-line name and the
+ * figures fill the top of the tile, and the profile takes what is left down to
+ * the bottom edge. 26 is about what a two-line name leaves at the default text
+ * size (badges 15, name 2 x 18, figures 15, gaps and clearance), so tiles in a
+ * row draw their silhouettes at the same height whether a name takes one line
+ * or two. Larger text
+ * leaves less, and the profile shrinks to fit rather than run under the
+ * figures; below `PROFILE_MIN_HEIGHT` a staircase is no longer readable as one,
+ * so it is not drawn at all.
+ */
+export const PROFILE_HEIGHT = 26;
+export const PROFILE_CLEARANCE = 4;
+export const PROFILE_MIN_HEIGHT = 12;
+
+/**
+ * How tall the profile can be in a corner `room` points tall.
+ *
+ * `room` is measured, not estimated: it is what the badges, the name and the
+ * figures actually left at this text size. Zero means do not draw.
+ */
+export function tileProfileHeight(room: number): number {
+    const height = Math.min(PROFILE_HEIGHT, Math.floor(room - PROFILE_CLEARANCE));
+    return height >= PROFILE_MIN_HEIGHT ? height : 0;
+}
 
 /**
  * The card's three figures, as one line for a tile that has no room for three.
@@ -49,6 +85,48 @@ function figuresLine(recipe: Recipe, isTea: boolean): string | null {
     return parts.length > 0 ? parts.join(" · ") : null;
 }
 
+export {TILE_PHOTO_SIZE} from "@/library/recipePictureLayout";
+
+type MetadataProps = {
+    evidence: string | null;
+    slot?: string;
+    marker?: string;
+    favourite: boolean;
+    editing: boolean;
+    uuid: string;
+    measuring?: boolean;
+    onActions?: () => void;
+};
+
+function RecipeTileMetadata({
+    evidence, slot, marker, favourite, editing, uuid, measuring = false, onActions
+}: MetadataProps) {
+    const id = (name: string) => measuring ? undefined : `recipe-tile-${name}`;
+    return (
+        <XStack testID={measuring ? "recipe-tile-metadata-intrinsic" : id("badges")} alignItems="center" gap={PHOTO_GAP}
+                flexWrap={measuring ? "nowrap" : "wrap"} justifyContent="flex-end" rowGap={2}>
+            {evidence !== null && <DotMatrixText testID={id("evidence")} fontSize={10}
+                weight="bold" letterSpacing={1.1} numberOfLines={1}
+                style={{flexShrink: measuring ? 0 : 1}} color={onAccent.label}>{evidence}</DotMatrixText>}
+            <XStack width={0} flexGrow={measuring ? 0 : 1}/>
+            {editing && (measuring
+                ? <View style={{width: 12, height: 12}}/>
+                : <Pressable testID={`recipe-tile-actions-${uuid}`} accessibilityElementsHidden
+                    importantForAccessibility="no-hide-descendants" hitSlop={8} onPress={onActions}>
+                    <DotIcon testID="recipe-tile-actions" name="overflow" size={12} color={onAccent.marker}/>
+                </Pressable>)}
+            {slot && <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+                <DotMatrixText testID={measuring ? undefined : "slot-marker"} color={onAccent.marker}
+                    fontSize={11} weight="extrabold" letterSpacing={1} numberOfLines={1}>{slot}</DotMatrixText>
+            </View>}
+            {favourite && (measuring ? <View style={{width: 12, height: 12}}/>
+                : <DotIcon testID={id("favourite")} name="favourite" size={12} color={onAccent.marker}/>)}
+            {marker && <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.4}
+                color={onAccent.marker}>{marker}</DotMatrixText>}
+        </XStack>
+    );
+}
+
 type Props = {
     recipe: Recipe;
     /** Open the recipe in the editor, the tile's plain tap. */
@@ -67,6 +145,8 @@ type Props = {
     showCoffeeMarker?: boolean;
     /** Fill the pour profile with a dot screen. Owned by the settings screen. */
     dottedProfile?: boolean;
+    /** Optional coffee photo, admitted only when the metadata row has room. */
+    showPicture?: boolean;
     /**
      * How this recipe has gone: rating, brew count, how lately.
      *
@@ -124,22 +204,47 @@ type Props = {
  *
  * The name is prose and stays in Inter, matching the list card and the manual
  * shelf's own label; the marker is machine vocabulary and is Doto.
+ *
+ * Top to bottom: badges, the name on up to two lines, the figures, and the pour
+ * profile in the bottom corner. A picture may lead the metadata row, never the
+ * name. The text is laid out first and the profile gets
+ * what it leaves, so the silhouette can never be drawn across the name or the
+ * figures. That is the card's arrangement too: its profile shares the bottom
+ * edge with the figures but sits beside them, not under them.
  */
 export default function RecipeShelfTile({
     recipe, onPress, onLongPress, showCoffeeMarker = true, dottedProfile = false,
     evidence, onBrew, onShare, onWrite, onDuplicate, onDelete, onToggleFavourite,
-    onHistory, editing = false, slotMarker, onEasyMode
+    onHistory, editing = false, slotMarker, onEasyMode, showPicture = false
 }: Props) {
     const accent = resolveAccent(recipe);
+    const picture = showPicture ? recipe.imageURL ?? "" : "";
     const isTea = accentGroupFor(recipe) === "tea";
     const marker = isTea ? "TEA" : "COFFEE";
     const showMarker = isTea || showCoffeeMarker;
+    const [profileRoom, setProfileRoom] = React.useState(0);
+    const profileHeight = tileProfileHeight(profileRoom);
 
     // The whole tile is one accessibility element, so nothing inside is spoken
     // on its own: everything it shows has to be in this label or it reaches a
     // screen reader as the accent colour alone.
     const figures = figuresLine(recipe, isTea);
     const shownEvidence = evidenceLine(evidence);
+    const {width, fontScale} = useWindowDimensions();
+    const metadata = {
+        evidence: shownEvidence,
+        slot: slotMarker?.slots.join(" "), marker: showMarker ? marker : undefined,
+        favourite: recipe.favourite, editing, uuid: recipe.uuid
+    };
+    const signature = JSON.stringify([metadata, recipe.displayName(), figures, width, fontScale, picture]);
+    const [available, setAvailable] = React.useState<{key: string; value: number}>();
+    const [intrinsic, setIntrinsic] = React.useState<{key: string; value: number}>();
+    const [failed, setFailed] = React.useState<string>();
+    const requested = picture.length > 0 && failed !== picture;
+    const availableWidth = available?.key === signature ? available.value : undefined;
+    const naturalKey = JSON.stringify([signature, availableWidth]);
+    const showPhoto = requested && metadataPhotoFits(availableWidth,
+        intrinsic?.key === naturalKey ? intrinsic.value : undefined);
     const summary = [
         recipe.displayName(),
         marker.toLowerCase(),
@@ -220,91 +325,63 @@ export default function RecipeShelfTile({
                 transform: [{scale: pressed ? 0.99 : 1}]
             })}>
             <YStack testID="recipe-tile" height={TILE_HEIGHT}
-                    justifyContent="space-between" overflow="hidden"
-                    padding="$3" borderRadius="$4"
+                    gap="$1.5" overflow="hidden"
+                    padding={TILE_PADDING} borderRadius="$4"
                     style={{backgroundColor: accent}}>
-                <View pointerEvents="none"
-                      style={{
-                          position: "absolute",
-                          right:    -(PROFILE_BLEED + PROFILE_OVERHANG),
-                          bottom:   -(PROFILE_BLEED + PROFILE_OVERHANG)
-                      }}>
-                    <PourProfile testID="recipe-tile-profile" pours={recipe.pours}
-                                 width={140} height={PROFILE_HEIGHT} dotted={dottedProfile}/>
-                </View>
 
-                <XStack testID="recipe-tile-badges" alignItems="center" gap="$1.5">
-                    {/* How it has gone leads the row, the way it takes the
-                        leading end of the card's own figures row. */}
-                    {shownEvidence !== null && (
-                        <DotMatrixText testID="recipe-tile-evidence" fontSize={10}
-                                       weight="bold" letterSpacing={1.1}
-                                       numberOfLines={1}
-                                       color={onAccent.label}>
-                            {shownEvidence}
-                        </DotMatrixText>
-                    )}
-                    <XStack flex={1}/>
-                    {editing && (
-                        // Opens the sheet the long press opens, so edit mode
-                        // adds a way in rather than a second list of acts that
-                        // could drift from the first.
-                        //
-                        // Hidden from the screen reader, and deliberately. The
-                        // tile is one accessibility element and already carries
-                        // every one of these acts as an `accessibilityAction`,
-                        // reachable from the rotor whether or not edit mode is
-                        // on -- so a screen reader user never needed the mode
-                        // in the first place. Announcing this glyph as well
-                        // would put a second door to the same room inside an
-                        // element that is already a door to it.
-                        //
-                        // The alternative the review suggested, lifting it out
-                        // to be a sibling of the accessible tile, would mean
-                        // absolutely positioning it over a row whose other
-                        // items vary in width, to gain a control that says
-                        // nothing new.
-                        <Pressable
-                            testID={`recipe-tile-actions-${recipe.uuid}`}
-                            accessibilityElementsHidden
-                            importantForAccessibility="no-hide-descendants"
-                            hitSlop={8}
-                            onPress={onLongPress}>
-                            <DotIcon testID="recipe-tile-actions" name="overflow"
-                                     size={12} color={onAccent.marker}/>
-                        </Pressable>
-                    )}
-                    <SlotMarker marker={slotMarker}/>
-                    {recipe.favourite && (
-                        <DotIcon testID="recipe-tile-favourite" name="favourite"
-                                 size={12} color={onAccent.marker}/>
-                    )}
-                    {showMarker && (
-                        <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.4}
-                                       color={onAccent.marker}>
-                            {marker}
-                        </DotMatrixText>
-                    )}
+                <XStack testID="recipe-tile-top" alignItems="flex-start">
+                    <YStack flex={1} gap="$1.5">
+                        <XStack key={signature} testID="recipe-tile-metadata-width" alignItems="center" gap={PHOTO_GAP}
+                            onLayout={event => setAvailable({key: signature, value: event.nativeEvent.layout.width})}>
+                            {requested && <RecipePhoto testID="recipe-tile-photo" uri={picture} visible={showPhoto}
+                                size={TILE_PHOTO_SIZE} radius={TILE_PHOTO_SIZE / 2} backing={onAccent.key}
+                                onError={() => setFailed(picture)}/>}
+                            <YStack flex={1}><RecipeTileMetadata {...metadata} onActions={onLongPress}/></YStack>
+                        </XStack>
+                        {requested && <ScrollView key={naturalKey} horizontal
+                            testID="recipe-tile-metadata-measure" pointerEvents="none"
+                            accessible={false} accessibilityElementsHidden importantForAccessibility="no-hide-descendants"
+                            style={{height: 0, opacity: 0, position: "absolute", width: "100%"}}
+                            onContentSizeChange={value => setIntrinsic({key: naturalKey, value})}>
+                            <RecipeTileMetadata {...metadata} measuring/>
+                        </ScrollView>}
+
+                        <Text fontSize={15} fontWeight="700"
+                              numberOfLines={2}
+                              color={recipe.hasName() ? onAccent.text : onAccent.label}>
+                            {recipe.displayName()}
+                        </Text>
+                    </YStack>
                 </XStack>
 
-                <YStack gap="$1">
-                    {/* One line rather than two once there are figures under
-                        it. Every tile keeps the grid's fixed height:
-                        a name that reflowed on its contents would break the
-                        row alignment the whole grid is built on. */}
-                    <Text fontSize={15} fontWeight="700"
-                          numberOfLines={figures === null ? 2 : 1}
-                          color={recipe.hasName() ? onAccent.text : onAccent.label}>
-                        {recipe.displayName()}
-                    </Text>
-                    {figures !== null && (
-                        <DotMatrixText testID="recipe-tile-figures" fontSize={11}
-                                       weight="bold" letterSpacing={1.2}
-                                       numberOfLines={1} color={onAccent.label}>
-                            {figures}
-                        </DotMatrixText>
+                {figures !== null && (
+                    <DotMatrixText testID="recipe-tile-figures" fontSize={11}
+                                   weight="bold" letterSpacing={1.2}
+                                   numberOfLines={1} color={onAccent.label}>
+                        {figures}
+                    </DotMatrixText>
+                )}
+
+                {/* The corner the text left, down to the tile's bottom and
+                    right edges. Measured rather than assumed, because the text
+                    above it grows with the OS text size. The profile is drawn
+                    only once the room is known and only as tall as the room,
+                    so it is never under the name or the figures. */}
+                <View testID="recipe-tile-profile-room" pointerEvents="none"
+                      onLayout={(event) => setProfileRoom(event.nativeEvent.layout.height)}
+                      style={{flex: 1, marginRight: -TILE_PADDING, marginBottom: -TILE_PADDING}}>
+                    {profileHeight > 0 && (
+                        <View style={{
+                            position: "absolute",
+                            right:    -(PROFILE_BLEED + PROFILE_OVERHANG),
+                            bottom:   -(PROFILE_BLEED + PROFILE_OVERHANG)
+                        }}>
+                            <PourProfile testID="recipe-tile-profile" pours={recipe.pours}
+                                         width={140} height={profileHeight}
+                                         dotted={dottedProfile}/>
+                        </View>
                     )}
-                </YStack>
+                </View>
             </YStack>
         </Pressable>
     );

@@ -21,6 +21,7 @@ import TeaSlotProbePanel, {type TeaSlotProbePanelProps} from "@/components/TeaSl
 import {teaProbeStatus} from "@/library/slots/teaSlotProbe";
 import {isTeaProbeSnapshot} from "@/library/slots/teaSlotCandidate";
 import {onAccent, palette} from "@/constants/colors";
+import {STABLE_HOST} from "@/constants/views";
 
 const BREW_BUSY = "The machine is busy with a running or held brew. Finish the brew before writing or recovering.";
 const SERIAL_BLOCK = "This incomplete write belongs to a different machine. Reconnect to the machine you started with.";
@@ -330,7 +331,7 @@ export default function EasyModeSlots({
 
     return (
         <YStack flex={1} backgroundColor={palette.base}>
-            <View testID="easy-mode-host" style={{flex: 1}} accessibilityElementsHidden={covered}
+            <View {...STABLE_HOST} testID="easy-mode-host" style={{flex: 1}} accessibilityElementsHidden={covered}
                 importantForAccessibility={covered ? "no-hide-descendants" : "auto"}
                 pointerEvents={covered ? "none" : "auto"}>
                 {header}

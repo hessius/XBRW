@@ -151,6 +151,7 @@ const EXPECTED_CALLS: Record<string, number> = {
     "components/HubRow.tsx":       1,
     "components/ImportResult.tsx": 1,
     "components/PodSection.tsx":   1,
+    "components/RecipePhoto.tsx":  1,
     "hooks/useShareRecipe.ts":     1,
     "library/XBloomRecipe.ts":     1,
     "library/cloud/transport.ts":  1,
@@ -222,6 +223,19 @@ describe("the outbound inventory", () => {
         expect(share!.host).toBe(new URL(SHARE_API_URL).host);
         expect(share!.hostPinned)
             .toBe(process.env.EXPO_PUBLIC_SHARE_API_URL === undefined);
+    });
+
+    it.each(["Recipe card photos", "Shelf photo previews", "Pictures in ABOUT"])(
+        "names %s in the library's photo exception", preference => {
+            const detail = SILENT_CAPABILITIES.find(entry => entry.id === "library")?.detail;
+            expect(detail).toContain(preference);
+            expect(detail).not.toContain("Show recipe pictures");
+        }
+    );
+
+    it("discloses shelf requests even with card photos disabled", () => {
+        const detail = SILENT_CAPABILITIES.find(entry => entry.id === "library")?.detail;
+        expect(detail).toContain("Shelf previews can fetch photos even with card photos off.");
     });
 
     it("says something about every entry", () => {

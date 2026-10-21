@@ -77,6 +77,15 @@ export default function MachineSection({settings}: {settings?: Settings}) {
             : status === "idle" ? `Not connected · ${remembered}`
                 : `Not in range · ${remembered}`;
 
+    // The info blob's model field (bytes 13-18) is the machine's own blank
+    // filler on real hardware: the captured plumbed-machine frame in
+    // `protocol.test.ts` carries six 0xFF there, which `readInfo` reads as "".
+    // The Device Information Service reading is the other place a model can
+    // come from. When neither says anything the row is left out, because a
+    // blank means "did not learn", and an empty row reads as a fault.
+    const model = info === null ? ""
+        : info.model !== "" ? info.model : machine.modelNumber;
+
     // The vitals are a snapshot taken at connect. Left alone, a tank refilled
     // since then still reads Low here, and only a relaunch clears it.
     useEffect(() => {
@@ -161,7 +170,7 @@ export default function MachineSection({settings}: {settings?: Settings}) {
             {info !== null && (
                 <YStack paddingVertical="$1">
                     <Vital label="Serial" value={info.serial}/>
-                    <Vital label="Model" value={info.model}/>
+                    {model !== "" && <Vital label="Model" value={model}/>}
                     <Pressable accessibilityRole="button"
                                accessibilityLabel={`Firmware, ${info.firmware}`}
                                onPress={onSecretPress}>

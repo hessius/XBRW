@@ -62,6 +62,7 @@ import Recipe, {CUP_TYPE} from "@/library/Recipe";
 import RecipeDatabase from "@/library/RecipeDatabase";
 import {shareBlockReason} from "@/library/shareLink";
 import {asTemperatureUnit, type TemperatureUnit} from "@/library/units";
+import {STABLE_HOST} from "@/constants/views";
 
 /** What a field's edit callback commits, given a label and the new value. */
 type Dispatch = (label: string, value: string) => void;
@@ -1282,10 +1283,10 @@ export default function EditRecipe(
                 screen reader, so TalkBack cannot reach and fire the controls
                 behind it — the Android half of what `accessibilityViewIsModal`
                 does on iOS. */}
-            <YStack testID="editor-content" flex={1} backgroundColor={palette.base}
+            <YStack {...STABLE_HOST} testID="editor-content" flex={1} backgroundColor={palette.base}
                     accessibilityElementsHidden={screenCovered}
                     importantForAccessibility={screenCovered ? "no-hide-descendants" : "auto"}>
-            <YStack testID="editor-deck" flex={1}
+            <YStack {...STABLE_HOST} testID="editor-deck" flex={1}
                     accessibilityElementsHidden={deckCovered}
                     importantForAccessibility={deckCovered ? "no-hide-descendants" : "auto"}>
             {/* Outside the scroll view, so it is the screen's header rather
@@ -1508,14 +1509,18 @@ export default function EditRecipe(
                               profile={beanProfile}
                               accent={accent}/>
 
-            {/* The recipe's own name, not its displayName(): a recipe following
-                its pod has an empty name and a borrowed title, and seeding the
-                field with the borrowed one would turn the next save into a
-                rename nobody asked for. Committed through the same dispatch the
-                Name row uses, so a rename from the header and a rename from
-                ABOUT are one code path. */}
+            {/* The recipe's own name and, apart from it, the pod name it
+                borrows while that is empty. The sheet opens on whichever is on
+                screen and hands the pod name back as an empty name when it is
+                saved unchanged, so looking at the name never stops a recipe
+                following its pod. Only the pod name is offered: a recipe
+                titled by its Recipe ID or a placeholder opens empty, as it
+                always did. Committed through the same dispatch the Name row
+                uses, so a rename from the header and a rename from ABOUT are
+                one code path. */}
             <RenameSheet open={renameOpen} onOpenChange={setRenameOpen}
                          name={recipe.name}
+                         borrowedName={recipe.xbloomName}
                          onRename={(next) => dispatch(RECIPE_LABELS.TITLE, next)}/>
 
             <BypassWriteSheet open={bypassWriteOpen}

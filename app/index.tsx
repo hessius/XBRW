@@ -57,6 +57,7 @@ import RemoveShelfSheet from "@/components/RemoveShelfSheet";
 import SelectableRecipeRow from "@/components/SelectableRecipeRow";
 import ShelfGrid from "@/components/ShelfGrid";
 import ShelfOverflowSheet from "@/components/ShelfOverflowSheet";
+import {withShelfPhotos} from "@/components/ShelfPhotoMark";
 import ShelfPickerHeader from "@/components/ShelfPickerHeader";
 import ShelfPickerBar, {PICKER_BAR_HEIGHT} from "@/components/ShelfPickerBar";
 import ShelfRoom, {type RoomRecipeActions} from "@/components/ShelfRoom";
@@ -95,6 +96,7 @@ import {tagKey} from "@/library/tagKey";
 import {shareBlockReason} from "@/library/shareLink";
 import {type Settings} from "@/library/Settings";
 import {UNCLIPPED_LIST} from "@/constants/lists";
+import {STABLE_HOST} from "@/constants/views";
 
 /**
  * How long one import link stays claimed after it is acted on.
@@ -311,6 +313,8 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
     const [onlySelected, setOnlySelected] = useState(false);
     const [showCoffeeMarker] = useSetting("showCoffeeMarker", settings);
     const [dottedProfile] = useSetting("dotMatrixProfile", settings);
+    const [showRecipeCardPhotos] = useSetting("showRecipeCardPhotos", settings);
+    const [showShelfPhotoPreviews] = useSetting("showShelfPhotoPreviews", settings);
     const [invertAutoShelves] = useSetting("invertAutoShelves", settings);
     const [hiddenShelves, setHiddenShelves] = useSetting("hiddenShelves", settings);
     const [rawTemperatureUnit] = useSetting("temperatureUnit", settings);
@@ -1348,7 +1352,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                 — the Android half of what `accessibilityViewIsModal` does on
                 iOS. The sheets are rendered outside this guarded subtree, so
                 they never hide themselves. */}
-            <YStack testID="home-content" flex={1} backgroundColor={palette.base}
+            <YStack {...STABLE_HOST} testID="home-content" flex={1} backgroundColor={palette.base}
                     accessibilityElementsHidden={screenCovered}
                     importantForAccessibility={screenCovered ? "no-hide-descendants" : "auto"}>
                 {picker.active ? (
@@ -1494,6 +1498,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                         evidence={library.evidence}
                         showCoffeeMarker={showCoffeeMarker}
                         dottedProfile={dottedProfile}
+                        showPicture={showRecipeCardPhotos}
                         editing={editing}
                         paddingBottom={insets.bottom + 8}/>
                 ) : libraryQuery.view === "shelves" && !picker.active ? (
@@ -1506,7 +1511,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                     // that showed NO MATCHES instead of the shelves would hide
                     // the control the user came to it for.
                     <ShelfGrid shelves={shelves}
-                               marks={library.shelfMarks}
+                               marks={withShelfPhotos(library.shelfMarks, showShelfPhotoPreviews)}
                                invertAuto={invertAutoShelves}
                                hidden={parseHidden(hiddenShelves)}
                                onOpen={libraryQuery.openShelf}
@@ -1561,13 +1566,15 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                                 selected={picker.selected.has(item.recipe.uuid)}
                                 onToggle={() => picker.toggle(item.recipe.uuid)}
                                 showCoffeeMarker={showCoffeeMarker}
-                                dottedProfile={dottedProfile}/>
+                                dottedProfile={dottedProfile}
+                                showPicture={showRecipeCardPhotos}/>
                         ) : (
                             <SwipeableRecipeRow
                                 recipe={item.recipe}
                                 editing={editing}
                                 showCoffeeMarker={showCoffeeMarker}
                                 dottedProfile={dottedProfile}
+                                showPicture={showRecipeCardPhotos}
                                 evidence={library.evidence[item.recipe.uuid]}
                                 slotMarker={slotMarkers(slotRecord, item.recipe)}
                                 onEasyMode={remembered !== ""

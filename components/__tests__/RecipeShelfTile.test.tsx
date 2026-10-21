@@ -1,10 +1,14 @@
 import React from "react";
-import {fireEvent, screen} from "@testing-library/react-native";
+import {fireEvent, screen, within} from "@testing-library/react-native";
 
-import RecipeShelfTile from "@/components/RecipeShelfTile";
+import RecipeShelfTile, {
+    PROFILE_CLEARANCE, PROFILE_HEIGHT, PROFILE_MIN_HEIGHT, tileProfileHeight
+} from "@/components/RecipeShelfTile";
+import {PROFILE_STROKE_WIDTH} from "@/components/PourProfile";
 import Recipe, {CUP_TYPE} from "@/library/Recipe";
 import Pour, {POUR_PATTERN} from "@/library/Pour";
 import {renderWithProviders} from "@/test-utils/render";
+import {StyleSheet} from "react-native";
 
 function named(name: string): Recipe {
     const r = new Recipe();
@@ -31,6 +35,45 @@ const HANDLERS = {
     onDuplicate:       jest.fn(),
     onDelete:          jest.fn()
 };
+
+it("measures the same child gaps as the visible metadata, including its collapsed spacer", async () => {
+    const recipe = writable("Exact fit");
+    recipe.imageURL = "https://coffee.example/bag.jpg";
+    await renderWithProviders(<RecipeShelfTile recipe={recipe} {...HANDLERS} showPicture
+        evidence={{brews: 2, lastBrewedAt: 0, avgRating: 0}} editing/>);
+    const visible = screen.getByTestId("recipe-tile-badges");
+    const intrinsic = screen.getByTestId("recipe-tile-metadata-intrinsic", {includeHiddenElements: true});
+    expect(StyleSheet.flatten(visible.props.style).gap).toBe(6);
+    expect(StyleSheet.flatten(intrinsic.props.style).gap).toBe(6);
+    expect(intrinsic.children).toHaveLength(visible.children.length);
+    const spacer = intrinsic.children[1];
+    if (typeof spacer === "string") throw new Error("Expected a native spacer view");
+    expect(StyleSheet.flatten(spacer.props.style)).toMatchObject({width: 0});
+    const hidden = within(screen.getByTestId("recipe-tile-metadata-measure", {includeHiddenElements: true}));
+    expect(hidden.queryByTestId("recipe-tile-evidence", {includeHiddenElements: true})).toBeNull();
+    expect(hidden.queryByTestId(`recipe-tile-actions-${recipe.uuid}`, {includeHiddenElements: true})).toBeNull();
+});
+
+it("measures intrinsic metadata before admitting a 20pt photo and drops stale readings", async () => {
+    const recipe = writable("Full width name");
+    recipe.imageURL = "https://coffee.example/bag.jpg";
+    const view = await renderWithProviders(<RecipeShelfTile recipe={recipe} {...HANDLERS} showPicture/>);
+    const photo = () => screen.queryByTestId("recipe-tile-photo", {includeHiddenElements: true});
+    expect(photo()?.parent).toHaveStyle({opacity: 0, position: "absolute"});
+    await fireEvent(screen.getByTestId("recipe-tile-metadata-width"), "layout",
+                    {nativeEvent: {layout: {width: 100, height: 20, x: 0, y: 0}}});
+    await fireEvent(screen.getByTestId("recipe-tile-metadata-measure", {includeHiddenElements: true}),
+                    "contentSizeChange", 74, 15);
+    expect(photo()?.props.style.width).toBe(20);
+    expect(photo()?.parent).toHaveStyle({opacity: 1});
+    await fireEvent(screen.getByTestId("recipe-tile-metadata-width"), "layout",
+                    {nativeEvent: {layout: {width: 99, height: 20, x: 0, y: 0}}});
+    expect(photo()?.parent).toHaveStyle({opacity: 0});
+    await view.rerender(<RecipeShelfTile recipe={recipe} {...HANDLERS} showPicture editing/>);
+    expect(photo()?.parent).toHaveStyle({opacity: 0});
+    await view.rerender(<RecipeShelfTile recipe={recipe} {...HANDLERS}/>);
+    expect(screen.queryByTestId("recipe-tile-metadata-measure", {includeHiddenElements: true})).toBeNull();
+});
 
 describe("RecipeShelfTile", () => {
     beforeEach(() => jest.clearAllMocks());
@@ -288,5 +331,96 @@ describe("a tile in edit mode", () => {
             .map((a) => a.name);
         expect(names).toEqual(expect.arrayContaining(
             ["share", "duplicate", "delete"]));
+    });
+
+    describe("the name and the pour profile", () => {
+        /** Lay the profile's corner out at `height`, as the platform would. */
+        async function layOut(height: number) {
+            await fireEvent(screen.getByTestId("recipe-tile-profile-room"), "layout", {
+                nativeEvent: {layout: {x: 0, y: 0, width: 160, height}}
+            });
+        }
+
+        it("gives the name two lines even with figures under it", async () => {
+            // The device report: "Ecuador | Vinka Fa..." cut to one line at
+            // the bottom of a tile that was empty at the top.
+            await renderWithProviders(
+                <RecipeShelfTile recipe={writable("Ecuador | Vinka Farm Washed")}
+                                 {...HANDLERS}/>
+            );
+            expect(screen.getByText("Ecuador | Vinka Farm Washed").props.numberOfLines)
+                .toBe(2);
+            expect(screen.getByTestId("recipe-tile-figures")).toBeTruthy();
+        });
+
+        it("gives a name without figures the same two lines", async () => {
+            await renderWithProviders(
+                <RecipeShelfTile recipe={named("Ethiopia")} {...HANDLERS}/>
+            );
+            expect(screen.getByText("Ethiopia").props.numberOfLines).toBe(2);
+        });
+
+        it("lays the text out first and the profile in what is left", async () => {
+            // The profile used to be pinned to the tile's corner over the top of
+            // the name and the figures. It now lives in its own room after them,
+            // so it cannot be drawn where the text is.
+            await renderWithProviders(
+                <RecipeShelfTile recipe={writable("Ethiopia")} {...HANDLERS}/>
+            );
+            await layOut(40);
+
+            const tile = screen.getByTestId("recipe-tile");
+            const order = (tile.props.children as React.ReactElement[])
+                .flat()
+                .filter(React.isValidElement)
+                .map((child) => (child.props as {testID?: string}).testID ?? "");
+            expect(order.indexOf("recipe-tile-profile-room"))
+                .toBe(order.length - 1);
+            expect(within(screen.getByTestId("recipe-tile-profile-room"))
+                .getByTestId("recipe-tile-profile")).toBeTruthy();
+        });
+
+        it("draws nothing until the room is measured", async () => {
+            // A guessed size is exactly how a profile ends up across the name
+            // at a large text size.
+            await renderWithProviders(
+                <RecipeShelfTile recipe={writable("Ethiopia")} {...HANDLERS}/>
+            );
+            expect(screen.queryByTestId("recipe-tile-profile")).toBeNull();
+        });
+
+        it("draws at full height when the room allows, and no taller", async () => {
+            await renderWithProviders(
+                <RecipeShelfTile recipe={writable("Ethiopia")} {...HANDLERS}/>
+            );
+            await layOut(80);
+            expect(screen.getByTestId("recipe-tile-profile").props.height)
+                .toBe(PROFILE_HEIGHT + PROFILE_STROKE_WIDTH);
+        });
+
+        it("shrinks to the room larger text leaves", async () => {
+            await renderWithProviders(
+                <RecipeShelfTile recipe={writable("Ethiopia")} {...HANDLERS}/>
+            );
+            await layOut(22);
+            expect(screen.getByTestId("recipe-tile-profile").props.height)
+                .toBe(22 - PROFILE_CLEARANCE + PROFILE_STROKE_WIDTH);
+        });
+
+        it("draws nothing in a room too small to read a staircase in", async () => {
+            await renderWithProviders(
+                <RecipeShelfTile recipe={writable("Ethiopia")} {...HANDLERS}/>
+            );
+            await layOut(PROFILE_MIN_HEIGHT + PROFILE_CLEARANCE - 1);
+            expect(screen.queryByTestId("recipe-tile-profile")).toBeNull();
+        });
+
+        it("keeps the clearance and the floor in the arithmetic", () => {
+            expect(tileProfileHeight(0)).toBe(0);
+            expect(tileProfileHeight(PROFILE_MIN_HEIGHT + PROFILE_CLEARANCE))
+                .toBe(PROFILE_MIN_HEIGHT);
+            expect(tileProfileHeight(25.6)).toBe(21);
+            expect(tileProfileHeight(500)).toBe(PROFILE_HEIGHT);
+        });
     });
 });

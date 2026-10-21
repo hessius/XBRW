@@ -1,11 +1,13 @@
 import React from "react";
-import {Pressable, View} from "react-native";
+import {Pressable, View, useWindowDimensions, type LayoutChangeEvent} from "react-native";
 import {XStack, YStack, Text} from "tamagui";
 
 import DigitRoll from "@/components/DigitRoll";
 import DotIcon from "@/components/DotIcon";
 import DotMatrixText, {DOTO_MAX_FONT_SCALE} from "@/components/DotMatrixText";
 import PourProfile, {PROFILE_BLEED} from "@/components/PourProfile";
+import {TILE_PHOTO_SIZE, PHOTO_GAP, metadataPhotoFits, type Rect} from "@/library/recipePictureLayout";
+import RecipePhoto from "@/components/RecipePhoto";
 import SlotMarker from "@/components/SlotMarker";
 import Recipe from "@/library/Recipe";
 import {evidenceLine, isSet, spokenEvidence} from "@/library/recipeEvidence";
@@ -28,6 +30,9 @@ const CARD_HEIGHT = 116;
  */
 const PROFILE_OVERHANG = 2;
 const PROFILE_HEIGHT = 56;
+
+export const CARD_PHOTO_SIZE = TILE_PHOTO_SIZE;
+const BOTTOM_GAP = 16;
 
 /**
  * The smallest comfortable touch target, per the HIG. The action icons are 18px
@@ -125,6 +130,8 @@ type Props = {
     showCoffeeMarker?: boolean;
     /** Fill the pour profile with a dot screen. Owned by the settings screen. */
     dottedProfile?: boolean;
+    /** Optional coffee/pod circle beside brew evidence, never at the name's expense. */
+    showPicture?: boolean;
     /** Called by the accessibility action that mirrors the swipe tray's BREW tile. */
     onBrew?: () => void;
     /** Called by the accessibility action that mirrors the swipe tray's TUNE tile. */
@@ -194,6 +201,7 @@ export default function RecipeCard({
     onDelete,
     showCoffeeMarker = true,
     dottedProfile = false,
+    showPicture = false,
     onBrew,
     onQuickEdit,
     onShare,
@@ -208,6 +216,7 @@ export default function RecipeCard({
     const isTea = accentGroupFor(recipe) === "tea";
     const marker = isTea ? "TEA" : "COFFEE";
     const showMarker = isTea || showCoffeeMarker;
+    const picture = showPicture ? recipe.imageURL ?? "" : "";
 
     // `accessible` groups the whole subtree into one element on iOS, so nothing
     // inside is announced on its own. Everything the card shows has to be in
@@ -216,6 +225,30 @@ export default function RecipeCard({
     const hasNote = recipe.description.length > 0;
 
     const shownEvidence = evidenceLine(evidence);
+    const {width, fontScale} = useWindowDimensions();
+    const signature = JSON.stringify([
+        recipe.uuid, recipe.displayName(), recipe.description, recipe.favourite, recipe.dosage,
+        recipe.ratio, recipe.grindSize, recipe.grinder, recipe.pours.map(pour => pour.volume),
+        isTea, showMarker, shownEvidence, slotMarker?.slots, editing,
+        !!onDuplicate, !!onDelete, picture, width, fontScale
+    ]);
+    const [regions, setRegions] = React.useState<Record<string, {key: string; rect: Rect}>>({});
+    const [failed, setFailed] = React.useState<string>();
+    const requested = picture.length > 0 && failed !== picture;
+    const surface = regions.surface?.key === signature ? regions.surface.rect : undefined;
+    const geometryKey = JSON.stringify([signature, surface?.width, surface?.height]);
+    const region = (id: string) => regions[id]?.key === geometryKey ? regions[id].rect : undefined;
+    const measure = (id: string) => !requested ? undefined : (event: LayoutChangeEvent) => {
+        const rect = event.nativeEvent.layout;
+        setRegions(was => ({...was, [id]: {key: id === "surface" ? signature : geometryKey, rect}}));
+    };
+    const bottom = region("bottom");
+    const figures = region("figures");
+    const end = region("end");
+    const metadataWidth = shownEvidence === null ? 0 : end?.width;
+    const showPhoto = requested && !editing
+        && !!bottom && !!figures
+        && metadataPhotoFits(bottom.width - figures.width - BOTTOM_GAP, metadataWidth);
 
     const summary = [
         recipe.displayName(),
@@ -338,7 +371,9 @@ export default function RecipeCard({
                 transform: [{scale: pressed ? 0.99 : 1}]
             })}>
             <YStack
+                key={signature}
                 testID="recipe-card-surface"
+                onLayout={requested ? measure("surface") : undefined}
                 // React Native does not promote a View to an accessibility element
                 // implicitly, and the label lives on the Pressable above; this stack
                 // is the card's paint.
@@ -364,9 +399,8 @@ export default function RecipeCard({
                                  width={200} height={PROFILE_HEIGHT} dotted={dottedProfile}/>
                 </View>
 
-                <XStack testID="recipe-card-title-row"
-                        justifyContent="space-between" alignItems="flex-start" gap="$2"
-                        paddingRight={0}>
+                <XStack key={`title-${geometryKey}`} testID="recipe-card-title-row"
+                        justifyContent="space-between" alignItems="flex-start" gap="$2">
                     {/* Bounded to the same scale Doto is, so the two halves of the
                         card grow together rather than the prose swamping the data.
 
@@ -421,8 +455,9 @@ export default function RecipeCard({
                     </XStack>
                 </XStack>
 
-                <XStack justifyContent="space-between" alignItems="flex-end" gap="$4">
-                    <XStack gap="$5" alignItems="flex-end">
+                <XStack key={`bottom-${geometryKey}`} testID="recipe-card-bottom-row" onLayout={measure("bottom")}
+                        justifyContent="space-between" alignItems="flex-end" gap={BOTTOM_GAP}>
+                    <XStack testID="recipe-card-figures" onLayout={measure("figures")} gap="$5" alignItems="flex-end">
                         <Stat label="DOSE" value={recipe.dosage} suffix="g"/>
                         <Stat label="RATIO" value={recipe.ratio}
                               text={isSet(recipe.ratio) && !Number.isInteger(recipe.ratio)
@@ -434,27 +469,32 @@ export default function RecipeCard({
                     {/* Editing takes this end back for the actions. The two
                         cannot share it, and a destructive control has the
                         stronger claim on a row the user opened to manage. */}
-                    {!editing && shownEvidence !== null && (
-                        // The star is drawn rather than typed: the line is set
-                        // in Doto, which has no glyph for one, and the app's
-                        // star is a dot icon everywhere else it appears.
-                        <XStack testID="recipe-card-evidence"
-                                alignItems="center" gap={3}>
-                            {(evidence?.avgRating ?? 0) > 0 && (
-                                <DotIcon name="favourite" size={9}
-                                         testID="recipe-card-evidence-star"
-                                         color={onAccent.label}/>
-                            )}
-                            <DotMatrixText fontSize={11} weight="bold"
-                                           letterSpacing={1.2}
-                                           color={onAccent.label}>
-                                {shownEvidence}
-                            </DotMatrixText>
-                        </XStack>
-                    )}
+                    {!editing && <XStack testID="recipe-card-metadata" alignItems="center"
+                        gap={PHOTO_GAP} flexShrink={0}>
+                        {shownEvidence !== null && (
+                            // Doto has no star glyph; use the app's dot icon.
+                            <XStack testID="recipe-card-evidence"
+                                    onLayout={measure("end")}
+                                    alignItems="center" gap={3}>
+                                {(evidence?.avgRating ?? 0) > 0 && (
+                                    <DotIcon name="favourite" size={9}
+                                             testID="recipe-card-evidence-star"
+                                             color={onAccent.label}/>
+                                )}
+                                <DotMatrixText fontSize={11} weight="bold"
+                                               letterSpacing={1.2}
+                                               color={onAccent.label}>
+                                    {shownEvidence}
+                                </DotMatrixText>
+                            </XStack>
+                        )}
+                        {showPhoto && <RecipePhoto testID="recipe-card-photo" uri={picture}
+                            size={CARD_PHOTO_SIZE} radius={CARD_PHOTO_SIZE / 2} backing={accent}
+                            onError={() => setFailed(picture)}/>}
+                    </XStack>}
 
                     {editing && (
-                        <XStack gap="$1">
+                        <XStack testID="recipe-card-actions" gap="$1" onLayout={measure("end")}>
                             {onDuplicate !== undefined && (
                                 <Action label="Duplicate recipe" icon="duplicate"
                                         tone={palette.success}

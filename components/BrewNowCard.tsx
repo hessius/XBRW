@@ -9,6 +9,7 @@ import {AGITATION_SENTENCE, LONGEST_NOW_SENTENCE, PATTERN_SENTENCE}
 import {palette} from "@/constants/colors";
 import {pauseSeconds} from "@/library/brew/brewShape";
 import type Pour from "@/library/Pour";
+import {STABLE_HOST} from "@/constants/views";
 
 type Props = {
     /** The live stage. Undefined before the first pour and after the last. */
@@ -71,7 +72,7 @@ export default function BrewNowCard({pour, accent, resting, hold = false}: Props
     const said = pour === undefined ? undefined : say(pour, resting);
 
     return (
-        <YStack
+        <YStack {...STABLE_HOST}
             testID="brew-now-card"
             backgroundColor={palette.raised}
             borderRadius="$4"
