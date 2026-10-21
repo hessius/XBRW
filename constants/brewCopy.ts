@@ -73,6 +73,7 @@ export const FAILURE_COPY: Record<string, string> = {
     doseMismatch: "The machine would not accept that dose and water volume.",
     idling:       "The machine went idle before the brew started.",
     rejected:     "The machine would not take the recipe.",
+    cancelUnconfirmed: "Couldn't confirm that the brew stopped. Check the machine before brewing again.",
     // Deliberately says only what was seen. The machine goes back to its
     // loaded screen and sends no fault, so a cause here would be a guess: the
     // field report was a tank two grams short, but somebody reaching over and
@@ -274,7 +275,7 @@ export const OVER: ReadonlySet<string> = new Set([
  * The dose is ground and the water is spent. Offering a retry here would read
  * as "this one is free".
  */
-export const NO_RETRY: ReadonlySet<string> = new Set(["noWater", "stopped"]);
+export const NO_RETRY: ReadonlySet<string> = new Set(["noWater", "stopped", "cancelUnconfirmed"]);
 
 /**
  * The mid-brew failures in three or four words, for the bar.
@@ -285,6 +286,7 @@ export const NO_RETRY: ReadonlySet<string> = new Set(["noWater", "stopped"]);
  * event and sent people looking at their Bluetooth.
  */
 export const MINI_FAILURE_WHY: Record<string, string> = {
+    cancelUnconfirmed: "Stop not confirmed",
     noWater:      "no water",
     noBeans:      "no beans",
     grindingStopped: "grinding stopped",

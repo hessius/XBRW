@@ -83,6 +83,15 @@ describe("BrewMiniBar", () => {
         expect(getByText("KEPT IN YOUR BREW HISTORY")).toBeTruthy();
     });
 
+    it("does not claim the machine stopped after an unconfirmed cancellation", async () => {
+        const {getByText, queryByText} = await draw({
+            phase: {name: "failed", reason: "cancelUnconfirmed"}
+        });
+        expect(getByText("Stop not confirmed")).toBeTruthy();
+        expect(getByText("CHECK THE MACHINE")).toBeTruthy();
+        expect(queryByText(/^Stopped:/)).toBeNull();
+    });
+
     it("does not call a refusal a stopped brew, or claim it was kept", async () => {
         // A `blocked` phase is a refusal before anything was sent: no dose was
         // spent and the recorder deliberately writes no row, so the bar must

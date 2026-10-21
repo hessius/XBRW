@@ -48,3 +48,10 @@ export class BrewUploadError extends Error {
         this.name = "BrewUploadError";
     }
 }
+
+export class BrewOwnershipError extends Error {
+    constructor(cause: unknown) {
+        super(cause instanceof Error ? cause.message : "The machine connection changed.", {cause});
+        this.name = "BrewOwnershipError";
+    }
+}

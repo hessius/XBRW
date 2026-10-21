@@ -20,6 +20,14 @@ and retry continuations. A failed upload is not automatically sent again after
 relinking, because a lost connection does not prove the recipe was not received.
 The tank's pushed low-water flag can refuse a new brew before spending a dose.
 
+Package integration review also exposed two ownership/error paths. A preflight
+superseded by a replacement connection is explicitly non-retryable, without
+disabling the existing retry for a genuine dropped preflight link. If either
+cancellation write fails during startup, START stays withdrawn and the run
+finishes as `cancelUnconfirmed`, not a successful cancellation. The screen and
+mini bar ask the user to check the machine and offer no retry. A replacement
+connection or an observed running brew keeps its own phase.
+
 Explicit no-beans state `0x0F` remains confirmed `noBeans`. A generic idle
 event `40517` during grinding is recorded as `grindingStopped` and suggests
 checking the hopper without claiming that the machine reported an empty

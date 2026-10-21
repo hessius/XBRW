@@ -26,6 +26,11 @@ result does not qualify this integration or a different built commit.
 - [ ] Mid-brew no-water has no TRY AGAIN; preflight water refusal is retryable.
 - [ ] Interrupted uploads cannot later START. Reconnection cannot resume old
   cancellation/upload continuations or automatically resend an upload.
+- [ ] A connection replaced during preflight is not disconnected or retried by
+  the superseded request. Genuine preflight link failures still get one retry.
+- [ ] If either cancel write fails during startup, the app reports an
+  unconfirmed stop, finishes the history record once and offers no START or
+  retry. Check the machine rather than assuming the stop succeeded.
 - [ ] Pause/resume remains intact. State `0x1F` also means armed/loaded and is
   not by itself evidence that a brew is paused or safe to cancel.
 

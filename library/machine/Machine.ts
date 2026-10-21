@@ -10,7 +10,7 @@ import type {SlotDatabase} from "@/library/slots/SlotDatabase";
 import type {SlotAcquireOptions, SlotIdentity} from "@/library/slots/slotWriter";
 import {sameBytes} from "@/library/slots/slotModel";
 
-import {BrewUploadError, RadioUnavailableError, SlotOperationError} from "./errors";
+import {BrewOwnershipError, BrewUploadError, RadioUnavailableError, SlotOperationError} from "./errors";
 
 import {frameLogText, historyLine} from "./frameLog";
 import {
@@ -81,6 +81,7 @@ export type FrameLogEntry = {
 /** Why a brew ended badly. Each has its own copy on the brew route. */
 export type BrewFailure =
     | "noWater" | "noBeans" | "grindingStopped" | "gearPosition" | "doseMismatch" | "idling" | "rejected"
+    | "cancelUnconfirmed"
     /**
      * The machine went back to its loaded screen with the brew unfinished.
      *
@@ -1272,9 +1273,17 @@ export default class Machine {
      */
     async brew(recipe: Recipe): Promise<void> {
         this.assertOrdinaryOperation();
+        const generation = this.generation;
         const finish = this.beginOrdinaryOperation();
         try {
             await this.brewAttempt(recipe);
+        } catch (error) {
+            // A replacement may still be connecting. A dropped link without
+            // a replacement remains eligible for the preflight relink.
+            if (generation !== this.generation && this.connectedId !== null) {
+                throw new BrewOwnershipError(error);
+            }
+            throw error;
         } finally {
             finish();
         }
@@ -1299,7 +1308,7 @@ export default class Machine {
         // is startable. See `clearForBrew`.
         await this.clearForBrew();
         if (ticket !== this.cancelTicket) return;
-        if (generation !== this.generation && this.isConnected()) {
+        if (generation !== this.generation && this.connectedId !== null) {
             throw new Error("The machine connection changed.");
         }
         // Ask how it is doing *now*, every time. Not only when the vitals are
@@ -1336,7 +1345,7 @@ export default class Machine {
         // `brewBlock`, which refuses it as `notConnected` and so keeps the
         // brew path's one relink. A link that is up again under a newer
         // generation was opened by somebody else, to whatever they chose.
-        if (generation !== this.generation && this.isConnected()) {
+        if (generation !== this.generation && this.connectedId !== null) {
             throw new Error("The machine connection changed.");
         }
         await this.brewOnce(recipe);
@@ -1691,23 +1700,32 @@ export default class Machine {
      */
     cancelBrew(): Promise<void> {
         if (this.userCancel !== null) return this.userCancel;
-        this.cancelTicket++;
+        const ticket = ++this.cancelTicket;
         // A recipe held back for START is withdrawn at once, not when the
         // machine answers: a START pressed in that window must find nothing.
         this.pendingCommit = null;
         const generation = this.generation;
         const run = async (): Promise<void> => {
-            await this.cancelOnce();
-            // Neither the 8022 nor the phase belongs on a link that replaced
-            // this one while the cancel was waiting for the machine.
-            if (generation !== this.generation) {
-                throw new Error("The machine connection changed during cancellation.");
+            try {
+                await this.cancelOnce();
+                // Neither the 8022 nor the phase belongs on a replacement link.
+                if (generation !== this.generation) {
+                    throw new Error("The machine connection changed during cancellation.");
+                }
+                await this.sendPaced([buildType1(8022)]);
+                if (generation !== this.generation) {
+                    throw new Error("The machine connection changed during cancellation.");
+                }
+                this.setPhase({name: "cancelled"});
+            } catch (error) {
+                if (generation === this.generation && ticket === this.cancelTicket
+                    && (this.phase.name === "waking" || this.phase.name === "sending"
+                        || this.phase.name === "readyToStart")) {
+                    this.setPhase({name: "failed", reason: "cancelUnconfirmed",
+                        detail: error instanceof Error ? error.message : undefined});
+                }
+                throw error;
             }
-            await this.sendPaced([buildType1(8022)]);
-            if (generation !== this.generation) {
-                throw new Error("The machine connection changed during cancellation.");
-            }
-            this.setPhase({name: "cancelled"});
         };
         const tracked: Promise<void> = run().finally(() => {
             if (this.userCancel === tracked) this.userCancel = null;

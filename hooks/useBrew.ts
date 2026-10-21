@@ -6,6 +6,7 @@ import type Machine from "@/library/machine/Machine";
 import {isActiveBrewPhase, type BrewPhase} from "@/library/machine/Machine";
 import {
     BluetoothPermissionError,
+    BrewOwnershipError,
     BrewUploadError,
     RadioUnavailableError,
     SlotOperationError
@@ -110,6 +111,7 @@ export function useBrew(injected?: Machine): Brewer {
         if (e instanceof RadioUnavailableError) return false;
         if (e instanceof SlotOperationError) return false;
         if (e instanceof BrewUploadError) return false;
+        if (e instanceof BrewOwnershipError) return false;
         if (e instanceof BluetoothPermissionError) return false;
         const phase = machine.phase;
         // Every other failed phase is left alone, including `rejected`. The

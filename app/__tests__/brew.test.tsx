@@ -718,6 +718,14 @@ describe("brew route", () => {
         expect(queryByLabelText("Try again")).toBeNull();
     });
 
+    it("reports an unconfirmed cancellation without offering another brew", async () => {
+        mockPhase = {name: "failed", reason: "cancelUnconfirmed"};
+        const {queryByLabelText, getByText} = await renderWithProviders(<Brew />);
+        expect(getByText("Couldn't confirm that the brew stopped. Check the machine before brewing again."))
+            .toBeTruthy();
+        expect(queryByLabelText("Try again")).toBeNull();
+    });
+
     it("offers the diagnostic log on a blocked failure", async () => {
         mockPhase = {name: "failed", reason: "blocked", detail: "The tank is low."} as BrewPhase;
         const {getByLabelText} = await renderWithProviders(<Brew />);
