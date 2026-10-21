@@ -1264,7 +1264,7 @@ export default class Machine {
      *
      * Resolves once the machine has been committed to, not once the brew is
      * over — the brew's progress arrives as phases.
-     * `verifyTarget` rechecks the caller's selected machine after fresh vitals.
+     * `verifyTarget` rechecks the selected machine before cleanup or upload.
      */
     async brew(recipe: Recipe, verifyTarget?: () => Promise<void>): Promise<void> {
         this.assertOrdinaryOperation();
@@ -1298,16 +1298,6 @@ export default class Machine {
         // A CANCEL pressed while this attempt is still preparing must stop it
         // before the recipe goes out, not after.
         const ticket = this.cancelTicket;
-        // A brew that died on the machine leaves a warning up, and a machine
-        // sitting on a warning will not take a recipe: on device, TRY AGAIN
-        // after a no-beans stop did nothing until the warning was dismissed by
-        // hand. At most one cancel, and none when the machine already says it
-        // is startable. See `clearForBrew`.
-        await this.clearForBrew();
-        if (ticket !== this.cancelTicket) return;
-        if (generation !== this.generation && this.connectedId !== null) {
-            throw new Error("The machine connection changed.");
-        }
         // The vitals this link already heard are used as they are: the
         // official app brews on its connect-time reading, and asking again
         // costs a handshake, which beeps (2026-10-19 owner report). Only a
@@ -1338,6 +1328,13 @@ export default class Machine {
             if (generation !== this.generation && this.isConnected()) {
                 throw new Error("The machine connection changed.");
             }
+        }
+        // Clearing an earlier warning sends commands too. Verify the serial
+        // learned above before touching a machine found by a stale-id scan.
+        await this.clearForBrew();
+        if (ticket !== this.cancelTicket) return;
+        if (generation !== this.generation && this.connectedId !== null) {
+            throw new Error("The machine connection changed.");
         }
         await this.brewOnce(recipe);
     }
@@ -1660,6 +1657,7 @@ export default class Machine {
             await this.cancelling;
             return;
         }
+        if (!this.isConnected() || this.info === null) return;
         let state = this.state;
         if (state === null) {
             const generation = this.generation;

@@ -5,11 +5,17 @@
 The approved scope is #227 (`2f24dc375ff58a9df9330cc1c7cfe20669d3379d`)
 and #228 (`5f4121d6cac5106b3fb264edf031056852e85991`), integrated for review
 in #258 from pinned develop `9ff154c89f5805894df078c16f569fbf261af041`.
-This preview carries its fixes: identity rechecks after preflight and before PRO
-retry, local refusal ownership, stale/forgotten discovery targets, live picker
+This preview carries its fixes: identity rechecks after fresh vitals, before
+warning-clearing commands and before PRO retry, local refusal ownership,
+stale/forgotten discovery targets, live picker
 state, disabled actions and a persistent editor chip. Accepted A-C behavior
 is preserved. Multi-machine and Original serial checks remain on the hardware
 checklist; #251 remains a separate unconfirmed recipe-buffer investigation.
+
+#258's single review reproduced warning cleanup reaching another machine
+before late serial verification. The correction verifies identity first and
+skips cleanup without vitals. Silent/faulting stranger and verified-machine
+regressions cover this alongside the existing cancellation/replacement guards.
 
 #231 is not accepted by that integration. Its machine cards and reordered
 Settings remain here only as an evaluation proposal, along with other

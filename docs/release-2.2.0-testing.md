@@ -14,7 +14,9 @@ each result. Leave a box open until its result is captured.
   Reconnect a lost-contact brew only to its original machine.
 - [ ] With only the other machine nearby, BREW refuses without any recipe
   upload or mode change. Check stale Bluetooth IDs and serials learned late
-  during preflight, including the explicit PRO retry path.
+  during preflight, including the explicit PRO retry path. Repeat after an
+  earlier no-beans failure: a mismatched or missing info response must not
+  cause warning-clearing CANCEL or home commands on the other machine.
 - [ ] A refused selection releases the app's live-run ownership without a
   cancellation command or a synthetic brew record. A later real brew works.
 - [ ] Open the picker before its first survey completes, drop the connection,
