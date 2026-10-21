@@ -1,9 +1,10 @@
 import React from "react";
-import {Dimensions, StyleSheet, type StyleProp, type ViewStyle} from "react-native";
+import {Dimensions, Platform, StyleSheet, type StyleProp, type ViewStyle} from "react-native";
 import {act, fireEvent, screen, waitFor, within} from "@testing-library/react-native";
 import * as Clipboard from "expo-clipboard";
 import * as Sharing from "expo-sharing";
 import {Linking} from "react-native";
+import {SafeAreaProvider} from "react-native-safe-area-context";
 
 import Brew from "@/app/brew";
 import {SCREEN_PADDING} from "@/constants/layout";
@@ -500,6 +501,42 @@ describe("brew route", () => {
     it("offers CANCEL while the machine is running", async () => {
         const {getByLabelText} = await renderWithProviders(<Brew />);
         expect(getByLabelText("Cancel")).toBeTruthy();
+    });
+
+    it("keeps CANCEL clear of a three-button navigation bar", async () => {
+        // Android 15+ draws the app under the navigation bar, and this screen
+        // reaches the bottom of the display, so the actions only clear the
+        // bar if the screen pads by the inset. 48 is the three-button bar,
+        // taller than the 34 the shared providers model an iPhone with.
+        const threeButton = {
+            frame:  {x: 0, y: 0, width: 412, height: 915},
+            insets: {top: 32, left: 0, right: 0, bottom: 48}
+        };
+        await renderWithProviders(
+            <SafeAreaProvider initialMetrics={threeButton}><Brew /></SafeAreaProvider>
+        );
+        // Presence only: a test renderer has no navigation bar to hide
+        // behind. The padding is what keeps CANCEL above it on a phone.
+        expect(screen.getByLabelText("Cancel")).toBeOnTheScreen();
+        const style = StyleSheet.flatten(screen.getByTestId("brew-screen").props.style);
+
+        expect(style.paddingBottom).toBe(SCREEN_PADDING + 48);
+    });
+
+    it("keeps the title and the close chevron clear of the Android status bar", async () => {
+        // Owner screenshot, 2026-10-19: on Android the dot-matrix title and
+        // the chevron were drawn over the clock. Android's modal is a full
+        // page; iOS presents a sheet below the status bar, so it adds nothing.
+        const withStatusBar = {
+            frame:  {x: 0, y: 0, width: 412, height: 915},
+            insets: {top: 32, left: 0, right: 0, bottom: 48}
+        };
+        await renderWithProviders(
+            <SafeAreaProvider initialMetrics={withStatusBar}><Brew /></SafeAreaProvider>
+        );
+        const style = StyleSheet.flatten(screen.getByTestId("brew-screen").props.style);
+
+        expect(style.paddingTop).toBe(SCREEN_PADDING + (Platform.OS === "android" ? 32 : 0));
     });
 
     it("shows the refusal in amber, with the recipe's own volume", async () => {
