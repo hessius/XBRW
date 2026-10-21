@@ -1,9 +1,26 @@
 import React from "react";
-import {Text} from "react-native";
+import {StyleSheet, Text} from "react-native";
 import {act, fireEvent, screen} from "@testing-library/react-native";
+import {SafeAreaProvider} from "react-native-safe-area-context";
 
-import XbrwSheet, {EXIT_GRACE} from "@/components/XbrwSheet";
-import {renderWithProviders} from "@/test-utils/render";
+import XbrwSheet, {EXIT_GRACE, insetSnapPoint} from "@/components/XbrwSheet";
+import {SCREEN_PADDING} from "@/constants/layout";
+import {useTakesBottomInset} from "@/hooks/useBottomInset";
+import {renderWithProviders, TEST_INSETS, THREE_BUTTON_METRICS} from "@/test-utils/render";
+
+/** Stands in for the live brew bar, which pads itself by the inset. */
+function TakesInset() {
+    useTakesBottomInset();
+    return null;
+}
+
+function framePaddings(): number[] {
+    // Tamagui draws a second, empty copy of the frame, so every copy is
+    // checked rather than whichever comes first.
+    const frames = screen.getAllByTestId("sheet-frame", {includeHiddenElements: true});
+    expect(frames.length).toBeGreaterThan(0);
+    return frames.map((frame) => StyleSheet.flatten(frame.props.style).paddingBottom);
+}
 
 function open(onOpenChange = jest.fn()) {
     return renderWithProviders(
@@ -26,6 +43,63 @@ describe("XbrwSheet", () => {
 
         expect(screen.getByLabelText("ABOUT").props.style)
             .toEqual(expect.objectContaining({flex: 1}));
+    });
+
+    it("pads its bottom by the inset so full content clears the navigation bar", async () => {
+        // Tamagui draws a second, empty copy of the frame, so every copy is
+        // checked rather than whichever comes first.
+        await open();
+        const frames = screen.getAllByTestId("sheet-frame", {includeHiddenElements: true});
+
+        expect(frames.length).toBeGreaterThan(0);
+        for (const frame of frames) {
+            expect(StyleSheet.flatten(frame.props.style).paddingBottom)
+                .toBe(SCREEN_PADDING + TEST_INSETS.bottom);
+        }
+    });
+
+    it("ends above a three-button navigation bar", async () => {
+        // The recipe sheet's last row, DELETE, sat under the bar until the
+        // frame padded by its full 48 points.
+        await renderWithProviders(
+            <SafeAreaProvider initialMetrics={THREE_BUTTON_METRICS}>
+                <XbrwSheet open onOpenChange={jest.fn()} title="ABOUT">
+                    <Text>the body</Text>
+                </XbrwSheet>
+            </SafeAreaProvider>
+        );
+
+        for (const padding of framePaddings()) {
+            expect(padding).toBe(SCREEN_PADDING + 48);
+        }
+    });
+
+    it("leaves the inset to the live brew bar while it is drawn", async () => {
+        // The bar sits beside the navigator and pads itself, so the screen
+        // the sheet is opened in already ends above the navigation bar.
+        await renderWithProviders(
+            <SafeAreaProvider initialMetrics={THREE_BUTTON_METRICS}>
+                <TakesInset/>
+                <XbrwSheet open onOpenChange={jest.fn()} title="ABOUT">
+                    <Text>the body</Text>
+                </XbrwSheet>
+            </SafeAreaProvider>
+        );
+
+        for (const padding of framePaddings()) {
+            expect(padding).toBe(SCREEN_PADDING);
+        }
+    });
+
+    it("grows by the inset so the content keeps the room it was tuned for", () => {
+        // 48 points of a 915 point screen is a little over 5 percent.
+        expect(insetSnapPoint(60, 48, 915)).toBeCloseTo(60 + 4800 / 915, 5);
+        // No inset, no growth.
+        expect(insetSnapPoint(60, 0, 915)).toBe(60);
+        // Growth stops short of the header the sheet was opened from...
+        expect(insetSnapPoint(92, 48, 915)).toBe(95);
+        // ...but never shrinks a sheet that asked for more.
+        expect(insetSnapPoint(97, 48, 915)).toBe(97);
     });
 
     it("can be dismissed without the platform gesture", async () => {

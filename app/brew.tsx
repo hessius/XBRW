@@ -5,6 +5,7 @@ import React, {useEffect, useState} from "react";
 import {KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, useWindowDimensions, View}
     from "react-native";
 import ViewShot from "react-native-view-shot";
+import {useSafeAreaInsets} from "react-native-safe-area-context";
 import {Text, XStack, YStack} from "tamagui";
 
 import BrewFigures from "@/components/BrewFigures";
@@ -215,6 +216,7 @@ export default function Brew({historyStore}: {historyStore?: ExportStore} = {}) 
     // screen would hand it a freshly deserialised recipe on every mount.
     const viewing = view === "1";
     const {width, height: windowHeight} = useWindowDimensions();
+    const insets = useSafeAreaInsets();
 
     // A local recipe from the route params. Used for the first render (before
     // RunOwner in the provider has its first tick) and for `total` below.
@@ -507,12 +509,33 @@ export default function Brew({historyStore}: {historyStore?: ExportStore} = {}) 
         // the editor's answer, only moves what is inside the scroll view, and
         // the judgement is deliberately outside it -- pinned under the summary
         // rather than scrolled away with it.
+        //
+        // The offset takes the bottom inset back out on iOS. The stack below
+        // pads by it, and the keyboard covers the home indicator, so without
+        // this the note sat the inset's height further above the keys.
         <KeyboardAvoidingView style={{flex: 1, backgroundColor: palette.base}}
-                              behavior={Platform.OS === "ios" ? "padding" : undefined}>
+                              behavior={Platform.OS === "ios" ? "padding" : undefined}
+                              keyboardVerticalOffset={Platform.OS === "ios" ? -insets.bottom : 0}>
         {/* Hidden from the reader while the bean sheet is up. XbrwSheet is
             not a modal, so on Android `accessibilityViewIsModal` on the sheet
-            does not take the screen behind it out of the reader's path. */}
-        <YStack {...STABLE_HOST} flex={1} backgroundColor={palette.base} padding="$4" gap="$3"
+            does not take the screen behind it out of the reader's path.
+
+            The bottom padding carries the inset. The root of the app is a
+            plain view rather than a SafeAreaView, so this screen reaches the
+            bottom of the display, and on Android 15+ that is behind the
+            navigation bar: with three-button navigation CANCEL and START
+            BREWING sat half under it. The mini bar, which clears the inset on
+            other screens, is not drawn on this one.
+
+            The top carries the status bar's inset on Android, for the same
+            reason: the modal is a full-screen page there, and the recipe title
+            and the close chevron were drawn over the clock. On iOS the modal
+            is a sheet that starts below the status bar, and the inset the
+            root provider reports would open a gap above the title. */}
+        <YStack {...STABLE_HOST} testID="brew-screen" flex={1} backgroundColor={palette.base}
+                padding="$4" paddingBottom={SCREEN_PADDING + insets.bottom}
+                paddingTop={SCREEN_PADDING + (Platform.OS === "android" ? insets.top : 0)}
+                gap="$3"
                 accessibilityElementsHidden={namingBean || ratingNoteOpen}
                 importantForAccessibility={namingBean || ratingNoteOpen
                     ? "no-hide-descendants"
@@ -527,8 +550,11 @@ export default function Brew({historyStore}: {historyStore?: ExportStore} = {}) 
                 </Pressable>
                 <MachineDot status={status} collapsed={false}
                             onPress={() => void connect()} />
+                {/* Two lines, so a roaster's long name still says which
+                    coffee this is. The row centres on it, and the chart below
+                    measures what is left rather than assuming a height. */}
                 <DotMatrixText testID="brew-recipe-title" fontSize={13}
-                               color={palette.dim} numberOfLines={1}
+                               color={palette.dim} numberOfLines={2}
                                style={{flex: 1}}>
                     {recipe.displayName()}
                 </DotMatrixText>

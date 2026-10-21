@@ -6,6 +6,7 @@ import * as Clipboard from "expo-clipboard";
 import HomeScreen, {EDITOR_PUSH_GUARD_MS} from "@/app/index";
 import {measureTilePicture} from "@/test-utils/pictureLayout";
 import Recipe, {CUP_TYPE} from "@/library/Recipe";
+import RecipeDatabase from "@/library/RecipeDatabase";
 import Pour, {POUR_PATTERN} from "@/library/Pour";
 import {XBloomRecipe} from "@/library/XBloomRecipe";
 import {renderWithProviders, SHEET_PRESS_TIMEOUT} from "@/test-utils/render";
@@ -3054,6 +3055,36 @@ describe("the import deep link", () => {
         return url.toString();
     };
 
+    it("reports a failed enrichment save without opening or changing the held recipe", async () => {
+        const held = writable("My coffee");
+        held.shareId = "abc123";
+        const before = JSON.stringify(held);
+        const db = store([held]);
+        const save = jest.mocked(RecipeDatabase.prototype.updateRecipe).mockClear()
+            .mockImplementationOnce(() => {
+                throw new Error("database write failed");
+            });
+        const incoming = new Recipe(undefined, before);
+        incoming.uuid = "incoming-import";
+        mockGetRecipe = () => incoming;
+        mockImportUrl = link({
+            "bean.name": "Peru",
+            "bean.image": "https://roaster.example/peru.png"
+        });
+
+        await renderWithProviders(
+            <HomeScreen db={db} settings={new Settings(memoryStorage())}/>
+        );
+
+        await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+        await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(
+            "Couldn't save the recipe. Try importing it again."
+        ));
+        expect(mockPush).not.toHaveBeenCalled();
+        expect(JSON.stringify(held)).toBe(before);
+        expect(mockNotify).not.toHaveBeenCalledWith(expect.objectContaining({tone: "info"}));
+    });
+
     it("imports the recipe the link points at", async () => {
         mockFetchRecipeDetail = () => new Promise<void>(() => {});
         mockImportUrl = link();
@@ -3076,7 +3107,9 @@ describe("the import deep link", () => {
             "bean.name":       "Finca La Esperanza",
             "bean.roaster":    "Some Roastery",
             "bean.processing": "Washed",
-            "recipe.url":      "https://brewmind.coffee/recipe/esperanza"
+            "recipe.url":      "https://brewmind.coffee/recipe/esperanza",
+            "recipe.name":     "Colombia | La Esperanza | Washed - 15g",
+            "bean.image":      "https://brewmind.coffee/bag.png"
         });
 
         await renderWithProviders(
@@ -3094,6 +3127,11 @@ describe("the import deep link", () => {
         expect(fetched.source).toBe("brewmind");
         // The producer's own page, which the editor offers a way back to.
         expect(fetched.recipeUrl).toBe("https://brewmind.coffee/recipe/esperanza");
+        // The producer's name for it, on the recipe's own name.
+        expect(fetched.name).toBe("Colombia | La Esperanza | Washed - 15g");
+        // The fetched recipe was made without a pod, so it has no artwork and
+        // the bag shot becomes the picture.
+        expect(fetched.imageURL).toBe("https://brewmind.coffee/bag.png");
     });
 
     it("imports once, however many times the screen renders", async () => {

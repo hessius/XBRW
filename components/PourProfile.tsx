@@ -53,6 +53,41 @@ export function buildProfilePath(pours: Pour[], width: number, height: number): 
     return "M" + points.map(([x, y]) => `${round(x)} ${round(y)}`).join(" L");
 }
 
+/**
+ * How high `buildProfilePath`'s line stands at `x`, measured up from its
+ * baseline, in the same units as `width` and `height`.
+ *
+ * The line only ever climbs, so this is also the highest it gets anywhere left
+ * of `x`. The recipe header uses it to keep a long name clear of the watermark
+ * without reserving the watermark's full height under a line that only runs
+ * over its low end.
+ */
+export function profileHeightAt(pours: Pour[], width: number, height: number, x: number): number {
+    if (pours.length === 0 || x <= 0) {
+        return 0;
+    }
+    const volumeOf = (pour: Pour) => Math.max(pour.volume, 0);
+    const total = pours.reduce((sum, pour) => sum + volumeOf(pour), 0);
+    if (total <= 0) {
+        return 0;
+    }
+    let before = 0;
+    for (let i = 0; i < pours.length; i++) {
+        const after = before + volumeOf(pours[i]) / total;
+        const riseStart = (i / pours.length) * width;
+        const riseEnd = ((i + 0.62) / pours.length) * width;
+        if (x < riseEnd) {
+            return (before + (after - before) * Math.max(0, x - riseStart) / (riseEnd - riseStart))
+                * height;
+        }
+        if (x <= ((i + 1) / pours.length) * width) {
+            return after * height;
+        }
+        before = after;
+    }
+    return height;
+}
+
 type Props = {
     pours: Pour[];
     width: number;

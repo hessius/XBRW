@@ -62,3 +62,21 @@ clears the recipe buffer before choosing one.
 - [ ] Editor headers remain photo-free with either ABOUT preference.
 - [ ] Measure cold/warm photo-heavy shelf opening under #253. Earlier mounting
   is not evidence of cache hits or a guaranteed native performance improvement.
+
+## Package C: grouped native and import checks
+
+- [ ] Rebuild Android at the exact 2.2.0 source. Check gesture and three-button
+  navigation, status-bar clearance, dark navigation treatment, keyboard and
+  pinned brew controls across the affected routes and sheets.
+- [ ] Check iOS note entry and sheet keyboard offsets without extra gaps.
+- [ ] Check long names at narrow widths, foldable widths and large system text;
+  the editor name stays clear of the profile and its header remains photo-free.
+- [ ] XPOD shows available coffee details, omits blanks/duplicate links and
+  updates after in-place edits without toggling decks.
+- [ ] Import a producer link with a name, image and coffee details, then reimport
+  over edited local metadata. Only blanks fill; local names and brews remain.
+- [ ] Refuse the existing-recipe database write: show a save error, keep the
+  held recipe unchanged and do not navigate or announce success. Retry the same
+  import after storage recovers, including the clipboard shortcut.
+- [ ] Round-trip backup and BrewMind import/share details. External-app and
+  native-device acceptance remain open; software tests are not these results.

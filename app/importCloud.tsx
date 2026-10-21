@@ -1,13 +1,13 @@
 import router from "@/hooks/steadyRouter";
 import React, {useState} from "react";
 import {FlatList} from "react-native-gesture-handler";
-import {useSafeAreaInsets} from "react-native-safe-area-context";
 import {Button, Input, Text, YStack, type ColorTokens} from "tamagui";
 
 import CloudImportRow from "@/components/CloudImportRow";
 import {notify} from "@/components/XbrwToast";
 import ScreenHeader from "@/components/ScreenHeader";
 import {palette} from "@/constants/colors";
+import {useBottomInset} from "@/hooks/useBottomInset";
 import {useCloudImport} from "@/hooks/useCloudImport";
 
 import RecipeDatabase from "@/library/RecipeDatabase";
@@ -59,7 +59,7 @@ export default function ImportCloudScreen() {
         replaceRecipe: (uuid, recipe) => database.updateRecipe(uuid, recipe),
     });
 
-    const insets = useSafeAreaInsets();
+    const bottomInset = useBottomInset();
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
 
@@ -330,7 +330,7 @@ export default function ImportCloudScreen() {
             {showImportBar && (
                 <YStack testID="import-bar"
                         paddingHorizontal="$4" paddingTop="$3"
-                        paddingBottom={Math.max(insets.bottom, 12)}
+                        paddingBottom={Math.max(bottomInset, 12)}
                         backgroundColor={palette.base}
                         borderTopWidth={1} borderTopColor={palette.line}>
                     <Button

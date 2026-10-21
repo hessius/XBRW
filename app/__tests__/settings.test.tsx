@@ -1,5 +1,7 @@
 import * as Application from "expo-application";
 import React from "react";
+import {StyleSheet} from "react-native";
+import {SafeAreaProvider} from "react-native-safe-area-context";
 import {screen, fireEvent, act, within, waitFor} from "@testing-library/react-native";
 import type {ReactTestRendererJSON} from "react-test-renderer";
 
@@ -8,7 +10,9 @@ import {SUPPORT_TITLE} from "@/components/SupportTile";
 import {palette} from "@/constants/colors";
 import Recipe from "@/library/Recipe";
 import {DEFAULTS, NOT_IN_BACKUP, Settings, type SettingKey, type SettingsStorage} from "@/library/Settings";
-import {renderWithProviders, SHEET_PRESS_TIMEOUT} from "@/test-utils/render";
+import {
+    renderWithProviders, SHEET_PRESS_TIMEOUT, THREE_BUTTON_METRICS
+} from "@/test-utils/render";
 
 /**
  * The rendered text of a `toJSON()` tree, in document order.
@@ -219,6 +223,38 @@ describe("SettingsScreen", () => {
         expect(settings.get("askForRatings")).toBe(false);
         await fireEvent.press(screen.getByRole("radio", {name: "50 MB"}));
         expect(settings.get("brewTraceBudgetMB")).toBe(50);
+    });
+
+    it("lets the last settings scroll clear of a three-button navigation bar", async () => {
+        // The screen is drawn under Android's 48 point navigation bar. With the
+        // old fixed 48 point end, the storage control at the bottom could
+        // scroll no further than the bar's top edge.
+        await renderWithProviders(
+            <SafeAreaProvider initialMetrics={THREE_BUTTON_METRICS}>
+                <SettingsScreen settings={new Settings(memoryStorage())}/>
+            </SafeAreaProvider>
+        );
+        const content = StyleSheet.flatten(
+            screen.getByTestId("settings-scroll").props.contentContainerStyle
+        );
+
+        expect(content.paddingBottom).toBe(48 + 24);
+    });
+
+    it("keeps its designed scroll end on a gesture navigation bar", async () => {
+        // A gesture bar is a thin strip with a handle on it, so the end the
+        // screen was designed with already clears it. No extra gap.
+        const gesture = {...THREE_BUTTON_METRICS, insets: {...THREE_BUTTON_METRICS.insets, bottom: 16}};
+        await renderWithProviders(
+            <SafeAreaProvider initialMetrics={gesture}>
+                <SettingsScreen settings={new Settings(memoryStorage())}/>
+            </SafeAreaProvider>
+        );
+        const content = StyleSheet.flatten(
+            screen.getByTestId("settings-scroll").props.contentContainerStyle
+        );
+
+        expect(content.paddingBottom).toBe(48);
     });
 
     it("shows the coffee marker toggle in its stored state", async () => {

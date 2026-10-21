@@ -10,6 +10,17 @@ describe("ScreenHeader", () => {
         expect(screen.getByText("Settings")).toBeTruthy();
     });
 
+    it("keeps a screen name to one line and lets a recipe name take two", async () => {
+        await renderWithProviders(<ScreenHeader title="Settings" onBack={jest.fn()}/>);
+        expect(screen.getByTestId("screen-title-text").props.numberOfLines).toBe(1);
+
+        await renderWithProviders(
+            <ScreenHeader title="Colombia | Las Flores | Chiroso Natural - 18g"
+                          titleLines={2} onBack={jest.fn()}/>
+        );
+        expect(screen.getByTestId("screen-title-text").props.numberOfLines).toBe(2);
+    });
+
     it("goes back when the key is pressed", async () => {
         const onBack = jest.fn();
         await renderWithProviders(<ScreenHeader title="About" onBack={onBack}/>);

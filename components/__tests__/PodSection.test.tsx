@@ -32,6 +32,45 @@ function linked(over: Partial<Recipe> = {}): Recipe {
 }
 
 describe("PodSection", () => {
+    it("shows the pod name after a lookup mutates the same recipe", async () => {
+        // The lookup writes the pod name onto the recipe the section already
+        // holds, so a memoised child keyed on that reference would keep
+        // drawing the unlinked state.
+        const recipe = linked({xbloomName: ""});
+        const properties = props({recipe});
+        const {rerender} = await renderWithProviders(<PodSection {...properties}/>);
+        expect(screen.getByTestId("pod-none")).toBeTruthy();
+        expect(screen.queryByTestId("pod-linked")).toBeNull();
+
+        recipe.xbloomName = "Ethiopia Guji";
+        await rerender(<PodSection {...properties}/>);
+
+        expect(screen.queryByTestId("pod-none")).toBeNull();
+        expect(screen.getByTestId("pod-linked")).toBeTruthy();
+        expect(screen.getAllByText("Ethiopia Guji")).toHaveLength(1);
+    });
+
+    it("lists what the pod carries directly under the pod line", async () => {
+        await renderWithProviders(
+            <PodSection {...props({recipe: linked({
+                coffee: {name: "Ethiopia Guji", roaster: "Some Roastery", processing: "Natural"}
+            })})}/>
+        );
+
+        expect(screen.getAllByTestId(/^pod-(linked|coffee)$/).map((node) => node.props.testID))
+            .toEqual(["pod-linked", "pod-coffee"]);
+        expect(screen.getByLabelText("Roaster, Some Roastery")).toBeTruthy();
+        expect(screen.getByLabelText("Process, Natural")).toBeTruthy();
+        // The pod line already names it.
+        expect(screen.getAllByText("Ethiopia Guji")).toHaveLength(1);
+    });
+
+    it("adds nothing under the pod line for a recipe without a coffee", async () => {
+        await renderWithProviders(<PodSection {...props({recipe: linked()})}/>);
+
+        expect(screen.queryByTestId("pod-coffee")).toBeNull();
+    });
+
     it("draws the ID field even for a recipe with no pod", async () => {
         // Always there, because someone hunting for the field needs it in a
         // fixed place rather than in a section that appears once they have

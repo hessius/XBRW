@@ -35,6 +35,17 @@ function Providers({children}: { children: React.ReactNode }) {
 /** The insets `renderWithProviders` supplies, for tests that assert on them. */
 export const TEST_INSETS = METRICS.insets;
 
+/**
+ * An Android phone with three-button navigation: a 48 point bar the system
+ * paints opaque across the bottom of the display, which the app is drawn under.
+ * Wrap a tree in `<SafeAreaProvider initialMetrics={THREE_BUTTON_METRICS}>`
+ * to put it on one; the nearest provider wins.
+ */
+export const THREE_BUTTON_METRICS: Metrics = {
+    frame:  {x: 0, y: 0, width: 412, height: 915},
+    insets: {top: 32, left: 0, right: 0, bottom: 48}
+};
+
 export function renderWithProviders(
     ui: React.ReactElement,
     options?: Omit<RenderOptions, "wrapper">

@@ -1,9 +1,10 @@
 import React from "react";
-import {Share, StyleSheet, TextInput} from "react-native";
+import {Platform, Share, StyleSheet, TextInput} from "react-native";
+import {SafeAreaProvider} from "react-native-safe-area-context";
 import {act, fireEvent, screen, waitFor, within} from "@testing-library/react-native";
 
 import EditRecipe, {PROFILE_HEIGHT, stageScrollTarget} from "@/app/editRecipe";
-import {renderWithProviders, SHEET_PRESS_TIMEOUT} from "@/test-utils/render";
+import {renderWithProviders, SHEET_PRESS_TIMEOUT, THREE_BUTTON_METRICS} from "@/test-utils/render";
 import {sharedSlotDatabase} from "@/hooks/useEasyModeSlots";
 
 import Pour, {POUR_PATTERN} from "@/library/Pour";
@@ -1249,6 +1250,22 @@ describe("the stages deck", () => {
         expect(
             screen.getByTestId("editor-scroll").props.contentContainerStyle.paddingBottom
         ).toBeGreaterThanOrEqual(200);
+    });
+
+    it("keeps BREW, WRITE and SAVE clear of a three-button navigation bar", async () => {
+        // The bar is pinned to the bottom of a screen drawn under Android's
+        // navigation bar. It used to sink 5 points into the inset everywhere,
+        // which on a 48 point opaque bar hid the bottom of the buttons. iOS
+        // keeps the sink: there the inset is the home indicator.
+        mockRecipeJSON = JSON.stringify(fixture());
+        await renderWithProviders(
+            <SafeAreaProvider initialMetrics={THREE_BUTTON_METRICS}>
+                <EditRecipe key="editor"/>
+            </SafeAreaProvider>
+        );
+        const bar = StyleSheet.flatten(screen.getByTestId("editor-actions").props.style);
+
+        expect(bar.paddingBottom).toBe(Platform.OS === "ios" ? 48 - 5 : 48);
     });
 
     it("opens the stage whose part of the curve was tapped", async () => {

@@ -5,6 +5,7 @@ import {Text, XStack, YStack} from "tamagui";
 import DeckSection from "@/components/DeckSection";
 import DotIcon from "@/components/DotIcon";
 import DotMatrixText from "@/components/DotMatrixText";
+import PodCoffeeRows from "@/components/PodCoffeeRows";
 import TextFieldRow from "@/components/TextFieldRow";
 import {palette} from "@/constants/colors";
 import Recipe, {isValidXID} from "@/library/Recipe";
@@ -30,6 +31,9 @@ const POD_SIZE = 44;
  * Copying would freeze a string, and the day the pod name changes or the ID is
  * corrected, yours would go on saying something slightly wrong forever. One tap
  * in, one tap out, and which of the two is in force is visible either way.
+ *
+ * Under the pod line sits what the pod carries: roaster, origin, process and
+ * the rest (`PodCoffeeRows`), each only when it has a value.
  */
 export default function PodSection({
     recipe, showHint, showAvatar, xidLookupFailed, externalEpoch,
@@ -54,6 +58,9 @@ export default function PodSection({
     /** Clears the recipe's own name, putting the title back on the pod's. */
     onFollowPod: () => void;
 }) {
+    "use no memo";
+
+    // A late pod lookup mutates the recipe; cached children must follow that update.
     const [podFailed, setPodFailed] = useState(false);
 
     const linked = recipe.xbloomName.trim().length > 0;
@@ -62,7 +69,9 @@ export default function PodSection({
     // answer one question -- does a picture help at all -- and it could not
     // answer it while half the pictures it names drew regardless of it. Its own
     // description already promised the pod photo; this section had simply never
-    // been asked.
+    // been asked. It now names the coffee photo too, because an import link's
+    // `bean.image` becomes `imageURL` on a recipe made without a pod
+    // (`decorateImport`), and this is where that picture is drawn.
     const podImage = showAvatar ? recipe.imageURL ?? "" : "";
 
     return (
@@ -158,6 +167,8 @@ export default function PodSection({
                     )}
                 </XStack>
             )}
+
+            <PodCoffeeRows recipe={recipe}/>
         </DeckSection>
     );
 }

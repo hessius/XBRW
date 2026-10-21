@@ -15,6 +15,7 @@ import {notify} from "@/components/XbrwToast";
 import {palette} from "@/constants/colors";
 import {useMachine} from "@/hooks/useMachine";
 import {useSetting} from "@/hooks/useSetting";
+import {useScrollEndPadding} from "@/hooks/useBottomInset";
 import BrewDatabase, {type StoredFrameLogSummary} from "@/library/BrewDatabase";
 import {formatBrewDate, formatBrewTime} from "@/library/brew/brewFormat";
 import {COMMANDS, type Command, frameFor, type Tier} from "@/library/machine/commands";
@@ -293,6 +294,9 @@ function CommandRow({command, onSend}: CommandRowProps) {
  * so the session can be pasted into a bug report.
  */
 export default function MachineConsole() {
+    // The end of the scroll clears whatever is under the screen: the
+    // navigation bar on Android, the home indicator on iOS.
+    const scrollEnd = useScrollEndPadding(48);
     const {machine, status, connect} = useMachine();
     const [brewDatabase] = useState(() => new BrewDatabase());
     const [acknowledged, setAcknowledged] = useSetting("machineConsoleAcknowledged");
@@ -474,7 +478,7 @@ export default function MachineConsole() {
     return (
         <YStack flex={1} backgroundColor={palette.base}>
             <ScreenHeader title="Machine console" onBack={() => router.back()}/>
-            <ScrollView contentContainerStyle={{padding: 16, paddingBottom: 48}}>
+            <ScrollView contentContainerStyle={{padding: 16, paddingBottom: scrollEnd}}>
                 <YStack gap="$2" padding="$4" borderRadius="$5"
                         borderColor={machineState === null ? palette.warn : palette.success}
                         borderWidth={1} backgroundColor={palette.surface}>

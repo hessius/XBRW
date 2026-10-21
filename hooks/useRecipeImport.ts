@@ -3,10 +3,14 @@ import {useEffect, useRef, useState} from "react";
 import {TYPING_DEBOUNCE_MS} from "@/constants/motion";
 import {sharedSettings} from "@/hooks/useSetting";
 import {resolveOnOpen} from "@/library/duplicates";
-import {decorateImport, type ImportDecoration} from "@/library/importDecoration";
+import {
+    decorateImport,
+    fillImportBlanks,
+    type ImportDecoration
+} from "@/library/importDecoration";
 import {parseImportInput, type ImportSource} from "@/library/importInput";
 import {asMachineModel} from "@/library/machine/machineModel";
-import type Recipe from "@/library/Recipe";
+import Recipe from "@/library/Recipe";
 import {XBloomRecipe} from "@/library/XBloomRecipe";
 
 /**
@@ -35,14 +39,8 @@ const DEBOUNCE_MS = TYPING_DEBOUNCE_MS;
  */
 const ABANDONED_MS = 2500;
 
-/**
- * Why a lookup failed.
- *
- * Three reasons rather than one, because "something went wrong" is not worth
- * writing. Each names the thing the reader can act on: their connection, their
- * input, or nothing at all.
- */
-export type ImportErrorReason = "network" | "notFound" | "unusable";
+/** Lookup and local persistence failures have different remedies. */
+export type ImportErrorReason = "network" | "notFound" | "unusable" | "storage";
 
 /** What the found panel draws. Everything it needs, and nothing else. */
 export type ImportPreview = {
@@ -51,7 +49,10 @@ export type ImportPreview = {
     isExisting: boolean;
     name: string;
     subtitle: string;
-    /** The pod photo, or `""`. Absent for every shared recipe. */
+    /**
+     * The recipe's own picture (pod artwork, or the coffee photo an import
+     * link brought), else the pod photo, else `""`.
+     */
     imageURL: string;
 };
 
@@ -107,6 +108,13 @@ type Options = {
     stored: Recipe[] | (() => Recipe[]);
     /** Navigation belongs to the screen; the timing rule belongs here. */
     onOpenRecipe: (recipe: Recipe, isExisting: boolean) => void;
+    /**
+     * Write a stored recipe back after an import link filled its blanks
+     * (`fillImportBlanks`). Called once with a staged copy before the held
+     * recipe changes or opens. Throw on failure to preserve the held copy.
+     * Optional: without it the filled recipe opens and is saved by the editor.
+     */
+    onSaveExisting?: (recipe: Recipe) => void;
 };
 
 export type RecipeImport = {
@@ -171,7 +179,7 @@ export type RecipeImport = {
     reset: () => void;
 };
 
-export function useRecipeImport({stored, onOpenRecipe}: Options): RecipeImport {
+export function useRecipeImport({stored, onOpenRecipe, onSaveExisting}: Options): RecipeImport {
     const [value, setValue] = useState("");
     const [state, setState] = useState<ImportState>({status: "idle"});
     const [hint, setHint] = useState(false);
@@ -248,6 +256,10 @@ export function useRecipeImport({stored, onOpenRecipe}: Options): RecipeImport {
     useEffect(() => {
         onOpenRef.current = onOpenRecipe;
     }, [onOpenRecipe]);
+    const onSaveRef = useRef(onSaveExisting);
+    useEffect(() => {
+        onSaveRef.current = onSaveExisting;
+    }, [onSaveExisting]);
 
     useEffect(() => () => {
         clearTimers();
@@ -340,9 +352,9 @@ export function useRecipeImport({stored, onOpenRecipe}: Options): RecipeImport {
         }
 
         // Before de-duplication, and on the candidate rather than the result.
-        // If this recipe is already held, the stored one wins below and keeps
-        // its own coffee: a link must not rewrite the coffee on a recipe the
-        // user has already edited.
+        // If this recipe is already held, the stored one wins below: a link
+        // must not rewrite a recipe the user has already edited. It may only
+        // fill that recipe's blanks, which happens after the match.
         if (decoration !== undefined) decorateImport(candidate, decoration);
 
         // "brew", not the card-bytes default: an imported recipe carries its
@@ -354,6 +366,26 @@ export function useRecipeImport({stored, onOpenRecipe}: Options): RecipeImport {
             ? storedRef.current()
             : storedRef.current;
         const {recipe, isExisting} = resolveOnOpen(storedNow, candidate, "brew");
+
+        // A held recipe first imported before the link carried a picture or a
+        // coffee would otherwise never get one, however often it is
+        // re-imported. Empty places only; see `fillImportBlanks`.
+        if (
+            isExisting &&
+            decoration !== undefined
+        ) {
+            const updated = new Recipe(undefined, JSON.stringify(recipe));
+            if (fillImportBlanks(updated, decoration)) {
+                try {
+                    onSaveRef.current?.(updated);
+                } catch {
+                    fail("storage", "Couldn't save the recipe. Try importing it again.");
+                    setFocusField(false);
+                    return;
+                }
+                Object.assign(recipe, updated);
+            }
+        }
 
         // A paste into the field and a share intent both navigate on their own.
         // A shortcut navigates only for a recipe not already held: the tile's
@@ -383,7 +415,9 @@ export function useRecipeImport({stored, onOpenRecipe}: Options): RecipeImport {
                 isExisting,
                 name:     xb.getName(),
                 subtitle: xb.getSubtitle(),
-                imageURL: xb.getImageURL()
+                // The recipe's own picture first: a held recipe keeps its own,
+                // and may just have been given one by `fillImportBlanks`.
+                imageURL: recipe.imageURL || xb.getImageURL()
             }
         });
     }

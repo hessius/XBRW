@@ -87,3 +87,35 @@ requests even with card photos OFF.
 
 Photo performance remains open in #253; no new cache policy, native timing
 measurement or hardware acceptance is claimed.
+
+## Package C: layout, identity and import enrichment
+
+Source heads are preserved in merge history:
+
+- #232: `e39db687627a2e55b7bba6c5a1d494da740d0a07`.
+- #234: `2e40b738ca04226ceabdd060a49ee8f8411887ed`.
+- #230: `7783cffcb8a8efe13c9decd84ea151b1bd575d7c`.
+- #223: `02df5e02fc9d670bf3d9a7db21f7c50ff0139056`.
+
+Android screens, sheets and pinned brew controls own their bottom insets, and
+the full-screen brew page clears the status bar. iOS keyboard offsets preserve
+the note position. The native navigation-bar plugin keeps Android's dark
+navigation treatment. Package B's fixed Fabric hosts remain in place.
+
+Long editor names wrap in a bounded, fitted layout clear of the watermark;
+other recipe headers can use a second line. The editor header remains
+photo-free. Optional coffee details live in XPOD on ABOUT, omit blanks and
+duplicate links/names, and stay fresh after in-place edits under React Compiler.
+
+Import links may carry a fitted recipe name and coffee/producer decoration.
+New imports use it; existing recipes receive only missing metadata, preserving
+their name, brewing choices and nonblank details. The approved preview
+correction `540476dd` is adapted to this standalone import path: stage one
+copy, persist once before changing the held object, and surface a storage error
+without opening the editor or retaining unsaved enrichment. Reimport can retry.
+Unaccepted author-refresh/subscription behavior is not introduced.
+
+The native navigation configuration deliberately moves `expo.version` to
+2.2.0 under the unchanged `appVersion` runtime policy. Schemes, EAS profiles,
+channels, SDK and dependency manifests are unchanged. This is not a native build,
+submission, deployment or hardware pass.

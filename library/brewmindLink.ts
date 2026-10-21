@@ -1,3 +1,5 @@
+import {fitSizedName} from "@/library/fitName";
+import {MAX_NAME} from "@/library/Recipe";
 import {LEGACY_NAMES, PodCoffee, httpsUrl, podCoffeeFromStored} from "@/library/podCoffee";
 
 /**
@@ -101,6 +103,17 @@ export type BrewMindLink = {
      * through xBloom. https only, on the same reasoning as an image.
      */
     recipeUrl?: string;
+    /**
+     * `recipe.name`: what the producer calls this recipe.
+     *
+     * A roaster's xBloom recipe is usually named for the person who keyed it
+     * into xBloom ("col chiroso -18g") rather than for the coffee, and the
+     * share link can only carry that name. This lets the page that sent the
+     * link name it properly. It lands on the recipe's own `name`, the one a
+     * rename writes, so `xbloomName` keeps what xBloom said and USE THIS NAME
+     * still has something to go back to.
+     */
+    recipeName?: string;
 };
 
 /**
@@ -150,6 +163,26 @@ export function parseBrewMindLink(link: string): BrewMindLink | null {
     if (recipeUrl !== undefined && recipeUrl.length <= MAX_URL) {
         const checked = httpsUrl(recipeUrl);
         if (checked !== undefined) result.recipeUrl = checked;
+    }
+
+    // Held to the rename sheet's ceiling rather than `SHORT_TEXT`. This is a
+    // recipe name, not a bean field, and a link that could set a name the
+    // sheet would refuse to hold would leave the user unable to edit what they
+    // were given. A longer name is fitted, not dropped: dropping it left the
+    // recipe on xBloom's own name, which for a roaster is whatever its account
+    // typed ("col Java hydrohoney -18g"). `fitSizedName` keeps a " - 18g"
+    // suffix whole and shortens only what comes before it, removing trailing
+    // bracketed groups and then whole words, with an ellipsis when words go.
+    // Nothing is cut mid-word, so the result is the sender's name, shortened
+    // where it says so, rather than a confident wrong one.
+    //
+    // Runs of whitespace fold to one space first. A name is a one-line title
+    // in the header and on the card, and a line break, a tab or a U+2028 sent
+    // in the link would split it there. JS `\s` already covers the Unicode
+    // separators, so one rule is enough.
+    const recipeName = params.get("recipe.name")?.replace(/\s+/g, " ").trim();
+    if (recipeName !== undefined && recipeName !== "") {
+        result.recipeName = fitSizedName(recipeName, MAX_NAME);
     }
     return result;
 }

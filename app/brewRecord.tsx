@@ -2,6 +2,7 @@ import {useLocalSearchParams} from "expo-router";
 import router from "@/hooks/steadyRouter";
 import React, {useState} from "react";
 import {PixelRatio, ScrollView, useWindowDimensions} from "react-native";
+import {useSafeAreaInsets} from "react-native-safe-area-context";
 import {Text, XStack, YStack} from "tamagui";
 
 import BrewJudgement from "@/components/BrewJudgement";
@@ -172,6 +173,7 @@ type Props = {
 export default function BrewRecord({recipeLookup}: Props) {
     const {id, latest} = useLocalSearchParams<{id?: string; latest?: string}>();
     const {width} = useWindowDimensions();
+    const insets = useSafeAreaInsets();
 
     const {open, brews} = useBrewHistory();
 
@@ -529,7 +531,11 @@ export default function BrewRecord({recipeLookup}: Props) {
                         // A tap on a star while the keyboard is up rates the
                         // brew rather than being eaten by the dismiss.
                         keyboardShouldPersistTaps="handled"
-                        contentContainerStyle={{paddingBottom: 24, gap: 8}}>
+                        // Plus the inset: the screen runs to the bottom of the
+                        // display, and on Android that is under the navigation
+                        // bar, which hid the end of the record. The mini bar
+                        // that clears it elsewhere is silent on this route.
+                        contentContainerStyle={{paddingBottom: 24 + insets.bottom, gap: 8}}>
             {watched ? (
                 <BrewSummary
                     {...summary}

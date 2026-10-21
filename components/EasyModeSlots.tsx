@@ -1,7 +1,6 @@
 import React, {useEffect, useRef, useState} from "react";
 import {AccessibilityInfo, findNodeHandle, FlatList, Pressable, ScrollView, View} from "react-native";
 import {Button, Input, Text, XStack, YStack, type ColorTokens} from "tamagui";
-import {useSafeAreaInsets} from "react-native-safe-area-context";
 import Recipe from "@/library/Recipe";
 import {resolveAccent} from "@/library/accent";
 import {overflowFor} from "@/library/brew/overflowConfig";
@@ -10,6 +9,7 @@ import {
     type SlotIndex, type SlotJournal, type SlotRecord
 } from "@/library/slots/slotModel";
 import {SLOT_INTEGRATION_BLOCK} from "@/library/slots/slotWriter";
+import {useBottomInset} from "@/hooks/useBottomInset";
 import type {SlotAttempt} from "@/hooks/useEasyModeSlots";
 import {useLiveBrewBarGuard} from "@/hooks/useLiveBrewBarGuard";
 import EasyModeSlotCard, {teaSlotFigures} from "@/components/EasyModeSlotCard";
@@ -281,7 +281,7 @@ export default function EasyModeSlots({
     const writeRef = writeControlRef ?? ownWriteRef;
     const focusOrigin = useRef<React.RefObject<React.ComponentRef<typeof Button> | null> | null>(null);
     const wasCovered = useRef(false);
-    const insets = useSafeAreaInsets();
+    const bottomInset = useBottomInset();
     const currentAttempt: SlotAttempt | null = attempt === null && running
         ? {deviceId, serial: serial ?? record.journal?.serial ?? null, operation: "write", status: "writing"}
         : attempt?.deviceId === deviceId
@@ -336,7 +336,11 @@ export default function EasyModeSlots({
                 pointerEvents={covered ? "none" : "auto"}>
                 {header}
                 <ScrollView testID="easy-mode-cards" style={{flex: 1, minHeight: 0}}
-                    contentContainerStyle={{paddingHorizontal: 14, paddingBottom: 14, gap: 10}}>
+                    contentContainerStyle={{paddingHorizontal: 14, gap: 10,
+                        // The actions panel takes the inset while it is drawn.
+                        // During a write it is not, and the cards reach the
+                        // bottom of the screen themselves.
+                        paddingBottom: journal === null ? 14 : 14 + bottomInset}}>
                     <XStack justifyContent="space-between" alignItems="center" gap="$2" flexWrap="wrap">
                         {journal === null && <Text color={palette.dim} fontSize={12} flex={1}>
                             {record.experiment?.phase === "active"
@@ -421,7 +425,7 @@ export default function EasyModeSlots({
                 {journal === null && <ScrollView testID="easy-mode-actions" nestedScrollEnabled
                     style={{flexGrow: 0, flexShrink: 1, maxHeight: "60%", backgroundColor: palette.base,
                         borderTopWidth: 1, borderTopColor: palette.line}}
-                    contentContainerStyle={{padding: 14, gap: 10, paddingBottom: Math.max(insets.bottom, 14)}}>
+                    contentContainerStyle={{padding: 14, gap: 10, paddingBottom: Math.max(bottomInset, 14)}}>
                     {displayedFailure !== null && <Text selectable accessibilityRole="alert"
                         color={displayedFailure.tone === "error" ? palette.danger : palette.text}>
                         {displayedFailure.message}
@@ -470,7 +474,7 @@ export default function EasyModeSlots({
             </XbrwSheet>
             <XbrwSheet open={confirmationOpen} onOpenChange={open => { if (!open) setConfirmation(null); }}
                 title={confirmationKind === "retry" ? "RETRY WRITE" : onDismissWrite ? "STOP THIS WRITE" : "CANCEL THIS WRITE"} heightPercent={70}>
-                <ScrollView contentContainerStyle={{gap: 16, paddingBottom: insets.bottom}}>
+                <ScrollView contentContainerStyle={{gap: 16}}>
                     <Text color={palette.text} fontSize={23} fontWeight="600">
                         {confirmationKind === "retry" ? "Which screen is your machine showing?"
                             : onDismissWrite ? "Stop this write?" : "Back to normal?"}
@@ -510,7 +514,7 @@ export default function EasyModeSlots({
                 </ScrollView>
             </XbrwSheet>
             <XbrwSheet open={helpOpen} onOpenChange={setHelp} title="ABOUT EASY MODE" heightPercent={70}>
-                <ScrollView contentContainerStyle={{gap: 16, paddingBottom: insets.bottom}}>
+                <ScrollView contentContainerStyle={{gap: 16}}>
                     <Text color={palette.text}>Assign all three recipes. Your choices are kept on this phone immediately.</Text>
                     <Text color={palette.text}>Writing replaces A, B and C and switches the machine to EASY.</Text>
                     <Text color={palette.text}>Scale ON automatically tares the scale when that slot is started.</Text>

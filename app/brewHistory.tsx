@@ -3,6 +3,7 @@ import router from "@/hooks/steadyRouter";
 import React, {useRef, useState} from "react";
 import {FlatList} from "react-native-gesture-handler";
 import Swipeable, {type SwipeableMethods} from "react-native-gesture-handler/ReanimatedSwipeable";
+import {useSafeAreaInsets} from "react-native-safe-area-context";
 import {Button, Text, XStack, YStack} from "tamagui";
 
 import BrewHistoryRow from "@/components/BrewHistoryRow";
@@ -290,6 +291,7 @@ function SwipeableBrewRow({
  */
 export default function BrewHistory() {
     const {recipeUuid} = useLocalSearchParams<{recipeUuid?: string}>();
+    const insets = useSafeAreaInsets();
     const {brews, open, remove, refresh} = useBrewHistory();
     const historyQuery = useBrewHistoryQuery(recipeUuid);
     const [sortOpen, setSortOpen] = useState(false);
@@ -486,7 +488,10 @@ export default function BrewHistory() {
                             selected={selectedIds.includes(item.id)}
                         />
                     )}
-                    contentContainerStyle={{paddingVertical: 8}}
+                    // The last row scrolls clear of the navigation bar or
+                    // home indicator, the way the library's does. The mini bar
+                    // is silent here, so nothing else takes the inset.
+                    contentContainerStyle={{paddingTop: 8, paddingBottom: 8 + insets.bottom}}
                     ListEmptyComponent={
                         <YStack padding="$4" alignItems="center" gap="$2">
                             <DotMatrixText fontSize={14} weight="bold" letterSpacing={1.6}

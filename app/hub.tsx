@@ -1,7 +1,6 @@
 import React, {useEffect, useState} from "react";
 import {Pressable, ScrollView} from "react-native";
 import {FlatList} from "react-native-gesture-handler";
-import {useSafeAreaInsets} from "react-native-safe-area-context";
 import {Button, Text, XStack, YStack} from "tamagui";
 
 import HubFilterSheet from "@/components/HubFilterSheet";
@@ -16,6 +15,7 @@ import XbrwSheet from "@/components/XbrwSheet";
 import {notify} from "@/components/XbrwToast";
 import {onAccent, palette} from "@/constants/colors";
 import router from "@/hooks/steadyRouter";
+import {useBottomInset} from "@/hooks/useBottomInset";
 import {useHubBrowse} from "@/hooks/useHubBrowse";
 import {useHubSave} from "@/hooks/useHubSave";
 import {loadHubCriteria, roastLabel} from "@/library/hub/hubCriteria";
@@ -340,7 +340,7 @@ function HubFooter({
 }
 
 export default function HubScreen() {
-    const insets = useSafeAreaInsets();
+    const bottomInset = useBottomInset();
     const browse = useHubBrowse();
     const save = useHubSave();
     const [openFacet, setOpenFacet] = useState<HubFacet | null>(null);
@@ -423,7 +423,7 @@ export default function HubScreen() {
     const roastSheetSelected = criteria === null
         ? []
         : selectedRoastNames(criteria, browse.query.roasts);
-    const bottomPadding = insets.bottom + 8 + (choosing ? SAVE_BAR_SPACE : 0);
+    const bottomPadding = bottomInset + 8 + (choosing ? SAVE_BAR_SPACE : 0);
 
     let body: React.ReactNode;
     if (rows.length === 0 && browse.arriving) {
@@ -496,7 +496,7 @@ export default function HubScreen() {
                     count={chosen.size}
                     saving={save.saving}
                     progress={save.progress}
-                    paddingBottom={insets.bottom}
+                    paddingBottom={bottomInset}
                     onCancel={closeChoosing}
                     onSave={saveChosen}/>
             )}
