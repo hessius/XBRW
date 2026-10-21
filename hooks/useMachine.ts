@@ -23,7 +23,8 @@ import {
     BluetoothPermissionError,
     NoSavedMachineError,
     RadioUnavailableError,
-    SlotOperationError
+    SlotOperationError,
+    WrongMachineError
 } from "@/library/machine/errors";
 import {
     bestSavedMachine,
@@ -468,7 +469,12 @@ export async function openLink(
         // same goes for picking another machine meanwhile, which moves the
         // active machine rather than emptying it: hence "changed", not "empty".
         if (startedWith !== "" && store.rememberedId() !== startedWith) {
-            throw lastFailure ?? new Error("Connecting was cancelled.");
+            throw new WrongMachineError("Connecting was cancelled. The machine selection changed.");
+        }
+        if (saved.length >= 2 && !store.savedMachines?.().some(entry => entry.id === target)) {
+            throw new WrongMachineError(
+                "The selected machine is not saved any more. Choose a machine, then try again."
+            );
         }
         try {
             await attemptLink(machine, store, target);

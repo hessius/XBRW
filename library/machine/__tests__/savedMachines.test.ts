@@ -1,10 +1,14 @@
 import {
     MACHINE_LABEL_MAX,
+    addSavedMachine,
     bestSavedMachine,
+    machineColourOf,
     machineLabel,
+    machineOrderWord,
     machineTag,
     makeDefaultMachine,
     moveSavedMachine,
+    nextMachineColour,
     parseSavedMachines,
     removeSavedMachine,
     replaceSavedMachineId,
@@ -17,6 +21,7 @@ import {
     type ActiveMachine,
     type SavedMachine
 } from "@/library/machine/savedMachines";
+import {machineColours, palette} from "@/constants/colors";
 
 function saved(id: string, overrides: Partial<SavedMachine> = {}): SavedMachine {
     return {
@@ -32,7 +37,8 @@ const CAFE = ["bar-1", "bar-2", "window", "back", "spare"].map((id) => saved(id,
 
 describe("reading the stored list", () => {
     it("reads what it wrote", () => {
-        const machines = [saved("a", {label: "Home"}), saved("b", {label: "Work", model: "original"})];
+        const machines = [saved("a", {label: "Home", colour: 0}),
+                          saved("b", {label: "Work", model: "original", colour: 1})];
         expect(parseSavedMachines(serialiseSavedMachines(machines))).toEqual(machines);
     });
 
@@ -52,12 +58,13 @@ describe("reading the stored list", () => {
 
     it("reads a list written before serials were kept", () => {
         const {serial: _, ...old} = saved("a", {label: "Home"});
-        expect(parseSavedMachines(JSON.stringify([old]))).toEqual([saved("a", {label: "Home"})]);
+        expect(parseSavedMachines(JSON.stringify([old])))
+            .toEqual([saved("a", {label: "Home", colour: 0})]);
     });
 
     it("keeps the higher-priority copy of a duplicated id", () => {
         const raw = JSON.stringify([saved("a", {label: "first"}), saved("a", {label: "second"})]);
-        expect(parseSavedMachines(raw)).toEqual([saved("a", {label: "first"})]);
+        expect(parseSavedMachines(raw)).toEqual([saved("a", {label: "first", colour: 0})]);
     });
 
     it("treats anything that is not a JSON array as no list", () => {
@@ -71,8 +78,9 @@ describe("migrating somebody with one remembered machine", () => {
         const machines = resolveSavedMachines("", {
             deviceId: "AA:BB", model: "original", modelString: "J15", name: "XBLOOM 1"
         });
+        // Green, the colour the link glyph has always drawn one machine in.
         expect(machines).toEqual([saved("AA:BB", {
-            model: "original", modelString: "J15", advertisedName: "XBLOOM 1"
+            model: "original", modelString: "J15", advertisedName: "XBLOOM 1", colour: 0
         })]);
     });
 
@@ -87,9 +95,9 @@ describe("migrating somebody with one remembered machine", () => {
         const machines = resolveSavedMachines(raw, {
             deviceId: "b", model: "original", modelString: "X", name: "N"
         });
-        expect(machines[0]).toEqual(saved("a", {label: "Home"}));
+        expect(machines[0]).toEqual(saved("a", {label: "Home", colour: 0}));
         expect(machines[1]).toEqual(saved("b", {
-            label: "Work", model: "original", modelString: "X", advertisedName: "N"
+            label: "Work", model: "original", modelString: "X", advertisedName: "N", colour: 1
         }));
     });
 });
@@ -213,7 +221,7 @@ describe("choosing from one scan", () => {
     });
 
     it("marks nothing either way before anybody has looked", () => {
-        const {inRange, away} = splitByRange(CAFE, null, "bar-2");
+        const {inRange, away} = splitByRange(CAFE, null, null);
         expect(inRange).toEqual([]);
         expect(away).toHaveLength(5);
     });
@@ -233,5 +241,71 @@ describe("adding one of several unsaved machines", () => {
     it("keeps the order heard when the radio gives no strength", () => {
         const heard = [{id: "x", name: ""}, {id: "y", name: ""}];
         expect(unsavedMachines(heard, []).map((entry) => entry.id)).toEqual(["x", "y"]);
+    });
+});
+
+describe("machine colours", () => {
+    it("draws a machine with no colour in today's connected green", () => {
+        expect(machineColourOf({}).ink).toBe(palette.success);
+        expect(machineColourOf({}).muted).toBe(palette.successMuted);
+    });
+
+    it("gives the first machine green and the next ones the next unused colours", () => {
+        const raw = JSON.stringify([saved("a"), saved("b"), saved("c")]);
+        expect(parseSavedMachines(raw).map((machine) => machine.colour)).toEqual([0, 1, 2]);
+    });
+
+    it("never moves a colour somebody chose, and fills the gaps around it", () => {
+        const raw = JSON.stringify([saved("a"), saved("b", {colour: 0}), saved("c")]);
+        expect(parseSavedMachines(raw).map((machine) => machine.colour)).toEqual([1, 0, 2]);
+    });
+
+    it("reads back a colour it stored", () => {
+        const raw = serialiseSavedMachines([saved("a", {colour: 3}), saved("b", {colour: 2})]);
+        expect(parseSavedMachines(raw).map((machine) => machine.colour)).toEqual([3, 2]);
+    });
+
+    it("replaces a colour that is not in the palette rather than dropping the machine", () => {
+        const raw = JSON.stringify([{...saved("a"), colour: 99}, {...saved("b"), colour: "red"}]);
+        expect(parseSavedMachines(raw).map((machine) => [machine.id, machine.colour]))
+            .toEqual([["a", 0], ["b", 1]]);
+    });
+
+    it("gives an added machine the first colour nobody has", () => {
+        const list = addSavedMachine([saved("a", {colour: 0}), saved("b", {colour: 2})], saved("c"));
+        expect(list[2].colour).toBe(1);
+    });
+
+    it("repeats colours as evenly as it can once every one is taken", () => {
+        const taken = machineColours.map((_, colour) => ({colour}));
+        expect(nextMachineColour(taken)).toBe(0);
+        expect(nextMachineColour([...taken, {colour: 0}])).toBe(1);
+    });
+
+    it("changes a colour through an update, and ignores one that is not in the palette", () => {
+        const list = [saved("a", {colour: 0})];
+        expect(updateSavedMachine(list, "a", {colour: 2})[0].colour).toBe(2);
+        expect(updateSavedMachine(list, "a", {colour: 42})[0].colour).toBe(0);
+        expect(updateSavedMachine([saved("a")], "a", {label: "Home"})[0]).not.toHaveProperty("colour");
+    });
+
+    it("keeps a machine's colour when its identifier changes or it moves", () => {
+        const list = [saved("a", {colour: 3}), saved("b", {colour: 1})];
+        expect(replaceSavedMachineId(list, "a", "a2")[0].colour).toBe(3);
+        expect(makeDefaultMachine(list, "b").map((machine) => machine.colour)).toEqual([1, 3]);
+    });
+});
+
+describe("the connect order in words", () => {
+    it("says nothing with one machine, because there is no order", () => {
+        expect(machineOrderWord(0, 1)).toBeNull();
+        expect(machineOrderWord(0, 0)).toBeNull();
+    });
+
+    it.each([
+        [0, "Tried 1st"], [1, "Tried 2nd"], [2, "Tried 3rd"], [3, "Tried 4th"],
+        [10, "Tried 11th"], [11, "Tried 12th"], [12, "Tried 13th"], [20, "Tried 21st"]
+    ])("calls place %i of several %s", (index, words) => {
+        expect(machineOrderWord(index, 30)).toBe(words);
     });
 });

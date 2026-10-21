@@ -1,4 +1,4 @@
-import {accents, mix, onAccent, onBrand, palette, switchColours} from "@/constants/colors";
+import {accents, machineColours, mix, onAccent, onBrand, palette, switchColours} from "@/constants/colors";
 import {contrast, over} from "@/test-utils/contrast";
 
 const everyAccent = [...accents.coffee, ...accents.tea];
@@ -213,5 +213,41 @@ describe("switch states", () => {
             expect(contrast(accent.off.ring, fill)).toBeGreaterThanOrEqual(3);
             expect(contrast(accent.off.thumb, fill)).toBeGreaterThanOrEqual(3);
         });
+    });
+});
+
+describe("machine colours", () => {
+    const surfaces = [["base", palette.base], ["surface", palette.surface],
+                      ["raised", palette.raised]] as const;
+    const inks = machineColours.flatMap((colour) => [
+        [`${colour.name} ink`, colour.ink], [`${colour.name} muted`, colour.muted]
+    ] as const);
+
+    it("starts with today's connected green, so one machine draws what it always drew", () => {
+        expect(machineColours[0].ink).toBe(palette.success);
+        expect(machineColours[0].muted).toBe(palette.successMuted);
+    });
+
+    it.each(inks.flatMap(([name, ink]) => surfaces.map(([where, surface]) =>
+        [name, where, ink, surface] as const)))(
+        "keeps %s readable on %s, as text as well as a dot", (_name, _where, ink, surface) => {
+            expect(contrast(ink, surface)).toBeGreaterThanOrEqual(4.5);
+        });
+
+    it("spends none of the colours that already mean something", () => {
+        // Amber is the machine connecting or stopped, red a fault or a machine
+        // not answering, and magenta is the brand, which never marks a state.
+        const reserved = [palette.warn, palette.danger, palette.dangerFaint,
+                          palette.brand, palette.brandFill];
+        for (const colour of machineColours) {
+            expect(reserved).not.toContain(colour.ink);
+            expect(reserved).not.toContain(colour.muted);
+        }
+    });
+
+    it("has four distinct colours with distinct names", () => {
+        expect(new Set(machineColours.map((colour) => colour.ink)).size).toBe(machineColours.length);
+        expect(new Set(machineColours.map((colour) => colour.name)).size).toBe(machineColours.length);
+        expect(machineColours).toHaveLength(4);
     });
 });

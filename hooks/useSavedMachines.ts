@@ -11,12 +11,14 @@ import {loadSavedMachines, saveSavedMachines} from "@/library/machine/savedMachi
 import type {Settings} from "@/library/Settings";
 
 export type SavedMachineList = {
-    /** Default first, then the order the link tries them in. */
+    /** In the order the link tries them in, highest first. */
     machines: SavedMachine[];
     /** The active machine's id, or "" when none is saved. */
     activeId: string;
     rename: (id: string, label: string) => void;
     setModel: (id: string, model: MachineModel) => void;
+    /** Mark a machine with one of `machineColours`, by index. */
+    setColour: (id: string, colour: number) => void;
     makeDefault: (id: string) => void;
     move: (id: string, by: -1 | 1) => void;
 };
@@ -55,6 +57,7 @@ export function useSavedMachines(settings?: Settings): SavedMachineList {
         activeId: deviceId,
         rename: (id, label) => edit((current) => updateSavedMachine(current, id, {label})),
         setModel: (id, next) => edit((current) => updateSavedMachine(current, id, {model: next})),
+        setColour: (id, colour) => edit((current) => updateSavedMachine(current, id, {colour})),
         makeDefault: (id) => edit((current) => makeDefaultMachine(current, id)),
         move: (id, by) => edit((current) => moveSavedMachine(current, id, by))
     };

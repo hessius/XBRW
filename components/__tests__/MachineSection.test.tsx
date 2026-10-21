@@ -1,7 +1,9 @@
 import React from "react";
+import {StyleSheet} from "react-native";
 import {fireEvent, screen, waitFor, within} from "@testing-library/react-native";
 
 import MachineSection from "@/components/MachineSection";
+import {machineColours} from "@/constants/colors";
 import {renderWithProviders} from "@/test-utils/render";
 
 jest.mock("@/components/XbrwToast", () => ({notify: jest.fn()}));
@@ -23,6 +25,7 @@ const mockLink: {
     forget: jest.Mock;
     canOpenSettings: boolean;
     openSettings: jest.Mock;
+    machines: import("@/library/machine/savedMachines").SavedMachine[];
 } = {
     machine: {info: null, askHowItIsDoing: mockAsk, modelNumber: ""},
     status: "disconnected",
@@ -31,7 +34,8 @@ const mockLink: {
     connect: jest.fn(),
     forget: jest.fn(),
     canOpenSettings: false,
-    openSettings: jest.fn()
+    openSettings: jest.fn(),
+    machines: []
 };
 
 jest.mock("@/hooks/useMachine", () => ({
@@ -60,6 +64,7 @@ describe("the machine section", () => {
         mockLink.error = null;
         mockLink.canOpenSettings = false;
         mockLink.openSettings.mockClear();
+        mockLink.machines = [];
     });
 
     it("does not ask the machine how it is doing when the settings screen opens", async () => {
@@ -177,25 +182,38 @@ describe("the machine section", () => {
         mockLink.status = "idle";
         mockLink.remembered = "AA:BB1122";
         await renderWithProviders(<MachineSection/>);
-        expect(await screen.findByText(/AA:BB1122/)).toBeTruthy();
+        expect(await screen.findByText("Not connected")).toBeTruthy();
     });
 
-    it("says not connected when idle with a paired machine, not in range when out of range", async () => {
-        // "Not connected" = no attempt made; "Not in range" = attempt made but
-        // the machine was not reachable. Different facts, different words.
+    it("says not connected before an attempt, and every reason a failed one could have after", async () => {
+        // "Not connected" = no attempt made. After a failed attempt the radio
+        // cannot say why: a machine another phone is connected to stops
+        // answering exactly like one that is off. "Not in range" claimed one
+        // reason, and was wrong with the machine on the bench beside a phone
+        // that had it. The Bluetooth identifier is not in the line either.
         mockLink.remembered = "MY:MACHINE";
+        const notFound = "Not found. It may be off, out of range or connected to another phone.";
 
         mockLink.status = "idle";
         await renderWithProviders(<MachineSection/>);
-        expect(await screen.findByText("Not connected · MY:MACHINE")).toBeTruthy();
+        expect(await screen.findByText("Not connected")).toBeTruthy();
 
         mockLink.status = "disconnected";
         await renderWithProviders(<MachineSection/>);
-        expect(await screen.findByText("Not in range · MY:MACHINE")).toBeTruthy();
+        expect(await screen.findByText(notFound)).toBeTruthy();
 
         mockLink.status = "failed";
         await renderWithProviders(<MachineSection/>);
-        expect(await screen.findByText("Not in range · MY:MACHINE")).toBeTruthy();
+        expect(await screen.findByText(notFound)).toBeTruthy();
+        expect(screen.queryByText(/MY:MACHINE/)).toBeNull();
+        expect(screen.queryByText(/Not in range/)).toBeNull();
+    });
+
+    it("tells somebody whose machine another phone has how to get it back", async () => {
+        mockLink.remembered = "MY:MACHINE";
+        mockLink.status = "failed";
+        await renderWithProviders(<MachineSection/>);
+        expect(screen.getByText(/close XBRW\+\+ or the xBloom app there/)).toBeTruthy();
     });
 
     it("opens the console from the status line when there is no connection", async () => {
@@ -294,13 +312,13 @@ describe("the machine section", () => {
         // they do not have. It is also the one place worth admitting the link
         // has only ever been tried against a Studio.
         await renderWithProviders(<MachineSection/>);
-        expect(screen.getByText(/Your xBloom Studio has to be switched on/)).toBeTruthy();
+        expect(screen.getByText(/Your xBloom Studio has to be on/)).toBeTruthy();
 
         await fireEvent.press(screen.getByLabelText("Original"));
 
         await waitFor(() =>
             expect(screen.getByText(/Only the Studio has been tested/)).toBeTruthy());
-        expect(screen.queryByText(/Your xBloom Studio has to be switched on/)).toBeNull();
+        expect(screen.queryByText(/Your xBloom Studio has to be on/)).toBeNull();
     });
 });
 
@@ -350,5 +368,158 @@ describe("a Bluetooth permission only Settings can undo", () => {
         await renderWithProviders(<MachineSection/>);
 
         await waitFor(() => expect(screen.queryByText(/Open app settings/)).toBeNull());
+    });
+});
+
+describe("several saved machines", () => {
+    const entry = (id: string, label: string, model: "studio" | "original" = "studio") => ({
+        id, label, model, modelString: "", advertisedName: "", serial: ""
+    });
+
+    beforeEach(() => {
+        mockLink.status = "connected";
+        mockLink.remembered = "WORK";
+        mockLink.machine = {info: null, askHowItIsDoing: mockAsk, modelNumber: ""};
+        mockLink.error = null;
+        mockLink.canOpenSettings = false;
+        mockLink.machines = [entry("HOME", "Home"), entry("WORK", "Work", "original")];
+    });
+
+    it("lists them in order, each with its place in the order, and the one in use", async () => {
+        await renderWithProviders(<MachineSection/>);
+
+        expect(screen.getByLabelText(/^Home, Studio · Tried 1st · ID HOME$/)).toBeTruthy();
+        expect(screen.getByLabelText(/^Work, Original · Tried 2nd · ID WORK · Connected$/)).toBeTruthy();
+    });
+
+    it("never says Default, which read as a third word for the machine in use", async () => {
+        // The first machine is only first in the connect order. It can be away
+        // while the second is the one connected, and "Default · ... ·
+        // Connected" on two different rows said two machines were in use.
+        await renderWithProviders(<MachineSection/>);
+
+        expect(screen.queryByLabelText(/Default/)).toBeNull();
+        expect(screen.queryByLabelText(/Choice \d/)).toBeNull();
+    });
+
+    it("marks each machine with its colour", async () => {
+        mockLink.machines = [{...entry("HOME", "Home"), colour: 2}, {...entry("WORK", "Work"), colour: 0}];
+        await renderWithProviders(<MachineSection/>);
+
+        const dot = (id: string) => StyleSheet.flatten(screen.getByTestId(
+            `saved-machine-colour-${id}`, {includeHiddenElements: true}).props.style);
+        expect(dot("HOME").backgroundColor).toBe(machineColours[2].ink);
+        expect(dot("WORK").backgroundColor).toBe(machineColours[0].ink);
+    });
+
+    it("calls the machine this phone uses Selected while it has no link to it", async () => {
+        // "In use" read as "another phone is using it", which the app cannot
+        // know. Selected is all it does know.
+        mockLink.status = "failed";
+        await renderWithProviders(<MachineSection/>);
+
+        expect(screen.getByLabelText(/^Work, Original · Tried 2nd · ID WORK · Selected$/)).toBeTruthy();
+        expect(screen.queryByText(/In use/)).toBeNull();
+    });
+
+    it("does not repeat Connected in a row of its own", async () => {
+        // The machine's row already says Connected, and the old row under it
+        // did nothing when pressed.
+        await renderWithProviders(<MachineSection/>);
+
+        expect(screen.queryByText("The link is held while XBRW++ is open.")).toBeNull();
+        expect(screen.queryByText("Connect to my machine")).toBeNull();
+    });
+
+    it("moves the model choice into each machine, because one row could only describe one", async () => {
+        await renderWithProviders(<MachineSection/>);
+
+        expect(screen.queryByText("Your xBloom")).toBeNull();
+    });
+
+    it("moves Forget into each machine's sheet", async () => {
+        await renderWithProviders(<MachineSection/>);
+
+        expect(screen.queryByText("Forget this machine")).toBeNull();
+    });
+
+    it("opens a machine's sheet from its row", async () => {
+        const onOpenMachine = jest.fn();
+        await renderWithProviders(<MachineSection onOpenMachine={onOpenMachine}/>);
+
+        await fireEvent.press(screen.getByLabelText(/^Home, /));
+
+        expect(onOpenMachine).toHaveBeenCalledWith("HOME");
+    });
+
+    it("offers to add another, through the screen's sheet", async () => {
+        const onAddMachine = jest.fn();
+        await renderWithProviders(<MachineSection onAddMachine={onAddMachine}/>);
+
+        await fireEvent.press(screen.getByText("Add another machine"));
+
+        expect(onAddMachine).toHaveBeenCalled();
+    });
+
+    it("keeps one machine's section as it was, with a row to name it and a way to add a second", async () => {
+        mockLink.machines = [entry("WORK", "")];
+        await renderWithProviders(<MachineSection/>);
+
+        expect(screen.getByText("Your xBloom")).toBeTruthy();
+        expect(screen.getByText("Forget this machine")).toBeTruthy();
+        expect(screen.getByText("Add another machine")).toBeTruthy();
+        // No order word and no colour: with one machine there is no order and
+        // nothing to tell apart.
+        expect(screen.getByLabelText(/^xBloom 1, Studio · ID WORK · Connected$/)).toBeTruthy();
+        expect(screen.queryByTestId("saved-machine-colour-WORK", {includeHiddenElements: true}))
+            .toBeNull();
+        // Nor the star's empty column, which left the name indented.
+        expect(screen.queryByTestId("saved-machine-star-WORK", {includeHiddenElements: true}))
+            .toBeNull();
+    });
+
+    it("keeps the star column on every row once there are two, so the names line up", async () => {
+        mockLink.machines = [entry("HOME", "Home"), entry("WORK", "Work")];
+        await renderWithProviders(<MachineSection/>);
+        expect(screen.getByTestId("saved-machine-star-HOME", {includeHiddenElements: true})).toBeTruthy();
+        expect(screen.getByTestId("saved-machine-star-WORK", {includeHiddenElements: true})).toBeTruthy();
+    });
+
+    it("drops the model choice once the machine's serial has named its model", async () => {
+        // The serial set the model on connect, so the choice could only be
+        // used to point imports at the wrong grind scale.
+        mockLink.machines = [{...entry("WORK", ""), serial: "J15A01D48H051"}];
+        await renderWithProviders(<MachineSection/>);
+
+        expect(screen.queryByText("Your xBloom")).toBeNull();
+        expect(screen.getByLabelText(/^xBloom 1, Studio · #H051/)).toBeTruthy();
+    });
+
+    it("keeps the model choice when the serial names no model", async () => {
+        mockLink.machines = [{...entry("WORK", ""), serial: "S1"}];
+        await renderWithProviders(<MachineSection/>);
+
+        expect(screen.getByText("Your xBloom")).toBeTruthy();
+    });
+
+    it("keeps the model choice until the saved model agrees with the serial", async () => {
+        // Corrected on the next connect; until then the choice stays usable.
+        mockLink.machines = [{...entry("WORK", "", "original"), serial: "J15A01D48H051"}];
+        await renderWithProviders(<MachineSection/>);
+
+        expect(screen.getByText("Your xBloom")).toBeTruthy();
+    });
+
+    it("shows the Bluetooth identifier in the machine's details, not the status line", async () => {
+        mockLink.machines = [entry("WORK", "")];
+        mockLink.machine = {askHowItIsDoing: mockAsk, info: {
+            kind: "info", serial: "J15ABC123456", model: "J15",
+            firmware: "V12.0D.500", waterEnough: true, waterFeed: "tank",
+            grindSize: 62, mode: "PRO"
+        }} as never;
+        await renderWithProviders(<MachineSection/>);
+
+        expect(screen.getByText("Bluetooth ID")).toBeTruthy();
+        expect(screen.getByText("WORK")).toBeTruthy();
     });
 });

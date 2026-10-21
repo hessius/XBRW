@@ -61,3 +61,29 @@ export function isMachineModel(value: unknown): value is MachineModel {
 export function asMachineModel(value: unknown): MachineModel {
     return isMachineModel(value) ? value : "studio";
 }
+
+/**
+ * The model a machine's own serial names, or null when it names neither.
+ *
+ * The serial comes from the machine's 40521 info frame and starts with
+ * xBloom's code for the model. Two Studios read on real hardware report
+ * `J15A01D48H051` and `J15A02A45H038`, and xBloom's catalogue names its two
+ * machines with the same codes: `machineList` is Studio `J15` and Original
+ * `J20` (see `hubQuery.ts`). An Original's serial has never been read here, so
+ * `J20` rests on that catalogue code alone.
+ *
+ * Only ever a positive match. Anything else is null, which means "the serial
+ * does not say", never "so it must be the other one": the user's own choice
+ * stays in charge then.
+ */
+const SERIAL_MODEL_CODES: readonly (readonly [string, MachineModel])[] = [
+    ["J15", "studio"],
+    ["J20", "original"]
+];
+
+export function modelFromSerial(serial: string): MachineModel | null {
+    const code = serial.trim().toUpperCase().slice(0, 3);
+    if (code.length < 3) return null;
+    const match = SERIAL_MODEL_CODES.find(([prefix]) => prefix === code);
+    return match === undefined ? null : match[1];
+}

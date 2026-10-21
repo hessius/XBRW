@@ -1,3 +1,5 @@
+import {machineColours, type MachineColour} from "@/constants/colors";
+
 import {asMachineModel, isMachineModel, type MachineModel} from "./machineModel";
 
 /**
@@ -48,6 +50,15 @@ export type SavedMachine = {
      * person can check against the machine itself.
      */
     serial: string;
+    /**
+     * Which of `machineColours` marks this machine, so that with several saved
+     * a glance says which one this phone is connected to.
+     *
+     * Optional because a list written before colours existed has none.
+     * `parseSavedMachines` fills a missing one in, so a machine read from the
+     * store always has one, and it is written back with the list's next save.
+     */
+    colour?: number;
 };
 
 /** The longest name a machine can be given. A name is a word or two, not a note. */
@@ -81,6 +92,50 @@ function isSavedMachine(value: unknown): value is SavedMachine {
         && (entry.serial === undefined || typeof entry.serial === "string");
 }
 
+function isColourIndex(value: unknown): value is number {
+    return typeof value === "number" && Number.isInteger(value)
+        && value >= 0 && value < machineColours.length;
+}
+
+/**
+ * The colour a new machine should take: the first nobody else has, or past
+ * that the least used, ties going to the earlier colour. The `nextAccentIndex`
+ * rule, for the same reason: colours repeat as evenly as they can.
+ */
+export function nextMachineColour(machines: readonly {colour?: number}[]): number {
+    const counts = machineColours.map(() => 0);
+    for (const machine of machines) {
+        if (isColourIndex(machine.colour)) counts[machine.colour]++;
+    }
+    let best = 0;
+    for (let i = 1; i < counts.length; i++) {
+        if (counts[i] < counts[best]) best = i;
+    }
+    return best;
+}
+
+/**
+ * Give every machine that has no colour the next free one, in list order.
+ *
+ * So the machine somebody has had all along, the only one on an upgraded
+ * phone, is green, which is the colour the link glyph has always been, and a
+ * second one is blue. Colours already chosen are never moved.
+ */
+function withColours(machines: SavedMachine[]): SavedMachine[] {
+    const done: SavedMachine[] = machines.filter((machine) => isColourIndex(machine.colour));
+    return machines.map((machine) => {
+        if (isColourIndex(machine.colour)) return machine;
+        const coloured = {...machine, colour: nextMachineColour(done)};
+        done.push(coloured);
+        return coloured;
+    });
+}
+
+/** The colour a machine is drawn in. Green for one with none, as always. */
+export function machineColourOf(machine: {colour?: number}): MachineColour {
+    return machineColours[isColourIndex(machine.colour) ? machine.colour : 0];
+}
+
 /**
  * Read the stored list, keeping what is well formed and dropping the rest.
  *
@@ -109,10 +164,11 @@ export function parseSavedMachines(raw: string): SavedMachine[] {
             model: entry.model,
             modelString: entry.modelString,
             advertisedName: entry.advertisedName,
-            serial: entry.serial ?? ""
+            serial: entry.serial ?? "",
+            ...(isColourIndex(entry.colour) ? {colour: entry.colour} : {})
         });
     }
-    return machines;
+    return withColours(machines);
 }
 
 export function serialiseSavedMachines(machines: readonly SavedMachine[]): string {
@@ -149,10 +205,10 @@ export function resolveSavedMachines(raw: string, active: ActiveMachine): SavedM
         advertisedName: active.name
     });
     if (!stored.some((entry) => entry.id === active.deviceId)) {
-        return [...stored, overlay({
+        return withColours([...stored, overlay({
             id: active.deviceId, label: "", model: active.model, modelString: "", advertisedName: "",
             serial: ""
-        })];
+        })]);
     }
     return stored.map((entry) => entry.id === active.deviceId ? overlay(entry) : entry);
 }
@@ -172,6 +228,31 @@ export function machineLabel(machine: SavedMachine, index: number): string {
 }
 
 /**
+ * Where a machine sits in the connect order, in words: `Tried 1st`.
+ *
+ * The order is what the list means. When the app connects by itself it scans
+ * once and takes the highest machine in this order that answers. The first
+ * entry used to read "Default", which sat next to "Selected" and "Connected"
+ * and read as a third word for the machine in use. It is not that: the first
+ * machine can be away while the third is the one connected. So it says what
+ * it does.
+ *
+ * Null with fewer than two saved, because with one machine there is no order
+ * and "Tried 1st" would be a word about nothing.
+ */
+export function machineOrderWord(index: number, count: number): string | null {
+    if (count < 2) return null;
+    const place = index + 1;
+    const tens = place % 100;
+    const suffix = tens >= 11 && tens <= 13 ? "th"
+        : place % 10 === 1 ? "st"
+        : place % 10 === 2 ? "nd"
+        : place % 10 === 3 ? "rd"
+        : "th";
+    return `Tried ${place}${suffix}`;
+}
+
+/**
  * A short tag that tells two machines apart when their names do not.
  *
  * Names need not be unique: a cafe may well call two machines "Bar". The last
@@ -188,10 +269,13 @@ export function machineTag(machine: {id: string; serial?: string}): string {
     return `ID ${bare.slice(-4).toUpperCase()}`;
 }
 
-/** Add a machine at the end of the order, or leave the list alone if it is there. */
+/**
+ * Add a machine at the end of the order, or leave the list alone if it is
+ * there. One that arrives without a colour takes the next free one.
+ */
 export function addSavedMachine(machines: readonly SavedMachine[], entry: SavedMachine): SavedMachine[] {
     if (machines.some((machine) => machine.id === entry.id)) return [...machines];
-    return [...machines, entry];
+    return withColours([...machines, entry]);
 }
 
 /** Change one entry. An id that is not in the list changes nothing. */
@@ -203,11 +287,16 @@ export function updateSavedMachine(
     return machines.map((machine) => {
         if (machine.id !== id) return machine;
         const next = {...machine, ...change};
-        return {
+        // A colour that is not one of the palette's keeps the old one.
+        const colour = isColourIndex(next.colour) ? next.colour : machine.colour;
+        const updated: SavedMachine = {
             ...next,
             label: next.label.trim().slice(0, MACHINE_LABEL_MAX),
             model: asMachineModel(next.model)
         };
+        if (colour === undefined) delete updated.colour;
+        else updated.colour = colour;
+        return updated;
     });
 }
 
@@ -326,8 +415,7 @@ export function splitByRange(
     connectedId: string | null
 ): {inRange: {machine: SavedMachine; index: number}[]; away: {machine: SavedMachine; index: number}[]} {
     const indexed = machines.map((machine, index) => ({machine, index}));
-    if (heard === null) return {inRange: [], away: indexed};
-    const near = new Set(heard);
+    const near = new Set(heard ?? []);
     if (connectedId !== null) near.add(connectedId);
     return {
         inRange: indexed.filter(({machine}) => near.has(machine.id)),

@@ -4,6 +4,36 @@ Package acceptance, integration and release qualification are separate.
 Record the exact app commit, native build, platform, machine and firmware for
 each device result. Software transports do not qualify BLE or NFC hardware.
 
+## Package D: multiple machines
+
+- [ ] Migrate an existing single pairing without losing its identity or model.
+  Save a second machine, rename/reorder/colour it and confirm forgetting.
+  Backups must not transfer phone-specific machine identifiers.
+- [ ] With both machines nearby, automatic connect prefers the selected one,
+  then list order. A manual choice during discovery must remain selected.
+  Reconnect a lost-contact brew only to its original machine.
+- [ ] With only the other machine nearby, BREW refuses without any recipe
+  upload or mode change. Check stale Bluetooth IDs and serials learned late
+  during preflight, including the explicit PRO retry path.
+- [ ] A refused selection releases the app's live-run ownership without a
+  cancellation command or a synthetic brew record. A later real brew works.
+- [ ] Open the picker before its first survey completes, drop the connection,
+  and start/finish a brew while it remains open. Connected labels, lock state,
+  screen-reader disabled state and rescan availability must follow reality.
+- [ ] The editor's selected-machine chip stays visible while scrolling all
+  decks, with long machine names and large text. Its sheet hides covered
+  controls on both platforms; Settings retains its fixed native sheet hosts.
+- [ ] Record commands and beeps on each available firmware: connect uses one
+  handshake, a fresh ordinary brew does not repeat it, and missing/stale/low
+  vitals refresh before the brew. Refill a previously low tank and retry.
+  Recheck Package A's cancellation and connection-replacement cases.
+- [ ] Verify Studio serial detection on both observed firmware variants.
+  Original `J20` serial/model detection is catalogue-derived, not hardware
+  verified; confirm it on a real Original before calling it device-qualified.
+
+#231 remains deferred. This checklist does not accept its settings reordering
+or close the separate wrong-recipe investigation in #251.
+
 ## Package A: brew correctness
 
 The maintainer accepted #247 provisionally on the contributor's report of

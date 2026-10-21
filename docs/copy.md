@@ -1014,14 +1014,15 @@ machine card's error line).
 | `machine.section.model.description` | `components/MachineSection.tsx` | Full-width explanation above the model selector. | `Choose your model for matching imports. Grind scales differ. Saved recipes stay unchanged.` |
 | `machine.section.idle.connecting` | `components/MachineSection.tsx:58` | Status while connecting. | `Connecting…` |
 | `machine.section.idle.none` | `components/MachineSection.tsx:59` | Status when no machine is paired. | `No machine paired` |
-| `machine.section.idle.notConnected` | `components/MachineSection.tsx:60` | Status when a machine is remembered but no connection attempt has been made. `${remembered}` is the machine name. | `Not connected · ${remembered}` |
-| `machine.section.idle.notInRange` | `components/MachineSection.tsx:61` | Status when a machine is remembered and a connection attempt was made but failed, or the link dropped. `${remembered}` is the machine name. | `Not in range · ${remembered}` |
+| `machine.section.idle.notConnected` | `components/MachineSection.tsx:60` | Status when a machine is remembered but no connection attempt has been made. The Bluetooth ID is in the machine's details, not here. | `Not connected` |
+| `machine.section.idle.notInRange` | `components/MachineSection.tsx:61` | Status when a machine is remembered and a connection attempt was made but failed, or the link dropped. Names every reason, because a machine held by another phone stops answering just like one that is off. | `Not found. It may be off, out of range or connected to another phone.` |
 | `machine.section.connect.connected` | `components/MachineSection.tsx:96` | Row label when connected. | `Connected` |
 | `machine.section.connect.connect` | `components/MachineSection.tsx:96` | Row label when not connected. | `Connect to my machine` |
-| `machine.section.connected.desc` | `components/MachineSection.tsx:98` | Sub-note when connected. | `The link is held while XBRW++ is open.` |
-| `machine.section.disconnected.desc` | `components/MachineSection.tsx:99` | Sub-note when not connected. | `Your xBloom Studio has to be switched on and nearby.` |
+| `machine.section.connected.desc` | `components/MachineSection.tsx:98` | Sub-note when connected. Only drawn before any machine is saved; with a saved machine its row already says Connected and this row is hidden. | `The link is held while XBRW++ is open.` |
+| `machine.section.disconnected.desc` | `components/MachineSection.tsx:99` | Sub-note when not connected. | `Your xBloom Studio has to be on and nearby. If another phone is connected to it, close XBRW++ or the xBloom app there.` |
 | `machine.section.vital.serial` | `components/MachineSection.tsx:108` | Vital label. | `Serial` |
 | `machine.section.vital.model` | `components/MachineSection.tsx:109` | Vital label. | `Model` |
+| `machine.section.vital.bluetooth` | `components/MachineSection.tsx` | Vital label; value is the saved Bluetooth identifier (a MAC address on Android, a UUID on iOS). Moved here from the status line. | `Bluetooth ID` |
 | `machine.section.vital.firmware.a11y` | `components/MachineSection.tsx:111` (a11y) | (a11y) Firmware vital. `${...}` is the firmware string. | `Firmware, ${info.firmware}` |
 | `machine.section.vital.firmware` | `components/MachineSection.tsx:113` | Vital label. | `Firmware` |
 | `machine.section.vital.water` | `components/MachineSection.tsx:115` | Vital label; value is OK/Low. | `Water` |
@@ -1074,6 +1075,33 @@ machine commands; the console retains its own acknowledgement gate.
 | `machine.dot.idle.a11y` | `components/MachineDot.tsx:33` (a11y, `idle`) | (a11y) Header dot when no connection attempt has been made. | `Machine not connected` |
 | `machine.dot.disconnected.a11y` | `components/MachineDot.tsx:34` (a11y, `disconnected`) | (a11y) Header dot when out of range. | `Machine not in range` |
 | `machine.dot.failed.a11y` | `components/MachineDot.tsx:35` (a11y, `failed`) | (a11y) Header dot after a failed link. | `Machine not in range` |
+| `machine.dot.several.connected.a11y` | `components/MachineDot.tsx` (`labelFor`) | (a11y) Header dot when connected, with two or more machines saved. `${name}` is the machine's name. One machine keeps the labels above. | `Connected to ${name}` |
+| `machine.dot.several.connecting.a11y` | `components/MachineDot.tsx` (`labelFor`) | (a11y) Header dot while connecting, with two or more saved. | `Connecting to ${name}` |
+| `machine.dot.several.idle.a11y` | `components/MachineDot.tsx` (`labelFor`) | (a11y) Header dot when no attempt has been made, with two or more saved. | `Not connected` |
+| `machine.dot.several.away.a11y` | `components/MachineDot.tsx` (`labelFor`) | (a11y) Header dot when the machine in use did not answer, with two or more saved. | `Not connected. ${name} is not in range` |
+| `machine.dot.several.hint` | `components/HomeHeader.tsx` (a11y hint) | (a11y) Hint on the header dot with two or more saved. | `Shows the machine panel. Hold to switch machines.` |
+| `machine.dot.several.action` | `components/HomeHeader.tsx` (a11y action) | (a11y) Named action on the header dot with two or more saved; opens the machine picker, as a hold does. | `Switch machine` |
+
+### Saved machines (`components/MachinePanel.tsx`, `MachinePickerSheet.tsx`, `MachineSection.tsx`, `MachineDetailSheet.tsx`)
+
+| ID | Source | Context — when the user sees this | Current text |
+|----|--------|-----------------------------------|--------------|
+| `machine.order.word` | `library/machine/savedMachines.ts` (`machineOrderWord`) | A machine's place in the connect order, on its Settings row and picker row, only with two or more saved. Replaces `Default` / `Choice N`: the first machine is only first in the order, and could be away while another is the one connected. `${n}` is 1st, 2nd, 3rd and so on. | `Tried ${n}` |
+| `machine.detail.order.first` | `components/MachineDetailSheet.tsx` | A machine's sheet, for the first in the order when it is not the one in use. Was `Your default. Tried first.` | `Tried first.` |
+| `machine.detail.order.later` | `components/MachineDetailSheet.tsx` | A machine's sheet, for any other machine not in use. | `Tried after ${index} other(s).` |
+| `machine.detail.makeFirst.label` | `components/MachineDetailSheet.tsx` | Action row that moves a machine to the top of the order. Was `Make default`. | `Try this one first` |
+| `machine.detail.makeFirst.detail` | `components/MachineDetailSheet.tsx` | Its detail. | `Moves it to the top. When the app connects by itself, it takes the highest machine nearby.` |
+| `machine.detail.colour.desc` | `components/MachineDetailSheet.tsx` | Above the colour swatches, under the name field, only with two or more saved. | `Colour. The link glyph on the home screen takes it while this machine is connected.` |
+| `machine.detail.colour.group.a11y` | `components/MachineDetailSheet.tsx` (a11y) | (a11y) The swatch group. | `Colour` |
+| `machine.colour.names` | `constants/colors.ts` (`machineColours`) | (a11y) Each swatch, read as a radio button. | `Green`, `Blue`, `Violet`, `Cyan` |
+| `machine.panel.choice.state` | `components/MachinePanel.tsx` (`MachineChoiceRow`) | Doto line under the machine's name in the panel's switcher, with two or more saved. `${MODEL}` is STUDIO or ORIGINAL. | `${MODEL} · CONNECTED` / `${MODEL} · SELECTED` |
+| `machine.panel.choice.hint` | `components/MachinePanel.tsx` (a11y hint) | (a11y) Hint on the switcher row. | `Choose another saved machine` |
+| `machine.forget.title` | `components/ForgetMachineSheet.tsx` | Title of the sheet that asks before a machine is forgotten, from the Forget row on Settings or in a machine's sheet. Forget used to act on the tap. `${name}` is the machine's name, or `xBloom N` when it has none. | `Forget ${name}?` |
+| `machine.forget.body` | `components/ForgetMachineSheet.tsx` | The sheet's body. Says how to get the machine back, because there is no undo. | `It comes off your list. To use it again, switch it on nearby and add it again.` |
+| `machine.forget.confirm` | `components/ForgetMachineSheet.tsx` | Doto label on the red button that forgets it. Refused with the usual toast while a brew holds the link. | `FORGET` |
+| `machine.forget.confirm.a11y` | `components/ForgetMachineSheet.tsx` (a11y) | (a11y) The red button. | `Forget ${name}` |
+| `machine.forget.keep` | `components/ForgetMachineSheet.tsx` | Doto label on the outlined button that closes the sheet and keeps the machine. | `KEEP IT` |
+| `machine.forget.keep.a11y` | `components/ForgetMachineSheet.tsx` (a11y) | (a11y) The keep button. | `Keep ${name}` |
 
 ### The machine panel (`components/MachinePanel.tsx`)
 
