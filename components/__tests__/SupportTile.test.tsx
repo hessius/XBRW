@@ -1,9 +1,9 @@
 import {fireEvent, screen} from "@testing-library/react-native";
 import React from "react";
-import {Linking} from "react-native";
+import {Linking, StyleSheet} from "react-native";
 
 import {LINK_OPEN_FAILED} from "@/components/openLink";
-import SupportTile, {SUPPORT_BODY, SUPPORT_TITLE, SUPPORT_URL} from "@/components/SupportTile";
+import SupportTile, {SupportAction, SUPPORT_BODY, SUPPORT_TITLE, SUPPORT_URL} from "@/components/SupportTile";
 import {renderWithProviders} from "@/test-utils/render";
 
 const mockNotify = jest.fn();
@@ -15,6 +15,38 @@ jest.mock("@/components/XbrwToast", () => ({
 describe("SupportTile", () => {
     beforeEach(() => {
         mockNotify.mockClear();
+    });
+
+    describe("the compact support action", () => {
+        it("keeps its full label, browser announcement and accessible target", async () => {
+            expect(typeof SupportAction).toBe("function");
+            await renderWithProviders(<SupportAction/>);
+            expect(screen.getByText(SUPPORT_TITLE)).toBeTruthy();
+            expect(screen.getByRole("link", {name: "Buy me a coffee. Opens in your browser."}))
+                .toBeTruthy();
+            expect(StyleSheet.flatten(screen.getByTestId("support-action").props.style).minHeight)
+                .toBeGreaterThanOrEqual(44);
+        });
+
+        it("opens the same support destination from the header action", async () => {
+            expect(typeof SupportAction).toBe("function");
+            const openURL = jest.spyOn(Linking, "openURL").mockResolvedValue(true);
+            await renderWithProviders(<SupportAction/>);
+            await fireEvent.press(screen.getByRole("link"));
+            expect(openURL).toHaveBeenCalledWith("https://buymeacoffee.com/hsus");
+            openURL.mockRestore();
+        });
+
+        it("reports when the header action cannot open a browser", async () => {
+            expect(typeof SupportAction).toBe("function");
+            mockNotify.mockClear();
+            const openURL = jest.spyOn(Linking, "openURL").mockRejectedValue(new Error("no handler"));
+            await renderWithProviders(<SupportAction/>);
+            await fireEvent.press(screen.getByRole("link"));
+            await Promise.resolve();
+            expect(mockNotify).toHaveBeenCalledWith({tone: "error", message: LINK_OPEN_FAILED});
+            openURL.mockRestore();
+        });
     });
 
     it("says who built the app and what the tap is for", async () => {

@@ -149,9 +149,10 @@ Paths below are relative to the repository root.
 - Do not reconcile `PourProfile`'s evenly spaced identifying silhouette with
   the brew trace's real-seconds axis. They serve different purposes.
 - Native changes use Expo config/plugins, not generated `ios/`/`android/`.
-  `runtimeVersion.policy` is `appVersion`: native-affecting changes need an
-  `expo.version` bump. Keep `xbrecipewriter` first in the scheme array or the
-  compiled share extension handoff breaks. Use Expo Router imports, not
+  `runtimeVersion.policy` is `fingerprint`: native-affecting changes need a
+  fresh native build, not an update to an older runtime. Keep `xbrecipewriter`
+  first in the scheme array or the compiled share extension handoff breaks.
+  Use Expo Router imports, not
   `@react-navigation/*`; keep the worklets Babel plugin last.
 
 ## Evidence and common mistakes

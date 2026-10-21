@@ -3,10 +3,12 @@ import appConfig from "@/app.json";
 type PluginEntry = string | [string, Record<string, unknown>];
 
 describe("native release configuration", () => {
-    /** Native navigation configuration must not reuse the shipped 2.1.0 runtime. */
-    it("targets 2.2.0, on the appVersion runtime policy", () => {
+    /** Native patches must not reuse an earlier 2.2.0 preview's runtime. */
+    it("targets 2.2.0 with native-fingerprinted runtime compatibility", () => {
         expect(appConfig.expo.version).toBe("2.2.0");
-        expect(appConfig.expo.runtimeVersion.policy).toBe("appVersion");
+        expect(appConfig.expo.runtimeVersion.policy).toBe("fingerprint");
+        expect(appConfig.expo.ios).not.toHaveProperty("runtimeVersion");
+        expect(appConfig.expo.android).not.toHaveProperty("runtimeVersion");
     });
 
     it("allows iOS central-role Bluetooth events in the background", () => {

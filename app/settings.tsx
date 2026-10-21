@@ -17,7 +17,7 @@ import SettingsActionRow from "@/components/SettingsActionRow";
 import SettingsChoiceRow from "@/components/SettingsChoiceRow";
 import SettingsSection from "@/components/SettingsSection";
 import SettingsToggleRow from "@/components/SettingsToggleRow";
-import SupportTile from "@/components/SupportTile";
+import {SupportAction} from "@/components/SupportTile";
 import {notify} from "@/components/XbrwToast";
 import {palette} from "@/constants/colors";
 import {useBackup} from "@/hooks/useBackup";
@@ -151,8 +151,7 @@ export default function SettingsScreen({settings}: Props) {
         useSetting("machineConsoleAcknowledged", settings);
     const [machineConsoleConfirmations, setMachineConsoleConfirmations] =
         useSetting("machineConsoleConfirmations", settings);
-    // Shown as rows inside MachineSection, not here. Read anyway, because a
-    // backup carries every preference and these are two.
+    // Keep the model binding here so backup and restore include it too.
     const [machineModel, setMachineModel] = useSetting("machineModel", settings);
     const [machineAutoStart, setMachineAutoStart] = useSetting("machineAutoStart", settings);
     const [animateBrewChart, setAnimateBrewChart] = useSetting("animateBrewChart", settings);
@@ -471,51 +470,43 @@ export default function SettingsScreen({settings}: Props) {
                     || machineSheetOpen
                     ? "no-hide-descendants"
                     : "auto"}>
-            <ScreenHeader title="Settings" onBack={() => router.back()}/>
+            <ScreenHeader title="Settings" onBack={() => router.back()}
+                          action={<SupportAction/>}/>
             <ScrollView testID="settings-scroll"
                         contentContainerStyle={{padding: 16, paddingBottom: scrollEnd}}>
             <YStack>
-                {/* At the top rather than the conventional bottom. The row
-                    carries the app's name and version, so it reads as the
-                    screen's identity rather than its footnote — the shape iOS
-                    uses for the Apple ID row — and it is the row an App Store
-                    reviewer comes here looking for. */}
-                <SettingsSection>
-                    <SettingsActionRow label="About XBRW++"
-                                       detail={`Version ${VERSION}`}
-                                       onPress={() => router.push("/about")}/>
+                <MachineSection settings={settings} onOpenMachine={setMachineSheetId}
+                                onAddMachine={machineAdder.start}/>
+
+                <SettingsSection title="Brewing">
+                    <SettingsToggleRow
+                        label="Start brewing automatically"
+                        description="Off, BREW loads the recipe onto the machine and waits for you to press START. On, it starts grinding the moment the recipe lands."
+                        value={machineAutoStart} onChange={setMachineAutoStart}/>
+                    <SettingsToggleRow
+                        label="Animate the brew chart"
+                        description="When off, each phase change holds its end state immediately. The system Reduced Motion switch also disables animation independently."
+                        value={animateBrewChart} onChange={setAnimateBrewChart}/>
+                    <SettingsToggleRow
+                        label="Ask how a brew was"
+                        description={`On, the last brew XBRW++ watched can ask how it was along the bottom for up to ${ratingPromptHours} hours. Off, ratings are only given on the brew itself.`}
+                        value={askForRatings} onChange={setAskForRatings}/>
+                    <SettingsChoiceRow
+                        label="Brew detail storage"
+                        description="Brew traces are the detailed charts. When they pass this limit, the oldest are dropped first. Rated and noted brews, and the newest brews of each recipe, go last. Summaries are always kept."
+                        value={String(brewTraceBudgetMB)}
+                        options={BUDGET_OPTIONS}
+                        onChange={(value) => setBrewTraceBudgetMB(Number(value))}/>
                 </SettingsSection>
 
-                {/* Beside About rather than buried under Library, because it is
-                    the same kind of row: something about the app itself rather
-                    than a preference. High on the screen on purpose. A privacy
-                    claim nobody can find is a privacy claim nobody can check,
-                    and this screen is what makes the claim checkable. */}
-                <SettingsSection>
-                    <SettingsActionRow label="What leaves this device"
-                                       detail="Every request the app can make, and what it carries."
-                                       onPress={() => router.push("/network")}/>
+                <SettingsSection title="Units">
+                    <SettingsChoiceRow
+                        label="Temperature"
+                        description="What the editor shows and takes. The card always stores Celsius, so switching back and forth changes nothing that is written."
+                        value={temperatureUnit}
+                        options={TEMPERATURE_OPTIONS}
+                        onChange={(value) => setTemperatureUnit(asTemperatureUnit(value))}/>
                 </SettingsSection>
-
-                {/* Its own section rather than a line in Library. Everything
-                    else under Library is about the recipes you hold; a brew
-                    history is a record of what the machine did, and burying it
-                    among backup and delete made the app's own diary read as
-                    file management. */}
-                <SettingsSection>
-                    <SettingsActionRow label="Brew history"
-                                       detail="Every brew you have recorded."
-                                       onPress={() => router.push("/brewHistory")}/>
-                </SettingsSection>
-
-                {/* Between Brew history and the preferences, not down with
-                    About. Almost nobody opens an About screen, and the ask is
-                    worth more than the rows under it are. Not wrapped in
-                    `SettingsSection`: that draws a `surface` card and rules
-                    hairlines between its children, and this is one filled tile
-                    rather than a list of rows. It carries the section's own
-                    `$4` top gap so the rhythm of the screen is unbroken. */}
-                <SupportTile/>
 
                 <SettingsSection title="Recipe list">
                     <SettingsToggleRow
@@ -548,36 +539,6 @@ export default function SettingsScreen({settings}: Props) {
                         description="Show coffee, pod and author pictures in recipe details."
                         value={showRecipeAvatars}
                         onChange={setShowRecipeAvatars}/>
-                </SettingsSection>
-
-                <SettingsSection title="Units">
-                    <SettingsChoiceRow
-                        label="Temperature"
-                        description="What the editor shows and takes. The card always stores Celsius, so switching back and forth changes nothing that is written."
-                        value={temperatureUnit}
-                        options={TEMPERATURE_OPTIONS}
-                        onChange={(value) => setTemperatureUnit(asTemperatureUnit(value))}/>
-                </SettingsSection>
-
-                <MachineSection settings={settings} onOpenMachine={setMachineSheetId}
-                                onAddMachine={machineAdder.start}
-                                onForgetMachine={setForgetSheetId}/>
-
-                <SettingsSection title="Brewing">
-                    <SettingsToggleRow
-                        label="Animate the brew chart"
-                        description="When off, each phase change holds its end state immediately. The system Reduced Motion switch also disables animation independently."
-                        value={animateBrewChart} onChange={setAnimateBrewChart}/>
-                    <SettingsToggleRow
-                        label="Ask how a brew was"
-                        description={`On, the last brew XBRW++ watched can ask how it was along the bottom for up to ${ratingPromptHours} hours. Off, ratings are only given on the brew itself.`}
-                        value={askForRatings} onChange={setAskForRatings}/>
-                    <SettingsChoiceRow
-                        label="Brew detail storage"
-                        description="Brew traces are the detailed charts. When they pass this limit, the oldest are dropped first. Rated and noted brews, and the newest brews of each recipe, go last. Summaries are always kept."
-                        value={String(brewTraceBudgetMB)}
-                        options={BUDGET_OPTIONS}
-                        onChange={(value) => setBrewTraceBudgetMB(Number(value))}/>
                 </SettingsSection>
 
                 {/* Its own section above Library, not a line inside it: Library
@@ -649,7 +610,7 @@ export default function SettingsScreen({settings}: Props) {
                                        onPress={() => setConfirmingDeleteAll(true)}/>
                 </SettingsSection>
 
-                {/* Last, under everything a user came here for, and absent
+                {/* Near the bottom, before About, and absent
                     until seven taps on the version line open it.
 
                     The rows here are unfinished work that is in the build so it
@@ -679,6 +640,12 @@ export default function SettingsScreen({settings}: Props) {
                 </SettingsSection>
                 <CardReadDiagnostic settings={settings}/>
                 </>}
+
+                <SettingsSection>
+                    <SettingsActionRow label="About XBRW++"
+                                       detail={`Version ${VERSION}`}
+                                       onPress={() => router.push("/about")}/>
+                </SettingsSection>
             </YStack>
             </ScrollView>
         </YStack>

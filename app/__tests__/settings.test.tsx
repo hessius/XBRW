@@ -215,11 +215,14 @@ describe("SettingsScreen", () => {
         const rendered = await renderWithProviders(<SettingsScreen settings={settings}/>);
         const order = renderOrder(rendered.toJSON());
         const brewing = order.indexOf("BREWING");
-        expect(brewing).toBeGreaterThan(order.indexOf("MACHINE"));
-        for (const label of ["Animate the brew chart", "Ask how a brew was", "Brew detail storage"]) {
+        expect(brewing).toBeGreaterThan(order.indexOf("MACHINES"));
+        for (const label of ["Start brewing automatically", "Animate the brew chart", "Ask how a brew was", "Brew detail storage"]) {
             expect(order.indexOf(label)).toBeGreaterThan(brewing);
             expect(order.indexOf(label)).toBeLessThan(order.indexOf("XBLOOM ACCOUNT"));
         }
+        expect(screen.getAllByRole("switch", {name: "Start brewing automatically"})).toHaveLength(1);
+        await fireEvent.press(screen.getByRole("switch", {name: "Start brewing automatically"}));
+        expect(settings.get("machineAutoStart")).toBe(true);
         await fireEvent.press(screen.getByRole("switch", {name: "Animate the brew chart"}));
         expect(settings.get("animateBrewChart")).toBe(false);
         await fireEvent.press(screen.getByRole("switch", {name: "Ask how a brew was"}));
@@ -985,6 +988,28 @@ describe("SettingsScreen", () => {
         const saved = {id: "WORK", label: "Work", model: "studio", modelString: "",
                        advertisedName: "", serial: ""};
 
+        function machineSettings(): Settings {
+            const settings = new Settings(memoryStorage());
+            settings.set("savedMachines", JSON.stringify([saved]));
+            settings.set("machineDeviceId", saved.id);
+            return settings;
+        }
+
+        async function openManagement(): Promise<void> {
+            await fireEvent.press(screen.getByRole("button", {name: /^Work, /}));
+            await fireEvent.press(screen.getByRole("button", {name: /^Manage machine/}));
+            await settleSheet();
+        }
+
+        async function askToForget(): Promise<void> {
+            await openManagement();
+            await waitFor(async () => {
+                await fireEvent.press(screen.getByRole("button", {name: /^Forget this machine/}));
+                expect(screen.getByText("Forget Work?")).toBeTruthy();
+            }, {timeout: SHEET_PRESS_TIMEOUT});
+            await settleSheet();
+        }
+
         beforeEach(() => {
             Object.assign(link(), {
                 remembered: "WORK", status: "disconnected", changeBlocker: null, machines: [saved]
@@ -999,10 +1024,8 @@ describe("SettingsScreen", () => {
         });
 
         it("asks first, and forgets nothing until the answer is Forget", async () => {
-            await renderWithProviders(<SettingsScreen settings={new Settings(memoryStorage())}/>);
-
-            await fireEvent.press(screen.getByText("Forget this machine"));
-            await settleSheet();
+            await renderWithProviders(<SettingsScreen settings={machineSettings()}/>);
+            await askToForget();
 
             expect(screen.getByText("Forget Work?")).toBeTruthy();
             expect(screen.getByTestId("settings-screen", {includeHiddenElements: true})
@@ -1019,32 +1042,31 @@ describe("SettingsScreen", () => {
         });
 
         it("keeps the machine when the answer is Keep it", async () => {
-            await renderWithProviders(<SettingsScreen settings={new Settings(memoryStorage())}/>);
-
-            await fireEvent.press(screen.getByText("Forget this machine"));
-            await settleSheet();
+            await renderWithProviders(<SettingsScreen settings={machineSettings()}/>);
+            await askToForget();
             await fireEvent.press(screen.getByRole("button", {name: "Keep Work"}));
             await settleSheet();
 
             expect(link().forgetMachine).not.toHaveBeenCalled();
             expect(link().forget).not.toHaveBeenCalled();
-            // Closed: the screen behind it is back in the reader's path, and
-            // the row is still there to tap.
             expect(screen.getByTestId("settings-screen").props.accessibilityElementsHidden)
                 .toBe(false);
-            expect(screen.getByText("Forget this machine")).toBeTruthy();
+            expect(screen.getByText("Manage machine")).toBeTruthy();
         });
 
-        it("does not ask while a brew holds the link; the refusal is said as before", async () => {
+        it("disables forgetting in management while a brew holds the link", async () => {
             link().changeBlocker = "A brew is running. Stop it or let it finish before changing machines.";
-            await renderWithProviders(<SettingsScreen settings={new Settings(memoryStorage())}/>);
+            await renderWithProviders(<SettingsScreen settings={machineSettings()}/>);
+            await openManagement();
 
-            await fireEvent.press(screen.getByText("Forget this machine"));
+            const forget = screen.getByRole("button", {name: /^Forget this machine/});
+            expect(forget).toBeDisabled();
+            expect(forget.props.accessibilityLabel).toContain(link().changeBlocker);
+            await fireEvent.press(forget);
             await settleSheet();
 
             expect(screen.queryByText("Forget Work?")).toBeNull();
-            // `forget` is the path that refuses and says why.
-            expect(link().forget).toHaveBeenCalled();
+            expect(link().forget).not.toHaveBeenCalled();
             expect(link().forgetMachine).not.toHaveBeenCalled();
         });
     });
@@ -1110,7 +1132,7 @@ describe("SettingsScreen", () => {
         expect(screen.getByText(/cannot be undone/i)).toBeTruthy();
     });
 
-    it("opens About from the top of the screen, not the bottom", async () => {
+    it("opens About from the final row after the ordered preference groups", async () => {
         await renderWithProviders(<SettingsScreen settings={accountOn()}/>);
 
         // SettingsActionRow folds its label and detail into one accessible
@@ -1124,32 +1146,24 @@ describe("SettingsScreen", () => {
 
         expect(mockPush).toHaveBeenCalledWith("/about");
 
-        // The name only proves the row exists and works; it says nothing about
-        // where it sits. Moving About to the bottom — the regression this test
-        // is named for — would leave the assertion above green, so position is
-        // checked directly against every other section, including the two
-        // this task adds.
         const order = renderOrder(screen.toJSON());
         const indexOf = (text: string) => order.indexOf(text);
-        expect(indexOf("About XBRW++")).toBeGreaterThanOrEqual(0);
-        expect(indexOf("About XBRW++")).toBeLessThan(indexOf("RECIPE LIST"));
-        expect(indexOf("RECIPE LIST")).toBeLessThan(indexOf("UNITS"));
-        expect(indexOf("UNITS")).toBeLessThan(indexOf("XBLOOM ACCOUNT"));
-        expect(indexOf("XBLOOM ACCOUNT")).toBeLessThan(indexOf("LIBRARY"));
+        const headings = ["MACHINES", "BREWING", "UNITS", "RECIPE LIST",
+                          "XBLOOM ACCOUNT", "LIBRARY", "About XBRW++"];
+        expect(indexOf(headings[0])).toBeGreaterThanOrEqual(0);
+        for (let index = 1; index < headings.length; index++) {
+            expect(indexOf(headings[index])).toBeGreaterThan(indexOf(headings[index - 1]));
+        }
+        expect(screen.queryByText("Brew history")).toBeNull();
+        expect(screen.queryByText("What leaves this device")).toBeNull();
     });
 
-    // Placement is the whole argument for the tile. Put it down with About and
-    // it is a row almost nobody scrolls to; the point of it is that it sits
-    // among the things people actually open Settings for.
-    it("puts the tip jar above the preferences, not down with About", async () => {
+    it("keeps support in the fixed header rather than the preferences scroll", async () => {
         await renderWithProviders(<SettingsScreen settings={accountOn()}/>);
 
-        expect(screen.getByTestId("support-tile")).toBeTruthy();
-
-        const order = renderOrder(screen.toJSON());
-        const indexOf = (text: string) => order.indexOf(text);
-        expect(indexOf(SUPPORT_TITLE)).toBeGreaterThan(indexOf("Brew history"));
-        expect(indexOf(SUPPORT_TITLE)).toBeLessThan(indexOf("RECIPE LIST"));
+        expect(screen.queryByTestId("support-tile")).toBeNull();
+        expect(screen.getByRole("link", {name: `${SUPPORT_TITLE}. Opens in your browser.`})).toBeTruthy();
+        expect(within(screen.getByTestId("settings-scroll")).queryByText(SUPPORT_TITLE)).toBeNull();
     });
 
     // It unlocks nothing, so it stores nothing. A key added here would also
@@ -1270,6 +1284,7 @@ describe("SettingsScreen", () => {
             const rendered = await renderWithProviders(<SettingsScreen settings={settings}/>);
             const order = renderOrder(rendered.toJSON());
             expect(order.indexOf("CARD DIAGNOSTICS")).toBeGreaterThan(order.indexOf("LABS"));
+            expect(order.indexOf("About XBRW++")).toBeGreaterThan(order.indexOf("CARD DIAGNOSTICS"));
             await fireEvent.press(screen.getByRole("button", {name: /^Machine console/}));
             expect(mockPush).toHaveBeenCalledWith("/machine");
             expect(settings.get("machineConsoleAcknowledged")).toBe(false);

@@ -33,6 +33,8 @@ type Props = {
      * which `ScreenTitle` explains.
      */
     titleLines?: number;
+    /** A trailing action that can wrap below the title when space is tight. */
+    action?: React.ReactNode;
     onBack: () => void;
 };
 
@@ -53,22 +55,43 @@ type Props = {
  * it, a screen reader arriving on a pushed screen has nothing for the rotor to
  * land on and no announcement saying where it landed.
  */
-export default function ScreenHeader({title, count, meta, titleLines, onBack}: Props) {
+export default function ScreenHeader({title, count, meta, titleLines, action, onBack}: Props) {
     const insets = useSafeAreaInsets();
+    const hasAction = action !== undefined && action !== null;
+    const back = (
+        <Pressable accessibilityRole="button" accessibilityLabel="Back"
+                   onPress={onBack} hitSlop={12}>
+            <YStack testID="screen-header-back" backgroundColor={onAccent.key}
+                    borderRadius="$3" width={KEY_SIZE} height={KEY_SIZE}
+                    alignItems="center" justifyContent="center">
+                <DotIcon name="back" size={16} color={palette.text}/>
+            </YStack>
+        </Pressable>
+    );
 
     return (
         <YStack backgroundColor={palette.base} paddingTop={insets.top}>
             <XStack alignItems="center" gap="$3"
+                    testID={hasAction ? "screen-header-action-row" : undefined}
+                    flexWrap={hasAction ? "wrap" : "nowrap"}
                     paddingHorizontal="$4" paddingTop="$2" paddingBottom="$3">
-                <Pressable accessibilityRole="button" accessibilityLabel="Back"
-                           onPress={onBack} hitSlop={12}>
-                    <YStack testID="screen-header-back" backgroundColor={onAccent.key}
-                            borderRadius="$3" width={KEY_SIZE} height={KEY_SIZE}
-                            alignItems="center" justifyContent="center">
-                        <DotIcon name="back" size={16} color={palette.text}/>
+                {hasAction ? (
+                    <XStack alignItems="center" gap="$3" maxWidth="100%" flexShrink={1}>
+                        {back}
+                        <YStack flexShrink={1}>
+                            <ScreenTitle title={title} count={count} heading lines={titleLines ?? 0}/>
+                        </YStack>
+                    </XStack>
+                ) : <>
+                    {back}
+                    <ScreenTitle title={title} count={count} heading lines={titleLines}/>
+                </>}
+                {hasAction && (
+                    <YStack testID="screen-header-action" marginLeft="auto"
+                            maxWidth="100%" flexShrink={1}>
+                        {action}
                     </YStack>
-                </Pressable>
-                <ScreenTitle title={title} count={count} heading lines={titleLines}/>
+                )}
                 {meta !== undefined && (
                     <DotMatrixText testID="screen-header-meta" fontSize={11}
                                    weight="bold" letterSpacing={1.2}
