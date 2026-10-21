@@ -1123,13 +1123,65 @@ describe("renaming from the header", () => {
         jest.useRealTimers();
     });
 
-    it("seeds the field with the recipe's own name, not a borrowed one", async () => {
-        // A recipe following its pod has an empty `name` and a title it borrowed
-        // from `xbloomName`. Seeding with the borrowed one would turn the next
-        // save into a rename nobody asked for, freezing a string the pod can
-        // still change.
+    it("opens a recipe following its pod on the pod name, so there is something to edit", async () => {
+        // An empty field here meant retyping the whole name to change one word.
         jest.useFakeTimers();
         await renderEditor({name: "", xbloomName: "Kenya Nyeri"});
+
+        await openRename();
+
+        expect(screen.getByTestId("rename-field").props.value).toBe("Kenya Nyeri");
+        jest.useRealTimers();
+    });
+
+    it("keeps following the pod when the pod name is saved unchanged", async () => {
+        // Saving what the sheet offered is not a rename. Freezing a copy would
+        // stop a later change to the pod name reaching the recipe.
+        jest.useFakeTimers();
+        await renderEditor({name: "", xid: "CGL12", xbloomName: "Kenya Nyeri"});
+        await openRename();
+
+        await fireEvent.press(screen.getByTestId("rename-confirm"));
+        await act(async () => { jest.advanceTimersByTime(500); });
+        await openAbout();
+
+        expect(screen.getByTestId("pod-following")).toBeTruthy();
+        expect(screen.queryByTestId("pod-use-name")).toBeNull();
+        jest.useRealTimers();
+    });
+
+    it("gives the recipe its own name when the pod name is edited", async () => {
+        jest.useFakeTimers();
+        await renderEditor({name: "", xid: "CGL12", xbloomName: "Kenya Nyeri"});
+        await openRename();
+
+        await fireEvent.changeText(screen.getByTestId("rename-field"), "Kenya Nyeri light");
+        await fireEvent.press(screen.getByTestId("rename-confirm"));
+        await act(async () => { jest.advanceTimersByTime(500); });
+        await openAbout();
+
+        expect(screen.getAllByText("Kenya Nyeri light").length).toBeGreaterThan(0);
+        expect(screen.getByTestId("pod-use-name")).toBeTruthy();
+        jest.useRealTimers();
+    });
+
+    it("opens empty for a recipe with no name from anywhere", async () => {
+        // The header shows a generated placeholder, which is not a name anybody
+        // chose and must not become one by being saved.
+        jest.useFakeTimers();
+        await renderEditor({name: "", xid: "", xbloomName: ""});
+
+        await openRename();
+
+        expect(screen.getByTestId("rename-field").props.value).toBe("");
+        jest.useRealTimers();
+    });
+
+    it("opens empty for a recipe titled only by its Recipe ID", async () => {
+        // Only the pod name is offered. An ID is not a pod name, so the sheet's
+        // advice about following one would not fit a field that held it.
+        jest.useFakeTimers();
+        await renderEditor({name: "", xid: "CGL12", xbloomName: ""});
 
         await openRename();
 
