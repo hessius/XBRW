@@ -1,4 +1,5 @@
 import {LICENCES, LICENCE_TEXTS} from "@/constants/licences";
+import {dependencies} from "@/package.json";
 
 describe("the generated licence list", () => {
     it("is not empty", () => {
@@ -46,7 +47,7 @@ describe("the generated licence list", () => {
         // A generator that quietly misses the tree is worse than no list: it
         // produces a confident, wrong one, and the obligation here is legal.
         const names = new Set(LICENCES.map((entry) => entry.name));
-        for (const declared of ["expo", "react", "react-native", "tamagui"]) {
+        for (const declared of Object.keys(dependencies)) {
             expect(names.has(declared)).toBe(true);
         }
     });

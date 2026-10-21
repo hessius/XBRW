@@ -12,7 +12,7 @@ not a device pass performed by this session. The maintainer currently has no
 machine available for further tests.
 
 The reviewed #247 head is `a997dac823b9c9ec7ede78914c8d86b9faec4e8e`;
-#246 is `2cb6303abcdae62bea09fa70773e8c7b1da76720`. These rebased standalone
+#246 is `687c0f7e029abf8b11473e2edfe18492de097d7e`. These rebased standalone
 heads differ from the original cumulative preview. In particular, #247's
 vitals/handshake path is not the combined preview's path. Name the actual tested
 commit rather than treating a preview pass as proof for another head.
@@ -68,12 +68,17 @@ constructor migration write. Its assertion now compares writes immediately
 before and after the read; no machine transport or brewing logic changed.
 Final PR-head CI remains a separate, pending parent-owned gate.
 
-The single Copilot round on #252 reviewed `af80b88e`. Both reported catalogue
+The first Copilot round on #252 reviewed `af80b88e`. Both reported catalogue
 defects were reproduced and corrected: replacement photo URLs are retried after
 a failure, and a bag's fixed coffee name agrees with later brew handoffs.
 Focused follow-up checks passed 162 tests across both platforms, typecheck and
 lint (zero errors, 35 existing warnings). Final-head CI is still required.
-No second review round is requested after the fixes.
+The maintainer subsequently requested a second round on `540476dd`.
+Its three findings were reproduced on both platforms before correction:
+automatic-cover photo failures now restore the glyph, paused subscriptions
+without a cache no longer claim to be loading, and the regenerated licence
+inventory includes the date picker. Personal/tag cover fallbacks are unchanged.
+No third round is requested. Photo-loading performance remains open in #253.
 
 The first post-review CI run exposed a machine-picker test pressing a mounted
 row before its sheet accepted input. Controlled timers reproduced the missed

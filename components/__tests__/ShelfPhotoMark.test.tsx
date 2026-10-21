@@ -49,6 +49,37 @@ const fourPhotos = Array.from({length: 4}, (_, index) => ({
     uuid: `recipe-${index}`, accent: members[0].accent, imageURL: `https://coffee.example/${index}.jpg`
 }));
 
+it.each([false, true])("restores the automatic glyph after a photo fails, inverted %s", async inverted => {
+    await renderWithProviders(<ShelfTile shelf={{id: "pods", label: "PODS", kind: "auto", count: 6}}
+        members={{accents: ["red"], coverMembers: fourPhotos}} inverted={inverted} onPress={jest.fn()}/>);
+    await fireEvent(photos()[0], "error");
+    expect(photos()).toHaveLength(0);
+    expect(screen.getByTestId(inverted ? "shelf-mark-glyph-inverted" : "shelf-mark-glyph")).toBeTruthy();
+});
+
+it("retries a replacement automatic-cover URL after falling back", async () => {
+    const shelf = {id: "pods", label: "PODS", kind: "auto" as const, count: 6};
+    const view = await renderWithProviders(<ShelfTile shelf={shelf}
+        members={{accents: ["red"], coverMembers: fourPhotos}} onPress={jest.fn()}/>);
+    await fireEvent(photos()[0], "error");
+    expect(screen.getByTestId("shelf-mark-glyph")).toBeTruthy();
+    const replaced = fourPhotos.map((member, index) => index === 0
+        ? {...member, imageURL: "https://coffee.example/replacement.jpg"} : member);
+    await view.rerender(<ShelfTile shelf={shelf}
+        members={{accents: ["red"], coverMembers: replaced}} onPress={jest.fn()}/>);
+    expect(photos()).toHaveLength(4);
+    expect(photos()[0].props.source.uri).toBe(replaced[0].imageURL);
+});
+
+it("restores the automatic glyph if the photo shared by four recipes fails", async () => {
+    const copies = fourPhotos.map(member => ({...member, imageURL: fourPhotos[0].imageURL}));
+    await renderWithProviders(<ShelfTile shelf={{id: "pods", label: "PODS", kind: "auto", count: 6}}
+        members={{accents: ["red"], coverMembers: copies}} onPress={jest.fn()}/>);
+    await fireEvent(photos()[0], "error");
+    expect(photos()).toHaveLength(0);
+    expect(screen.getByTestId("shelf-mark-glyph")).toBeTruthy();
+});
+
 it.each(["xbloom", "favourites", "pods", "mostBrewed", "recentlyAdded"])(
     "uses four distinct coffee photos for the approved %s auto shelf", async id => {
         await renderWithProviders(<ShelfTile shelf={{id, label: id, kind: "auto", count: 12}}

@@ -139,6 +139,8 @@ Only `xbloom` (XBLOOM RECIPES), `favourites` (STARRED), `pods` (XBLOOM PODS),
 four-cell grid, and only with at least four actual matching recipes carrying
 usable coffee/pod photos. Different recipes sharing one image URL each count:
 four copies of a photographed recipe fill all four cells with that photo.
+If a selected image fails to load, restore the automatic shelf's glyph rather
+than leaving a partial grid. Failure is keyed by URL so a replacement can load.
 Select the first four photographed members in `sortName`, UUID order;
 unpictured members do not consume this automatic-cover quota.
 Do not enlarge a photo. Below threshold or with previews OFF, keep the

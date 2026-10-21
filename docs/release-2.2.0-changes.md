@@ -4,7 +4,7 @@ This is an evaluation branch, not an approved release candidate. The notes below
 come from the contributor proposals and describe intended behavior, not completed
 hardware acceptance. The 24 proposal heads at the integration checkpoint are
 included for testing; later contributor rebases need comparison before acceptance.
-No contributor PR has been merged into develop or main.
+Issue #249 records accepted-package integration separately from this preview.
 Draft cumulative evaluation PR [#252](https://github.com/hessius/XBRW/pull/252)
 targets develop. Its initial green CI at `b63602eb` predates the picture
 redesign below and is not verification of that implementation.
@@ -49,9 +49,9 @@ names without restoring header photos, and #230's optional XPOD details.
 its later refinements. Acceptance is not a contributor PR merge or a native
 device pass; the grouped checks remain in the testing checklist.
 
-### Single cumulative review follow-ups
+### Cumulative review follow-ups
 
-The single Copilot round on #252 reported two reproducible catalogue defects.
+The first Copilot round on #252 reported two reproducible catalogue defects.
 A failed search-row photo now suppresses only that URL, so a replacement image
 from a refreshed feed is attempted without remounting the coffee row.
 
@@ -60,6 +60,18 @@ determines the name sent with brews. The sheet shows that name read-only, and
 bag creation enforces the same rule; recipes without coffee metadata retain
 editable bean names. Both-platform regressions cover the row, form and stored
 name. Beanconqueror matching still needs an external-app pass.
+
+The maintainer requested a second review at the package boundary. Automatic
+shelf covers now restore their glyph if a selected image fails, while
+personal/tag covers retain their accent-cell fallback. Replacement image URLs
+can load again. A paused subscription without a cached catalogue says updates
+are paused rather than promising a load. The generated licence inventory now
+includes the date picker; coverage checks every declared runtime dependency.
+No third review round is requested.
+
+Photo loading when opening shelves remains noticeably slow on device despite
+the earlier improvement. Follow-up #253 tracks native request/cache, decode and
+reveal measurements; these fixes do not establish a cache-performance result.
 
 ### Confirmed and inferred missing beans
 
@@ -119,7 +131,8 @@ boundary as well as the machine-level cancellation tests on both platforms.
 The unanswered-vitals cancellation reported by review already remains terminal
 in the combined incoming code and is pinned by a regression test.
 
-These are preview-owned follow-ups, not edits to the contributor's #247 branch.
+The contributor has carried an adapted version into #247; record the exact
+source and built head rather than treating the two preflight paths as identical.
 They do not establish recipe-buffer clearing or resolve the wrong-recipe report.
 
 ### Low-grind brew history
