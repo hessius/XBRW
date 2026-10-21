@@ -27,8 +27,9 @@ already-connected machine visible before scanning completes, and announces
 blocked actions as disabled. An older scan cannot replace a newer manual
 selection.
 
-Brew identity is checked again after fresh vitals and before PRO retry
-commands. Selection refusals retire only the unsent app-owned attempt, without
+Brew identity is checked again after fresh vitals, before warning-clearing
+commands and before PRO retry commands. Missing vitals never trigger warning
+cleanup on an unverified link. Selection refusals retire only the unsent app-owned attempt, without
 sending CANCEL or inventing a history record. Package A's cancellation,
 partial-upload and replacement-connection protections remain in place.
 

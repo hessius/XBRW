@@ -11,7 +11,8 @@ import {act, renderHook} from "@testing-library/react-native";
 import {useBrew} from "@/hooks/useBrew";
 import {__resetSharedMachine, chooseMachine} from "@/hooks/useMachine";
 import {sharedSettings} from "@/hooks/useSetting";
-import {FakeTransport} from "@/library/machine/__tests__/FakeTransport";
+import {FakeTransport, machineInfoFrame} from "@/library/machine/__tests__/FakeTransport";
+import {status} from "@/library/machine/__tests__/protocolFixtures";
 import {NoSavedMachineError, WrongMachineError} from "@/library/machine/errors";
 import Machine from "@/library/machine/Machine";
 import {serialiseSavedMachines, type SavedMachine} from "@/library/machine/savedMachines";
@@ -204,6 +205,64 @@ describe("one machine saved", () => {
         expect(refused).toHaveBeenCalledWith(expect.any(WrongMachineError));
         expect(transport.connectedTo).toBeNull();
         expect(sharedSettings().get("machineDeviceId")).toBe("HOME");
+    });
+
+    it.each([null, status(0x0F)])(
+        "verifies a late serial before clearing an earlier brew failure (home reply %j)",
+        async (homeReply) => {
+            const connectOnly = await connectOnlyFrames();
+            const transport = new FakeTransport();
+            transport.refuseIds = ["HOME"];
+            transport.devices = [{id: "STRANGER", name: "XBLOOM"}];
+            transport.ignoreInfoRequests = 1;
+            transport.homeReply = homeReply;
+            const machine = new Machine(transport, {frameGapMs: 0, infoWaitMs: 10});
+            machine.phase = {name: "failed", reason: "noBeans"};
+            const {result} = await renderHook(() => useBrew(machine));
+            const refused = jest.fn();
+
+            await act(async () => { await result.current.brew(coffee(), undefined, refused); });
+
+            expect(BREW_COMMANDS_SEEN(transport, connectOnly)).toEqual([]);
+            expect(refused).toHaveBeenCalledWith(expect.any(WrongMachineError));
+            expect(result.current.error).toMatch(/not your saved machine/);
+            expect(transport.connectedTo).toBeNull();
+            expect(sharedSettings().get("machineDeviceId")).toBe("HOME");
+        }
+    );
+
+    it("still clears an earlier failure after fresh vitals confirm the saved machine", async () => {
+        const transport = new FakeTransport();
+        transport.refuseIds = ["HOME"];
+        transport.devices = [{id: "HOME-NEW-ID", name: "XBLOOM"}];
+        transport.ignoreInfoRequests = 1;
+        transport.infoReply = machineInfoFrame({serial: "J15HOME00001"});
+        const machine = new Machine(transport, {frameGapMs: 0, infoWaitMs: 10});
+        machine.phase = {name: "failed", reason: "noBeans"};
+        const {result} = await renderHook(() => useBrew(machine));
+
+        await act(async () => { await result.current.brew(coffee()); });
+
+        expect(result.current.error).toBeNull();
+        expect(transport.sent.filter(code => code === 40519)).toHaveLength(1);
+        expect(transport.sent.indexOf(40519)).toBeLessThan(transport.sent.indexOf(8001));
+        expect(transport.connectedTo).toBe("HOME-NEW-ID");
+    });
+
+    it("does not clear an earlier failure when the new link never supplies vitals", async () => {
+        const transport = new FakeTransport();
+        transport.infoReply = null;
+        const machine = new Machine(transport, {frameGapMs: 0, infoWaitMs: 10});
+        machine.phase = {name: "failed", reason: "noBeans"};
+        const {result} = await renderHook(() => useBrew(machine));
+
+        await act(async () => { await result.current.brew(coffee()); });
+
+        expect(transport.sent).not.toContain(40519);
+        expect(transport.sent).not.toContain(8022);
+        expect(transport.sent).not.toContain(8002);
+        expect(machine.phase).toMatchObject({name: "failed", reason: "blocked", block: "noVitals"});
+        expect(result.current.error).toMatch(/has not said/);
     });
 
     it("still brews when the rescan finds the same machine under a new id", async () => {
