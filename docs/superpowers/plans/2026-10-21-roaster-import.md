@@ -58,7 +58,7 @@ files while the catalogue unit owns them.
 **Files:** New files in #237's diff; existing Settings/defaults/backup snapshot,
 headers, route registration, network inventory and publisher documentation.
 
-- [ ] **Step 1: Record the source delta and additive-file inventory.**
+- [x] **Step 1: Record the source delta and additive-file inventory.**
 
 Run from the owned worktree:
 
@@ -70,7 +70,7 @@ git diff --diff-filter=A --name-only 4aa7c02d226c1900efb453ab63529172c1801ea7...
 Exclude all preview-only dependencies and bag files. Do not restore modified
 files wholesale, especially Settings, headers, home, importer or recipe DB.
 
-- [ ] **Step 2: Replay the additive source files with Git.**
+- [x] **Step 2: Replay the additive source files with Git.**
 
 ```bash
 git diff --diff-filter=A --name-only -z \
@@ -85,7 +85,7 @@ Add feed settings and their existing backup exclusions/snapshot entries;
 register catalogue routes and foreground syncing without changing native config.
 Keep Settings' approved machine-first layout and header action.
 
-- [ ] **Step 3: Run the new domain suites to identify actual integration gaps.**
+- [x] **Step 3: Run the new domain suites to identify actual integration gaps.**
 
 ```bash
 npx jest --runTestsByPath library/__tests__/roasterFeed.test.ts library/__tests__/roasterCatalogue.test.ts library/__tests__/roasterSync.test.ts library/__tests__/importRefresh.test.ts
@@ -95,14 +95,50 @@ npm run typecheck
 If the fresh worktree reports missing Jest/dependencies, run `npm ci` once and
 rerun. Do not change package versions to satisfy an unrelated preview dependency.
 
-- [ ] **Step 4: Resolve imports and shared API mismatches, then rerun.**
+- [x] **Step 4: Resolve imports and shared API mismatches, then rerun.**
 
 Retain accepted `ScreenHeader` action wrapping; add only required count,
 subtitle/title-size support. Keep all palette values centralized. Preserve
 Settings snapshot exhaustiveness and mark catalogue caches as non-backup data.
 Source additions remain unaccepted until targeted suites pass.
 
-- [ ] **Step 5: Commit the coherent catalogue foundation and source provenance.**
+- [x] **Step 5: Commit the coherent catalogue foundation and source provenance.**
+
+### Task 1 integration record
+
+The additive catalogue foundation is replayed from #237 at
+`27535f8b72fd30febe51d07f7bd2cbd20bf63980`, with surgical shared APIs.
+Accepted `fitName` files already existed and were retained. The donor's
+`useRecipeImport.reimport` hook test is deferred with Task 3 rather than making
+the accepted importer depend on an unintegrated API. No #240 home promotion,
+#245 database-copy changes, native configuration or dependencies are included.
+
+Foreground syncing has one root-owned hook, not a home-screen effect. Import
+offer wiring must not add a second foreground owner. Backups carry choices and
+fingerprints but exclude catalogue/alert caches; restored subscriptions reset
+sync timestamps while preserving pause. The feed checker pipes fetched bodies
+through stdin instead of writing downloads to a temporary directory. Currency
+fixtures explicitly select an Australian locale instead of depending on the
+developer machine's locale.
+
+Self-review: foundation/domain and route suites pass, but this is not production
+acceptance of the source flows. Task 3 still owns typed save-before-open, staging
+every existing-recipe save, distinguishing storage failures from lookup failures,
+the enclosing-feed roaster fallback, and replacing mount-time catalogue age
+clocks. The copied catalogue still mutates existing recipes before saving and
+its ADD catch still reports storage failures as connectivity failures. The
+accepted import hook, `fillImportBlanks`, recipe-name/photo decoration and
+machine-first Settings layout are retained. Catalogue stage previews use the
+existing ladder without replaying the source's optional plan styling.
+
+Verification: the four required suites pass on iOS and Android (138 tests).
+The expanded foundation/shared-surface run passes 50 suites and 990 tests; the
+CLI harness is intentionally skipped there on both platforms and passes when
+invoked by `npm run check-feed`. Accepted importer/ImportSheet regression
+coverage plus the required suites passes 12 suites and 320 tests. Typecheck
+and `git diff --check` pass; lint has no errors and 32 warnings. The checker
+accepts the 30-coffee sample both as a local file and through its mocked-fetch
+stdin path. No native build, live roaster request, NFC or BLE test was attempted.
 
 ## Task 2: Add explicit Import choices and the approved sheet
 

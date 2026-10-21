@@ -31,7 +31,7 @@ type Props = {
     /** Prose, so this is Inter — never rendered in Doto. */
     title: string;
     /** Rendered as a small superscript. Hidden when absent or zero. */
-    count?: number;
+    count?: number | string;
     fontSize?: number;
     /**
      * Announces the title as a heading.
@@ -65,7 +65,8 @@ type Props = {
  */
 export default function ScreenTitle({title, count, fontSize = TITLE_FONT_SIZE,
                                      heading = false, lines = 1}: Props) {
-    const showCount = typeof count === "number" && count > 0;
+    const showCount = typeof count === "string" ? count.length > 0
+        : typeof count === "number" && count > 0;
     const reduced = useReducedMotion();
 
     const size = useSharedValue(fontSize);
@@ -96,7 +97,7 @@ export default function ScreenTitle({title, count, fontSize = TITLE_FONT_SIZE,
                 ]}>
                 {title}
             </Animated.Text>
-            {showCount && (
+            {showCount && count !== undefined && (
                 <Animated.View testID="screen-title-count-lift" style={countStyle}>
                     <DotMatrixText testID="screen-title-count" fontSize={11}
                                    weight="bold" color={palette.dim}>

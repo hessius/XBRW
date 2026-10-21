@@ -557,6 +557,38 @@ describe("SettingsScreen", () => {
         expect(mockNotify).not.toHaveBeenCalledWith(expect.objectContaining({tone: "error"}));
     });
 
+    it("refetches restored catalogues while retaining paused subscriptions and import choices", async () => {
+        const storage = memoryStorage();
+        const feed = "https://roaster.example/feed.json";
+        const subscriptions = JSON.stringify([{
+            feed, roaster: "Roaster", paused: true, lastSync: 1000, lastAttempt: 2000
+        }]);
+        const prints = JSON.stringify({u1: "brewing content"});
+        mockPickBackup.mockResolvedValue(backupOf([recipeNamed("A", "u1")], {
+            roasterSubscriptions: subscriptions,
+            roasterFeedOptOut: JSON.stringify([feed]),
+            importFingerprints: prints,
+            roasterCatalogue: "untrusted cache",
+            roasterAlerts: "untrusted alerts"
+        }));
+        mockApplyRestore.mockReturnValue({status: "restored", added: 1});
+        await renderWithProviders(<SettingsScreen settings={new Settings(storage)}/>);
+        await fireEvent.press(screen.getByRole("button",
+            {name: "Restore from a backup, Adds anything your library does not already have."}));
+        await settleSheet();
+        await fireEvent(screen.getByLabelText(/settings from this backup/i), "checkedChange", true);
+        await fireEvent.press(screen.getByRole("button", {name: /add to my library/i}));
+
+        const restored = new Settings(storage);
+        expect(JSON.parse(restored.get("roasterSubscriptions"))).toEqual([{
+            feed, roaster: "Roaster", paused: true, lastSync: 0, lastAttempt: 0
+        }]);
+        expect(restored.get("roasterFeedOptOut")).toBe(JSON.stringify([feed]));
+        expect(restored.get("importFingerprints")).toBe(prints);
+        expect(restored.get("roasterCatalogue")).toBe("");
+        expect(restored.get("roasterAlerts")).toBe("");
+    });
+
     it("restores every setting a backup carries, not a subset of them", async () => {
         // The other half of the same omission: a key can be in the snapshot and
         // still be dropped on the way back in, which loses the preference at the

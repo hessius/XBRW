@@ -1,0 +1,972 @@
+{
+  "version": 1,
+  "roaster": {
+    "name": "Central Coast Coffee",
+    "url": "https:\/\/www.centralcoastcoffee.com.au",
+    "feed": "https:\/\/www.centralcoastcoffee.com.au\/collections\/roasted-coffee-beans?view=xbrw",
+    "add_to_cart": "https:\/\/www.centralcoastcoffee.com.au\/cart\/add?id={variant_id}\u0026quantity=1"
+  },
+  "coffees": [
+    {
+      "id": "peru-david-ojeda-finca-el-palto-ihuamaca-gesha-washed-signature-series",
+      "name": "Peru | El Palto | David Ojeda | Gesha Washed",
+      "url": "https:\/\/www.centralcoastcoffee.com.au\/products\/peru-david-ojeda-finca-el-palto-ihuamaca-gesha-washed-signature-series",
+      "available": true,
+      "image": "https:\/\/central-coast-coffee.myshopify.com\/cdn\/shop\/files\/peru_el_palto_480g_906dec83-ce40-4130-be72-9c63482b683c.png?format=pjpg\u0026v=1783415230\u0026width=600",
+      "recipes": [{ "size": "18g", "share": "https:\/\/share-h5.xbloom.com\/?id=%2BVyYN7RtTYU4xoOcCQXSeg%3D%3D" }],
+      "roast": {
+        "level": "Nordic Ultra-light",
+        "rest_days": 14,
+        "peak_day": 35,
+        "best_until_day": 52
+      },
+      "bag_sizes_g": [1000,480,320,160],
+      "variants": [
+        { "id": 42246212583460, "grams": 1000, "price": 146.0, "currency": "AUD", "available": true },
+        { "id": 42246212550692, "grams": 480, "price": 78.0, "currency": "AUD", "available": true },
+        { "id": 42227047301156, "grams": 320, "price": 53.0, "currency": "AUD", "available": true },
+        { "id": 42227047268388, "grams": 160, "price": 28.0, "currency": "AUD", "available": true }
+      ],
+      "bean": {
+        "roaster": "Central Coast Coffee",
+        "country": "Peru",
+        "region": "Cajamarca, San Ignacio",
+        "farm": "El Palto",
+        "farmer": "Luz Helena Salazar",
+        "elevation": "1590",
+        "variety": "Gesha",
+        "processing": "Washed",
+        "aromatics": "Cacao, fresh blueberry, jammy red grape, vanilla",
+        "cupping_points": "88.0",
+        "decaffeinated": false
+      }
+    },
+    {
+      "id": "colombia-castellon-bourbon-aruzi-washed-signature-series",
+      "name": "Colombia | Castellon | Bourbon Aruzi Washed",
+      "url": "https:\/\/www.centralcoastcoffee.com.au\/products\/colombia-castellon-bourbon-aruzi-washed-signature-series",
+      "available": true,
+      "image": "https:\/\/central-coast-coffee.myshopify.com\/cdn\/shop\/files\/colombia_castellon_bourbon_aruzi_washed_480g_1764b774-d913-4297-8c96-c56c99520fa1.png?format=pjpg\u0026v=1783415069\u0026width=600",
+      "recipes": [{ "size": "18g", "share": "https:\/\/share-h5.xbloom.com\/?id=JJVZc3kwCku6eKDXAqGeEA%3D%3D" }],
+      "roast": {
+        "level": "Nordic Ultra-light",
+        "rest_days": 14,
+        "peak_day": 35,
+        "best_until_day": 52
+      },
+      "bag_sizes_g": [480,320,160],
+      "variants": [
+        { "id": 41684777599012, "grams": 480, "price": 60.0, "currency": "AUD", "available": true },
+        { "id": 41684777566244, "grams": 320, "price": 41.0, "currency": "AUD", "available": false },
+        { "id": 41684777500708, "grams": 160, "price": 22.0, "currency": "AUD", "available": true }
+      ],
+      "bean": {
+        "roaster": "Central Coast Coffee",
+        "country": "Colombia",
+        "region": "Quindío",
+        "farm": "Castellon",
+        "farmer": "Jairo Arcila",
+        "elevation": "1500",
+        "variety": "Bourbon Aruzi",
+        "processing": "Washed",
+        "aromatics": "Vanilla, floral, cacao nibs, melon, sugarcane, lime",
+        "cupping_points": "88.0",
+        "decaffeinated": false
+      }
+    },
+    {
+      "id": "colombia-pillimue-family-caturra-colombia-washed-ea-decaf",
+      "name": "Colombia | Pillimue Family | Caturra \/ Colombia Washed | EA Decaf",
+      "url": "https:\/\/www.centralcoastcoffee.com.au\/products\/colombia-pillimue-family-caturra-colombia-washed-ea-decaf",
+      "available": true,
+      "image": "https:\/\/central-coast-coffee.myshopify.com\/cdn\/shop\/files\/col_pillimue_1000g_93a3b261-dea9-4645-903a-453282c4587d.png?format=pjpg\u0026v=1783251362\u0026width=600",
+      "recipes": [{ "size": "18g", "share": "https:\/\/share-h5.xbloom.com\/?id=jnq1U5Iw%2BBOAyxzYXLaaLQ%3D%3D" }],
+      "roast": {
+        "level": "Decaf",
+        "rest_days": 5,
+        "peak_day": 14,
+        "best_until_day": 21
+      },
+      "bag_sizes_g": [1000,480,320],
+      "variants": [
+        { "id": 42446094139428, "grams": 1000, "price": 68.0, "currency": "AUD", "available": true },
+        { "id": 42446094073892, "grams": 480, "price": 37.0, "currency": "AUD", "available": true },
+        { "id": 42446094106660, "grams": 320, "price": 26.0, "currency": "AUD", "available": true }
+      ],
+      "bean": {
+        "roaster": "Central Coast Coffee",
+        "country": "Colombia",
+        "region": "Cauca, Inzá",
+        "farm": "Pillimue Family",
+        "farmer": "Pillimue Family",
+        "elevation": "1800",
+        "variety": "Caturra, Colombia",
+        "processing": "Washed, EA Decaf",
+        "aromatics": "Clean and well-structured, with a buttery mouthfeel. Stewed apple, fresh cream and sweet almond.",
+        "cupping_points": "84.5",
+        "decaffeinated": true
+      }
+    },
+    {
+      "id": "colombia-finca-patio-bonito-paola-carlos-trujillo-bourbon-aji-natural-signature-series",
+      "name": "Colombia | Patio Bonito | Paola \u0026 Carlos Trujillo | Bourbon Aji Natural",
+      "url": "https:\/\/www.centralcoastcoffee.com.au\/products\/colombia-finca-patio-bonito-paola-carlos-trujillo-bourbon-aji-natural-signature-series",
+      "available": true,
+      "image": "https:\/\/central-coast-coffee.myshopify.com\/cdn\/shop\/files\/col_patio_bonito_bourbonaji_320g_7ea7fd08-318d-45fb-b164-3e73525b589a.png?format=pjpg\u0026v=1783415122\u0026width=600",
+      "recipes": [{ "size": "18g", "share": "https:\/\/share-h5.xbloom.com\/?id=oxq10NMqs0iLiEyUXfTY3Q%3D%3D" }],
+      "roast": {
+        "level": "Medium",
+        "rest_days": 7,
+        "peak_day": 18,
+        "best_until_day": 27
+      },
+      "bag_sizes_g": [320,160],
+      "variants": [
+        { "id": 42333212672036, "grams": 320, "price": 57.0, "currency": "AUD", "available": true },
+        { "id": 42333212639268, "grams": 160, "price": 30.0, "currency": "AUD", "available": true }
+      ],
+      "bean": {
+        "roaster": "Central Coast Coffee",
+        "country": "Colombia",
+        "region": "Cauca, Caldono",
+        "farm": "Patio Bonito",
+        "farmer": "",
+        "elevation": "1700",
+        "variety": "Bourbon Aji",
+        "processing": "Natural",
+        "aromatics": "Cacao, jammy passion fruit, caramel, fresh blackberry, heather blossom honey, feijoa, papaya, kiwifruit",
+        "cupping_points": "88.0",
+        "decaffeinated": false
+      }
+    },
+    {
+      "id": "colombia-finca-juan-martin-sidra-washed-signature-series",
+      "name": "Colombia | Juan Martin | Sidra Washed",
+      "url": "https:\/\/www.centralcoastcoffee.com.au\/products\/colombia-finca-juan-martin-sidra-washed-signature-series",
+      "available": true,
+      "image": "https:\/\/central-coast-coffee.myshopify.com\/cdn\/shop\/files\/juan_martin_320g_a47039fb-1114-429f-952e-ba4d28492226.png?format=pjpg\u0026v=1783415120\u0026width=600",
+      "recipes": [{ "size": "18g", "share": "https:\/\/share-h5.xbloom.com\/?id=plvHoWGOMZg0cFEY1CRknw%3D%3D" }],
+      "roast": {
+        "level": "Medium",
+        "rest_days": 7,
+        "peak_day": 18,
+        "best_until_day": 27
+      },
+      "bag_sizes_g": [320,160],
+      "variants": [
+        { "id": 42227050446884, "grams": 320, "price": 49.0, "currency": "AUD", "available": true },
+        { "id": 42227050414116, "grams": 160, "price": 27.0, "currency": "AUD", "available": true }
+      ],
+      "bean": {
+        "roaster": "Central Coast Coffee",
+        "country": "Colombia",
+        "region": "",
+        "farm": "Finca Juan Martin",
+        "farmer": "",
+        "elevation": "2050",
+        "variety": "Sidra",
+        "processing": "Washed",
+        "aromatics": "Fresh peach, cooked stone fruit, mild caramel, vanilla",
+        "cupping_points": "88.0",
+        "decaffeinated": false
+      }
+    },
+    {
+      "id": "colombia-las-flores-chiroso-natural-signature-series",
+      "name": "Colombia | Las Flores | Chiroso Natural",
+      "url": "https:\/\/www.centralcoastcoffee.com.au\/products\/colombia-las-flores-chiroso-natural-signature-series",
+      "available": true,
+      "image": "https:\/\/central-coast-coffee.myshopify.com\/cdn\/shop\/files\/colombia_las_flores_chiroso_480g_e480bad0-c8e7-42a8-b71a-be3a15878d1c.png?format=pjpg\u0026v=1783415147\u0026width=600",
+      "recipes": [{ "size": "18g", "share": "https:\/\/share-h5.xbloom.com\/?id=uYpqpjyIirKJHceFSDDsDw%3D%3D" }],
+      "roast": {
+        "level": "Light",
+        "rest_days": 11,
+        "peak_day": 28,
+        "best_until_day": 42
+      },
+      "bag_sizes_g": [480,320,160],
+      "variants": [
+        { "id": 41632601669668, "grams": 480, "price": 119.0, "currency": "AUD", "available": true },
+        { "id": 41632601636900, "grams": 320, "price": 82.0, "currency": "AUD", "available": true },
+        { "id": 41632601604132, "grams": 160, "price": 42.0, "currency": "AUD", "available": true }
+      ],
+      "bean": {
+        "roaster": "Central Coast Coffee",
+        "country": "Colombia",
+        "region": "Huila, Acevedo",
+        "farm": "Las Flores",
+        "farmer": "Jhoan Vergara",
+        "elevation": "1730",
+        "variety": "Chiroso",
+        "processing": "Natural",
+        "aromatics": "Intense Flavours, Cherry, Red Apple, Chamomile, Full body, Red Wine, Pineapple acidity, salted caramel, dark chocolate",
+        "cupping_points": "88.0",
+        "decaffeinated": false
+      }
+    },
+    {
+      "id": "colombia-la-divisa-gesha-washed-signature-series",
+      "name": "Colombia | La Divisa | Gesha Washed",
+      "url": "https:\/\/www.centralcoastcoffee.com.au\/products\/colombia-la-divisa-gesha-washed-signature-series",
+      "available": true,
+      "image": "https:\/\/central-coast-coffee.myshopify.com\/cdn\/shop\/files\/colombia_la_divisa_480g_d3d2e2c8-9721-4e4f-9e0f-da2934db85fe.png?format=pjpg\u0026v=1783415146\u0026width=600",
+      "recipes": [{ "size": "18g", "share": "https:\/\/share-h5.xbloom.com\/?id=sqPiqy%2BzIyIv12FWhIxDsA%3D%3D" }],
+      "roast": {
+        "level": "Light",
+        "rest_days": 11,
+        "peak_day": 28,
+        "best_until_day": 42
+      },
+      "bag_sizes_g": [480,320,160],
+      "variants": [
+        { "id": 41632647020580, "grams": 480, "price": 90.0, "currency": "AUD", "available": false },
+        { "id": 41632646987812, "grams": 320, "price": 62.0, "currency": "AUD", "available": true },
+        { "id": 41632646955044, "grams": 160, "price": 32.0, "currency": "AUD", "available": true }
+      ],
+      "bean": {
+        "roaster": "Central Coast Coffee",
+        "country": "Colombia",
+        "region": "Quindío",
+        "farm": "La Divisa",
+        "farmer": "Sebastian Gomez",
+        "elevation": "1600",
+        "variety": "Gesha",
+        "processing": "Washed",
+        "aromatics": "Caramel | brown sugar | lemongrass",
+        "cupping_points": "88.0",
+        "decaffeinated": false
+      }
+    },
+    {
+      "id": "ethiopia-yirgacheffe-gargari-heirloom-cm-natural-amber-pr16-signature-series",
+      "name": "Ethiopia | Yirgacheffe Gargari | Heirloom CM Natural, Amber PR16",
+      "url": "https:\/\/www.centralcoastcoffee.com.au\/products\/ethiopia-yirgacheffe-gargari-heirloom-cm-natural-amber-pr16-signature-series",
+      "available": true,
+      "image": "https:\/\/central-coast-coffee.myshopify.com\/cdn\/shop\/files\/eth_gargari_nat_480g_8689928b-edd8-42f4-8de2-7508e1c4adc5.png?format=pjpg\u0026v=1783415248\u0026width=600",
+      "recipes": [{ "size": "18g", "share": "https:\/\/share-h5.xbloom.com\/?id=KLRnuLh9zP5Lqq32HyxEww%3D%3D" }],
+      "roast": {
+        "level": "Light",
+        "rest_days": 11,
+        "peak_day": 28,
+        "best_until_day": 42
+      },
+      "bag_sizes_g": [480,320,160],
+      "variants": [
+        { "id": 42049003290660, "grams": 480, "price": 64.0, "currency": "AUD", "available": true },
+        { "id": 42049003257892, "grams": 320, "price": 44.0, "currency": "AUD", "available": false },
+        { "id": 42049003225124, "grams": 160, "price": 24.0, "currency": "AUD", "available": true }
+      ],
+      "bean": {
+        "roaster": "Central Coast Coffee",
+        "country": "Ethiopia",
+        "region": "Gedeo, Kochere",
+        "farm": "Various smallholders",
+        "farmer": "Various smallholders",
+        "elevation": "1950",
+        "variety": "Heirloom",
+        "processing": "Natural CM",
+        "aromatics": "Papaya, mango, lemon peel, orange, tangerine, peach, pineapple, tropical, cane sugar, sweet, creamy, bold",
+        "cupping_points": "86.0",
+        "decaffeinated": false
+      }
+    },
+    {
+      "id": "bolivia-carmelita-caturra-coco-natural",
+      "name": "Bolivia | Carmelita | Caturra Coco Natural",
+      "url": "https:\/\/www.centralcoastcoffee.com.au\/products\/bolivia-carmelita-caturra-coco-natural",
+      "available": true,
+      "image": "https:\/\/central-coast-coffee.myshopify.com\/cdn\/shop\/files\/BOL0209_320g_4a6845d2-5ab1-476d-a120-d03acc077f7d.png?format=pjpg\u0026v=1783286655\u0026width=600",
+      "recipes": [{ "size": "18g", "share": "https:\/\/share-h5.xbloom.com\/?id=fhwublr3T%2FGDSPKrXY5nqQ%3D%3D" }],
+      "roast": {
+        "level": "Light",
+        "rest_days": 11,
+        "peak_day": 28,
+        "best_until_day": 42
+      },
+      "bag_sizes_g": [1000,320],
+      "variants": [
+        { "id": 43586759753764, "grams": 1000, "price": 109.0, "currency": "AUD", "available": true },
+        { "id": 42158470463524, "grams": 320, "price": 36.0, "currency": "AUD", "available": true }
+      ],
+      "bean": {
+        "roaster": "Central Coast Coffee",
+        "country": "Bolivia",
+        "region": "Caranavi",
+        "farm": "Carmelita",
+        "farmer": "Carmela Aduviri",
+        "elevation": "1500",
+        "variety": "Caturra",
+        "processing": "Natural  Coco",
+        "aromatics": "Intensely fruit forward and tropical, with tamarind, hibiscus tea and rose hip florals.",
+        "cupping_points": "86.19",
+        "decaffeinated": false
+      }
+    },
+    {
+      "id": "ecuador-vinka-sidra-signature-series",
+      "name": "Ecuador | Vinka Farm | Carlos \u0026 Maria Fernanda | 2024 Sidra Natural Anaerobic",
+      "url": "https:\/\/www.centralcoastcoffee.com.au\/products\/ecuador-vinka-sidra-signature-series",
+      "available": true,
+      "image": "https:\/\/central-coast-coffee.myshopify.com\/cdn\/shop\/files\/vinka_nat_320g_6a7cc92e-3a3c-4877-92e3-f9718344929b.png?format=pjpg\u0026v=1783831567\u0026width=600",
+      "recipes": [{ "size": "18g", "share": "https:\/\/share-h5.xbloom.com\/?id=xscmwhtRrIbVm2LzyTwenw%3D%3D" }, { "size": "15g", "share": "https:\/\/share-h5.xbloom.com\/?id=ahQ2G5em3ObkSXktrLFvoQ%3D%3D" }],
+      "roast": {
+        "level": "Light",
+        "rest_days": 11,
+        "peak_day": 28,
+        "best_until_day": 42
+      },
+      "bag_sizes_g": [320,160],
+      "variants": [
+        { "id": 41975977607204, "grams": 320, "price": 99.0, "currency": "AUD", "available": true },
+        { "id": 41975977574436, "grams": 160, "price": 55.0, "currency": "AUD", "available": true }
+      ],
+      "bean": {
+        "roaster": "Central Coast Coffee",
+        "country": "Ecuador",
+        "region": "Loja",
+        "farm": "Vinka",
+        "farmer": "Maria Fernanda and Carlos",
+        "elevation": "1120",
+        "variety": "Sidra",
+        "processing": "Natural Anaerobic",
+        "aromatics": "Raspberry Mandarin Floral (2024 Harvest)",
+        "cupping_points": "89.0",
+        "decaffeinated": false
+      }
+    },
+    {
+      "id": "panama-janson-estate-gesha-natural-lot-797-signature-series",
+      "name": "Panama | Janson Estate | Gesha Natural Lot 797",
+      "url": "https:\/\/www.centralcoastcoffee.com.au\/products\/panama-janson-estate-gesha-natural-lot-797-signature-series",
+      "available": true,
+      "image": "https:\/\/central-coast-coffee.myshopify.com\/cdn\/shop\/files\/janson_geisha_natural_320g_dc6daf0d-7cd3-4807-9a0e-732882861e7d.png?format=pjpg\u0026v=1783415228\u0026width=600",
+      "recipes": [{ "size": "18g", "share": "https:\/\/share-h5.xbloom.com\/?id=YGvPmu7TUXmbix9Hy%2B8rIw%3D%3D" }, { "size": "15g", "share": "https:\/\/share-h5.xbloom.com\/?id=2J6o3ipeGDCiQBL%2FXp4Cyg%3D%3D" }],
+      "roast": {
+        "level": "Light",
+        "rest_days": 11,
+        "peak_day": 28,
+        "best_until_day": 42
+      },
+      "bag_sizes_g": [320,160,80],
+      "variants": [
+        { "id": 42728397864996, "grams": 320, "price": 169.0, "currency": "AUD", "available": false },
+        { "id": 42728397832228, "grams": 160, "price": 89.0, "currency": "AUD", "available": true },
+        { "id": 42728397799460, "grams": 80, "price": 49.0, "currency": "AUD", "available": true }
+      ],
+      "bean": {
+        "roaster": "Central Coast Coffee",
+        "country": "Panama",
+        "region": "Chiriquí, Volcán",
+        "farm": "Janson Estate",
+        "farmer": "Janson Estate",
+        "elevation": "1350",
+        "variety": "Gesha",
+        "processing": "Natural",
+        "aromatics": "Blueberry, raspberry, cherry, passionfruit, brown sugar, chocolate",
+        "cupping_points": "89.0",
+        "decaffeinated": false
+      }
+    },
+    {
+      "id": "colombia-jardines-del-encanto-felipe-arcila-red-gesha-natural-ef2-signature-series",
+      "name": "Colombia | Jardines Del Encanto | Felipe Arcila | Red Gesha Natural EF2",
+      "url": "https:\/\/www.centralcoastcoffee.com.au\/products\/colombia-jardines-del-encanto-felipe-arcila-red-gesha-natural-ef2-signature-series",
+      "available": true,
+      "image": "https:\/\/central-coast-coffee.myshopify.com\/cdn\/shop\/files\/col-jardines-del-encanto-felipe-arcila-red-geisha-natural-ef2_480g_3363a11c-4ca8-47b9-8985-6248ea333aad.png?format=pjpg\u0026v=1783415123\u0026width=600",
+      "recipes": [{ "size": "18g", "share": "https:\/\/share-h5.xbloom.com\/?id=rdKMzCe2%2Blek7mbqaJAjiw%3D%3D" }],
+      "roast": {
+        "level": "Light",
+        "rest_days": 11,
+        "peak_day": 28,
+        "best_until_day": 42
+      },
+      "bag_sizes_g": [480,320,160],
+      "variants": [
+        { "id": 41911385260068, "grams": 480, "price": 199.0, "currency": "AUD", "available": true },
+        { "id": 41911385227300, "grams": 320, "price": 110.0, "currency": "AUD", "available": true },
+        { "id": 41911385194532, "grams": 160, "price": 60.0, "currency": "AUD", "available": true }
+      ],
+      "bean": {
+        "roaster": "Central Coast Coffee",
+        "country": "Colombia",
+        "region": "Quindío",
+        "farm": "Jardines Del Encanto",
+        "farmer": "Felipe Arcila",
+        "elevation": "2000",
+        "variety": "Red Gesha EF2",
+        "processing": "Natural",
+        "aromatics": "Lavender, Lemongrass, Red Fruits, Apple",
+        "cupping_points": "90.0",
+        "decaffeinated": false
+      }
+    },
+    {
+      "id": "ecuador-vinka-farm-carlos-maria-fernanda-2024-sidra-washed-anaerobic-award-winner",
+      "name": "Ecuador | Vinka Farm | Carlos \u0026 Maria Fernanda | 2024 Sidra Washed Anaerobic **AWARD WINNER**",
+      "url": "https:\/\/www.centralcoastcoffee.com.au\/products\/ecuador-vinka-farm-carlos-maria-fernanda-2024-sidra-washed-anaerobic-award-winner",
+      "available": true,
+      "image": "https:\/\/central-coast-coffee.myshopify.com\/cdn\/shop\/files\/washed_anaerobic_320g_426889e0-3872-4296-9e59-a842e3b5f2ee.png?format=pjpg\u0026v=1783831569\u0026width=600",
+      "recipes": [{ "size": "18g", "share": "https:\/\/share-h5.xbloom.com\/?id=QM0nuGiUgJZ9gdOTHJCssA%3D%3D" }],
+      "roast": {
+        "level": "Nordic Ultra-light",
+        "rest_days": 14,
+        "peak_day": 35,
+        "best_until_day": 52
+      },
+      "bag_sizes_g": [320,160],
+      "variants": [
+        { "id": 42728244740132, "grams": 320, "price": 99.0, "currency": "AUD", "available": true },
+        { "id": 42728244707364, "grams": 160, "price": 50.0, "currency": "AUD", "available": true }
+      ],
+      "bean": {
+        "roaster": "Central Coast Coffee",
+        "country": "Ecuador",
+        "region": "Loja",
+        "farm": "Vinka",
+        "farmer": "Maria Fernanda and Carlos",
+        "elevation": "1120",
+        "variety": "Sidra",
+        "processing": "Washed Anaerobic",
+        "aromatics": "Papaya, Raspberry, Citrus (2024 Harvest)",
+        "cupping_points": "89.0",
+        "decaffeinated": false
+      }
+    },
+    {
+      "id": "colombia-potosi-tres-dragones-caturra-colombia-bourbon-castillo-natural",
+      "name": "Colombia | Potosi (Tres Dragones) | Caturra \/ Colombia \/ Bourbon \/ Castillo Natural",
+      "url": "https:\/\/www.centralcoastcoffee.com.au\/products\/colombia-potosi-tres-dragones-caturra-colombia-bourbon-castillo-natural",
+      "available": true,
+      "image": "https:\/\/central-coast-coffee.myshopify.com\/cdn\/shop\/files\/col_la_esp_320g_2d86fc3d-3131-4355-8c93-f8403e845b34.png?format=pjpg\u0026v=1783977608\u0026width=600",
+      "recipes": [{ "size": "18g", "share": "https:\/\/share-h5.xbloom.com\/?id=XR5m5kHCPCL4nNHBvqSjhA%3D%3D" }],
+      "roast": {
+        "level": "Medium",
+        "rest_days": 7,
+        "peak_day": 18,
+        "best_until_day": 27
+      },
+      "bag_sizes_g": [320],
+      "variants": [
+        { "id": 42027523440676, "grams": 320, "price": 42.0, "currency": "AUD", "available": true }
+      ],
+      "bean": {
+        "roaster": "Central Coast Coffee",
+        "country": "Colombia",
+        "region": "Valle del Cauca, Trujillo",
+        "farm": "Potosi",
+        "farmer": "Rigoberto and Luis Eduardo Herrera",
+        "elevation": "1700",
+        "variety": "Colombia, Caturra, Bourbon, Castillo",
+        "processing": "Natural",
+        "aromatics": "White wine, cherry, raspberry, blackcurrant and cola. Rounded acidity and body with delicate rose florals and maple syrup on the finish.",
+        "cupping_points": "89.0",
+        "decaffeinated": false
+      }
+    },
+    {
+      "id": "panama-iris-estate-jamison-savage-gesha-cm-washed-vivid-2025-signature-series",
+      "name": "Panama | Iris Estate | Jamison Savage | Gesha CM Washed VIVID 2025",
+      "url": "https:\/\/www.centralcoastcoffee.com.au\/products\/panama-iris-estate-jamison-savage-gesha-cm-washed-vivid-2025-signature-series",
+      "available": true,
+      "image": "https:\/\/central-coast-coffee.myshopify.com\/cdn\/shop\/files\/iris_estate_2025_vivid_160g_9f191cbc-9eb1-46ea-993d-76ea84f14ca7.png?format=pjpg\u0026v=1783415201\u0026width=600",
+      "recipes": [{ "size": "18g", "share": "https:\/\/share-h5.xbloom.com\/?id=YGvPmu7TUXmbix9Hy%2B8rIw%3D%3D" }],
+      "roast": {
+        "level": "Light",
+        "rest_days": 11,
+        "peak_day": 28,
+        "best_until_day": 42
+      },
+      "bag_sizes_g": [160,80],
+      "variants": [
+        { "id": 42858326589476, "grams": 160, "price": 84.0, "currency": "AUD", "available": true },
+        { "id": 42858326556708, "grams": 80, "price": 55.0, "currency": "AUD", "available": true }
+      ],
+      "bean": {
+        "roaster": "Central Coast Coffee",
+        "country": "Panama",
+        "region": "Volcán",
+        "farm": "Iris Estate",
+        "farmer": "Jamison Savage, Sasa Sestic, Elvin Siew",
+        "elevation": "1850",
+        "variety": "Gesha",
+        "processing": "Washed CM",
+        "aromatics": "Jasmine, Yellow Peach, Brown Sugar, Apricot, Medium Body, Low to Medium Acidity, High Sweetness (2025 VIVID lot)",
+        "cupping_points": "90.0",
+        "decaffeinated": false
+      }
+    },
+    {
+      "id": "colombia-las-flores-jhoan-vergara-java-duo-cherry-velvet-signature-series",
+      "name": "Colombia | Las Flores | Jhoan Vergara | Java Hydrohoney (Duo Cherry Velvet) (Competition Coffee)",
+      "url": "https:\/\/www.centralcoastcoffee.com.au\/products\/colombia-las-flores-jhoan-vergara-java-duo-cherry-velvet-signature-series",
+      "available": true,
+      "image": "https:\/\/central-coast-coffee.myshopify.com\/cdn\/shop\/files\/little_bit_less_magic_its_ovle_Nano_Banana_Pro_85319.jpg?format=pjpg\u0026v=1769675491\u0026width=600",
+      "recipes": [{ "size": "18g", "share": "https:\/\/share-h5.xbloom.com\/?id=iwy88N%2Fr0Ow5kHkM0HL8Yg%3D%3D" }],
+      "roast": {
+        "level": "Light",
+        "rest_days": 11,
+        "peak_day": 28,
+        "best_until_day": 42
+      },
+      "bag_sizes_g": [160],
+      "variants": [
+        { "id": 43115889360932, "grams": 160, "price": 79.0, "currency": "AUD", "available": true }
+      ],
+      "bean": {
+        "roaster": "Central Coast Coffee",
+        "country": "Colombia",
+        "region": "Huila, Acevedo",
+        "farm": "Las Flores",
+        "farmer": "Jhoan Vergara",
+        "elevation": "1750",
+        "variety": "Java",
+        "processing": "Hydrohoney",
+        "aromatics": "Cherry, Passionfruit, Turkish Delight, Mango (Java Duo Cherry Velvet)",
+        "cupping_points": "90.0",
+        "decaffeinated": false
+      }
+    },
+    {
+      "id": "colombia-finca-las-margaritas-sudan-rume-washed",
+      "name": "Colombia | Las Margaritas | Sudan Rume Washed",
+      "url": "https:\/\/www.centralcoastcoffee.com.au\/products\/colombia-finca-las-margaritas-sudan-rume-washed",
+      "available": true,
+      "image": "https:\/\/central-coast-coffee.myshopify.com\/cdn\/shop\/files\/colombia_geisha_copy.jpg?format=pjpg\u0026v=1760662642\u0026width=600",
+      "recipes": [{ "size": "18g", "share": "https:\/\/share-h5.xbloom.com\/?id=1g%2BWm82honaXAs9%2BawzIgA%3D%3D" }],
+      "roast": {
+        "level": "Light",
+        "rest_days": 11,
+        "peak_day": 28,
+        "best_until_day": 42
+      },
+      "bag_sizes_g": [320,160],
+      "variants": [
+        { "id": 42728461631524, "grams": 320, "price": 69.0, "currency": "AUD", "available": true },
+        { "id": 42728461598756, "grams": 160, "price": 39.0, "currency": "AUD", "available": true }
+      ],
+      "bean": {
+        "roaster": "Central Coast Coffee",
+        "country": "Colombia",
+        "region": "Valle del Cauca, Caicedonia",
+        "farm": "Finca Las Margaritas",
+        "farmer": "Finca Las Margaritas",
+        "elevation": "1600",
+        "variety": "Sudan Rume",
+        "processing": "Washed",
+        "aromatics": "Lime, lemongrass, sweet ginger, mandarin \u0026 toffee. Round body with citric acidity. Cacao nibs, black tea \u0026 sage finish",
+        "cupping_points": "87.5",
+        "decaffeinated": false
+      }
+    },
+    {
+      "id": "colombia-el-diviso-nestor-lasso-ombligon-floral-symphony-natural-signature-series",
+      "name": "Colombia | El Diviso | Nestor Lasso | Ombligon Natural (Floral Symphony) (Competition Coffee)",
+      "url": "https:\/\/www.centralcoastcoffee.com.au\/products\/colombia-el-diviso-nestor-lasso-ombligon-floral-symphony-natural-signature-series",
+      "available": true,
+      "image": "https:\/\/central-coast-coffee.myshopify.com\/cdn\/shop\/files\/COL-ELDIV-NL-OMB-FSN-SS_f5c1ca40-bc62-4296-b902-096e87668a6a.png?format=pjpg\u0026v=1783415093\u0026width=600",
+      "recipes": [{ "size": "18g", "share": "https:\/\/share-h5.xbloom.com\/?id=l11Ly3HpDcX3VliWd6AQag%3D%3D" }],
+      "roast": {
+        "level": "Light",
+        "rest_days": 11,
+        "peak_day": 28,
+        "best_until_day": 42
+      },
+      "bag_sizes_g": [160],
+      "variants": [
+        { "id": 43123998588964, "grams": 160, "price": 79.0, "currency": "AUD", "available": true }
+      ],
+      "bean": {
+        "roaster": "Central Coast Coffee",
+        "country": "Colombia",
+        "region": "Huila, Bruselas",
+        "farm": "El Diviso",
+        "farmer": " Nestor Lasso",
+        "elevation": "1780",
+        "variety": "Ombligon",
+        "processing": "Natural",
+        "aromatics": "Cherry, watermelon, strawberry candy, very sweet. really complex and unique. (Floral Symphony)",
+        "cupping_points": "90.0",
+        "decaffeinated": false
+      }
+    },
+    {
+      "id": "colombia-la-divisa-diofanor-ruiz-papayo-natural",
+      "name": "Colombia | La Divisa | Diofanor Ruiz | Papayo Natural",
+      "url": "https:\/\/www.centralcoastcoffee.com.au\/products\/colombia-la-divisa-diofanor-ruiz-papayo-natural",
+      "available": true,
+      "image": "https:\/\/central-coast-coffee.myshopify.com\/cdn\/shop\/files\/col_divisi_papayo_320g_28490a0c-aa1d-4e83-bd46-33d89d86727e.png?format=pjpg\u0026v=1783262506\u0026width=600",
+      "recipes": [{ "size": "18g", "share": "https:\/\/share-h5.xbloom.com\/?id=pY%2F3A0PeloiqN1DpEbEplw%3D%3D" }],
+      "roast": {
+        "level": "Light",
+        "rest_days": 11,
+        "peak_day": 28,
+        "best_until_day": 42
+      },
+      "bag_sizes_g": [320,160],
+      "variants": [
+        { "id": 42945093435428, "grams": 320, "price": 44.0, "currency": "AUD", "available": true },
+        { "id": 42945093402660, "grams": 160, "price": 25.0, "currency": "AUD", "available": true }
+      ],
+      "bean": {
+        "roaster": "Central Coast Coffee",
+        "country": "Colombia",
+        "region": "Quindío, Buenavista",
+        "farm": "La Divisa",
+        "farmer": "Diofanor Ruiz",
+        "elevation": "1600",
+        "variety": "Papayo",
+        "processing": "Natural",
+        "aromatics": "Floral, Apricot, Lime",
+        "cupping_points": "88.0",
+        "decaffeinated": false
+      }
+    },
+    {
+      "id": "ecuador-vinka-farm-carlos-maria-fernanda-2025-sidra-yeast-washed",
+      "name": "Ecuador | Vinka Farm | Carlos \u0026 Maria Fernanda | 2025 Sidra Washed Yeast",
+      "url": "https:\/\/www.centralcoastcoffee.com.au\/products\/ecuador-vinka-farm-carlos-maria-fernanda-2025-sidra-yeast-washed",
+      "available": true,
+      "image": "https:\/\/central-coast-coffee.myshopify.com\/cdn\/shop\/files\/vinka_2025_yeast_washed_320_3955e332-cf03-402b-9dd1-a153b4d7a4d4.png?format=pjpg\u0026v=1783838788\u0026width=600",
+      "recipes": [{ "size": "18g", "share": "https:\/\/share-h5.xbloom.com\/?id=HCSEtxQQGS4TB2guSyMUeQ%3D%3D" }],
+      "roast": {
+        "level": "Nordic Ultra-light",
+        "rest_days": 14,
+        "peak_day": 35,
+        "best_until_day": 52
+      },
+      "bag_sizes_g": [320,160],
+      "variants": [
+        { "id": 42728692940836, "grams": 320, "price": 119.0, "currency": "AUD", "available": true },
+        { "id": 42728692908068, "grams": 160, "price": 65.0, "currency": "AUD", "available": true }
+      ],
+      "bean": {
+        "roaster": "Central Coast Coffee",
+        "country": "Ecuador",
+        "region": "Loja",
+        "farm": "Vinka",
+        "farmer": "Maria Fernanda and Carlos",
+        "elevation": "1120",
+        "variety": "Sidra",
+        "processing": "Washed",
+        "aromatics": "Sweet, fruity, orange marmalade, blueberry, blackberry, floral, jasmine, anise, cinnamon (2025 Yeast Washed L-2025-002)",
+        "cupping_points": "90.0",
+        "decaffeinated": false
+      }
+    },
+    {
+      "id": "bolivia-el-fuerte-los-rodriguez-java-coco-natural",
+      "name": "Bolivia | El Fuerte | Los Rodriguez | Java Coco Natural",
+      "url": "https:\/\/www.centralcoastcoffee.com.au\/products\/bolivia-el-fuerte-los-rodriguez-java-coco-natural",
+      "available": true,
+      "image": "https:\/\/central-coast-coffee.myshopify.com\/cdn\/shop\/files\/BOL0203_320g_73741a89-d954-4aea-b7f6-823d75f8d708.png?format=pjpg\u0026v=1783286655\u0026width=600",
+      "recipes": [{ "size": "18g", "share": "https:\/\/share-h5.xbloom.com\/?id=%2BScAetBKdllDs2BJBfK%2BXQ%3D%3D" }],
+      "roast": {
+        "level": "Nordic Ultra-light",
+        "rest_days": 14,
+        "peak_day": 35,
+        "best_until_day": 52
+      },
+      "bag_sizes_g": [320],
+      "variants": [
+        { "id": 42158501330980, "grams": 320, "price": 49.0, "currency": "AUD", "available": true }
+      ],
+      "bean": {
+        "roaster": "Central Coast Coffee",
+        "country": "Bolivia",
+        "region": "Samaipata",
+        "farm": "El Fuerte",
+        "farmer": "Los Rodriguez Family",
+        "elevation": "1526",
+        "variety": "Java",
+        "processing": "Natural  Coco",
+        "aromatics": "Winey acidity, balanced by great depth of sweetness. Blackberry, Turkish Delight and chocolate fudge.",
+        "cupping_points": "87.67",
+        "decaffeinated": false
+      }
+    },
+    {
+      "id": "colombia-las-flores-jhoan-vergara-chiroso-duo-cherry-velvet-signature-series",
+      "name": "Colombia | Las Flores | Jhoan Vergara | Chiroso Hydrohoney (Duo Cherry Velvet) (Competition Coffee)",
+      "url": "https:\/\/www.centralcoastcoffee.com.au\/products\/colombia-las-flores-jhoan-vergara-chiroso-duo-cherry-velvet-signature-series",
+      "available": true,
+      "image": "https:\/\/central-coast-coffee.myshopify.com\/cdn\/shop\/files\/COL-LASFLO-JV-CHIR-DCV-SS_dacf4b24-5c24-489e-9b9a-3ec4a99e8edd.png?format=pjpg\u0026v=1783415177\u0026width=600",
+      "recipes": [{ "size": "18g", "share": "https:\/\/share-h5.xbloom.com\/?id=DBt0Iz%2FYabiAU522M1Ce6w%3D%3D" }],
+      "roast": {
+        "level": "Light",
+        "rest_days": 11,
+        "peak_day": 28,
+        "best_until_day": 42
+      },
+      "bag_sizes_g": [160],
+      "variants": [
+        { "id": 43115889492004, "grams": 160, "price": 79.0, "currency": "AUD", "available": true }
+      ],
+      "bean": {
+        "roaster": "Central Coast Coffee",
+        "country": "Colombia",
+        "region": "Huila, Bruselas",
+        "farm": "Las Flores",
+        "farmer": "Jhoan Vergara",
+        "elevation": "1780",
+        "variety": "Chiroso",
+        "processing": "Hydrohoney",
+        "aromatics": "Floral, rose, strawberries, cherry, bright acidity and sweet. (Chiroso Duo Cherry Velvet)",
+        "cupping_points": "90.0",
+        "decaffeinated": false
+      }
+    },
+    {
+      "id": "colombia-el-diviso-nestor-lasso-aji-bourbon-tropical-fruit-forward-lush-natural-signature-series",
+      "name": "Colombia | El Diviso | Nestor Lasso | Aji Bourbon Natural (Tropical Fruit Forward Lush) (Competition Coffee)",
+      "url": "https:\/\/www.centralcoastcoffee.com.au\/products\/colombia-el-diviso-nestor-lasso-aji-bourbon-tropical-fruit-forward-lush-natural-signature-series",
+      "available": true,
+      "image": "https:\/\/central-coast-coffee.myshopify.com\/cdn\/shop\/files\/COL-ELDIV-NL-AJIB-TFFLN-SS_dedfc639-e93d-454e-a12f-ade2350d11ed.png?format=pjpg\u0026v=1783415092\u0026width=600",
+      "recipes": [{ "size": "18g", "share": "https:\/\/share-h5.xbloom.com\/?id=t0KrI%2F3OR9m0C3G1DJw4mA%3D%3D" }],
+      "roast": {
+        "level": "Light",
+        "rest_days": 11,
+        "peak_day": 28,
+        "best_until_day": 42
+      },
+      "bag_sizes_g": [160],
+      "variants": [
+        { "id": 43115944214564, "grams": 160, "price": 89.0, "currency": "AUD", "available": true }
+      ],
+      "bean": {
+        "roaster": "Central Coast Coffee",
+        "country": "Colombia",
+        "region": "Huila, Bruselas",
+        "farm": "El Diviso",
+        "farmer": "Nestor Lasso",
+        "elevation": "1780",
+        "variety": "Bourbon Aji",
+        "processing": "Natural",
+        "aromatics": "Floral, lavender, passion fruit, apricot, citrus, slight spice, sweet and complex. (Aji Bourbon Tropical Fruit Forward Lush Natural)",
+        "cupping_points": "90.0",
+        "decaffeinated": false
+      }
+    },
+    {
+      "id": "colombia-zarza-jonathan-gasca-pacamara-tropical-fruit-forward-lush-natural-signature-series",
+      "name": "Colombia | Zarza | Jonathan Gasca | Pacamara Natural (Tropical Fruit Forward Lush) (Competition Coffee)",
+      "url": "https:\/\/www.centralcoastcoffee.com.au\/products\/colombia-zarza-jonathan-gasca-pacamara-tropical-fruit-forward-lush-natural-signature-series",
+      "available": true,
+      "image": "https:\/\/central-coast-coffee.myshopify.com\/cdn\/shop\/files\/COL-ZARZA-JG-PAC-TFFLN-SS_c5a38486-5b5e-4e5f-a6f6-305e7d4f8fdf.png?format=pjpg\u0026v=1783415181\u0026width=600",
+      "recipes": [{ "size": "18g", "share": "https:\/\/share-h5.xbloom.com\/?id=PyM1ecKHNzWELHSmN%2BlvIQ%3D%3D" }],
+      "roast": {
+        "level": "Light",
+        "rest_days": 11,
+        "peak_day": 28,
+        "best_until_day": 42
+      },
+      "bag_sizes_g": [160],
+      "variants": [
+        { "id": 43115908235300, "grams": 160, "price": 79.0, "currency": "AUD", "available": true }
+      ],
+      "bean": {
+        "roaster": "Central Coast Coffee",
+        "country": "Colombia",
+        "region": "Huila, Bruselas",
+        "farm": "Zarza",
+        "farmer": "Jonathan Gasca ",
+        "elevation": "1550",
+        "variety": "Pacamara",
+        "processing": "Natural",
+        "aromatics": "Floral and aromatic, tropical fruit, kiwi, pineapple, brilliant acidity, juicy and long residual. (Pacamara Tropical Fruit Forward Lush Natural)",
+        "cupping_points": "90.0",
+        "decaffeinated": false
+      }
+    },
+    {
+      "id": "ecuador-vinka-farm-carlos-maria-fernanda-2025-sidra-anaerobic-natural-48h",
+      "name": "Ecuador | Vinka Farm | Carlos \u0026 Maria Fernanda | 2025 Sidra Natural Anaerobic 48h",
+      "url": "https:\/\/www.centralcoastcoffee.com.au\/products\/ecuador-vinka-farm-carlos-maria-fernanda-2025-sidra-anaerobic-natural-48h",
+      "available": true,
+      "image": "https:\/\/central-coast-coffee.myshopify.com\/cdn\/shop\/files\/vinka_2025_nat_ana_48h_320_60fa97d1-2b62-453d-ba28-9f78dedbb611.png?format=pjpg\u0026v=1783831588\u0026width=600",
+      "recipes": [{ "size": "18g", "share": "https:\/\/share-h5.xbloom.com\/?id=WCMv6nKbue18yCv0gQXRHg%3D%3D" }],
+      "roast": {
+        "level": "Nordic Ultra-light",
+        "rest_days": 14,
+        "peak_day": 35,
+        "best_until_day": 52
+      },
+      "bag_sizes_g": [320,160],
+      "variants": [
+        { "id": 42728692678692, "grams": 320, "price": 89.0, "currency": "AUD", "available": true },
+        { "id": 42728692645924, "grams": 160, "price": 52.0, "currency": "AUD", "available": true }
+      ],
+      "bean": {
+        "roaster": "Central Coast Coffee",
+        "country": "Ecuador",
+        "region": "Loja",
+        "farm": "Vinka",
+        "farmer": "Maria Fernanda and Carlos",
+        "elevation": "1120",
+        "variety": "Sidra",
+        "processing": "Natural Anaerobic",
+        "aromatics": "Sweet, fruity, citrus fruits, blueberry (2025 Anaerobic Natural 48h N-2025-003)",
+        "cupping_points": "",
+        "decaffeinated": false
+      }
+    },
+    {
+      "id": "colombia-las-flores-jhoan-vergara-chiroso-creamy-cultured-brilliance-natural-signature-series",
+      "name": "Colombia | Las Flores | Jhoan Vergara | Chiroso Natural (Creamy Cultured Brilliance) (Competition Coffee)",
+      "url": "https:\/\/www.centralcoastcoffee.com.au\/products\/colombia-las-flores-jhoan-vergara-chiroso-creamy-cultured-brilliance-natural-signature-series",
+      "available": true,
+      "image": "https:\/\/central-coast-coffee.myshopify.com\/cdn\/shop\/files\/COL-LASFLO-JV-CHIR-CCBN-SS_422d8d1c-b7b5-4480-b01e-e9044133c1de.png?format=pjpg\u0026v=1783415148\u0026width=600",
+      "recipes": [{ "size": "18g", "share": "https:\/\/share-h5.xbloom.com\/?id=uYpqpjyIirKJHceFSDDsDw%3D%3D" }],
+      "roast": {
+        "level": "Light",
+        "rest_days": 11,
+        "peak_day": 28,
+        "best_until_day": 42
+      },
+      "bag_sizes_g": [160],
+      "variants": [
+        { "id": 43115889623076, "grams": 160, "price": 86.0, "currency": "AUD", "available": true }
+      ],
+      "bean": {
+        "roaster": "Central Coast Coffee",
+        "country": "Colombia",
+        "region": "Huila, Acevedo",
+        "farm": "Las Flores",
+        "farmer": "Jhoan Vergara",
+        "elevation": "1750",
+        "variety": "Chiroso",
+        "processing": "Natural",
+        "aromatics": "Mint, raspberry, buttery, juicy, prolonged and elegant residual. (Chiroso Creamy Cultured Brilliance Natural)",
+        "cupping_points": "90.0",
+        "decaffeinated": false
+      }
+    },
+    {
+      "id": "colombia-las-flores-jhoan-vergara-java-fruit-forward-berry-ensemble-natural-signature-series",
+      "name": "Colombia | Las Flores | Jhoan Vergara | Java Natural (Fruit Forward Berry Ensemble) (Competition Coffee)",
+      "url": "https:\/\/www.centralcoastcoffee.com.au\/products\/colombia-las-flores-jhoan-vergara-java-fruit-forward-berry-ensemble-natural-signature-series",
+      "available": true,
+      "image": "https:\/\/central-coast-coffee.myshopify.com\/cdn\/shop\/files\/COL-LASFLO-JV-JAVA-FFBEN-SS_f5023e8e-0221-4e5a-86f4-0acbfecb3fae.png?format=pjpg\u0026v=1783415179\u0026width=600",
+      "recipes": [{ "size": "18g", "share": "https:\/\/share-h5.xbloom.com\/?id=53C7JMOJAnpBgA5NELNX6w%3D%3D" }],
+      "roast": {
+        "level": "Medium",
+        "rest_days": 7,
+        "peak_day": 18,
+        "best_until_day": 27
+      },
+      "bag_sizes_g": [160],
+      "variants": [
+        { "id": 43115889754148, "grams": 160, "price": 79.0, "currency": "AUD", "available": true }
+      ],
+      "bean": {
+        "roaster": "Central Coast Coffee",
+        "country": "Colombia",
+        "region": "Huila, Acevedo",
+        "farm": "Las Flores",
+        "farmer": "Jhoan Vergara",
+        "elevation": "1750",
+        "variety": "Java",
+        "processing": "Natural",
+        "aromatics": "Cherry, Raspberries, Bubblegum, Syrup. Silky body, very intense and good sweetness. (Java Fruit Forward Berry Ensemble Natural)",
+        "cupping_points": "90.0",
+        "decaffeinated": false
+      }
+    },
+    {
+      "id": "ecuador-vinka-farm-carlos-maria-fernanda-2025-sidra-natural-oxidation",
+      "name": "Ecuador | Vinka Farm | Carlos \u0026 Maria Fernanda | 2025 Sidra Natural Oxidation",
+      "url": "https:\/\/www.centralcoastcoffee.com.au\/products\/ecuador-vinka-farm-carlos-maria-fernanda-2025-sidra-natural-oxidation",
+      "available": true,
+      "image": "https:\/\/central-coast-coffee.myshopify.com\/cdn\/shop\/files\/vinka_2025_nat_oxi_320_676a18b5-24ae-4f06-8ede-00a995e003fa.png?format=pjpg\u0026v=1783831587\u0026width=600",
+      "recipes": [{ "size": "18g", "share": "https:\/\/share-h5.xbloom.com\/?id=PyA2ZLDMRpn2294LzQ3BvQ%3D%3D" }],
+      "roast": {
+        "level": "Nordic Ultra-light",
+        "rest_days": 14,
+        "peak_day": 35,
+        "best_until_day": 52
+      },
+      "bag_sizes_g": [320,160],
+      "variants": [
+        { "id": 42728692383780, "grams": 320, "price": 89.0, "currency": "AUD", "available": true },
+        { "id": 42728692351012, "grams": 160, "price": 52.0, "currency": "AUD", "available": true }
+      ],
+      "bean": {
+        "roaster": "Central Coast Coffee",
+        "country": "Ecuador",
+        "region": "Loja",
+        "farm": "Vinka",
+        "farmer": "Maria Fernanda and Carlos",
+        "elevation": "1120",
+        "variety": "Sidra",
+        "processing": "Natural Oxidation",
+        "aromatics": "Vanilla, cherry, blackberry, chocolate, blackberry pie, red fruit jam, floral (2025 Natural Oxidation N-2025-001)",
+        "cupping_points": "",
+        "decaffeinated": false
+      }
+    },
+    {
+      "id": "ecuador-vinka-farm-carlos-maria-fernanda-2024-sidra-honey",
+      "name": "Ecuador | Vinka Farm | Carlos \u0026 Maria Fernanda | 2024 Sidra Honey",
+      "url": "https:\/\/www.centralcoastcoffee.com.au\/products\/ecuador-vinka-farm-carlos-maria-fernanda-2024-sidra-honey",
+      "available": true,
+      "image": "https:\/\/central-coast-coffee.myshopify.com\/cdn\/shop\/files\/vinka_honey_320g_9f27bfa7-1558-42e5-8e5b-4511a6af2980.png?format=pjpg\u0026v=1783831568\u0026width=600",
+      "recipes": [{ "size": "18g", "share": "https:\/\/share-h5.xbloom.com\/?id=4yHmKrINvZ1DkEZbHfn8Uw%3D%3D" }],
+      "roast": {
+        "level": "Light",
+        "rest_days": 11,
+        "peak_day": 28,
+        "best_until_day": 42
+      },
+      "bag_sizes_g": [320,160],
+      "variants": [
+        { "id": 42728244346916, "grams": 320, "price": 79.0, "currency": "AUD", "available": true },
+        { "id": 42728244314148, "grams": 160, "price": 43.0, "currency": "AUD", "available": true }
+      ],
+      "bean": {
+        "roaster": "Central Coast Coffee",
+        "country": "Ecuador",
+        "region": "Loja",
+        "farm": "Vinka",
+        "farmer": "Maria Fernanda and Carlos",
+        "elevation": "1120",
+        "variety": "Sidra",
+        "processing": "Honey",
+        "aromatics": "Light, sweet, and easy-drinking with soft acidity (2024 Harvest)",
+        "cupping_points": "85.0",
+        "decaffeinated": false
+      }
+    },
+    {
+      "id": "ecuador-vinka-farm-carlos-maria-fernanda-2024-sidra-natural-oxidation",
+      "name": "Ecuador | Vinka Farm | Carlos \u0026 Maria Fernanda | 2024 Sidra Natural Oxidation",
+      "url": "https:\/\/www.centralcoastcoffee.com.au\/products\/ecuador-vinka-farm-carlos-maria-fernanda-2024-sidra-natural-oxidation",
+      "available": true,
+      "image": "https:\/\/central-coast-coffee.myshopify.com\/cdn\/shop\/files\/vinka_natox_320g_244695d2-94ed-4e0a-b036-f9cacac33caa.png?format=pjpg\u0026v=1783831568\u0026width=600",
+      "recipes": [{ "size": "18g", "share": "https:\/\/share-h5.xbloom.com\/?id=pA1WGb4EhMjw8jJ7ttsSQA%3D%3D" }],
+      "roast": {
+        "level": "Nordic Ultra-light",
+        "rest_days": 14,
+        "peak_day": 35,
+        "best_until_day": 52
+      },
+      "bag_sizes_g": [320,160],
+      "variants": [
+        { "id": 42728244183076, "grams": 320, "price": 109.0, "currency": "AUD", "available": false },
+        { "id": 42728244150308, "grams": 160, "price": 57.0, "currency": "AUD", "available": true }
+      ],
+      "bean": {
+        "roaster": "Central Coast Coffee",
+        "country": "Ecuador",
+        "region": "Loja",
+        "farm": "Vinka",
+        "farmer": "Maria Fernanda and Carlos",
+        "elevation": "1120",
+        "variety": "Sidra",
+        "processing": "Natural Oxidation",
+        "aromatics": "Raspberry, blackberry syrup, cherry, lavender, caramel, with a refreshing mint finish (2024 Harvest)",
+        "cupping_points": "87.0",
+        "decaffeinated": false
+      }
+    }
+
+  ]
+}

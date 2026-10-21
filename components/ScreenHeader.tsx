@@ -1,7 +1,7 @@
 import React from "react";
 import {Pressable} from "react-native";
 import {useSafeAreaInsets} from "react-native-safe-area-context";
-import {XStack, YStack} from "tamagui";
+import {Text, XStack, YStack} from "tamagui";
 
 import DotIcon from "@/components/DotIcon";
 import DotMatrixText from "@/components/DotMatrixText";
@@ -17,7 +17,7 @@ type Props = {
      * A machine-counted superscript beside the title, e.g. how many brews the
      * list below holds. Hidden when absent or zero, which `ScreenTitle` decides.
      */
-    count?: number;
+    count?: number | string;
     /**
      * A machine-derived line about this particular screen — the brew record
      * uses the date and time of the brew — set flush right on the title's own
@@ -33,6 +33,8 @@ type Props = {
      * which `ScreenTitle` explains.
      */
     titleLines?: number;
+    titleSize?: number;
+    subtitle?: string;
     /** A trailing action that can wrap below the title when space is tight. */
     action?: React.ReactNode;
     onBack: () => void;
@@ -55,9 +57,17 @@ type Props = {
  * it, a screen reader arriving on a pushed screen has nothing for the rotor to
  * land on and no announcement saying where it landed.
  */
-export default function ScreenHeader({title, count, meta, titleLines, action, onBack}: Props) {
+export default function ScreenHeader({title, count, meta, titleLines, titleSize, subtitle, action, onBack}: Props) {
     const insets = useSafeAreaInsets();
     const hasAction = action !== undefined && action !== null;
+    const metaText = meta === undefined ? null : (
+        <DotMatrixText testID="screen-header-meta" fontSize={11}
+                       weight="bold" letterSpacing={1.2}
+                       color={palette.dim} numberOfLines={1}
+                       style={{marginLeft: "auto", paddingLeft: 8}}>
+            {meta}
+        </DotMatrixText>
+    );
     const back = (
         <Pressable accessibilityRole="button" accessibilityLabel="Back"
                    onPress={onBack} hitSlop={12}>
@@ -74,17 +84,20 @@ export default function ScreenHeader({title, count, meta, titleLines, action, on
             <XStack alignItems="center" gap="$3"
                     testID={hasAction ? "screen-header-action-row" : undefined}
                     flexWrap={hasAction ? "wrap" : "nowrap"}
-                    paddingHorizontal="$4" paddingTop="$2" paddingBottom="$3">
+                    paddingHorizontal="$4" paddingTop="$2"
+                    paddingBottom={subtitle === undefined ? "$3" : "$1"}>
                 {hasAction ? (
                     <XStack alignItems="center" gap="$3" maxWidth="100%" flexShrink={1}>
                         {back}
                         <YStack flexShrink={1}>
-                            <ScreenTitle title={title} count={count} heading lines={titleLines ?? 0}/>
+                            <ScreenTitle title={title} count={count} heading lines={titleLines ?? 0}
+                                         fontSize={titleSize}/>
                         </YStack>
                     </XStack>
                 ) : <>
                     {back}
-                    <ScreenTitle title={title} count={count} heading lines={titleLines}/>
+                    <ScreenTitle title={title} count={count} heading lines={titleLines}
+                                 fontSize={titleSize}/>
                 </>}
                 {hasAction && (
                     <YStack testID="screen-header-action" marginLeft="auto"
@@ -92,15 +105,18 @@ export default function ScreenHeader({title, count, meta, titleLines, action, on
                         {action}
                     </YStack>
                 )}
-                {meta !== undefined && (
-                    <DotMatrixText testID="screen-header-meta" fontSize={11}
-                                   weight="bold" letterSpacing={1.2}
-                                   color={palette.dim} numberOfLines={1}
-                                   style={{marginLeft: "auto", paddingLeft: 8}}>
-                        {meta}
-                    </DotMatrixText>
-                )}
+                {subtitle === undefined && metaText}
             </XStack>
+            {subtitle !== undefined && (
+                <XStack alignItems="center" paddingLeft={16 + KEY_SIZE + 12}
+                        paddingRight="$4" paddingBottom="$3">
+                    <Text testID="screen-header-subtitle" fontSize={13} color={palette.dim}
+                          flexShrink={1}>
+                        {subtitle}
+                    </Text>
+                    {metaText}
+                </XStack>
+            )}
         </YStack>
     );
 }

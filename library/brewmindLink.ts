@@ -1,4 +1,5 @@
 import {fitSizedName} from "@/library/fitName";
+import {readLabels} from "@/library/coffeeLabels";
 import {MAX_NAME} from "@/library/Recipe";
 import {LEGACY_NAMES, PodCoffee, httpsUrl, podCoffeeFromStored} from "@/library/podCoffee";
 
@@ -38,9 +39,9 @@ export const BREWMIND_SOURCE = "brewmind";
  * these caps are also what keeps the handoff working. Capped, the whole block
  * is roughly 3 kB before gzip against a 131 kB budget.
  */
-const SHORT_TEXT = 120;
+export const SHORT_TEXT = 120;
 /** A URL's cap, shared by the coffee's link, its image, and `recipe.url`. */
-const MAX_URL = 2000;
+export const MAX_URL = 2000;
 const CAPS: Readonly<Record<string, number>> = {
     name: SHORT_TEXT,
     roaster: SHORT_TEXT,
@@ -114,6 +115,10 @@ export type BrewMindLink = {
      * still has something to go back to.
      */
     recipeName?: string;
+    /** Address of the producer's catalogue; parsing never fetches it. */
+    feed?: string;
+    flavours?: string[];
+    tags?: string[];
 };
 
 /**
@@ -184,6 +189,15 @@ export function parseBrewMindLink(link: string): BrewMindLink | null {
     if (recipeName !== undefined && recipeName !== "") {
         result.recipeName = fitSizedName(recipeName, MAX_NAME);
     }
+    const flavours = readLabels(params.get("bean.flavours") ?? "");
+    if (flavours.length > 0) result.flavours = flavours;
+    const tags = readLabels(params.get("bean.tags") ?? "");
+    if (tags.length > 0) result.tags = tags;
+    const feed = params.get("feed")?.trim();
+    if (feed !== undefined && feed.length <= MAX_URL) {
+        const checked = httpsUrl(feed);
+        if (checked !== undefined) result.feed = checked;
+    }
     return result;
 }
 
@@ -198,14 +212,24 @@ export function parseBrewMindLink(link: string): BrewMindLink | null {
  * which is length.
  */
 function coffeeFrom(params: URLSearchParams): PodCoffee | null {
-    const record: Record<string, string> = {};
-    let sawAny = false;
-
+    const fields: [string, string][] = [];
     for (const [key, value] of params.entries()) {
-        if (!key.startsWith("bean.")) continue;
-        sawAny = true;
-        const param = key.slice("bean.".length);
+        if (key.startsWith("bean.")) fields.push([key.slice("bean.".length), value]);
+    }
+    if (fields.length === 0) return null;
+    return coffeeFromFields(fields);
+}
+
+/** Share the link's aliases and caps with a feed's JSON bean fields. */
+export function coffeeFromFields(fields: Iterable<[string, unknown]>): PodCoffee | null {
+    const record: Record<string, unknown> = {};
+    for (const [param, value] of fields) {
         const field = PARAM_ALIASES[param] ?? param;
+        if (typeof value === "number" || typeof value === "boolean") {
+            record[field] = value;
+            continue;
+        }
+        if (typeof value !== "string") continue;
         const trimmed = value.trim();
         if (trimmed === "") continue;
 
@@ -218,6 +242,5 @@ function coffeeFrom(params: URLSearchParams): PodCoffee | null {
         record[field] = trimmed;
     }
 
-    if (!sawAny) return null;
     return podCoffeeFromStored(record);
 }

@@ -147,6 +147,8 @@ const EXPECTED_CALLS: Record<string, number> = {
     // where the browser starts and says nothing about where it then goes. The
     // inventory entry carries that caveat in words.
     "components/BrewMindBrowser.tsx": 1,
+    "components/CatalogueParts.tsx": 2,
+    "components/RoasterCoffeeRow.tsx": 1,
     "components/FromSection.tsx":  1,
     "components/HubRow.tsx":       1,
     "components/ImportResult.tsx": 1,
@@ -155,7 +157,8 @@ const EXPECTED_CALLS: Record<string, number> = {
     "hooks/useShareRecipe.ts":     1,
     "library/XBloomRecipe.ts":     1,
     "library/cloud/transport.ts":  1,
-    "library/hub/hubApi.ts":       1
+    "library/hub/hubApi.ts":       1,
+    "library/roasterFeed.ts":      1
 };
 
 const listed = new Set(OUTBOUND_CALLS.flatMap((call) => call.source));

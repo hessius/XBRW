@@ -3,6 +3,22 @@ import {decorateImport, fillImportBlanks} from "@/library/importDecoration";
 
 const recipe = () => new Recipe();
 
+describe("decorateImport with a roaster colour", () => {
+    it("sets the nearest palette accent only on a recipe without one", () => {
+        expect(decorateImport(recipe(), {colour: "#1D5F96"}).accentIndex).toBe(0);
+        const held = recipe();
+        held.accentIndex = 5;
+        expect(decorateImport(held, {colour: "#1D5F96"}).accentIndex).toBe(5);
+    });
+
+    it("leaves an unusable colour unset and never stores a raw colour", () => {
+        expect(decorateImport(recipe(), {colour: "#333333"}).accentIndex).toBeUndefined();
+        expect(decorateImport(recipe(), {colour: "navy"}).accentIndex).toBeUndefined();
+        expect(JSON.stringify(decorateImport(recipe(), {colour: "#1D5F96"})))
+            .not.toContain("1D5F96");
+    });
+});
+
 describe("decorateImport", () => {
     it("records the provenance", () => {
         expect(decorateImport(recipe(), {source: "brewmind"}).source).toBe("brewmind");

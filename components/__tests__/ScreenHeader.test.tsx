@@ -6,6 +6,22 @@ import ScreenHeader from "@/components/ScreenHeader";
 import {renderWithProviders} from "@/test-utils/render";
 
 describe("ScreenHeader", () => {
+    it("shows catalogue counts and subtitles without losing the wrapping action", async () => {
+        await renderWithProviders(
+            <ScreenHeader title="Central Coast Coffee" count="2 OF 44" titleSize={22}
+                          subtitle="2 of 44 coffees" meta="Updated 3 h ago"
+                          action={<Text>Manage</Text>} onBack={jest.fn()}/>
+        );
+        expect(screen.getByTestId("screen-title-count")).toHaveTextContent("2 OF 44");
+        expect(screen.getByTestId("screen-header-subtitle")).toHaveTextContent("2 of 44 coffees");
+        expect(screen.getByTestId("screen-header-meta")).toHaveTextContent("Updated 3 h ago");
+        expect(screen.getByText("Manage")).toBeTruthy();
+        expect(StyleSheet.flatten(screen.getByTestId("screen-header-action-row").props.style))
+            .toEqual(expect.objectContaining({flexWrap: "wrap"}));
+        expect(StyleSheet.flatten(screen.getByTestId("screen-title-text").props.style))
+            .toEqual(expect.objectContaining({fontSize: 22}));
+    });
+
     it("keeps a supplied action beside the title in a wrapping header", async () => {
         await renderWithProviders(
             <ScreenHeader title="Settings" onBack={jest.fn()}
