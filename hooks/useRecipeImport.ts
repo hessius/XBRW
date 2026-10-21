@@ -10,7 +10,7 @@ import {
 } from "@/library/importDecoration";
 import {parseImportInput, type ImportSource} from "@/library/importInput";
 import {asMachineModel} from "@/library/machine/machineModel";
-import type Recipe from "@/library/Recipe";
+import Recipe from "@/library/Recipe";
 import {XBloomRecipe} from "@/library/XBloomRecipe";
 
 /**
@@ -39,14 +39,8 @@ const DEBOUNCE_MS = TYPING_DEBOUNCE_MS;
  */
 const ABANDONED_MS = 2500;
 
-/**
- * Why a lookup failed.
- *
- * Three reasons rather than one, because "something went wrong" is not worth
- * writing. Each names the thing the reader can act on: their connection, their
- * input, or nothing at all.
- */
-export type ImportErrorReason = "network" | "notFound" | "unusable";
+/** Lookup and local persistence failures have different remedies. */
+export type ImportErrorReason = "network" | "notFound" | "unusable" | "storage";
 
 /** What the found panel draws. Everything it needs, and nothing else. */
 export type ImportPreview = {
@@ -116,9 +110,9 @@ type Options = {
     onOpenRecipe: (recipe: Recipe, isExisting: boolean) => void;
     /**
      * Write a stored recipe back after an import link filled its blanks
-     * (`fillImportBlanks`). Called only when something changed, and before the
-     * recipe is opened. Optional: without it the filled recipe still opens,
-     * it just is not saved until the editor saves it.
+     * (`fillImportBlanks`). Called once with a staged copy before the held
+     * recipe changes or opens. Throw on failure to preserve the held copy.
+     * Optional: without it the filled recipe opens and is saved by the editor.
      */
     onSaveExisting?: (recipe: Recipe) => void;
 };
@@ -378,10 +372,19 @@ export function useRecipeImport({stored, onOpenRecipe, onSaveExisting}: Options)
         // re-imported. Empty places only; see `fillImportBlanks`.
         if (
             isExisting &&
-            decoration !== undefined &&
-            fillImportBlanks(recipe, decoration)
+            decoration !== undefined
         ) {
-            onSaveRef.current?.(recipe);
+            const updated = new Recipe(undefined, JSON.stringify(recipe));
+            if (fillImportBlanks(updated, decoration)) {
+                try {
+                    onSaveRef.current?.(updated);
+                } catch {
+                    fail("storage", "Couldn't save the recipe. Try importing it again.");
+                    setFocusField(false);
+                    return;
+                }
+                Object.assign(recipe, updated);
+            }
         }
 
         // A paste into the field and a share intent both navigate on their own.

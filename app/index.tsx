@@ -904,16 +904,9 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                 notify({tone: "info", message: ALREADY_IN_LIBRARY});
             }
         },
-        // An import link filled blanks on a recipe already held (its picture,
-        // its coffee). Best-effort, like the minted share link below: the
-        // editor opens on the filled recipe either way, and saving there
-        // writes it too.
+        // The importer commits its staged changes only after this write succeeds.
         onSaveExisting: recipe => {
-            try {
-                new RecipeDatabase().updateRecipe(recipe.uuid, recipe);
-            } catch {
-                // The filled recipe is still what the editor opens.
-            }
+            new RecipeDatabase().updateRecipe(recipe.uuid, recipe);
             library.refresh();
         }
     });
