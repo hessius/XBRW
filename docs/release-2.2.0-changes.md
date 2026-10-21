@@ -5,6 +5,9 @@
 The approved scope is #227 (`2f24dc375ff58a9df9330cc1c7cfe20669d3379d`)
 and #228 (`5f4121d6cac5106b3fb264edf031056852e85991`), integrated for review
 in #258 from pinned develop `9ff154c89f5805894df078c16f569fbf261af041`.
+The focused integration merged into develop as
+`b66ec311f51e4994a2189298c52705f63d1453e7` after its single review and
+green final-head CI. Both original source PRs are marked merged.
 This preview carries its fixes: identity rechecks after fresh vitals, before
 warning-clearing commands and before PRO retry, local refusal ownership,
 stale/forgotten discovery targets, live picker
