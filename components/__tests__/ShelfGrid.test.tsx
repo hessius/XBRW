@@ -4,12 +4,37 @@ import {fireEvent, screen} from "@testing-library/react-native";
 import ShelfGrid from "@/components/ShelfGrid";
 import type {Shelf} from "@/library/shelves";
 import {renderWithProviders} from "@/test-utils/render";
+import {withShelfPhotos} from "@/components/ShelfPhotoMark";
+import {palette} from "@/constants/colors";
 
 function shelf(over: Partial<Shelf> = {}): Shelf {
     return {id: "tea", label: "TEA", kind: "auto", count: 4, ...over};
 }
 
 describe("ShelfGrid", () => {
+    it("keeps saved roaster membership, accessibility and actions while toggling photo marks", async () => {
+        const roaster = shelf({id: "roaster:49th", label: "49th", count: 3});
+        const marks = {[roaster.id]: {
+            accents: [palette.text],
+            coverMembers: [
+                {uuid: "photo", accent: palette.text, imageURL: "https://coffee.example/bag.jpg"},
+                {uuid: "plain", accent: palette.dim}
+            ]
+        }};
+        const onOpen = jest.fn();
+        const view = await renderWithProviders(<ShelfGrid shelves={[roaster]} marks={marks}
+            onOpen={onOpen} onNewShelf={jest.fn()} onShelfActions={jest.fn()}/>);
+        expect(screen.getAllByTestId("shelf-photo", {includeHiddenElements: true})).toHaveLength(1);
+        await fireEvent.press(screen.getByRole("button", {name: "49th, auto shelf, 3 recipes"}));
+        expect(onOpen).toHaveBeenCalledWith(roaster.id);
+        await view.rerender(<ShelfGrid shelves={[roaster]} marks={withShelfPhotos(marks, false)}
+            onOpen={onOpen} onNewShelf={jest.fn()} onShelfActions={jest.fn()}/>);
+        expect(screen.queryAllByTestId("shelf-photo", {includeHiddenElements: true})).toHaveLength(0);
+        expect(screen.getByTestId("shelf-mark-initial")).toHaveTextContent("4");
+        expect(screen.getByTestId("shelf-mark")).toHaveStyle({width: 44, height: 44});
+        expect(screen.getByRole("button", {name: "49th, auto shelf, 3 recipes"})).toBeTruthy();
+    });
+
     it("draws the auto heading only when there are auto shelves", async () => {
         await renderWithProviders(
             <ShelfGrid shelves={[shelf()]} onOpen={jest.fn()} onNewShelf={jest.fn()} onShelfActions={jest.fn()}/>

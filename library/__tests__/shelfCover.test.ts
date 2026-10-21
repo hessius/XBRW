@@ -1,4 +1,4 @@
-import {coverCells, hasStockPhotoCover, stockPhotoCover} from "../shelfCover";
+import {coverCells, hasMixedPhotoCover, hasStockPhotoCover, roasterPhotoCover, stockPhotoCover} from "../shelfCover";
 
 const members = [
     {uuid: "a", accent: "a", imageURL: "https://coffee"},
@@ -44,4 +44,24 @@ it("requires four photographed recipes, skipping missing, blank, invalid and rep
 it("counts four recipes sharing one photo as a full stock cover", () => {
     const copies = Array.from({length: 4}, (_, n) => ({...members[0], uuid: `copy-${n}`}));
     expect(stockPhotoCover(copies)).toEqual(copies);
+});
+
+it.each(["roaster:Acme", "roaster:49th", "roaster:東京"])(
+    "limits mixed automatic covers to the saved roaster namespace %s", id => {
+        expect(hasMixedPhotoCover(id)).toBe(true);
+        expect(hasStockPhotoCover(id)).toBe(false);
+    }
+);
+it.each(["roaster:", "roaster:   ", "sharedBy:Acme", "tag:Acme", "pods", "Acme"])(
+    "does not infer a mixed cover from %s", id => expect(hasMixedPhotoCover(id)).toBe(false)
+);
+it("selects photos by UUID, not URL, then fills spare cells with actual ordinary member accents", () => {
+    expect(roasterPhotoCover([members[0], members[0], members[2]], members)).toEqual([
+        members[0], members[2], members[1], members[3]
+    ]);
+});
+it("does not turn spare ordinary members into additional photos", () => {
+    expect(roasterPhotoCover([members[0]], members)).toEqual([
+        members[0], members[1], {uuid: "c", accent: "c"}, members[3]
+    ]);
 });

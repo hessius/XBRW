@@ -11,7 +11,7 @@ import {buildLibraryQuery, type FilterResolver, type LibraryQuery,
         type RecipeEvidence} from './libraryQuery';
 import {columnDefinitions, indexStatements, INDEX_COLUMNS, type IndexValue,
         projectRecipe, schemaHash} from './recipeIndex';
-import {COVER_MEMBERS, hasStockPhotoCover} from './shelfCover';
+import {COVER_MEMBERS, hasMixedPhotoCover, hasStockPhotoCover} from './shelfCover';
 
 /**
  * Turn one stored row into a `Recipe`, or `null` if its blob cannot be read.
@@ -770,7 +770,7 @@ class RecipeDatabase {
     }
 
     /**
-     * Only the five photo-capable stock shelves seek beyond the first members.
+     * Photo-capable stock and roaster shelves seek beyond the first members.
      * Count photographed recipes, including copies sharing the same pod shot.
      * JSON is guarded before extraction; hydration and URL validation still
      * own the read boundary.
@@ -782,7 +782,7 @@ class RecipeDatabase {
     ): Record<string, Recipe[]> {
         const members: Record<string, Recipe[]> = {};
         for (const id of ids) {
-            if (!hasStockPhotoCover(id)) continue;
+            if (!hasStockPhotoCover(id) && !hasMixedPhotoCover(id)) continue;
             const clause = resolveFilter(id);
             if (clause === null) continue;
             const rows = this.db.getAllSync(

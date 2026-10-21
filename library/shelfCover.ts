@@ -1,10 +1,36 @@
 import {podImageUrl} from "@/library/podCoffee";
+import {roasterFromFilterId} from "@/library/libraryFilters";
 
 export const COVER_MEMBERS = 4;
 export type ShelfCoverMember = {uuid: string; accent: string; imageURL?: string};
 
 export function hasStockPhotoCover(id: string): boolean {
     return ["xbloom", "favourites", "pods", "mostBrewed", "recentlyAdded"].includes(id);
+}
+
+export function hasMixedPhotoCover(id: string): boolean {
+    return roasterFromFilterId(id) !== null;
+}
+
+export function roasterPhotoCover(
+    photos: readonly ShelfCoverMember[], ordinary: readonly ShelfCoverMember[]
+): ShelfCoverMember[] {
+    const selected: ShelfCoverMember[] = [];
+    const seen = new Set<string>();
+    for (const member of photos) {
+        const imageURL = podImageUrl(member.imageURL);
+        if (!imageURL || seen.has(member.uuid)) continue;
+        selected.push({...member, imageURL});
+        seen.add(member.uuid);
+        if (selected.length === COVER_MEMBERS) return selected;
+    }
+    for (const member of ordinary) {
+        if (seen.has(member.uuid)) continue;
+        selected.push({uuid: member.uuid, accent: member.accent});
+        seen.add(member.uuid);
+        if (selected.length === COVER_MEMBERS) break;
+    }
+    return selected;
 }
 
 export function stockPhotoCover(members: readonly ShelfCoverMember[]): ShelfCoverMember[] {

@@ -12,18 +12,21 @@ export function withShelfPhotos(
     return Object.fromEntries(Object.entries(marks).map(([id, members]) => [id, {accents: members.accents}]));
 }
 
-export default function ShelfPhotoMark({members, count, fallback, automatic = false}: {
+export default function ShelfPhotoMark({members, count, fallback, automatic = false, mixed = false}: {
     members: readonly ShelfCoverMember[];
     count: number;
     fallback: React.ReactNode;
     automatic?: boolean;
+    mixed?: boolean;
 }) {
     const [failedURLs, setFailedURLs] = useState<readonly string[]>([]);
-    const cells = coverCells(members, count, automatic);
+    const cells = coverCells(members, mixed ? Math.max(2, count) : count, automatic || mixed);
     if (!cells.some(cell => cell.imageURL)) return <>{fallback}</>;
-    if (automatic && cells.filter(cell => cell.imageURL && !failedURLs.includes(cell.imageURL))
+    if (mixed && !cells.some(cell => cell.imageURL && !failedURLs.includes(cell.imageURL))) return <>{fallback}</>;
+    if (automatic && !mixed && cells.filter(cell => cell.imageURL && !failedURLs.includes(cell.imageURL))
         .length < COVER_MEMBERS) return <>{fallback}</>;
-    const size = count === 1 ? MARK_SIZE : (MARK_SIZE - 2) / 2;
+    const single = count === 1 && !mixed;
+    const size = single ? MARK_SIZE : (MARK_SIZE - 2) / 2;
     return (
         <View testID="shelf-photo-mark" accessible={false} accessibilityElementsHidden
               importantForAccessibility="no-hide-descendants"
@@ -33,10 +36,10 @@ export default function ShelfPhotoMark({members, count, fallback, automatic = fa
                 return (
                 <View key={`${index}-${cell.uuid}`} testID="shelf-cover-cell"
                       style={{width: size, height: size, backgroundColor: cell.accent,
-                          borderRadius: count === 1 ? size / 2 : 4, overflow: "hidden"}}>
-                    {uri && <RecipePhoto uri={uri} size={size} radius={size / 2}
+                          borderRadius: single ? size / 2 : 4, overflow: "hidden"}}>
+                    {uri && !(mixed && failedURLs.includes(uri)) && <RecipePhoto uri={uri} size={size} radius={size / 2}
                         backing={cell.accent} testID="shelf-photo"
-                        onError={automatic ? () => setFailedURLs(failed =>
+                        onError={automatic || mixed ? () => setFailedURLs(failed =>
                             failed.includes(uri) ? failed : [...failed, uri]) : undefined}/>}
                 </View>
                 );

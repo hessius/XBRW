@@ -8,6 +8,7 @@ import {
 import type {LibraryQuery, RecipeEvidence} from "@/library/libraryQuery";
 import Recipe from "@/library/Recipe";
 import {MARK_MEMBERS} from "@/components/ShelfMark";
+import {COVER_MEMBERS} from "@/library/shelfCover";
 
 jest.mock("@/library/RecipeDatabase");
 
@@ -51,13 +52,13 @@ function named(name: string): Recipe {
 }
 
 describe("saved roaster reads", () => {
-    it("returns whole-table counts and asks the shared resolver for fallback art only", async () => {
+    it("returns whole-table counts and asks the shared resolver for bounded mixed-cover members", async () => {
         const db = stubDb([named("Visible unrelated coffee")]);
         db.countRecipesByRoaster.mockReturnValue([{roaster: "CAFÉ", count: 3}, {roaster: "Small", count: 2}]);
         const {result} = await renderHook(() => useRecipeLibrary(db));
         expect(result.current.roasterCounts).toEqual([{roaster: "CAFÉ", count: 3}, {roaster: "Small", count: 2}]);
         expect(db.shelfMembers).toHaveBeenCalledWith(
-            expect.arrayContaining(["roaster:CAFÉ"]), resolveLibraryFilter, MARK_MEMBERS
+            expect.arrayContaining(["roaster:CAFÉ"]), resolveLibraryFilter, COVER_MEMBERS
         );
         expect(db.shelfMembers.mock.calls.flatMap(call => call[0])).not.toContain("roaster:Small");
     });

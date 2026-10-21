@@ -2,7 +2,9 @@ import {useEffect, useRef, useState} from "react";
 
 import {mergeRecipes, type BackupPayload} from "@/library/backup";
 import {MARK_MEMBERS} from "@/components/ShelfMark";
-import {COVER_MEMBERS, hasStockPhotoCover, type ShelfCoverMember} from "@/library/shelfCover";
+import {
+    COVER_MEMBERS, hasMixedPhotoCover, hasStockPhotoCover, roasterPhotoCover, type ShelfCoverMember
+} from "@/library/shelfCover";
 import {resolveAccent} from "@/library/accent";
 import {
     authorFilterId, roasterFilterId, MIN_COUNT, resolveLibraryFilter, resolveStockFilter,
@@ -179,7 +181,7 @@ export type ShelfWriteOutcome = {
 /** What a shelf's mark is drawn from: its first few members, in shelf order. */
 export type ShelfMarkMembers = {
     accents: string[];
-    /** First four actual members for tags; four photographed members for eligible stock shelves. */
+    /** Four actual tag members, full stock photos, or roaster photos plus ordinary member accents. */
     coverMembers?: ShelfCoverMember[];
 };
 
@@ -730,9 +732,10 @@ function readShelfMarks(
 ): Record<string, ShelfMarkMembers> {
     void revision;
     const allIds = JSON.parse(ids) as string[];
+    const needsFourMembers = (id: string) => id.startsWith("tag:") || hasMixedPhotoCover(id);
     const members = {
-        ...db.shelfMembers?.(allIds.filter(id => !id.startsWith("tag:")), resolveLibraryFilter, MARK_MEMBERS),
-        ...db.shelfMembers?.(allIds.filter(id => id.startsWith("tag:")), resolveLibraryFilter, COVER_MEMBERS)
+        ...db.shelfMembers?.(allIds.filter(id => !needsFourMembers(id)), resolveLibraryFilter, MARK_MEMBERS),
+        ...db.shelfMembers?.(allIds.filter(needsFourMembers), resolveLibraryFilter, COVER_MEMBERS)
     };
 
     const marks: Record<string, ShelfMarkMembers> = {};
@@ -745,12 +748,19 @@ function readShelfMarks(
             }))} : {})
         };
     }
-    const photoMembers = db.shelfPhotoMembers?.(allIds.filter(hasStockPhotoCover), resolveLibraryFilter) ?? {};
+    const photoMembers = db.shelfPhotoMembers?.(
+        allIds.filter(id => hasStockPhotoCover(id) || hasMixedPhotoCover(id)), resolveLibraryFilter
+    ) ?? {};
     for (const [id, recipes] of Object.entries(photoMembers)) {
-        if (!hasStockPhotoCover(id) || !marks[id]) continue;
-        marks[id].coverMembers = recipes.map(recipe => ({
+        if ((!hasStockPhotoCover(id) && !hasMixedPhotoCover(id)) || !marks[id]) continue;
+        const photos = recipes.map(recipe => ({
             uuid: recipe.uuid, accent: resolveAccent(recipe), imageURL: recipe.imageURL
         }));
+        marks[id].coverMembers = hasMixedPhotoCover(id)
+            ? roasterPhotoCover(photos, (members[id] ?? []).map(recipe => ({
+                uuid: recipe.uuid, accent: resolveAccent(recipe)
+            })))
+            : photos;
     }
     return marks;
 }

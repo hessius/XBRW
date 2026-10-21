@@ -514,14 +514,14 @@ Round-trip recipe metadata through copy and backup/restore.
 `ShelfMark.tsx`, `ShelfTile.tsx`, `hooks/useRecipeLibrary.ts`,
 `RecipeDatabase.shelfPhotoMembers` and their tests.
 
-- [ ] **Step 1: Add failing rendering and query tests.**
+- [x] **Step 1: Add failing rendering and query tests.**
 
 Test 0/1/2/3/4 usable photos, a pictured member beyond the first three,
 photos disabled, individual/all image failures, repeated URLs on distinct
 UUIDs and unchanged 44 pt geometry. Assert a roaster initial with no photos.
 Retain existing stock four-photo threshold tests unchanged.
 
-- [ ] **Step 2: Separate cover policy without broadening other shelves.**
+- [x] **Step 2: Separate cover policy without broadening other shelves.**
 
 Recognize `roaster:` as mixed-photo eligible. Fetch at most four photographed
 saved members through the same resolver, then fill spare cover positions with
@@ -532,14 +532,62 @@ Expose a specific roaster mark/initial input rather than passing a brand name
 as a `DotIconName`. Use `DotMatrixText` within the existing square. Preserve
 the same accent/inversion contrast and accessible shelf name/count.
 
-- [ ] **Step 3: Make failed photos use the correct fallback.**
+- [x] **Step 3: Make failed photos use the correct fallback.**
 
 Track failed image URLs with the existing image error callback. Mixed mode
 uses an accent for a failed cell, and the initial when all photos fail.
 Full-stock mode retains its existing whole-mark fallback. A failed old URL
 must not poison a new URI or a different mounted shelf.
 
-- [ ] **Step 4: Rerun cover/mark/tile/grid and library regressions; commit.**
+- [x] **Step 4: Rerun cover/mark/tile/grid and library regressions; commit.**
+
+### Task 5 implementation evidence (2026-10-21)
+
+- Red before green: new `RoasterShelfPhoto` and
+  `RecipeDatabase.roasterCover` tests failed on both platforms with the
+  unchanged implementation (missing initial, no mixed photos, no roaster
+  photo query). Existing stock four-photo tests were left unchanged.
+- Roaster cover lookup uses the same saved `roasterKey` resolver as counts
+  and opening the shelf. Each photo query has `LIMIT 7` (four members plus
+  the existing three-row unreadable allowance), hydrates at most those
+  candidates and returns at most four photos. Four bounded ordinary members
+  supply actual-member accents for spare cells; the ordinary glyph mark
+  still takes three accents. No whole-library/shelf hydration or feed,
+  subscription, import, index-column or namespace changes.
+- Distinct UUIDs sharing a URL retain separate cells. Roaster photos never
+  expand to fill the mark or repeat into spare cells, including for one
+  member. Partial failures leave accent cells; all failures restore the
+  initial. Failure state is URL-local and shelf-local, and replacement URLs
+  retry. Stock whole-cover failure and manual/tag cover behavior remain.
+- `ShelfMark.roasterInitial` renders an explicit initial, not a brand icon.
+  ASCII letters/digits use `DotMatrixText`; non-ASCII initials use the existing
+  text font fallback. NFC names, leading digits, empty active shelves, accent
+  inversion, accessible shelf/count labels and 44 pt geometry are covered.
+  Existing `withShelfPhotos` preference gating strips cover data without
+  losing the accents needed by the initial.
+- Final serial regression run: **24 suites / 558 tests passed**, iOS and
+  Android, covering `shelfCover`, database stock/roaster/roaster-cover SQL,
+  `ShelfPhotoMark`, `RoasterShelfPhoto`, `ShelfMark`, `RecipeShelfTile`,
+  `RecipeShelfTilePhoto`, `ShelfGrid` and both library-hook suites.
+  `npm run typecheck`, changed-file ESLint and `git diff --check` passed.
+  This is not a full-suite or repository-wide warning-free claim; existing
+  warnings were not changed. Startup read-only worktree audit completed.
+- Owned manifest: `library/shelfCover.ts`, `library/RecipeDatabase.ts`,
+  `library/__tests__/shelfCover.test.ts`,
+  `library/__tests__/RecipeDatabase.roasterCover.test.ts`,
+  `components/ShelfMark.tsx`, `components/ShelfPhotoMark.tsx`,
+  `components/ShelfTile.tsx`, `components/__tests__/ShelfGrid.test.tsx`,
+  `components/__tests__/RoasterShelfPhoto.test.tsx`,
+  `hooks/useRecipeLibrary.ts`, `hooks/__tests__/useRecipeLibrary.test.ts`,
+  `hooks/__tests__/useRecipeLibrary.realDb.test.ts`, and this Task 5 section.
+- Preserved as a coherent local-only checkpoint in the controller-owned
+  `/Users/jesperhessius/Dev/XBRW-220-roaster-import-20261021` worktree on
+  `feat/2.2.0-roaster-import-20261021` (pinned develop base
+  `4aa7c02d226c1900efb453ab63529172c1801ea7`).
+  Concurrent controller app/import/docs edits were not staged or modified.
+  Task 6 integration and independent acceptance remain with the controller.
+  No push, PR/review, merge, dependency/native change, build, deployment,
+  cleanup or hardware qualification performed.
 
 ## Task 6: Validate integration and document the accepted adaptation
 
