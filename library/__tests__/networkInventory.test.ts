@@ -151,6 +151,10 @@ const EXPECTED_CALLS: Record<string, number> = {
     "components/HubRow.tsx":       1,
     "components/ImportResult.tsx": 1,
     "components/PodSection.tsx":   1,
+    "components/RecipePhoto.tsx":  1,
+    "components/ShelfPhotoMark.tsx": 1,
+    // The header picture opened full screen: the same address, already loaded.
+    "components/PhotoViewer.tsx":   1,
     "hooks/useShareRecipe.ts":     1,
     "library/XBloomRecipe.ts":     1,
     "library/cloud/transport.ts":  1,

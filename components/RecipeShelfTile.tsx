@@ -1,10 +1,11 @@
-import React from "react";
+import React, {useState} from "react";
 import {Pressable, View} from "react-native";
 import {Text, XStack, YStack} from "tamagui";
 
 import DotIcon from "@/components/DotIcon";
 import DotMatrixText from "@/components/DotMatrixText";
 import PourProfile, {PROFILE_BLEED} from "@/components/PourProfile";
+import RecipePhoto from "@/components/RecipePhoto";
 import SlotMarker from "@/components/SlotMarker";
 import {TILE_HEIGHT} from "@/components/ShelfTile";
 import Recipe from "@/library/Recipe";
@@ -84,6 +85,27 @@ function figuresLine(recipe: Recipe, isTea: boolean): string | null {
     return parts.length > 0 ? parts.join(" · ") : null;
 }
 
+/**
+ * The recipe's picture on a tile: a rounded square in the top left corner,
+ * level with the badge row.
+ *
+ * That corner was the tile's one empty space. The picture is drawn out of the
+ * layout flow, so it can never make the tile taller or move the name, and the
+ * badge row only gives up its leading end to it. It is as big as the room down
+ * to the name allows, up to `TILE_PHOTO_SIZE`. At a text size that leaves less
+ * than `TILE_PHOTO_MIN` it is left out: a thumbnail too small to tell two bags
+ * apart is clutter, and the alternative is drawing it over the name.
+ */
+export const TILE_PHOTO_SIZE = 48;
+export const TILE_PHOTO_MIN = 40;
+export const TILE_PHOTO_GAP = 8;
+
+/** How big the picture can be, given the room from the badge row's top down to the name. */
+export function tilePhotoSize(room: number): number {
+    const size = Math.min(TILE_PHOTO_SIZE, Math.floor(room - TILE_PHOTO_GAP / 2));
+    return size >= TILE_PHOTO_MIN ? size : 0;
+}
+
 type Props = {
     recipe: Recipe;
     /** Open the recipe in the editor, the tile's plain tap. */
@@ -102,6 +124,11 @@ type Props = {
     showCoffeeMarker?: boolean;
     /** Fill the pour profile with a dot screen. Owned by the settings screen. */
     dottedProfile?: boolean;
+    /**
+     * `showRecipeAvatars`. On, a recipe with an `imageURL` shows it in the
+     * tile's top left corner.
+     */
+    showPicture?: boolean;
     /**
      * How this recipe has gone: rating, brew count, how lately.
      *
@@ -169,9 +196,15 @@ type Props = {
 export default function RecipeShelfTile({
     recipe, onPress, onLongPress, showCoffeeMarker = true, dottedProfile = false,
     evidence, onBrew, onShare, onWrite, onDuplicate, onDelete, onToggleFavourite,
-    onHistory, editing = false, slotMarker, onEasyMode
+    onHistory, editing = false, slotMarker, onEasyMode, showPicture = false
 }: Props) {
     const accent = resolveAccent(recipe);
+    // Measured, both of them: the badge row and the free space under it add up
+    // to the room the picture has above the name at this text size.
+    const [badgeRow, setBadgeRow] = useState(0);
+    const [freeRoom, setFreeRoom] = useState(0);
+    const picture = showPicture ? recipe.imageURL ?? "" : "";
+    const photoSize = picture.length > 0 ? tilePhotoSize(badgeRow + freeRoom) : 0;
     const isTea = accentGroupFor(recipe) === "tea";
     const marker = isTea ? "TEA" : "COFFEE";
     const showMarker = isTea || showCoffeeMarker;
@@ -267,13 +300,26 @@ export default function RecipeShelfTile({
                     padding={TILE_PADDING} borderRadius="$4"
                     style={{backgroundColor: accent}}>
 
-                <XStack testID="recipe-tile-badges" alignItems="center" gap="$1.5">
+                <XStack testID="recipe-tile-badges" alignItems="center" gap="$1.5"
+                        onLayout={(event) => setBadgeRow(event.nativeEvent.layout.height)}
+                        paddingLeft={photoSize > 0 ? photoSize + TILE_PHOTO_GAP : 0}>
+                    {/* Hung from the row's top left, so it lines up with the
+                        badges. The row keeps the room even if the picture
+                        fails to load, so the badges do not jump. */}
+                    {photoSize > 0 && (
+                        <View pointerEvents="none"
+                              style={{position: "absolute", left: 0, top: 0}}>
+                            <RecipePhoto testID="recipe-tile-photo" uri={picture}
+                                         size={photoSize} radius={8}
+                                         backing={onAccent.key}/>
+                        </View>
+                    )}
                     {/* How it has gone leads the row, the way it takes the
                         leading end of the card's own figures row. */}
                     {shownEvidence !== null && (
                         <DotMatrixText testID="recipe-tile-evidence" fontSize={10}
                                        weight="bold" letterSpacing={1.1}
-                                       numberOfLines={1}
+                                       numberOfLines={1} style={{flexShrink: 1}}
                                        color={onAccent.label}>
                             {shownEvidence}
                         </DotMatrixText>
@@ -320,6 +366,8 @@ export default function RecipeShelfTile({
                         </DotMatrixText>
                     )}
                 </XStack>
+                <View testID="recipe-tile-free-room" style={{flex: 1}}
+                      onLayout={(event) => setFreeRoom(event.nativeEvent.layout.height)}/>
 
                 <YStack gap="$1">
                     {/* Two lines, figures or not: the name sits under the
