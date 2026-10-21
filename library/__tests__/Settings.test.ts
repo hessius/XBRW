@@ -85,6 +85,19 @@ describe("Settings", () => {
         expect(new Settings(fakeStorage()).get("showHints")).toBe(false);
     });
 
+    it("shows recipe pictures by default, and keeps them off once turned off", () => {
+        // The default moved from off to on. Only an absent row reads as the
+        // default, so a stored false must survive a fresh store on the same
+        // storage rather than coming back on.
+        const storage = fakeStorage();
+        expect(new Settings(storage).get("showRecipeAvatars")).toBe(true);
+
+        new Settings(storage).set("showRecipeAvatars", false);
+        expect(new Settings(storage).get("showRecipeAvatars")).toBe(false);
+        expect(new Settings(fakeStorage({showRecipeAvatars: "false"}))
+            .get("showRecipeAvatars")).toBe(false);
+    });
+
     it("has no help style left to store", () => {
         // Two deliveries for the long-form notes shipped behind this key and
         // both were withdrawn. A key nobody reads is a row that outlives the
