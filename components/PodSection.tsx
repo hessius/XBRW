@@ -5,6 +5,7 @@ import {Text, XStack, YStack} from "tamagui";
 import DeckSection from "@/components/DeckSection";
 import DotIcon from "@/components/DotIcon";
 import DotMatrixText from "@/components/DotMatrixText";
+import PodCoffeeRows from "@/components/PodCoffeeRows";
 import TextFieldRow from "@/components/TextFieldRow";
 import {palette} from "@/constants/colors";
 import Recipe, {isValidXID} from "@/library/Recipe";
@@ -30,6 +31,9 @@ const POD_SIZE = 44;
  * Copying would freeze a string, and the day the pod name changes or the ID is
  * corrected, yours would go on saying something slightly wrong forever. One tap
  * in, one tap out, and which of the two is in force is visible either way.
+ *
+ * Under the pod line sits what the pod carries: roaster, origin, process and
+ * the rest (`PodCoffeeRows`), each only when it has a value.
  */
 export default function PodSection({
     recipe, showHint, showAvatar, xidLookupFailed, externalEpoch,
@@ -54,6 +58,9 @@ export default function PodSection({
     /** Clears the recipe's own name, putting the title back on the pod's. */
     onFollowPod: () => void;
 }) {
+    "use no memo";
+
+    // A late pod lookup mutates the recipe; cached children must follow that update.
     const [podFailed, setPodFailed] = useState(false);
 
     const linked = recipe.xbloomName.trim().length > 0;
@@ -158,6 +165,8 @@ export default function PodSection({
                     )}
                 </XStack>
             )}
+
+            <PodCoffeeRows recipe={recipe}/>
         </DeckSection>
     );
 }

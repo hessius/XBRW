@@ -1,5 +1,5 @@
 import React from "react";
-import {fireEvent, screen} from "@testing-library/react-native";
+import {fireEvent, screen, within} from "@testing-library/react-native";
 
 import AboutDeck from "@/components/AboutDeck";
 import {palette} from "@/constants/colors";
@@ -94,6 +94,30 @@ describe("AboutDeck", () => {
                 "about-from",
                 "about-history"
             ]);
+    });
+
+    it("draws the pod's coffee inside XPOD, not as a section of its own", async () => {
+        // Inside XPOD because it answers the pod's question, and because a tea
+        // pod carries the same block: a COFFEE heading would be wrong for it.
+        await renderWithProviders(
+            <AboutDeck {...props({recipe: recipeWith({
+                xid:        "TEA01",
+                xbloomName: "Jasmine Pearl",
+                coffee:     {name: "Jasmine Pearl", region: "Fujian"}
+            })})}/>
+        );
+
+        expect(within(screen.getByTestId("about-pod")).getByLabelText("Region, Fujian"))
+            .toBeTruthy();
+        expect(screen.getAllByTestId(/^about-/).map((section) => section.props.testID))
+            .toEqual([
+                "about-note",
+                "about-tags",
+                "about-pod",
+                "about-from",
+                "about-history"
+            ]);
+        expect(screen.queryByText("COFFEE")).toBeNull();
     });
 
     it("drops the FROM section for a recipe that came from nowhere", async () => {
