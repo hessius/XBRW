@@ -320,7 +320,7 @@ describe("RecipeDatabase stock photo covers (real SQLite)", () => {
         return recipe;
     }
 
-    it("seeks four distinct photographed actual members beyond unpictured and repeated members", () => {
+    it("seeks four photographed actual members beyond unpictured members", () => {
         const db = freshDatabase();
         add(db, "000-blank");
         add(db, "001-portrait").sharedByAvatar = "https://example.com/portrait.jpg";
@@ -340,7 +340,7 @@ describe("RecipeDatabase stock photo covers (real SQLite)", () => {
         query.mockRestore();
     });
 
-    it("does not count duplicate, blank, missing, portrait-only, non-HTTPS or malformed stored pictures", () => {
+    it("counts shared photos but not blank, missing, portrait-only, non-HTTPS or malformed stored pictures", () => {
         const db = freshDatabase();
         add(db, "a", "https://example.com/1.jpg");
         add(db, "b", " https://example.com/1.jpg ");
@@ -356,7 +356,24 @@ describe("RecipeDatabase stock photo covers (real SQLite)", () => {
         appDatabase().runSync("INSERT INTO recipes (uuid, recipeJSON, favourite) VALUES (?, ?, 1);",
             ["numeric-photo", '{"imageURL":42}']);
         const selected = db.shelfPhotoMembers(["favourites"], resolveLibraryFilter).favourites;
-        expect(selected.map(r => r.uuid)).toEqual(["a", "f", "g"]);
+        expect(selected.map(r => r.uuid)).toEqual(["a", "b", "f", "g"]);
+    });
+
+    it("keeps four copies sharing one photo in a six-recipe pod shelf", () => {
+        const db = freshDatabase();
+        const recipe = add(db, "original", "https://example.com/pod.jpg");
+        recipe.cupType = CUP_TYPE.XPOD;
+        db.updateRecipe(recipe.uuid, recipe);
+        for (let n = 0; n < 3; n++) db.cloneRecipe(recipe.uuid);
+        for (let n = 0; n < 2; n++) {
+            const blank = add(db, `blank-${n}`);
+            blank.cupType = CUP_TYPE.XPOD;
+            db.updateRecipe(blank.uuid, blank);
+        }
+        const selected = db.shelfPhotoMembers(["pods"], resolveLibraryFilter).pods;
+        expect(selected).toHaveLength(4);
+        expect(new Set(selected.map(r => r.uuid)).size).toBe(4);
+        expect(selected.every(r => r.imageURL === recipe.imageURL)).toBe(true);
     });
 
     it("does not query other auto shelves, authors or tags", () => {

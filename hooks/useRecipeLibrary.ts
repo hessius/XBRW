@@ -193,7 +193,7 @@ export type ShelfWriteOutcome = {
 /** What a shelf's mark is drawn from: its first few members, in shelf order. */
 export type ShelfMarkMembers = {
     accents: string[];
-    /** First four actual members for tags; four distinct photographed members for eligible stock shelves. */
+    /** First four actual members for tags; four photographed members for eligible stock shelves. */
     coverMembers?: ShelfCoverMember[];
 };
 

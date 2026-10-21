@@ -28,15 +28,20 @@ it.each(["xbloom", "favourites", "pods", "mostBrewed", "recentlyAdded"])(
 it.each(["tea", "allRecipes", "mine", "neverBrewed", "sharedBy:Somebody", "tag:pods"])(
     "does not extend stock photos to %s", id => expect(hasStockPhotoCover(id)).toBe(false)
 );
-it("requires four distinct usable coffee URLs, skipping missing, blank, invalid and repeated URLs", () => {
+it("requires four photographed recipes, skipping missing, blank, invalid and repeated members", () => {
     const photos = Array.from({length: 4}, (_, n) => ({
         uuid: `p${n}`, accent: "accent", imageURL: `https://coffee.example/${n}`
     }));
     expect(stockPhotoCover(photos.slice(0, 3))).toEqual([]);
-    expect(stockPhotoCover([...photos.slice(0, 3), {...photos[0], uuid: "duplicate"}])).toEqual([]);
+    expect(stockPhotoCover([...photos.slice(0, 3), photos[0]])).toEqual([]);
     expect(stockPhotoCover([
         {uuid: "blank", accent: "a", imageURL: " "},
         {uuid: "invalid", accent: "a", imageURL: "http://coffee.example/insecure"},
         members[1], ...photos
     ])).toEqual(photos);
+});
+
+it("counts four recipes sharing one photo as a full stock cover", () => {
+    const copies = Array.from({length: 4}, (_, n) => ({...members[0], uuid: `copy-${n}`}));
+    expect(stockPhotoCover(copies)).toEqual(copies);
 });

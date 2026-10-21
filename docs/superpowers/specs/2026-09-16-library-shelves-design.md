@@ -484,7 +484,8 @@ setting key and the losing candidate are gone, and what is left is the rule:
 [picture-placement design](2026-10-20-recipe-picture-placement-design.md)
 retains this fallback grammar, but allows XBLOOM RECIPES, STARRED, XBLOOM PODS,
 MOST BREWED and RECENTLY ADDED to show the four-cell coffee/pod grid when four
-distinct usable actual-member photos exist and previews are enabled. Other
+actual members carry usable photos and previews are enabled. Copies sharing a
+photo count separately. Other
 automatic/author shelves keep glyphs; manual/tag mixed covers keep their separate
 first-four-member selection. The unconditional auto-glyph statements below are
 historical, not a reason to remove that approved exception.

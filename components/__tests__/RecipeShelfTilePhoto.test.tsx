@@ -46,6 +46,19 @@ describe("RecipeShelfTile picture", () => {
         return screen.queryByTestId("recipe-tile-photo", {includeHiddenElements: true});
     }
 
+    it("starts loading before layout and reveals the same image once the metadata fits", async () => {
+        await renderWithProviders(
+            <RecipeShelfTile recipe={pictured("Ethiopia")} {...HANDLERS} showPicture/>
+        );
+        const loading = photo();
+        expect(loading?.props.source.uri).toBe(PHOTO);
+        expect(loading?.parent).toHaveStyle({opacity: 0, position: "absolute"});
+        await measureTilePicture();
+        expect(photo()).toBe(loading);
+        expect(photo()?.parent).toHaveStyle({opacity: 1});
+        expect(photo()?.parent!.props.style.position).toBeUndefined();
+    });
+
     it("shows it only in the metadata row, never beside the name", async () => {
         await renderWithProviders(
             <RecipeShelfTile recipe={pictured("Ecuador | Vinka Farm Washed")}
@@ -116,12 +129,12 @@ describe("RecipeShelfTile picture", () => {
         expect(photo()).toBeNull();
         recipe.imageURL = "https://example.com/new.jpg";
         await view.rerender(<RecipeShelfTile recipe={recipe} {...HANDLERS} showPicture/>);
-        expect(photo()).toBeNull();
+        expect(photo()?.parent).toHaveStyle({opacity: 0});
         await measureTilePicture();
         expect(photo()?.props.source.uri).toBe(recipe.imageURL);
         recipe.favourite = true;
         await view.rerender(<RecipeShelfTile recipe={recipe} {...HANDLERS} showPicture/>);
-        expect(photo()).toBeNull();
+        expect(photo()?.parent).toHaveStyle({opacity: 0});
         await measureTilePicture();
         expect(photo()).toBeTruthy();
         await view.rerender(<RecipeShelfTile recipe={pictured("Ethiopia")} {...HANDLERS} showPicture/>);
@@ -137,11 +150,11 @@ describe("RecipeShelfTile picture", () => {
         expect(photo()).toBeTruthy();
         try {
             await act(async () => Dimensions.set({window: {...window, fontScale: 1.8}, screen: display}));
-            expect(photo()).toBeNull();
+            expect(photo()?.parent).toHaveStyle({opacity: 0});
             expect(screen.getByTestId("slot-marker", {includeHiddenElements: true})).toHaveTextContent("A");
             expect(screen.getByTestId("recipe-tile-actions", {includeHiddenElements: true})).toBeTruthy();
             await measureTilePicture(120, 140);
-            expect(photo()).toBeNull();
+            expect(photo()?.parent).toHaveStyle({opacity: 0});
             expect(screen.getByTestId("recipe-tile-figures")).toHaveTextContent("15G · 1:15 · 60");
         } finally {
             await act(async () => Dimensions.set({window, screen: display}));
@@ -182,7 +195,7 @@ describe("RecipeShelfTile picture", () => {
         // than run off the edge.
         expect(screen.getByTestId("recipe-tile-badges"))
             .toHaveStyle({flexWrap: "wrap", justifyContent: "flex-end"});
-        expect(photo()).toBeNull();
+        expect(photo()?.parent).toHaveStyle({opacity: 0});
         expect(screen.getByTestId("recipe-tile-figures")).toBeTruthy();
         expect(within(screen.getByTestId("recipe-tile-profile-room"))
             .getByTestId("recipe-tile-profile")).toBeTruthy();

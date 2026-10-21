@@ -350,7 +350,7 @@ export default function RecipeShelfTile({
                     <YStack flex={1} gap="$1.5">
                         <XStack key={signature} testID="recipe-tile-metadata-width" alignItems="center" gap={PHOTO_GAP}
                             onLayout={event => setAvailable({key: signature, value: event.nativeEvent.layout.width})}>
-                            {showPhoto && <RecipePhoto testID="recipe-tile-photo" uri={picture}
+                            {requested && <RecipePhoto testID="recipe-tile-photo" uri={picture} visible={showPhoto}
                                 size={TILE_PHOTO_SIZE} radius={TILE_PHOTO_SIZE / 2} backing={onAccent.key}
                                 onError={() => setFailed(picture)}/>}
                             <YStack flex={1}><RecipeTileMetadata {...metadata} onActions={onLongPress}/></YStack>

@@ -35,7 +35,6 @@ const PROFILE_OVERHANG = 2;
 const PROFILE_HEIGHT = 56;
 
 export const CARD_PHOTO_SIZE = TILE_PHOTO_SIZE;
-const CARD_PADDING = 16;
 const BOTTOM_GAP = 16;
 
 /**
@@ -494,10 +493,6 @@ export default function RecipeCard({
 
                 <XStack key={`bottom-${geometryKey}`} testID="recipe-card-bottom-row" onLayout={measure("bottom")}
                         justifyContent="space-between" alignItems="flex-end" gap={BOTTOM_GAP}>
-                    <View testID="recipe-card-bottom-shade" pointerEvents="none" style={{
-                        position: "absolute", left: -CARD_PADDING, right: -CARD_PADDING,
-                        top: -4, bottom: -CARD_PADDING, backgroundColor: onAccent.profileFill
-                    }}/>
                     <XStack testID="recipe-card-figures" onLayout={measure("figures")} gap="$5" alignItems="flex-end">
                         <Stat label="DOSE" value={recipe.dosage} suffix="g"/>
                         <Stat label="RATIO" value={recipe.ratio}

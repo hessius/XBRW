@@ -58,6 +58,16 @@ it.each(["xbloom", "favourites", "pods", "mostBrewed", "recentlyAdded"])(
     }
 );
 
+it.each(["xbloom", "favourites", "pods", "mostBrewed", "recentlyAdded"])(
+    "fills the %s grid with four photographed recipes even when their photo is shared", async id => {
+        const copies = fourPhotos.map(member => ({...member, imageURL: fourPhotos[0].imageURL}));
+        await renderWithProviders(<ShelfTile shelf={{id, label: id, kind: "auto", count: 6}}
+            members={{accents: ["red"], coverMembers: copies}} onPress={jest.fn()}/>);
+        expect(photos()).toHaveLength(4);
+        expect(photos().every(photo => photo.props.source.uri === fourPhotos[0].imageURL)).toBe(true);
+    }
+);
+
 it.each([false, true])("keeps eligible cover inversion and preference-off glyph fallback (%s)", async inverted => {
     const mark = {accents: ["red"], coverMembers: fourPhotos};
     const shelf = {id: "pods", label: "XBLOOM PODS", kind: "auto" as const, count: 4};
@@ -72,7 +82,7 @@ it.each([false, true])("keeps eligible cover inversion and preference-off glyph 
 
 it.each([
     fourPhotos.slice(0, 3),
-    [...fourPhotos.slice(0, 3), {...fourPhotos[0], uuid: "duplicate"}],
+    [...fourPhotos.slice(0, 3), fourPhotos[0]],
     [...fourPhotos.slice(0, 3), {uuid: "blank", accent: "red", imageURL: " "}],
     [...fourPhotos.slice(0, 3), {uuid: "portrait-only", accent: "red"}]
 ].map(cover => ({cover})))("keeps the stock glyph when four actual photos are unavailable (%j)", async ({cover}) => {

@@ -60,17 +60,18 @@ it("measures intrinsic metadata before admitting a 20pt photo and drops stale re
     recipe.imageURL = "https://coffee.example/bag.jpg";
     const view = await renderWithProviders(<RecipeShelfTile recipe={recipe} {...HANDLERS} showPicture/>);
     const photo = () => screen.queryByTestId("recipe-tile-photo", {includeHiddenElements: true});
-    expect(photo()).toBeNull();
+    expect(photo()?.parent).toHaveStyle({opacity: 0, position: "absolute"});
     await fireEvent(screen.getByTestId("recipe-tile-metadata-width"), "layout",
                     {nativeEvent: {layout: {width: 100, height: 20, x: 0, y: 0}}});
     await fireEvent(screen.getByTestId("recipe-tile-metadata-measure", {includeHiddenElements: true}),
                     "contentSizeChange", 74, 15);
     expect(photo()?.props.style.width).toBe(20);
+    expect(photo()?.parent).toHaveStyle({opacity: 1});
     await fireEvent(screen.getByTestId("recipe-tile-metadata-width"), "layout",
                     {nativeEvent: {layout: {width: 99, height: 20, x: 0, y: 0}}});
-    expect(photo()).toBeNull();
+    expect(photo()?.parent).toHaveStyle({opacity: 0});
     await view.rerender(<RecipeShelfTile recipe={recipe} {...HANDLERS} showPicture editing/>);
-    expect(photo()).toBeNull();
+    expect(photo()?.parent).toHaveStyle({opacity: 0});
     await view.rerender(<RecipeShelfTile recipe={recipe} {...HANDLERS}/>);
     expect(screen.queryByTestId("recipe-tile-metadata-measure", {includeHiddenElements: true})).toBeNull();
 });

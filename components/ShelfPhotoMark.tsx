@@ -12,12 +12,13 @@ export function withShelfPhotos(
     return Object.fromEntries(Object.entries(marks).map(([id, members]) => [id, {accents: members.accents}]));
 }
 
-export default function ShelfPhotoMark({members, count, fallback}: {
+export default function ShelfPhotoMark({members, count, fallback, repeatPhotos = false}: {
     members: readonly ShelfCoverMember[];
     count: number;
     fallback: React.ReactNode;
+    repeatPhotos?: boolean;
 }) {
-    const cells = coverCells(members, count);
+    const cells = coverCells(members, count, repeatPhotos);
     if (!cells.some(cell => cell.imageURL)) return <>{fallback}</>;
     const size = count === 1 ? MARK_SIZE : (MARK_SIZE - 2) / 2;
     return (

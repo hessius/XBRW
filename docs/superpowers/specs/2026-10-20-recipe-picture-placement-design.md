@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-Design and written specification approved, implemented and revised on 2026-10-20.
+Design and written specification approved, implemented and revised on 2026-10-21.
 The approved follow-up replaces the original list-photo rail and adds precisely
 five automatic-shelf photo exceptions below. Native visual qualification remains open.
 
@@ -38,7 +38,7 @@ them or introducing a new aggressive crop.
 | Home list recipe card | 20 pt circle at bottom right, beside brew evidence, over the decorative graph if needed | Recipe card photos, default OFF |
 | Compact recipe card inside a shelf, including selection mode | 20 pt circle at the start of the metadata row | Same preference, default OFF |
 | Ready to brew | 36 pt circle alongside its text; independent BREW/dismiss controls remain reachable | Same preference, default OFF |
-| Five eligible automatic shelf covers | Four-cell coffee/pod photo grid only with four distinct usable member photos; otherwise existing glyph | Shelf photo previews, default ON |
+| Five eligible automatic shelf covers | Four-cell grid with four photographed recipes, including copies sharing a photo; otherwise existing glyph | Shelf photo previews, default ON |
 | Other automatic / author shelf covers | Existing category glyph and inversion | Never replaced by a photo |
 | Personal or tag shelf cover | Mixed actual-member photo/accent cells | Shelf photo previews, default ON |
 | Editor header, expanded and collapsed | No picture or picture-specific space reservation | Not configurable |
@@ -86,8 +86,8 @@ needed.
 
 When enabled and a coffee image is available, place a 20 pt circular frame at
 the trailing end of the bottom metadata row beside brew-count/last-brew evidence.
-The bottom strip is shaded with the existing on-accent profile wash; the circle
-uses the actual, lighter recipe accent as its backing.
+Keep the original uniform card background, without a shaded bottom strip.
+The circle uses the recipe accent as its backing over the decorative graph.
 
 The graph keeps its original 200x56 geometry and corner position regardless of
 photos. Overlap with this decorative background is explicitly permitted. There
@@ -114,6 +114,14 @@ The photo has no independent touch target and must not compete with the star,
 overflow action, Easy Mode slot, bag/freshness, evidence or beverage markers.
 Selection/edit modes follow the same layout rules.
 
+Mount the photo at its final decoding size immediately, invisible and outside
+the row's flow until the metadata measurements permit revealing it. Do not
+delay starting the native image request/cache lookup behind those measurements,
+or remount the image when revealing it. Crowded metadata still omits the photo
+visually. Images use the native HTTP/decoded-image caches, subject to response
+headers, size-specific decoded entries and eviction; this is not an offline
+photo store or a guarantee of instantaneous rendering.
+
 Retain #236's text-first profile behaviour: the silhouette uses remaining room,
 shrinks when needed and disappears below its readable minimum instead of
 overlapping text. Do not shrink text to preserve a photo.
@@ -128,16 +136,17 @@ image before allowing it to crowd those controls or their text.
 
 Only `xbloom` (XBLOOM RECIPES), `favourites` (STARRED), `pods` (XBLOOM PODS),
 `mostBrewed` and `recentlyAdded` may replace their glyph with the existing
-four-cell grid, and only with at least four distinct nonblank usable coffee/pod
-URLs from actual matching members. Four recipes alone do not qualify.
-Select the first four distinct photographed members in `sortName`, UUID order;
-unpictured or duplicate-photo members do not consume this automatic-cover quota.
-Do not enlarge or repeat a photo. Below threshold or with previews OFF, keep the
+four-cell grid, and only with at least four actual matching recipes carrying
+usable coffee/pod photos. Different recipes sharing one image URL each count:
+four copies of a photographed recipe fill all four cells with that photo.
+Select the first four photographed members in `sortName`, UUID order;
+unpictured members do not consume this automatic-cover quota.
+Do not enlarge a photo. Below threshold or with previews OFF, keep the
 glyph, including inversion. Other automatic and shared-author shelves always
 keep glyphs; author portraits never count.
 
 The separate stock-photo database read applies the real filter clause with its
-bound parameters, guards JSON extraction, ranks by URL before limiting and
+bound parameters, guards JSON extraction, counts recipes rather than unique URLs and
 returns at most four plus the existing three-row unreadable allowance. Hydration
 and the existing HTTPS validator still apply; excessive corrupt candidates may
 leave a fallback glyph rather than causing an unbounded repair scan. No whole
@@ -171,7 +180,8 @@ shared fallback contract to implement photo covers.
 
 For personal/tag covers only, a pictured recipe outside the selected first four
 does not force its way onto the cover. This mixed-member rule is unchanged;
-the five automatic-cover exceptions intentionally seek four distinct photos.
+the five automatic-cover exceptions seek four photographed members, including
+copies sharing a photo.
 
 ## Editor and ABOUT
 

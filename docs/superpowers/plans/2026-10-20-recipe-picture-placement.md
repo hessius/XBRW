@@ -15,20 +15,25 @@
 The maintainer explicitly revised two placements after the initial implementation:
 
 - Only `xbloom`, `favourites`, `pods`, `mostBrewed`, `recentlyAdded` may use four
-  distinct usable actual-member coffee/pod photos. Their separate bounded SQL
-  query ranks URLs before limiting, in stable name/UUID order; no visible-query
-  data or author portrait is used. Three photos, duplicates or previews OFF keep
+  photographed actual members, including copies sharing one coffee/pod image.
+  Their separate bounded SQL query selects recipes in stable name/UUID order;
+  no visible-query data or author portrait is used. Three pictured members or previews OFF keep
   the glyph and inversion. Personal/tag first-four mixed covers are unchanged.
-- Home list photos now use 20 pt circles beside bottom-row brew evidence, over
-  a shaded strip with the actual lighter card accent behind the circle. Keep
+- Home list photos now use 20 pt circles beside bottom-row brew evidence,
+  with the actual card accent behind the circle and no shaded bottom strip. Keep
   the original 200x56 graph and corner position, permitting decorative overlap.
   Remove the 36 pt rail, 60 pt shift, silhouette and name-width gates.
   Current bottom-row/figures/evidence measurements omit crowded or large-text
   decoration before controls/text; long names retain photos when metadata fits.
 
+The 2026-10-21 correction counts photographed recipes, not distinct image URLs,
+and removes the unintended full-width bottom wash. Compact-card images start
+loading before metadata measurements, remaining invisible and outside row flow
+until there is room; the same native image is revealed without remounting.
+
 The original implementation steps below are historical, not instructions to
 restore the superseded policy. Preferences, migration/backup behavior, compact
-cards, Ready to brew, editor and ABOUT remain unchanged. Native layout checks
+card appearance, Ready to brew, editor and ABOUT remain unchanged. Native layout checks
 remain unverified; no production/native build is part of this follow-up.
 
 ## Approved contract and execution boundaries

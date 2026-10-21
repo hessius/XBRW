@@ -12,22 +12,24 @@ export function stockPhotoCover(members: readonly ShelfCoverMember[]): ShelfCove
     const selected: ShelfCoverMember[] = [];
     for (const member of members) {
         const imageURL = podImageUrl(member.imageURL);
-        if (!imageURL || seen.has(imageURL)) continue;
-        seen.add(imageURL);
+        if (!imageURL || seen.has(member.uuid)) continue;
+        seen.add(member.uuid);
         selected.push({...member, imageURL});
         if (selected.length === COVER_MEMBERS) return selected;
     }
     return [];
 }
 
-export function coverCells(members: readonly ShelfCoverMember[], count: number): ShelfCoverMember[] {
+export function coverCells(
+    members: readonly ShelfCoverMember[], count: number, repeatPhotos = false
+): ShelfCoverMember[] {
     const selected = members.slice(0, COVER_MEMBERS);
     if (selected.length === 0) return [];
     const seen = new Set<string>();
     return Array.from({length: count === 1 ? 1 : COVER_MEMBERS}, (_, index) => {
         const member = selected[index % selected.length];
         const cell: ShelfCoverMember = {uuid: member.uuid, accent: member.accent};
-        if (index < selected.length && member.imageURL && !seen.has(member.imageURL)) {
+        if (index < selected.length && member.imageURL && (repeatPhotos || !seen.has(member.imageURL))) {
             cell.imageURL = member.imageURL;
             seen.add(member.imageURL);
         }

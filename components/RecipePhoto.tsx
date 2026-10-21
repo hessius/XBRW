@@ -15,6 +15,8 @@ type Props = {
      * product shots of a bag, and a crop cuts the label off.
      */
     backing?: string;
+    /** Start loading at the final size without occupying space until layout permits it. */
+    visible?: boolean;
     testID?: string;
     onError?: () => void;
 };
@@ -37,11 +39,14 @@ type Props = {
  * without a state reset in an effect.
  *
  * React Native's own `Image`, as every other picture in the app is, so the
- * platform's HTTP cache serves repeat views. `resizeMethod="resize"` lets
+ * platform's HTTP cache can serve repeat views, subject to response headers
+ * and eviction. `resizeMethod="resize"` lets
  * Android decode a 600 px bag photo at roughly the size it is drawn, which
  * matters in a scrolling list.
  */
-export default function RecipePhoto({uri, size, radius, backing = palette.raised, testID, onError}: Props) {
+export default function RecipePhoto({
+    uri, size, radius, backing = palette.raised, visible = true, testID, onError
+}: Props) {
     const [failed, setFailed] = useState<string | null>(null);
 
     if (uri.length === 0 || failed === uri) {
@@ -49,7 +54,9 @@ export default function RecipePhoto({uri, size, radius, backing = palette.raised
     }
 
     return (
-        <View style={{width: size, height: size, borderRadius: radius, overflow: "hidden",
+        <View pointerEvents="none"
+              style={{width: size, height: size, borderRadius: radius, overflow: "hidden",
+                      opacity: visible ? 1 : 0, position: visible ? undefined : "absolute",
                       backgroundColor: backing}}>
             <Image testID={testID} source={{uri}}
                    accessible={false}

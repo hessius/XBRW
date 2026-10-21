@@ -35,11 +35,18 @@ it("admits a 20pt bottom-right metadata photo without moving or resizing the gra
     expect(graphStyle.right).toBe(-(PROFILE_BLEED + 2));
     expect(profilePath()).toContain(buildProfilePath(recipe.pours, 200, 56));
     expect(profilePath()).toBe(path);
-    expect(screen.getByTestId("recipe-card-bottom-shade")).toHaveStyle({backgroundColor: onAccent.profileFill});
+    expect(screen.queryByTestId("recipe-card-bottom-shade")).toBeNull();
     expect(photo()!.parent).toHaveStyle({backgroundColor: screen.getByTestId("recipe-card-surface").props.style.backgroundColor});
     await pictureLayout("recipe-card-figures", 350, 50);
     expect(photo()).toBeNull();
     expect(screen.getByTestId("recipe-card-profile").parent!.props.style).toEqual(graphStyle);
+});
+
+it.each([false, true])("keeps the card background uniform with photos enabled %s", async showPicture => {
+    const recipe = makeRecipe({imageURL: "https://coffee.example/bag.jpg"});
+    await renderWithProviders(<RecipeCard recipe={recipe} showPicture={showPicture} onPress={jest.fn()}/>);
+    expect(screen.queryByTestId("recipe-card-bottom-shade")).toBeNull();
+    expect(screen.getByTestId("recipe-card-bottom-row").props.style.backgroundColor).toBeUndefined();
 });
 
 it("discards card measurements after mutable badges or surface size changes, retries new URLs", async () => {

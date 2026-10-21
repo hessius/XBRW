@@ -90,16 +90,25 @@ passing suite or plan checkboxes as proof of a stricter chronology.
 The explicitly approved picture follow-up supersedes the earlier list rail and
 automatic-glyph-only acceptance rules. Its five eligible stock-shelf tests first
 failed behaviorally on both platforms (10 expected failures: no photos drawn).
-Final focused checks cover the four-distinct-photo threshold, duplicate/blank/
-portrait rejection, real SQLite membership and deterministic URL-ranking bounds,
+The initial focused checks covered the original distinct-photo threshold,
+blank/portrait rejection, real SQLite membership and deterministic selection bounds,
 query-independent revision updates, unchanged personal/tag selection, inversion/
 OFF fallback, 20 pt list metadata placement, original 200x56 graph/corner geometry,
 long names, exact row-fit boundaries, crowded/large-text omission, URL retry,
 Settings copy and preserved preference/migration/backup behavior.
-The focused iOS/Android run passes 36 suites / 1,260 tests; typecheck passes and
+That focused iOS/Android run passed 36 suites / 1,260 tests; typecheck passed and
 repository lint has zero errors (35 existing warnings). These are targeted local
 checks, not another full-suite/CI claim or another Copilot review round.
 Native visual checks below remain unverified.
+
+The 2026-10-21 follow-up corrects two mistaken design interpretations: no
+full-width bottom shade, and four photographed recipes qualify even when all
+four share one image URL. Regressions reproduce the six-pod shelf with four
+copies through real SQLite cloning, all five stock shelf renderers, and the
+unchanged list graph. Compact photos now mount before metadata measurement,
+invisible and outside row flow, then reveal the same image only if it fits.
+This removes the request/cache-lookup waterfall, not the fit checks. Native
+cache hits and cold/warm rendering times still require device observation.
 
 - [ ] **#233 Android Fabric gate:** duplicate a recipe on a real Android native
   build; confirm the card and all controls render and no flattened-view failure
@@ -116,7 +125,8 @@ Native visual checks below remain unverified.
   evidence without wrapping metadata or moving/resizing the 200x56 graph.
   Decorative graph overlap is now allowed. Long names/notes retain their width
   and photos; crowded evidence, editing controls and large text omit decoration
-  first. Check the lighter accent circle against the consistently shaded strip.
+  first. Confirm the background stays uniform with and without photos; there
+  must be no full-width shaded bottom strip.
 - [ ] Confirm no arrival reflow, aggressive crop, blank image hole or error
   toast with slow loading, offline first view, failure and a changed image URL.
   Shelf cells keep their accents/geometry; a lone photo in a larger shelf must
@@ -124,9 +134,14 @@ Native visual checks below remain unverified.
 - [ ] Exercise independent card, shelf and ABOUT preferences, upgrading a legacy
   OFF install and restoring old/new backups over previously configured choices.
   Only XBLOOM RECIPES, STARRED, XBLOOM PODS, MOST BREWED and RECENTLY ADDED may
-  replace glyphs with four distinct actual-member coffee/pod photos. Verify
-  three photos, duplicates, blanks and OFF retain glyph/inversion; every other
+  replace glyphs with four photographed actual members. Verify four copies
+  sharing a photo fill all four cells, while three pictured members, blanks
+  and OFF retain glyph/inversion; every other
   automatic/author shelf stays a glyph. Personal/tag mixed covers are unchanged.
+- [ ] Compare first opening, repeated opening and reopening offline after a
+  successful photo load. Native HTTP/decoded caches are conditional on headers,
+  size and eviction, not an app-managed permanent image store. Distinguish
+  request/decode time from metadata layout before calling a delay a cache miss.
 - [ ] Expand/collapse the editor with short and long names, rename, HELP and
   menu. There must be no header image, viewing action or picture-only space.
   ABOUT keeps separate coffee/pod and author circles.

@@ -145,7 +145,7 @@ export default function ShelfTile({
                     borderColor={palette.line}>
                 <XStack alignItems="flex-start" justifyContent="space-between">
                     <ShelfPhotoMark members={cover}
-                        count={shelf.count} fallback={mark}/>
+                        count={shelf.count} fallback={mark} repeatPhotos={shelf.kind === "auto"}/>
                     {onActions && (
                         <Pressable accessibilityRole="button"
                                    accessibilityLabel={`Actions for the ${shelf.label} shelf`}

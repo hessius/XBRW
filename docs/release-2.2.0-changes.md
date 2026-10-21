@@ -423,7 +423,8 @@ cumulative preview. It does not mean those contributor PRs were merged.
   the start of compact metadata rows, including selection mode.
 - **Shelf photo previews**, default ON: mixed personal/tag covers plus four-photo
   grids for XBLOOM RECIPES, STARRED, XBLOOM PODS, MOST BREWED and RECENTLY ADDED
-  only when four distinct usable actual-member coffee/pod URLs exist. Below that
+  only when four actual members carry usable coffee/pod photos. Copies sharing
+  one image URL count separately. Below that
   threshold and for every other automatic/author shelf, retain the glyph/inversion.
 - **Pictures in ABOUT**, default ON: the existing `showRecipeAvatars` preference
   now controls only coffee/pod and separate author pictures in recipe details.
@@ -445,9 +446,9 @@ actually single-member shelf can use one 44 pt circle. A fifth pictured member
 does not replace one of the selected four. Image failures leave cell colours
 and geometry intact. Existing three-member fallback art is unchanged.
 
-The five stock exceptions separately select the first four distinct photographed
+The five stock exceptions separately select the first four photographed
 matching members in stable name/UUID order, not the first four recipes or the
-visible query. SQL guards JSON, deduplicates before the limit, and returns at
+visible query. SQL guards JSON, counts recipes rather than unique URLs, and returns at
 most seven candidates (four plus the existing unreadable allowance), then the
 normal guarded hydrate/HTTPS validation applies. Excessive corrupt candidates
 leave glyph fallback, not an unbounded recovery read. No schema change is needed.
@@ -464,10 +465,16 @@ whose original 200x56 geometry/corner position never changes. No photo rail,
 60 pt shift, profile collision or name-width gate remains: long names and notes
 keep their existing width. Measured bottom-row/figure/evidence widths admit the
 photo only without wrapping; editing or large accessibility text omits it first.
-The bottom strip uses the existing shaded profile wash, and the circle uses the
-actual lighter card accent. Photos do not shrink text or add card height.
+There is no shaded bottom strip; the original uniform card background remains.
+The circle uses the card accent over the decorative graph. Photos do not shrink text or add card height.
 Loading reserves the admitted frame; failure releases it, and a changed URL can
 retry. Native visual qualification remains open.
+
+Compact-card photos now start loading at their final size before metadata
+measurement finishes. They stay invisible and outside the row's flow until
+they fit, then reveal the same image without remounting. Native HTTP and decoded
+caches remain in use, subject to headers and eviction; no new image library,
+permanent offline store or native rebuild was introduced.
 Ready to brew similarly omits its circle before text
 would be crowded and keeps its independent controls and 44 pt BREW target.
 
