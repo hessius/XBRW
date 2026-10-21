@@ -17,6 +17,17 @@ not approval to merge that PR unchanged.
 - No new settings, migrations, dependencies, native configuration or BLE
   behaviour. The broader colour proposal in #243 is not approved by this work.
 
+### Authorized maintenance amendment
+
+After implementation, the live Expo Doctor gate required three newer SDK 57
+patches. The user explicitly selected "Include the required Expo patch updates
+and native-runtime handling, then finish the PR." That authorizes a separate
+maintenance checkpoint for Expo 57.0.31, Router 57.0.29 and Sharing 57.0.24,
+plus the `fingerprint` runtime policy. Marketing version remains 2.2.0; native
+compatibility no longer reuses an earlier 2.2.0 preview's version identifier.
+No OTA dependency, build, deployment or release promotion is authorized.
+All other UI/BLE boundaries and physical-device gates remain unchanged.
+
 ## Purpose
 
 Open Settings on useful machine controls rather than navigation and support

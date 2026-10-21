@@ -4,6 +4,16 @@ Package acceptance, integration and release qualification are separate.
 Record the exact app commit, native build, platform, machine and firmware for
 each device result. Software transports do not qualify BLE or NFC hardware.
 
+## SDK 57 patch and runtime follow-up
+
+- [ ] Rebuild the native client from the final accepted commit before device
+  acceptance. Expo 57.0.31, Router 57.0.29 and Sharing 57.0.24 replace earlier
+  patch versions; Metro reload does not update their native code.
+- [ ] Record the platform-specific fingerprint with the native artifact and
+  verify its runtime is not the earlier `appVersion` identifier `2.2.0`.
+  Keep native build, release and deployment approvals separate. No OTA package,
+  deployment or hardware pass is introduced by changing the runtime policy.
+
 ## Package D follow-up: Settings (#231)
 
 - [ ] Check the header at 320/390-point widths and default/2x text: the full
@@ -29,7 +39,8 @@ each device result. Software transports do not qualify BLE or NFC hardware.
   judgement sheet. Back up/restore preferences without changing their values.
 
 Implementation evidence: the combined affected suites pass on both Jest
-platforms. An isolated harness rendered the actual header, support action and
+platforms. At the UI-only checkpoint `2ada7e7a`, an isolated harness rendered
+the actual header, support action and
 long-name card on iPhone 17 Pro / iOS 26.4 with Expo Go 57.0.9. Headers at
 320/390 points reflowed without overlap at native font scales 1 and 2.14.
 This is component-layout evidence, not a full-app, Android-native or physical

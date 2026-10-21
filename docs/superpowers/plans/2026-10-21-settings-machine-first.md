@@ -20,7 +20,8 @@
 - User authorized immediate execution, push, a focused develop PR, one Copilot
   review round, finding fixes and green CI. Stop before merging.
 - Do not alter the live cumulative preview or the other owner's theming worktree.
-- No transport, native configuration, setting-schema or dependency changes.
+- No transport or setting-schema changes. The UI is dependency-neutral; the
+  subsequently approved patch/runtime maintenance is documented below.
 - Use the existing Tamagui stack rather than installing `@expo/ui`.
 
 ## File map
@@ -269,12 +270,22 @@ Commit the source adoption and approved adaptations with the coauthor trailer.
 
 ## Task 4: Verification, focused PR and exactly one review
 
-Pre-review checkpoint: all 434 affected tests pass across both platforms;
-typecheck and lint pass. Expo Doctor passes 20/21 checks but now requires
+Pre-review checkpoint: all 434 affected tests passed across both platforms;
+typecheck and lint passed. Expo Doctor passed 20/21 checks but required
 `expo` 57.0.31, `expo-router` 57.0.29 and `expo-sharing` 57.0.24, one patch
 above the unchanged task lockfile. Package comparisons include native Android
-artifacts. Do not suppress the hard gate or silently expand this UI-only task
-into dependency/runtime maintenance; obtain a scope decision first.
+artifacts. The user subsequently approved including those patches and native-
+runtime handling. Keep the SDK and marketing version at 57/2.2.0, use native
+fingerprints instead of reusing `appVersion`, and retain all new-build and
+release approval gates. Compare both native fingerprints before/after and run
+the native configuration regressions, Expo Doctor and affected suites again.
+Do not suppress the hard gate or install/enable OTA updates.
+
+Maintenance evidence: both platform fingerprints changed from their pre-patch
+values; the native configuration regression first failed and then passed.
+All 458 combined Settings/native/share tests pass on both projects, typecheck
+and lint pass, and Expo Doctor passes 21/21 checks. Generated licences were
+refreshed through the existing script. Native build/device checks remain open.
 
 - [x] Inspect the full base-to-head diff and run the smallest combined affected
   suites, escalating to the existing full-suite CI for the final branch.

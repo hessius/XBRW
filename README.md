@@ -88,8 +88,10 @@ builds above already on the device.
 
 This project uses Continuous Native Generation — `ios/` and `android/` are
 generated and not committed. Never hand-edit them: change `app.json` and re-run
-`npx expo prebuild --clean`. Because `runtimeVersion.policy` is `appVersion`, a
-native-affecting change needs `expo.version` raised too.
+`npx expo prebuild --clean`. The `fingerprint` runtime policy derives native
+compatibility from the project's native inputs, independently of the marketing
+version. Native-affecting changes still require a new native build and device
+qualification; never publish them as an update to an older runtime.
 
 ### Checks
 

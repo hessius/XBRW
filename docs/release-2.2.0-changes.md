@@ -27,9 +27,24 @@ own row with large text. History remains in the home header, and disclosure
 remains under About; their redundant Settings shortcuts are removed.
 
 The existing palette, preferences, persistence, sheet hosts, model rules and
-Package D brew locks are retained. No BLE protocol, native configuration or
-dependency change is included. Implementation and software acceptance are not
+Package D brew locks are retained. The Settings adaptation itself makes no BLE
+protocol, native configuration or dependency change. The separately authorized
+patch/runtime maintenance below is included in the same focused PR.
+Implementation and software acceptance are not
 physical-device qualification, and this task does not close #251 or #253.
+
+## SDK 57 patch and native-runtime maintenance
+
+The maintainer separately approved the three patch updates required by the live
+Expo Doctor check: Expo 57.0.31, Router 57.0.29 and Sharing 57.0.24. The SDK stays
+at 57 and the app remains 2.2.0. No OTA package is added or enabled.
+
+The runtime policy changes from `appVersion` to `fingerprint`, so native inputs
+determine compatibility rather than reusing an earlier 2.2.0 preview identifier.
+A fresh native build and device qualification are required before distributing
+this native change. Existing preview clients are not qualified by Metro reload
+or the component-layout harness. No build, deployment, channel change or release
+promotion is part of this maintenance.
 
 ## Package D: saved machines and selection
 
@@ -178,7 +193,8 @@ copy, persist once before changing the held object, and surface a storage error
 without opening the editor or retaining unsaved enrichment. Reimport can retry.
 Unaccepted author-refresh/subscription behavior is not introduced.
 
-The native navigation configuration deliberately moves `expo.version` to
-2.2.0 under the unchanged `appVersion` runtime policy. Schemes, EAS profiles,
-channels, SDK and dependency manifests are unchanged. This is not a native build,
+Package C moved `expo.version` to 2.2.0 under the then-current `appVersion`
+runtime policy. The separately approved patch/runtime maintenance above replaces
+that policy. Package C itself did not change schemes, EAS profiles, channels,
+SDK or dependency manifests. This is not a native build,
 submission, deployment or hardware pass.
