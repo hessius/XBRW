@@ -92,6 +92,35 @@ beforeEach(() => {
 });
 
 describe("author reimport", () => {
+    it("does not save a replacement when another editor is already opening", async () => {
+        const held = importedRecipe();
+        held.shareId = "author";
+        rememberPrint(sharedSettings(), held);
+        const before = JSON.stringify(held);
+        const prints = readPrints(sharedSettings());
+        const latest = importedRecipe();
+        latest.shareId = "author";
+        latest.grindSize = 62;
+        mockGetRecipe.mockReturnValueOnce(latest);
+        const onSaveExisting = jest.fn();
+        const onOpenRecipe = jest.fn();
+        const onDiscard = jest.fn();
+        const {result} = await renderHook(() => useRecipeImport({
+            stored: [held], onSaveExisting, onOpenRecipe, onDiscard,
+            canOpenRecipe: () => false
+        }));
+        await act(async () => result.current.resolveNow(
+            {kind: "share", id: "author"}, "deliberate"
+        ));
+        await act(() => result.current.openFound());
+        expect(onSaveExisting).not.toHaveBeenCalled();
+        expect(onOpenRecipe).not.toHaveBeenCalled();
+        expect(JSON.stringify(held)).toBe(before);
+        expect(readPrints(sharedSettings())).toEqual(prints);
+        expect(onDiscard).toHaveBeenCalled();
+        expect(result.current.state.status).toBe("idle");
+    });
+
     it("never stages a superseded out-of-order author response", async () => {
         const held = importedRecipe();
         held.shareId = "author";

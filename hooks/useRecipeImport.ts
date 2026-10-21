@@ -110,6 +110,8 @@ type Options = {
     stored: Recipe[] | (() => Recipe[]);
     /** Navigation belongs to the screen; false declines a guarded navigation. */
     onOpenRecipe: (recipe: Recipe, isExisting: boolean) => void | boolean;
+    /** Synchronous navigation preflight, checked before any existing-recipe write. */
+    canOpenRecipe?: () => boolean;
     /**
      * Write a stored recipe back after an import link filled its blanks
      * (`fillImportBlanks`). Called once with a staged copy before the held
@@ -187,7 +189,7 @@ export type RecipeImport = {
 };
 
 export function useRecipeImport({
-    stored, onOpenRecipe, onSaveExisting, onFeed, onImported, onDiscard
+    stored, onOpenRecipe, canOpenRecipe, onSaveExisting, onFeed, onImported, onDiscard
 }: Options): RecipeImport {
     const [value, setValue] = useState("");
     const [state, setState] = useState<ImportState>({status: "idle"});
@@ -590,6 +592,11 @@ export function useRecipeImport({
         // Consume before calling storage or navigation: both may synchronously
         // re-enter the hook, and a second tap must never replay a write.
         pending.current = null;
+        if (canOpenRecipe?.() === false) {
+            followUp.current.onDiscard?.();
+            clearInteraction();
+            return;
+        }
         const {recipe, candidate, isExisting, decoration} = work;
         const replacing = replace ?? work.replace;
         let opening = recipe;

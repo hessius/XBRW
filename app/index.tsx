@@ -901,6 +901,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
 
     const importer = useRecipeImport({
         stored:       () => library.allRecipes(),
+        canOpenRecipe,
         onFeed: roasterOffer.arm,
         onImported: roasterOffer.imported,
         onDiscard: roasterOffer.disarm,
@@ -1195,8 +1196,12 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
         return answered;
     }
 
+    function canOpenRecipe(): boolean {
+        return Date.now() - lastEditorPushAt >= EDITOR_PUSH_GUARD_MS;
+    }
+
     function openRecipe(recipe: Recipe): boolean {
-        if (Date.now() - lastEditorPushAt < EDITOR_PUSH_GUARD_MS) {
+        if (!canOpenRecipe()) {
             return false;
         }
         lastEditorPushAt = Date.now();
