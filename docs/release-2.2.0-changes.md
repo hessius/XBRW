@@ -6,6 +6,44 @@ draft #252 also contain proposals that have not been accepted; they must not be
 merged wholesale. Issue #249 records source heads, decisions and integration.
 The shipped 2.1.0 ledger remains unchanged.
 
+## Package D: saved machines and selection
+
+Source heads are preserved in merge history:
+
+- #227: `2f24dc375ff58a9df9330cc1c7cfe20669d3379d`.
+- #228: `5f4121d6cac5106b3fb264edf031056852e85991`.
+
+Saved machines carry their own name, model, serial and optional colour.
+Existing pairing settings migrate without a write; device identifiers stay
+out of backups. List order controls automatic selection, while an explicit
+selection lasts for the app session. A lost-contact brew reconnects only to
+its own machine. Switching models changes matching imports, not saved recipes
+or their non-convertible grind values.
+
+The home panel, accessible hold action and persistent editor chip open one
+picker. Settings supports naming, colour, ordering, adding and confirmed
+forgetting. The picker tracks live connection and brew changes, keeps an
+already-connected machine visible before scanning completes, and announces
+blocked actions as disabled. An older scan cannot replace a newer manual
+selection.
+
+Brew identity is checked again after fresh vitals, before warning-clearing
+commands and before PRO retry commands. Missing vitals never trigger warning
+cleanup on an unverified link. Selection refusals retire only the unsent app-owned attempt, without
+sending CANCEL or inventing a history record. Package A's cancellation,
+partial-upload and replacement-connection protections remain in place.
+
+The source stack also includes hardware-informed handshake/vitals changes:
+connect waits for the pushed info frame, and fresh connect-time vitals avoid
+another handshake before every brew. Missing, stale or tank-low readings
+refresh once; opening Settings does not itself trigger a beep. These changes
+need qualification on the exact integrated build.
+
+Studio serial prefixes have hardware evidence; the Original `J20` mapping
+comes from catalogue model codes and remains unverified on an Original.
+#231's settings reordering, machine cards and diagnostics folding are not
+accepted in this package. About and donation placement remain unchanged.
+
 ## Package A: brew correctness
 
 Source heads:

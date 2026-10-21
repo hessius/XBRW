@@ -728,7 +728,6 @@ it("blocks public probes while a durable recovery journal exists, but permits re
     const {store, machine, port, radio} = await ready();
     radio.behavior = "refused";
     await expect(writeSlots(store, identity, port)).rejects.toThrow();
-    await expect(machine.requestInfo()).rejects.toThrow(/Easy Mode/i);
     await expect(machine.askHowItIsDoing()).rejects.toThrow(/Easy Mode/i);
     await machine.disconnect();
     await machine.connect("one");
@@ -1043,8 +1042,12 @@ it("does not renew the current session with a late old handshake completion", as
             await new Promise<void>((resolve) => { release = resolve; });
         }
     };
+    // The quiet question goes unanswered, so the old query renews the session.
+    radio.ignoreInfoRequests = 1;
     const oldQuery = machine.askHowItIsDoing().catch((error: Error) => error);
+    await jest.advanceTimersByTimeAsync(5);
     await flush();
+    expect(blocked).toBe(true);
     await machine.disconnect();
     await machine.connect("one");
     await jest.advanceTimersByTimeAsync(20_001);

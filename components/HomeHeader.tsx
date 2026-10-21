@@ -7,7 +7,7 @@ import DotIcon from "@/components/DotIcon";
 import HomeTitle from "@/components/HomeTitle";
 import MachineDot from "@/components/MachineDot";
 import {TITLE_FONT_SIZE, TITLE_FONT_SIZE_COMPACT} from "@/components/ScreenTitle";
-import {palette} from "@/constants/colors";
+import {palette, type MachineColour} from "@/constants/colors";
 import type {DotIconName} from "@/constants/dotIcons";
 import {DURATION, EASING, useReducedMotion} from "@/constants/motion";
 import type {LinkStatus} from "@/hooks/useMachine";
@@ -71,6 +71,16 @@ type Props = {
     machineAlarm?: boolean;
     /** Called when the user taps the machine dot. */
     onMachinePress?: () => void;
+    /**
+     * The machine in use, with two or more saved: the dot draws in its colour
+     * while connected and says its name. Absent with one or none.
+     */
+    machine?: {name: string; colour: MachineColour};
+    /**
+     * Called when the user holds the machine dot. With two or more saved this
+     * opens the machine picker; absent, a hold does what a tap does.
+     */
+    onMachineLongPress?: () => void;
     /** Called when the user taps TRY NOW in the popover. */
     onMachineConnect?: () => void;
     /**
@@ -112,6 +122,8 @@ export default function HomeHeader({
     machineStatus,
     machineAlarm = false,
     onMachinePress = () => undefined,
+    machine,
+    onMachineLongPress,
     onMachineConnect = () => undefined,
     onBrewHistory,
     machinePanel,
@@ -194,7 +206,15 @@ export default function HomeHeader({
                             status={machineStatus}
                             collapsed={collapsed}
                             alarm={machineAlarm}
+                            machine={machine}
                             onPress={onMachinePress}
+                            onLongPress={onMachineLongPress}
+                            accessibilityHint={onMachineLongPress === undefined
+                                ? undefined
+                                : "Shows the machine panel. Hold to switch machines."}
+                            longPressActionLabel={onMachineLongPress === undefined
+                                ? undefined
+                                : "Switch machine"}
                         />
                     )}
                     {/* The slot the edit toggle left when it moved down into

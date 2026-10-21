@@ -60,6 +60,39 @@ export const CONNECT_TIMEOUT_MS = 10_000;
 export const SCAN_SECONDS = 10;
 
 /**
+ * How long a scan keeps listening once it has heard a saved machine that is
+ * not the default.
+ *
+ * The scan above stops at the first xBloom because a machine that is on and
+ * nearby advertises within a second or two. With several saved, the first one
+ * heard is not necessarily the one wanted: at home, Work is never heard, but
+ * in a cafe with both in range the default may simply advertise a moment
+ * later. Two seconds is that "second or two", and it is only ever spent when
+ * the default has not been heard yet. Not measured on hardware with two
+ * machines; nobody has had two in front of them.
+ */
+export const SAVED_MACHINE_SETTLE_MS = 2000;
+
+/**
+ * How long the machine picker listens to mark saved machines "Nearby".
+ *
+ * Shorter than `SCAN_SECONDS`, because it runs while somebody is looking at
+ * a sheet, and a machine that is on and nearby advertises within a second or
+ * two. It never stops early: the point is to hear every machine in the room.
+ * Not measured with several machines; four is the guess to tune on hardware.
+ */
+export const SURVEY_SECONDS = 4;
+
+/**
+ * How long adding a machine listens before offering what it heard.
+ *
+ * Longer than the picker's look around, because a machine left out of this
+ * list cannot be added at all, and adding one is rare enough to be worth a
+ * few seconds more.
+ */
+export const ADD_SCAN_SECONDS = 6;
+
+/**
  * The handshake has to reach the machine within about 200 ms of connecting or
  * it ignores everything that follows. This is the budget, not the target.
  */
@@ -81,13 +114,18 @@ export const HANDSHAKE_FRESH_MS = 20_000;
 /**
  * How long to wait, after the handshake, for the machine to describe itself.
  *
+ * The machine sends its 40521 vitals by itself right after acknowledging an
+ * 8100: 1.2 s after it at connect and 0.4 s after it at a brew, on V12.0D.500
+ * (owner log, 2026-10-19). A bare 40521 request is ignored, so this wait is
+ * the only one there is, and three seconds leaves room above both.
+ *
  * Nothing may be brewed until it has: the info frame is the only place the
  * water level is reported, and sending a recipe to a machine whose tank state
  * is unknown is how water ends up on the counter. Connecting still succeeds if
  * this elapses — the console is useful on a machine that will not introduce
  * itself, and the brew path refuses on its own.
  */
-export const INFO_WAIT_MS = 2000;
+export const INFO_WAIT_MS = 3000;
 
 /**
  * How long to leave between the frames of a brew sequence.
@@ -149,24 +187,17 @@ export const PAUSE_ACK_MS = 3000;
 export const GRINDING_TIMEOUT_MS = null;
 
 /**
- * How many times to ask the machine to describe itself before giving up.
+ * How long the vitals heard on a link are good enough to brew on.
  *
- * More than one, because the question can be lost. It is written immediately
- * after the handshake, and the radio drops frames sent in a burst — a link that
- * came up perfectly then reported no vitals at all, and the brew refused with
- * "reconnect and try again", which reconnecting did not fix.
+ * The water flag and the grind dial change only by hand at the machine, and
+ * the official app brews on the reading it took when it connected, without
+ * asking again. Refreshing costs a handshake, which beeps, so a brew within
+ * this window uses what it has. Ten minutes bounds how old a "tank OK" can be;
+ * a cached low tank is always refreshed before it refuses a brew, so a tank
+ * filled since is not refused on an old reading. A tank that ran low inside
+ * the window is still caught by the machine's own no-water stop.
  */
-export const INFO_ATTEMPTS = 3;
-
-/**
- * How many times a brew opens a fresh session to ask an unanswered machine.
- *
- * `INFO_ATTEMPTS` retries the question inside one session; this retries the
- * session itself, which is what a machine that has stopped listening needs.
- * Bounded because a machine that is switched off is silent in exactly the same
- * way, and somebody has to be told.
- */
-export const BREW_INFO_ROUNDS = 3;
+export const INFO_FRESH_MS = 10 * 60_000;
 
 /**
  * How long to wait before each attempt at opening a link.

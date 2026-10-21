@@ -13,7 +13,9 @@ import {AppState, type AppStateStatus} from "react-native";
 import {PAUSE_ACK_MS} from "@/constants/machine";
 import {useBrew} from "@/hooks/useBrew";
 import {useBrewRun} from "@/hooks/useBrewRun";
-import {BluetoothPermissionError, RadioUnavailableError} from "@/library/machine/errors";
+import {
+    BluetoothPermissionError, NoSavedMachineError, RadioUnavailableError, WrongMachineError
+} from "@/library/machine/errors";
 import Machine from "@/library/machine/Machine";
 import type {BrewPhase} from "@/library/machine/Machine";
 import {FakeTransport, machineInfoFrame} from "@/library/machine/__tests__/FakeTransport";
@@ -46,6 +48,7 @@ jest.mock("@/hooks/useMachine", () => ({
         status: "connected",
         error: null,
         remembered: "",
+        machines: [],
         forget: jest.fn()
     })
 }));
@@ -105,6 +108,36 @@ beforeEach(() => {
     jest.mocked(notify).mockClear();
 });
 
+it.each([
+    new NoSavedMachineError("None of your saved machines answered."),
+    new WrongMachineError("This is not the selected machine.")
+])("retires an app-owned run after $name without sending cancellation", async error => {
+    const radio = new FakeTransport();
+    const machine = new Machine(radio, {frameGapMs: 0});
+    mockSharedMachine = machine;
+    mockConnect.mockRejectedValueOnce(error);
+    const store = {insert: jest.fn(), sweepWhenReady: jest.fn(async () => {})};
+    const {result} = await renderHook(() => useBrewRun(coffee(), store));
+
+    await act(async () => { await result.current.brew(coffee()); });
+
+    expect(result.current.phase).toMatchObject({
+        name: "failed", reason: "blocked", detail: error.message
+    });
+    expect(machine.phase.name).toBe("idle");
+    expect(radio.sent).toEqual([]);
+    expect(store.insert).not.toHaveBeenCalled();
+    expect(mockConnect).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+        await machine.connect("external");
+        radio.emit(event(40510, 1));
+        radio.emit(status(0x41));
+    });
+    expect(result.current.phase).toMatchObject({name: "failed", detail: error.message});
+    expect(store.insert).not.toHaveBeenCalled();
+});
+
 it("never relinks and retries after a recipe write loses its connection", async () => {
     class Radio extends FakeTransport {
         async write(frame: Uint8Array): Promise<void> {
@@ -146,6 +179,7 @@ it.each([true, false])("does not retry preflight on a replacement link, connecte
         const machine = new Machine(radio, {frameGapMs: 0, infoWaitMs: 100});
         await machine.connect("one");
         radio.emit(status(0x01));
+        radio.emit(machineInfoFrame({waterEnough: 0}));
         radio.infoReply = null;
         const disconnect = jest.spyOn(machine, "disconnect");
         const brew = jest.spyOn(machine, "brew");
@@ -328,6 +362,8 @@ describe("overflow protection through useBrew's real preflight retry", () => {
             transport.infoReply = null;
         } else if (block === "notConnected") {
             // Lose the link during the real preflight question, before brewBlock.
+            // Old vitals, so the preflight asks (a fresh reading is used as is).
+            machine.infoAt = 0;
             jest.spyOn(machine, "askHowItIsDoing").mockImplementationOnce(async () => {
                 transport.drop();
                 return false;

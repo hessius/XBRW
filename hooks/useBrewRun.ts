@@ -15,7 +15,7 @@ import {pauseSeconds, pourSeconds} from "@/library/brew/brewShape";
 import {stageOriginMl, stageWaterFrom, stalledNow, stallsInStage, type Stall}
     from "@/library/brew/stalls";
 import type {BrewPhase} from "@/library/machine/Machine";
-import type {SlotOperationError} from "@/library/machine/errors";
+import type {BrewRefusal} from "@/library/machine/errors";
 import type {QuickEditRecordAdjustments} from "@/library/quickEdit";
 import type Recipe from "@/library/Recipe";
 
@@ -175,10 +175,9 @@ export function useBrewRun(
                 } catch (error) {
                     console.warn("Could not sweep brew traces after a brew", error);
                 }
-                // After the insert, and not awaited. The reading is a BLE
-                // round trip that beeps, and the brew is over: holding the
-                // record back for it would delay the one thing that must not
-                // be lost for the sake of the one thing that may be.
+                // After the insert, and not awaited. It sends nothing: it keeps
+                // the dial only if the machine reported one after the pour
+                // began (see `readDialAfterBrew`).
                 const store = database.current;
                 if (store?.recordDialAfter === undefined) return;
                 const writeDial = store.recordDialAfter.bind(store);
@@ -372,7 +371,7 @@ export function useBrewRun(
             })
           };
 
-    function refuseAttempt(error: SlotOperationError): void {
+    function refuseAttempt(error: BrewRefusal): void {
         const held = owner.current;
         if (held === null || held.machine !== machine || held.runId !== runId) return;
         // Nothing was sent: retire app ownership without a machine failure or history row.
