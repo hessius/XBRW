@@ -1,11 +1,12 @@
 import React from "react";
 import {Pressable} from "react-native";
-import {Switch, Text, XStack, YStack} from "tamagui";
+import {Text, XStack, YStack} from "tamagui";
 
 import DotIcon from "@/components/DotIcon";
 import DotMatrixText from "@/components/DotMatrixText";
 import SegmentedControl from "@/components/SegmentedControl";
 import XbrwSheet from "@/components/XbrwSheet";
+import XbrwSwitch from "@/components/XbrwSwitch";
 import {palette} from "@/constants/colors";
 import {
     defaultDirection,
@@ -136,13 +137,9 @@ export default function SortSheet({
                             Keep starred recipes at the top, in the same order
                         </Text>
                     </YStack>
-                    <Switch accessibilityLabel="Starred first" accessibilityRole="switch"
-                            accessibilityState={{checked: favouritesFirst}}
-                            checked={favouritesFirst}
-                            onCheckedChange={onFavouritesFirstChange} size="$3"
-                            backgroundColor={favouritesFirst ? palette.success : palette.control}>
-                        <Switch.Thumb backgroundColor={palette.text}/>
-                    </Switch>
+                    <XbrwSwitch accessibilityLabel="Starred first"
+                                checked={favouritesFirst}
+                                onCheckedChange={onFavouritesFirstChange}/>
                 </XStack>
             </YStack>
         </XbrwSheet>

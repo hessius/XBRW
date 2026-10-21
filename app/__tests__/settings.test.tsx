@@ -261,22 +261,50 @@ describe("SettingsScreen", () => {
         expect(new Settings(storage).get("dotMatrixProfile")).toBe(true);
     });
 
-    it("offers recipe pictures, off until someone asks for them", async () => {
-        // Off by default on purpose: the setting exists to find out whether a
-        // pod photo or a sharer's picture helps at all.
+    it("offers recipe pictures, on until someone turns them off", async () => {
+        // On by default: most recipes now arrive with a pod photo, a sharer's
+        // picture or a coffee photo, and a picture that will not load falls
+        // back to the accent mark.
         await renderWithProviders(<SettingsScreen settings={new Settings(memoryStorage())}/>);
 
-        expect(screen.getByLabelText("Show recipe pictures")
-            .props.accessibilityState.checked).toBe(false);
+        expect(screen.getByLabelText("Pictures in ABOUT")
+            .props.accessibilityState.checked).toBe(true);
+        expect(screen.getByLabelText("Recipe card photos").props.accessibilityState.checked).toBe(false);
+        expect(screen.getByLabelText("Shelf photo previews").props.accessibilityState.checked).toBe(true);
     });
 
-    it("persists recipe pictures", async () => {
+    it("changes each picture surface independently", async () => {
+        const settings = new Settings(memoryStorage());
+        await renderWithProviders(<SettingsScreen settings={settings}/>);
+        await fireEvent(screen.getByLabelText("Pictures in ABOUT"), "checkedChange", false);
+        expect(settings.get("showShelfPhotoPreviews")).toBe(true);
+        expect(settings.get("showRecipeCardPhotos")).toBe(false);
+        await fireEvent(screen.getByLabelText("Recipe card photos"), "checkedChange", true);
+        await fireEvent(screen.getByLabelText("Shelf photo previews"), "checkedChange", false);
+        expect(settings.get("showRecipeAvatars")).toBe(false);
+        expect(settings.get("showRecipeCardPhotos")).toBe(true);
+        expect(settings.get("showShelfPhotoPreviews")).toBe(false);
+    });
+
+    it("persists recipe pictures turned off", async () => {
         const storage = memoryStorage();
 
         await renderWithProviders(<SettingsScreen settings={new Settings(storage)}/>);
-        await fireEvent(screen.getByLabelText("Show recipe pictures"), "checkedChange", true);
+        await fireEvent(screen.getByLabelText("Pictures in ABOUT"), "checkedChange", false);
 
-        expect(new Settings(storage).get("showRecipeAvatars")).toBe(true);
+        expect(new Settings(storage).get("showRecipeAvatars")).toBe(false);
+    });
+
+    it("shows recipe pictures off for someone who turned them off", async () => {
+        // The default moved, the choice did not: a stored false is a row, and
+        // a row wins over the default.
+        const settings = new Settings(memoryStorage());
+        settings.set("showRecipeAvatars", false);
+
+        await renderWithProviders(<SettingsScreen settings={settings}/>);
+
+        expect(screen.getByLabelText("Pictures in ABOUT")
+            .props.accessibilityState.checked).toBe(false);
     });
 
     it("does not offer the one-line hints", async () => {
@@ -515,6 +543,24 @@ describe("SettingsScreen", () => {
         }
     });
 
+    it.each([false, true])("restores legacy picture %s over newer independent settings", async legacy => {
+        const storage = memoryStorage();
+        const settings = new Settings(storage);
+        settings.set("showRecipeCardPhotos", true);
+        settings.set("showShelfPhotoPreviews", !legacy);
+        mockPickBackup.mockResolvedValue(backupOf([recipeNamed("A", "u1")], {showRecipeAvatars: legacy}));
+        mockApplyRestore.mockReturnValue({status: "restored", added: 1});
+        await renderWithProviders(<SettingsScreen settings={settings}/>);
+        await fireEvent.press(screen.getByRole("button",
+            {name: "Restore from a backup, Adds anything your library does not already have."}));
+        await settleSheet();
+        await fireEvent(screen.getByLabelText(/settings from this backup/i), "checkedChange", true);
+        await fireEvent.press(screen.getByRole("button", {name: /add to my library/i}));
+        expect(settings.get("showRecipeAvatars")).toBe(legacy);
+        expect(settings.get("showRecipeCardPhotos")).toBe(false);
+        expect(settings.get("showShelfPhotoPreviews")).toBe(legacy);
+    });
+
     it("restores which machine you own, not just the default", async () => {
         // The generic restore test flips booleans, so a string setting round-trips
         // its own default through it and proves nothing. This one names a value
@@ -535,6 +581,41 @@ describe("SettingsScreen", () => {
         await fireEvent.press(screen.getByRole("button", {name: /add to my library/i}));
 
         expect(new Settings(storage).get("machineModel")).toBe("original");
+    });
+
+    it("restores recipe pictures turned off, though the default is on", async () => {
+        // A backup's false is somebody's answer, or at least the value they
+        // had. It must land as a stored false, not be read as "unset" and come
+        // back on under the new default.
+        const storage = memoryStorage();
+        mockPickBackup.mockResolvedValue(
+            backupOf([recipeNamed("A", "u1")], {showRecipeAvatars: false})
+        );
+        mockApplyRestore.mockReturnValue({status: "restored", added: 1});
+        await renderWithProviders(<SettingsScreen settings={new Settings(storage)}/>);
+
+        await fireEvent.press(screen.getByRole("button",
+            {name: "Restore from a backup, Adds anything your library does not already have."}));
+        await settleSheet();
+        await fireEvent(screen.getByLabelText(/settings from this backup/i),
+                        "checkedChange", true);
+        await fireEvent.press(screen.getByRole("button", {name: /add to my library/i}));
+
+        expect(new Settings(storage).get("showRecipeAvatars")).toBe(false);
+    });
+
+    it("backs up recipe pictures turned off as off", async () => {
+        const settings = new Settings(memoryStorage());
+        settings.set("showRecipeAvatars", false);
+        mockExportBackup.mockResolvedValue({ok: true});
+        await renderWithProviders(<SettingsScreen settings={settings}/>);
+
+        await fireEvent.press(screen.getByRole("button",
+            {name: "Back up my recipes, Writes a file and hands it to the share sheet."}));
+
+        expect(mockExportBackup).toHaveBeenCalledWith(expect.anything(),
+            expect.objectContaining({showRecipeAvatars: false}),
+            expect.any(String), expect.any(Array));
     });
 
     it("reports a backup that could not be shared", async () => {

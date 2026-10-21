@@ -42,3 +42,48 @@ hardware verification. This is not a new maintainer device pass.
 The wrong-recipe A/B report is an unconfirmed, separate investigation in
 [#251](https://github.com/hessius/XBRW/issues/251). These changes do not establish
 its cause or prove that cancellation clears a loaded recipe.
+
+## Package B: small UI fixes and scoped pictures
+
+Source heads are preserved in merge history:
+
+- #233: `338f49015f0e0abe75b121db1089b8a0ae401906`.
+- #224: `4221f25b15cd62b27adf783db55477b307a04a20`.
+- #236: `dc7f4f8ae599c995b65022df1e7e8ffafb68ead9`.
+- #229: `7eb2963bf324eeca04d8a82ab1fee22b7666edf4`.
+- #226: `e1a6c83104df2fb3cf1fad9cf1f1661570229b47`.
+- #225: `4016340794068bae6cf94d4f01e37c8dcf2c99e9`.
+- #235: `adb548dbd8b20aa5163abfcea684108132ab85d4`.
+
+Android sheet hosts keep fixed native parents. Rename preserves an untouched
+borrowed pod name, including multiline names, and does not overwrite typing
+when pod details arrive. Compact profiles yield to text. Machine settings use
+an honest model fallback. ON switches use magenta; this does not accept #243's
+broader colour proposal.
+
+The original #225/#235 defaults and placements are replaced, not accepted
+unchanged. Card photos default OFF and use small circular marks. List photos
+are 20pt bottom-right circles beside brew evidence, with lighter card-tint
+backing, no full-width bottom wash, and unchanged graph/title geometry. Compact
+photos yield when metadata does not fit and begin loading before measurement.
+The editor header has no photo; ABOUT retains its independent picture choice.
+
+Personal/tag shelf covers default ON, mix actual members' photos and accents,
+and respect a stored legacy OFF choice. Eligible auto shelves need four
+photographed recipe UUIDs, even if they share a URL: xBloom recipes, Starred,
+xBloom pods, Most brewed and Recently added. Fewer usable photos, including
+after image failures, restore the glyph. Other automatic and author shelves
+retain glyphs. Cover queries remain bounded.
+
+The approved picture work is ported from preview checkpoints `071e3568`,
+`4ff7cd26`, `f6d5dab7`, `2799b826`, `d06f4a78` and the cover-only part of
+`c2030d31`. Unaccepted Ready to brew, bags, roaster subscriptions, multiple-machine
+features and the broader colour proposal are not included. Package C's hero
+name-fitting work remains separate.
+
+The package's single integration review also corrected the library privacy
+disclosure: it names all three photo preferences and explicitly covers shelf
+requests even with card photos OFF.
+
+Photo performance remains open in #253; no new cache policy, native timing
+measurement or hardware acceptance is claimed.

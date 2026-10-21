@@ -820,6 +820,10 @@ file.
 
 ### The avatar setting
 
+> **Superseded in part** by "Revision: recipe pictures are on by default" below,
+> which turns the setting on for anyone who has not chosen. The reasoning here is
+> kept because the revision is an answer to it.
+
 `showRecipeAvatars`, off by default, exists to find out whether avatars help at
 all.
 
@@ -829,6 +833,44 @@ silently back to the accent mark, and a missing image is never an error.
 
 It partly reopens the roadmap's deferred "recipe images" item, and only partly: a
 40 pt mark is a much smaller promise than a hero image.
+
+### Revision: recipe pictures are on by default
+
+2026-10-17. The setting was off so that turning it on was a choice, made by
+someone curious whether a picture helps. That made sense while most recipes had
+nothing to draw. They usually have something now: a pod recipe carries the pod's
+artwork, a shared recipe its sharer's picture, and a recipe from an import link
+the coffee's own photo. Left off, all of that arrives and is never seen, and a
+setting few people open cannot tell us whether pictures help.
+
+So the default is now on. The risk stays as small as it was: the mark is 40 pt,
+a picture that will not load falls back to the accent mark without a word, and
+one switch in settings turns it off.
+
+Only the default changes. `Settings.get()` returns the default only while no row
+exists for the key, and nothing writes defaults on launch. Someone who never
+touched the switch gets the new default; someone who turned it off has a stored
+`false` and keeps it. A restored backup writes the value it carries, so it lands
+as the backup had it. The one blur is that a backup carries the value in force
+when it was made, not whether anyone chose it, so restoring a backup made under
+the old default turns pictures off again. That is the same for every setting,
+and it is the less surprising error: it keeps what the file says.
+
+### Revision: placement-specific pictures
+
+2026-10-20. The global default-on proposal above is superseded. Recipe card
+photos default OFF and appear as small circles, never at the expense of names,
+figures or controls. List pictures are 20pt circles at the bottom-right beside
+brew evidence; the card keeps its tint and the profile keeps its geometry.
+The editor header has no picture. ABOUT retains `showRecipeAvatars`.
+
+`showShelfPhotoPreviews` defaults ON. Personal/tag covers use the first four
+actual members, mixing photos and accents. Five automatic shelves use a grid
+only with four photographed recipe UUIDs: xBloom recipes, Starred, xBloom pods,
+Most brewed and Recently added. Copies may share a photo URL. Fewer usable
+photos, including image failures, restore the glyph; other automatic and author
+shelves keep glyphs. A legacy stored OFF choice remains OFF, and backup restore
+translates legacy preferences before applying explicit new overrides.
 
 ## Storage
 
@@ -893,7 +935,9 @@ All in `Settings.DEFAULTS`, which is what carries them into a backup.
 | `librarySort` | `name` |
 | `librarySortDirection` | `asc` |
 | `libraryFavouritesFirst` | `false` |
-| `showRecipeAvatars` | `false` |
+| `showRecipeAvatars` | `true` (was `false`; see "Revision: recipe pictures are on by default") |
+| `showRecipeCardPhotos` | `false` |
+| `showShelfPhotoPreviews` | `true`, with legacy OFF respected |
 | `shelfMarkVariant` | tester-controlled, through LABS |
 | `hiddenShelves` | `""` |
 | `invertAutoShelves` | `false` |

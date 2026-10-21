@@ -19,7 +19,7 @@ type Props = {
     recipe: Recipe;
     /** The recipe's own colour, which the FROM mark falls back to. */
     accent: string;
-    /** `showRecipeAvatars`, off by default. */
+    /** `showRecipeAvatars`, on by default. */
     showAvatar: boolean;
     /** How many times this recipe has been brewed, when last, and how it fared. */
     brews: BrewSummary;

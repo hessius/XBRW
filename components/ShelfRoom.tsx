@@ -76,7 +76,7 @@ export type RoomRecipeActions = {
 export default function ShelfRoom({
     label, recipes, onBack, actionsFor, evidence = {}, namedByUser = false,
     showCoffeeMarker = true, dottedProfile = false, onScroll, paddingBottom = 0,
-    editing = false
+    editing = false, showPicture = false
 }: {
     /** The shelf's name, drawn as the room's heading. */
     label: string;
@@ -117,6 +117,8 @@ export default function ShelfRoom({
     namedByUser?: boolean;
     showCoffeeMarker?: boolean;
     dottedProfile?: boolean;
+    /** `showRecipeAvatars`, forwarded to every tile. */
+    showPicture?: boolean;
     /** Drives the screen's collapsing header. */
     onScroll?: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
     paddingBottom?: number;
@@ -191,6 +193,7 @@ export default function ShelfRoom({
                                     onLongPress={acts.onLongPress}
                                     showCoffeeMarker={showCoffeeMarker}
                                     dottedProfile={dottedProfile}
+                                    showPicture={showPicture}
                                     evidence={evidence[recipe.uuid]}
                                     onBrew={acts.onBrew}
                                     onShare={acts.onShare}

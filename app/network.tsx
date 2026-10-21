@@ -14,6 +14,7 @@ import {
     type OutboundCall
 } from "@/constants/network";
 import {useLiveBrew} from "@/hooks/useLiveBrew";
+import {STABLE_HOST} from "@/constants/views";
 
 const PRIVACY_URL = `${REPO_URL}/blob/main/PRIVACY.md`;
 
@@ -42,7 +43,7 @@ export default function NetworkScreen() {
     const {ratingNoteOpen} = useLiveBrew();
 
     return (
-        <YStack testID="network-screen" flex={1} backgroundColor={palette.base}
+        <YStack {...STABLE_HOST} testID="network-screen" flex={1} backgroundColor={palette.base}
                 accessibilityElementsHidden={ratingNoteOpen}
                 importantForAccessibility={ratingNoteOpen ? "no-hide-descendants" : "auto"}>
             <ScreenHeader title="Network" onBack={() => router.back()}/>

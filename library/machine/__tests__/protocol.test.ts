@@ -106,8 +106,14 @@ describe("reading what the machine says", () => {
             0x00, 0x00, 0x00, 0x39, 0x34
         ]);
 
+        // Bytes 13-18 of the payload are six 0xFF, so a real Studio's blob
+        // names no model, and the settings row has to cope with that rather
+        // than draw an empty value.
         expect(parseNotification(captured)).toMatchObject({
             kind: "info",
+            serial: "J15A02A45H038",
+            model: "",
+            firmware: "V12.0D.500",
             waterEnough: false,
             waterFeed: "tap"
         });
