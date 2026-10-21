@@ -501,6 +501,12 @@ Round-trip recipe metadata through copy and backup/restore.
   No push, PR, review request, merge, deployment or cleanup performed.
   Home integration is intentionally pending above. No physical-device, native,
   NFC or BLE qualification is claimed.
+- Task 4 review follow-up: seed missing applied roaster identities with count 0
+  before suppression, retaining the active shelf after its final member is
+  deleted or relabelled. Canonical matching avoids duplicate Unicode/case
+  spellings and preserves a live representative's real count. Regression red:
+  6 failures across both platforms; focused shelf green: 2 suites / 66 tests.
+  Changed-file ESLint and `git diff --check` passed; no heavy tests run.
 
 ## Task 5: Add mixed-photo roaster marks and initial fallback
 

@@ -156,6 +156,15 @@ export function buildShelves(input: {
         const id = roasterFilterId(roaster);
         if (roasterFromFilterId(id) !== null) roasterTotals[id] = count;
     }
+    const roasterIdentities = new Set(Object.keys(roasterTotals).map(canonicalShelfId));
+    for (const id of applied) {
+        const roaster = roasterFromFilterId(id);
+        if (roaster === null) continue;
+        const identity = canonicalShelfId(id);
+        if (roasterIdentities.has(identity)) continue;
+        roasterTotals[roasterFilterId(roaster)] = 0;
+        roasterIdentities.add(identity);
+    }
     // The representative spelling can change while this shelf is applied.
     // Feed its live id through the same gate without changing the applied query.
     const appliedIdentities = new Set(applied.map(canonicalShelfId));

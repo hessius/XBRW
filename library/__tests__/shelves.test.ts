@@ -19,6 +19,24 @@ describe("saved roaster shelves", () => {
         expect(shelves(2, ["roaster:cafe\u0301"], "CAFÉ")).toHaveLength(1);
         expect(shelves(9, ["roaster:Acme"])).toHaveLength(1);
     });
+    it.each([0, 10])("keeps an applied roaster with no remaining members in a library of %i", librarySize => {
+        expect(buildShelves({
+            filterCounts: {}, tagCounts: [], roasterCounts: [], librarySize,
+            applied: ["roaster:Acme"]
+        })).toEqual([{id: "roaster:Acme", label: "Acme", kind: "auto", count: 0}]);
+    });
+    it("seeds absent applied identities once without replacing a live canonical representative", () => {
+        const input = {
+            filterCounts: {}, tagCounts: [], librarySize: 10,
+            applied: ["roaster:CAFÉ", "roaster:cafe\u0301", "roaster:  ", "sharedBy:Other"]
+        };
+        expect(buildShelves({...input, roasterCounts: []})).toEqual([
+            {id: "roaster:CAFÉ", label: "CAFÉ", kind: "auto", count: 0}
+        ]);
+        expect(buildShelves({...input, roasterCounts: [{roaster: "café", count: 2}]})).toEqual([
+            {id: "roaster:café", label: "café", kind: "auto", count: 2}
+        ]);
+    });
     it("leaves author shelves separate and the escape last", () => {
         expect(buildShelves({
             filterCounts: {allRecipes: 10, tea: 3}, tagCounts: [],
