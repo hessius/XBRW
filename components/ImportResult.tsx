@@ -53,7 +53,10 @@ export default function ImportResult({preview, onOpen}: Props) {
 
     // The name the user gave a recipe they already hold -- the most useful thing
     // on this panel, because it is how they recognise which of theirs this is.
-    // Only the name *they* chose: `recipe.name` is exactly that field. Neither
+    // Only the name *they* chose: `recipe.name` is exactly that field. (An
+    // import link's `recipe.name` also writes it, but only on a new import, and
+    // a link import is "shared", which navigates without ever drawing this
+    // panel. A held recipe shown here carries the stored name.) Neither
     // `hasName()` nor `displayName()` is right here -- both fold in `xbloomName`
     // and `xid`, so for a never-renamed import (which always carries an XID)
     // they would report a name, and `displayName()` would print the xBloom

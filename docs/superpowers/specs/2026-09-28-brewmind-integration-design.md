@@ -137,6 +137,57 @@ uses. Copied at write time for the same reason `recipeName` and `accent` are:
 an export must still say where the recipe came from after the recipe itself
 has been deleted.
 
+### `recipe.name`, the producer's name for the recipe
+
+Requested by Central Coast Coffee, who link to XBRW++ from their product pages.
+A roaster's xBloom recipe tends to be named by whoever keyed it into xBloom
+("col chiroso -18g"), and a share link can only carry that name, so the recipe
+arrived named for the keying rather than for the coffee.
+
+`recipe.name` sets the recipe's own `name`, the field a rename writes. It does
+not touch `xbloomName`: that stays what xBloom published, so `displayName()`
+shows the producer's name while USE THIS NAME still has xBloom's to go back to.
+
+Runs of whitespace, line breaks and U+2028 included, fold to one space, so a
+link cannot split a one-line title. It is then trimmed, and dropped when
+empty. It is capped at `MAX_NAME` (100), the rename sheet's ceiling, which now
+lives on `Recipe` so both read one constant.
+Not the 120 of the bean's short text: a link should not be able to set a name
+the rename sheet would then refuse to hold whole. A longer name is fitted
+rather than dropped (`library/fitName.ts`): a trailing size suffix such as
+" - 18g" is kept whole, trailing bracketed groups are removed from the end one
+at a time, and only then is the name cut at the last whole word, with "…"
+before the suffix. Dropping it had left real roaster names (six of Central
+Coast Coffee's thirty, such as "Colombia | Las Flores | Jhoan Vergara | Java
+Hydrohoney (Duo Cherry Velvet) (Competition Coffee) - 18g") on xBloom's own
+name. Nothing is cut mid-word, so what remains is the sender's name, visibly
+shortened.
+
+Like the rest of the decoration it applies only to a new import. A recipe
+already in the library keeps its stored name, even an empty one; see "How the
+coffee reaches the recipe" below.
+
+### `bean.image` as the recipe's picture
+
+`bean.image` was stored on the coffee as `imageUrl` and sent on to
+Beanconqueror, but never became the recipe's own `imageURL`. `XBloomRecipe`
+sets `imageURL` from the pod's coffee or artwork, and it does so before the
+link's coffee is applied, so a share-link import of a recipe made without a
+pod arrived with no picture. (A share link to a pod-made recipe carries
+`podsVo`, so it already had the pod's artwork.)
+
+`decorateImport` now sets `imageURL` from the decorated coffee's `imageUrl`,
+through `podImageUrl` (https only, the rule backup restore applies to
+`imageURL`), but only when the recipe has no picture of its own. Pod artwork
+wins where there is any. A recipe already in the library keeps a picture it
+has; one with no picture gets this one through the fill-blanks rule below.
+
+The picture is drawn in one place: the XPOD section on ABOUT, beside the
+xBloom name, and only while `showRecipeAvatars` is on. That setting defaults to
+off, so most users will not see it until they turn it on. The import preview
+panel is not involved: a link resolves as `"shared"`, which opens the editor
+without drawing that panel.
+
 ### Why the pod output does not change
 
 `podCoffeeFromPodsVo` maps only the fields the pod endpoint carries. The new
@@ -233,7 +284,21 @@ Applied to the *candidate*, before `resolveOnOpen`. The consequence is
 deliberate: when the link points at a recipe already in the library, the stored
 recipe wins and its own coffee is kept. A link should not silently rewrite the
 coffee on a recipe the user has already edited, and "already in your library"
-is what the sheet says in that case.
+is what the sheet says in that case. The same holds for `recipe.url`,
+`recipe.name` and the picture: a stored recipe keeps its own page, name and
+artwork.
+
+The stored recipe is not frozen, though. After the match, `fillImportBlanks`
+gives it what the link carries in the places it has nothing: `imageURL` when it
+has no picture (through `podImageUrl`), `coffee` when it has none, each missing
+or blank field of an existing coffee, and `recipeUrl` when it has none. A value
+is never replaced. The name and the source are never touched, since an empty
+name means "follow the pod" and the source is history. Derived tags are added
+only to a recipe with no tags, and only from the coffee fields just filled, so
+a cleared tag list stays cleared. The hook saves the recipe through
+`onSaveExisting` only when something changed. Without this, a recipe first
+imported before links carried `bean.image` never got its photo, however often
+it was re-imported.
 
 ### Provenance
 
