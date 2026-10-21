@@ -32,7 +32,7 @@ export default function RoasterCoffeeRow({coffee, badge, onPress, testID}: {
     onPress: () => void;
     testID: string;
 }) {
-    const [failed, setFailed] = useState(false);
+    const [failedUri, setFailedUri] = useState<string | null>(null);
     const image = coffee.image ?? null;
     const roast = coffee.roast?.level;
     // The flavours when the roaster lists them, which is what they are for.
@@ -55,9 +55,9 @@ export default function RoasterCoffeeRow({coffee, badge, onPress, testID}: {
             <XStack alignItems="center" maxWidth={600} paddingHorizontal={SIDE_PADDING}
                     paddingVertical={ROW_PADDING} gap="$3"
                     opacity={coffee.available ? 1 : 0.6}>
-                {image !== null && !failed ? (
+                {image !== null && image !== failedUri ? (
                     <Image testID="roaster-row-photo" source={{uri: image}}
-                           onError={() => setFailed(true)}
+                           onError={() => setFailedUri(image)}
                            style={{width: PHOTO_SIZE, height: PHOTO_SIZE, borderRadius: PHOTO_RADIUS}}/>
                 ) : (
                     <YStack testID="roaster-row-photo-blank" width={PHOTO_SIZE} height={PHOTO_SIZE}

@@ -18,6 +18,10 @@ jest.mock("expo-router", () => ({
 }));
 
 const mockNotify = jest.fn();
+let mockRatingNoteOpen = false;
+jest.mock("@/hooks/useLiveBrew", () => ({
+    useLiveBrew: () => ({ratingNoteOpen: mockRatingNoteOpen})
+}));
 jest.mock("@/components/XbrwToast", () => ({
     __esModule: true,
     notify: (...args: unknown[]) => mockNotify(...args)
@@ -61,6 +65,7 @@ async function drawDetail(settings = memorySettings(), fetchBody = fetched()) {
 }
 
 beforeEach(() => {
+    mockRatingNoteOpen = false;
     mockNotify.mockReset();
     (router.push as jest.Mock).mockReset();
     (router.dismissTo as jest.Mock).mockReset();
@@ -145,6 +150,23 @@ describe("the subscriptions list", () => {
 });
 
 describe("a roaster's subscription", () => {
+    it.each([false, true])("hides the route behind the global brew note, subscribed: %s", async (hasSubscription) => {
+        const settings = hasSubscription ? subscribed() : memorySettings();
+        mockRatingNoteOpen = true;
+        const route = () => <SubscriptionScreen settings={settings} feedUrl={FEED_URL} now={() => NOW}/>;
+        const view = await renderWithProviders(route());
+        const id = hasSubscription ? "subscription-content" : "subscription-missing";
+        const content = () => screen.getByTestId(id, {includeHiddenElements: true});
+        expect(content().props.accessibilityElementsHidden).toBe(true);
+        expect(content().props.importantForAccessibility).toBe("no-hide-descendants");
+
+        mockRatingNoteOpen = false;
+        await view.rerender(route());
+        expect(content().props.accessibilityElementsHidden).toBe(false);
+        expect(content().props.importantForAccessibility).toBe("auto");
+        expect(screen.getByText(hasSubscription ? "Test Roaster" : "NOT SUBSCRIBED")).toBeTruthy();
+    });
+
     it("makes Show in Import an explicit, persistent choice that can be removed", async () => {
         const settings = subscribed();
         await drawDetail(settings);

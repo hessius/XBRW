@@ -55,7 +55,9 @@ export default function SubscriptionScreen({settings, feedUrl, fetchBody, now: c
 
     if (sub === undefined) {
         return (
-            <YStack testID="subscription-missing" flex={1} backgroundColor={palette.base}>
+            <YStack testID="subscription-missing" flex={1} backgroundColor={palette.base}
+                    accessibilityElementsHidden={covered}
+                    importantForAccessibility={covered ? "no-hide-descendants" : "auto"}>
                 <ScreenHeader title="Roaster feed" onBack={() => router.back()}/>
                 <CatalogueStatus title="NOT SUBSCRIBED"
                                  body="Roasters appear here when you subscribe from a roaster's import link."/>
