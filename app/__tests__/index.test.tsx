@@ -330,7 +330,7 @@ function store(recipes: Recipe[]) {
         queryRecipes: jest.fn((query: LibraryQuery) => queried(query)),
         retrieveAllRecipes: jest.fn(() => recipes),
         countRecipes: jest.fn(() => recipes.length),
-        countRecipesByRoaster: jest.fn(() => []),
+        countRecipesByRoaster: jest.fn((): {roaster: string; count: number}[] => []),
         countRecipesByFilter: jest.fn((ids: readonly string[]) =>
             Object.fromEntries(ids.map((id) => [
                 id,
@@ -425,6 +425,26 @@ async function renderHome(
 }
 
 describe("HomeScreen", () => {
+    it.each([false, true])("keeps followed roasters out of home and search with saved recipes: %s", async saved => {
+        const settings = new Settings(memoryStorage({
+            roasterSubscriptions: JSON.stringify([{
+                feed: FEED_URL, roaster: "Unsaved catalogue", lastSync: Date.now(),
+                lastAttempt: Date.now(), paused: true, pinnedAt: 1
+            }])
+        }));
+        await renderHome({recipes: saved ? [named("Ethiopia")] : [], settings});
+        expect(screen.queryByText("Unsaved catalogue")).toBeNull();
+        expect(screen.queryAllByTestId("recipe-card")).toHaveLength(saved ? 1 : 0);
+        if (saved) {
+            await fireEvent.press(screen.getByTestId("rail-search"));
+            await fireEvent.changeText(screen.getByTestId("rail-search-input"), "Unsaved catalogue");
+            await waitFor(() => expect(screen.queryByTestId("recipe-card")).toBeNull());
+            expect(screen.queryByText("Unsaved catalogue")).toBeNull();
+        } else {
+            expect(screen.getByText("NO RECIPES YET")).toBeOnTheScreen();
+        }
+    });
+
     it("lists the saved recipes as cards", async () => {
         await renderWithProviders(<HomeScreen db={store([named("Ethiopia"), named("Kenya")])} settings={new Settings(memoryStorage())}/>);
         expect(screen.getAllByTestId("recipe-card")).toHaveLength(2);
@@ -1868,6 +1888,15 @@ it("assigns a recipe through its list action and exposes the persisted slot mark
 });
 
 describe("the shelf grid", () => {
+    it("offers saved-roaster counts as auto shelves without following a feed", async () => {
+        const db = store(shelfLibrary());
+        db.countRecipesByRoaster.mockReturnValue([{roaster: "Acme", count: 3}]);
+        await renderWithProviders(<HomeScreen db={db} settings={new Settings(memoryStorage())}/>);
+        await fireEvent.press(screen.getByRole("tab", {name: "Shelves"}));
+        expect(screen.getByTestId("shelf-roaster:Acme")).toBeOnTheScreen();
+        expect(screen.getByLabelText("Acme, auto shelf, 3 recipes")).toBeOnTheScreen();
+    });
+
     it("shows slot markers and the Easy Mode recipe action on shelf-room tiles", async () => {
         mockRemembered = "machine-device-id";
         const recipe = writable("Slot coffee");

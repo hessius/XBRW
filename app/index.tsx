@@ -526,6 +526,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
         filterCounts: library.filterCounts,
         tagCounts:    library.tagCounts,
         authorCounts: library.authorCounts,
+        roasterCounts: library.roasterCounts,
         librarySize:  library.librarySize,
         applied:      libraryQuery.query.filters,
         myShelves:    parseHidden(myShelves)

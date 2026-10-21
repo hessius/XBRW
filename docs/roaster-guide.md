@@ -1,9 +1,8 @@
 # XBRW++ for roasters: a setup guide
 
-> Integration status: the feed parser, catalogue routes, checker and explicit
-> Import choices are staged. Subscription offers and safe re-import are separate
-> follow-ups. This guide describes the intended completed flow, not a release
-> readiness claim.
+> Integration status: Package E connects the catalogue, Import choices,
+> subscription offers and staged re-imports. This guide is not a release
+> readiness or physical-device qualification claim.
 
 This guide is for coffee roasters who publish xBloom recipes for their coffees
 and want customers to find them in XBRW++. You do not need to be a developer.
@@ -27,6 +26,12 @@ the practical version.
   customers can choose up to three shortcuts, shown in selection order.
   Subscribing does not select a shortcut automatically; removing one leaves
   the subscription and saved recipes alone.
+- **A shelf for saved recipes.** A saved recipe keeps its declared roaster even
+  after unsubscribing. Three saved recipes can form an automatic roaster shelf,
+  provided they are no more than 80% of the library. Publish `bean.roaster` for
+  a coffee-specific name; otherwise the app keeps the recipe import's roaster
+  or uses your feed's name. Re-import never replaces a customer's saved
+  nonblank roaster. Home and its search never mix in unsaved catalogue coffees.
 - **New coffees and restocks.** When you add a coffee, it shows as NEW in their
   catalogue the next time the app updates. If a coffee is sold out, they can
   ask to be told when it is back, and the app tells them when your list says

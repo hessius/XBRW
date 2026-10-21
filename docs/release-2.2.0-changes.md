@@ -6,6 +6,44 @@ draft #252 also contain proposals that have not been accepted; they must not be
 merged wholesale. Issue #249 records source heads, decisions and integration.
 The shipped 2.1.0 ledger remains unchanged.
 
+## Package E: roasters in Import and saved shelves
+
+The focused adaptation uses these reviewed source heads:
+#237 `27535f8b72fd30febe51d07f7bd2cbd20bf63980`,
+#240 `25672dfab641116521be313aa650ab788f869994` and
+#245 `d306e9c22aa54bf803ec0fb07fc1cea5d3055395`.
+This branch is a merge candidate, not accepted development or a release.
+
+Home, search and empty-library states remain saved-only. Independent roaster
+catalogues are reached through Import. Customers choose up to three **Show in
+Import** shortcuts in selection order, with no automatic filling; **All
+roasters** remains available whenever subscriptions exist. Plain Import opening
+keeps the keyboard closed and Paste stays beside the field with native consent.
+The separate **xBloom catalogue** names both xBloom and community contributions.
+
+Typed results stage updates until explicitly opened. Existing-recipe writes
+complete before mutating the held recipe; refused navigation and failed storage
+do not replace it or record a successful author fingerprint. Local edits and
+nonblank metadata survive ordinary re-import. New catalogue recipes prefer the
+coffee's declared roaster, then the underlying import's roaster, then the feed's
+declared name. Feed offers are scoped to their successful import and discarded
+on cancellation, replacement or failure. Relative catalogue ages refresh each
+minute and when the app returns to the foreground.
+
+Saved `coffee.roaster` metadata forms automatic shelves independently of
+subscriptions. Matching trims and normalizes Unicode and case, without guessing
+aliases or treating an account author as a roaster. Existing library visibility
+rules apply: three members, at most 80% of the whole library and applied-shelf
+passthrough. JSON remains authoritative and the SQL projection rebuilds for
+older saved recipes. Copy and backup preserve membership.
+
+Roaster marks use mixed four-cell photos and member accents, or an initial when
+photos are disabled, absent or all fail. The existing stock-auto requirement for
+four successful photos is unchanged. Photo performance remains #253; this is
+not a cache or timing fix. Adoption and publishing feedback are tracked without
+new analytics in #261. No home discovery strip, tracking, dependency or native
+configuration change is included. Physical/native UI checks remain separate.
+
 ## Package D follow-up: machine-first Settings
 
 Source #231 is preserved at

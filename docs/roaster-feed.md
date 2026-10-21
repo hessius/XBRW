@@ -1,15 +1,26 @@
 # Roaster feed
 
-> Integration status: this is the publication contract staged with Package E's
-> catalogue foundation. Explicit Import choices are staged separately; the
-> accepted import hook's subscription offers and safe re-import remain follow-up
-> tasks. This document does not mean those entry points are already connected.
+> Integration status: Package E connects the catalogue, explicit Import choices
+> and staged re-imports. This is a publication contract, not a release or
+> physical-device qualification claim.
 
 A roaster feed is one JSON file listing every coffee a roaster has published an
 xBloom recipe for. An XBRW++ import link can point at it, and the app then offers
 to subscribe to that roaster. Subscribing adds the roaster to the catalogue: the
 user can browse its coffees, open one, and brew it, add it to their library or
 put it on a shelf. Subscribing adds nothing to the library by itself.
+
+Home and its search show saved recipes only. Open **Import → All roasters** to
+browse subscriptions. **Show in Import** selects up to three roaster shortcuts
+in selection order; the app never fills the remaining slots automatically.
+All roasters stays available with subscriptions even when none is selected.
+
+Saved recipes form automatic roaster shelves from their `coffee.roaster`,
+independent of subscriptions. The ordinary visibility rules apply: at least
+three saved recipes and no more than 80% of the library, except an applied shelf
+stays reachable. Names match after trimming, Unicode normalization and
+case-folding; different names are not guessed to be the same business.
+Unsubscribing does not remove saved recipes or their shelves.
 
 Any roaster can publish one. This page is the contract. For a step-by-step
 setup written for roasters (a ready-made Shopify template, a product-page
