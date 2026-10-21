@@ -210,7 +210,7 @@ export const OUTBOUND_CALLS: OutboundCall[] = [
     {
         id:      "images",
         title:   "Load a photo",
-        trigger: "You open the hub, a roaster's catalogue or an import preview. Pictures in ABOUT controls coffee, pod and author pictures in recipe details. Recipe card photos controls coffee or pod photos in your library list, shelf rooms and Ready to brew. Shelf photo previews controls coffee photos in your own and tag shelf covers, never automatic shelves. The home screen also loads coffee photos while you subscribe to a roaster.",
+        trigger: "You open the hub, a roaster's catalogue or an import preview. Pictures in ABOUT controls coffee, pod and author pictures in recipe details. Recipe card photos controls coffee or pod photos in your library list, shelf rooms and Ready to brew. Shelf photo previews controls coffee photos in your own, tag and eligible automatic shelves. The home screen also loads coffee photos while you subscribe to a roaster.",
         host:    "whichever host xBloom named in its own reply",
         hostPinned: false,
         owner:   "xBloom, or whoever xBloom points at",
@@ -261,7 +261,7 @@ export const SILENT_CAPABILITIES: SilentCapability[] = [
     {
         id:     "library",
         title:  "Your library",
-        detail: "Recipes, tags, shelves and notes are stored in a database on this phone. There is no sync, no account of our own, and no server that holds a copy. The one exception is a photo: an imported recipe remembers where its picture came from. Pictures in ABOUT, Recipe card photos and Shelf photo previews control its display on their respective surfaces. The Load a photo entry below says what that carries."
+        detail: "Recipes, tags, shelves and notes are stored in a database on this phone. There is no sync, no account of our own, and no server that holds a copy. Photos are the exception: imported recipes remember their photo addresses. Recipe card photos, Shelf photo previews and Pictures in ABOUT control the respective placements. Shelf previews can fetch photos even with card photos off. The Load a photo entry below says what those requests carry."
     },
     {
         id:     "brewing",

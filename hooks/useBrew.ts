@@ -6,6 +6,7 @@ import type Machine from "@/library/machine/Machine";
 import {isActiveBrewPhase, type BrewPhase} from "@/library/machine/Machine";
 import {
     BluetoothPermissionError,
+    BrewOwnershipError,
     BrewUploadError,
     type BrewRefusal,
     isBrewRefusal,
@@ -158,6 +159,7 @@ export function useBrew(injected?: Machine): Brewer {
         if (e instanceof RadioUnavailableError) return false;
         if (e instanceof SlotOperationError) return false;
         if (e instanceof BrewUploadError) return false;
+        if (e instanceof BrewOwnershipError) return false;
         if (e instanceof BluetoothPermissionError) return false;
         // A scan that listened for every saved machine and heard none of them
         // is an answer about the room, not a flaky link. A second ten-second

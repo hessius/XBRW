@@ -88,3 +88,10 @@ export function isBrewRefusal(error: unknown): error is BrewRefusal {
     return error instanceof SlotOperationError || error instanceof WrongMachineError
         || error instanceof NoSavedMachineError;
 }
+
+export class BrewOwnershipError extends Error {
+    constructor(cause: unknown) {
+        super(cause instanceof Error ? cause.message : "The machine connection changed.", {cause});
+        this.name = "BrewOwnershipError";
+    }
+}

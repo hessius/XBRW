@@ -11,7 +11,6 @@ import {
 } from "@/library/libraryFilters";
 import type {FilterResolver, LibraryQuery,
               RecipeEvidence} from "@/library/libraryQuery";
-import type Pour from "@/library/Pour";
 import Recipe from "@/library/Recipe";
 import RecipeDatabase from "@/library/RecipeDatabase";
 import {recipeAtDose} from "@/library/quickEdit";

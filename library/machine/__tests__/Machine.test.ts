@@ -2255,6 +2255,75 @@ describe("one cancel per brew start", () => {
         }
     });
 
+    it.each([40519, 8022])("ends an interrupted upload honestly when cancel command %s fails", async code => {
+        jest.useFakeTimers();
+        try {
+            const transport = new FakeTransport();
+            const machine = new Machine(transport);
+            const connecting = machine.connect("AA:BB");
+            await jest.advanceTimersByTimeAsync(FRAME_GAP_MS + 10);
+            await connecting;
+            transport.emit(status(0x01));
+            machine.setAutoStart(false);
+            transport.written = [];
+            const recipe = brewable();
+            const onRecord = jest.fn();
+            const recorder = new BrewRecorder({machine, recipe, onRecord});
+            recorder.start();
+            const brewing = machine.brew(recipe);
+            await jest.advanceTimersByTimeAsync(FRAME_GAP_MS);
+            expect(transport.sent).toEqual([8102, 8104]);
+            transport.failWriteOf = {code, reason: "Stop was not confirmed"};
+            const cancelling = machine.cancelBrew().catch((error: unknown) => error);
+            await jest.advanceTimersByTimeAsync(FRAME_GAP_MS * 4);
+            await brewing;
+            expect(await cancelling).toBeInstanceOf(Error);
+            expect(machine.isConnected()).toBe(true);
+            expect(machine.phase).toMatchObject({name: "failed", reason: "cancelUnconfirmed"});
+            expect(onRecord).toHaveBeenCalledTimes(1);
+            expect(onRecord.mock.calls[0][0]).toMatchObject({
+                outcome: "failed", failure: "cancelUnconfirmed"
+            });
+            await expect(machine.startBrew()).rejects.toThrow("There is no recipe waiting");
+            expect(transport.sent).not.toContain(8002);
+            recorder.stop();
+        } finally {
+            jest.useRealTimers();
+        }
+    });
+
+    it("keeps observing an active pour if its cancel write fails", async () => {
+        const {transport, machine} = await readyMachine();
+        machine.phase = {name: "pouring", pour: 1, pours: 1};
+        transport.failWriteOf = {code: 40519, reason: "Stop was not confirmed"};
+        await expect(machine.cancelBrew()).rejects.toThrow("Stop was not confirmed");
+        expect(machine.phase).toEqual({name: "pouring", pour: 1, pours: 1});
+    });
+
+    it("does not finish a replacement upload when an old cancel write rejects", async () => {
+        const {transport, machine} = await readyMachine();
+        let rejectCancel: (error: Error) => void = () => { throw new Error("Cancel was not sent"); };
+        const held = new Promise<void>((_resolve, reject) => { rejectCancel = reject; });
+        const write = transport.write.bind(transport);
+        jest.spyOn(transport, "write").mockImplementation(async frame => {
+            if ((frame[3] | (frame[4] << 8)) === 40519) await held;
+            else await write(frame);
+        });
+        const cancelling = machine.cancelBrew().catch((error: unknown) => error);
+        await tick();
+        transport.drop();
+        await machine.connect("CC:DD");
+        transport.emit(status(0x01));
+        machine.setAutoStart(false);
+        await machine.brew(brewable());
+        expect(machine.phase.name).toBe("readyToStart");
+        rejectCancel(new Error("Old cancel failed"));
+        expect(await cancelling).toBeInstanceOf(Error);
+        expect(machine.phase.name).toBe("readyToStart");
+        await machine.startBrew();
+        expect(transport.sent).toContain(8002);
+    });
+
     it.each([true, false])(
         "never finishes an old cancel on a replacement connection (new state: %s)", async (reply) => {
             jest.useFakeTimers();

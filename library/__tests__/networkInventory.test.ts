@@ -237,6 +237,25 @@ describe("the outbound inventory", () => {
             .toBe(process.env.EXPO_PUBLIC_SHARE_API_URL === undefined);
     });
 
+    it.each(["Recipe card photos", "Shelf photo previews", "Pictures in ABOUT"])(
+        "names %s in the library's photo exception", preference => {
+            const detail = SILENT_CAPABILITIES.find(entry => entry.id === "library")?.detail;
+            expect(detail).toContain(preference);
+            expect(detail).not.toContain("Show recipe pictures");
+        }
+    );
+
+    it("discloses shelf requests even with card photos disabled", () => {
+        const detail = SILENT_CAPABILITIES.find(entry => entry.id === "library")?.detail;
+        expect(detail).toContain("Shelf previews can fetch photos even with card photos off.");
+    });
+
+    it("includes eligible automatic covers in shelf-photo disclosure", () => {
+        const call = OUTBOUND_CALLS.find(entry => entry.id === "images");
+        expect(call?.trigger).toContain("eligible automatic shelves");
+        expect(call?.trigger).not.toContain("never automatic shelves");
+    });
+
     it("says something about every entry", () => {
         for (const call of OUTBOUND_CALLS) {
             expect(call.carries.length).toBeGreaterThan(0);

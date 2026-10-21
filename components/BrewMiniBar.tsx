@@ -64,6 +64,14 @@ function say(props: Props): {title: string; detail: string; line: string} {
         };
     }
 
+    if (phase.name === "failed" && phase.reason === "cancelUnconfirmed") {
+        return {
+            title: MINI_FAILURE_WHY.cancelUnconfirmed,
+            detail: "CHECK THE MACHINE",
+            line: palette.danger
+        };
+    }
+
     if (phase.name === "failed" || phase.name === "cancelled" ||
         phase.name === "lostContact") {
         const why = phase.name === "cancelled"
