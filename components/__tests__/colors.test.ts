@@ -1,4 +1,4 @@
-import {accents, mix, onAccent, onBrand, palette} from "@/constants/colors";
+import {accents, mix, onAccent, onBrand, palette, switchColours} from "@/constants/colors";
 import {contrast, over} from "@/test-utils/contrast";
 
 const everyAccent = [...accents.coffee, ...accents.tea];
@@ -149,5 +149,69 @@ describe("mix", () => {
 
     it("always returns a six-digit hex, padding a small channel", () => {
         expect(mix("#000000", "#0f0f0f", 0.5)).toBe("#080808");
+    });
+});
+
+describe("switch states", () => {
+    // WCAG 1.4.11: the parts of a control that show its state need 3:1 against
+    // what is next to them. Before these tokens, on and off were two near-equal
+    // greys with the same white thumb, and position was the only cue.
+    const {dark, accent} = switchColours;
+    const grounds = {base: palette.base, surface: palette.surface, raised: palette.raised};
+
+    it.each(Object.entries(grounds))("fills the on track visibly on %s", (_, ground) => {
+        expect(contrast(dark.on.track, ground)).toBeGreaterThanOrEqual(3);
+    });
+
+    it.each(Object.entries(grounds))("rings the off track visibly on %s", (_, ground) => {
+        // The off fill is the quiet `control` grey and stays under 3:1 on
+        // purpose; the ring is what carries the edge.
+        expect(contrast(dark.off.track, ground)).toBeLessThan(3);
+        expect(contrast(dark.off.ring, ground)).toBeGreaterThanOrEqual(3);
+    });
+
+    it("tells the on track from the off track", () => {
+        expect(contrast(dark.on.track, dark.off.track)).toBeGreaterThanOrEqual(3);
+    });
+
+    it("fills the on track with the brighter of the two magentas", () => {
+        // `brandFill` would carry the white thumb better, but sits only 2.53:1
+        // from the off track. Pinned so it is not swapped in by symmetry with
+        // the support tile.
+        expect(dark.on.track).toBe(palette.brand);
+        expect(contrast(palette.brandFill, dark.off.track)).toBeLessThan(3);
+    });
+
+    it("keeps each thumb visible on its own track", () => {
+        expect(contrast(dark.on.thumb, dark.on.track)).toBeGreaterThanOrEqual(3);
+        expect(contrast(dark.off.thumb, dark.off.track)).toBeGreaterThanOrEqual(3);
+    });
+
+    it("pins the measured values", () => {
+        // The figures quoted in `switchColours`. A retuned token has to move
+        // these on purpose rather than drift past them.
+        expect(contrast(dark.on.track, palette.surface)).toBeCloseTo(5.04, 2);
+        expect(contrast(dark.on.track, palette.raised)).toBeCloseTo(4.79, 2);
+        expect(contrast(dark.on.track, dark.off.track)).toBeCloseTo(3.59, 2);
+        expect(contrast(dark.on.thumb, dark.on.track)).toBeCloseTo(3.78, 2);
+        expect(contrast(dark.off.ring, palette.surface)).toBeCloseTo(3.73, 2);
+        expect(contrast(dark.off.ring, palette.raised)).toBeCloseTo(3.55, 2);
+        expect(contrast(dark.off.thumb, dark.off.track)).toBeCloseTo(5.38, 2);
+    });
+
+    describe("on a recipe accent", () => {
+        it.each(everyAccent)("fills the on track visibly on %s", (fill) => {
+            expect(contrast(accent.on.track, fill)).toBeGreaterThanOrEqual(3);
+            expect(contrast(accent.on.thumb, accent.on.track)).toBeGreaterThanOrEqual(3);
+        });
+
+        it.each(everyAccent)("outlines the off track and thumb visibly on %s", (fill) => {
+            // Off is hollow: the accent shows through, so the ring and the
+            // thumb are measured against the accent itself, and so is the
+            // difference between the filled on track and the empty off one.
+            expect(accent.off.track).toBe(palette.none);
+            expect(contrast(accent.off.ring, fill)).toBeGreaterThanOrEqual(3);
+            expect(contrast(accent.off.thumb, fill)).toBeGreaterThanOrEqual(3);
+        });
     });
 });
