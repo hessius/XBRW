@@ -241,7 +241,7 @@ export const SILENT_CAPABILITIES: SilentCapability[] = [
     {
         id:     "library",
         title:  "Your library",
-        detail: "Recipes, tags, shelves and notes are stored in a database on this phone. There is no sync, no account of our own, and no server that holds a copy. The one exception is a photo: a recipe imported from xBloom remembers where its picture came from, and opening that recipe, or seeing it in the list with Show recipe pictures on, fetches it. The Load a photo entry below says what that carries."
+        detail: "Recipes, tags, shelves and notes are stored in a database on this phone. There is no sync, no account of our own, and no server that holds a copy. Photos are the exception: imported recipes remember their photo addresses. Recipe card photos, Shelf photo previews and Pictures in ABOUT control the respective placements. Shelf previews can fetch photos even with card photos off. The Load a photo entry below says what those requests carry."
     },
     {
         id:     "brewing",

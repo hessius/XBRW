@@ -81,5 +81,9 @@ The approved picture work is ported from preview checkpoints `071e3568`,
 features and the broader colour proposal are not included. Package C's hero
 name-fitting work remains separate.
 
+The package's single integration review also corrected the library privacy
+disclosure: it names all three photo preferences and explicitly covers shelf
+requests even with card photos OFF.
+
 Photo performance remains open in #253; no new cache policy, native timing
 measurement or hardware acceptance is claimed.
