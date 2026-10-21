@@ -56,6 +56,7 @@ import {RECORD_ACTION_GAP, SCREEN_PADDING} from "@/constants/layout";
 import type {StoredBrew} from "@/library/BrewDatabase";
 import {HANDOFF_ALREADY_SENT, ENDED_ON_MACHINE_NOTE, pausedNote, pauseReasonsNote}
     from "@/constants/brewCopy";
+import {STABLE_HOST} from "@/constants/views";
 
 /** Minimal interface for looking up a recipe. Injected by tests. */
 export type RecipeLookup = {getRecipe: (uuid: string) => Recipe | null};
@@ -497,7 +498,7 @@ export default function BrewRecord({recipeLookup}: Props) {
                 nothing on its own, so the screen underneath stays reachable
                 unless it is hidden from here. The sheet sits outside this
                 subtree so it never hides itself. */}
-            <YStack flex={1} gap="$2" testID="brew-record-content"
+            <YStack {...STABLE_HOST} flex={1} gap="$2" testID="brew-record-content"
                     accessibilityElementsHidden={screenCovered}
                     importantForAccessibility={screenCovered ? "no-hide-descendants" : "auto"}>
             {/* Titled "Brew", not with the recipe's name: `BrewSummary` draws

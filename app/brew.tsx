@@ -72,6 +72,7 @@ import {
 import Recipe from "@/library/Recipe";
 import RecipeDatabase from "@/library/RecipeDatabase";
 import {SCREEN_PADDING} from "@/constants/layout";
+import {STABLE_HOST} from "@/constants/views";
 
 const WORKING = new Set(["idle", "waking", "sending"]);
 export const BREW_BAND_GAP = 13;
@@ -511,7 +512,7 @@ export default function Brew({historyStore}: {historyStore?: ExportStore} = {}) 
         {/* Hidden from the reader while the bean sheet is up. XbrwSheet is
             not a modal, so on Android `accessibilityViewIsModal` on the sheet
             does not take the screen behind it out of the reader's path. */}
-        <YStack flex={1} backgroundColor={palette.base} padding="$4" gap="$3"
+        <YStack {...STABLE_HOST} flex={1} backgroundColor={palette.base} padding="$4" gap="$3"
                 accessibilityElementsHidden={namingBean || ratingNoteOpen}
                 importantForAccessibility={namingBean || ratingNoteOpen
                     ? "no-hide-descendants"

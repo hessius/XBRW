@@ -17,6 +17,7 @@ import {LICENCES} from "@/constants/licences";
 import {useLiveBrew} from "@/hooks/useLiveBrew";
 import {useSetting} from "@/hooks/useSetting";
 import type {Settings} from "@/library/Settings";
+import {STABLE_HOST} from "@/constants/views";
 
 type Props = {
     /** Injected by tests. The route renders with the shared store. */
@@ -134,7 +135,7 @@ export default function AboutScreen({settings}: Props = {}) {
     }
 
     return (
-        <YStack flex={1} backgroundColor={palette.base}
+        <YStack {...STABLE_HOST} flex={1} backgroundColor={palette.base}
                 accessibilityElementsHidden={ratingNoteOpen}
                 importantForAccessibility={ratingNoteOpen ? "no-hide-descendants" : "auto"}>
             <ScreenHeader title="About" onBack={() => router.back()}/>
