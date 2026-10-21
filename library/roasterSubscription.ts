@@ -42,6 +42,8 @@ export type RoasterSubscription = {
     paused: boolean;
     /** Why the last attempt failed, or absent when it worked. */
     lastError?: SyncError;
+    /** Epoch ms selected for Import, oldest first. Absent when not selected. */
+    pinnedAt?: number;
 };
 
 function text(value: unknown, max: number): string | undefined {
@@ -77,6 +79,8 @@ function subscription(value: unknown): RoasterSubscription | null {
     if (SYNC_ERRORS.includes(entry.lastError as SyncError)) {
         result.lastError = entry.lastError as SyncError;
     }
+    const pinnedAt = time(entry.pinnedAt);
+    if (pinnedAt > 0) result.pinnedAt = pinnedAt;
     return result;
 }
 
@@ -120,12 +124,13 @@ export function subscriptionFor(
     return key === null ? undefined : list.find((sub) => feedKey(sub.feed) === key);
 }
 
-/** Replace (or add) one subscription, keyed by feed. */
+/** Replace in place (or append), preserving the order of equal legacy pins. */
 export function withSubscription(
     list: readonly RoasterSubscription[], next: RoasterSubscription
 ): RoasterSubscription[] {
     const key = feedKey(next.feed);
-    return [...list.filter((sub) => feedKey(sub.feed) !== key), next];
+    const index = list.findIndex((sub) => feedKey(sub.feed) === key);
+    return index < 0 ? [...list, next] : list.map((sub, i) => i === index ? next : sub);
 }
 
 export function withoutSubscription(

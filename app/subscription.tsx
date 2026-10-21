@@ -8,6 +8,7 @@ import {openLink} from "@/components/openLink";
 import ScreenHeader from "@/components/ScreenHeader";
 import SettingsActionRow from "@/components/SettingsActionRow";
 import SettingsSection from "@/components/SettingsSection";
+import SettingsToggleRow from "@/components/SettingsToggleRow";
 import UnsubscribeSheet from "@/components/UnsubscribeSheet";
 import {palette} from "@/constants/colors";
 import router from "@/hooks/steadyRouter";
@@ -83,6 +84,10 @@ export default function SubscriptionScreen({settings, feedUrl, fetchBody, now: c
                     </SettingsSection>
 
                     <SettingsSection>
+                        <SettingsToggleRow label="Show in Import"
+                                           description="Choose up to 3 roasters, in the order you select them."
+                                           value={sub.pinnedAt !== undefined}
+                                           onChange={(shown) => subs.showInImport(sub, shown)}/>
                         <SettingsActionRow label="Browse coffees"
                                            onPress={() => router.push({pathname: "/roaster",
                                                                        params: {feed: sub.feed}})}/>

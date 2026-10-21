@@ -145,6 +145,49 @@ describe("the subscriptions list", () => {
 });
 
 describe("a roaster's subscription", () => {
+    it("makes Show in Import an explicit, persistent choice that can be removed", async () => {
+        const settings = subscribed();
+        await drawDetail(settings);
+        expect(screen.getByRole("switch", {name: "Show in Import", checked: false})).toBeTruthy();
+        await fireEvent.press(screen.getByRole("switch", {name: "Show in Import"}));
+        expect(readSubscriptions(settings)[0].pinnedAt).toBe(NOW);
+        expect(screen.getByRole("switch", {name: "Show in Import", checked: true})).toBeTruthy();
+        await fireEvent.press(screen.getByRole("switch", {name: "Show in Import"}));
+        expect(readSubscriptions(settings)[0].pinnedAt).toBeUndefined();
+    });
+
+    it("visibly refuses a fourth choice without changing any subscription", async () => {
+        const settings = subscribed();
+        const {feed, body} = feedBody([{id: "a"}]);
+        for (let i = 1; i <= 3; i++) {
+            const url = `https://other${i}.example/feed`;
+            subscribe(settings, url, feed, body, NOW);
+            updateSubscription(settings, url, (s) => ({...s, pinnedAt: i}));
+        }
+        const before = settings.get("roasterSubscriptions");
+        await drawDetail(settings);
+        await fireEvent.press(screen.getByRole("switch", {name: "Show in Import"}));
+        expect(settings.get("roasterSubscriptions")).toBe(before);
+        expect(mockNotify).toHaveBeenCalledWith({
+            tone: "info", message: "Choose up to 3 roasters for Import. Remove a choice first."
+        });
+        expect(screen.getByRole("switch", {name: "Show in Import", checked: false})).toBeTruthy();
+    });
+
+    it("exposes a legacy fourth choice as selected and still allows removal", async () => {
+        const settings = subscribed((s) => ({...s, pinnedAt: 4}));
+        const {feed, body} = feedBody([{id: "a"}]);
+        for (let i = 1; i <= 3; i++) {
+            const url = `https://other${i}.example/feed`;
+            subscribe(settings, url, feed, body, NOW);
+            updateSubscription(settings, url, (s) => ({...s, pinnedAt: i}));
+        }
+        await drawDetail(settings);
+        expect(screen.getByRole("switch", {name: "Show in Import", checked: true})).toBeTruthy();
+        await fireEvent.press(screen.getByRole("switch", {name: "Show in Import"}));
+        expect(readSubscriptions(settings).filter((s) => s.pinnedAt !== undefined)).toHaveLength(3);
+    });
+
     it("names the roaster and says what it holds and how fresh it is", async () => {
         await drawDetail(subscribed());
         expect(screen.getByText("Test Roaster")).toBeTruthy();

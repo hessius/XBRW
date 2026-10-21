@@ -1,9 +1,9 @@
 # Roaster feed
 
 > Integration status: this is the publication contract staged with Package E's
-> catalogue foundation. The accepted import hook's subscription offers, explicit
-> Import choices and re-import workflow are separate follow-up tasks; this
-> document does not mean those entry points are already connected.
+> catalogue foundation. Explicit Import choices are staged separately; the
+> accepted import hook's subscription offers and safe re-import remain follow-up
+> tasks. This document does not mean those entry points are already connected.
 
 A roaster feed is one JSON file listing every coffee a roaster has published an
 xBloom recipe for. An XBRW++ import link can point at it, and the app then offers

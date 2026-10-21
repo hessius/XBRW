@@ -146,7 +146,7 @@ stdin path. No native build, live roaster request, NFC or BLE test was attempted
 `hooks/useRoasterSubscriptions.ts`, `components/ImportSheet.tsx`,
 subscription management routes and their tests.
 
-- [ ] **Step 1: Add failing tests for choice ordering and the three-row cap.**
+- [x] **Step 1: Add failing tests for choice ordering and the three-row cap.**
 
 Use the existing `RoasterSubscription` shape and source test factories:
 
@@ -173,7 +173,7 @@ it("shows chosen roasters in selection order and caps old data at three", () => 
 Run `npx jest --runTestsByPath library/__tests__/roasterImport.test.ts`.
 Expected failure: the new module is absent.
 
-- [ ] **Step 2: Implement the pure selection policy.**
+- [x] **Step 2: Implement the pure selection policy.**
 
 ```ts
 import type {RoasterSubscription} from "./roasterSubscription";
@@ -195,7 +195,7 @@ The user-facing mutation refuses a fourth new choice with a visible message,
 leaves existing data intact, and uses monotonic selection timestamps so equal
 clock readings cannot reorder choices. Removing a choice remains allowed.
 
-- [ ] **Step 3: Add component regressions before changing Import.**
+- [x] **Step 3: Add component regressions before changing Import.**
 
 Assert native Paste still uses `PasteOverlay`, plain opening does not call
 `TextInput.prototype.focus`, field tapping remains available, three chosen
@@ -206,7 +206,7 @@ Pressing a source closes the sheet before pushing the correct route.
 Run `npx jest --runTestsByPath components/__tests__/ImportSheet.test.tsx app/__tests__/subscriptions.test.tsx`.
 Expected failures: old focus, layout/copy and missing choices.
 
-- [ ] **Step 4: Adapt the sheet and management controls.**
+- [x] **Step 4: Adapt the sheet and management controls.**
 
 Keep `PasteOverlay` intact, place its face beside a flexing input, and give the
 Paste control a minimum 44 pt target. Keep hook intent-specific failure focus;
@@ -216,7 +216,40 @@ Do not import `RoasterStrip`, `RoasterSearchRow`, `roasterHome` or
 `useHomeRoasters`. Rename the hub entry and heading to the approved copy.
 Use scrolling content rather than a fixed height.
 
-- [ ] **Step 5: Rerun the tests, typecheck and commit.**
+- [x] **Step 5: Rerun the tests, typecheck and commit.**
+
+### Task 2 integration record
+
+Adapted only #240's subscription pin storage/mutation/control pattern from
+`25672dfab641116521be313aa650ab788f869994` (Rhys Evans). Pins now mean
+**Show in Import**, never home access. New choices use monotonic timestamps,
+refuse a fourth without writing, and never fill vacant slots. Validated legacy
+choices survive backup/restore, including extra pins; management exposes each
+one. Subscription replacement now preserves list position so a sync cannot
+reshuffle equal legacy timestamps.
+
+Import keeps the native `PasteOverlay` next to the flexing input. Plain
+open/reset remain keyboard-down; existing share/shortcut failure policies stay
+intact. One scrolling body contains idle-only selected roasters, All roasters,
+the account and the renamed xBloom catalogue. Cached counts remain absent
+until a cache exists. Source navigation closes before pushing. Home and the
+accepted catalogue `id:`/`index:` routing fix are unchanged.
+
+Verification: test-first failures were observed for missing choice policy,
+management controls, initial focus, catalogue copy and source rows. A separate
+red regression caught equal pins reordering after sync. The targeted dual-
+platform run passes 22 suites / 1,020 tests (ImportSheet, subscriptions,
+roaster catalogue routes/domain, hub, Settings restore, import hook,
+choice policy, sync, backup and alerts). Typecheck and whitespace checks pass;
+repository lint reports no errors and the existing 32 warnings. Self-review
+followed pin parsing through persistence, sync, restore and navigation, and
+checked that ImportResult introduces no nested scroll view.
+
+Native clipboard consent, touch/keyboard behaviour, large-font/short-screen
+scrolling and gesture interaction still need device verification; Jest is not
+evidence of native behaviour. No native/dependency changes, live feed fetch,
+NFC/BLE test, push, PR, automated review, merge or deployment was performed.
+Task 3 offer/re-import/metadata work and Tasks 4–5 shelves remain unimplemented.
 
 ## Task 3: Preserve safe imports and capture roaster metadata
 

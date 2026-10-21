@@ -2,7 +2,7 @@ import * as Clipboard from "expo-clipboard";
 import router from "@/hooks/steadyRouter";
 import React, {useEffect, useRef, useState} from "react";
 import {Keyboard, Pressable, TextInput} from "react-native";
-import {Input, Spinner, Text, XStack, YStack} from "tamagui";
+import {Input, ScrollView, Spinner, Text, XStack, YStack} from "tamagui";
 import type {ColorTokens} from "tamagui";
 
 import DotIcon from "@/components/DotIcon";
@@ -12,13 +12,18 @@ import PasteOverlay from "@/components/PasteOverlay";
 import XbrwSheet from "@/components/XbrwSheet";
 import {palette} from "@/constants/colors";
 import type {RecipeImport} from "@/hooks/useRecipeImport";
+import {sharedSettings, useSetting} from "@/hooks/useSetting";
+import {readCatalogue} from "@/library/roasterCatalogue";
+import {selectedImportRoasters} from "@/library/roasterImport";
+import {parseSubscriptions} from "@/library/roasterSubscription";
+import type {Settings} from "@/library/Settings";
 
 const FIELD_LABEL = "Share link or pod code";
 const FORMAT_HINT = "Paste an xBloom share link, or a pod code like ETH120.";
 const ACCOUNT_LABEL = "YOUR XBLOOM ACCOUNT";
 const ACCOUNT_CAPTION = "Bring in the recipes you've made";
-const CATALOGUE_LABEL = "BROWSE THE CATALOGUE";
-const CATALOGUE_CAPTION = "Find recipes shared by other xBloom users.";
+const CATALOGUE_LABEL = "XBLOOM CATALOGUE";
+const CATALOGUE_CAPTION = "Recipes from xBloom and the community";
 
 /**
  * The app's own face for the paste affordance.
@@ -35,6 +40,8 @@ function PasteFace() {
             alignItems="center"
             justifyContent="center"
             paddingVertical="$3"
+            paddingHorizontal="$3"
+            minHeight={44}
             borderRadius="$6"
             backgroundColor={palette.raised}
             borderWidth={1}
@@ -50,7 +57,29 @@ type Props = {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     importer: RecipeImport;
+    settings?: Settings;
 };
+
+function RoasterSourceRow({label, caption, onPress}: {
+    label: string; caption?: string; onPress: () => void;
+}) {
+    return (
+        <Pressable accessibilityRole="button"
+                   accessibilityLabel={caption ? `${label}, ${caption}` : label}
+                   onPress={onPress}
+                   style={({pressed}) => ({opacity: pressed ? 0.7 : 1, minHeight: 44})}>
+            <XStack minHeight={44} alignItems="center" justifyContent="space-between" gap="$4">
+                <YStack flex={1} gap="$1">
+                    <Text color={palette.text} fontSize={16}>{label}</Text>
+                    {caption !== undefined && <Text color={palette.dim} fontSize={13}>{caption}</Text>}
+                </YStack>
+                <XStack style={{transform: [{rotate: "180deg"}]}}>
+                    <DotIcon name="back" size={14} color={palette.muted}/>
+                </XStack>
+            </XStack>
+        </Pressable>
+    );
+}
 
 /**
  * The one import sheet, reached from three doors.
@@ -59,7 +88,18 @@ type Props = {
  * whether the field is drawn and what is said when it fails belongs to
  * `useRecipeImport`.
  */
-export default function ImportSheet({open, onOpenChange, importer}: Props) {
+export default function ImportSheet({open, onOpenChange, importer, settings}: Props) {
+    const store = settings ?? sharedSettings();
+    const [stored] = useSetting("roasterSubscriptions", store);
+    // A refreshed feed updates its count without starting a request here.
+    useSetting("roasterCatalogue", store);
+    const subscriptions = parseSubscriptions(stored);
+    const chosen = selectedImportRoasters(subscriptions);
+    const counts = chosen.map((sub) => {
+        const cached = readCatalogue(store, sub.feed);
+        const count = cached?.feed.coffees.length;
+        return count === undefined ? undefined : `${count} ${count === 1 ? "coffee" : "coffees"}`;
+    });
     // `showField` and `focusField` are the hook's, not props: whether the field
     // is drawn and whether it grabs focus both follow from the import intent,
     // which only the hook knows, so they live in exactly one place. `showField`
@@ -122,9 +162,9 @@ export default function ImportSheet({open, onOpenChange, importer}: Props) {
     // failure, which would raise the keyboard on someone whose attention is
     // still in the app they shared from. So focus is driven here, on the
     // false->true edge of the field being shown, and gated on `focusField` --
-    // which the hook drops to false only for that one case. A plain open, a
-    // shortcut degrade and a shortcut failure all keep `focusField` true and so
-    // still focus; the typed and in-field-paste paths never hide the field, so
+    // which the hook leaves false on plain open/reset and a failed share.
+    // A shortcut degrade and a shortcut failure still request focus;
+    // the typed and in-field-paste paths never hide the field, so
     // there is no edge and their keyboard is left exactly as the user left it.
     // Focus lives in the sheet, not the hook: `useRecipeImport` owns the import
     // rules and holds no React Native import, and which control has focus is
@@ -168,11 +208,15 @@ export default function ImportSheet({open, onOpenChange, importer}: Props) {
 
     return (
         <XbrwSheet open={open} onOpenChange={onOpenChange} title="Import" prewarm>
-            <YStack gap="$3" paddingHorizontal="$4" paddingBottom="$4">
+            <ScrollView testID="import-scroll" flex={1} keyboardShouldPersistTaps="handled"
+                        contentContainerStyle={{paddingHorizontal: 16, paddingBottom: 16, gap: 12}}>
                 {showField && (
-                    <>
+                    <XStack testID="import-input-row" gap="$2" alignItems="center">
                         <Input
                             ref={inputRef}
+                            flex={1}
+                            minWidth={0}
+                            minHeight={44}
                             accessibilityLabel={FIELD_LABEL}
                             placeholder={FIELD_LABEL}
                             // The palette is a plain module of raw strings, not
@@ -215,6 +259,7 @@ export default function ImportSheet({open, onOpenChange, importer}: Props) {
                             made. Either way the sheet shows its own dot-matrix
                             `PASTE`, not an obvious system control. */}
                         <PasteOverlay
+                            style={{minWidth: 44, minHeight: 44}}
                             native={nativePaste}
                             accessibilityLabel="Paste from clipboard"
                             onPress={paste}
@@ -223,28 +268,28 @@ export default function ImportSheet({open, onOpenChange, importer}: Props) {
                             faceTestID="import-paste-face">
                             <PasteFace/>
                         </PasteOverlay>
-                    </>
+                    </XStack>
                 )}
 
-                {/* The fourth door. It lives in the sheet rather than on the home
-                    screen because it is a kind of import, and the home screen's
-                    three tiles are the app's entire top-level vocabulary -- a
-                    fourth would cost more than it bought.
+                {state.status === "idle" && subscriptions.length > 0 && (
+                    <YStack testID="import-roasters" gap="$2">
+                        {chosen.map((sub, index) => (
+                            <RoasterSourceRow key={sub.feed} label={sub.roaster} caption={counts[index]}
+                                              onPress={() => {
+                                                  onOpenChange(false);
+                                                  router.push({pathname: "/roaster", params: {feed: sub.feed}});
+                                              }}/>
+                        ))}
+                        <RoasterSourceRow label="All roasters" onPress={() => {
+                            onOpenChange(false);
+                            router.push("/roasters");
+                        }}/>
+                    </YStack>
+                )}
 
-                    A rule, a dot-matrix label in the sheet's own chrome
-                    register, a caption and a chevron, rather than a filled
-                    button. The chevron promises departure, so the row does not
-                    read as a third thing that might expand in place -- which a
-                    button sitting under the field and the paste face would.
-
-                    It shows only while the sheet is idle. Once a lookup is
-                    resolving, has failed or has found something, the sheet has
-                    one subject, and a second import route competing with a
-                    found recipe is noise at the moment of decision.
-
-
-                    Drawn only while idle for the same reason: a found recipe
-                    has already answered the question the row asks. */}
+                {/* Sources belong to Import, not the saved library. Once a
+                    lookup starts the sheet has one subject, so every source
+                    row stays idle-only. */}
                 {state.status === "idle" && (
                     <Pressable accessibilityRole="button"
                                accessibilityLabel={`${ACCOUNT_LABEL}, ${ACCOUNT_CAPTION}`}
@@ -380,7 +425,7 @@ export default function ImportSheet({open, onOpenChange, importer}: Props) {
                 {state.status === "found" && (
                     <ImportResult preview={state.preview} onOpen={openFound}/>
                 )}
-            </YStack>
+            </ScrollView>
         </XbrwSheet>
     );
 }

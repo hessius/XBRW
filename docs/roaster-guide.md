@@ -1,9 +1,9 @@
 # XBRW++ for roasters: a setup guide
 
-> Integration status: the feed parser, catalogue routes and checker are staged.
-> The customer-facing Import choices and subscription offer are being integrated
-> separately. This guide describes the intended completed flow, not a release
-> readiness claim for the foundation alone.
+> Integration status: the feed parser, catalogue routes, checker and explicit
+> Import choices are staged. Subscription offers and safe re-import are separate
+> follow-ups. This guide describes the intended completed flow, not a release
+> readiness claim.
 
 This guide is for coffee roasters who publish xBloom recipes for their coffees
 and want customers to find them in XBRW++. You do not need to be a developer.
@@ -22,6 +22,11 @@ the practical version.
   catalogue. Nothing else is added to their library.
 - **Your catalogue.** They can browse every coffee you have a recipe for, with
   photos, roast level, tasting notes and bag sizes, and search or filter it.
+  Subscribed roasters are reached through **Import → All roasters**, not the
+  xBloom catalogue. Under **Manage feeds**, each roaster has **Show in Import**:
+  customers can choose up to three shortcuts, shown in selection order.
+  Subscribing does not select a shortcut automatically; removing one leaves
+  the subscription and saved recipes alone.
 - **New coffees and restocks.** When you add a coffee, it shows as NEW in their
   catalogue the next time the app updates. If a coffee is sold out, they can
   ask to be told when it is back, and the app tells them when your list says
@@ -455,7 +460,7 @@ app's page.
    iPhone without the app, Safari says it cannot open the page. That is
    normal.)
 5. **Go back to the app's library.** It should ask "Subscribe to {your
-   name}?". Say yes, then open Catalogue, then Roasters, and check your
+   name}?". Say yes, then open Import, then All roasters, and check your
    coffees, photos and prices look right.
 6. **Tap BUY on a bag** and check it opens the right product in the browser.
 

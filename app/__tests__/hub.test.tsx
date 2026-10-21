@@ -207,7 +207,7 @@ describe("the catalogue screen", () => {
         await renderHub();
         await settleRows();
 
-        expect(screen.getByRole("header", {name: /catalogue/i})).toBeTruthy();
+        expect(screen.getByRole("header", {name: /xbloom catalogue/i})).toBeTruthy();
         expect(screen.getByTestId("screen-title-count")).toHaveTextContent("2");
     });
 

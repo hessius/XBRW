@@ -68,6 +68,18 @@ function setup(stored: Recipe[] = []) {
     return {onOpenRecipe, stored};
 }
 
+it("opens and resets quietly without changing shortcut failure focus policy", async () => {
+    mockGetRecipe.mockReturnValueOnce(null);
+    const {result} = await renderHook(() => useRecipeImport(setup()));
+    expect(result.current.focusField).toBe(false);
+    await act(() => result.current.resolveNow({kind: "xid", xid: "ETH999"}, "shortcut"));
+    await waitFor(() => expect(result.current.state.status).toBe("error"));
+    expect(result.current.focusField).toBe(true);
+    await act(() => result.current.reset());
+    expect(result.current.focusField).toBe(false);
+    expect(result.current.showField).toBe(true);
+});
+
 beforeEach(() => {
     mockFetchRecipeDetail.mockReset().mockResolvedValue(undefined);
     mockGetRecipe.mockReset().mockReturnValue(importedRecipe());

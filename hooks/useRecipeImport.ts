@@ -137,11 +137,11 @@ export type RecipeImport = {
     /**
      * Whether the field, when the sheet draws it, should take focus.
      *
-     * The field is only unmounted and remounted for the two intents that hide it
-     * -- a share intent and the tile shortcut -- so this only decides the
-     * keyboard for those. True everywhere except when a *share intent* fails: its
-     * field was hidden, so restoring it remounts a `TextInput` whose focus would
-     * raise the keyboard, and a share came from another app, not this sheet, so
+     * A plain open and reset stay quiet. The field is only unmounted and
+     * remounted for the two intents that hide it -- a share intent and the tile
+     * shortcut. When a *share intent* fails, restoring the field remounts a
+     * `TextInput` whose focus would raise the keyboard. A share came from
+     * another app, not this sheet, so
      * an unbidden keyboard is an ambush. A shortcut failure or degrade keeps
      * focus -- the user tapped the tile and is now in the sheet, ready to type
      * the next code. A typed or in-field-paste failure never unmounts the field,
@@ -192,11 +192,10 @@ export function useRecipeImport({stored, onOpenRecipe, onSaveExisting}: Options)
     const [showField, setShowField] = useState(true);
     /**
      * Whether the field takes focus when the sheet next draws it. See
-     * `focusField` on `RecipeImport`. The default is true (every ordinary
-     * appearance of the field wants the keyboard); only a failed share intent
-     * sets it false, so its restored field comes back quietly.
+     * `focusField` on `RecipeImport`. Plain opening keeps the keyboard down;
+     * resolving an intent sets its own policy for any restored field.
      */
-    const [focusField, setFocusField] = useState(true);
+    const [focusField, setFocusField] = useState(false);
 
     /**
      * The last text seen, tracked synchronously.
@@ -550,7 +549,7 @@ export function useRecipeImport({stored, onOpenRecipe, onSaveExisting}: Options)
         setValue("");
         setHint(false);
         setShowField(true);
-        setFocusField(true);
+        setFocusField(false);
         setState({status: "idle"});
     }
 

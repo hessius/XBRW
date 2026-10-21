@@ -561,7 +561,7 @@ describe("SettingsScreen", () => {
         const storage = memoryStorage();
         const feed = "https://roaster.example/feed.json";
         const subscriptions = JSON.stringify([{
-            feed, roaster: "Roaster", paused: true, lastSync: 1000, lastAttempt: 2000
+            feed, roaster: "Roaster", paused: true, lastSync: 1000, lastAttempt: 2000, pinnedAt: 123
         }]);
         const prints = JSON.stringify({u1: "brewing content"});
         mockPickBackup.mockResolvedValue(backupOf([recipeNamed("A", "u1")], {
@@ -581,7 +581,7 @@ describe("SettingsScreen", () => {
 
         const restored = new Settings(storage);
         expect(JSON.parse(restored.get("roasterSubscriptions"))).toEqual([{
-            feed, roaster: "Roaster", paused: true, lastSync: 0, lastAttempt: 0
+            feed, roaster: "Roaster", paused: true, lastSync: 0, lastAttempt: 0, pinnedAt: 123
         }]);
         expect(restored.get("roasterFeedOptOut")).toBe(JSON.stringify([feed]));
         expect(restored.get("importFingerprints")).toBe(prints);
