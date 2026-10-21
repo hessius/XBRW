@@ -25,7 +25,42 @@ import {onAccent} from "@/constants/colors";
  * two views that only happen to agree today.
  */
 const PROFILE_OVERHANG = 2;
-const PROFILE_HEIGHT = 44;
+
+/**
+ * The tile's inset, as a number: Tamagui's `$3`, which it used to be written as.
+ * The profile's corner reaches back out through it to the tile's edges, and a
+ * negative margin needs the number.
+ */
+const TILE_PADDING = 13;
+
+/**
+ * The silhouette's tallest height, and the room it keeps from the text above.
+ *
+ * The profile sits in the corner the text leaves free, the way it sits beside
+ * the card's figures rather than under them: badges, a two-line name and the
+ * figures fill the top of the tile, and the profile takes what is left down to
+ * the bottom edge. 26 is about what a two-line name leaves at the default text
+ * size (badges 15, name 2 x 18, figures 15, gaps and clearance), so tiles in a
+ * row draw their silhouettes at the same height whether a name takes one line
+ * or two. Larger text
+ * leaves less, and the profile shrinks to fit rather than run under the
+ * figures; below `PROFILE_MIN_HEIGHT` a staircase is no longer readable as one,
+ * so it is not drawn at all.
+ */
+export const PROFILE_HEIGHT = 26;
+export const PROFILE_CLEARANCE = 4;
+export const PROFILE_MIN_HEIGHT = 12;
+
+/**
+ * How tall the profile can be in a corner `room` points tall.
+ *
+ * `room` is measured, not estimated: it is what the badges, the name and the
+ * figures actually left at this text size. Zero means do not draw.
+ */
+export function tileProfileHeight(room: number): number {
+    const height = Math.min(PROFILE_HEIGHT, Math.floor(room - PROFILE_CLEARANCE));
+    return height >= PROFILE_MIN_HEIGHT ? height : 0;
+}
 
 /**
  * The card's three figures, as one line for a tile that has no room for three.
@@ -124,6 +159,12 @@ type Props = {
  *
  * The name is prose and stays in Inter, matching the list card and the manual
  * shelf's own label; the marker is machine vocabulary and is Doto.
+ *
+ * Top to bottom: badges, the name on up to two lines, the figures, and the pour
+ * profile in the bottom corner. The text is laid out first and the profile gets
+ * what it leaves, so the silhouette can never be drawn across the name or the
+ * figures. That is the card's arrangement too: its profile shares the bottom
+ * edge with the figures but sits beside them, not under them.
  */
 export default function RecipeShelfTile({
     recipe, onPress, onLongPress, showCoffeeMarker = true, dottedProfile = false,
@@ -134,6 +175,8 @@ export default function RecipeShelfTile({
     const isTea = accentGroupFor(recipe) === "tea";
     const marker = isTea ? "TEA" : "COFFEE";
     const showMarker = isTea || showCoffeeMarker;
+    const [profileRoom, setProfileRoom] = React.useState(0);
+    const profileHeight = tileProfileHeight(profileRoom);
 
     // The whole tile is one accessibility element, so nothing inside is spoken
     // on its own: everything it shows has to be in this label or it reaches a
@@ -220,18 +263,9 @@ export default function RecipeShelfTile({
                 transform: [{scale: pressed ? 0.99 : 1}]
             })}>
             <YStack testID="recipe-tile" height={TILE_HEIGHT}
-                    justifyContent="space-between" overflow="hidden"
-                    padding="$3" borderRadius="$4"
+                    gap="$1.5" overflow="hidden"
+                    padding={TILE_PADDING} borderRadius="$4"
                     style={{backgroundColor: accent}}>
-                <View pointerEvents="none"
-                      style={{
-                          position: "absolute",
-                          right:    -(PROFILE_BLEED + PROFILE_OVERHANG),
-                          bottom:   -(PROFILE_BLEED + PROFILE_OVERHANG)
-                      }}>
-                    <PourProfile testID="recipe-tile-profile" pours={recipe.pours}
-                                 width={140} height={PROFILE_HEIGHT} dotted={dottedProfile}/>
-                </View>
 
                 <XStack testID="recipe-tile-badges" alignItems="center" gap="$1.5">
                     {/* How it has gone leads the row, the way it takes the
@@ -288,12 +322,13 @@ export default function RecipeShelfTile({
                 </XStack>
 
                 <YStack gap="$1">
-                    {/* One line rather than two once there are figures under
-                        it. Every tile keeps the grid's fixed height:
-                        a name that reflowed on its contents would break the
-                        row alignment the whole grid is built on. */}
+                    {/* Two lines, figures or not: the name sits under the
+                        badges now, where the tile used to be empty, so it no
+                        longer has to share the bottom edge with the profile.
+                        Every tile keeps the grid's fixed height, and the
+                        profile below takes up whatever a long name uses. */}
                     <Text fontSize={15} fontWeight="700"
-                          numberOfLines={figures === null ? 2 : 1}
+                          numberOfLines={2}
                           color={recipe.hasName() ? onAccent.text : onAccent.label}>
                         {recipe.displayName()}
                     </Text>
@@ -305,6 +340,27 @@ export default function RecipeShelfTile({
                         </DotMatrixText>
                     )}
                 </YStack>
+
+                {/* The corner the text left, down to the tile's bottom and
+                    right edges. Measured rather than assumed, because the text
+                    above it grows with the OS text size. The profile is drawn
+                    only once the room is known and only as tall as the room,
+                    so it is never under the name or the figures. */}
+                <View testID="recipe-tile-profile-room" pointerEvents="none"
+                      onLayout={(event) => setProfileRoom(event.nativeEvent.layout.height)}
+                      style={{flex: 1, marginRight: -TILE_PADDING, marginBottom: -TILE_PADDING}}>
+                    {profileHeight > 0 && (
+                        <View style={{
+                            position: "absolute",
+                            right:    -(PROFILE_BLEED + PROFILE_OVERHANG),
+                            bottom:   -(PROFILE_BLEED + PROFILE_OVERHANG)
+                        }}>
+                            <PourProfile testID="recipe-tile-profile" pours={recipe.pours}
+                                         width={140} height={profileHeight}
+                                         dotted={dottedProfile}/>
+                        </View>
+                    )}
+                </View>
             </YStack>
         </Pressable>
     );
