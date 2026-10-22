@@ -105,6 +105,36 @@ function Consumers({choice}: {choice: AppearanceChoice}) {
 describe("persistent appearance consumers", () => {
     afterEach(async () => { await act(() => toast.remove()); });
 
+    it.each(THEME_IDS)("keeps both watch states visible on %s chrome", async theme => {
+        for (const recipeColours of ["original", "themed"] as const) {
+            const choice = {theme, recipeColours};
+            const {chromeSwitch} = resolveAppearance(choice);
+            const onChange = jest.fn();
+            const view = (on: boolean) => (
+                <AppearanceScope choice={choice}>
+                    <WatchToggle on={on} onChange={onChange}/>
+                </AppearanceScope>
+            );
+            const rendered = await renderWithProviders(view(false));
+            expect(screen.getByTestId("roaster-coffee-watch")).toHaveStyle({
+                backgroundColor: chromeSwitch.off.track,
+                borderTopColor: chromeSwitch.off.ring
+            });
+            expect(screen.getByTestId("roaster-coffee-watch-thumb"))
+                .toHaveStyle({backgroundColor: chromeSwitch.off.thumb});
+            await fireEvent.press(screen.getByRole("switch"));
+            expect(onChange).toHaveBeenCalledWith(true);
+            await screen.rerender(view(true));
+            expect(screen.getByTestId("roaster-coffee-watch")).toHaveStyle({
+                backgroundColor: chromeSwitch.on.track,
+                borderTopColor: chromeSwitch.on.ring
+            });
+            expect(screen.getByTestId("roaster-coffee-watch-thumb"))
+                .toHaveStyle({backgroundColor: chromeSwitch.on.thumb});
+            await rendered.unmount();
+        }
+    });
+
     it("recolours existing text, glyphs, fields, controls, open sheet and actual toaster without resetting entry", async () => {
         await renderWithProviders(<Consumers choice={DEFAULT_APPEARANCE}/>);
         await fireEvent.press(screen.getByLabelText("Edit Dose"));

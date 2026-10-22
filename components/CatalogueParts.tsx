@@ -301,9 +301,7 @@ export function CoffeeBadgeTag({badge, testID}: {badge: CoffeeBadge; testID?: st
  * on the next sync that finds it on sale; there are no push notifications.
  */
 export function WatchToggle({on, onChange}: {on: boolean; onChange: (on: boolean) => void}) {
-    const {palette, switchOn} = useAppearance();
-    const pair = switchOn(palette.success);
-    const track = on ? pair.on : pair.off;
+    const {palette, chromeSwitch: {on: active, off}} = useAppearance();
     return (
         <XStack alignItems="center" justifyContent="space-between" gap="$4" minHeight={44}>
             <YStack flex={1} gap="$1">
@@ -315,8 +313,10 @@ export function WatchToggle({on, onChange}: {on: boolean; onChange: (on: boolean
             <Switch testID="roaster-coffee-watch" accessibilityLabel="Tell me when it's back"
                     accessibilityRole="switch" accessibilityState={{checked: on}} checked={on}
                     onCheckedChange={onChange} size="$3"
-                    backgroundColor={track.track} borderWidth={1} borderColor={track.ring}>
-                <Switch.Thumb backgroundColor={track.thumb}/>
+                    backgroundColor={off.track} borderWidth={1} borderColor={off.ring}
+                    activeStyle={{backgroundColor: active.track, borderColor: active.ring}}>
+                <Switch.Thumb testID="roaster-coffee-watch-thumb" backgroundColor={off.thumb}
+                              activeStyle={{backgroundColor: active.thumb}}/>
             </Switch>
         </XStack>
     );
