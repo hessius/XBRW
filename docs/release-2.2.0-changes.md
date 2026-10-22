@@ -390,3 +390,17 @@ runtime policy. The separately approved patch/runtime maintenance above replaces
 that policy. Package C itself did not change schemes, EAS profiles, channels,
 SDK or dependency manifests. This is not a native build,
 submission, deployment or hardware pass.
+
+## Proposed: catalogue rows and library cards say what the bean is
+
+Branch `feat/catalogue-row-details`, not yet accepted into `develop`.
+
+A roaster's catalogue row now reads: name, then "Country · Farm" (the region
+when there is no farm), then "Variety · Process", then the roast level and
+flavours. Empty parts are skipped, so rows can differ in height. The bag-sizes
+line and its spoken part are gone from the row; the coffee's own screen still
+lists bags and prices.
+
+A library recipe card with no note now uses its second line for "Variety ·
+Process" from the recipe's coffee. A note still wins. The card keeps its two
+lines of prose and its height.

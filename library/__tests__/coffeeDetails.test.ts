@@ -2,7 +2,9 @@ import {
     coffeeDetails,
     formatCuppingPoints,
     formatElevation,
-    formatRoastingDate
+    formatRoastingDate,
+    placeLine,
+    varietyProcessLine
 } from "@/library/coffeeDetails";
 import type {PodCoffee} from "@/library/podCoffee";
 
@@ -162,5 +164,19 @@ describe("coffeeDetails", () => {
             expect(row.spokenLabel).not.toBe(row.label);
             expect(row.spokenLabel).toMatch(/^[A-Z][a-z ]+$/);
         }
+    });
+});
+
+describe("placeLine and varietyProcessLine", () => {
+    it("joins what is there and leaves out blanks", () => {
+        expect(placeLine({name: "x", country: "Kenya", farm: "Gatomboya", region: "Nyeri"}))
+            .toBe("Kenya · Gatomboya");
+        expect(placeLine({name: "x", country: "Kenya", farm: " ", region: "Nyeri"})).toBe("Kenya · Nyeri");
+        expect(placeLine({name: "x", region: "Nyeri"})).toBe("Nyeri");
+        expect(placeLine({name: "x"})).toBeUndefined();
+        expect(placeLine(undefined)).toBeUndefined();
+        expect(varietyProcessLine({name: "x", variety: "SL28", processing: "Washed"})).toBe("SL28 · Washed");
+        expect(varietyProcessLine({name: "x", processing: "Natural"})).toBe("Natural");
+        expect(varietyProcessLine({name: "x", variety: "", processing: "  "})).toBeUndefined();
     });
 });

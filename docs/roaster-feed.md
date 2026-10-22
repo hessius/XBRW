@@ -187,9 +187,11 @@ link tags the recipe it imports.
 - **Subscribing** stores the roaster and caches the feed. Nothing is imported and
   no shelf is made. A shelf is what the person owns, so they choose what goes on
   one.
-- **Browsing** the catalogue reads only the cached feed: photo, name, roast level,
-  tasting notes, bag sizes and whether each coffee is on sale. Sold-out coffees
-  are shown, after the ones on sale.
+- **Browsing** the catalogue reads only the cached feed: photo, name, country and
+  farm (or region), variety and process, roast level, tasting notes and whether
+  each coffee is on sale. A part the feed leaves out is skipped. Bag sizes and
+  prices are on the coffee's own screen. Sold-out coffees are shown, after the
+  ones on sale.
 - **Opening a coffee** fetches its recipe from xBloom at that moment, so it shows
   the roaster's latest. From there the person can:
   - **Brew now**: the recipe opens in the editor without being saved.
