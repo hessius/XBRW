@@ -3,7 +3,8 @@ import {fireEvent} from "@testing-library/react-native";
 import {StyleSheet, processColor} from "react-native";
 
 import BrewMiniBar from "@/components/BrewMiniBar";
-import {palette} from "@/constants/colors";
+import {palette, resolveAppearance} from "@/constants/colors";
+import {DEFAULT_APPEARANCE} from "@/library/appearance";
 import Pour from "@/library/Pour";
 import {TEST_INSETS, renderWithProviders} from "@/test-utils/render";
 
@@ -160,7 +161,7 @@ describe("BrewMiniBar", () => {
             );
         });
 
-        it("uses the recipe's accent while it is pouring", async () => {
+        it("uses readable presentation ink for the recipe's accent while it is pouring", async () => {
             const {getByTestId} = await draw({
                 phase: {name: "pouring", pour: 1, pours: 4},
                 accent: "#123456",
@@ -171,7 +172,9 @@ describe("BrewMiniBar", () => {
             });
 
             expect(getByTestId("trace-water").props.stroke).toEqual(
-                expect.objectContaining({payload: processColor("#123456")})
+                expect.objectContaining({
+                    payload: processColor(resolveAppearance(DEFAULT_APPEARANCE).recipe("#123456").ink)
+                })
             );
         });
     });
