@@ -12,6 +12,8 @@ import * as databaseModule from "@/library/appDatabase";
 import {SUPPORT_TITLE} from "@/components/SupportTile";
 import {palette} from "@/constants/colors";
 import Recipe from "@/library/Recipe";
+import {buildBackup, parseBackup} from "@/library/backup";
+import {brew} from "@/library/brew/handoff/__tests__/fixtures";
 import {DEFAULTS, NOT_IN_BACKUP, Settings, SqliteSettingsStorage, type SettingKey, type SettingsStorage} from "@/library/Settings";
 import {
     renderWithProviders, SHEET_PRESS_TIMEOUT, THREE_BUTTON_METRICS
@@ -1038,6 +1040,27 @@ describe("SettingsScreen", () => {
             tone: "success", message: "1 recipe and 2 brews restored"
         }));
     });
+
+    it.each(["", "not-a-colour"])(
+        "reports a backup's invalid brew accent %j instead of silently restoring it", async accent => {
+            mockLibraryRecipes = [];
+            mockPickBackup.mockResolvedValue({
+                cancelled: false,
+                result: parseBackup(buildBackup([recipeNamed("A", "u1")], {}, "2.2.0", [brew({accent})]))
+            });
+            mockApplyRestore.mockReturnValue({status: "restored", added: 1});
+            mockBrewStore.restore.mockReturnValue(0);
+            await renderWithProviders(<SettingsScreen settings={new Settings(memoryStorage())}/>);
+            await fireEvent.press(screen.getByRole("button",
+                {name: "Restore from a backup, Adds anything your library does not already have."}));
+            await settleSheet();
+            await fireEvent.press(screen.getByRole("button", {name: /add to my library/i}));
+            expect(mockBrewStore.restore).toHaveBeenCalledWith([]);
+            expect(mockNotify).toHaveBeenCalledWith(expect.objectContaining({
+                tone: "error", message: "One brew in that backup could not be read."
+            }));
+        }
+    );
 
     it("says so when part of a history could not be read", async () => {
         // A short history is not a failed restore, but a user told only what

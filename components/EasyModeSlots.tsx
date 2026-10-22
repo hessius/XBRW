@@ -199,7 +199,7 @@ function RecipeChoice({recipe, onPick}: {recipe: Recipe; onPick: () => void}) {
         <Pressable accessibilityRole="button" accessibilityLabel={`Choose ${recipe.displayName()}`}
             accessibilityHint={problem ?? undefined}
             accessibilityState={{disabled: problem !== null}} disabled={problem !== null} onPress={onPick}>
-            <YStack gap="$2" padding="$3" marginBottom="$2" borderRadius="$3"
+            <YStack testID="recipe-choice-surface" gap="$2" padding="$3" marginBottom="$2" borderRadius="$3"
                 backgroundColor={colour.fill}>
                 <Text color={onAccent.text} fontSize={16} fontWeight="600">{recipe.displayName()}</Text>
                 <XStack gap="$2" alignItems="center" justifyContent="space-between" flexWrap="wrap">
@@ -208,7 +208,9 @@ function RecipeChoice({recipe, onPick}: {recipe: Recipe; onPick: () => void}) {
                             : `${recipe.dosage}G · 1:${recipe.ratio} · GRIND ${recipe.grinder ? recipe.grindSize : "OFF"}`}
                     </DotMatrixText>
                     <View pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-                        <PourProfile pours={recipe.pours} width={80} height={24}/>
+                        <PourProfile pours={recipe.pours} width={80} height={24}
+                            stroke={onAccent.profileStroke} fill={onAccent.profileFill}
+                            dot={onAccent.profileDot}/>
                     </View>
                 </XStack>
                 {problem !== null && <Text color={onAccent.text} fontSize={13}>{problem}</Text>}

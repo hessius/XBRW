@@ -174,7 +174,7 @@ export default function PourProfile({
             <Svg testID={testID} width={width + strokeWidth} height={height + strokeWidth}
                  viewBox={viewBox}>
                 <Path testID="profile-wash" d={area} fill={fill}/>
-                <Path d={path} fill="none" stroke={stroke} strokeWidth={strokeWidth}
+                <Path testID="profile-line" d={path} fill="none" stroke={stroke} strokeWidth={strokeWidth}
                       strokeLinejoin="round"/>
             </Svg>
         );

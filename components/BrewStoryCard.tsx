@@ -6,6 +6,7 @@ import BrewStars from "@/components/BrewStars";
 import DotMatrixText from "@/components/DotMatrixText";
 import Wordmark from "@/components/Wordmark";
 import {useAppearance} from "@/hooks/useAppearance";
+import {historicalAccent} from "@/library/brew/historicalColour";
 import {SCREEN_PADDING} from "@/constants/layout";
 import {
     storyFrame,
@@ -68,7 +69,7 @@ export default function BrewStoryCard({
 }: Props) {
     const appearance = useAppearance();
     const {palette} = appearance;
-    const displayAccent = appearance.recipe(accent).ink;
+    const displayAccent = appearance.recipe(historicalAccent(accent, appearance)).ink;
     const frame = storyFrame(width);
     const textScale = storyTextScale(width);
     const header = storyHeaderLayout(width, budget.fontScale, when);

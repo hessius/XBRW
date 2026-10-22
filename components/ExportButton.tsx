@@ -4,6 +4,8 @@ import {YStack} from "tamagui";
 
 import DotMatrixText from "@/components/DotMatrixText";
 import {useAppearance} from "@/hooks/useAppearance";
+import {isValidColour} from "@/constants/colors";
+import {historicalAccent, HISTORICAL_COLOUR_WARNING} from "@/library/brew/historicalColour";
 
 /**
  * One of the two export actions on a finished brew.
@@ -43,7 +45,8 @@ export default function ExportButton(
 ) {
     const appearance = useAppearance();
     const {palette} = appearance;
-    const recipeInk = accent === undefined ? undefined : appearance.recipe(accent).ink;
+    const recipeInk = accent === undefined
+        ? undefined : appearance.recipe(historicalAccent(accent, appearance)).ink;
     const inert = busy || disabled;
     const borderColor = recipeInk ?? palette.line;
     const labelColor = recipeInk ?? palette.dim;
@@ -55,6 +58,8 @@ export default function ExportButton(
             testID={testID}
             accessibilityRole="button"
             accessibilityLabel={accessibilityLabel ?? label}
+            accessibilityHint={accent !== undefined && !isValidColour(accent)
+                ? HISTORICAL_COLOUR_WARNING : undefined}
             accessibilityState={{disabled: inert}}
             disabled={inert}
             onPress={onPress}

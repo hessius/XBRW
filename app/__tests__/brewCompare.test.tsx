@@ -100,6 +100,27 @@ function pair(over: Parameters<typeof makeBrewRecordFixture>[0] = {}) {
 }
 
 describe("the comparison screen", () => {
+    it.each(["", "not-a-colour"])(
+        "renders stored invalid accent %j in overlay and separate comparison without changing either record",
+        async accent => {
+            const a = makeBrewRecordFixture({id: "a", accent, plan: comparisonPlan, grindSize: 58});
+            const b = makeBrewRecordFixture({id: "b", accent: "red", plan: comparisonPlan, grindSize: 62});
+            const samples = makeBrewRecordSamples(comparisonSamples);
+            const before = JSON.stringify({a, b, samples});
+            setRecords({a: {record: a, samples}, b: {record: b, samples}});
+            setParams({a: "a", b: "b"});
+            const tree = await renderWithProviders(<BrewCompareScreen/>);
+            expect(tree.getByText("Stored brew colour is invalid; using a display fallback.")).toBeTruthy();
+            expect(tree.getByTestId("trace-cup-subject")).toBeTruthy();
+            await fireEvent.press(tree.getByRole("button", {name: "Show the brews separately"}));
+            expect(tree.getByTestId("compare-a-GRIND")).toBeTruthy();
+            await fireEvent.press(tree.getByRole("button", {name: "Swap which brew leads"}));
+            expect(tree.getByText("Stored brew colour is invalid; using a display fallback.")).toBeTruthy();
+            await fireEvent.press(tree.getByRole("button", {name: "Show the brews overlaid"}));
+            expect(tree.getByTestId("trace-cup-subject")).toBeTruthy();
+            expect(JSON.stringify({a, b, samples})).toBe(before);
+        }
+    );
     it.each(THEME_IDS.flatMap(theme => (["original", "themed"] as const)
         .map(recipeColours => ({theme, recipeColours}))))(
         "renders canonical history and comparison columns in $theme/$recipeColours",

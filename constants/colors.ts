@@ -539,6 +539,10 @@ const BLACK = "#000000";
 const WHITE = "#FFFFFF";
 type RGB = readonly [number, number, number];
 
+export function isValidColour(value: unknown): value is string {
+    return typeof value === "string" && normalizeColor(value) !== null;
+}
+
 /** RN colour syntax and alpha affect calculations, never persisted identity. */
 function effectiveHex(colour: string, backdrop: string): string {
     const normalized = normalizeColor(colour);

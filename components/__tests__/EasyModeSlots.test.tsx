@@ -1,7 +1,7 @@
 import React from "react";
 import {act, fireEvent, screen, waitFor, within} from "@testing-library/react-native";
-import {AccessibilityInfo, Dimensions, StyleSheet} from "react-native";
-import {renderWithProviders, SHEET_PRESS_TIMEOUT} from "@/test-utils/render";
+import {AccessibilityInfo, Dimensions, processColor, StyleSheet} from "react-native";
+import {renderWithProviders, Providers, SHEET_PRESS_TIMEOUT} from "@/test-utils/render";
 import EasyModeSlots from "@/components/EasyModeSlots";
 import EasyModeSlotCard from "@/components/EasyModeSlotCard";
 import {emptySlotRecord, prepareSet, snapshotRecipe} from "@/library/slots/slotModel";
@@ -13,11 +13,11 @@ import {createTestDatabase} from "@/test-utils/sqlite";
 import {SlotDatabase} from "@/library/slots/SlotDatabase";
 import {useEasyModeSlots} from "@/hooks/useEasyModeSlots";
 import {palette, resolveAppearance} from "@/constants/colors";
-import {DEFAULT_APPEARANCE} from "@/library/appearance";
+import {DEFAULT_APPEARANCE, THEME_IDS} from "@/library/appearance";
 import {resolveAccent} from "@/library/accent";
 import * as motion from "@/constants/motion";
 import {restoreTeaSlotOriginal, writeTeaSlotProbe} from "@/library/slots/teaSlotProbe";
-import {PROFILE_BLEED} from "@/components/PourProfile";
+import {buildProfilePath, PROFILE_BLEED} from "@/components/PourProfile";
 import {DOTO_FAMILIES} from "@/components/DotMatrixText";
 
 const recipes = [coffee("Morning"), coffee("Evening")];
@@ -26,6 +26,23 @@ const props = () => ({
     record: emptySlotRecord(), recipes, deviceId: "one", connected: true,
     available: false, running: false, error: null,
     onAssign: jest.fn(), onWrite: jest.fn(), onRecover: jest.fn(), onCancel: jest.fn()
+});
+
+it.each(THEME_IDS.flatMap(theme => (["original", "themed"] as const).map(recipeColours =>
+    ({theme, recipeColours}))))("draws chooser silhouettes on their actual card ground: %j", async choice => {
+    const colour = resolveAppearance(choice).recipe(resolveAccent(recipes[0]));
+    await renderWithProviders(<EasyModeSlots {...props()}/>, {
+        wrapper: ({children}: {children: React.ReactNode}) =>
+            <Providers appearance={choice}>{children}</Providers>
+    });
+    await fireEvent.press(screen.getByRole("button", {name: "Change slot C recipe"}));
+    const card = await screen.findByRole("button", {name: "Choose Morning"});
+    expect(within(card).getByTestId("recipe-choice-surface")).toHaveStyle({backgroundColor: colour.fill});
+    const profile = within(card).getByTestId("profile-wash", {includeHiddenElements: true});
+    expect(profile.props.fill).toEqual({type: 0, payload: processColor(colour.onAccent.profileFill)});
+    const line = within(card).getByTestId("profile-line", {includeHiddenElements: true});
+    expect(line.props.stroke).toEqual({type: 0, payload: processColor(colour.onAccent.profileStroke)});
+    expect(line.props.d).toBe(buildProfilePath(recipes[0].pours, 80, 24));
 });
 
 it.each([1, 3])("keeps the Scale hit target at least 44pt without changing its visual size at font scale %p",

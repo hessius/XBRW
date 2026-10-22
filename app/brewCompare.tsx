@@ -13,6 +13,8 @@ import CompareTrace, {compareTracePlotHeight} from "@/components/CompareTrace";
 import DotMatrixText from "@/components/DotMatrixText";
 import TeaStageLadder from "@/components/TeaStageLadder";
 import ScreenHeader from "@/components/ScreenHeader";
+import HistoricalColourNotice from "@/components/HistoricalColourNotice";
+import {historicalAccent} from "@/library/brew/historicalColour";
 import {
     COMPARE_COPY,
     COMPARE_DEGRADED,
@@ -317,6 +319,7 @@ export default function BrewCompareScreen() {
         hasChart
     } = comparisonState;
     const copy = COMPARE_COPY[comparison.pour.verdict];
+    const accent = historicalAccent(subject.record.accent, appearance);
 
     return (
         <YStack flex={1} backgroundColor={palette.base}>
@@ -326,6 +329,8 @@ export default function BrewCompareScreen() {
             <ScrollView testID="compare-scroll"
                         contentContainerStyle={{paddingBottom: 24 + bottomInset, gap: 12}}>
                 <YStack paddingHorizontal={SCREEN_PADDING} gap="$3">
+                    <HistoricalColourNotice accent={subject.record.accent}/>
+                    <HistoricalColourNotice accent={reference.record.accent}/>
                     <Text color={palette.dim} fontSize={13} numberOfLines={1}>
                         {subject.record.recipeName}
                     </Text>
@@ -365,7 +370,7 @@ export default function BrewCompareScreen() {
 
                     <XStack justifyContent="space-between" gap="$3">
                         <BrewKey label="THIS BREW" record={subject.record}
-                                 colour={appearance.recipe(subject.record.accent).ink} />
+                                 colour={appearance.recipe(accent).ink} />
                         <BrewKey label="THAT BREW" record={reference.record}
                                  colour={referenceColour} />
                     </XStack>
@@ -415,7 +420,7 @@ export default function BrewCompareScreen() {
                                 <CompareTrace
                                     subject={subject.samples}
                                     reference={reference.samples}
-                                    accent={subject.record.accent}
+                                    accent={accent}
                                     verdict={comparison.pour.verdict}
                                     width={chartWidth}
                                     height={CHART_HEIGHT}
@@ -442,7 +447,7 @@ export default function BrewCompareScreen() {
                                                 compact
                                                 pours={axis.subjectPours}
                                                 samples={subject.samples}
-                                                accent={subject.record.accent}
+                                                accent={accent}
                                                 width={chartWidth}
                                                 height={LANE_HEIGHT}
                                                 plannedSeconds={plannedSeconds(axis.subjectPours)}
@@ -453,7 +458,7 @@ export default function BrewCompareScreen() {
                                                 <CompareRateLane
                                                     testID="compare-rate-subject"
                                                     series={axis.subjectRate}
-                                                    accent={subject.record.accent}
+                                                    accent={accent}
                                                     width={chartWidth}
                                                     maxT={axis.maxT}
                                                     maxRate={axis.maxRate}
@@ -465,7 +470,7 @@ export default function BrewCompareScreen() {
                                         runs={comparison.cupGapRuns}
                                         width={chartWidth}
                                         maxT={axis.maxT}
-                                        colour={appearance.recipe(subject.record.accent).cupInk}
+                                        colour={appearance.recipe(accent).cupInk}
                                     />
                                     {referenceHasTrace && (
                                         <YStack testID="compare-lane-b"
@@ -481,7 +486,7 @@ export default function BrewCompareScreen() {
                                                 compact
                                                 pours={axis.referencePours}
                                                 samples={reference.samples}
-                                                accent={subject.record.accent}
+                                                accent={accent}
                                                 role="reference"
                                                 width={chartWidth}
                                                 height={LANE_HEIGHT}
@@ -493,7 +498,7 @@ export default function BrewCompareScreen() {
                                                 <CompareRateLane
                                                     testID="compare-rate-reference"
                                                     series={axis.referenceRate}
-                                                    accent={subject.record.accent}
+                                                    accent={accent}
                                                     width={chartWidth}
                                                     maxT={axis.maxT}
                                                     maxRate={axis.maxRate}
@@ -507,19 +512,19 @@ export default function BrewCompareScreen() {
                         </YStack>
                     )}
 
-                    <CompareTable rows={comparison.rows} accent={subject.record.accent}
+                    <CompareTable rows={comparison.rows} accent={accent}
                                   beverageKinds={[subject.record.beverageKind,
                                       reference.record.beverageKind]}/>
 
                     <TeaCompareCycles record={subject.record} label="THIS BREW · TEA CYCLES"
-                                      testID="compare-tea-this" accent={appearance.recipe(subject.record.accent).ink}/>
+                                      testID="compare-tea-this" accent={appearance.recipe(accent).ink}/>
                     <TeaCompareCycles record={reference.record} label="THAT BREW · TEA CYCLES"
                                       testID="compare-tea-that" accent={referenceColour}/>
 
                     <XStack gap="$3">
                         <YStack flex={1}>
                             <JudgementReadout label="THIS BREW" record={subject.record}
-                                              colour={appearance.recipe(subject.record.accent).ink} />
+                                              colour={appearance.recipe(accent).ink} />
                         </YStack>
                         <YStack flex={1}>
                             <JudgementReadout label="THAT BREW" record={reference.record}

@@ -14,6 +14,8 @@ import CompareWithSheet from "@/components/CompareWithSheet";
 import StageDetail from "@/components/StageDetail";
 import TeaStageDetail from "@/components/TeaStageDetail";
 import DotMatrixText from "@/components/DotMatrixText";
+import HistoricalColourNotice from "@/components/HistoricalColourNotice";
+import {historicalAccent} from "@/library/brew/historicalColour";
 
 import ExportButton from "@/components/ExportButton";
 import ScreenHeader from "@/components/ScreenHeader";
@@ -171,7 +173,8 @@ type Props = {
  * a short note; figures and trace remain.
  */
 export default function BrewRecord({recipeLookup}: Props) {
-    const {palette} = useAppearance();
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const {id, latest} = useLocalSearchParams<{id?: string; latest?: string}>();
     const {width} = useWindowDimensions();
     const insets = useSafeAreaInsets();
@@ -271,7 +274,7 @@ export default function BrewRecord({recipeLookup}: Props) {
     // means revisiting this selection rather than assuming it appears here.
     const [handoffTarget] = HANDOFF_TARGETS;
     const showHandoff = handoffEnabled && canHandOff(record);
-    const accent = record.accent;
+    const accent = historicalAccent(record.accent, appearance);
 
     // Measured from the first drop, because that is where the sample stream is
     // zeroed. From `startedAt` the axis would also carry waking and grinding,
@@ -514,6 +517,7 @@ export default function BrewRecord({recipeLookup}: Props) {
                 meta={`${formatBrewDate(record.startedAt)} · ${formatBrewTime(record.startedAt)}`}
                 onBack={() => router.back()}
             />
+            <HistoricalColourNotice accent={record.accent}/>
             {/* BrewSummary owns its own background and padding because the
                 story card still captures the same subtree at a different
                 ratio. */}

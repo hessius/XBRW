@@ -229,6 +229,34 @@ describe("brew record", () => {
         mockJudgementStore.brewsFor.mockReturnValue([record]);
     });
 
+    it.each(["", "not-a-colour"])(
+        "renders stored invalid accent %j in record, trace, capture and export without changing the snapshot",
+        async accent => {
+            mockOpened = {
+                record: {...record, accent},
+                samples: [{at: 0, water: 0, cup: 0, pour: 1},
+                    {at: 228_000, water: 250, cup: 244, pour: 2}]
+            };
+            const before = JSON.stringify(mockOpened);
+            const tree = await renderWithProviders(<BrewRecord/>);
+            expect(tree.getByText("Stored brew colour is invalid; using a display fallback.")).toBeTruthy();
+            expect(tree.getByTestId("trace-cup", {includeHiddenElements: true})).toBeTruthy();
+            await fireEvent.press(tree.getByLabelText("Share this brew as a story card"));
+            await waitFor(() => expect(screen.getByTestId("story-stage")).toBeTruthy());
+            await fireEvent(screen.getByTestId("story-stage"), "layout", {
+                nativeEvent: {layout: {width: 360, height: 740, x: 0, y: 0}}
+            });
+            await waitFor(() => expect(screen.getByTestId("brew-story-card")).toBeTruthy());
+            const {mockCapture} = viewShotModule as unknown as {mockCapture: jest.Mock};
+            const captures = mockCapture.mock.calls.length;
+            await waitFor(async () => {
+                await fireEvent.press(screen.getByLabelText("Share the card"));
+                expect(mockCapture.mock.calls.length).toBe(captures + 1);
+            }, {timeout: SHEET_PRESS_TIMEOUT});
+            expect(JSON.stringify(mockOpened)).toBe(before);
+        }
+    );
+
     it.each(THEME_IDS.flatMap(theme => (["original", "themed"] as const)
         .map(recipeColours => ({theme, recipeColours}))))(
         "renders the snapshotted identity after recolouring and deleting its source in $theme/$recipeColours",

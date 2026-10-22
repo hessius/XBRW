@@ -1582,3 +1582,57 @@ Typecheck passed, lint reported **0 errors / 32 warnings**, and Doctor passed
 **21/21**. This supersedes the preceding test count. Evidence is preserved in
 the session's `files/appearance-controller-final-gates.log`; native/manual
 qualification and the separate PR/merge permissions remain pending.
+
+### PR #264: corrections from the single authorized review round
+
+Both findings were reproduced against clean starting HEAD
+`e2dd5d560ea18010752e8518f114fd1941b8aae0`, on the existing owned
+`feat/2.2.0-appearance-20261022` worktree (pinned base
+`98f3ae5255dfc691bc44d7c5ed356e47830f3df9`).
+
+- **4353555432 — historical colours:** `reviveBrew` accepted any string,
+  `BrewDatabase.restore` persisted it unchanged, and hydration returned it
+  unchanged to the strict render-time resolver. Backup validation now uses
+  the same pure RN colour normalizer as colour math: invalid accents cost the
+  brew and increment `skippedBrews`. The existing restore path explicitly
+  reports this as an error notification, not just a successful recipe restore.
+  Valid names, RGB/HSL, short hex and alpha formats remain accepted verbatim.
+  Already-stored invalid accents instead use the shared, explicit-Appearance
+  `historicalAccent` presentation helper, falling back to that theme's neutral
+  `dim`. History, record and comparison show a visible notice; the history row
+  includes it in its accessible label, and a raw-accent export action exposes
+  the same notice as its accessible hint. There are no render-time logs,
+  persistence, catches or effects. The strict general recipe resolver still
+  rejects invalid syntax. Record/compare roots pass the safe presentation
+  colour through charts, tables, ladders and capture; standalone story-card
+  and export treatments share the safeguard too. Database snapshots, backup
+  output, record JSON and handoff bytes are not rewritten.
+- **4353555489 — chooser ground:** `RecipeChoice` draws on `colour.fill`, not
+  `palette.text`. It now supplies its already-resolved `onAccent.profileStroke`,
+  `profileFill` and `profileDot` explicitly to `PourProfile`. Native SVG output
+  and the actual card backing are asserted across all eight choices, including
+  Light/Original. The identifying silhouette path and even-per-pour time axis
+  are unchanged; the existing stroke bleed and geometry tests still pass.
+
+RED evidence: **14 failing / 10 passing / 144 skipped tests**, both platforms,
+covering invalid backup acceptance, stored-accent history crashes and the
+Light chooser's wrong foreground. Final serial targeted qualification:
+**28 suites / 2,452 tests passing**, both iOS and Android, 53.481 seconds.
+This includes real SQLite restore/read/raw-column preservation through
+`createTestDatabase`, rendered history and working restored export actions,
+actual restore error notifications, record trace and story capture/export,
+comparison overlay/separate/swap, all-eight chooser output, pure JSON/handoff
+invariance, colour contrast, geometry and AST-boundary regressions.
+Typecheck and diff-check pass; whole-repository lint remains
+**0 errors / 32 existing warnings**. React/animation `act` warnings remain;
+this is not a warning-free claim.
+
+Evidence: the session's existing `files/appearance-pr264-fixes-*` RED, GREEN,
+restore-reporting, record, typecheck, lint and worktree-audit logs. No full-suite
+rerun, native build/prebuild, push, PR/review request, merge, cleanup or
+deployment was performed. The #243 and #264 review rounds are both spent.
+The controller owns push and exact-corrected-head CI; the prior successful CI
+is not evidence for this correction. The appearance worktree remains owned by
+this task for that handoff, with local committed corrections as its recovery
+pointer. The native/manual eight-choice matrix, physical-device checks and
+release gates remain pending; native builds were explicitly declined.

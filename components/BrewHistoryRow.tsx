@@ -8,6 +8,9 @@ import {useAppearance} from "@/hooks/useAppearance";
 import type {StoredBrew} from "@/library/BrewDatabase";
 import {formatBrewDate, formatBrewDuration} from "@/library/brew/brewFormat";
 import {drawdownRate, formatFlowRate} from "@/library/brew/flowRate";
+import {isValidColour} from "@/constants/colors";
+import {historicalAccent, HISTORICAL_COLOUR_WARNING} from "@/library/brew/historicalColour";
+import HistoricalColourNotice from "@/components/HistoricalColourNotice";
 
 type Props = {
     brew: StoredBrew;
@@ -62,6 +65,7 @@ export default function BrewHistoryRow({brew, onPress, selectionMode = false, se
         endedEarly ? "ended early" : undefined,
         stopped ? "stopped" : undefined,
         brew.hasStream ? undefined : "no trace kept",
+        isValidColour(brew.accent) ? undefined : HISTORICAL_COLOUR_WARNING,
         // Only when there is one. "Not rated" on every unjudged row would be
         // the loudest thing in a history nobody has rated yet, and it is the
         // one part of the row that carries no information.
@@ -98,9 +102,10 @@ export default function BrewHistoryRow({brew, onPress, selectionMode = false, se
                 <View
                     testID="history-row-mark"
                     style={{width: 8, height: 8, borderRadius: 4,
-                            backgroundColor: appearance.recipe(brew.accent).fill}}
+                            backgroundColor: appearance.recipe(historicalAccent(brew.accent, appearance)).fill}}
                 />
                 <YStack flex={1} gap="$1">
+                    <HistoricalColourNotice accent={brew.accent}/>
                     <XStack alignItems="center" gap="$2">
                         <DotMatrixText fontSize={13} weight="bold" letterSpacing={1.2}
                                        color={palette.text} numberOfLines={1}
