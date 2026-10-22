@@ -473,6 +473,34 @@ it("opens Easy Mode with the editor's current recipe through the recipe menu", a
     expect(sharedSlotDatabase().read(deviceId).drafts[0]?.name).toBe("Current slot recipe");
 });
 
+it("saves an unsaved recipe before putting it in an Easy Mode slot, so the slot keeps its library link", async () => {
+    const deviceId = "slot-save-device";
+    mockSettings = {machineDeviceId: deviceId};
+    const RecipeDatabase = jest.requireMock("@/library/RecipeDatabase").default;
+    RecipeDatabase.mockClear();
+    RecipeDatabase.prototype.getRecipe.mockReturnValue(null);
+    RecipeDatabase.prototype.retrieveAllRecipes.mockReturnValue([]);
+    try {
+        await renderEditor({name: "Catalogue recipe"});
+        const recipeUuid = JSON.parse(mockRecipeJSON as string).uuid;
+        await fireEvent.press(screen.getByLabelText("More"));
+        await waitFor(async () => {
+            if (mockPush.mock.calls.length === 0) {
+                await fireEvent.press(screen.getByRole("button", {name: "Assign to Easy Mode"}));
+            }
+            expect(mockPush).toHaveBeenCalledWith({pathname: "/easyMode"});
+        }, {timeout: SHEET_PRESS_TIMEOUT});
+        const saves = RecipeDatabase.mock.instances.flatMap(
+            (store: {updateRecipe: {mock: {calls: unknown[][]}}}) => store.updateRecipe.mock.calls);
+        expect(saves.map((call: unknown[]) => call[0])).toContain(recipeUuid);
+        expect(mockNotify).toHaveBeenCalledWith({tone: "success", message: "Saved to your library."});
+        expect(sharedSlotDatabase().read(deviceId).drafts[0]?.sourceUuid).toBe(recipeUuid);
+    } finally {
+        RecipeDatabase.prototype.getRecipe.mockReset();
+        RecipeDatabase.prototype.retrieveAllRecipes.mockReset();
+    }
+});
+
 async function openTheQuickEditPanel(): Promise<void> {
     mockSettings = {machineDeviceId: "AA:BB:CC:DD:EE:FF"};
     await renderEditor();
