@@ -6,7 +6,8 @@ import {XStack} from "tamagui";
 import DotMatrixText from "@/components/DotMatrixText";
 import PourGlyph, {glyphForPattern} from "@/components/PourGlyph";
 import HatchFill from "@/components/HatchFill";
-import {mix, palette} from "@/constants/colors";
+import {mix, type Palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 import {pauseSeconds} from "@/library/brew/brewShape";
 import {rungSegments, seamIndex, type Segment} from "@/library/brew/rungGeometry";
 import type {Stall} from "@/library/brew/stalls";
@@ -188,7 +189,7 @@ function buildLabel(
 }
 
 /** The colour a segment's filled part takes. */
-function fillColour(kind: Segment["kind"], stageColour: string): string {
+function fillColour(kind: Segment["kind"], stageColour: string, palette: Palette): string {
     if (kind === "stall") return palette.warn;
     return stageColour;
 }
@@ -200,7 +201,7 @@ function fillColour(kind: Segment["kind"], stageColour: string): string {
  * in a recipe are visible before it runs and the ladder reads as a plan and not
  * only as a progress bar; accent over the part that has elapsed.
  */
-function hatchColours(stageColour: string): {dim: string; bright: string} {
+function hatchColours(stageColour: string, palette: Palette): {dim: string; bright: string} {
     return {dim: mix(stageColour, palette.base, HATCH_DIM), bright: stageColour};
 }
 
@@ -252,6 +253,7 @@ export default function BrewStageRung({
     pour, index, state, accent, laneSeconds, barHeight, delivered, pauseElapsed,
     stalls, selected = false, onPress, accentDone = false, pauseKind, testID
 }: Props) {
+    const {palette} = useAppearance();
     const marker = state === "active" ? pauseKind : undefined;
     const segments = rungSegments({pour, delivered, pauseElapsed, stalls});
     const span = laneSeconds > 0 ? laneSeconds : 1;
@@ -317,7 +319,7 @@ export default function BrewStageRung({
                 )}
                 {segments.map((segment, i) => {
                     const fraction = Math.max(0, Math.min(1, segment.fill));
-                    const hatch = hatchColours(stageColour);
+                    const hatch = hatchColours(stageColour, palette);
                     return (
                         <React.Fragment key={`segment-${i}`}>
                         {i > 0 && (
@@ -360,7 +362,7 @@ export default function BrewStageRung({
                                             flex: fraction,
                                             height: barHeight,
                                             borderRadius: radius,
-                                            backgroundColor: fillColour(segment.kind, stageColour)
+                                            backgroundColor: fillColour(segment.kind, stageColour, palette)
                                         }}
                                     />
                                     <View style={{flex: 1 - fraction}} />

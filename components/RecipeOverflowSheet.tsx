@@ -6,7 +6,7 @@ import {Text, XStack, YStack} from "tamagui";
 import DotIcon from "@/components/DotIcon";
 import DotMatrixText from "@/components/DotMatrixText";
 import XbrwSheet from "@/components/XbrwSheet";
-import {palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 import type {DotIconName} from "@/constants/dotIcons";
 
 /**
@@ -82,6 +82,7 @@ export default function RecipeOverflowSheet({
     onShare, onDuplicate, onRefreshName, onRevert, onDelete,
     onBrew, onWrite, onToggleFavourite, favourite = false, onEasyMode
 }: Props) {
+    const {palette} = useAppearance();
     function pick(action: () => void) {
         onOpenChange(false);
         action();

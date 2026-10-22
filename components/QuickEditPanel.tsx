@@ -4,7 +4,7 @@ import {Button, Text, XStack, YStack} from "tamagui";
 
 import DotMatrixText from "@/components/DotMatrixText";
 import Stepper from "@/components/Stepper";
-import {palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 import {
     describeAdjustment,
     describeGrind,
@@ -78,6 +78,7 @@ function updateAdjustment(
 const BASELINE_LINE_HEIGHT = 16;
 
 function QuickEditRow({label, children, detail, fontScale}: QuickEditRowProps) {
+    const {palette} = useAppearance();
     return (
         <XStack alignItems="center" justifyContent="space-between" gap="$3"
                 paddingVertical="$2.5">
@@ -108,7 +109,8 @@ function baselineDetail(
     recipe: Recipe,
     knob: QuickEditKnob,
     adjusted: boolean,
-    fontScale: number
+    fontScale: number,
+    secondaryInk: string
 ): React.ReactNode {
     if (!adjusted) {
         return undefined;
@@ -116,7 +118,7 @@ function baselineDetail(
 
     return (
         <Text testID={`quick-edit-${knob}-baseline`} fontSize={12} lineHeight={16}
-              color={palette.dim}>
+              color={secondaryInk}>
             {describeKnobBaseline(recipe, knob, fontScale)}
         </Text>
     );
@@ -125,6 +127,7 @@ function baselineDetail(
 export default function QuickEditPanel({
     recipe, adjustments, accent, temperatureUnit, onChange, renderBrewAction
 }: QuickEditPanelProps) {
+    const {palette} = useAppearance();
     const {fontScale} = useWindowDimensions();
     const bounds = quickEditBounds(recipe);
     const savedDose = recipe.dosage;
@@ -170,7 +173,7 @@ export default function QuickEditPanel({
                     borderColor={palette.line} paddingVertical="$1">
                 <QuickEditRow label="DOSE" fontScale={fontScale}
                               detail={baselineDetail(
-                                  recipe, "dose", adjustments.dose !== undefined, fontScale
+                                  recipe, "dose", adjustments.dose !== undefined, fontScale, palette.dim
                               )}>
                     <Stepper label="Quick edit dose" value={dose}
                              min={bounds.dose.min} max={bounds.dose.max} step={1}
@@ -183,7 +186,7 @@ export default function QuickEditPanel({
                 {bounds.ratio !== null && (
                     <QuickEditRow label="RATIO" fontScale={fontScale}
                                   detail={baselineDetail(
-                                      recipe, "ratio", adjustments.ratio !== undefined, fontScale
+                                      recipe, "ratio", adjustments.ratio !== undefined, fontScale, palette.dim
                                   )}>
                         <Stepper label="Quick edit ratio" value={ratio}
                                  min={bounds.ratio.min} max={bounds.ratio.max} step={1}
@@ -197,7 +200,7 @@ export default function QuickEditPanel({
                 {grindBounds !== null && (
                     <QuickEditRow label="GRIND" fontScale={fontScale}
                                   detail={baselineDetail(
-                                      recipe, "grind", adjustments.grind !== undefined, fontScale
+                                      recipe, "grind", adjustments.grind !== undefined, fontScale, palette.dim
                                   )}>
                         <Stepper label="Quick edit grind" value={grind}
                                  min={grindBounds.min} max={grindBounds.off} step={1}

@@ -4,7 +4,7 @@ import Animated, {useAnimatedStyle} from "react-native-reanimated";
 import type {SharedValue} from "react-native-reanimated";
 import Svg, {Defs, LinearGradient, Rect, Stop} from "react-native-svg";
 
-import {palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 import {FADE_HEIGHT} from "@/library/scrollFade";
 
 /**
@@ -22,12 +22,14 @@ import {FADE_HEIGHT} from "@/library/scrollFade";
  * away in exchange for a hint.
  */
 export default function ScrollFade({
-    progress, color = palette.base, testID
+    progress, color: suppliedColor, testID
 }: {
     progress: SharedValue<number>;
     color?: string;
     testID?: string;
 }) {
+    const {palette} = useAppearance();
+    const color = suppliedColor ?? palette.base;
     // React's id carries punctuation (`:r0:`), which is not valid in an SVG
     // `url(#...)` reference, so the gradient silently fails to resolve and the
     // fade draws as nothing. Every other SVG component here strips it the

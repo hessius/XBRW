@@ -2,7 +2,7 @@ import React from "react";
 import {YStack} from "tamagui";
 
 import DotMatrixText from "@/components/DotMatrixText";
-import {palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 
 /**
  * A titled block on the ABOUT deck.
@@ -22,6 +22,7 @@ export default function DeckSection({title, testID, children}: {
     testID?: string;
     children: React.ReactNode;
 }) {
+    const {palette} = useAppearance();
     return (
         <YStack testID={testID} gap="$2" marginTop="$4">
             <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.6}

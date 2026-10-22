@@ -10,7 +10,7 @@ import Animated, {
 
 import DotMatrixText, {drawnFontSize, type DotoWeight} from "@/components/DotMatrixText";
 import {DURATION, EASING, useReducedMotion} from "@/constants/motion";
-import {palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 
 const DIGITS = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
 
@@ -111,8 +111,10 @@ export default function DigitRoll({
     suffix,
     fontSize = 20,
     weight = "bold",
-    color = palette.text
+    color: suppliedColor
 }: Props) {
+    const {palette} = useAppearance();
+    const color = suppliedColor ?? palette.text;
     const reduced = useReducedMotion();
     const text = Math.max(0, Math.round(value)).toString().padStart(minDigits, "0");
     const digits = text.split("").map((d) => Number(d));

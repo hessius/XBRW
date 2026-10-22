@@ -2,7 +2,7 @@ import React, {useId} from "react";
 import Svg, {Circle, ClipPath, Defs, Path, Pattern, Rect} from "react-native-svg";
 
 import type Pour from "@/library/Pour";
-import {onAccent} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 
 function round(value: number): number {
     return Math.round(value * 10) / 10;
@@ -133,13 +133,18 @@ export default function PourProfile({
     pours,
     width,
     height,
-    stroke = onAccent.profileStroke,
-    fill = onAccent.profileFill,
-    dot = onAccent.profileDot,
+    stroke: suppliedStroke,
+    fill: suppliedFill,
+    dot: suppliedDot,
     dotted = false,
     strokeWidth = PROFILE_STROKE_WIDTH,
     testID
 }: Props) {
+    const {palette, onFill} = useAppearance();
+    const foreground = onFill(palette.text);
+    const stroke = suppliedStroke ?? foreground.profileStroke;
+    const fill = suppliedFill ?? foreground.profileFill;
+    const dot = suppliedDot ?? foreground.profileDot;
     // SVG ids are resolved document-wide, so a fixed one would leave every card
     // in a list pointing at whichever profile mounted last. The punctuation React
     // puts in its ids is not valid in an id used from a url() reference.

@@ -4,7 +4,7 @@ import {Input, XStack} from "tamagui";
 
 import DotIcon from "@/components/DotIcon";
 import DotMatrixText from "@/components/DotMatrixText";
-import {palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 
 /** Delay before a held button starts repeating, and the fastest it repeats. */
 const REPEAT_START_MS = 200;
@@ -113,6 +113,8 @@ type Props = {
 export default function Stepper({
     label, value, min, max, step, values, accent, unit, formatValue, signedInput, onChange
 }: Props) {
+    const {palette} = useAppearance();
+    const activeStepStyle = {...stepStyle, backgroundColor: palette.control, borderColor: palette.line};
     // null means the Doto readout is showing; a string means the field is
     // open and holds the in-progress text.
     const [draft, setDraft] = useState<string | null>(null);
@@ -207,7 +209,7 @@ export default function Stepper({
                        // stopRepeating on a plain tap is intentional and safe —
                        // it is a no-op when no repeat timer is pending.
                        onPressOut={stopRepeating}
-                       style={stepStyle}>
+                       style={activeStepStyle}>
                 <DotIcon name="minus" size={16} color={palette.dim}/>
             </Pressable>
 
@@ -257,7 +259,7 @@ export default function Stepper({
                        onPress={() => nudge(1)}
                        onLongPress={() => startRepeating(1)}
                        onPressOut={stopRepeating}
-                       style={stepStyle}>
+                       style={activeStepStyle}>
                 <DotIcon name="plus" size={16} color={palette.dim}/>
             </Pressable>
         </XStack>
@@ -275,7 +277,5 @@ const stepStyle = {
     // and the glyphs read as a stray dash and a stray cross rather than as two
     // buttons. The hairline is the other half of that: an edge is what says a
     // thing is a separate object you can press.
-    backgroundColor: palette.control,
-    borderWidth:     1,
-    borderColor:     palette.line
+    borderWidth:     1
 };

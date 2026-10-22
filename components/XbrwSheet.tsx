@@ -4,7 +4,7 @@ import {InteractionManager, Pressable, View} from "react-native";
 import {useSafeAreaFrame} from "react-native-safe-area-context";
 
 import DotMatrixText from "@/components/DotMatrixText";
-import {palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 import {SCREEN_PADDING} from "@/constants/layout";
 import {DURATION} from "@/constants/motion";
 import {STABLE_HOST} from "@/constants/views";
@@ -89,6 +89,7 @@ export default function XbrwSheet({
     open, onOpenChange, title, showTitle = true, heightPercent = 70,
     prewarm = false, children
 }: Props) {
+    const {palette} = useAppearance();
     const bottomInset = useBottomInset();
     const {height: screenHeight} = useSafeAreaFrame();
     // The sheet is put in the tree closed, and opened on the frame after.

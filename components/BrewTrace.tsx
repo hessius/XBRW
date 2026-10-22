@@ -7,6 +7,7 @@ import {XStack, YStack} from "tamagui";
 import {dotMatrixSvgProps, drawnFontSize} from "@/components/DotMatrixText";
 import TraceLegendItem, {LEGEND_SIZE, rowHeight} from "@/components/TraceLegendItem";
 import {palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 import type {BeverageKind, BrewSample} from "@/library/brew/BrewRecord";
 import {livePoints, pathLength, planPoints, splitAtPauses, stageSpans, toPath,
         traceAxisFor, traceTimeParts,
@@ -199,10 +200,12 @@ function temperatureAccessibilityLabel(marks: {temperature: number}[]): string {
 export default function BrewTrace({
     pours, samples, beverageKind, accent, width, height, plannedSeconds,
     axis, pauseIntervals = NO_INTERVALS,
-    holding = false, role = "subject", planOpacity = 1, planColor = palette.muted,
+    holding = false, role = "subject", planOpacity = 1, planColor: suppliedPlanColor,
     planDashed = true, planHeadAt = 1,
     compact = false, legendInset = 0, stages, selectedIndex = null, onSelectStage, bypass
 }: Props) {
+    const appearance = useAppearance();
+    const planColor = suppliedPlanColor ?? appearance.palette.muted;
     const id = useId().replace(/[^a-zA-Z0-9]/g, "");
     const waterFillId = `trace-water-fill-${id}`;
     const plan = planPoints(pours);

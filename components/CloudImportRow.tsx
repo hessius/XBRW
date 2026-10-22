@@ -2,7 +2,7 @@ import React from "react";
 import {Pressable} from "react-native";
 import {Text, XStack, YStack} from "tamagui";
 
-import {palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 import {resolveAccent} from "@/library/accent";
 import type {ImportEntry, ImportStatus} from "@/library/cloud/importPlan";
 
@@ -53,13 +53,6 @@ const UNSELECTABLE_CAPTION = "Two recipes here claim this one. Remove one in you
 // `unchanged` and `edited` step back to secondary text. `dim` rather than
 // `muted`: `muted` is 4.12:1 on `base` and documented as a non-text colour, so
 // a status line drawn in it would fall under AA.
-const TONES: Record<ImportStatus, string> = {
-    new: palette.text,
-    updated: palette.text,
-    unchanged: palette.dim,
-    edited: palette.dim,
-};
-
 const BAR_WIDTH = 4;
 
 type Props = {
@@ -68,6 +61,13 @@ type Props = {
 };
 
 export default function CloudImportRow({entry, onToggle}: Props) {
+    const {palette} = useAppearance();
+    const tones: Record<ImportStatus, string> = {
+        new: palette.text,
+        updated: palette.text,
+        unchanged: palette.dim,
+        edited: palette.dim
+    };
     const caption = entry.selectable ? CAPTIONS[entry.status] : UNSELECTABLE_CAPTION;
     // The library's own resolver, not a local lookup: it validates the index
     // and falls back to the same hash every other screen uses, so a recipe
@@ -110,7 +110,7 @@ export default function CloudImportRow({entry, onToggle}: Props) {
                     <Text testID="cloud-import-name" color={palette.text} fontSize={16}>
                         {entry.name}
                     </Text>
-                    <Text testID="cloud-import-status" color={TONES[entry.status]} fontSize={13}>
+                    <Text testID="cloud-import-status" color={tones[entry.status]} fontSize={13}>
                         {LABELS[entry.status]}
                     </Text>
                     {caption ? (

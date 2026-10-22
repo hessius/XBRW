@@ -5,7 +5,7 @@ import {Button, Switch, Text, XStack, YStack} from "tamagui";
 import DotIcon from "@/components/DotIcon";
 import DotMatrixText from "@/components/DotMatrixText";
 import {openLink} from "@/components/openLink";
-import {onAccent, palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 import type {CoffeeBadge} from "@/library/roasterAlerts";
 import type {BuyOption} from "@/library/roasterBuy";
 
@@ -49,6 +49,7 @@ export function DetailPhoto({uri, testID = "hub-recipe-photo", whole = false}: {
     testID?: string;
     whole?: boolean;
 }) {
+    const {palette} = useAppearance();
     const [failed, setFailed] = useState(false);
     const [aspect, setAspect] = useState(1);
     if (whole) {
@@ -104,6 +105,7 @@ export function DetailPhoto({uri, testID = "hub-recipe-photo", whole = false}: {
 
 /** A small Doto tag: a flavour, a process, a size. */
 export function Chip({label}: {label: string}) {
+    const {palette} = useAppearance();
     return (
         <YStack paddingHorizontal="$2" paddingVertical="$1"
                 borderRadius="$3" backgroundColor={palette.raised}
@@ -127,6 +129,7 @@ export function CatalogueStatus({title, body, testID, action, onAction}: {
     action?: string;
     onAction?: () => void;
 }) {
+    const {palette, selection} = useAppearance();
     return (
         <YStack testID={testID} flex={1} alignItems="center" justifyContent="center"
                 gap="$4" paddingHorizontal="$6" paddingVertical="$8">
@@ -140,8 +143,8 @@ export function CatalogueStatus({title, body, testID, action, onAction}: {
                 <Button accessibilityRole="button"
                         accessibilityLabel={action}
                         testID={testID === undefined ? undefined : `${testID}-action`}
-                        backgroundColor={palette.text}
-                        color={onAccent.text}
+                        backgroundColor={selection.fill}
+                        color={selection.ink}
                         borderRadius="$4"
                         onPress={onAction}>
                     {action}
@@ -161,6 +164,7 @@ function BagWatch({label, bag, on, onWatch}: {
     on: boolean;
     onWatch: (bag: string, on: boolean) => void;
 }) {
+    const {palette, onFill} = useAppearance();
     return (
         <XStack alignItems="center" gap="$2">
             <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.4} color={palette.muted}>
@@ -174,7 +178,7 @@ function BagWatch({label, bag, on, onWatch}: {
                         borderWidth={on ? 0 : 1} borderColor={palette.line}
                         backgroundColor={on ? palette.success : palette.none}>
                     <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.4}
-                                   color={on ? onAccent.text : palette.text}>
+                                   color={on ? onFill(palette.success).text : palette.text}>
                         {on ? "WATCHING" : "TELL ME"}
                     </DotMatrixText>
                 </XStack>
@@ -200,6 +204,7 @@ export function BuySection({options, watching, onWatch}: {
      */
     onWatch?: (bag: string, on: boolean) => void;
 }) {
+    const {palette, selection} = useAppearance();
     return (
         <YStack testID="roaster-coffee-buy" gap="$2">
             <DotMatrixText fontSize={12} weight="bold" letterSpacing={1.5} color={palette.dim}>
@@ -231,9 +236,9 @@ export function BuySection({options, watching, onWatch}: {
                                    testID={`buy-${option.key}-link`}
                                    onPress={() => openLink(option.url as string)}>
                             <XStack height={36} paddingHorizontal="$3" alignItems="center"
-                                    borderRadius="$4" backgroundColor={palette.text}>
+                                    borderRadius="$4" backgroundColor={selection.fill}>
                                 <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.4}
-                                               color={onAccent.text}>
+                                               color={selection.ink}>
                                     BUY
                                 </DotMatrixText>
                             </XStack>
@@ -255,32 +260,38 @@ const DOT_SIZE = 20;
  * Decorative to a screen reader: the row it sits on says the same in words.
  */
 export function AlertDot({count, testID}: {count: number; testID?: string}) {
+    const {palette, onFill} = useAppearance();
     if (count <= 0) return null;
     return (
         <XStack testID={testID} accessibilityElementsHidden importantForAccessibility="no-hide-descendants"
                 minWidth={DOT_SIZE} height={DOT_SIZE} paddingHorizontal={5}
                 borderRadius={DOT_SIZE / 2} alignItems="center" justifyContent="center"
                 backgroundColor={palette.info}>
-            <DotMatrixText fontSize={11} weight="bold" color={onAccent.text}>
+            <DotMatrixText fontSize={11} weight="bold" color={onFill(palette.info).text}>
                 {count > 99 ? "99+" : String(count)}
             </DotMatrixText>
         </XStack>
     );
 }
 
-const BADGE_COPY: Record<NonNullable<CoffeeBadge>, {label: string; color: string}> = {
-    new:  {label: "NEW", color: palette.info},
-    back: {label: "BACK IN STOCK", color: palette.success}
+const BADGE_COPY: Record<NonNullable<CoffeeBadge>, string> = {
+    new: "NEW",
+    back: "BACK IN STOCK"
 };
 
 /** NEW or BACK IN STOCK above a coffee's name, in the colour of the dot that counted it. */
 export function CoffeeBadgeTag({badge, testID}: {badge: CoffeeBadge; testID?: string}) {
+    const {palette} = useAppearance();
+    const tones: Record<NonNullable<CoffeeBadge>, string> = {
+        new: palette.info,
+        back: palette.success
+    };
     if (badge === undefined) return null;
     const copy = BADGE_COPY[badge];
     return (
         <DotMatrixText testID={testID} fontSize={11} weight="bold" letterSpacing={1.4}
-                       color={copy.color}>
-            {copy.label}
+                       color={tones[badge]}>
+            {copy}
         </DotMatrixText>
     );
 }
@@ -290,6 +301,9 @@ export function CoffeeBadgeTag({badge, testID}: {badge: CoffeeBadge; testID?: st
  * on the next sync that finds it on sale; there are no push notifications.
  */
 export function WatchToggle({on, onChange}: {on: boolean; onChange: (on: boolean) => void}) {
+    const {palette, switchOn} = useAppearance();
+    const pair = switchOn(palette.success);
+    const track = on ? pair.on : pair.off;
     return (
         <XStack alignItems="center" justifyContent="space-between" gap="$4" minHeight={44}>
             <YStack flex={1} gap="$1">
@@ -301,8 +315,8 @@ export function WatchToggle({on, onChange}: {on: boolean; onChange: (on: boolean
             <Switch testID="roaster-coffee-watch" accessibilityLabel="Tell me when it's back"
                     accessibilityRole="switch" accessibilityState={{checked: on}} checked={on}
                     onCheckedChange={onChange} size="$3"
-                    backgroundColor={on ? palette.success : palette.control}>
-                <Switch.Thumb backgroundColor={palette.text}/>
+                    backgroundColor={track.track} borderWidth={1} borderColor={track.ring}>
+                <Switch.Thumb backgroundColor={track.thumb}/>
             </Switch>
         </XStack>
     );
@@ -320,6 +334,7 @@ export function PageLinkRow({label, url, testID}: {
     url: string;
     testID?: string;
 }) {
+    const {palette} = useAppearance();
     return (
         <Pressable accessibilityRole="link"
                    testID={testID}

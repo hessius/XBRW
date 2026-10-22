@@ -2,7 +2,7 @@ import React, {useEffect, useRef, useState} from "react";
 import {Pressable, TextInput} from "react-native";
 
 import FieldRow from "@/components/FieldRow";
-import {palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 import type {HelpTopic} from "@/constants/recipeHelp";
 
 export type TextFieldRowProps = {
@@ -66,6 +66,7 @@ export default function TextFieldRow({
     showHint, onCommit, onDraft,
     validate, invalidReason, onInvalidChange, onFocusChange, note
 }: TextFieldRowProps) {
+    const {palette} = useAppearance();
     const [invalid, setInvalid] = useState(() => validate ? !validate(initialValue) : false);
     // The whole row focuses this, so a short or empty value no longer leaves a
     // wide strip of the row looking tappable while only the input responds.
