@@ -12,7 +12,7 @@ import {
     PAUSED_NOTE, RATING_CAN_WAIT
 } from "@/constants/brewCopy";
 import {Providers, renderWithProviders, SHEET_PRESS_TIMEOUT} from "@/test-utils/render";
-import {mix, resolveAppearance} from "@/constants/colors";
+import {resolveAppearance} from "@/constants/colors";
 import {resolveAccent} from "@/library/accent";
 import type {BrewPhase} from "@/library/machine/Machine";
 import type {OverflowSnapshot} from "@/library/brew/OverflowController";
@@ -296,8 +296,9 @@ describe("brew route", () => {
         const tree = await renderWithProviders(
             <Providers appearance={choice}><Brew/></Providers>
         );
-        const expected = appearance.chartInk(ink,
-            [appearance.palette.base, mix(appearance.palette.base, ink, 0.28)], 3.05);
+        // No water samples yet: fit the whole plan breath on the bare chart,
+        // including its trough, rather than a water wash which is not drawn.
+        const expected = appearance.chartInk(ink, [appearance.palette.base], 3.05, 0.45);
         expect(tree.getByTestId("trace-plan").props.stroke).toEqual(
             expect.objectContaining({payload: processColor(expected)})
         );

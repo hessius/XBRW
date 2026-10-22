@@ -1,3 +1,4 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React, {useState} from "react";
 import {Pressable, ScrollView} from "react-native";
 import {XStack, YStack} from "tamagui";
@@ -7,7 +8,7 @@ import DotMatrixText from "@/components/DotMatrixText";
 import RailChip, {CHIP_HEIGHT} from "@/components/RailChip";
 import SegmentedControl from "@/components/SegmentedControl";
 import XbrwSheet from "@/components/XbrwSheet";
-import {onAccent, palette} from "@/constants/colors";
+
 import {
     HISTORY_SORTS, isHistorySortDirection,
     type HistoryQuery, type HistorySort, type HistorySortDirection
@@ -49,6 +50,9 @@ export default function BrewHistoryControls({
     onToggleRatedOnly: () => void;
     onOpenSort: () => void;
 }) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
+    const onAccent = appearance.onFill(palette.text);
     const {sort, direction, hideUnsuccessful, ratedOnly} = query;
     const [filtersOpen, setFiltersOpen] = useState(false);
     const count = Number(hideUnsuccessful) + Number(ratedOnly);
@@ -105,6 +109,8 @@ export default function BrewHistoryControls({
 export function BrewHistorySortSheet({
     open, onOpenChange, sort, direction, onSortChange
 }: SortProps & {open: boolean; onOpenChange: (open: boolean) => void}) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const labels = DIRECTIONS[sort];
     return (
         <XbrwSheet open={open} onOpenChange={onOpenChange} title="Sort brew history">

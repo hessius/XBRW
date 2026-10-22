@@ -1,9 +1,10 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React, {useState} from "react";
 import {TextInput} from "react-native";
 import {Text, XStack} from "tamagui";
 
 import DeckSection from "@/components/DeckSection";
-import {palette} from "@/constants/colors";
+
 import {MAX_DESCRIPTION} from "@/library/Recipe";
 
 /**
@@ -28,6 +29,8 @@ export default function NoteSection({initialValue, onDraft, onCommit}: {
     onDraft: (value: string) => void;
     onCommit: (value: string) => void;
 }) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const [length, setLength] = useState(initialValue.length);
     const full = length >= MAX_DESCRIPTION;
 

@@ -1,10 +1,11 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React from "react";
 import {TextInput} from "react-native";
 import {Text, XStack, YStack} from "tamagui";
 
 import BrewStars from "@/components/BrewStars";
 import DotMatrixText from "@/components/DotMatrixText";
-import {palette} from "@/constants/colors";
+
 import {
     COFFEE_JUDGEMENT_PLACEHOLDER, RATING_PROMPT_QUESTION,
     TEA_JUDGEMENT_HEADING, TEA_JUDGEMENT_PLACEHOLDER
@@ -54,6 +55,8 @@ export default function BrewJudgement({
     clearable?: boolean;
     beverageKind?: BeverageKind;
 }) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const tea = beverageKind === "tea";
     return (
         <YStack gap="$2" testID={testID ?? "brew-judgement"}>

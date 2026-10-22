@@ -1,7 +1,8 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React from "react";
 import Svg, {Circle, Path} from "react-native-svg";
 
-import {palette} from "@/constants/colors";
+
 
 /**
  * BrewMind's own mark, redrawn from the SVG they serve at
@@ -20,6 +21,8 @@ import {palette} from "@/constants/colors";
  * in the app, so a retune takes this with it.
  */
 export default function BrewMindMark({size = 22}: {size?: number}) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     return (
         <Svg width={size} height={size} viewBox="0 0 57.97 57.97"
              accessibilityElementsHidden

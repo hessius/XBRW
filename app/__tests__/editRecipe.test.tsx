@@ -252,6 +252,31 @@ it("recolours the editor header and already-open help without losing its draft",
     expect(screen.getByLabelText("Ratio, 16.5")).toBeTruthy();
 });
 
+it("recolours editor parameters and an open rename sheet while retaining both drafts", async () => {
+    mockRecipeJSON = JSON.stringify(Object.assign(fixture(), {name: "Saved", accentIndex: PINNED_ACCENT_INDEX}));
+    const view = await renderWithProviders(
+        <AppearanceScope choice={{theme: "original", recipeColours: "original"}}><EditRecipe/></AppearanceScope>
+    );
+    await fireEvent.press(screen.getByLabelText("Increase Dose"));
+    await fireEvent.press(screen.getByTestId("hero-rename"));
+    await fireEvent.changeText(screen.getByTestId("rename-field"), "Unsaved new name");
+    await view.rerender(
+        <AppearanceScope choice={{theme: "light", recipeColours: "themed"}}><EditRecipe/></AppearanceScope>
+    );
+    const appearance = resolveAppearance({theme: "light", recipeColours: "themed"});
+    expect(screen.getByTestId("brew-target", {includeHiddenElements: true}))
+        .toHaveStyle({color: appearance.recipe(pinnedAccent()).ink});
+    expect(screen.getByTestId("rename-field")).toHaveDisplayValue("Unsaved new name");
+    expect(screen.getByTestId("rename-field")).toHaveStyle({color: appearance.palette.text});
+    expect(screen.getByTestId("editor-content", {includeHiddenElements: true}).props.accessibilityElementsHidden).toBe(true);
+    await waitFor(async () => {
+        await fireEvent.press(screen.getByTestId("rename-confirm"));
+        expect(screen.getByTestId("editor-content").props.accessibilityElementsHidden).toBe(false);
+    }, {timeout: SHEET_PRESS_TIMEOUT});
+    expect(screen.getByTestId("hero-name")).toHaveTextContent("Unsaved new name");
+    expect(screen.getByLabelText("Dose, 19 g")).toBeTruthy();
+});
+
 it("keeps the selected machine outside the scrolling recipe content", async () => {
     mockSettings = {
         machineDeviceId: "WORK",
@@ -1764,7 +1789,8 @@ describe("the action bar", () => {
         await renderEditor({accentIndex: PINNED_ACCENT_INDEX});
 
         expect(fillOf("Write card")).toBe(pinnedAccent());
-        expect(inkOf("Write card", "WRITE")).toBe(palette.base);
+        expect(inkOf("Write card", "WRITE")).toBe(resolveAppearance({theme: "original", recipeColours: "original"})
+            .recipe(pinnedAccent()).onAccent.text);
     });
 
     it("empties WRITE with no machine paired too", async () => {

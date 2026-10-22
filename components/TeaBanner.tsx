@@ -1,8 +1,9 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React from "react";
 import {Text, XStack, YStack} from "tamagui";
 
 import DotMatrixText from "@/components/DotMatrixText";
-import {palette} from "@/constants/colors";
+
 
 /**
  * What tea does differently, said out loud.
@@ -12,13 +13,15 @@ import {palette} from "@/constants/colors";
  * why.
  */
 export default function TeaBanner({accent}: {accent: string}) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     return (
         <XStack marginTop="$3" padding="$3" borderRadius="$4" gap="$2.5"
                 backgroundColor={palette.raised}
-                borderLeftWidth={2} borderLeftColor={accent}>
+                borderLeftWidth={2} borderLeftColor={appearance.recipe(accent).ink}>
             <YStack flex={1} gap={3}>
                 <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.8}
-                               color={accent}>
+                               color={appearance.recipe(accent).ink}>
                     TEA
                 </DotMatrixText>
                 <Text testID="tea-banner-body" fontSize={12} lineHeight={17}

@@ -1,9 +1,10 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React from "react";
 import {Pressable, View} from "react-native";
 import Svg, {Line, Path, Rect} from "react-native-svg";
 
 import {buildProfilePath, PROFILE_STROKE_WIDTH} from "@/components/PourProfile";
-import {palette} from "@/constants/colors";
+
 import type Pour from "@/library/Pour";
 
 /**
@@ -83,6 +84,8 @@ export default function StageProfile({
     pours, target, accent, width, height, selected, onSelect, bypassVolume, testID
 }: Props) {
     "use no memo";
+    const appearance = useAppearance();
+    const {palette} = appearance;
 
     // These components draw a model that is mutated in place: `pour.getVolume()`
     // is a method call, not a property read, so the React Compiler cannot see
@@ -165,10 +168,10 @@ export default function StageProfile({
                 blank recipe became something the app can author. */}
             {path !== "" && (
                 <>
-                    <Path d={`${path} L${stageWidth} ${drawn} Z`} fill={accent}
+                    <Path d={`${path} L${stageWidth} ${drawn} Z`} fill={appearance.recipe(accent).fill}
                           opacity={0.16}
                           transform={`translate(0 ${height - drawn})`}/>
-                    <Path d={path} fill="none" stroke={accent} strokeWidth={stroke}
+                    <Path d={path} fill="none" stroke={appearance.recipe(accent).ink} strokeWidth={stroke}
                           strokeLinejoin="round" strokeLinecap="round"
                           transform={`translate(0 ${height - drawn})`}/>
                 </>

@@ -1,10 +1,11 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React, {useState} from "react";
 import {Pressable, TextInput} from "react-native";
 import {Text, XStack, YStack} from "tamagui";
 
 import DeckSection from "@/components/DeckSection";
 import {CHIP_HEIGHT} from "@/components/RailChip";
-import {palette} from "@/constants/colors";
+
 import {MAX_TAG_LENGTH, MAX_TAGS_PER_RECIPE} from "@/library/Recipe";
 import {FERMENTATIONS, PROCESSES, ROASTS} from "@/library/brew/beanTags";
 import {tagKey} from "@/library/tagKey";
@@ -31,6 +32,8 @@ export default function TagSection({tags, known, onChange}: {
     /** The whole new set, for `setTags`. */
     onChange: (tags: string[]) => void;
 }) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const [adding, setAdding] = useState(false);
     const [typed, setTyped] = useState("");
 
@@ -145,6 +148,8 @@ function TagChip({tag, onRemove}: {
     tag: string;
     onRemove: () => void;
 }) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     return (
         <XStack alignItems="center"
                 testID={`tag-chip-${tagKey(tag)}`}

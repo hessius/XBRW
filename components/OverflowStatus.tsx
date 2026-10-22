@@ -1,3 +1,4 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React, {useEffect, useRef} from "react";
 import {AccessibilityInfo, Platform} from "react-native";
 import {Text, YStack} from "tamagui";
@@ -7,7 +8,7 @@ import {
     OVERFLOW_STATE_COPY, OVERFLOW_WAITING_FOR_READINGS, overflowCountdownText,
     overflowEstimateLine, overflowGramsText
 } from "@/constants/brewCopy";
-import {palette} from "@/constants/colors";
+
 import type {OverflowSnapshot} from "@/library/brew/OverflowController";
 
 type Props = {
@@ -59,6 +60,8 @@ function figuresLine(status: OverflowSnapshot, now: number): string | null {
  * milliseconds and are deliberately not announced.
  */
 export default function OverflowStatus({status, now, compact}: Props) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const stateText = stateLine(status);
     const previousStateText = useRef(stateText);
     useEffect(() => {

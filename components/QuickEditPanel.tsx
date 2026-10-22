@@ -127,7 +127,8 @@ function baselineDetail(
 export default function QuickEditPanel({
     recipe, adjustments, accent, temperatureUnit, onChange, renderBrewAction
 }: QuickEditPanelProps) {
-    const {palette} = useAppearance();
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const {fontScale} = useWindowDimensions();
     const bounds = quickEditBounds(recipe);
     const savedDose = recipe.dosage;
@@ -154,7 +155,7 @@ export default function QuickEditPanel({
             <XStack alignItems="center" justifyContent="space-between" gap="$3">
                 <YStack flex={1} gap={2}>
                     <DotMatrixText fontSize={16} weight="bold" letterSpacing={1.8}
-                                   color={accent}>
+                                   color={appearance.recipe(accent).ink}>
                         QUICK EDIT
                     </DotMatrixText>
                     <Text fontSize={12} lineHeight={16} color={palette.dim}>
@@ -163,7 +164,7 @@ export default function QuickEditPanel({
                 </YStack>
                 <Button size="$3" chromeless accessibilityRole="button"
                         accessibilityLabel="Reset quick edits"
-                        color={accent}
+                        color={appearance.recipe(accent).ink}
                         onPress={() => onChange({})}>
                     RESET
                 </Button>
