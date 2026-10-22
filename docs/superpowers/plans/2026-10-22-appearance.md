@@ -1573,3 +1573,12 @@ the session's existing `files/appearance-final-foregrounds-*` artifacts.
 The worktree remains owned by this appearance task, retained for controller
 review and native qualification. This checkpoint is local only; no push,
 PR/review, merge, cleanup, native build/prebuild or deployment was performed.
+
+Controller follow-up explicitly adds Rose to the rendered raised StageDetail
+regression alongside Peach and Oolong. The complete serial gate chain was
+repeated with that exact regression: **866 passing / 2 skipped suites;
+19,922 passing / 26 skipped tests; 2 passing snapshots**, 324.867 seconds.
+Typecheck passed, lint reported **0 errors / 32 warnings**, and Doctor passed
+**21/21**. This supersedes the preceding test count. Evidence is preserved in
+the session's `files/appearance-controller-final-gates.log`; native/manual
+qualification and the separate PR/merge permissions remain pending.

@@ -83,7 +83,7 @@ describe.each(choices)("numeric chrome foregrounds: $theme / $recipeColours", ch
     });
 });
 
-it.each([accents.coffee[1], accents.tea[1]])(
+it.each([accents.coffee[1], accents.coffee[7], accents.tea[1]])(
     "keeps Blue Themed %s small stage labels readable on the rendered raised panel", async canonical => {
         const stage = new Pour(1, 90, 92);
         await renderWithProviders(scoped({theme: "blue", recipeColours: "themed"},
