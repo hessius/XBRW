@@ -1597,9 +1597,9 @@ Both findings were reproduced against clean starting HEAD
   brew and increment `skippedBrews`. The existing restore path explicitly
   reports this as an error notification, not just a successful recipe restore.
   Valid names, RGB/HSL, short hex and alpha formats remain accepted verbatim.
-  Already-stored invalid accents instead use the shared, explicit-Appearance
-  `historicalAccent` presentation helper, falling back to that theme's neutral
-  `dim`. History, record and comparison show a visible notice; the history row
+  Already-stored invalid accents instead use the shared `historicalAccent`
+  presentation helper with a canonical neutral fallback, resolved inside the
+  active or frozen appearance scope. History, record and comparison show a visible notice; the history row
   includes it in its accessible label, and a raw-accent export action exposes
   the same notice as its accessible hint. There are no render-time logs,
   persistence, catches or effects. The strict general recipe resolver still
@@ -1613,6 +1613,18 @@ Both findings were reproduced against clean starting HEAD
   and the actual card backing are asserted across all eight choices, including
   Light/Original. The identifying silhouette path and even-per-pour time axis
   are unchanged; the existing stroke bleed and geometry tests still pass.
+
+Controller correction: the neutral fallback must be canonical rather than
+derived from the outer active theme. Otherwise changing appearance during an
+invalid-colour story capture changes the accent inside the frozen image.
+The actual capture regression reproduced four failures across both platforms;
+the shared fallback now stays stable while each drawing scope resolves it.
+The chooser regression explicitly selects the reported Sky slot.
+Controller GREEN: **20 suites / 2,014 tests passing**, both platforms,
+including actual frozen captures on success/failure with invalid accents.
+Typecheck and lint pass (**0 errors / 32 warnings**). Logs are preserved as
+`files/appearance-pr264-fallback-capture-red.log` and
+`files/appearance-pr264-controller-green.log`.
 
 RED evidence: **14 failing / 10 passing / 144 skipped tests**, both platforms,
 covering invalid backup acceptance, stored-accent history crashes and the

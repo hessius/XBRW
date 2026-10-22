@@ -1495,7 +1495,13 @@ describe("brew record's story card", () => {
         await waitFor(() => expect(screen.getByTestId("brew-story-card")).toBeTruthy());
     }
 
-    it.each(["completion", "failure"])("freezes the actual story image until %s but not the record, then captures a fresh current appearance", async (ending) => {
+    it.each(["completion", "failure"].flatMap(ending =>
+        [undefined, "not-a-colour"].map(accent => ({ending, accent}))
+    ))("freezes the actual story image until $ending with accent $accent but not the record, then captures a fresh current appearance", async ({ending, accent}) => {
+        if (accent !== undefined) {
+            if (mockOpened === null) throw new Error("Missing story fixture");
+            mockOpened = {...mockOpened, record: {...mockOpened.record, accent}};
+        }
         const light = {theme: "light", recipeColours: "themed"} as const;
         const blue = {theme: "blue", recipeColours: "original"} as const;
         const {mockCapture} = viewShotModule as unknown as {mockCapture: jest.Mock};

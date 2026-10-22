@@ -69,7 +69,7 @@ export default function BrewStoryCard({
 }: Props) {
     const appearance = useAppearance();
     const {palette} = appearance;
-    const displayAccent = appearance.recipe(historicalAccent(accent, appearance)).ink;
+    const displayAccent = appearance.recipe(historicalAccent(accent)).ink;
     const frame = storyFrame(width);
     const textScale = storyTextScale(width);
     const header = storyHeaderLayout(width, budget.fontScale, when);

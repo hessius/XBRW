@@ -1,4 +1,4 @@
-import {isValidColour, resolveAppearance} from "@/constants/colors";
+import {isValidColour, palette, resolveAppearance} from "@/constants/colors";
 import {THEME_IDS} from "@/library/appearance";
 import {historicalAccent} from "@/library/brew/historicalColour";
 import {buildEnvelope} from "@/library/brew/handoff/envelope";
@@ -11,7 +11,8 @@ it.each(["red", "rgb(255,0,0)", "hsl(120,100%,50%)", "#1234", "rgba(20,40,60,0.5
         for (const theme of THEME_IDS) {
             for (const recipeColours of ["original", "themed"] as const) {
                 const appearance = resolveAppearance({theme, recipeColours});
-                expect(historicalAccent(accent, appearance)).toBe(accent);
+                expect(historicalAccent(accent)).toBe(accent);
+                expect(appearance.recipe(historicalAccent(accent)).canonical).toBe(accent);
             }
         }
     }
@@ -26,8 +27,8 @@ it.each(["", "not-a-colour"])(
         for (const theme of THEME_IDS) {
             for (const recipeColours of ["original", "themed"] as const) {
                 const appearance = resolveAppearance({theme, recipeColours});
-                const presented = historicalAccent(record.accent, appearance);
-                expect(presented).toBe(appearance.palette.dim);
+                const presented = historicalAccent(record.accent);
+                expect(presented).toBe(palette.dim);
                 expect(() => appearance.recipe(presented)).not.toThrow();
                 expect(() => appearance.recipe(record.accent)).toThrow("Invalid colour");
                 expect(JSON.stringify(record)).toBe(json);

@@ -46,7 +46,7 @@ export default function ExportButton(
     const appearance = useAppearance();
     const {palette} = appearance;
     const recipeInk = accent === undefined
-        ? undefined : appearance.recipe(historicalAccent(accent, appearance)).ink;
+        ? undefined : appearance.recipe(historicalAccent(accent)).ink;
     const inert = busy || disabled;
     const borderColor = recipeInk ?? palette.line;
     const labelColor = recipeInk ?? palette.dim;

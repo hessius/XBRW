@@ -319,7 +319,7 @@ export default function BrewCompareScreen() {
         hasChart
     } = comparisonState;
     const copy = COMPARE_COPY[comparison.pour.verdict];
-    const accent = historicalAccent(subject.record.accent, appearance);
+    const accent = historicalAccent(subject.record.accent);
 
     return (
         <YStack flex={1} backgroundColor={palette.base}>

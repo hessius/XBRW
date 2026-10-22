@@ -102,7 +102,7 @@ export default function BrewHistoryRow({brew, onPress, selectionMode = false, se
                 <View
                     testID="history-row-mark"
                     style={{width: 8, height: 8, borderRadius: 4,
-                            backgroundColor: appearance.recipe(historicalAccent(brew.accent, appearance)).fill}}
+                            backgroundColor: appearance.recipe(historicalAccent(brew.accent)).fill}}
                 />
                 <YStack flex={1} gap="$1">
                     <HistoricalColourNotice accent={brew.accent}/>

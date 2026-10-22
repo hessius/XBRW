@@ -30,19 +30,21 @@ const props = () => ({
 
 it.each(THEME_IDS.flatMap(theme => (["original", "themed"] as const).map(recipeColours =>
     ({theme, recipeColours}))))("draws chooser silhouettes on their actual card ground: %j", async choice => {
-    const colour = resolveAppearance(choice).recipe(resolveAccent(recipes[0]));
-    await renderWithProviders(<EasyModeSlots {...props()}/>, {
+    const recipe = coffee("Sky");
+    recipe.accentIndex = 0;
+    const colour = resolveAppearance(choice).recipe(resolveAccent(recipe));
+    await renderWithProviders(<EasyModeSlots {...props()} recipes={[recipe]}/>, {
         wrapper: ({children}: {children: React.ReactNode}) =>
             <Providers appearance={choice}>{children}</Providers>
     });
     await fireEvent.press(screen.getByRole("button", {name: "Change slot C recipe"}));
-    const card = await screen.findByRole("button", {name: "Choose Morning"});
+    const card = await screen.findByRole("button", {name: "Choose Sky"});
     expect(within(card).getByTestId("recipe-choice-surface")).toHaveStyle({backgroundColor: colour.fill});
     const profile = within(card).getByTestId("profile-wash", {includeHiddenElements: true});
     expect(profile.props.fill).toEqual({type: 0, payload: processColor(colour.onAccent.profileFill)});
     const line = within(card).getByTestId("profile-line", {includeHiddenElements: true});
     expect(line.props.stroke).toEqual({type: 0, payload: processColor(colour.onAccent.profileStroke)});
-    expect(line.props.d).toBe(buildProfilePath(recipes[0].pours, 80, 24));
+    expect(line.props.d).toBe(buildProfilePath(recipe.pours, 80, 24));
 });
 
 it.each([1, 3])("keeps the Scale hit target at least 44pt without changing its visual size at font scale %p",
