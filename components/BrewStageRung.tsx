@@ -6,7 +6,7 @@ import {XStack} from "tamagui";
 import DotMatrixText from "@/components/DotMatrixText";
 import PourGlyph, {glyphForPattern} from "@/components/PourGlyph";
 import HatchFill from "@/components/HatchFill";
-import {mix, type Palette} from "@/constants/colors";
+import {mix, type Appearance, type Palette} from "@/constants/colors";
 import {useAppearance} from "@/hooks/useAppearance";
 import {pauseSeconds} from "@/library/brew/brewShape";
 import {rungSegments, seamIndex, type Segment} from "@/library/brew/rungGeometry";
@@ -63,9 +63,6 @@ type Props = {
     pauseKind?: PauseKind;
     testID?: string;
 };
-
-/** The dimmed opacity of a stage that has not happened. */
-const PENDING_OPACITY = 0.45;
 
 /**
  * The space between one segment and the next.
@@ -201,8 +198,12 @@ function fillColour(kind: Segment["kind"], stageColour: string, palette: Palette
  * in a recipe are visible before it runs and the ladder reads as a plan and not
  * only as a progress bar; accent over the part that has elapsed.
  */
-function hatchColours(stageColour: string, palette: Palette): {dim: string; bright: string} {
-    return {dim: mix(stageColour, palette.base, HATCH_DIM), bright: stageColour};
+function hatchColours(stageColour: string, appearance: Appearance): {dim: string; bright: string} {
+    const {palette} = appearance;
+    return {
+        dim: appearance.chartInk(mix(stageColour, palette.base, HATCH_DIM), [palette.raised]),
+        bright: appearance.chartInk(stageColour, [palette.raised])
+    };
 }
 
 /**
@@ -253,7 +254,11 @@ export default function BrewStageRung({
     pour, index, state, accent, laneSeconds, barHeight, delivered, pauseElapsed,
     stalls, selected = false, onPress, accentDone = false, pauseKind, testID
 }: Props) {
-    const {palette} = useAppearance();
+    const appearance = useAppearance();
+    const {palette} = appearance;
+    const displayAccent = appearance.chartInk(
+        appearance.recipe(accent).ink, [palette.base, palette.raised], 4.5
+    );
     const marker = state === "active" ? pauseKind : undefined;
     const segments = rungSegments({pour, delivered, pauseElapsed, stalls});
     const span = laneSeconds > 0 ? laneSeconds : 1;
@@ -267,7 +272,9 @@ export default function BrewStageRung({
     const after = pour.getAgitationAfter();
     // One decision, used by the bar, the hatch and the mark alike. A done
     // stage is grey on the live ladder and accented on a finished summary.
-    const stageColour = done && !accentDone ? palette.muted : accent;
+    const stageColour = appearance.chartInk(
+        done && !accentDone ? palette.muted : displayAccent, [palette.base, palette.raised]
+    );
     const markColour = stageColour;
     // Which gap the after-mark lives in. A stage with no rest has no seam
     // inside the lane, so its mark goes in a gap added past the last segment —
@@ -294,16 +301,15 @@ export default function BrewStageRung({
             marginHorizontal="$-2"
             borderRadius="$3"
             backgroundColor={selected ? palette.raised : palette.none}
-            style={{opacity: state === "pending" ? PENDING_OPACITY : 1}}
         >
             <DotMatrixText fontSize={12} weight="bold" letterSpacing={1.4}
-                           color={state === "active" ? accent : palette.dim}>
+                           color={state === "active" ? displayAccent : palette.dim}>
                 {String(index + 1).padStart(2, "0")}
             </DotMatrixText>
 
             <PourGlyph
                 kind={glyphForPattern(pour.pourPattern)}
-                accent={state === "active" ? accent : palette.dim}
+                accent={state === "active" ? displayAccent : palette.dim}
                 size={14}
             />
 
@@ -319,7 +325,7 @@ export default function BrewStageRung({
                 )}
                 {segments.map((segment, i) => {
                     const fraction = Math.max(0, Math.min(1, segment.fill));
-                    const hatch = hatchColours(stageColour, palette);
+                    const hatch = hatchColours(stageColour, appearance);
                     return (
                         <React.Fragment key={`segment-${i}`}>
                         {i > 0 && (

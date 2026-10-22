@@ -4,6 +4,7 @@ import {
     Dimensions,
     Linking,
     PixelRatio,
+    processColor,
     StyleSheet,
     type StyleProp,
     type TextStyle,
@@ -17,8 +18,9 @@ import {gunzipSync} from "fflate";
 import BrewRecord from "@/app/brewRecord";
 import type {RecipeLookup} from "@/app/brewRecord";
 import {sharedSettings} from "@/hooks/useSetting";
-import {palette} from "@/constants/colors";
-import {renderWithProviders, SHEET_PRESS_TIMEOUT, TEST_INSETS} from "@/test-utils/render";
+import {accents, palette, resolveAppearance} from "@/constants/colors";
+import {THEME_IDS} from "@/library/appearance";
+import {renderWithProviders, Providers, SHEET_PRESS_TIMEOUT, TEST_INSETS} from "@/test-utils/render";
 import {
     brewRecordFixture as record,
     makeBrewRecordFixture,
@@ -225,6 +227,40 @@ describe("brew record", () => {
         mockJudgementStore.brewsFor.mockReset();
         mockJudgementStore.brewsFor.mockReturnValue([record]);
     });
+
+    it.each(THEME_IDS.flatMap(theme => (["original", "themed"] as const)
+        .map(recipeColours => ({theme, recipeColours}))))(
+        "renders the snapshotted identity after recolouring and deleting its source in $theme/$recipeColours",
+        async choice => {
+            const appearance = resolveAppearance(choice);
+            const canonical = accents.coffee[0];
+            mockOpened = {
+                record: {...record, accent: canonical.toLowerCase()},
+                samples: [{at: 0, water: 0, cup: 0, pour: 1},
+                    {at: 228_000, water: 250, cup: 244, pour: 2}]
+            };
+            const before = JSON.stringify(mockOpened);
+            const source = new Recipe();
+            source.pours = twoPours.pours;
+            source.accentIndex = 6;
+            const recoloured = await renderWithProviders(
+                <Providers appearance={choice}>
+                    <BrewRecord recipeLookup={{getRecipe: () => source}}/>
+                </Providers>
+            );
+            expect(recoloured.getByTestId("trace-water").props.stroke).toEqual(
+                expect.objectContaining({payload: processColor(appearance.recipe(canonical).ink)})
+            );
+            await recoloured.unmount();
+            const deleted = await renderWithProviders(
+                <Providers appearance={choice}><BrewRecord recipeLookup={noRecipeLookup}/></Providers>
+            );
+            expect(deleted.getByTestId("trace-water").props.stroke).toEqual(
+                expect.objectContaining({payload: processColor(appearance.recipe(canonical).ink)})
+            );
+            expect(JSON.stringify(mockOpened)).toBe(before);
+        }
+    );
 
     it("draws the trace and the figures", async () => {
         await renderWithProviders(<BrewRecord recipeLookup={mockLookup} />);

@@ -14,7 +14,7 @@ import ExportButton from "@/components/ExportButton";
 import ScreenHeader from "@/components/ScreenHeader";
 import XbrwSheet from "@/components/XbrwSheet";
 import {COMPARE_SELECTION_COPY} from "@/constants/brewCopy";
-import {palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 import {useBrewBatchHandoff} from "@/hooks/useBrewBatchHandoff";
 import {useBrewHistory} from "@/hooks/useBrewHistory";
 import {useBrewHistoryQuery} from "@/hooks/useBrewHistoryQuery";
@@ -48,6 +48,7 @@ const TILE_GLYPH_SIZE = 24;
  * screen, is not extended here.
  */
 function HistoryHeader({recipeName, count}: {recipeName?: string; count: number}) {
+    const {palette} = useAppearance();
     return (
         <YStack>
             {/* The same header the other pushed screens draw, rather than a
@@ -75,6 +76,7 @@ function HistoryHeader({recipeName, count}: {recipeName?: string; count: number}
  * because a brew record cannot be recovered once removed.
  */
 function DeleteTile({onPress}: {onPress: () => void}) {
+    const {palette} = useAppearance();
     return (
         <YStack
             accessible
@@ -139,6 +141,7 @@ function SelectionActionRow({
     onDelete: () => void;
     onCancel: () => void;
 }) {
+    const {palette} = useAppearance();
     if (!selecting) return null;
 
     const sendableCount = count - blocked;
@@ -290,6 +293,7 @@ function SwipeableBrewRow({
  * (unfiltered).
  */
 export default function BrewHistory() {
+    const {palette} = useAppearance();
     const {recipeUuid} = useLocalSearchParams<{recipeUuid?: string}>();
     const insets = useSafeAreaInsets();
     const {brews, open, remove, refresh} = useBrewHistory();
@@ -498,7 +502,7 @@ export default function BrewHistory() {
                                            color={palette.dim}>
                                 {scoped.length === 0 ? "NO BREWS YET" : "NO MATCHING BREWS"}
                             </DotMatrixText>
-                            <Text color={palette.muted} fontSize={13} textAlign="center">
+                            <Text color={palette.dim} fontSize={13} textAlign="center">
                                 {scoped.length === 0
                                     ? "Brew a recipe and it will appear here."
                                     : "No brews match these filters."}

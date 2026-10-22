@@ -471,6 +471,8 @@ export type Appearance = Readonly<{
     onBrand: {readonly text: string; readonly marker: string};
     chromeSwitch: SwitchPair;
     recipe: (canonical: string) => DisplayRecipeColour;
+    /** Chart marks on their actual (possibly composited) grounds; never remaps identity. */
+    chartInk: (displayColour: string, grounds: readonly string[], floor?: number) => string;
     onFill: (fill: string) => AccentForeground;
     switchOn: (fill: string) => SwitchPair;
     machineColour: (canonical: MachineColour) => MachineColour;
@@ -704,7 +706,10 @@ export function resolveAppearance(supplied: AppearanceChoice): Appearance {
     return {
         choice, scheme: choice.theme === "light" ? "light" : "dark",
         palette: p, primary, selection, onBrand: {...onBrand}, chromeSwitch,
-        recipe, onFill: fill => foregroundFor(fill, p.base), switchOn,
+        recipe,
+        chartInk: (displayColour, grounds, floor = 3) =>
+            fit(effectiveHex(displayColour, grounds[0]), grounds, floor),
+        onFill: fill => foregroundFor(fill, p.base), switchOn,
         machineColour: canonical => ({
             ...canonical,
             ink: fit(canonical.ink, grounds, 4.5),

@@ -6,7 +6,6 @@ import {XStack, YStack} from "tamagui";
 
 import {dotMatrixSvgProps, drawnFontSize} from "@/components/DotMatrixText";
 import TraceLegendItem, {LEGEND_SIZE, rowHeight} from "@/components/TraceLegendItem";
-import {palette} from "@/constants/colors";
 import {useAppearance} from "@/hooks/useAppearance";
 import type {BeverageKind, BrewSample} from "@/library/brew/BrewRecord";
 import {livePoints, pathLength, planPoints, splitAtPauses, stageSpans, toPath,
@@ -19,6 +18,7 @@ import {stageAtX, stageBounds} from "@/library/brew/stagePick";
 import {bandY, hasSetTemperature, temperatureBand,
         temperatureInBand, temperatureMarks} from "@/library/brew/tempBand";
 import {channelStyle, type Role} from "@/library/brew/traceStyle";
+import {mix} from "@/constants/colors";
 import type Pour from "@/library/Pour";
 
 type Props = {
@@ -120,8 +120,8 @@ const TEMP_BAR_STEM = 6;
  * the SVG would be clipped, and trading the degree sign for width would cost
  * more than it saves.
  *
- * They are `palette.dim`. `palette.muted` is 4.12:1 on `base`, under AA, and
- * the palette documents it as not a text colour.
+ * Ink starts at `palette.dim` and is fitted to the chart's actual grounds.
+ * A graphic grey cannot label a temperature, especially over a pause tint.
  */
 const TEMP_LABEL = 11;
 /** Clearance between a reading's baseline and the rule it labels. */
@@ -135,7 +135,6 @@ function tempLabelHeadroom(): number {
 const PLOT_FLOOR = 10;
 const NO_INTERVALS: readonly PauseInterval[] = [];
 const PAUSE_OPACITY = 0.18;
-const PAUSE_FILL = {manual: palette.dim, overflow: palette.warnMuted} as const;
 
 /** Minimum rendered bypass box size on the volume axis, unrelated to temperature mark width. */
 const BYPASS_BOX_MIN = 2;
@@ -205,7 +204,18 @@ export default function BrewTrace({
     compact = false, legendInset = 0, stages, selectedIndex = null, onSelectStage, bypass
 }: Props) {
     const appearance = useAppearance();
-    const planColor = suppliedPlanColor ?? appearance.palette.muted;
+    const {palette} = appearance;
+    const displayAccent = appearance.recipe(accent).ink;
+    const pauseFill = {manual: palette.dim, overflow: palette.warnMuted};
+    const chartGrounds = (compact || selectedIndex === null
+        ? [palette.base] : [palette.base, palette.raised]).flatMap(ground =>
+        [ground, ...pauseIntervals.map(({reason}) => mix(ground, pauseFill[reason], PAUSE_OPACITY))]
+            .flatMap(paused => compact ? [paused] : [paused, mix(paused, displayAccent, FILL_TOP)]));
+    const neutralInk = appearance.chartInk(palette.muted, chartGrounds, 3.05);
+    const planColor = suppliedPlanColor === undefined ? neutralInk
+        : appearance.chartInk(suppliedPlanColor, chartGrounds, 3.05);
+    const temperatureInk = appearance.chartInk(palette.dim, chartGrounds, 4.55);
+    const markInk = appearance.chartInk(displayAccent, chartGrounds, 3.05);
     const id = useId().replace(/[^a-zA-Z0-9]/g, "");
     const waterFillId = `trace-water-fill-${id}`;
     const plan = planPoints(pours);
@@ -242,11 +252,21 @@ export default function BrewTrace({
     // Derived here rather than at each use so the compact render, the full
     // render and the legend cannot drift apart. From `traceStyle` rather than
     // inline so that `CompareTrace` cannot drift from either.
-    const waterStyle = channelStyle("water", {accent, holding, role});
-    const cupStyle = channelStyle("cup", {accent, role});
+    const waterStyle = channelStyle("water", {accent, appearance, holding, role});
+    const cupStyle = channelStyle("cup", {accent, appearance, role});
     const planStyle = channelStyle("plan", {
-        accent, dashed: planDashed, planColour: planColor
+        accent, appearance, dashed: planDashed, planColour: planColor
     });
+    // Clearance gives each measured channel its real base ground even where
+    // pause tints, selection and the water wash overlap. The signal itself
+    // retains the shared width/dash grammar.
+    const channelGrounds = [
+        {channel: "cup", path: cupPath, style: cupStyle},
+        {channel: "water", path: waterPath, style: waterStyle}
+    ].filter(({path}) => path !== "").map(({channel, path, style}) => (
+        <Path key={channel} testID={`trace-${channel}-ground`} d={path} fill="none"
+              {...{...style, stroke: palette.base, strokeWidth: style.strokeWidth + 2}}/>
+    ));
     // The stages a temperature belongs to. `stages ?? pours` is the same
     // fallback the tap bounds use: a summary passes `pours={[]}` and supplies
     // `stages`, so reading `pours` alone would draw nothing in history.
@@ -265,7 +285,7 @@ export default function BrewTrace({
             key={`pause-${i}`}
             testID={`trace-pause-${interval.reason}-${i}`}
             x={x} y={0} width={bandWidth} height={svgHeight}
-            fill={PAUSE_FILL[interval.reason]}
+            fill={pauseFill[interval.reason]}
             fillOpacity={PAUSE_OPACITY}
         />
     ));
@@ -326,6 +346,7 @@ export default function BrewTrace({
             <Svg width={width} height={height} accessibilityRole="image"
                  accessibilityLabel={accessibilityLabel}>
                 {pauseDraws}
+                {channelGrounds}
                 {planPath !== "" && (
                     <Path
                         testID="trace-plan"
@@ -396,8 +417,8 @@ export default function BrewTrace({
              accessibilityLabel={accessibilityLabel}>
                 <Defs>
                     <LinearGradient id={waterFillId} x1="0" y1="0" x2="0" y2="1">
-                        <Stop offset="0" stopColor={accent} stopOpacity={FILL_TOP} />
-                        <Stop offset="1" stopColor={accent} stopOpacity={FILL_BOTTOM} />
+                        <Stop offset="0" stopColor={displayAccent} stopOpacity={FILL_TOP} />
+                        <Stop offset="1" stopColor={displayAccent} stopOpacity={FILL_BOTTOM} />
                     </LinearGradient>
                 </Defs>
                 {selectionBand && (
@@ -431,7 +452,7 @@ export default function BrewTrace({
                                 testID={mark.lineTestID}
                                 x1={mark.x} y1={mark.y}
                                 x2={mark.x + mark.width} y2={mark.y}
-                                stroke={palette.dim}
+                                stroke={temperatureInk}
                                 strokeWidth={TEMP_BAR_STROKE}
                                 strokeLinecap="round"
                                 fill="none"
@@ -440,7 +461,7 @@ export default function BrewTrace({
                                 testID={mark.stemTestID}
                                 x1={stemX} y1={mark.y}
                                 x2={stemX} y2={mark.y + TEMP_BAR_STEM}
-                                stroke={palette.dim}
+                                stroke={temperatureInk}
                                 strokeWidth={TEMP_BAR_STROKE}
                                 strokeLinecap="round"
                                 fill="none"
@@ -450,7 +471,7 @@ export default function BrewTrace({
                                 x={labelPosition.x}
                                 y={tempLabelY(mark.y)}
                                 textAnchor={labelPosition.textAnchor}
-                                fill={palette.dim}
+                                fill={temperatureInk}
                                 {...dotMatrixSvgProps({fontSize: TEMP_LABEL})}
                             >
                                 {label}
@@ -473,7 +494,7 @@ export default function BrewTrace({
                                 x={labelPosition.x}
                                 y={bypassBoxLabelY(bypassBox.y, bypassBox.height, svgHeight)}
                                 textAnchor={labelPosition.textAnchor}
-                                fill={palette.dim}
+                                fill={temperatureInk}
                                 {...dotMatrixSvgProps({fontSize: TEMP_LABEL})}
                             >
                                 {label}
@@ -494,13 +515,14 @@ export default function BrewTrace({
                     <Path
                         testID="trace-head"
                         d={planPath}
-                        stroke={accent}
+                        stroke={markInk}
                         strokeWidth={2}
                         strokeDasharray={`${planLength * LIT} ${planLength}`}
                         strokeDashoffset={-planHeadAt * planLength * (1 + LIT)}
                         fill="none"
                     />
                 )}
+                {channelGrounds}
                 {cupPath !== "" && (
                     <Path
                         testID="trace-cup"
@@ -523,7 +545,7 @@ export default function BrewTrace({
                         x={bypassBox.x} y={bypassBox.y}
                         width={bypassBox.width} height={bypassBox.height}
                         fill="none"
-                        stroke={bypass?.state === "pending" ? palette.line : accent}
+                        stroke={bypass?.state === "pending" ? neutralInk : markInk}
                         strokeWidth={1.5}
                         strokeDasharray="4 4"
                     />

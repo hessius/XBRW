@@ -1,11 +1,11 @@
 import React from "react";
-import {StyleSheet, View} from "react-native";
+import {View} from "react-native";
 import {XStack, YStack} from "tamagui";
 
 import BrewStars from "@/components/BrewStars";
 import DotMatrixText from "@/components/DotMatrixText";
 import Wordmark from "@/components/Wordmark";
-import {palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 import {SCREEN_PADDING} from "@/constants/layout";
 import {
     storyFrame,
@@ -66,6 +66,9 @@ type Props = {
 export default function BrewStoryCard({
     width, budget, summary, when, accent, rating, coffee, tags
 }: Props) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
+    const displayAccent = appearance.recipe(accent).ink;
     const frame = storyFrame(width);
     const textScale = storyTextScale(width);
     const header = storyHeaderLayout(width, budget.fontScale, when);
@@ -76,14 +79,15 @@ export default function BrewStoryCard({
     return (
         <View
             testID="brew-story-card"
-            style={[styles.frame, {width: frame.width, height: frame.height}]}
+            style={[{backgroundColor: palette.base, overflow: "hidden"},
+                {width: frame.width, height: frame.height}]}
         >
             <View style={{height: frame.safeTop}} testID="story-safe-top"/>
             <YStack testID="story-content" flex={1} justifyContent="center"
                     gap={budget.sectionGap}>
                 {header.stacked ? (
                     <YStack paddingHorizontal={SCREEN_PADDING} gap={2}>
-                        <Wordmark fontSize={header.markSize} plusColor={accent}/>
+                        <Wordmark fontSize={header.markSize} plusColor={displayAccent}/>
                         <XStack justifyContent="flex-end">
                             <DotMatrixText testID="story-when" fontSize={header.dateSize}
                                            weight="bold"
@@ -99,7 +103,7 @@ export default function BrewStoryCard({
                 ) : (
                     <XStack paddingHorizontal={SCREEN_PADDING}
                             alignItems="center" justifyContent="space-between">
-                        <Wordmark fontSize={header.markSize} plusColor={accent}/>
+                        <Wordmark fontSize={header.markSize} plusColor={displayAccent}/>
                         <DotMatrixText testID="story-when" fontSize={header.dateSize}
                                        weight="bold" letterSpacing={header.dateTracking}
                                        maxFontSizeMultiplier={
@@ -160,7 +164,7 @@ export default function BrewStoryCard({
                         {extra > 0 && (
                             <DotMatrixText testID="story-tags-more" fontSize={10 * textScale}
                                            weight="bold" letterSpacing={1.2 * textScale}
-                                           numberOfLines={1} color={palette.muted}>
+                                           numberOfLines={1} color={palette.dim}>
                                 {`+${extra}`}
                             </DotMatrixText>
                         )}
@@ -171,16 +175,3 @@ export default function BrewStoryCard({
         </View>
     );
 }
-
-const styles = StyleSheet.create({
-    /**
-     * The card supplies its own background for the same reason `BrewSummary`
-     * does: a capture inherits nothing from its ancestors. `overflow: hidden`
-     * holds the ratio. Content that outgrew the frame would otherwise be
-     * photographed spilling past the 9:16 the platforms are about to crop to.
-     */
-    frame: {
-        backgroundColor: palette.base,
-        overflow:        "hidden"
-    }
-});

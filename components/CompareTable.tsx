@@ -2,7 +2,7 @@ import React from "react";
 import {Text, XStack, YStack} from "tamagui";
 
 import DotMatrixText from "@/components/DotMatrixText";
-import {palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 import type {CompareRow} from "@/library/brew/compare";
 import type {BeverageKind} from "@/library/brew/BrewRecord";
 import {referenceCupColour} from "@/library/brew/traceStyle";
@@ -30,6 +30,9 @@ function rowLabel(row: CompareRow): string {
  * for.
  */
 export default function CompareTable({rows: recordedRows, accent, beverageKinds = []}: Props) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
+    const displayAccent = appearance.recipe(accent).ink;
     const hasTea = beverageKinds.includes("tea");
     const rows = hasTea ? recordedRows
         .filter((row) => !["GRIND", "RPM", "RATIO", "DRAWDOWN", "DELAY"].includes(row.label))
@@ -61,7 +64,7 @@ export default function CompareTable({rows: recordedRows, accent, beverageKinds 
                             fontSize={10}
                             weight="bold"
                             letterSpacing={1.2}
-                            color={palette.muted}>
+                            color={palette.dim}>
                             {row.label}
                         </DotMatrixText>
                     </YStack>
@@ -79,7 +82,7 @@ export default function CompareTable({rows: recordedRows, accent, beverageKinds 
                             <YStack flex={1} alignItems="flex-start">
                                 <Text
                                     testID={`compare-a-${row.label}`}
-                                    color={accent}
+                                    color={displayAccent}
                                     fontSize={14}>
                                     {row.a}
                                 </Text>
@@ -87,7 +90,7 @@ export default function CompareTable({rows: recordedRows, accent, beverageKinds 
                             <YStack flex={1} alignItems="flex-end">
                                 <Text
                                     testID={`compare-b-${row.label}`}
-                                    color={referenceCupColour}
+                                    color={referenceCupColour(appearance)}
                                     fontSize={14}>
                                     {row.b}
                                 </Text>

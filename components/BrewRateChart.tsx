@@ -3,7 +3,7 @@ import {PixelRatio, View} from "react-native";
 import Svg, {G, Path, Text as SvgText} from "react-native-svg";
 
 import {dotMatrixSvgProps, drawnFontSize} from "@/components/DotMatrixText";
-import {palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 import {type Box, type Point, toMonotonePath} from "@/library/brew/brewShape";
 import {maxRateOf, type FlowPoint} from "@/library/brew/flowRate";
 import {
@@ -116,10 +116,12 @@ export default function BrewRateChart({
     series, accent, width, maxT, maxRate, height = RATE_HEIGHT, role = "subject",
     labelInset = 0
 }: Props) {
+    const appearance = useAppearance();
     if (!hasDrawableRateRun(series)) return null;
 
-    const waterStyle = channelStyle("water", {accent, role});
-    const cupStyle = channelStyle("cup", {accent, role});
+    const {palette} = appearance;
+    const waterStyle = channelStyle("water", {accent, appearance, role});
+    const cupStyle = channelStyle("cup", {accent, appearance, role});
     const verticalInset = Math.max(waterStyle.strokeWidth, cupStyle.strokeWidth) / 2;
     const fontScale = PixelRatio.getFontScale();
     const labelSize = drawnFontSize(RATE_LABEL_SIZE);

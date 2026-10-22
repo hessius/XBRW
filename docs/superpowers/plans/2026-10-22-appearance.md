@@ -108,6 +108,7 @@ export type Appearance = Readonly<{
     onBrand: {readonly text: string; readonly marker: string};
     chromeSwitch: SwitchPair;
     recipe: (canonical: string) => DisplayRecipeColour;
+    chartInk: (displayColour: string, grounds: readonly string[], floor?: number) => string;
     onFill: (fill: string) => AccentForeground;
     switchOn: (fill: string) => SwitchPair;
     machineColour: (canonical: MachineColour) => MachineColour;
@@ -125,6 +126,9 @@ accepts a displayed fill and **does not map identity**. `ink` is for small text
 on chrome, `fill` for the card, `cupInk` for the chart. Do not introduce a global
 active `onAccent`: a badge on `palette.info`, a neutral selection, and a recipe
 card can require three different foregrounds in the same frame.
+`chartInk` fits an already-displayed colour against non-empty actual chart
+grounds (including composited tints), defaulting to the 3:1 graphic floor.
+It does not map identity; text callers explicitly request the 4.5:1 floor.
 
 ### Execution dependencies
 
@@ -814,7 +818,7 @@ const badgeForeground = appearance.onFill(palette.info);
 `library/brew/__tests__/traceStyle.test.ts`,
 `components/__tests__/traceGrammar.test.tsx` and existing chart tests.
 
-- [ ] Extend pure channel tests to take explicit `appearance`:
+- [x] Extend pure channel tests to take explicit `appearance`:
 
 ```ts
 const appearance = resolveAppearance({theme: "light", recipeColours: "original"});
@@ -828,7 +832,7 @@ expect(contrast(cup.stroke, appearance.palette.base)).toBeGreaterThanOrEqual(3);
   Preserve `ChannelStyle`'s SVG `stroke` field and existing dash/width assertions.
   Cover holding water, plan, subject/reference, missing stream, all twelve
   accents and both modes. Run and observe missing input/contrast failures.
-- [ ] Add `appearance: Appearance` to `ChannelInput`. Use
+- [x] Add `appearance: Appearance` to `ChannelInput`. Use
   `appearance.recipe(input.accent).ink` for water, its `cupInk` for cup,
   `appearance.palette.warn` for holding water, and explicit neutral active
   palette values for reference channels and plan. Preserve the original
@@ -838,19 +842,55 @@ expect(contrast(cup.stroke, appearance.palette.base)).toBeGreaterThanOrEqual(3);
   Update every `channelStyle` test call with explicit default appearance,
   including traceGrammar. Do not make the input optional to hide unmigrated
   callers.
-- [ ] Resolve plan, pause fills, hatch and stage marks for their actual
+- [x] Resolve plan, pause fills, hatch and stage marks for their actual
   backgrounds. Existing pending-stage group opacity must be included when
   measuring informative text; lower opacity is not a disabled exemption for
   future brew stages. Move informational “NOT WATCHED” text to `palette.dim`.
   Do not change held-time/rate arithmetic, `FLOW_WINDOW_MS`, bypass exclusion,
   staircase time scaling or PourProfile's intentionally even stage division.
-- [ ] Add historical regressions: recognised uppercase/lowercase stock
+- [x] Add historical regressions: recognised uppercase/lowercase stock
   snapshots map to the same current slot; unknown `#C86A3B` stays itself;
   deleting or recolouring the source recipe does not change historical
   identity. Render history marker, record, comparison and story in all eight
   choices. Assert stored rows and sample arrays unchanged.
-- [ ] Run the pure trace tests and existing renderer tests in one Jest call,
+- [x] Run the pure trace tests and existing renderer tests in one Jest call,
   then typecheck. Commit `feat: apply appearance to historical and live charts`.
+
+### Task 8 implementation checkpoint — 2026-10-22
+
+- `ChannelInput.appearance` is required; reference colours are pure functions of
+  that input. Chart accent props remain canonical, and water/cup/holding retain
+  the original solid/dotted/dashed widths and time geometry.
+- Added the small pure `Appearance.chartInk` role rather than altering approved
+  palette values. Plan and temperature marks fit their actual selected,
+  paused and shaded grounds. Measured channels have base-colour SVG clearance
+  underneath the unchanged signal strokes, so their real background remains
+  the ground against which `ink`/`cupInk` were resolved.
+- Intentional contrast corrections: comparison plans are opaque (dashes and
+  width still distinguish them), hatch stripes clear 3:1 on their raised lanes,
+  and future rungs retain opaque informational text instead of the former
+  0.45 group opacity. Missing-stream and not-watched copy uses `dim`.
+- Capture/frame backgrounds react now; capture freezing remains Task 10.
+  Closely coupled `BrewFigures`/`BrewRecipeContext` use the same appearance as
+  their summary, and only the live route's plan-colour interpolation boundary
+  changed. Its other consumers remain in Task 7.
+- Historical row, record route, comparison route and story tests cover all
+  eight choices, upper/lowercase stock identities, unknown/named/alpha legacy
+  colours, source recolouring/deletion, and unchanged stored-row/sample data.
+- RED evidence: the pure light/original stroke measured 1.65:1; missing required
+  input failed chart renderers; rendered hatch and composed plan tests failed
+  below their floors; the live plan warmed toward the old colour; missing-stream
+  copy still used a graphic grey. All were observed before the respective fixes.
+- GREEN: one serial 23-file Jest invocation covering pure trace, existing
+  chart/history/live renderers, coupled figures/context and appearance regressions:
+  **46 platform suites, 2,488 tests**. `npm run typecheck`, changed-file
+  `npx eslint`, and `git diff --check` passed. Lint has zero errors and three
+  baseline warnings verified against the incoming commit: the record test's
+  existing require import and two unused purity directives in history.
+  No held-time, rate, bypass-exclusion, sample, plan-time or even-stage profile
+  arithmetic changed.
+- No native build, physical-device visual check, capture-freezing change,
+  production action, PR/review or push is part of this checkpoint.
 
 ## Task 9: Wire the stable root and native appearance, including Android buttons
 

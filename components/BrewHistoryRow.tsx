@@ -4,7 +4,7 @@ import {XStack, YStack} from "tamagui";
 
 import BrewStars, {spokenRating} from "@/components/BrewStars";
 import DotMatrixText from "@/components/DotMatrixText";
-import {palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 import type {StoredBrew} from "@/library/BrewDatabase";
 import {formatBrewDate, formatBrewDuration} from "@/library/brew/brewFormat";
 import {drawdownRate, formatFlowRate} from "@/library/brew/flowRate";
@@ -28,6 +28,8 @@ const STOPPED_OUTCOMES: ReadonlySet<string> =
  * recipe does not rewrite its own history.
  */
 export default function BrewHistoryRow({brew, onPress, selectionMode = false, selected = false}: Props) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     // Named outcomes, not "anything but done". A brew the machine finished
     // short is not a failure and must not sit in the history wearing the same
     // red chip as one that was cancelled or lost the link -- that would
@@ -96,7 +98,7 @@ export default function BrewHistoryRow({brew, onPress, selectionMode = false, se
                 <View
                     testID="history-row-mark"
                     style={{width: 8, height: 8, borderRadius: 4,
-                            backgroundColor: brew.accent}}
+                            backgroundColor: appearance.recipe(brew.accent).fill}}
                 />
                 <YStack flex={1} gap="$1">
                     <XStack alignItems="center" gap="$2">
@@ -138,7 +140,7 @@ export default function BrewHistoryRow({brew, onPress, selectionMode = false, se
                             </>
                         ) : (
                             <DotMatrixText fontSize={11} weight="bold"
-                                           letterSpacing={1.4} color={palette.muted}>
+                                           letterSpacing={1.4} color={palette.dim}>
                                 NOT WATCHED
                             </DotMatrixText>
                         )}
@@ -156,7 +158,7 @@ export default function BrewHistoryRow({brew, onPress, selectionMode = false, se
                         )}
                         {!brew.hasStream && (
                             <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.4}
-                                           color={palette.muted}>
+                                           color={palette.dim}>
                                 NO TRACE KEPT
                             </DotMatrixText>
                         )}

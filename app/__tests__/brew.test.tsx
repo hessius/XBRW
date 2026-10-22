@@ -1,9 +1,8 @@
 import React from "react";
-import {Dimensions, Platform, StyleSheet, type StyleProp, type ViewStyle} from "react-native";
+import {Dimensions, Linking, Platform, processColor, StyleSheet, type StyleProp, type ViewStyle} from "react-native";
 import {act, fireEvent, screen, waitFor, within} from "@testing-library/react-native";
 import * as Clipboard from "expo-clipboard";
 import * as Sharing from "expo-sharing";
-import {Linking} from "react-native";
 import {SafeAreaProvider} from "react-native-safe-area-context";
 
 import Brew from "@/app/brew";
@@ -12,7 +11,9 @@ import {
     LONGEST_ACTIVE_HEADLINE, OVERFLOW_FOREGROUND_CAUTION, OVERFLOW_MANUAL_OVERRIDE,
     PAUSED_NOTE, RATING_CAN_WAIT
 } from "@/constants/brewCopy";
-import {renderWithProviders, SHEET_PRESS_TIMEOUT} from "@/test-utils/render";
+import {Providers, renderWithProviders, SHEET_PRESS_TIMEOUT} from "@/test-utils/render";
+import {mix, resolveAppearance} from "@/constants/colors";
+import {resolveAccent} from "@/library/accent";
 import type {BrewPhase} from "@/library/machine/Machine";
 import type {OverflowSnapshot} from "@/library/brew/OverflowController";
 import type {StoredBrew} from "@/library/BrewDatabase";
@@ -287,6 +288,21 @@ async function drawDone() {
 }
 
 describe("brew route", () => {
+    it("warms the live plan toward the displayed identity rather than the stored colour", async () => {
+        const choice = {theme: "light", recipeColours: "themed"} as const;
+        const appearance = resolveAppearance(choice);
+        const ink = appearance.recipe(resolveAccent(mockRecipe)).ink;
+        mockPhase = namedPhase("grinding");
+        const tree = await renderWithProviders(
+            <Providers appearance={choice}><Brew/></Providers>
+        );
+        const expected = appearance.chartInk(ink,
+            [appearance.palette.base, mix(appearance.palette.base, ink, 0.28)], 3.05);
+        expect(tree.getByTestId("trace-plan").props.stroke).toEqual(
+            expect.objectContaining({payload: processColor(expected)})
+        );
+    });
+
     it.each([false, true])("shows the finished grind with mini-player reopening %s", async (reopened) => {
         mockView = reopened ? "1" : undefined;
         if (reopened) mockRecipeJSON = undefined;

@@ -3,6 +3,7 @@ import React from "react";
 import CompareTable from "@/components/CompareTable";
 import type {CompareRow} from "@/library/brew/compare";
 import {referenceCupColour} from "@/library/brew/traceStyle";
+import {resolveAppearance} from "@/constants/colors";
 import {renderWithProviders} from "@/test-utils/render";
 
 const ROWS: CompareRow[] = [
@@ -76,6 +77,7 @@ describe("CompareTable", () => {
         expect(getByTestId("compare-a-GRIND").props.style)
             .toEqual(expect.objectContaining({color: "#C86A3B"}));
         expect(getByTestId("compare-b-GRIND").props.style)
-            .toEqual(expect.objectContaining({color: referenceCupColour}));
+            .toEqual(expect.objectContaining({color: referenceCupColour(
+                resolveAppearance({theme: "original", recipeColours: "original"}))}));
     });
 });

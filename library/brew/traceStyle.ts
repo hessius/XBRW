@@ -1,4 +1,4 @@
-import {cupLineFor, palette} from "@/constants/colors";
+import type {Appearance} from "@/constants/colors";
 
 /**
  * What the lines on a brew chart look like.
@@ -31,8 +31,8 @@ export type Role = "subject" | "reference";
  * non-text graphic on `base`. The water grey collides with the plan stroke on
  * purpose; width and dashes separate those lines, not a third low-contrast grey.
  */
-export const referenceCupColour = palette.dim;
-export const referenceWaterColour = palette.muted;
+export const referenceCupColour = (appearance: Appearance) => appearance.palette.dim;
+export const referenceWaterColour = (appearance: Appearance) => appearance.palette.muted;
 
 /**
  * The attributes a channel's line carries.
@@ -52,6 +52,7 @@ export type ChannelStyle = {
 };
 
 export type ChannelInput = {
+    appearance: Appearance;
     accent: string;
     /** Overflow protection has stopped the water. Water only. */
     holding?: boolean;
@@ -72,7 +73,7 @@ export type ChannelInput = {
 
 export function channelStyle(
     channel: Channel,
-    {accent, holding = false, dashed = true, planColour, role = "subject"}: ChannelInput
+    {appearance, accent, holding = false, dashed = true, planColour, role = "subject"}: ChannelInput
 ): ChannelStyle {
     const reference = role === "reference";
     switch (channel) {
@@ -80,8 +81,8 @@ export function channelStyle(
             return {
                 // Reference water stays grey even if that brew was held; amber
                 // was rejected because it reads as a live warning on the wrong brew.
-                stroke: reference ? referenceWaterColour
-                    : holding ? palette.warn : accent,
+                stroke: reference ? referenceWaterColour(appearance)
+                    : holding ? appearance.palette.warn : appearance.recipe(accent).ink,
                 strokeWidth:     2.5,
                 strokeDasharray: undefined,
                 strokeLinecap:   "round",
@@ -89,7 +90,7 @@ export function channelStyle(
             };
         case "cup":
             return {
-                stroke:          reference ? referenceCupColour : cupLineFor(accent),
+                stroke:          reference ? referenceCupColour(appearance) : appearance.recipe(accent).cupInk,
                 strokeWidth:     2,
                 strokeDasharray: "1 3",
                 strokeLinecap:   "round",
@@ -99,7 +100,7 @@ export function channelStyle(
             return {
                 // `planOpacity` is animation state, not drawing grammar, so it
                 // stays with each chart rather than being shared here.
-                stroke:          planColour ?? palette.muted,
+                stroke:          planColour ?? appearance.palette.muted,
                 strokeWidth:     1.5,
                 strokeDasharray: dashed ? "4 4" : undefined,
                 strokeLinecap:   undefined,

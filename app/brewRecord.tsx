@@ -17,7 +17,7 @@ import DotMatrixText from "@/components/DotMatrixText";
 
 import ExportButton from "@/components/ExportButton";
 import ScreenHeader from "@/components/ScreenHeader";
-import {palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 import {useBrewExport} from "@/hooks/useBrewExport";
 import {useBrewRecordHandoff} from "@/hooks/useBrewRecordHandoff";
 import {useLiveBrew} from "@/hooks/useLiveBrew";
@@ -171,6 +171,7 @@ type Props = {
  * a short note; figures and trace remain.
  */
 export default function BrewRecord({recipeLookup}: Props) {
+    const {palette} = useAppearance();
     const {id, latest} = useLocalSearchParams<{id?: string; latest?: string}>();
     const {width} = useWindowDimensions();
     const insets = useSafeAreaInsets();
@@ -257,7 +258,7 @@ export default function BrewRecord({recipeLookup}: Props) {
                                color={palette.dim}>
                     BREW NOT FOUND
                 </DotMatrixText>
-                <Text color={palette.muted} fontSize={13} textAlign="center">
+                <Text color={palette.dim} fontSize={13} textAlign="center">
                     That brew is no longer here.
                 </Text>
                 </YStack>
@@ -553,7 +554,7 @@ export default function BrewRecord({recipeLookup}: Props) {
                     </DotMatrixText>
                     <DotMatrixText testID="record-not-watched" fontSize={13}
                                    weight="bold" letterSpacing={1.6}
-                                   color={palette.muted}>
+                                   color={palette.dim}>
                         NOT WATCHED
                     </DotMatrixText>
                 </YStack>

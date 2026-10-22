@@ -7,7 +7,7 @@ import FlowSparkline, {
     FLOW_SPARKLINE_HEIGHT,
     FLOW_SPARKLINE_MIN_POINTS
 } from "@/components/FlowSparkline";
-import {palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 import {formatBrewClock} from "@/library/brew/brewFormat";
 import {grindRecipeBadges, type GrindFigure} from "@/library/brew/dialAfterBrew";
 import {brewFigureDetails, type BrewFigureAdjustments} from "@/library/brew/brewFigures";
@@ -133,6 +133,7 @@ function FigureBadge({children, testID, textScale = 1}: {
     testID?: string;
     textScale?: number;
 }) {
+    const {palette} = useAppearance();
     const badge = brewFigureBadgeGeometry(textScale);
     return (
         <XStack testID={testID}
@@ -186,6 +187,7 @@ function Figure({
     outlined?: boolean;
     textScale?: number;
 }) {
+    const {palette} = useAppearance();
     const badgeGeometry = brewFigureBadgeGeometry(textScale);
     const valueText = (
         <DotMatrixText fontSize={fontSize} weight="bold" color={color}
@@ -293,6 +295,9 @@ export default function BrewFigures(
         adjustments
     }: Props
 ) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
+    const displayAccent = appearance.recipe(accent).ink;
     const {drawdown, drawdownRate, delay, grind, reserveDrawdown} = brewFigureDetails(
         beverageKind, {drawdown: rawDrawdown, drawdownRate: rawDrawdownRate,
             delay: rawDelay, grind: rawGrind, reserveDrawdown: rawReserveDrawdown}
@@ -357,7 +362,7 @@ export default function BrewFigures(
     return (
         <YStack testID="brew-figures" gap={BREW_FIGURE_ROW_GAP}>
             <XStack testID="figures-main-row" gap={figureText.columnGap}>
-                <Figure label="WATER" value={String(Math.round(water))} color={accent}
+                <Figure label="WATER" value={String(Math.round(water))} color={displayAccent}
                         badge={badge} fontSize={figureText.valueSize}
                         badgeGap={badgeGeometry.gap}
                         labelSize={figureText.labelSize}

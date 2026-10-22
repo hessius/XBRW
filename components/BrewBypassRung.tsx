@@ -3,7 +3,7 @@ import {View} from "react-native";
 import {XStack} from "tamagui";
 
 import DotMatrixText from "@/components/DotMatrixText";
-import {palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 import {bypassSeconds} from "@/library/brew/brewShape";
 import type {BypassRungState} from "@/library/brew/bypassState";
 
@@ -18,9 +18,6 @@ type Props = {
     barHeight: number;
     testID?: string;
 };
-
-/** The dimmed opacity of a bypass that has not happened. Matches BrewStageRung. */
-const PENDING_OPACITY = 0.45;
 
 /**
  * Bypass water, as the closing rung of the brew ladder.
@@ -40,6 +37,11 @@ const PENDING_OPACITY = 0.45;
 export default function BrewBypassRung({
     volume, temperature, delivered, state, accent, laneSeconds, barHeight, testID
 }: Props) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
+    const displayAccent = appearance.chartInk(
+        appearance.recipe(accent).ink, [palette.base, palette.raised]
+    );
     const target = Math.max(volume, 0);
     const seconds = bypassSeconds(target);
     const span = laneSeconds > 0 ? laneSeconds : 1;
@@ -68,7 +70,6 @@ export default function BrewBypassRung({
             gap="$2"
             paddingHorizontal="$2"
             marginHorizontal="$-2"
-            style={{opacity: state === "pending" ? PENDING_OPACITY : 1}}
         >
             <DotMatrixText fontSize={12} weight="bold" letterSpacing={1.4}
                            color={lit ? palette.info : palette.dim}>
@@ -88,7 +89,7 @@ export default function BrewBypassRung({
                         borderRadius: radius,
                         borderWidth: 1,
                         borderStyle: "dashed",
-                        borderColor: lit ? accent : palette.line,
+                        borderColor: lit ? displayAccent : palette.muted,
                         overflow: "hidden",
                         flexDirection: "row"
                     }}
@@ -99,7 +100,7 @@ export default function BrewBypassRung({
                             flex: fill,
                             height: barHeight,
                             borderRadius: radius,
-                            backgroundColor: accent
+                            backgroundColor: displayAccent
                         }}
                     />
                     <View style={{flex: 1 - fill}} />
