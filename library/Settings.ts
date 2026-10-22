@@ -336,6 +336,16 @@ export const DEFAULTS = {
      * tag starts as a tag and one tap promotes the ones that were not.
      */
     myShelves: "",
+    /** Feed keys the user has declined; carried in backups with their choices. */
+    roasterFeedOptOut: "",
+    /** Validated subscription records; carried in backups. */
+    roasterSubscriptions: "",
+    /** Cached feed bodies, refetched after restore rather than backed up. */
+    roasterCatalogue: "",
+    /** Alert bookkeeping for the cached feeds, also excluded from backups. */
+    roasterAlerts: "",
+    /** Imported brewing-content fingerprints, backed up with their recipes. */
+    importFingerprints: "",
     /**
      * Draw an auto shelf's tile the other way round: the accent fills the card
      * and the glyph's square takes the quiet background.
@@ -406,12 +416,12 @@ export type BackupExcluded =
     "machineDeviceId" | "savedMachines" | "lastCardRead" | "labsUnlocked" | "beanconquerorHandoff" |
     "machineModelString" | "machineName" | "ratingPromptDismissed" |
     "drawerHintLastShownAt" | "drawerHintShownCount" | "drawerHintManualOpens" |
-    "drawerHintSignature" | "drawerHintLastSeenAt";
+    "drawerHintSignature" | "drawerHintLastSeenAt" | "roasterCatalogue" | "roasterAlerts";
 export const NOT_IN_BACKUP: readonly SettingKey[] = [
     "machineDeviceId", "savedMachines", "lastCardRead", "labsUnlocked", "beanconquerorHandoff",
     "machineModelString", "machineName", "ratingPromptDismissed",
     "drawerHintLastShownAt", "drawerHintShownCount", "drawerHintManualOpens",
-    "drawerHintSignature", "drawerHintLastSeenAt"
+    "drawerHintSignature", "drawerHintLastSeenAt", "roasterCatalogue", "roasterAlerts"
 ];
 
 /**

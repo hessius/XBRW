@@ -77,6 +77,20 @@ usually a mistake, but they are surfaced here so you can change them deliberatel
 
 ## Home / recipe library
 
+### Package E Import source labels
+
+Home and search stay saved-only. Idle Import shows the chosen roasters first,
+then the customer's xBloom account and the separate xBloom catalogue.
+
+| ID | Source | Context | Current text |
+|----|--------|---------|--------------|
+| `import.roasters.all` | `components/ImportSheet.tsx:289` | Opens followed independent roasters, even with no chosen shortcut. | `All roasters` |
+| `import.catalogue.caption` | `components/ImportSheet.tsx:27` (`CATALOGUE_CAPTION`) | Attributes the separate xBloom catalogue. | `Recipes from xBloom and the community` |
+| `settings.roasterFeeds.label` | `app/settings.tsx:593` | Feed management, including declined offers with no subscriptions. | `Roaster feeds` |
+| `settings.roasterFeeds.detail` | `app/settings.tsx:594` | Recovery path from Library settings. | `Manage subscriptions and declined offers.` |
+
+### Saved-library copy
+
 The recipe list (`app/index.tsx`), its empty state, recipe cards, the swipe
 tray, and the overflow sheet.
 

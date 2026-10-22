@@ -2,16 +2,19 @@
  * `render` and `fireEvent` are asynchronous in this repository. Without the
  * `await`, `screen` is empty and the test passes for the wrong reason.
  */
-import {act, fireEvent, screen, waitFor} from "@testing-library/react-native";
+import {act, fireEvent, screen, waitFor, within} from "@testing-library/react-native";
 import * as Clipboard from "expo-clipboard";
 import {router} from "expo-router";
-import {Keyboard, TextInput} from "react-native";
+import {Keyboard, StyleSheet, TextInput} from "react-native";
 
 import ImportSheet from "@/components/ImportSheet";
 import type {RecipeImport} from "@/hooks/useRecipeImport";
 import Pour, {POUR_PATTERN} from "@/library/Pour";
 import Recipe, {CUP_TYPE} from "@/library/Recipe";
-import {renderWithProviders} from "@/test-utils/render";
+import {useRecipeImport} from "@/hooks/useRecipeImport";
+import {setPinned, subscribe, unsubscribe, updateSubscription} from "@/library/roasterSync";
+import {FEED_URL, feedBody, memorySettings} from "@/test-utils/roasterFeed";
+import {renderWithProviders, SHEET_PRESS_TIMEOUT} from "@/test-utils/render";
 
 // The sheet reads the account feature's gate, and `useSetting` reaches for the
 // shared SQLite-backed store, which cannot open under Jest.
@@ -58,17 +61,32 @@ function stubImport(overrides: Partial<RecipeImport> = {}): RecipeImport {
         state:        {status: "idle"},
         value:        "",
         showField:    true,
-        focusField:   true,
+        focusField:   false,
         hint:         false,
         onChangeText: jest.fn(),
         onSelectionChange: jest.fn(),
         resolveNow:   jest.fn(),
         onPastedText: jest.fn(),
         openFound:    jest.fn(),
+        acceptLatest: jest.fn(),
+        keepMine:     jest.fn(),
         reset:        jest.fn(),
         ...overrides
     };
 }
+
+it("offers both author-version choices inside the import sheet", async () => {
+    const held = new Recipe();
+    held.name = "My coffee";
+    const importer = stubImport({state: {status: "newer", held, latest: new Recipe()}});
+    await renderWithProviders(<ImportSheet open onOpenChange={jest.fn()} importer={importer}/>);
+    await waitFor(async () => {
+        await fireEvent.press(screen.getByTestId("newer-version-latest"));
+        expect(importer.acceptLatest).toHaveBeenCalled();
+    }, {timeout: SHEET_PRESS_TIMEOUT});
+    await fireEvent.press(screen.getByTestId("newer-version-keep"));
+    expect(importer.keepMine).toHaveBeenCalled();
+});
 
 function foundState() {
     const recipe = new Recipe();
@@ -424,8 +442,7 @@ it("leaves the keyboard alone when a typed lookup fails", async () => {
     // The positive case for the typed path: its field never unmounts, so a
     // failure neither remounts-and-refocuses nor dismisses. The keyboard the
     // user was typing with stays exactly where it was, ready to correct the
-    // typo. The initial mount focuses once (the field is present from the
-    // start); clear that, then assert the *failure* transition touches nothing.
+    // typo. Clear the spy after mount so only the failure transition counts.
     const focus = jest.spyOn(TextInput.prototype, "focus");
     const dismiss = jest.spyOn(Keyboard, "dismiss");
     const {rerender} = await renderWithProviders(
@@ -558,7 +575,7 @@ it("offers the door even when the field is hidden, because it is not part of the
 });
 
 /**
- * The account door is drawn once, at the top, and only while nothing has been
+ * The account door is drawn once, after any roasters, and only while nothing has been
  * found.
  */
 it("draws the account door", async () => {
@@ -577,7 +594,7 @@ it("draws the account door", async () => {
  * other people shared. They are different questions, so the sheet asks both,
  * and one rule separates the field from the pair rather than one per row.
  */
-const CATALOGUE = /BROWSE THE CATALOGUE/i;
+const CATALOGUE = /XBLOOM CATALOGUE/i;
 
 it("offers the catalogue as a way in, without taking the account away", async () => {
     await renderWithProviders(
@@ -587,8 +604,8 @@ it("offers the catalogue as a way in, without taking the account away", async ()
     expect(screen.getByRole("button", {name: CATALOGUE})).toBeTruthy();
     expect(screen.getByRole("button", {name: ACCOUNT})).toBeTruthy();
     expect(screen.getByTestId("import-catalogue-label"))
-        .toHaveTextContent("BROWSE THE CATALOGUE");
-    expect(screen.getByText("Find recipes shared by other xBloom users.")).toBeTruthy();
+        .toHaveTextContent("XBLOOM CATALOGUE");
+    expect(screen.getByText("Recipes from xBloom and the community")).toBeTruthy();
 });
 
 it("draws one rule for both doors, not one each", async () => {
@@ -635,3 +652,131 @@ it.each([
     expect(screen.queryByRole("button", {name: CATALOGUE})).toBeNull();
 });
 
+it("plain opening and reset keep the keyboard down while the input remains usable", async () => {
+    const focus = jest.spyOn(TextInput.prototype, "focus");
+    function PlainImport() {
+        const importer = useRecipeImport({stored: [], onOpenRecipe: jest.fn()});
+        return <ImportSheet open importer={importer} onOpenChange={() => importer.reset()}/>;
+    }
+    await renderWithProviders(<PlainImport/>);
+    expect(focus).not.toHaveBeenCalled();
+    await fireEvent.changeText(screen.getByLabelText("Share link or pod code"), "ETH");
+    expect(screen.getByLabelText("Share link or pod code")).toHaveProp("value", "ETH");
+    await waitFor(async () => {
+        await fireEvent.press(screen.getByLabelText("Close"));
+        expect(screen.getByLabelText("Share link or pod code")).toHaveProp("value", "");
+    }, {timeout: SHEET_PRESS_TIMEOUT});
+    expect(focus).not.toHaveBeenCalled();
+    focus.mockRestore();
+});
+
+it("keeps the native paste affordance beside a flexing, reachable input", async () => {
+    await renderWithProviders(
+        <ImportSheet open onOpenChange={() => {}} importer={stubImport()}/>
+    );
+    const row = screen.getByTestId("import-input-row");
+    expect(StyleSheet.flatten(row.props.style).flexDirection).toBe("row");
+    const field = within(row).getByLabelText("Share link or pod code");
+    expect(StyleSheet.flatten(field.props.style)).toMatchObject({flex: 1, minHeight: 44});
+    const paste = within(row).getByRole("button", {name: "Paste from clipboard"});
+    expect(StyleSheet.flatten(paste.props.style)).toMatchObject({minWidth: 44, minHeight: 44});
+    expect(field).not.toBeDisabled();
+    expect(Clipboard.getStringAsync).not.toHaveBeenCalled();
+});
+
+function importSettings(pins: (number | undefined)[]) {
+    const settings = memorySettings();
+    pins.forEach((pinnedAt, i) => {
+        const url = i === 0 ? FEED_URL : `https://roaster${i}.example/feed`;
+        const {feed, body} = feedBody([{id: "a"}], `Roaster ${i}`);
+        subscribe(settings, url, feed, body, 1);
+        if (pinnedAt !== undefined) updateSubscription(settings, url, (s) => ({...s, pinnedAt}));
+    });
+    return settings;
+}
+
+it("offers only the oldest three explicit choices, then All roasters, account and catalogue", async () => {
+    const settings = importSettings([40, 10, 20, 30]);
+    await renderWithProviders(
+        <ImportSheet open settings={settings} onOpenChange={() => {}} importer={stubImport()}/>
+    );
+    const labels = screen.getAllByRole("button").map((node) => node.props.accessibilityLabel);
+    expect(labels.filter((label) => /Roaster \d|All roasters|YOUR XBLOOM|XBLOOM CATALOGUE/.test(label)))
+        .toEqual(["Roaster 1, 1 coffee", "Roaster 2, 1 coffee", "Roaster 3, 1 coffee",
+            "All roasters", "YOUR XBLOOM ACCOUNT, Bring in the recipes you've made",
+            "XBLOOM CATALOGUE, Recipes from xBloom and the community"]);
+    expect(screen.getByTestId("import-scroll")).toBeTruthy();
+    expect(screen.getByLabelText("Close")).toBeTruthy();
+});
+
+it.each([{pins: []}, {pins: [undefined, undefined]}])("never invents shortcuts when pins are $pins", async ({pins}) => {
+    await renderWithProviders(
+        <ImportSheet open settings={importSettings(pins)} onOpenChange={() => {}} importer={stubImport()}/>
+    );
+    expect(screen.queryByRole("button", {name: /Roaster \d/})).toBeNull();
+    expect(screen.queryByLabelText("All roasters") !== null).toBe(pins.length > 0);
+});
+
+it.each(["resolving", "found", "error"] as const)("hides every source while %s", async (status) => {
+    const state = status === "found" ? foundState() : status === "error"
+        ? {status, reason: "network" as const, message: "Try again"} : {status};
+    await renderWithProviders(
+        <ImportSheet open settings={importSettings([1])} onOpenChange={() => {}}
+                     importer={stubImport({state})}/>
+    );
+    expect(screen.queryByLabelText("All roasters")).toBeNull();
+    expect(screen.queryByRole("button", {name: /Roaster 0|XBLOOM/})).toBeNull();
+});
+
+it.each(["Roaster 0, 1 coffee", "All roasters"])("closes before opening %s", async (label) => {
+    const onOpenChange = jest.fn();
+    await renderWithProviders(
+        <ImportSheet open settings={importSettings([1])} onOpenChange={onOpenChange} importer={stubImport()}/>
+    );
+    await waitFor(async () => {
+        await fireEvent.press(screen.getByLabelText(label));
+        expect(router.push).toHaveBeenCalled();
+    }, {timeout: SHEET_PRESS_TIMEOUT});
+    expect(onOpenChange.mock.invocationCallOrder[0])
+        .toBeLessThan((router.push as jest.Mock).mock.invocationCallOrder[0]);
+    expect(router.push).toHaveBeenCalledWith(label === "All roasters" ? "/roasters"
+        : {pathname: "/roaster", params: {feed: FEED_URL}});
+});
+
+it("does not present an uncached feed as zero coffees", async () => {
+    const settings = importSettings([1]);
+    settings.set("roasterCatalogue", "");
+    await renderWithProviders(
+        <ImportSheet open settings={settings} onOpenChange={() => {}} importer={stubImport()}/>
+    );
+    expect(screen.getByRole("button", {name: "Roaster 0"})).toBeTruthy();
+    expect(screen.queryByText("0 coffees")).toBeNull();
+});
+
+it("reflects removal and unsubscribe without filling vacant shortcuts", async () => {
+    const settings = importSettings([1, undefined]);
+    await renderWithProviders(
+        <ImportSheet open settings={settings} onOpenChange={() => {}} importer={stubImport()}/>
+    );
+    await act(() => {setPinned(settings, FEED_URL, false, 2);});
+    expect(screen.queryByRole("button", {name: /Roaster \d/})).toBeNull();
+    expect(screen.getByLabelText("All roasters")).toBeTruthy();
+    await act(() => {
+        unsubscribe(settings, FEED_URL);
+        unsubscribe(settings, "https://roaster1.example/feed");
+    });
+    expect(screen.queryByTestId("import-roasters")).toBeNull();
+});
+
+it("updates displayed counts from cache changes without a lookup", async () => {
+    const settings = importSettings([1]);
+    await renderWithProviders(
+        <ImportSheet open settings={settings} onOpenChange={() => {}} importer={stubImport()}/>
+    );
+    expect(screen.getByLabelText("Roaster 0, 1 coffee")).toBeTruthy();
+    await act(() => {
+        const {feed, body} = feedBody([{id: "a"}, {id: "b"}], "Roaster 0");
+        subscribe(settings, FEED_URL, feed, body, 2);
+    });
+    expect(screen.getByLabelText("Roaster 0, 2 coffees")).toBeTruthy();
+});

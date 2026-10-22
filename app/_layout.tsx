@@ -17,6 +17,7 @@ import RouteWatcher from '@/components/RouteWatcher';
 import {LiveBrewProvider} from '@/hooks/useLiveBrew';
 import {sharedBrewDatabase, sweepOnLaunch} from '@/hooks/useBrewHistory';
 import {useSetting} from '@/hooks/useSetting';
+import {useRoasterForegroundSync} from '@/hooks/useRoasterForegroundSync';
 
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
@@ -46,6 +47,7 @@ const shareIntentOptions = {
 };
 
 export default function RootLayout() {
+    useRoasterForegroundSync();
     const [splashDone, setSplashDone] = useState(false);
     const [loaded] = useFonts({
         SpaceMono:        require('../assets/fonts/SpaceMono-Regular.ttf'),
@@ -135,6 +137,11 @@ export default function RootLayout() {
                                             <Stack.Screen name="machine" options={{headerShown: false}}/>
                                             <Stack.Screen name="easyMode" options={{headerShown: false}}/>
                                             <Stack.Screen name="importCloud" options={{headerShown: false}}/>
+                                            <Stack.Screen name="subscriptions" options={{headerShown: false}}/>
+                                            <Stack.Screen name="subscription" options={{headerShown: false}}/>
+                                            <Stack.Screen name="roasters" options={{headerShown: false}}/>
+                                            <Stack.Screen name="roaster" options={{headerShown: false}}/>
+                                            <Stack.Screen name="roasterCoffee" options={{headerShown: false}}/>
                                             {/* The history list and one brew's
                                                 record. These were registered
                                                 nowhere, so they fell through to

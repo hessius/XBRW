@@ -4,6 +4,45 @@ Package acceptance, integration and release qualification are separate.
 Record the exact app commit, native build, platform, machine and firmware for
 each device result. Software transports do not qualify BLE or NFC hardware.
 
+## Package E: Import, catalogues and saved-roaster shelves
+
+- [ ] On both native platforms, open Import with zero subscriptions, then with
+  subscriptions and zero/one/three chosen shortcuts. Verify selection order,
+  fourth-choice refusal, All roasters access and no automatic slot filling.
+  With none, recover a declined offer through Settings → Library → Roaster feeds.
+- [ ] Check narrow widths, large system text, sheet scrolling, native Paste
+  consent and keyboard remaining closed on a plain open. Source choices close
+  Import before navigating and disappear during lookup/error/found states.
+- [ ] Follow a feed and verify no unsaved coffees appear in home, search or
+  empty-library states. Browse through Import and return with accessibility
+  focus restored. The xBloom catalogue credits xBloom and the community.
+- [ ] Type an existing import, cancel or replace it, then explicitly open it.
+  Only the explicit open may save staged changes. Fail storage and retry:
+  the held recipe, local metadata and author fingerprint remain unchanged on
+  failure. An arrival within the editor push guard must neither save nor leave
+  a sheet covering Home.
+- [ ] Exercise newer-author choices, local edits and unchanged-author
+  fingerprints. Check feed offers on return and cancellation, replacement,
+  failed lookup and failed feed without losing a valid imported recipe.
+  Edit and save a catalogue Brew now recipe, then reimport its unchanged author:
+  it must keep the edit without claiming there is a newer author version.
+- [ ] Save catalogue recipes with coffee-, import- and feed-level roaster
+  metadata; check precedence and fill-only-blank existing metadata. Copy,
+  backup/restore and unsubscribe without losing saved roaster identity.
+- [ ] Verify roaster shelves at two/three members, exactly/over 80%, applied
+  zero-member passthrough, Unicode/case variants and hidden-shelf restoration.
+  The shelf count, opened recipes and art must identify the same saved members.
+- [ ] Check 0/1/2/3/4 photos, a pictured member beyond the first three, repeated
+  URLs on different saved recipes, failed images and photos disabled.
+  Roaster marks stay 44 pt; no single photo expands to fill the preview.
+  Stock auto shelves still need four successful photos.
+- [ ] Leave catalogue status visible across a minute and background/foreground
+  transition. Confirm age labels advance and no timer remains after unmount.
+
+Software regressions do not satisfy these native presentation checks. The
+existing client/runtime compatibility gap still applies. #253 remains the
+photo-performance follow-up and #261 the non-blocking adoption follow-up.
+
 ## SDK 57 patch and runtime follow-up
 
 - [ ] Rebuild the native client from the final accepted commit before device

@@ -84,7 +84,7 @@ export const OUTBOUND_CALLS: OutboundCall[] = [
     {
         id:      "import",
         title:   "Look up a shared recipe",
-        trigger: "You paste an xBloom link or a pod code, or share a link into the app.",
+        trigger: "You paste an xBloom link or a pod code, share a link into the app, or open, brew or add a coffee in a roaster's catalogue.",
         host:    "client-api.xbloom.com",
         hostPinned: true,
         owner:   "xBloom",
@@ -95,6 +95,21 @@ export const OUTBOUND_CALLS: OutboundCall[] = [
             "Nothing about you, and nothing from your library."
         ],
         source:  ["library/XBloomRecipe.ts", "library/importInput.ts"]
+    },
+    {
+        id:      "roasterFeed",
+        title:   "Check a roaster's list of coffees",
+        trigger: "You open a roaster's import link that names a list of its coffees. If you subscribe, the app reads that list again when you open the app, at most once every 12 hours, and whenever you tap Refresh. Pausing or ending the subscription stops it.",
+        host:    "whichever roaster the import link named",
+        hostPinned: false,
+        owner:   "The roaster who made the link",
+        carries: [
+            "Nothing but the request itself: your IP address, and the address of the list.",
+            "No recipe, no account and nothing from your library. XBRW++ drops any address that is not https.",
+            "Only while the app is open. There is no background fetch.",
+            "Checking the list never asks xBloom anything and never changes your library. A coffee's recipe is fetched from xBloom only when you open, brew or add it."
+        ],
+        source:  ["library/roasterFeed.ts", "library/roasterSync.ts", "hooks/useRoasterOffer.ts"]
     },
     {
         id:      "brewMind",
@@ -195,14 +210,14 @@ export const OUTBOUND_CALLS: OutboundCall[] = [
     {
         id:      "images",
         title:   "Load a photo",
-        trigger: "You open the hub, an import preview, or a saved recipe that carries a pod photo or the avatar of whoever shared it. Recipe card photos, Shelf photo previews and Pictures in ABOUT control their respective placements.",
-        host:    "whichever host xBloom named in its own reply",
+        trigger: "You open the hub, a roaster's catalogue, an import preview, or a saved recipe that carries a pod photo or the avatar of whoever shared it. Recipe card photos, Shelf photo previews and Pictures in ABOUT control their respective placements.",
+        host:    "whichever host xBloom or the roaster named",
         hostPinned: false,
-        owner:   "xBloom, or whoever xBloom points at",
+        owner:   "xBloom, the roaster, or whoever they point at",
         carries: [
             "Nothing but the request itself: your IP address, and the address of the picture.",
             "No recipe, no account and nothing you have typed.",
-            "The address comes from xBloom's reply rather than from this app, so it is not a fixed one. XBRW++ drops any address that is not https, and sends it nothing.",
+            "The address comes from xBloom's reply or the roaster's feed rather than from this app, so it is not a fixed one. XBRW++ drops any address that is not https, and sends it nothing.",
             "This is the one request that can happen while you are only looking at your own library, because a recipe imported from xBloom remembers the photo that came with it."
         ],
         source:  [
@@ -213,7 +228,9 @@ export const OUTBOUND_CALLS: OutboundCall[] = [
             "components/FromSection.tsx",
             "components/HubRow.tsx",
             "components/ImportResult.tsx",
-            "app/hubRecipe.tsx"
+            "app/hubRecipe.tsx",
+            "components/CatalogueParts.tsx",
+            "components/RoasterCoffeeRow.tsx"
         ]
     }
 ];

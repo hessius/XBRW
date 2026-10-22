@@ -1,7 +1,8 @@
 import React from "react";
-import {XStack, YStack} from "tamagui";
+import {Text, XStack, YStack} from "tamagui";
 
 import DotIcon from "@/components/DotIcon";
+import DotMatrixText from "@/components/DotMatrixText";
 import {onAccent, palette} from "@/constants/colors";
 import type {DotIconName} from "@/constants/dotIcons";
 
@@ -40,8 +41,8 @@ const RADIUS = 10;
  *
  * The design's central claim, now settled: an auto shelf is a closed set that
  * ships with the app, so it carries a glyph drawn at design time, while a
- * non-auto shelf is open ended and takes a mosaic of its members' accents. The
- * art then says which kind of shelf it is, without a caption saying so.
+ * non-auto shelf is open ended and takes a mosaic of its members' accents.
+ * Saved roasters supply their own initial instead of a stock glyph.
  *
  * It was a setting while the tester group was deciding, and the losing
  * candidates have been deleted along with the switch. A function rather than
@@ -63,11 +64,13 @@ export function markFor(kind: "auto" | "manual" | "tag"): "mosaic" | "glyph" {
  * when its last member left would read as two shelves.
  */
 export default function ShelfMark({
-    kind, glyph, accents = [], inverted = false
+    kind, glyph, roasterInitial, accents = [], inverted = false
 }: {
     kind: "auto" | "manual" | "tag";
     /** The glyph an auto shelf carries. Auto shelves only. */
     glyph?: DotIconName | null;
+    /** An auto roaster shelf's literal first letter or leading digit, not an icon alias. */
+    roasterInitial?: string;
     /** Member accents, dominant first. */
     accents?: readonly string[];
     /**
@@ -89,6 +92,21 @@ export default function ShelfMark({
     const mark = asked === "glyph" && glyph == null ? "mosaic" : asked;
     const members = accents.slice(0, MARK_MEMBERS);
     const field = members[0] ?? palette.surface;
+
+    if (kind === "auto" && roasterInitial) {
+        const ink = inverted
+            ? (members.length > 0 ? field : palette.text)
+            : (members.length > 0 ? onAccent.text : palette.text);
+        return (
+            <Square testID="shelf-mark-initial" background={inverted ? palette.surface : field}>
+                {/^[A-Z0-9]$/.test(roasterInitial)
+                    ? <DotMatrixText testID="shelf-mark-initial-text" fontSize={26}
+                        maxFontSizeMultiplier={1} letterSpacing={0} color={ink}>{roasterInitial}</DotMatrixText>
+                    : <Text testID="shelf-mark-initial-text" fontSize={26} maxFontSizeMultiplier={1}
+                        fontWeight="700" color={ink}>{roasterInitial}</Text>}
+            </Square>
+        );
+    }
 
     if (mark === "glyph" && glyph != null) {
         // Inverted, the accent is behind the whole tile and this square is the

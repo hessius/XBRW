@@ -188,15 +188,16 @@ export default function XbrwSheet({
     // sheet's own chrome — the same register as the deck switch and the toast —
     // rather than copy about the recipe.
     const heading = (
-        <XStack alignItems="center" justifyContent={showTitle ? "space-between" : "flex-end"}
+        <XStack alignItems="flex-start" justifyContent={showTitle ? "space-between" : "flex-end"}
                 gap="$3">
             {showTitle && (
-                <DotMatrixText fontSize={11} weight="bold" letterSpacing={2}
-                               color={palette.dim}>
+                <DotMatrixText testID="sheet-title" fontSize={11} weight="bold" letterSpacing={2}
+                               color={palette.dim} style={{flexShrink: 1}}>
                     {title}
                 </DotMatrixText>
             )}
             <Pressable accessibilityRole="button" accessibilityLabel="Close"
+                       style={{flexShrink: 0}}
                        onPress={() => onOpenChange(false)} hitSlop={12}>
                 <DotMatrixText fontSize={11} weight="bold" letterSpacing={2}
                                color={palette.dim}>

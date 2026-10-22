@@ -1,10 +1,13 @@
 import {
     AUTHOR_FILTER_PREFIX,
     TAG_FILTER_PREFIX,
+    ROASTER_FILTER_PREFIX,
     authorFromFilterId,
     tagFromFilterId,
+    roasterFromFilterId,
 } from "@/library/libraryFilters";
 import {tagKey} from "@/library/tagKey";
+import {roasterKey} from "@/library/roasterIdentity";
 
 /**
  * Which auto shelves the user has put away.
@@ -36,11 +39,13 @@ import {tagKey} from "@/library/tagKey";
 /**
  * The form of a shelf id this list stores and compares.
  *
- * Stock ids are their own canonical form. Author and tag ids are folded, so
- * the two spellings of one person or shelf are one answer.
+ * Stock ids are their own canonical form. Author, tag and roaster ids use their
+ * membership key, so a representative spelling change cannot unhide a shelf.
  */
 export function canonicalShelfId(id: string): string {
     const trimmed = id.trim();
+    const roaster = roasterFromFilterId(trimmed);
+    if (roaster !== null) return `${ROASTER_FILTER_PREFIX}${roasterKey(roaster)}`;
     const author = authorFromFilterId(trimmed);
     if (author !== null) return `${AUTHOR_FILTER_PREFIX}${tagKey(author)}`;
     // Tags fold for the reason authors do, and it matters more here: a tag is

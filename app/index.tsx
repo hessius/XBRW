@@ -14,6 +14,7 @@ import DotMatrixText from "@/components/DotMatrixText";
 import EmptyLibrary from "@/components/EmptyLibrary";
 import HomeHeader from "@/components/HomeHeader";
 import ImportSheet from "@/components/ImportSheet";
+import RoasterOfferSheet from "@/components/RoasterOfferSheet";
 import ImportTile from "@/components/ImportTile";
 import BrewMindBrowser from "@/components/BrewMindBrowser";
 import LibraryRail, {type RailFilter} from "@/components/LibraryRail";
@@ -41,6 +42,7 @@ import {openEasyModeRecipe, useSlotRecord} from "@/hooks/useEasyModeSlots";
 import {slotMarkers} from "@/library/slots/slotModel";
 import {useLibraryQuery} from "@/hooks/useLibraryQuery";
 import {useRecipeImport} from "@/hooks/useRecipeImport";
+import {useRoasterOffer} from "@/hooks/useRoasterOffer";
 import {useRecipeLibrary, type RecipeStore, type ShelfWriteOutcome}
     from "@/hooks/useRecipeLibrary";
 import {useSetting} from "@/hooks/useSetting";
@@ -524,6 +526,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
         filterCounts: library.filterCounts,
         tagCounts:    library.tagCounts,
         authorCounts: library.authorCounts,
+        roasterCounts: library.roasterCounts,
         librarySize:  library.librarySize,
         applied:      libraryQuery.query.filters,
         myShelves:    parseHidden(myShelves)
@@ -892,15 +895,25 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
     // caught nothing. `+native-intent` stops that pair from forming; this is
     // what holds if anything ever mounts a second one again.
 
+    const roasterOffer = useRoasterOffer({
+        settings,
+        canAsk: () => lastEditorPushAt === 0 && !screenCovered
+    });
+
     const importer = useRecipeImport({
         stored:       () => library.allRecipes(),
+        canOpenRecipe,
+        onOpenDeclined: () => setImportOpen(false),
+        onFeed: roasterOffer.arm,
+        onImported: roasterOffer.imported,
+        onDiscard: roasterOffer.disarm,
         onOpenRecipe: (recipe, isExisting) => {
             setImportOpen(false);
             // Ask to navigate first: a recipe that arrives while an editor is
             // already opening is dropped whole, and a dropped arrival must not
             // announce itself either.
             if (!openRecipe(recipe)) {
-                return;
+                return false;
             }
             if (isExisting) {
                 // The same words a card read already uses when it turns out the
@@ -953,6 +966,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
             // guards above and refuse a second, deliberate visit that they had
             // deliberately allowed.
             forgetLastMove();
+            roasterOffer.ask();
             // Regaining focus is the one signal that separates a redelivery of a
             // shared link from a deliberate re-share of it: a re-share only
             // happens after the user left the editor this import opened and came
@@ -1050,6 +1064,9 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
             coffee: link.coffee,
             recipeUrl: link.recipeUrl,
             recipeName: link.recipeName,
+            feed: link.feed,
+            colour: link.colour,
+            tags: link.tags,
             // Only a stated `brewmind` source earns the provenance. Anything
             // else still imports and reads as an ordinary import, because the
             // link is useful to anyone who can mint one.
@@ -1181,8 +1198,12 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
         return answered;
     }
 
+    function canOpenRecipe(): boolean {
+        return Date.now() - lastEditorPushAt >= EDITOR_PUSH_GUARD_MS;
+    }
+
     function openRecipe(recipe: Recipe): boolean {
-        if (Date.now() - lastEditorPushAt < EDITOR_PUSH_GUARD_MS) {
+        if (!canOpenRecipe()) {
             return false;
         }
         lastEditorPushAt = Date.now();
@@ -1311,7 +1332,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
         || namingShelf || renamingShelf !== null || shelfActions !== null
         || deletingShelf !== null || beanFilterOpen
         || removingShelf !== null || overflowRecipe !== null || quickEdit !== null
-        || ratingNoteOpen || machinePicker.open;
+        || ratingNoteOpen || machinePicker.open || roasterOffer.state.phase === "offer";
 
     // The sheet's own row, reachable without the long press that opens it. A
     // reader cannot make that gesture, so every verb the sheet offers is also an
@@ -1842,6 +1863,9 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                         library.refresh();
                     }
                 }}/>
+
+            <RoasterOfferSheet state={roasterOffer.state}
+                              onAccept={roasterOffer.accept} onDecline={roasterOffer.decline}/>
 
             <NewRecipeSheet open={newOpen} onOpenChange={setNewOpen}
                             onChoose={createRecipe}

@@ -36,6 +36,7 @@ import {isMachineModel} from "@/library/machine/machineModel";
 import {isSortAxis, isSortDirection} from "@/library/librarySort";
 import {isHistorySort, isHistorySortDirection} from "@/library/brew/historyQuery";
 import {isLibraryView} from "@/library/libraryView";
+import {parseSubscriptions, serialiseSubscriptions} from "@/library/roasterSubscription";
 import {asTemperatureUnit} from "@/library/units";
 import {STABLE_HOST} from "@/constants/views";
 
@@ -181,6 +182,9 @@ export default function SettingsScreen({settings}: Props) {
     // shelf is promoted from its own tile in the grid, which is where the user
     // is standing when they decide it is one.
     const [myShelves, setMyShelves] = useSetting("myShelves", settings);
+    const [roasterFeedOptOut, setRoasterFeedOptOut] = useSetting("roasterFeedOptOut", settings);
+    const [roasterSubscriptions, setRoasterSubscriptions] = useSetting("roasterSubscriptions", settings);
+    const [importFingerprints, setImportFingerprints] = useSetting("importFingerprints", settings);
 
     // Deliberately given no query: this screen's questions are all about the
     // whole library, never about a view of it. That is what lets the restore
@@ -228,7 +232,8 @@ export default function SettingsScreen({settings}: Props) {
             brewTraceBudgetMB, storyCardHidden,
             brewHistorySort, brewHistorySortDirection,
             librarySort, librarySortDirection, libraryFavouritesFirst,
-            libraryView, invertAutoShelves, hiddenShelves, myShelves
+            libraryView, invertAutoShelves, hiddenShelves, myShelves,
+            roasterFeedOptOut, roasterSubscriptions, importFingerprints
         };
     }
 
@@ -375,6 +380,19 @@ export default function SettingsScreen({settings}: Props) {
         // put it back would quietly demote every shelf they had made.
         if (typeof incoming.myShelves === "string") {
             setMyShelves(incoming.myShelves);
+        }
+        if (typeof incoming.roasterFeedOptOut === "string") {
+            setRoasterFeedOptOut(incoming.roasterFeedOptOut);
+        }
+        // The cache is not restored, so even a recently synced subscription
+        // must fetch again. Paused subscriptions retain the user's choice.
+        if (typeof incoming.roasterSubscriptions === "string") {
+            setRoasterSubscriptions(incoming.roasterSubscriptions === "" ? "" : serialiseSubscriptions(
+                parseSubscriptions(incoming.roasterSubscriptions).map((sub) =>
+                    ({...sub, lastSync: 0, lastAttempt: 0}))));
+        }
+        if (typeof incoming.importFingerprints === "string") {
+            setImportFingerprints(incoming.importFingerprints);
         }
     }
 
@@ -572,6 +590,9 @@ export default function SettingsScreen({settings}: Props) {
                 </SettingsSection>
 
                 <SettingsSection title="Library">
+                    <SettingsActionRow label="Roaster feeds"
+                                       detail="Manage subscriptions and declined offers."
+                                       onPress={() => router.push("/subscriptions")}/>
                     {unreadableCount > 0 && (
                         // Bought off here: `queryRecipes` skips a blob it cannot
                         // read so the library still opens (#124), and this is

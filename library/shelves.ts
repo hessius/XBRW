@@ -1,6 +1,6 @@
 import {
     authorFilterId, availableFilters, filterLabel, STOCK_FILTERS, STOCK_FILTER_ORDER,
-    tagFilterId, type FilterId
+    tagFilterId, roasterFilterId, roasterFromFilterId, type FilterId
 } from "@/library/libraryFilters";
 import {canonicalShelfId} from "@/library/hiddenShelves";
 
@@ -76,13 +76,16 @@ export function buildShelves(input: {
     tagCounts: readonly {tag: string; count: number}[];
     /** How many recipes arrived from each person, for the per-author shelves. */
     authorCounts?: readonly {author: string; count: number}[];
+    /** Whole-table counts of saved coffee metadata, regardless of source. */
+    roasterCounts?: readonly {roaster: string; count: number}[];
     librarySize: number;
     applied?: readonly string[];
     /** Parsed from the `myShelves` setting. */
     myShelves?: readonly string[];
 }): Shelf[] {
     const {
-        filterCounts, tagCounts, authorCounts = [], librarySize, applied = [], myShelves = []
+        filterCounts, tagCounts, authorCounts = [], roasterCounts = [],
+        librarySize, applied = [], myShelves = []
     } = input;
 
     const order = [...new Set(myShelves.map(canonicalShelfId))];
@@ -148,7 +151,31 @@ export function buildShelves(input: {
             count: authorTotals[id] ?? 0
         }));
 
-    // ALL RECIPES is pulled out of the stock run and put last, after the author
+    const roasterTotals: Record<string, number> = {};
+    for (const {roaster, count} of roasterCounts) {
+        const id = roasterFilterId(roaster);
+        if (roasterFromFilterId(id) !== null) roasterTotals[id] = count;
+    }
+    const roasterIdentities = new Set(Object.keys(roasterTotals).map(canonicalShelfId));
+    for (const id of applied) {
+        const roaster = roasterFromFilterId(id);
+        if (roaster === null) continue;
+        const identity = canonicalShelfId(id);
+        if (roasterIdentities.has(identity)) continue;
+        roasterTotals[roasterFilterId(roaster)] = 0;
+        roasterIdentities.add(identity);
+    }
+    // The representative spelling can change while this shelf is applied.
+    // Feed its live id through the same gate without changing the applied query.
+    const appliedIdentities = new Set(applied.map(canonicalShelfId));
+    const appliedRoasters = Object.keys(roasterTotals)
+        .filter(id => appliedIdentities.has(canonicalShelfId(id)));
+    const byRoaster: Shelf[] = availableFilters(roasterTotals, librarySize, appliedRoasters)
+        .map(id => ({
+            id, label: filterLabel(id), kind: "auto" as const, count: roasterTotals[id]
+        }));
+
+    // ALL RECIPES is pulled out of the stock run and put last, after the roaster
     // shelves, because it is the way out of every category rather than one more
     // of them. Its position is the only thing about it that is special; its
     // count, its clause and its art all come through the ordinary path.
@@ -166,5 +193,5 @@ export function buildShelves(input: {
     };
     const arranged = [...manual].sort((a, b) => place(a) - place(b));
 
-    return [...arranged, ...byTag, ...stock, ...byAuthor, ...escape];
+    return [...arranged, ...byTag, ...stock, ...byAuthor, ...byRoaster, ...escape];
 }

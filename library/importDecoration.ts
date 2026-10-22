@@ -1,6 +1,8 @@
 import Recipe, {type RecipeSource} from "@/library/Recipe";
+import {accentGroupFor} from "@/library/accent";
 import {fermentationFrom, processFrom, roastFrom} from "@/library/brew/beanTags";
 import {podImageUrl, type PodCoffee} from "@/library/podCoffee";
+import {roasterAccent} from "@/library/roasterColour";
 
 /**
  * What an import link adds to the recipe it points at (issue #159).
@@ -19,6 +21,10 @@ export type ImportDecoration = {
      * never to `xbloomName`, which stays what xBloom published.
      */
     recipeName?: string;
+    tags?: readonly string[];
+    colour?: string;
+    /** A validated catalogue URL, followed only after this import succeeds. */
+    feed?: string;
 };
 
 /**
@@ -64,13 +70,18 @@ function tagsFrom(coffee: Partial<PodCoffee>): string[] {
  * the link carries in the places it has nothing, and only there.
  */
 export function decorateImport(recipe: Recipe, decoration: ImportDecoration): Recipe {
-    const {coffee, source, recipeUrl, recipeName} = decoration;
+    const {coffee, source, recipeUrl, recipeName, tags, colour} = decoration;
     if (source !== undefined) recipe.source = source;
     if (recipeUrl !== undefined) recipe.recipeUrl = recipeUrl;
     // `name`, not `xbloomName`. `displayName()` already prefers `name`, so the
     // recipe reads as the producer called it, while xBloom's own title stays
     // cached underneath for USE THIS NAME to restore.
     if (recipeName !== undefined) recipe.name = recipeName;
+    if (tags !== undefined && tags.length > 0) recipe.setTags([...recipe.tags, ...tags]);
+    if (colour !== undefined && recipe.accentIndex === undefined) {
+        const index = roasterAccent(colour, accentGroupFor(recipe));
+        if (index !== null) recipe.accentIndex = index;
+    }
     if (coffee === undefined) return recipe;
 
     recipe.coffee = coffee;
@@ -148,9 +159,9 @@ export function fillImportBlanks(recipe: Recipe, decoration: ImportDecoration): 
     } else {
         const held = recipe.coffee as Record<string, unknown>;
         for (const [key, value] of Object.entries(coffee)) {
-            if (value === undefined || value === "") continue;
+            if (value === undefined || (typeof value === "string" && value.trim() === "")) continue;
             const current = held[key];
-            if (current !== undefined && current !== "") continue;
+            if (current !== undefined && !(typeof current === "string" && current.trim() === "")) continue;
             held[key] = value;
             (filled as Record<string, unknown>)[key] = value;
         }

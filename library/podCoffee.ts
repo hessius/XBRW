@@ -1,3 +1,5 @@
+import {readLabels} from "@/library/coffeeLabels";
+
 /**
  * What we know about a coffee, and hand onwards.
  *
@@ -61,6 +63,8 @@ export type PodCoffee = {
     /** Link to the coffee. https only. */
     url?: string;
     imageUrl?: string;
+    /** Short tasting notes, distinct from the longer aromatics narrative. */
+    flavours?: string[];
 };
 
 /** A trimmed string, or undefined when there was nothing worth carrying. */
@@ -407,5 +411,7 @@ export function podCoffeeFromStored(value: unknown): PodCoffee | null {
     if (elevation !== undefined) coffee.elevation = elevation;
     if (cuppingPoints !== undefined) coffee.cupping_points = cuppingPoints;
     if (decaffeinated !== undefined) coffee.decaffeinated = decaffeinated;
+    const flavours = readLabels(record.flavours);
+    if (flavours.length > 0) coffee.flavours = flavours;
     return coffee;
 }

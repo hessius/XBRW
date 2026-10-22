@@ -477,7 +477,7 @@ export default function HubScreen() {
             <YStack {...STABLE_HOST} flex={1} backgroundColor={palette.base}
                     accessibilityElementsHidden={screenCovered}
                     importantForAccessibility={screenCovered ? "no-hide-descendants" : "auto"}>
-                <ScreenHeader title="CATALOGUE" count={rows.length}
+                <ScreenHeader title="XBLOOM CATALOGUE" count={rows.length}
                               onBack={() => router.back()}/>
                 <HubRail
                     browse={browse}

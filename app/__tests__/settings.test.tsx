@@ -195,6 +195,15 @@ async function settleSheet(): Promise<void> {
 }
 
 describe("SettingsScreen", () => {
+    it("keeps feed management reachable with no subscriptions", async () => {
+        const settings = new Settings(memoryStorage());
+        await renderWithProviders(<SettingsScreen settings={settings}/>);
+        await fireEvent.press(screen.getByRole("button", {
+            name: "Roaster feeds, Manage subscriptions and declined offers."
+        }));
+        expect(mockPush).toHaveBeenCalledWith("/subscriptions");
+    });
+
     beforeEach(() => {
         jest.clearAllMocks();
         mockLibraryRecipes = [];
@@ -555,6 +564,38 @@ describe("SettingsScreen", () => {
         }, {timeout: SHEET_PRESS_TIMEOUT});
         expect(new Settings(storage).get("brewTraceBudgetMB")).toBe(expected);
         expect(mockNotify).not.toHaveBeenCalledWith(expect.objectContaining({tone: "error"}));
+    });
+
+    it("refetches restored catalogues while retaining paused subscriptions and import choices", async () => {
+        const storage = memoryStorage();
+        const feed = "https://roaster.example/feed.json";
+        const subscriptions = JSON.stringify([{
+            feed, roaster: "Roaster", paused: true, lastSync: 1000, lastAttempt: 2000, pinnedAt: 123
+        }]);
+        const prints = JSON.stringify({u1: "brewing content"});
+        mockPickBackup.mockResolvedValue(backupOf([recipeNamed("A", "u1")], {
+            roasterSubscriptions: subscriptions,
+            roasterFeedOptOut: JSON.stringify([feed]),
+            importFingerprints: prints,
+            roasterCatalogue: "untrusted cache",
+            roasterAlerts: "untrusted alerts"
+        }));
+        mockApplyRestore.mockReturnValue({status: "restored", added: 1});
+        await renderWithProviders(<SettingsScreen settings={new Settings(storage)}/>);
+        await fireEvent.press(screen.getByRole("button",
+            {name: "Restore from a backup, Adds anything your library does not already have."}));
+        await settleSheet();
+        await fireEvent(screen.getByLabelText(/settings from this backup/i), "checkedChange", true);
+        await fireEvent.press(screen.getByRole("button", {name: /add to my library/i}));
+
+        const restored = new Settings(storage);
+        expect(JSON.parse(restored.get("roasterSubscriptions"))).toEqual([{
+            feed, roaster: "Roaster", paused: true, lastSync: 0, lastAttempt: 0, pinnedAt: 123
+        }]);
+        expect(restored.get("roasterFeedOptOut")).toBe(JSON.stringify([feed]));
+        expect(restored.get("importFingerprints")).toBe(prints);
+        expect(restored.get("roasterCatalogue")).toBe("");
+        expect(restored.get("roasterAlerts")).toBe("");
     });
 
     it("restores every setting a backup carries, not a subset of them", async () => {
