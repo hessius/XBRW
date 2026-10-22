@@ -3,7 +3,7 @@ import {TextInput} from "react-native";
 import {Text, XStack, YStack} from "tamagui";
 
 import XbrwSheet from "@/components/XbrwSheet";
-import {onAccent, palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 import DotMatrixText, {dotMatrixTextProps} from "@/components/DotMatrixText";
 
 /**
@@ -46,6 +46,7 @@ export default function NameShelfSheet({
      */
     current?: string;
 }) {
+    const {palette, primary} = useAppearance();
     const renaming = current !== undefined;
     // The text is stored with the shelf it was typed for, and discarded at
     // render when the two no longer agree. Seeding a plain `useState` from
@@ -130,9 +131,12 @@ export default function NameShelfSheet({
                     opacity={trimmed.length === 0 ? 0.35 : 1}
                     height={48} alignItems="center" justifyContent="center"
                     borderRadius="$4"
-                    backgroundColor={palette.text}>
+                    backgroundColor={primary.fill}
+                    pressStyle={trimmed.length === 0 ? undefined : {
+                        backgroundColor: primary.pressedFill, opacity: 1
+                    }}>
                     <DotMatrixText fontSize={13} weight="bold" letterSpacing={1.5}
-                                   color={onAccent.text}>
+                                   color={primary.ink}>
                         {renaming ? "RENAME SHELF" : "CREATE SHELF"}
                     </DotMatrixText>
                 </XStack>

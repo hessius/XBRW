@@ -4,7 +4,7 @@ import {Text, XStack, YStack} from "tamagui";
 
 import DotMatrixText from "@/components/DotMatrixText";
 import XbrwSheet from "@/components/XbrwSheet";
-import {onAccent, palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 import {MAX_NAME} from "@/library/Recipe";
 
 /**
@@ -57,6 +57,8 @@ export default function RenameSheet({open, onOpenChange, name, borrowedName, onR
     borrowedName: string;
     onRename: (name: string) => void;
 }) {
+    // No recipe identity is supplied here: saving its name is a neutral utility.
+    const {palette, selection} = useAppearance();
     const following = name.trim().length === 0;
     const seed = following ? borrowedName : name;
     const [draft, setDraft] = useState(seed);
@@ -148,9 +150,10 @@ export default function RenameSheet({open, onOpenChange, name, borrowedName, onR
                     onPress={submit}
                     height={48} alignItems="center" justifyContent="center"
                     borderRadius="$4"
-                    backgroundColor={palette.text}>
+                    backgroundColor={selection.fill}
+                    pressStyle={{backgroundColor: selection.pressedFill, opacity: 1}}>
                     <DotMatrixText fontSize={13} weight="bold" letterSpacing={1.5}
-                                   color={onAccent.text}>
+                                   color={selection.ink}>
                         SAVE NAME
                     </DotMatrixText>
                 </XStack>

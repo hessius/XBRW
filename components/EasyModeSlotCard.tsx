@@ -82,7 +82,7 @@ export default function EasyModeSlotCard({
                     </DotMatrixText>
                     <XbrwSwitch accessibilityLabel={`Scale for slot ${name}`}
                         accessibilityHint="Automatically tares when this slot is started. Write to machine to apply."
-                        checked={scaleEnabled} disabled={scaleLocked} ground="accent"
+                        checked={scaleEnabled} disabled={scaleLocked} ground="accent" displayFill={accent}
                         // The 46 x 23pt switch needs only vertical slop; parent padding prevents clipping.
                         hitSlop={{top: 10.5, bottom: 10.5, left: 0, right: 0}}
                         onCheckedChange={enabled => { if (!scaleLocked) onSetScaleEnabled?.(enabled); }}/>

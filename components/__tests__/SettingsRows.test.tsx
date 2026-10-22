@@ -121,10 +121,8 @@ describe("SettingsActionRow", () => {
             .toEqual(expect.objectContaining({minHeight: 44}));
     });
 
-    it("dims and shrinks under the finger, then returns", async () => {
-        // The same press answer as every other primary tap in the app
-        // (CtaTile's opacity 0.7 / scale 0.98): a user must see the row
-        // acknowledge the touch and let go again when the finger lifts.
+    it("shrinks without fading informative text under the finger, then returns", async () => {
+        // Scale acknowledges the touch without reducing text contrast.
         //
         // The feedback rides React Native's Pressability state machine, which is
         // driven by the responder events, not by an `onPressIn` prop — so the
@@ -150,7 +148,7 @@ describe("SettingsActionRow", () => {
             jest.advanceTimersByTime(200);
         });
         expect(button.props.style).toEqual(
-            expect.objectContaining({opacity: 0.7, transform: [{scale: 0.98}]})
+            expect.objectContaining({opacity: 1, transform: [{scale: 0.98}]})
         );
 
         await fireEvent(button, "responderRelease", grantEvent);

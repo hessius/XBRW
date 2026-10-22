@@ -3,7 +3,7 @@ import {Pressable} from "react-native";
 import {XStack, YStack} from "tamagui";
 
 import DotMatrixText from "@/components/DotMatrixText";
-import {palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 
 export type SplitBrewButtonProps = {
     enabled: boolean;
@@ -26,11 +26,14 @@ export type SplitBrewButtonProps = {
 export default function SplitBrewButton({
     enabled, accent, flex, quickEditOpen, onBrew, onToggleQuickEdit
 }: SplitBrewButtonProps) {
-    const brewFill = enabled ? accent : palette.none;
+    const appearance = useAppearance();
+    const {palette} = appearance;
+    const {fill: displayFill, onAccent} = appearance.recipe(accent);
+    const brewFill = enabled ? displayFill : palette.none;
 
     return (
         <XStack flex={flex} borderRadius="$4" overflow="hidden"
-                borderWidth={1} borderColor={accent} backgroundColor={palette.none}>
+                borderWidth={1} borderColor={displayFill} backgroundColor={palette.none}>
             <Pressable accessibilityRole="button" accessibilityLabel="Brew"
                        accessibilityState={{disabled: !enabled}}
                        onPress={() => enabled && onBrew()}
@@ -38,7 +41,7 @@ export default function SplitBrewButton({
                 <YStack flex={1} alignItems="center" justifyContent="center"
                         paddingVertical="$3.5" backgroundColor={brewFill}>
                     <DotMatrixText fontSize={12} weight="bold" letterSpacing={2}
-                                   color={enabled ? palette.base : palette.muted}>
+                                   color={enabled ? onAccent.text : palette.muted}>
                         BREW
                     </DotMatrixText>
                 </YStack>
@@ -51,7 +54,7 @@ export default function SplitBrewButton({
                 {/* The hairline is where one tap target ends and the next
                     begins, so it has to be visible against both fills. It was
                     drawn in the accent on an accent fill, which is to say not
-                    drawn at all. `base` is the ink the labels already use on
+                    drawn at all. The resolved foreground is the ink the labels use on
                     an accent fill, so the boundary reads as part of the
                     control rather than as a new colour. */}
                 {/* Both halves fill their pressable rather than sizing to
@@ -63,10 +66,10 @@ export default function SplitBrewButton({
                 <YStack testID="split-brew-divider"
                         flex={1} alignItems="center" justifyContent="center"
                         paddingVertical="$3.5"
-                        borderLeftWidth={1} borderLeftColor={palette.base}
-                        backgroundColor={accent}>
+                        borderLeftWidth={1} borderLeftColor={onAccent.text}
+                        backgroundColor={displayFill}>
                     <DotMatrixText fontSize={12} weight="bold" letterSpacing={1.6}
-                                   color={palette.base}>
+                                   color={onAccent.text}>
                         {quickEditOpen ? "▼" : "▲"}
                     </DotMatrixText>
                 </YStack>
