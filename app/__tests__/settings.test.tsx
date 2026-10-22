@@ -6,10 +6,13 @@ import {screen, fireEvent, act, within, waitFor} from "@testing-library/react-na
 import type {ReactTestRendererJSON} from "react-test-renderer";
 
 import SettingsScreen from "@/app/settings";
+import {AppearanceProvider} from "@/hooks/useAppearance";
+import {createTestDatabase} from "@/test-utils/sqlite";
+import * as databaseModule from "@/library/appDatabase";
 import {SUPPORT_TITLE} from "@/components/SupportTile";
 import {palette} from "@/constants/colors";
 import Recipe from "@/library/Recipe";
-import {DEFAULTS, NOT_IN_BACKUP, Settings, type SettingKey, type SettingsStorage} from "@/library/Settings";
+import {DEFAULTS, NOT_IN_BACKUP, Settings, SqliteSettingsStorage, type SettingKey, type SettingsStorage} from "@/library/Settings";
 import {
     renderWithProviders, SHEET_PRESS_TIMEOUT, THREE_BUTTON_METRICS
 } from "@/test-utils/render";
@@ -195,6 +198,138 @@ async function settleSheet(): Promise<void> {
 }
 
 describe("SettingsScreen", () => {
+    function sqlSettings() {
+        const db = createTestDatabase();
+        jest.spyOn(databaseModule, "appDatabase").mockReturnValue(
+            db as unknown as ReturnType<typeof databaseModule.appDatabase>);
+        return {db, settings: new Settings(new SqliteSettingsStorage())};
+    }
+
+    async function renderAppearanceSettings(settings: Settings) {
+        return renderWithProviders(
+            <AppearanceProvider settings={settings} onInvalidPreferences={mockNotify}>
+                <SettingsScreen settings={settings}/>
+            </AppearanceProvider>);
+    }
+
+    async function openAppearance() {
+        expect(screen.getAllByRole("button", {name: /^Appearance,/})).toHaveLength(1);
+        await fireEvent.press(screen.getByRole("button", {name: /^Appearance,/}));
+        await waitFor(() => expect(screen.getByRole("radio", {name: "Offline Blue"})).toBeTruthy());
+    }
+
+    async function pressRadio(name: string, selected: () => void) {
+        await waitFor(async () => {
+            await fireEvent.press(screen.getByRole("radio", {name}));
+            selected();
+        }, {timeout: SHEET_PRESS_TIMEOUT});
+    }
+
+    it("immediately persists independent appearance choices without Apply, retaining them after close", async () => {
+        const {settings, db} = sqlSettings();
+        await renderAppearanceSettings(settings);
+        await openAppearance();
+        expect(screen.queryByRole("button", {name: /apply/i})).toBeNull();
+        expect(screen.getByTestId("settings-screen", {includeHiddenElements: true})).toHaveProp("accessibilityElementsHidden", true);
+        expect(screen.getByTestId("settings-screen", {includeHiddenElements: true})).toHaveProp("importantForAccessibility", "no-hide-descendants");
+        await pressRadio("Themed", () =>
+            expect(screen.getByRole("radio", {name: "Themed"})).toBeChecked());
+        // Original Dark deliberately has the same visuals in either recipe mode.
+        expect(settings.get("appearanceTheme")).toBe("original");
+        await pressRadio("Light", () =>
+            expect(screen.getByRole("radio", {name: "Light"})).toBeChecked());
+        expect(db.getFirstSync("SELECT value FROM settings WHERE key = ?", ["appearanceTheme"]))
+            .toEqual({value: '"light"'});
+        expect(db.getFirstSync("SELECT value FROM settings WHERE key = ?", ["recipeColourMode"]))
+            .toEqual({value: '"themed"'});
+        await fireEvent.press(screen.getByRole("button", {name: "Close"}));
+        await openAppearance();
+        expect(screen.getByRole("radio", {name: "Light"})).toBeChecked();
+        expect(screen.getByRole("radio", {name: "Themed"})).toBeChecked();
+    });
+
+    it("keeps the last persisted selection and explicitly reports either failed appearance write", async () => {
+        const {settings, db} = sqlSettings();
+        settings.set("appearanceTheme", "blue");
+        settings.set("recipeColourMode", "themed");
+        db.execSync(`CREATE TRIGGER reject_appearance BEFORE UPDATE ON settings
+            WHEN NEW.key IN ('appearanceTheme', 'recipeColourMode')
+            BEGIN SELECT RAISE(FAIL, 'disk full'); END;`);
+        await renderAppearanceSettings(settings);
+        await openAppearance();
+        await pressRadio("Light", () => expect(mockNotify).toHaveBeenCalledWith({
+            tone: "error", message: "Could not save this appearance. Please try again."
+        }));
+        await pressRadio("Original", () => expect(mockNotify).toHaveBeenCalledWith({
+            tone: "error", message: "Could not save recipe colours. Please try again."
+        }));
+        expect(screen.getByRole("radio", {name: "Offline Blue"})).toBeChecked();
+        expect(screen.getByRole("radio", {name: "Themed"})).toBeChecked();
+        expect(new Settings(new SqliteSettingsStorage()).get("appearanceTheme")).toBe("blue");
+        expect(new Settings(new SqliteSettingsStorage()).get("recipeColourMode")).toBe("themed");
+    });
+
+    it("shows validated fallbacks in the sheet rather than selecting unknown stored enum strings", async () => {
+        const {settings, db} = sqlSettings();
+        db.runSync("INSERT INTO settings (key, value) VALUES (?, ?)", ["appearanceTheme", '"future"']);
+        db.runSync("INSERT INTO settings (key, value) VALUES (?, ?)", ["recipeColourMode", '"future"']);
+        await renderAppearanceSettings(settings);
+        await openAppearance();
+        expect(screen.getByRole("radio", {name: "Original Dark"})).toBeChecked();
+        expect(screen.getByRole("radio", {name: "Original"})).toBeChecked();
+        expect(screen.getAllByRole("radio", {checked: true})).toHaveLength(2);
+    });
+
+    it.each([
+        [{appearanceTheme: "light", recipeColourMode: "themed"}, "light", "themed", false],
+        [{}, "blue", "original", false],
+        [{appearanceTheme: 9, recipeColourMode: "themed"}, "blue", "themed", true],
+        [{appearanceTheme: "magenta", recipeColourMode: false}, "magenta", "original", true],
+        [{appearanceTheme: "future", recipeColourMode: "themed"}, "blue", "themed", true],
+        [{appearanceTheme: "light", recipeColourMode: "future"}, "light", "original", true],
+        [{appearanceTheme: "future", recipeColourMode: "future"}, "blue", "original", true]
+    ] as const)("restores appearance preferences independently from %j using real SQL", async (incoming, theme, mode, warning) => {
+        const {settings} = sqlSettings();
+        settings.set("appearanceTheme", "blue");
+        mockPickBackup.mockResolvedValue(backupOf([], incoming));
+        mockApplyRestore.mockReturnValue({status: "restored", added: 0});
+        await renderAppearanceSettings(settings);
+        await fireEvent.press(screen.getByRole("button", {name: /^Restore from a backup,/}));
+        await settleSheet();
+        await fireEvent(screen.getByLabelText(/settings from this backup/i), "checkedChange", true);
+        await waitFor(async () => {
+            await fireEvent.press(screen.getByRole("button", {name: "Take the settings"}));
+            expect(mockApplyRestore).toHaveBeenCalled();
+        }, {timeout: SHEET_PRESS_TIMEOUT});
+        const reopened = new Settings(new SqliteSettingsStorage());
+        expect(reopened.get("appearanceTheme")).toBe(theme);
+        expect(reopened.get("recipeColourMode")).toBe(mode);
+        const notice = {tone: "error", message: "Some appearance preferences were not restored."};
+        if (warning) expect(mockNotify).toHaveBeenCalledWith(notice);
+        else expect(mockNotify).not.toHaveBeenCalledWith(notice);
+    });
+
+    it("reports rejected SQL during restore without claiming success", async () => {
+        const {settings, db} = sqlSettings();
+        settings.set("appearanceTheme", "blue");
+        db.execSync(`CREATE TRIGGER reject_restore BEFORE UPDATE ON settings
+            WHEN NEW.key = 'appearanceTheme' BEGIN SELECT RAISE(FAIL, 'disk full'); END;`);
+        mockPickBackup.mockResolvedValue(backupOf([], {appearanceTheme: "light"}));
+        mockApplyRestore.mockReturnValue({status: "restored", added: 0});
+        await renderAppearanceSettings(settings);
+        await fireEvent.press(screen.getByRole("button", {name: /^Restore from a backup,/}));
+        await settleSheet();
+        await fireEvent(screen.getByLabelText(/settings from this backup/i), "checkedChange", true);
+        await waitFor(async () => {
+            await fireEvent.press(screen.getByRole("button", {name: "Take the settings"}));
+            expect(mockNotify).toHaveBeenCalledWith({
+                tone: "error", message: "The restore could not be completed. Some settings could not be saved."
+            });
+        }, {timeout: SHEET_PRESS_TIMEOUT});
+        expect(mockNotify).not.toHaveBeenCalledWith(expect.objectContaining({tone: "success"}));
+        expect(new Settings(new SqliteSettingsStorage()).get("appearanceTheme")).toBe("blue");
+    });
+
     it("keeps feed management reachable with no subscriptions", async () => {
         const settings = new Settings(memoryStorage());
         await renderWithProviders(<SettingsScreen settings={settings}/>);
@@ -218,6 +353,8 @@ describe("SettingsScreen", () => {
         mockBrewStore.all.mockReturnValue([]);
         mockBrewStore.restore.mockReturnValue(0);
     });
+
+    afterEach(() => jest.restoreAllMocks());
 
     it("groups app brew preferences separately and preserves their settings", async () => {
         const settings = new Settings(memoryStorage());

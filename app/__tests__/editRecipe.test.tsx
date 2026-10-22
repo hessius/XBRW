@@ -10,7 +10,9 @@ import {sharedSlotDatabase} from "@/hooks/useEasyModeSlots";
 import Pour, {POUR_PATTERN} from "@/library/Pour";
 import Recipe, {CUP_TYPE} from "@/library/Recipe";
 import {palette, resolveAppearance} from "@/constants/colors";
-import {AppearanceScope} from "@/hooks/useAppearance";
+import {AppearanceProvider, AppearanceScope} from "@/hooks/useAppearance";
+import {Settings} from "@/library/Settings";
+import {THEME_IDS} from "@/library/appearance";
 import {RECIPE_HELP} from "@/constants/recipeHelp";
 import {resolveAccent} from "@/library/accent";
 import type {BeanProfile} from "@/library/beanProfile";
@@ -110,6 +112,9 @@ jest.mock("@/hooks/useCardWriter", () => ({
 // because the real hook opens a database.)
 jest.mock("@/hooks/useSetting", () => ({
     useSetting: (key: string) => {
+        if (mockAppearanceSettings !== null) {
+            return jest.requireActual("@/hooks/useSetting").useSetting(key, mockAppearanceSettings);
+        }
         // A real store, not a constant: the caret's hints switch writes through
         // this hook and the deck reads back through it, so a setter that threw
         // the value away would leave that wiring untested.
@@ -147,6 +152,7 @@ let mockParams: Record<string, string> | null = null;
 
 /** Whatever the editor reads out of the settings store. */
 let mockSettings: Record<string, unknown> = {};
+let mockAppearanceSettings: Settings | null = null;
 
 /**
  * `mock`-prefixed so the hoisted `useSetting` factory is allowed to read it.
@@ -184,6 +190,7 @@ beforeEach(() => {
     RecipeDatabase.prototype.countRecipesByTag.mockReturnValue([{tag: "Morning", count: 3}]);
     mockRecipeJSON = JSON.stringify(fixture());
     mockSettings = {};
+    mockAppearanceSettings = null;
     mockParams = null;
     mockGoBack.mockClear();
     mockDispatch.mockClear();
@@ -250,6 +257,57 @@ it("recolours the editor header and already-open help without losing its draft",
         expect(screen.getByTestId("editor-content").props.accessibilityElementsHidden).toBe(false);
     }, {timeout: SHEET_PRESS_TIMEOUT});
     expect(screen.getByLabelText("Ratio, 16.5")).toBeTruthy();
+});
+
+it("preserves unsaved notes, the active deck and visible quick edits through shared-store appearance writes", async () => {
+    const values = new Map<string, string>();
+    const settings = new Settings({
+        read: key => values.get(key) ?? null,
+        write: (key, value) => { values.set(key, value); }
+    });
+    settings.set("machineDeviceId", "AA:BB:CC:DD:EE:FF");
+    mockAppearanceSettings = settings;
+    await renderWithProviders(
+        <AppearanceProvider settings={settings} onInvalidPreferences={mockNotify}>
+            <EditRecipe/>
+        </AppearanceProvider>);
+    await openAbout();
+    await fireEvent.changeText(screen.getByTestId("note-field"), "My unsaved morning note");
+    await fireEvent.press(screen.getByLabelText("Quick edit brew"));
+    await fireEvent.press(screen.getByLabelText("Increase Quick edit dose"));
+    expect(screen.getByLabelText(/^Quick edit dose,/)).toHaveAccessibilityValue({now: 19});
+    const store = jest.requireMock("@/library/RecipeDatabase").default;
+    const writes = () => store.mock.instances.reduce(
+        (n: number, instance: {updateRecipe: {mock: {calls: unknown[]}}}) =>
+            n + instance.updateRecipe.mock.calls.length, 0);
+    const writesBefore = writes();
+    const historyBefore = mockRate.mock.calls.length;
+    for (const theme of THEME_IDS) {
+        for (const mode of ["original", "themed"] as const) {
+            await act(async () => {
+                settings.set("appearanceTheme", theme);
+                settings.set("recipeColourMode", mode);
+            });
+            expect(screen.getByLabelText(/^Quick edit dose,/)).toHaveAccessibilityValue({now: 19});
+            expect(screen.getByTestId("quick-edit-dose-baseline")).toHaveTextContent(/^(recipe )?18 g$/);
+            expect(screen.getByTestId("note-field", {includeHiddenElements: true}))
+                .toHaveDisplayValue("My unsaved morning note");
+            expect(screen.getByRole("tab", {name: /about/i, includeHiddenElements: true})).toBeSelected();
+            expect(screen.getByTestId("quick-edit-panel")).toHaveStyle({
+                backgroundColor: resolveAppearance({theme, recipeColours: mode}).palette.surface
+            });
+            expect(writes()).toBe(writesBefore);
+            expect(mockRate.mock.calls).toHaveLength(historyBefore);
+        }
+    }
+    await fireEvent.press(screen.getByLabelText("Close quick edit"));
+    expect(screen.getByTestId("note-field")).toHaveDisplayValue("My unsaved morning note");
+    expect(screen.getByRole("tab", {name: /about/i})).toBeSelected();
+    await fireEvent.press(screen.getByLabelText("Quick edit brew"));
+    expect(screen.getByLabelText(/^Quick edit dose,/)).toHaveAccessibilityValue({now: 18});
+    expect(screen.queryByTestId("quick-edit-dose-baseline")).toBeNull();
+    expect(writes()).toBe(writesBefore);
+    expect(mockPush).not.toHaveBeenCalled();
 });
 
 it("recolours editor parameters and an open rename sheet while retaining both drafts", async () => {
