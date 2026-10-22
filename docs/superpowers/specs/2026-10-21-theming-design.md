@@ -4,12 +4,13 @@ Date: 2026-10-21
 
 Revised: 2026-10-22
 
-Status: Combined Package G design, incorporating #257 and an adapted #243.
-The maintainer approved the combined scope, action/state distinction, complete
-palette directions and presentation boundary, then approved this written
-revision for implementation planning. The implementation plan is
-`docs/superpowers/plans/2026-10-22-appearance.md`. No application implementation
-is included or authorised by this design checkpoint.
+Status: Combined Package G design, incorporating #257 and an adapted #243,
+implemented locally in the owned task branch; native/manual qualification and
+maintainer acceptance remain pending. The approved product directions below
+are unchanged. Tasks 1–11 have been implemented and reviewed; Task 12 records
+local qualification separately from fresh-client, hardware, PR and release
+gates in `docs/superpowers/plans/2026-10-22-appearance.md`. This is not approval
+to build clients, open or merge a PR, close source proposals, or ship.
 
 The original #257 design was committed at
 `4dc0b2dee8ac3c7d6b73c92de64068b075c306dd`. The #243 proposal was inspected at

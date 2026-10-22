@@ -18,6 +18,32 @@ including its twelve-slot palette tables and contrast floors, is authoritative.
 This plan is not permission to start implementation, create a PR, close #243,
 merge, build a native client, deploy, or promote a release.
 
+**Execution status — 2026-10-22:** The maintainer subsequently authorized serial
+implementation. Tasks 1–11 are implemented, reviewed and pushed through
+`8cb8b1190901e00cdc2520b3873c4530153fafef`; Tasks 8 and 9 preceded Task 7 as
+required by its boundary gate. Task 12 is local qualification/documentation
+only. Its new commits remain local for controller review and push. No PR,
+automated GitHub review, native build/prebuild, merge, deployment or cleanup
+permission is implied. The original per-step instructions/checklists below
+remain execution history, not evidence that a historical RED command or a
+native/manual gate ran; current task states and qualification are recorded here
+and in Task 12.
+
+| Task | Current state / implementation checkpoint |
+| --- | --- |
+| 1 — identities and validation | Implemented/reviewed; `94b0c514` |
+| 2 — pure presets and contrast | Implemented/reviewed; `57d59448`, `c677280d` |
+| 3 — persistence and pure scope | Implemented/reviewed; `c9448dd3` |
+| 4 — action/selection controls and legacy colours | Implemented/reviewed; `785df105`, `aa35aeb1` |
+| 5 — shared primitives | Implemented/reviewed; `5ca507f1`, `6380663e` |
+| 6 — recipe/shelf/machine presentation | Implemented/reviewed; `170d40d1` |
+| 8 — charts/history/contrast refinements | Implemented/reviewed; `7801b95a` through `59f064ee` |
+| 9 — stable root and native configuration | Implemented/reviewed; `87b0e955`; native qualification pending |
+| 7 — all remaining consumers and AST boundary | Implemented/reviewed; `253fda4e`, `4c8c4093`, `38e1d4f3` |
+| 10 — frozen image appearance | Implemented/reviewed; `7f5f0c2e`; actual PNG qualification pending |
+| 11 — Settings, restore and scripted lifecycle | Implemented/reviewed; `8cb8b119`; physical gates pending |
+| 12 — qualification/documentation | Local execution only; native/manual/PR acceptance remains pending |
+
 Continue the owned task rather than creating another design branch:
 
 | Item | Exact value |
@@ -1268,7 +1294,7 @@ planning document. Update the existing colour-module header and directly
 related `.github/copilot-instructions.md` colour guidance for canonical versus
 presentation imports.
 
-- [ ] Run the exact final local gates serially:
+- [x] Run the exact final local gates serially:
 
 ```bash
 npm run typecheck && npm run lint && npm test && npx expo-doctor
@@ -1279,7 +1305,7 @@ git diff --stat 98f3ae5255dfc691bc44d7c5ed356e47830f3df9
   Both Jest projects must pass. Fix regressions instead of weakening original
   byte, geometry, contrast or async expectations. The import-boundary test must
   account for every inventory consumer and its documented launch exception.
-- [ ] Review the diff for canonical domain changes, accidental F features,
+- [x] Review the diff for canonical domain changes, accidental F features,
   hard-coded UI colours, changed recipe-photo geometry, generated native files,
   hand-edited licences, hand memoization, effect-driven React state resets and
   missing sheet coverage. Remove task-created scratch artifacts only.
@@ -1298,12 +1324,14 @@ git diff --stat 98f3ae5255dfc691bc44d7c5ed356e47830f3df9
   appearance change without resending or stopping; retain the existing genuine
   NFC card/Android write release gates. Scripted transports prove payload
   invariance, not radio/hardware qualification.
-- [ ] Commit qualification/documentation updates and push the authorized task
-  branch. Only after explicit PR permission, open one focused PR to `develop`,
+- [x] Commit qualification/documentation updates locally for controller review.
+  The controller owns the subsequent task-branch push; this phase has no push
+  permission.
+- [ ] Only after explicit PR permission, open one focused PR to `develop`,
   account for at most one Copilot round, implement its findings, and require
   exact-head CI green. Do not close #243/#257 or merge/reconcile preview without
   the applicable approval.
-- [ ] At handoff, run `git fetch origin --no-prune && npm run worktrees:check`
+- [x] At handoff, run `git fetch origin --no-prune && npm run worktrees:check`
   and record branch/worktree/base/full HEAD, dirty state, push state, pending
   work and hardware gaps. Retain this task worktree for its named owner and
   pending implementation/review; remote branch is the preservation pointer.
@@ -1364,6 +1392,121 @@ an explicit appearance argument.
 | Stable brew/editor state and unchanged NFC/BLE payloads | Task 11 plus physical gates in Task 12 |
 | Both platforms, all eight combinations, no unapproved contrast exception | Task 12 |
 
-Planning checkpoint: the combined specification is approved. Application
-implementation and native qualification have not started; execution awaits the
-maintainer's choice.
+Implementation checkpoint: Tasks 1–11 are implemented locally and previously
+reviewed/pushed. This does not accept Package G into `develop` or complete
+Task 12. The local qualification evidence and still-pending manual gates below
+supersede the original planning-only status, not the approved product design.
+
+### Task 12 local qualification — 2026-10-22
+
+The first fresh serial gate run exposed one newly stale mini-bar assertion on
+both platforms: a custom dark historical accent `#123456` was expected to be
+the water stroke verbatim, but Task 8 deliberately fits presentation ink for
+contrast. Production `channelStyle` correctly returned
+`appearance.recipe(accent).ink`. The narrowly coupled test-only correction is
+`83611cb9c65072feed1352ee736ae31082422717`; it retains the exact rendered SVG
+payload assertion, using the default resolved ink rather than canonical input.
+No byte, geometry, contrast-floor or asynchronous assertion was weakened.
+Its targeted both-platform run passed 2 suites / 36 tests. The initial full
+run remains evidence: 2 failed, 864 passed, 2 skipped suites; 2 failed,
+19,626 passed, 26 skipped tests; 2 passed snapshots. The chained Doctor did
+not run after that Jest failure.
+
+**Fresh local gates passed**, serially and without changing worker limits,
+test configuration or thresholds:
+
+```sh
+npm run typecheck && npm run lint && npm test && npx expo-doctor
+git diff --check
+git diff --stat 98f3ae5255dfc691bc44d7c5ed356e47830f3df9
+```
+
+Typecheck passed. Lint completed with **0 errors / 32 warnings**, not a
+warning-free result. Both Jest projects passed: **433 passing suites each**,
+**866 passing / 2 skipped suites** in total; **19,628 passing / 26 skipped
+tests** (19,654 total), **2 passing snapshots**, 341.950 seconds. The log
+also contains 1,313 animation/React `act` warning occurrences and two
+`TimeoutOverflowWarning` messages; no comparison run establishes a baseline
+for those warnings. Expo Doctor passed **21/21** checks, no issues detected.
+The exact chain exited 0. `git diff --check` passed.
+
+Evidence is preserved outside the repository in
+`/Users/jesperhessius/.copilot/session-state/96519c03-5860-47ba-837c-30d9b0766696/files/`:
+
+- `appearance-final-full-gates.log` — initial exact-chain failure, including
+  typecheck, lint and both mini-bar failures.
+- `appearance-final-mini-bar-regression.log` — focused correction, both projects.
+- `appearance-final-full-gates-recheck.log` — fresh complete exact chain.
+- `appearance-final-lifecycle-review.diff` — scoped root/capture/native review.
+- `appearance-final-scope-audit.log` — canonical AST and scope checks.
+- `appearance-final-base.diff` and `appearance-final-base-stat.log` — full
+  diff/stat against the exact pinned base.
+- `appearance-final-precommit-worktrees.log`,
+  `appearance-final-worktrees.log` and `appearance-final-handoff.log` —
+  read-only ownership audit and exact final Git state.
+
+The qualified implementation/test head is
+`83611cb9c65072feed1352ee736ae31082422717`; subsequent qualification changes
+are the five directly related documentation/header files only. Both the
+test-only correction and documentation checkpoint have the required Copilot
+trailer, with no amend. Final full HEAD, dirty state and upstream/ahead state
+are recorded in the handoff artifact rather than a self-referential commit.
+The remote preservation pointer remains
+`origin/feat/2.2.0-appearance-20261022` at
+`8cb8b1190901e00cdc2520b3873c4530153fafef` until the controller pushes.
+No push was attempted. The owned worktree is retained for the controller's
+final review and pending native/manual qualification; session logs preserve
+local evidence. Unrelated worktrees are unchanged and no deletion is approved.
+
+**Scope audit:** canonical `palette`, `onAccent`, `onBrand`, `accents`,
+`machineColours` and `switchColours` declarations are unchanged against the
+pinned base (TypeScript AST declaration comparison). Core recipe/Pour/NFC,
+database, backup parser, accent assignment, machine transport/commands and
+brew arithmetic production files have no diff. `Settings.DEFAULTS` adds the
+two appearance keys; pure `library/appearance.ts` and presentation-only
+`traceStyle` are intentional. No Package F feature, new photo layout/cache/
+timing behavior, generated native tree, CI/Jest threshold change, added
+production UI colour literal, hand memoization or effect-driven React state
+reset was found in this local scope review. Photo sizing, shelf cell geometry
+and canonical history identities remain intact.
+
+The TypeScript AST import guard has only the approved static
+`SplashOverlay` launch exception. Reference chart colours are pure factories
+requiring explicit `Appearance`, separately AST-guarded. The pure scope is
+separate from production native effects and the root/live owner is unkeyed.
+Settings includes its new Appearance sheet in both platform accessibility
+coverage guards. Existing sheet coverage and rendered open-sheet regressions
+remain in place; controller final feature-quality review is still required.
+`npm run generate-licences` reproduced the committed generated file exactly
+(824 packages / 63 distinct licence bodies); it was not hand-edited.
+
+Approved colour corrections remain intentional: the official pure
+`@react-native/normalize-colors` 0.83.2 direct dependency/ambient type handles
+legacy colours. Task 8 bounds the full RGB water wash at Blue 0.20 and Magenta
+0.26 over selected/paused/water grounds; Original/Light remain unchanged.
+The twelve slots across all eight combinations and RGB extrema have
+regressions; no mathematical/wire behavior was changed. Task 9 uses SDK 57
+`expo-navigation-bar` 57.0.3 declarative Android `auto` and its supported plugin
+instead of the fixed custom plugin. Version 2.2.0 and runtime fingerprint policy
+are intact.
+
+**Manual qualification matrix — all rows PENDING, not authorized or exercised
+in this phase.** Every visual row requires both platforms and all eight
+theme/recipe-colour combinations, with source/client/device/screenshot evidence.
+
+| Gate | Missing evidence |
+| --- | --- |
+| Fresh native clients | iOS and Android development clients for the changed native fingerprint; no Metro-reload substitution. Intended iOS hardware: iPhone 17 Pro named `iPhone14`, never iPhone 13 mini. |
+| Main visual paths | Library, editor, an already-open sheet and toast, live brew, history, comparison, and both actual PNG image targets. Unit/deferred-capture mocks are not actual PNG evidence. |
+| Edge/state/accessibility matrix | Small screen and large fonts; tea and validation; unknown/deleted-recipe history; pressed/selected/disabled controls; cold launch, resume, opposite OS appearance and rapid changes. |
+| Android native chrome | Actual button navigation and gesture navigation. SDK 57's Android 15 emulator navigation-style bug makes emulator-only qualification insufficient. |
+| Physical machine/card/external gates | One active real brew survives appearance switching without a radio resend/stop; genuine NFC card read/write, particularly Android write safety; external handoff/release gates. Scripted byte/lifecycle tests do not qualify radios or physical hardware. |
+
+**Permission boundary:** PR/source closure/merge/cumulative-preview actions
+remain unauthorized. Do not close #243/#257 or reconcile evaluation draft #252.
+The #243 source's existing Copilot round is already spent. A later approved
+focused G PR targets `develop`, gets at most one automated review round
+(including automatic ruleset reviews), and needs exact-head PR CI green;
+task-branch pushes alone do not prove PR CI. The controller owns final
+review/push and coordination updates. No `main`/`develop` changes or worktree
+deletion are authorized.

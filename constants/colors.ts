@@ -1,9 +1,17 @@
 /**
  * Single source of truth for every colour in the app.
  *
- * Canonical exports retain the original appearance. `resolveAppearance` returns
- * explicit presentation roles without changing stored colour identities or any
- * global active state. Colour lives in a plain module rather than in Tamagui
+ * Static exports are canonical identities: keep them in persisted recipes,
+ * history, shelves, machine choices and non-image exports. Original theme with
+ * Original recipe colours is the default; its stored recipe values do not change.
+ * Presentation consumers use `useAppearance`; pure drawing helpers receive an
+ * explicit Appearance from `resolveAppearance`, never global active state.
+ * Generic selections use neutral selection roles; genuine primary actions use
+ * primary roles. SplashOverlay alone retains fixed branded launch colours.
+ *
+ * AppearanceScope is pure; production persistence and native side effects belong
+ * to their providers/hooks, not this resolver or offscreen image scopes.
+ * Colour lives in a plain module rather than in Tamagui
  * theme tokens because roughly half the call sites are plain React Native,
  * expo-router or SVG props that cannot accept
  * a `$token`, and Tamagui's theme proxy has no parent-theme fallback — a custom
