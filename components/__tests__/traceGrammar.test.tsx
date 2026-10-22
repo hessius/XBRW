@@ -6,10 +6,11 @@ import CompareTrace from "@/components/CompareTrace";
 import FlowSparkline from "@/components/FlowSparkline";
 import type {FlowPoint} from "@/library/brew/flowRate";
 import type {BrewSample} from "@/library/brew/BrewRecord";
-import {channelStyle} from "@/library/brew/traceStyle";
+import {channelStyle, PLAN_MIN_OPACITY} from "@/library/brew/traceStyle";
 import Pour from "@/library/Pour";
 import {renderWithProviders, Providers} from "@/test-utils/render";
-import {accents, resolveAppearance} from "@/constants/colors";
+import {accents, mix, resolveAppearance} from "@/constants/colors";
+import {traceAnimationFor} from "@/hooks/useTraceAnimation";
 import {THEME_IDS} from "@/library/appearance";
 import {processColor, StyleSheet} from "react-native";
 import BrewHistoryRow from "@/components/BrewHistoryRow";
@@ -54,6 +55,8 @@ const FLOW_SERIES: FlowPoint[] = [
 
 const CHOICES = THEME_IDS.flatMap(theme =>
     (["original", "themed"] as const).map(recipeColours => ({theme, recipeColours})));
+const TRACE_CHOICES = CHOICES.flatMap(choice =>
+    [...accents.coffee, ...accents.tea].map(accent => ({...choice, accent})));
 
 function rgb(colour: string | {payload: number}): number[] {
     const value = typeof colour === "string" ? Number(processColor(colour)) : colour.payload;
@@ -197,7 +200,7 @@ describe("historical appearance is presentation, never a history migration", () 
         }
     });
 
-    it.each(CHOICES)("keeps actual hatch, selected text and paused plan readable on $theme/$recipeColours", async choice => {
+    it.each(TRACE_CHOICES)("keeps actual hatch, selected text and paused plan readable on $theme/$recipeColours/$accent", async choice => {
         const appearance = resolveAppearance(choice);
         const base = rgb(appearance.palette.base);
         const raised = rgb(appearance.palette.raised);
@@ -205,9 +208,9 @@ describe("historical appearance is presentation, never a history migration", () 
         const tree = await renderWithProviders(
             <Providers appearance={choice}>
                 <BrewStageRung pour={POURS[0]} index={0} state="active" selected
-                               accent={accents.coffee[0]} laneSeconds={60} barHeight={12}
+                               accent={choice.accent} laneSeconds={60} barHeight={12}
                                delivered={0} pauseElapsed={0} stalls={[]}/>
-                <CompareTrace subject={SAMPLES} reference={[]} accent={accents.coffee[0]}
+                <CompareTrace subject={SAMPLES} reference={[]} accent={choice.accent}
                               verdict="differed" width={300} height={160} maxT={30} maxV={260}
                               subjectPlan={PLAN_PATH} subjectPauses={pauses}/>
             </Providers>
@@ -227,19 +230,22 @@ describe("historical appearance is presentation, never a history migration", () 
             .toBeGreaterThanOrEqual(3);
     });
 
-    it.each(CHOICES)("keeps trace information readable over the actual selected, paused and shaded grounds on $theme/$recipeColours", async choice => {
+    it.each(TRACE_CHOICES)("keeps trace information readable over the actual selected, paused and shaded grounds on $theme/$recipeColours/$accent", async choice => {
         const appearance = resolveAppearance(choice);
-        const accent = accents.coffee[0];
+        const accent = choice.accent;
         const base = rgb(appearance.palette.base);
         const raised = rgb(appearance.palette.raised);
         const tree = await renderWithProviders(
             <Providers appearance={choice}>
                 <BrewTrace pours={POURS} stages={POURS} samples={SAMPLES} accent={accent}
                            width={300} height={160} plannedSeconds={30} selectedIndex={0}
-                           planHeadAt={0.5}
+                           planHeadAt={0.5} holding
                            bypass={{volume: 20, temperature: 90, delivered: 0,
                                startedAt: null, state: "pending"}}
                            pauseIntervals={[{from: 1_000, to: 20_000, pour: 1, reason: "manual"}]}/>
+                <CompareTrace subject={[]} reference={SAMPLES} accent={accent}
+                              verdict="differed" width={300} height={160} maxT={30} maxV={260}
+                              subjectPlan={PLAN_PATH} referencePlan={PLAN_PATH}/>
             </Providers>
         );
         const band = tree.getByTestId("trace-pause-manual-0").props;
@@ -262,6 +268,89 @@ describe("historical appearance is presentation, never a history migration", () 
             expect(backing.strokeWidth).toBeGreaterThan(line.strokeWidth);
             expect(contrast(rgb(line.stroke), rgb(backing.stroke))).toBeGreaterThanOrEqual(3);
         }
+        expect(tree.queryByTestId("trace-cup-subject")).toBeNull();
+        for (const id of ["trace-plan-subject", "trace-plan-reference",
+            "trace-water-reference", "trace-cup-reference"]) {
+            const line = tree.getByTestId(id).props;
+            expect(contrast(composite(rgb(line.stroke), base, line.strokeOpacity ?? 1), base))
+                .toBeGreaterThanOrEqual(3);
+        }
+    });
+
+    it.each(TRACE_CHOICES)("keeps the actual waking trough readable on $theme/$recipeColours/$accent", async choice => {
+        const appearance = resolveAppearance(choice);
+        const motion = traceAnimationFor("waking", 0, true, 120);
+        expect(motion.opacity).toBe(0.45);
+        expect(motion.opacity).toBe(PLAN_MIN_OPACITY);
+        const before = JSON.stringify(POURS);
+        for (const compact of [true, false]) {
+            const tree = await renderWithProviders(
+                <Providers appearance={choice}>
+                    <BrewTrace pours={POURS} samples={[]} accent={choice.accent}
+                               width={300} height={160} plannedSeconds={30} compact={compact}
+                               planOpacity={motion.opacity} planDashed={motion.dashed}
+                               planColor={mix(appearance.palette.muted,
+                                   appearance.recipe(choice.accent).ink, motion.warmth)}/>
+                </Providers>
+            );
+            const plan = tree.getByTestId("trace-plan").props;
+            expect(plan.strokeOpacity).toBe(motion.opacity);
+            expect(plan.strokeWidth).toBe(1.5);
+            expect(plan.strokeDasharray).toEqual(["4", "4"]);
+            const base = rgb(appearance.palette.base);
+            const ratio = contrast(composite(rgb(plan.stroke), base, plan.strokeOpacity), base);
+            expect(ratio).toBeGreaterThanOrEqual(3);
+            await tree.unmount();
+        }
+        expect(JSON.stringify(POURS)).toBe(before);
+    });
+
+    it("refits a mounted breathing plan when the appearance changes", async () => {
+        const motion = traceAnimationFor("waking", 0, true, 120);
+        const draw = (theme: "original" | "light") => (
+            <Providers appearance={{theme, recipeColours: "original"}}>
+                <BrewTrace pours={POURS} samples={[]} accent={accents.coffee[0]}
+                           width={300} height={160} plannedSeconds={30} compact
+                           planOpacity={motion.opacity}/>
+            </Providers>
+        );
+        const tree = await renderWithProviders(draw("original"));
+        const originalStroke = tree.getByTestId("trace-plan").props.stroke;
+        await tree.rerender(draw("light"));
+        const plan = tree.getByTestId("trace-plan").props;
+        const base = rgb(resolveAppearance({theme: "light", recipeColours: "original"}).palette.base);
+        expect(plan.stroke).not.toEqual(originalStroke);
+        expect(plan.strokeOpacity).toBe(motion.opacity);
+        expect(contrast(composite(rgb(plan.stroke), base, plan.strokeOpacity), base))
+            .toBeGreaterThanOrEqual(3);
+    });
+
+    it.each(TRACE_CHOICES)("preserves a visible breath above the fitted trough on $theme/$recipeColours/$accent", async choice => {
+        const appearance = resolveAppearance(choice);
+        const base = rgb(appearance.palette.base);
+        const draw = (elapsed: number) => {
+            const motion = traceAnimationFor("waking", elapsed, true, 120);
+            return (
+                <Providers appearance={choice}>
+                    <BrewTrace pours={POURS} samples={[]} accent={choice.accent}
+                               width={300} height={160} plannedSeconds={30}
+                               planOpacity={motion.opacity}
+                               planColor={mix(appearance.palette.muted,
+                                   appearance.recipe(choice.accent).ink, motion.warmth)}/>
+                </Providers>
+            );
+        };
+        const tree = await renderWithProviders(draw(0));
+        const trough = tree.getByTestId("trace-plan").props;
+        const troughContrast = contrast(composite(rgb(trough.stroke), base, trough.strokeOpacity), base);
+        await tree.rerender(draw(1700));
+        const peak = tree.getByTestId("trace-plan").props;
+        expect(peak.strokeOpacity).toBe(1);
+        // Even the peak's ink is safe at the trough: fitting must not undo
+        // opacity on each tick and flatten the animation to constant contrast.
+        expect(contrast(composite(rgb(peak.stroke), base, PLAN_MIN_OPACITY), base))
+            .toBeGreaterThanOrEqual(3);
+        expect(contrast(rgb(peak.stroke), base)).toBeGreaterThan(troughContrast);
     });
 });
 

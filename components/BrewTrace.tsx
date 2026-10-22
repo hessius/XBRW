@@ -17,7 +17,7 @@ import {tracePauseSpoken} from "@/constants/brewCopy";
 import {stageAtX, stageBounds} from "@/library/brew/stagePick";
 import {bandY, hasSetTemperature, temperatureBand,
         temperatureInBand, temperatureMarks} from "@/library/brew/tempBand";
-import {channelStyle, type Role} from "@/library/brew/traceStyle";
+import {channelStyle, planInk, PLAN_MIN_OPACITY, type Role} from "@/library/brew/traceStyle";
 import {mix} from "@/constants/colors";
 import type Pour from "@/library/Pour";
 
@@ -210,10 +210,15 @@ export default function BrewTrace({
     const chartGrounds = (compact || selectedIndex === null
         ? [palette.base] : [palette.base, palette.raised]).flatMap(ground =>
         [ground, ...pauseIntervals.map(({reason}) => mix(ground, pauseFill[reason], PAUSE_OPACITY))]
-            .flatMap(paused => compact ? [paused] : [paused, mix(paused, displayAccent, FILL_TOP)]));
+            .flatMap(paused => compact || samples.length === 0
+                ? [paused] : [paused, mix(paused, displayAccent, FILL_TOP)]));
     const neutralInk = appearance.chartInk(palette.muted, chartGrounds, 3.05);
-    const planColor = suppliedPlanColor === undefined ? neutralInk
-        : appearance.chartInk(suppliedPlanColor, chartGrounds, 3.05);
+    // Before water arrives the live screen supplies animated colours. Fit the
+    // entire breath at its trough, including the peak, so ink correction cannot
+    // cancel the breathing or jump back to an opaque fit at the peak.
+    const planFitOpacity = samples.length === 0 && suppliedPlanColor !== undefined
+        ? Math.min(planOpacity, PLAN_MIN_OPACITY) : planOpacity;
+    const planColor = planInk(appearance, suppliedPlanColor ?? palette.muted, chartGrounds, planFitOpacity);
     const temperatureInk = appearance.chartInk(palette.dim, chartGrounds, 4.55);
     const markInk = appearance.chartInk(displayAccent, chartGrounds, 3.05);
     const id = useId().replace(/[^a-zA-Z0-9]/g, "");
