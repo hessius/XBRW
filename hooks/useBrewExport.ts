@@ -3,6 +3,9 @@ import * as Sharing from "expo-sharing";
 import {useRef, useState} from "react";
 import type {ViewShotRef} from "react-native-view-shot";
 
+import {notify} from "@/components/XbrwToast";
+import {useAppearance} from "@/hooks/useAppearance";
+import type {AppearanceChoice} from "@/library/appearance";
 import {brewFilename, toExportJson} from "@/library/brew/brewExport";
 import type {BrewSample} from "@/library/brew/BrewRecord";
 import type {StoredBrew} from "@/library/BrewDatabase";
@@ -23,6 +26,10 @@ export type BrewExportSource = {record: StoredBrew; samples: BrewSample[]};
  * flight: the guard is a ref, set synchronously before the first `await`, so a
  * double tap cannot open two share sheets. `busy` is the same fact as state,
  * for a caller that wants to disable a button.
+ *
+ * Keep an AppearanceScope mounted inside ViewShot, using `captureChoice`
+ * while non-null and the current choice otherwise. Descendants resolve their
+ * own colours from canonical props so only the image freezes, not its controls.
  */
 export function useBrewExport(
     source: () => BrewExportSource | null,
@@ -32,12 +39,13 @@ export function useBrewExport(
      * the shading and the tint do not end up baked into a picture nobody can
      * tap.
      *
-     * Awaited, and the capture waits a further frame afterwards, because
+     * Awaited, and the capture waits two paints afterwards, because
      * `ViewShot` photographs what is on the glass: a state change is not on
      * the glass until React has committed it and the compositor has drawn it.
      */
     prepare?: () => Promise<void>
 ) {
+    const appearance = useAppearance();
     // Attached by the caller to the ViewShot wrapping the summary.
     const shotRef = useRef<ViewShotRef>(null);
 
@@ -45,25 +53,34 @@ export function useBrewExport(
     const isSharingImageRef = useRef(false);
     const isSharingDataRef  = useRef(false);
     const [busy, setBusy] = useState(false);
+    const [captureChoice, setCaptureChoice] = useState<AppearanceChoice | null>(null);
 
     /**
      * Capture the summary as a PNG and hand it to the system share sheet.
-     * Sharing can fail silently (user cancel, simulator, no share sheet) —
-     * none of those is an error worth surfacing.
+     * Capture failures are actionable; cancelling the share sheet is not.
      */
     async function shareImage() {
         if (isSharingImageRef.current) return;
         const opened = source();
         if (opened === null) return;
         isSharingImageRef.current = true;
+        setCaptureChoice(appearance.choice);
         setBusy(true);
         try {
-            if (prepare) {
-                await prepare();
+            let uri: string;
+            try {
+                if (prepare) await prepare();
+                // Even without preparation, the scoped appearance must commit.
                 await nextPaint();
+                if (shotRef.current?.capture === undefined) {
+                    throw new Error("Image capture is not ready");
+                }
+                uri = await shotRef.current.capture();
+                if (!uri) throw new Error("Image capture did not produce a file");
+            } catch {
+                notify({tone: "error", message: "Could not create this image. Please try again."});
+                return;
             }
-            const uri = await shotRef.current?.capture?.();
-            if (uri === undefined) return;
             if (!(await Sharing.isAvailableAsync())) return;
             await Sharing.shareAsync(uri, {
                 mimeType:    "image/png",
@@ -76,6 +93,7 @@ export function useBrewExport(
             // User cancelled, or the share sheet is unavailable — not an error.
         } finally {
             isSharingImageRef.current = false;
+            setCaptureChoice(null);
             setBusy(isSharingDataRef.current);
         }
     }
@@ -112,7 +130,7 @@ export function useBrewExport(
         }
     }
 
-    return {shotRef, shareImage, shareData, busy};
+    return {shotRef, shareImage, shareData, busy, captureChoice};
 }
 
 /**

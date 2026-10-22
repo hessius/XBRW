@@ -656,6 +656,7 @@ export default function BrewRecord({recipeLookup}: Props) {
                 }/>
             <BrewStorySheet open={storyOpen} onOpenChange={setStoryOpen}
                             shotRef={story.shotRef} busy={story.busy}
+                            captureChoice={story.captureChoice}
                             onShare={() => void story.shareImage()}
                             layout={(cardWidth) => {
                                 const storyFontScale = PixelRatio.getFontScale();

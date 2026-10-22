@@ -6,6 +6,8 @@ import {XStack, YStack} from "tamagui";
 import ExportButton from "@/components/ExportButton";
 import RailChip, {CHIP_HEIGHT} from "@/components/RailChip";
 import XbrwSheet from "@/components/XbrwSheet";
+import {AppearanceScope, useAppearance} from "@/hooks/useAppearance";
+import type {AppearanceChoice} from "@/library/appearance";
 import {SCREEN_PADDING} from "@/constants/layout";
 import {STORY_ASPECT, storyFrame} from "@/library/brew/storyCard";
 
@@ -24,6 +26,8 @@ type Props = {
     shotRef: React.RefObject<ViewShotRef | null>;
     /** True while the share is in flight. */
     busy: boolean;
+    /** Freeze only the image, not the sheet's controls, during an export. */
+    captureChoice?: AppearanceChoice | null;
     onShare: () => void;
     toggles?: StoryToggleOption[] | ((width: number) => StoryToggleOption[]);
     layout?: (width: number) => {card: React.ReactNode; toggles?: StoryToggleOption[]};
@@ -94,8 +98,9 @@ function StoryToggleRow({toggles}: {toggles: StoryToggleOption[]}) {
  * fit would be shared at the size it was shrunk to.
  */
 export default function BrewStorySheet({
-    open, onOpenChange, shotRef, busy, onShare, toggles = [], layout, children
+    open, onOpenChange, shotRef, busy, captureChoice, onShare, toggles = [], layout, children
 }: Props) {
+    const appearance = useAppearance();
     // Measured from an onLayout event rather than derived from the window: the
     // sheet's own height is a share of the screen the sheet decides, and the
     // header and the button below take a bite out of it that only the layout
@@ -147,7 +152,9 @@ export default function BrewStorySheet({
                             }}
                         >
                             <ViewShot ref={shotRef} options={{format: "png", quality: 1}}>
-                                {card}
+                                <AppearanceScope choice={captureChoice ?? appearance.choice}>
+                                    {card}
+                                </AppearanceScope>
                             </ViewShot>
                         </View>
                     )}

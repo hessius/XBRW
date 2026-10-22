@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import {act, fireEvent, screen, waitFor, within} from "@testing-library/react-native";
 import * as Sharing from "expo-sharing";
+import * as viewShotModule from "react-native-view-shot";
 import {File as FSFile} from "expo-file-system";
 import {gunzipSync} from "fflate";
 
@@ -1465,6 +1466,66 @@ describe("brew record's story card", () => {
         });
         await waitFor(() => expect(screen.getByTestId("brew-story-card")).toBeTruthy());
     }
+
+    it.each(["completion", "failure"])("freezes the actual story image until %s but not the record, then captures a fresh current appearance", async (ending) => {
+        const light = {theme: "light", recipeColours: "themed"} as const;
+        const blue = {theme: "blue", recipeColours: "original"} as const;
+        const {mockCapture} = viewShotModule as unknown as {mockCapture: jest.Mock};
+        const originalCapture = mockCapture.getMockImplementation();
+        mockCapture.mockClear();
+        const bytes = JSON.stringify(mockOpened);
+        let release!: (uri: string) => void;
+        let reject!: (error: Error) => void;
+        mockCapture.mockImplementation(() => new Promise<string>((resolve, fail) => {
+            release = resolve;
+            reject = fail;
+        }));
+        const draw = (choice: typeof light | typeof blue) => (
+            <Providers appearance={choice}><BrewRecord recipeLookup={lookup}/></Providers>
+        );
+        const capturedColours = () => within(screen.getByTestId("viewshot"))
+            .getAllByTestId(/./)
+            .map(node => ({style: node.props.style, fill: node.props.fill, stroke: node.props.stroke}));
+        try {
+            const tree = await renderWithProviders(draw(light));
+            await openCard(600);
+            const shot = screen.getByTestId("viewshot");
+            const card = screen.getByTestId("brew-story-card");
+            const initial = capturedColours();
+            await pressOnSheet(() => screen.getByLabelText("Share the card"),
+                () => mockCapture.mock.calls.length > 0);
+            await tree.rerender(draw(blue));
+            expect(screen.getByTestId("viewshot")).toBe(shot);
+            expect(screen.getByTestId("brew-story-card")).toBe(card);
+            expect(capturedColours()).toEqual(initial);
+            expect(screen.getByTestId("brew-story-card")).toHaveStyle({
+                backgroundColor: resolveAppearance(light).palette.base
+            });
+            expect(screen.getByTestId("brew-capture", {includeHiddenElements: true})).toHaveStyle({
+                backgroundColor: resolveAppearance(blue).palette.base
+            });
+            await act(() => {
+                if (ending === "failure") reject(new Error("capture failed"));
+                else release("file:///first-story.png");
+            });
+            await waitFor(() => expect(screen.getByTestId("brew-story-card")).toHaveStyle({
+                backgroundColor: resolveAppearance(blue).palette.base
+            }));
+            const current = capturedColours();
+            expect(screen.getByTestId("brew-story-card")).toBe(card);
+            expect(current).not.toEqual(initial);
+            await fireEvent.press(screen.getByLabelText("Share the card"));
+            await waitFor(() => expect(mockCapture).toHaveBeenCalledTimes(2));
+            expect(capturedColours()).toEqual(current);
+            await act(() => release("file:///second-story.png"));
+            await waitFor(() => expect(Sharing.shareAsync).toHaveBeenCalledWith(
+                "file:///second-story.png", expect.objectContaining({mimeType: "image/png"})
+            ));
+            expect(JSON.stringify(mockOpened)).toBe(bytes);
+        } finally {
+            mockCapture.mockReset().mockImplementation(originalCapture!);
+        }
+    });
 
     async function pressStoryToggle(label: string): Promise<void> {
         await waitFor(
