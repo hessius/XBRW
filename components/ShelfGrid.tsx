@@ -1,3 +1,4 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React from "react";
 import {Pressable, ScrollView} from "react-native";
 import type {LayoutChangeEvent, NativeScrollEvent, NativeSyntheticEvent} from "react-native";
@@ -15,7 +16,7 @@ import {Text, XStack, YStack} from "tamagui";
 import DotIcon from "@/components/DotIcon";
 import DotMatrixText from "@/components/DotMatrixText";
 import ShelfTile, {TILE_HEIGHT} from "@/components/ShelfTile";
-import {palette} from "@/constants/colors";
+
 import {DURATION, EASING, SPRING, useReducedMotion} from "@/constants/motion";
 import type {ShelfMarkMembers} from "@/hooks/useRecipeLibrary";
 import {hides} from "@/library/hiddenShelves";
@@ -42,6 +43,8 @@ const COLUMNS = 2;
 const GRID_GAP = 13;
 
 function Heading({label}: {label: string}) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     return (
         <DotMatrixText fontSize={12} weight="bold" letterSpacing={2} color={palette.dim}>
             {label}
@@ -63,6 +66,8 @@ function Heading({label}: {label: string}) {
  * reading as a different kind of thing.
  */
 function NewShelfButton({onPress}: {onPress: () => void}) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     return (
         <Pressable accessibilityRole="button" accessibilityLabel="New shelf"
                    testID="new-shelf" onPress={onPress}>
@@ -366,6 +371,8 @@ function HiddenShelves({shelves, onShow}: {
     shelves: readonly Shelf[];
     onShow: (id: string) => void;
 }) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     return (
         <YStack gap="$2" paddingTop="$1" testID="hidden-shelves">
             <DotMatrixText fontSize={10} weight="bold" letterSpacing={1.4}
@@ -442,6 +449,8 @@ export default function ShelfGrid({
     onScroll?: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
     paddingBottom?: number;
 }) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const manual = shelves.filter((shelf) => shelf.kind === "manual");
     const tagged = shelves.filter((shelf) => shelf.kind === "tag");
     const allAuto = shelves.filter((shelf) => shelf.kind === "auto");

@@ -718,7 +718,7 @@ Execute Tasks 8 and 9 before this task so root/native and historical reference
 imports do not leave the full boundary test red. Capture freezing follows in
 Task 10.
 
-- [ ] Add an import-boundary test in
+- [x] Add an import-boundary test in
   `components/__tests__/appearanceBoundary.test.ts` that parses imports with
   the installed TypeScript compiler, not a text search. Scan production
   `app/`, `components/`, `hooks/` and reject static imports of `palette`,
@@ -761,8 +761,7 @@ it("has no frozen presentation imports outside fixed launch artwork", () => {
                 if (!ts.isImportDeclaration(statement) ||
                     !ts.isStringLiteral(statement.moduleSpecifier)) continue;
                 const module = statement.moduleSpecifier.text;
-                if (module !== "@/constants/colors" &&
-                    module !== "@/library/brew/traceStyle") continue;
+                if (module !== "@/constants/colors") continue;
                 const bindings = statement.importClause?.namedBindings;
                 if (bindings && ts.isNamespaceImport(bindings)) {
                     violations.push(`${relative}: namespace ${module}`);
@@ -780,7 +779,7 @@ it("has no frozen presentation imports outside fixed launch artwork", () => {
     expect(violations).toEqual([]);
 });
 ```
-- [ ] For each remaining component/screen, replace the static palette binding
+- [x] For each remaining component/screen, replace the static palette binding
   with an unconditional `const {palette} = useAppearance()` and keep pure
   imports (`mix`, canonical arrays, types). For fills/foregrounds, apply the
   actual-surface rules rather than renaming static `onAccent` mechanically:
@@ -796,21 +795,117 @@ const badgeForeground = appearance.onFill(palette.info);
 
   This matters in CatalogueParts, where a dark Light-mode informational badge
   cannot use a stock pastel card's black foreground.
-- [ ] Migrate the inventory in three serial batches: shared sheet/overlay
+- [x] Migrate the inventory in three serial batches: shared sheet/overlay
   consumers; editor/live-brew consumers; remaining routes/library/import/
   roaster/subscription consumers. In each batch, add one changing-scope
   rendered regression covering its primary screen and an already-open sheet.
   Use `waitFor` press retries with `SHEET_PRESS_TIMEOUT` for sheet actions.
   Keep every existing `screenCovered` guard complete on both platforms.
-- [ ] For Reanimated/SVG values, resolve plain strings before worklets and
+- [x] For Reanimated/SVG values, resolve plain strings before worklets and
   include changed colour inputs in derived/animated dependencies. Do not close
   over an appearance context object in a worklet or freeze processColor at
   module import. Preserve motion timings, geometry and reduced-motion policy.
-- [ ] Run targeted tests for each changed batch, then
+- [x] Run targeted tests for each changed batch, then
   `components/__tests__/appearanceBoundary.test.ts`, typecheck and lint.
   Commit each coherent batch separately with subject
   `refactor: apply appearance to sheets`, `refactor: apply appearance to editor and brew`,
   or `refactor: apply appearance to remaining screens`.
+
+### Task 7 execution evidence (2026-10-22)
+
+Owned checkout: `/Users/jesperhessius/Dev/XBRW-220-appearance-20261022`,
+branch `feat/2.2.0-appearance-20261022`; pinned task base
+`98f3ae5255dfc691bc44d7c5ed356e47830f3df9`, Task 7 starting head
+`87b0e955ff6cc59f2a0407974ef5d32fee2614d3`. No dependencies, native builds,
+prebuild, push, PR, external review, integration or deployment.
+
+RED: `npx jest --runTestsByPath components/__tests__/appearanceBoundary.test.ts --runInBand --silent`
+printed all 110 remaining frozen imports (both platforms). The explicit
+reference-factory assertion was already green. Each new rendered regression
+also failed before its batch's production migration:
+
+- A: `app/__tests__/editRecipe.test.tsx -t 'recolours the editor header'`;
+  already-open help stayed white in Light. GREEN batch: 14 suites / 484 tests.
+- B: `app/__tests__/editRecipe.test.tsx -t 'recolours editor parameters'`;
+  the editor target retained canonical pastel ink in Light/Themed. GREEN batch:
+  20 suites / 758 tests.
+- C: `app/__tests__/index.test.tsx -t 'recolours the library'`;
+  the library background stayed black with Import already open. The final
+  targeted command below includes all remaining routes and boundary checks:
+  38 suites / 1,358 passing tests, 4 existing skips. The boundary alone is
+  2 suites / 6 passing tests.
+
+All RED selectors use `npx jest --runTestsByPath`, `--runInBand --silent`,
+and run both Jest projects. Actions on open sheets retry with
+`SHEET_PRESS_TIMEOUT`; assertions cover actual rendered styles, preserved
+recipe/dose/ratio/name/import drafts and `screenCovered`. Appearance is never
+mocked. Existing historical chart assertions now respect Task 8's no-samples
+breathing trough, without changing production chart contrast or wash bounds.
+
+Batch A (`253fda4e4396d95d6658aa6062743909521e43c5`) file manifest:
+
+- `app/__tests__/editRecipe.test.tsx`
+- `components/{BeanFilterSheet,BeanNameSheet,BrewNoteSheet,BypassWriteSheet,CompareWithSheet,DeleteAllSheet,DotBloom,EasyModeWriteOverlay,ForgetMachineSheet,HelpSheet,HubFilterSheet,ImportSheet,LeaveEditorSheet,MachineAddSheet,NewerVersionPrompt,NfcOverlay,PasteOverlay,RemoveShelfSheet,RestoreSheet,RevertSheet,RoasterOfferSheet,ScreenHeader,ScreenTitle,ShelfChoiceSheet,UnsubscribeSheet}.tsx`
+- `components/__tests__/{RoasterOfferSheet.test.tsx,appearanceBoundary.test.ts}`
+- This existing plan.
+
+Batch B (`4c8c409321a1ab7c6bc5c46c897e53f8f708b7a7`) file manifest:
+
+- `app/{brew,editRecipe}.tsx`, `app/__tests__/{brew,editRecipe}.test.tsx`
+- `components/{BrewHistoryControls,BrewJudgement,BrewMindBrowser,BrewMindMark,BrewNowCard,BrewRatingBar,BrewStars,BypassRung,DeckSwitch,FromSection,HistorySection,NoteSection,OverflowSection,OverflowStatus,PodCoffeeRows,PodSection,QuickEditPanel,StageDetail,StageProfile,StageTile,TagSection,TeaBanner,TeaStageDetail,TeaStageLadder}.tsx`
+
+Batch C (`refactor: apply appearance to remaining screens`) file manifest:
+
+- `app/{about,easyMode,hub,hubRecipe,importCloud,index,licences,machine,network,roaster,roasterCoffee,roasters,settings,subscription,subscriptions}.tsx`
+- `app/__tests__/index.test.tsx`
+- `components/{AboutTicker,CardReadDiagnostic,CtaTile,EmptyLibrary,FadingRail,HomeTitle,HubSaveBar,LinkText,LivingMark,MachinePanel,MachineSpikeSection,RailSearch,RoasterCoffeeRow,SettingsChoiceRow,SettingsSection,SettingsToggleRow,ShelfGrid,ShelfPickerBar,ShelfPickerHeader,SlotLabControls,SwipeableRecipeRow,TeaSlotProbePanel}.tsx`
+- `components/__tests__/appearanceBoundary.test.ts`, this existing plan.
+
+The authoritative exact file list for each checkpoint is
+`git show --format=fuller --name-only <commit>`; the C commit is identifiable
+by its exact subject immediately after B (no amend). Final targeted C command:
+
+```sh
+npx jest --runTestsByPath \
+  app/__tests__/editRecipe.test.tsx components/__tests__/RoasterOfferSheet.test.tsx \
+  components/__tests__/ImportSheet.test.tsx components/__tests__/RevertSheet.test.tsx \
+  components/__tests__/EasyModeWriteOverlay.test.tsx components/__tests__/DotBloom.test.tsx \
+  components/__tests__/ScreenHeader.test.tsx --runInBand --silent
+
+npx jest --runTestsByPath \
+  app/__tests__/editRecipe.test.tsx app/__tests__/brew.test.tsx \
+  components/__tests__/StageTile.test.tsx components/__tests__/StageProfile.test.tsx \
+  components/__tests__/StageDetail.test.tsx components/__tests__/QuickEditPanel.test.tsx \
+  components/__tests__/BrewNowCard.test.tsx components/__tests__/TeaBanner.test.tsx \
+  components/__tests__/TeaStageLadder.test.tsx \
+  components/__tests__/BrewHistoryControls.test.tsx --runInBand --silent
+
+npx jest --runTestsByPath \
+  app/__tests__/index.test.tsx app/__tests__/settings.test.tsx \
+  app/__tests__/easyMode.test.tsx app/__tests__/hub.test.tsx \
+  app/__tests__/hubRecipe.test.tsx app/__tests__/importCloud.test.tsx \
+  app/__tests__/roasterCatalogue.test.tsx app/__tests__/roasterAlerts.test.tsx \
+  app/__tests__/subscriptions.test.tsx app/__tests__/about.test.tsx \
+  app/__tests__/licences.test.tsx app/__tests__/machine.test.tsx \
+  app/__tests__/network.test.tsx components/__tests__/LivingMark.test.tsx \
+  components/__tests__/ShelfGrid.test.tsx components/__tests__/SwipeableRecipeRow.test.tsx \
+  components/__tests__/HomeTitle.test.tsx components/__tests__/MachinePanel.test.tsx \
+  components/__tests__/appearanceBoundary.test.ts --runInBand --silent
+```
+
+Static validation: `npm run typecheck -- --pretty false`,
+`npx eslint` over changed TypeScript files, and `git diff --check`.
+Only the pre-existing `index.test.tsx` settings-mock `require` lint warning
+remains. No full-suite or parallel heavy-test run. Self-review found no
+appearance/palette object captured in production animated callbacks; LivingMark
+closes over plain changed strings with explicit dependencies. Compiler opt-out
+directives remain first statements. Canonical recipes, history, storage,
+recorder and transport payloads remain unchanged; no photo or chart geometry
+was changed. Device NFC/BLE and visual hardware checks are not claimed.
+
+Task 10 capture freezing and Task 11 Settings/AppearanceSheet UI are intentionally
+not implemented here. The controller owns whole-Task-7 review and pushing;
+these three new checkpoints remain local until that handoff.
 
 ## Task 8: Theme charts, history and comparisons with explicit pure inputs
 

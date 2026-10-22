@@ -1,3 +1,4 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import router from "@/hooks/steadyRouter";
 import React, {useState} from "react";
 import {FlatList, Pressable, type ListRenderItemInfo} from "react-native";
@@ -5,7 +6,7 @@ import {ScrollView, Text, YStack} from "tamagui";
 
 import ScreenHeader from "@/components/ScreenHeader";
 import XbrwSheet from "@/components/XbrwSheet";
-import {palette} from "@/constants/colors";
+
 import {LICENCES, LICENCE_TEXTS, type Licence} from "@/constants/licences";
 import {useLiveBrew} from "@/hooks/useLiveBrew";
 import {useScrollEndPadding} from "@/hooks/useBottomInset";
@@ -40,6 +41,8 @@ export default function LicencesScreen({
     entries?: readonly Licence[];
     texts?: Readonly<Record<string, string>>;
 }) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     // The end of the scroll clears whatever is under the screen: the
     // navigation bar on Android, the home indicator on iOS.
     const scrollEnd = useScrollEndPadding(48);
@@ -104,6 +107,8 @@ export default function LicencesScreen({
  * without one is inert rather than a button that opens an empty sheet.
  */
 function LicenceRow({entry, onPress}: {entry: Licence; onPress?: () => void}) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const content = (
         <YStack paddingVertical="$1">
             <Text fontSize={11} color={palette.muted}>

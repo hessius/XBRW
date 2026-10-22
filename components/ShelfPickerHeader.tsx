@@ -1,3 +1,4 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React from "react";
 import {Pressable} from "react-native";
 import {useSafeAreaInsets} from "react-native-safe-area-context";
@@ -5,7 +6,7 @@ import {XStack, YStack} from "tamagui";
 
 import DotIcon from "@/components/DotIcon";
 import ScreenTitle from "@/components/ScreenTitle";
-import {onAccent, palette} from "@/constants/colors";
+
 
 /** Matches the well every other header puts its back glyph in. */
 const KEY_SIZE = 32;
@@ -46,6 +47,8 @@ export default function ShelfPickerHeader({
      */
     onActions?: () => void;
 }) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const insets = useSafeAreaInsets();
 
     return (
@@ -56,7 +59,7 @@ export default function ShelfPickerHeader({
                 <Pressable accessibilityRole="button" accessibilityLabel="Cancel"
                            testID="shelf-picker-header-cancel"
                            onPress={onCancel} hitSlop={12}>
-                    <YStack backgroundColor={onAccent.key}
+                    <YStack backgroundColor={palette.control}
                             borderRadius="$3" width={KEY_SIZE} height={KEY_SIZE}
                             alignItems="center" justifyContent="center">
                         <DotIcon name="close" size={16} color={palette.text}/>
@@ -71,7 +74,7 @@ export default function ShelfPickerHeader({
                                testID="shelf-picker-actions"
                                onPress={onActions} hitSlop={12}
                                style={{marginLeft: "auto", paddingLeft: 8}}>
-                        <YStack backgroundColor={onAccent.key}
+                        <YStack backgroundColor={palette.control}
                                 borderRadius="$3" width={KEY_SIZE} height={KEY_SIZE}
                                 alignItems="center" justifyContent="center">
                             <DotIcon name="more" size={16} color={palette.text}/>

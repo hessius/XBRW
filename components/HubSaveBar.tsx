@@ -1,9 +1,10 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React from "react";
 import {Pressable} from "react-native";
 import {XStack, YStack} from "tamagui";
 
 import DotMatrixText from "@/components/DotMatrixText";
-import {onAccent, palette} from "@/constants/colors";
+
 
 const BAR_PADDING = 12;
 const BUTTON_HEIGHT = 44;
@@ -20,6 +21,9 @@ type Props = {
 export default function HubSaveBar({
     count, saving, progress, onCancel, onSave, paddingBottom = 0
 }: Props) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
+    const {primary} = appearance;
     const disabled = saving || count === 0;
     const label = saving ? `${progress.done} OF ${progress.total}` : `SAVE ${count}`;
     const spoken = saving
@@ -58,9 +62,9 @@ export default function HubSaveBar({
                         height={BUTTON_HEIGHT} paddingHorizontal="$4"
                         alignItems="center" justifyContent="center"
                         borderRadius="$4"
-                        backgroundColor={palette.text}>
+                        backgroundColor={primary.fill}>
                     <DotMatrixText fontSize={12} weight="bold" letterSpacing={1.5}
-                                   color={onAccent.text}>
+                                   color={primary.ink}>
                         {label}
                     </DotMatrixText>
                 </XStack>

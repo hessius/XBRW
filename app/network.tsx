@@ -1,3 +1,4 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import router from "@/hooks/steadyRouter";
 import React from "react";
 import {ScrollView, Text, XStack, YStack} from "tamagui";
@@ -5,7 +6,7 @@ import {ScrollView, Text, XStack, YStack} from "tamagui";
 import DotMatrixText from "@/components/DotMatrixText";
 import LinkText from "@/components/LinkText";
 import ScreenHeader from "@/components/ScreenHeader";
-import {palette} from "@/constants/colors";
+
 import {
     OUTBOUND_CALLS,
     REPO_URL,
@@ -41,6 +42,8 @@ const PRIVACY_URL = `${REPO_URL}/blob/main/PRIVACY.md`;
  * carries the name instead, where it has room.
  */
 export default function NetworkScreen() {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     // The end of the scroll clears whatever is under the screen: the
     // navigation bar on Android, the home indicator on iOS.
     const scrollEnd = useScrollEndPadding(48);
@@ -117,6 +120,8 @@ export default function NetworkScreen() {
 
 /** One request, on a card of its own. */
 function CallCard({call}: {call: OutboundCall}) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     return (
         <YStack testID={`network-call-${call.id}`}
                 backgroundColor={palette.surface} borderRadius="$5"
@@ -190,6 +195,8 @@ function CallCard({call}: {call: OutboundCall}) {
 
 /** A labelled part of a card. */
 function Field({label, children}: {label: string; children: React.ReactNode}) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     return (
         <YStack gap="$1.5">
             <DotMatrixText fontSize={10} weight="bold" letterSpacing={1.6}
@@ -208,6 +215,8 @@ function Field({label, children}: {label: string; children: React.ReactNode}) {
  * children here are cards of prose rather than rows of controls.
  */
 function Section({title, children}: {title: string; children: React.ReactNode}) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     return (
         <YStack gap="$2" paddingTop="$4">
             <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.6}
@@ -221,6 +230,8 @@ function Section({title, children}: {title: string; children: React.ReactNode}) 
 
 /** Body copy. At module scope; see the note in every other component here. */
 function Paragraph({children}: {children: React.ReactNode}) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     return (
         <Text fontSize={14} lineHeight={21} color={palette.dim} paddingBottom="$2">
             {children}

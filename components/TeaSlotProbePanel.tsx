@@ -1,9 +1,10 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React, {useState} from "react";
 import {ScrollView} from "react-native";
 import * as Clipboard from "expo-clipboard";
 import {Button, Input, Text, XStack, YStack, type ColorTokens} from "tamagui";
 import {notify} from "@/components/XbrwToast";
-import {palette} from "@/constants/colors";
+
 import SlotLabControls, {type SlotLabActions} from "@/components/SlotLabControls";
 import {
     prepareSet, SLOT_NAMES, type SlotIndex, type SlotObservation, type SlotRecord
@@ -49,6 +50,8 @@ function SlotObservationForm({slot, initial, disabled, onSave}: {
     disabled: boolean;
     onSave: (observation: SlotObservation) => boolean;
 }) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const name = SLOT_NAMES[slot];
     const [display, setDisplay] = useState(initial?.display ?? "");
     const [held, setHeld] = useState(initial?.heldSeconds?.toString() ?? "");
@@ -104,6 +107,8 @@ export default function TeaSlotProbePanel({
     record, deviceId, serial, connected, available, busy, running, error,
     onWriteProbe, onRestore, onObserve, onWriteLab, onRecoveryCommand, onClearRecovery
 }: TeaSlotProbePanelProps) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const experiment = record.experiment;
     const status = teaProbeStatus(record);
     const nextCandidate = onWriteLab === undefined ? nextTeaProbeCandidate(record) : null;

@@ -1,3 +1,4 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import * as Application from "expo-application";
 import {pictureSettingsFromBackup} from "@/library/pictureSettings";
 
@@ -19,7 +20,7 @@ import SettingsSection from "@/components/SettingsSection";
 import SettingsToggleRow from "@/components/SettingsToggleRow";
 import {SupportAction} from "@/components/SupportTile";
 import {notify} from "@/components/XbrwToast";
-import {palette} from "@/constants/colors";
+
 import {useBackup} from "@/hooks/useBackup";
 import {useSteadyRouter} from "@/hooks/steadyRouter";
 import {sharedBrewDatabase} from "@/hooks/useBrewHistory";
@@ -107,6 +108,8 @@ function restoredMessage(recipes: number, brews: number): string {
  * decision in place.
  */
 export default function SettingsScreen({settings}: Props) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     // The end of the scroll clears whatever is under the screen: the
     // navigation bar on Android, the home indicator on iOS.
     const scrollEnd = useScrollEndPadding(48);

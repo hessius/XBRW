@@ -1,10 +1,11 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React from "react";
 import {YStack} from "tamagui";
 
 import DotIcon from "@/components/DotIcon";
 import DotMatrixText from "@/components/DotMatrixText";
 import type {DotIconName} from "@/constants/dotIcons";
-import {palette} from "@/constants/colors";
+
 
 /**
  * The icon size inside a tile: large enough that the dot grid still reads.
@@ -39,6 +40,8 @@ export default function CtaTile({
     accessibilityLabel,
     disabled = false
 }: Props) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     return (
         <YStack
             flex={1}

@@ -1,3 +1,4 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React, {useEffect, useRef, useState} from "react";
 import {AccessibilityInfo, findNodeHandle, ScrollView} from "react-native";
 import {useLocalSearchParams, useNavigation} from "expo-router";
@@ -13,7 +14,7 @@ import EasyModeSlots, {slotWriteAvailability} from "@/components/EasyModeSlots";
 import {slotOverlayVisible} from "@/components/EasyModeWriteOverlay";
 import XbrwSheet from "@/components/XbrwSheet";
 import ScreenHeader from "@/components/ScreenHeader";
-import {onAccent, palette} from "@/constants/colors";
+
 import DotMatrixText from "@/components/DotMatrixText";
 import {isActiveBrewPhase} from "@/library/machine/Machine";
 import {unavailableSlotPort} from "@/library/slots/slotWriter";
@@ -21,6 +22,9 @@ import {unwrittenSlotCount} from "@/library/slots/slotModel";
 import {STABLE_HOST} from "@/constants/views";
 
 export default function EasyModeScreen() {
+    const appearance = useAppearance();
+    const {palette} = appearance;
+    const {primary} = appearance;
     const {recipeJSON} = useLocalSearchParams<{recipeJSON?: string | string[]}>();
     const navigation = useNavigation();
     const focused = useIsFocused();
@@ -158,10 +162,10 @@ export default function EasyModeScreen() {
                     </Text>
                     {availability !== null && <Text color={palette.dim}>{availability}</Text>}
                     <Button height="auto" minHeight="$4" paddingVertical="$3"
-                        backgroundColor={palette.text} color={onAccent.text}
+                        backgroundColor={primary.fill} color={primary.ink}
                         disabledStyle={{backgroundColor: palette.text, opacity: 0.45}}
                         disabled={availability !== null} onPress={write}>
-                        <DotMatrixText fontSize={12} weight="bold" color={onAccent.text}>WRITE TO MACHINE</DotMatrixText>
+                        <DotMatrixText fontSize={12} weight="bold" color={primary.ink}>WRITE TO MACHINE</DotMatrixText>
                     </Button>
                     <Button height="auto" minHeight="$4" paddingVertical="$3"
                         backgroundColor={palette.raised} color={palette.text} borderWidth={1} borderColor={palette.line}

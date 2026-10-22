@@ -1,3 +1,4 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React, {useEffect, useRef} from "react";
 import {StyleSheet} from "react-native";
 import Animated, {
@@ -11,7 +12,7 @@ import {XStack, YStack} from "tamagui";
 
 import DotMatrixText from "@/components/DotMatrixText";
 import Wordmark from "@/components/Wordmark";
-import {palette} from "@/constants/colors";
+
 import {ATTRACT, DURATION, EASING, useReducedMotion} from "@/constants/motion";
 
 /** How long the `++` keeps its tint after launch. Re-exported for tests. */
@@ -87,6 +88,8 @@ type Props = {
  * replay is only the later nod.
  */
 export default function HomeTitle({count, collapsed, fontSize}: Props) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const reduced = useReducedMotion();
 
     const size = useSharedValue(fontSize);

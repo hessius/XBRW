@@ -1,3 +1,4 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import {useLocalSearchParams} from "expo-router";
 import React, {useEffect, useRef, useState} from "react";
 import {Pressable, ScrollView} from "react-native";
@@ -14,7 +15,7 @@ import NewerVersionPrompt from "@/components/NewerVersionPrompt";
 import ScreenHeader from "@/components/ScreenHeader";
 import ShelfChoiceSheet from "@/components/ShelfChoiceSheet";
 import {notify} from "@/components/XbrwToast";
-import {onAccent, palette} from "@/constants/colors";
+
 import {SCREEN_PADDING} from "@/constants/layout";
 import router from "@/hooks/steadyRouter";
 import {useLiveBrew} from "@/hooks/useLiveBrew";
@@ -57,9 +58,11 @@ const FACT_LABEL_MIN_WIDTH = 92;
 const SCROLL_END = 24;
 
 function Figure({label, value, accent}: {label: string; value: string; accent: string}) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     return (
         <YStack flex={1} minWidth={72} gap="$1">
-            <DotMatrixText fontSize={20} weight="bold" color={accent}>{value}</DotMatrixText>
+            <DotMatrixText fontSize={20} weight="bold" color={appearance.recipe(accent).ink}>{value}</DotMatrixText>
             <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.2} color={palette.muted}>
                 {label}
             </DotMatrixText>
@@ -75,16 +78,19 @@ function Action({label, spoken, testID, primary = false, disabled = false, onPre
     disabled?: boolean;
     onPress: () => void;
 }) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
+    const action = appearance.primary;
     return (
         <Pressable accessibilityRole="button" accessibilityLabel={spoken}
                    accessibilityState={{disabled}} testID={testID}
                    onPress={disabled ? undefined : onPress}>
             <XStack height={48} alignItems="center" justifyContent="center" borderRadius="$4"
                     opacity={disabled ? 0.35 : 1}
-                    backgroundColor={primary ? palette.text : palette.none}
+                    backgroundColor={primary ? action.fill : palette.none}
                     borderWidth={primary ? 0 : 1} borderColor={palette.line}>
                 <DotMatrixText fontSize={12} weight="bold" letterSpacing={1.6}
-                               color={primary ? onAccent.text : palette.text}>
+                               color={primary ? action.ink : palette.text}>
                     {label}
                 </DotMatrixText>
             </XStack>
@@ -109,6 +115,9 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
     library?: LibraryDeps;
     shelves?: () => string[];
 } = {}) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
+    const onAccent = appearance.onFill(palette.text);
     const {ratingNoteOpen} = useLiveBrew();
     const params = useLocalSearchParams<{feed: string; coffee: string}>();
     const feed = feedUrl ?? params.feed ?? "";

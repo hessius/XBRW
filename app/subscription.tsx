@@ -1,3 +1,4 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import {useLocalSearchParams} from "expo-router";
 import React, {useState} from "react";
 import {useCatalogueNow} from "@/hooks/useCatalogueNow";
@@ -11,7 +12,7 @@ import SettingsActionRow from "@/components/SettingsActionRow";
 import SettingsSection from "@/components/SettingsSection";
 import SettingsToggleRow from "@/components/SettingsToggleRow";
 import UnsubscribeSheet from "@/components/UnsubscribeSheet";
-import {palette} from "@/constants/colors";
+
 import router from "@/hooks/steadyRouter";
 import {sharedSettings} from "@/hooks/useSetting";
 import {useLiveBrew} from "@/hooks/useLiveBrew";
@@ -41,6 +42,8 @@ export default function SubscriptionScreen({settings, feedUrl, fetchBody, now: c
     fetchBody?: (url: string, signal?: AbortSignal) => Promise<{feed: RoasterFeed; body: string}>;
     now?: () => number;
 } = {}) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const params = useLocalSearchParams<{feed: string}>();
     const feed = feedUrl ?? params.feed ?? "";
     const {ratingNoteOpen} = useLiveBrew();

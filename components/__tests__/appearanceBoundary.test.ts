@@ -46,21 +46,29 @@ it("has no frozen presentation imports outside fixed branded launch artwork", ()
     expect(violations.sort()).toEqual([]);
 });
 
-it("keeps reference colours as pure factories with required explicit Appearance", () => {
-    const source = parse(path.join(root, "library/brew/traceStyle.ts"));
-    for (const name of ["referenceCupColour", "referenceWaterColour"]) {
-        const declaration = source.statements
-            .filter(ts.isVariableStatement)
-            .flatMap(statement => [...statement.declarationList.declarations])
-            .find(entry => ts.isIdentifier(entry.name) && entry.name.text === name);
-        expect(declaration).toBeDefined();
-        const factory = declaration?.initializer;
-        expect(factory && (ts.isArrowFunction(factory) || ts.isFunctionExpression(factory))).toBe(true);
-        if (!factory || !(ts.isArrowFunction(factory) || ts.isFunctionExpression(factory))) return;
-        expect(factory.parameters).toHaveLength(1);
-        const parameter = factory.parameters[0];
-        expect(parameter.questionToken).toBeUndefined();
-        expect(parameter.initializer).toBeUndefined();
-        expect(parameter.type?.getText(source)).toBe("Appearance");
+it.each(["library/brew/traceStyle.ts", "constants/colors.ts"])(
+    "keeps any reference colours in %s as factories with required explicit Appearance", file => {
+        const source = parse(path.join(root, file));
+        for (const name of ["referenceCupColour", "referenceWaterColour"]) {
+            const declaredFunction = source.statements.find(statement =>
+                ts.isFunctionDeclaration(statement) && statement.name?.text === name);
+            const declaration = source.statements
+                .filter(ts.isVariableStatement)
+                .flatMap(statement => [...statement.declarationList.declarations])
+                .find(entry => ts.isIdentifier(entry.name) && entry.name.text === name);
+            const factory = declaredFunction ?? declaration?.initializer;
+            // These factories live in traceStyle; a new legacy export in colors
+            // must obey the same explicit-input contract, never freeze a string.
+            if (file === "constants/colors.ts" && !factory) continue;
+            expect(factory && (ts.isArrowFunction(factory) || ts.isFunctionExpression(factory) ||
+                ts.isFunctionDeclaration(factory))).toBe(true);
+            if (!factory || !(ts.isArrowFunction(factory) || ts.isFunctionExpression(factory) ||
+                ts.isFunctionDeclaration(factory))) continue;
+            expect(factory.parameters).toHaveLength(1);
+            const parameter = factory.parameters[0];
+            expect(parameter.questionToken).toBeUndefined();
+            expect(parameter.initializer).toBeUndefined();
+            expect(parameter.type?.getText(source)).toBe("Appearance");
+        }
     }
-});
+);

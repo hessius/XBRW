@@ -1,3 +1,4 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import * as Clipboard from "expo-clipboard";
 import React from "react";
 import {Text, XStack, YStack} from "tamagui";
@@ -5,13 +6,15 @@ import {Text, XStack, YStack} from "tamagui";
 import SettingsActionRow from "@/components/SettingsActionRow";
 import SettingsSection from "@/components/SettingsSection";
 import {notify} from "@/components/XbrwToast";
-import {palette} from "@/constants/colors";
+
 import {useSetting} from "@/hooks/useSetting";
 import {captureToText, parseCapture} from "@/library/cardDiagnostics";
 import type {Settings} from "@/library/Settings";
 
 /** One label-and-value line, borrowed from `MachineSection`'s `Vital`. */
 function Line({label, value}: {label: string; value: string}) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     return (
         <XStack justifyContent="space-between" paddingVertical="$2" paddingHorizontal="$4">
             <Text color={palette.dim} fontSize={13}>{label}</Text>
@@ -33,6 +36,8 @@ function Line({label, value}: {label: string; value: string}) {
  * console still requires its separate acknowledgement before commands appear.
  */
 export default function CardReadDiagnostic({settings}: {settings?: Settings}) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const [labsUnlocked] = useSetting("labsUnlocked", settings);
     const [lastCardRead] = useSetting("lastCardRead", settings);
 
