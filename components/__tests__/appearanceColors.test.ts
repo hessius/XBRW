@@ -258,10 +258,45 @@ describe.each(choices)("$theme / $recipeColours", choice => {
     });
 
     it.each([
-        "", "#xyzxyz", "#12345g", "#1234567", "#12", "#1234", "#12345",
-        "#12345678", "#f0g", " #f00", "#f00 ", "not-a-colour", "rgba(0,0,0,0.5)"
+        ["red", "#ff0000"], ["rgb(255,0,0)", "#ff0000"],
+        ["hsl(0,100%,50%)", "#ff0000"], ["#FF0000FF", "#ff0000"],
+        ["#f00f", "#ff0000"], ["rebeccapurple", "#663399"],
+        ["rgba(0,0,0,0.5)", "black-half"],
+        ["#f008", "red-half"], ["#FF000080", "red-half"],
+        ["rgba(255,0,0,0.5)", "red-half"], ["hsla(0,100%,50%,0.5)", "red-half"],
+        ["transparent", "base"]
+    ])("preserves RN colour %s and derives from its effective base composite", (canonical, expected) => {
+        const a = resolveAppearance(choice);
+        // RN quantises .5 alpha to 128/255, and #RGBA's 8 to 136/255.
+        // Explicit independent six-digit composites, never parsed from the input.
+        const composites = {
+            original: {half: "#800000", short: "#880000", black: "#000000"},
+            light: {half: "#fa7a78", short: "#fa7270", black: "#7a7a78"},
+            blue: {half: "#800a5c", short: "#880a56", black: "#000a5c"},
+            magenta: {half: "#93050e", short: "#9a050e", black: "#13050e"}
+        }[choice.theme];
+        const effective = expected === "base" ? a.palette.base
+            : expected === "black-half" ? composites.black
+            : expected === "red-half" ? canonical === "#f008" ? composites.short : composites.half
+            : expected;
+        const c = a.recipe(canonical);
+        const equivalent = a.recipe(effective);
+        expect(c.canonical).toBe(canonical);
+        expect(c.fill).toBe(canonical);
+        expect(c).toEqual({...equivalent, canonical, fill: canonical});
+        expectCard({...c, fill: effective}, a);
+        expect(c.ink).toBe(firstPassing(effective, a.palette.base, 4.5));
+        expect(c.cupInk).toBe(firstPassing(cupLineFor(effective), a.palette.base, 3));
+        expect(a.onFill(canonical)).toEqual(a.onFill(effective));
+        expect(a.switchOn(canonical)).toEqual(a.switchOn(effective));
+        expectSwitch(a.switchOn(canonical), [effective]);
+    });
+
+    it.each([
+        "", "#xyzxyz", "#12345g", "#1234567", "#12", "#12345",
+        "#123456789", "#f0g", " #f00", "#f00 ", "not-a-colour", "rgba(nope)"
     ])(
-        "rejects invalid opaque hex syntax %p explicitly", value => {
+        "rejects invalid RN colour syntax %p explicitly", value => {
             const a = resolveAppearance(choice);
             expect(() => a.recipe(value)).toThrow(/colour/i);
             expect(() => a.onFill(value)).toThrow(/colour/i);

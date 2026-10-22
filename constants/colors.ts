@@ -13,6 +13,8 @@
  * ones (`red`).
  */
 
+import normalizeColor from "@react-native/normalize-colors";
+
 import type {AppearanceChoice, ThemeId} from "@/library/appearance";
 
 /** The two halves of the accent palette. */
@@ -527,17 +529,25 @@ const BLACK = "#000000";
 const WHITE = "#FFFFFF";
 type RGB = readonly [number, number, number];
 
-/** Expand historical opaque shorthand for calculations, never persisted identity. */
-function opaqueHex(colour: string): string {
+/** RN colour syntax and alpha affect calculations, never persisted identity. */
+function effectiveHex(colour: string, backdrop: string): string {
+    const normalized = normalizeColor(colour);
+    if (normalized === null) throw new Error(`Invalid colour: ${colour}`);
     if (/^#[0-9a-f]{3}$/i.test(colour)) {
         return `#${colour.slice(1).split("").map(channel => channel + channel).join("")}`;
     }
-    if (!/^#[0-9a-f]{6}$/i.test(colour)) throw new Error(`Invalid colour: ${colour}`);
-    return colour;
+    // Keep existing casing/output contracts for opaque hex inputs.
+    if (/^#[0-9a-f]{6}$/i.test(colour)) return colour;
+    const alpha = (normalized & 0xff) / 255;
+    const background = rgb(backdrop);
+    const foreground = [normalized >>> 24, (normalized >>> 16) & 0xff, (normalized >>> 8) & 0xff];
+    return "#" + foreground.map((channel, i) =>
+        Math.round(channel * alpha + background[i] * (1 - alpha))
+            .toString(16).padStart(2, "0")).join("");
 }
 
+/** Internal calculations use opaque six-digit colours. */
 function rgb(colour: string): RGB {
-    colour = opaqueHex(colour);
     return [
         parseInt(colour.slice(1, 3), 16),
         parseInt(colour.slice(3, 5), 16),
@@ -598,21 +608,21 @@ function hasFill(group: Readonly<Record<AccentGroup, readonly string[]>>, fill: 
 }
 
 /** Takes an actual displayed fill, never a persisted identity to remap. */
-function foregroundFor(fill: string): AccentForeground {
-    rgb(fill);
+function foregroundFor(fill: string, backdrop: string): AccentForeground {
+    const computedFill = effectiveHex(fill, backdrop);
     if (hasFill(accents, fill)) return {...onAccent};
     const lightCard = hasFill(themedAccents.light, fill);
     const pastelCard = hasFill(themedAccents.blue, fill) || hasFill(themedAccents.magenta, fill);
-    const whiteInk = lightCard || (!pastelCard && neutralFor(fill) === WHITE);
+    const whiteInk = lightCard || (!pastelCard && neutralFor(computedFill) === WHITE);
     const ink = whiteInk ? WHITE : BLACK;
     return {
         text: lightCard ? WHITE : pastelCard ? onAccent.text : ink,
-        label: translucent(ink, fill, whiteInk ? 0.90 : pastelCard ? 0.80 : 0.65, 4.5),
-        marker: translucent(ink, fill, whiteInk ? 0.90 : pastelCard ? 0.80 : 0.70, 4.5),
-        profileStroke: translucent(ink, fill, whiteInk ? 0.80 : pastelCard ? 0.70 : 0.50, 3),
+        label: translucent(ink, computedFill, whiteInk ? 0.90 : pastelCard ? 0.80 : 0.65, 4.5),
+        marker: translucent(ink, computedFill, whiteInk ? 0.90 : pastelCard ? 0.80 : 0.70, 4.5),
+        profileStroke: translucent(ink, computedFill, whiteInk ? 0.80 : pastelCard ? 0.70 : 0.50, 3),
         profileFill: `rgba(${rgb(ink).join(",")},0.15)`,
         profileDot: `rgba(${rgb(ink).join(",")},0.36)`,
-        key: translucent(ink, fill, 0.78, 3)
+        key: translucent(ink, computedFill, 0.78, 3)
     };
 }
 
@@ -635,7 +645,6 @@ export function resolveAppearance(supplied: AppearanceChoice): Appearance {
         ? controlPair("#202020", WHITE) : controlPair(WHITE, onAccent.text);
 
     function recipe(canonical: string): DisplayRecipeColour {
-        rgb(canonical);
         let fill = canonical;
         if (choice.recipeColours === "themed" && choice.theme !== "original") {
             for (const group of ["coffee", "tea"] as const) {
@@ -646,13 +655,13 @@ export function resolveAppearance(supplied: AppearanceChoice): Appearance {
                 }
             }
         }
-        const computedFill = opaqueHex(fill);
-        const foreground = foregroundFor(fill);
+        const computedFill = effectiveHex(fill, p.base);
+        const foreground = foregroundFor(fill, p.base);
         const stock = hasFill(accents, fill);
         const keyParts = foreground.key.match(/^rgba\((\d+),(\d+),(\d+),([\d.]+)\)$/)!;
         const key = composite(
             `#${keyParts.slice(1, 4).map(c => Number(c).toString(16).padStart(2, "0")).join("")}`,
-            fill, Number(keyParts[4])
+            computedFill, Number(keyParts[4])
         );
         // The glyph is on the rounded, composited well, not on chrome or fill.
         const keyGround = `#${key.map(c => Math.round(c).toString(16).padStart(2, "0")).join("")}`;
@@ -671,7 +680,7 @@ export function resolveAppearance(supplied: AppearanceChoice): Appearance {
     }
 
     function switchOn(fill: string): SwitchPair {
-        const foreground = foregroundFor(fill);
+        const foreground = foregroundFor(fill, p.base);
         if (hasFill(accents, fill)) {
             return {on: {...switchColours.accent.on}, off: {...switchColours.accent.off}};
         }
@@ -695,7 +704,7 @@ export function resolveAppearance(supplied: AppearanceChoice): Appearance {
     return {
         choice, scheme: choice.theme === "light" ? "light" : "dark",
         palette: p, primary, selection, onBrand: {...onBrand}, chromeSwitch,
-        recipe, onFill: foregroundFor, switchOn,
+        recipe, onFill: fill => foregroundFor(fill, p.base), switchOn,
         machineColour: canonical => ({
             ...canonical,
             ink: fit(canonical.ink, grounds, 4.5),
