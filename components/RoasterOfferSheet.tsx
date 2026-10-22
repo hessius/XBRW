@@ -1,10 +1,10 @@
 import React, {useState} from "react";
-import {Pressable} from "react-native";
+import {Pressable, ScrollView} from "react-native";
 import {Text, XStack, YStack} from "tamagui";
 
 import DotMatrixText from "@/components/DotMatrixText";
 import XbrwSheet from "@/components/XbrwSheet";
-import {palette, primary} from "@/constants/colors";
+import {onAccent, palette} from "@/constants/colors";
 import type {RoasterOfferState} from "@/hooks/useRoasterOffer";
 
 const BUTTON_HEIGHT = 48;
@@ -29,7 +29,10 @@ export default function RoasterOfferSheet({state, onAccept, onDecline}: {
     onAccept: (dontAskAgain: boolean) => void;
     onDecline: (dontAskAgain: boolean) => void;
 }) {
-    const [dontAsk, setDontAsk] = useState(false);
+    // The hook creates a new state object for each offer, even for the same feed.
+    const [choice, setChoice] = useState({offer: state, dontAsk: false});
+    if (choice.offer !== state) setChoice({offer: state, dontAsk: false});
+    const dontAsk = choice.offer === state && choice.dontAsk;
     const open = state.phase === "offer";
     // Kept while the sheet animates away, so it has something to draw.
     const [last, setLast] = useState("");
@@ -38,71 +41,78 @@ export default function RoasterOfferSheet({state, onAccept, onDecline}: {
 
     function answer(accepted: boolean) {
         const choice = dontAsk;
-        setDontAsk(false);
+        setChoice({offer: state, dontAsk: false});
         if (accepted) onAccept(choice);
         else onDecline(choice);
     }
 
     return (
-        <XbrwSheet open={open} title={`Subscribe to ${roaster}?`} heightPercent={40}
+        <XbrwSheet open={open} title="Subscribe" heightPercent={40}
                    onOpenChange={(next) => {
                        // Dismissing is "not now".
                        if (!next && state.phase === "offer") answer(false);
                    }}>
-            <YStack gap="$3" paddingHorizontal="$4" paddingBottom="$4">
-                {/* No count and no app name. The count is whatever the feed
-                    held today and changes as coffees sell out, and the app's
-                    name broke across a line between its two plus signs. */}
-                <Text testID="roaster-offer-body" fontSize={13} color={palette.dim}>
-                    {ROASTER_OFFER_BODY}
-                </Text>
+            <ScrollView testID="roaster-offer-scroll" style={{flex: 1, minHeight: 0, flexShrink: 1}}>
+                <YStack gap="$3" paddingHorizontal="$4" paddingBottom="$4">
+                    <Text fontSize={17} fontWeight="700" color={palette.text}>
+                        {`Subscribe to ${roaster}?`}
+                    </Text>
+                    {/* No count and no app name. The count is whatever the feed
+                        held today and changes as coffees sell out, and the app's
+                        name broke across a line between its two plus signs. */}
+                    <Text testID="roaster-offer-body" fontSize={13} color={palette.dim}>
+                        {ROASTER_OFFER_BODY}
+                    </Text>
 
-                <Pressable accessibilityRole="checkbox"
-                           accessibilityState={{checked: dontAsk}}
-                           accessibilityLabel="Don't ask again for this roaster"
-                           testID="roaster-offer-dont-ask"
-                           hitSlop={8}
-                           onPress={() => setDontAsk((was) => !was)}>
-                    <XStack alignItems="center" gap="$3" minHeight={44}>
-                        <XStack width={BOX} height={BOX} borderRadius={4} borderWidth={1.5}
-                                borderColor={dontAsk ? palette.text : palette.dim}
-                                alignItems="center" justifyContent="center">
-                            {dontAsk && (
-                                <YStack width={BOX - 10} height={BOX - 10} borderRadius={2}
-                                        backgroundColor={palette.text}/>
-                            )}
+                    <Pressable accessibilityRole="checkbox"
+                               accessibilityState={{checked: dontAsk}}
+                               accessibilityLabel="Don't ask again for this roaster"
+                               testID="roaster-offer-dont-ask"
+                               hitSlop={8}
+                               onPress={() => setChoice({offer: state, dontAsk: !dontAsk})}>
+                        <XStack alignItems="center" gap="$3" minHeight={44}>
+                            <XStack width={BOX} height={BOX} borderRadius={4} borderWidth={1.5}
+                                    borderColor={dontAsk ? palette.text : palette.dim}
+                                    alignItems="center" justifyContent="center">
+                                {dontAsk && (
+                                    <YStack width={BOX - 10} height={BOX - 10} borderRadius={2}
+                                            backgroundColor={palette.text}/>
+                                )}
+                            </XStack>
+                            <Text fontSize={13} color={palette.text} flexShrink={1}>
+                                Don&apos;t ask again for this roaster
+                            </Text>
                         </XStack>
-                        <Text fontSize={13} color={palette.text} flexShrink={1}>
-                            Don&apos;t ask again for this roaster
-                        </Text>
-                    </XStack>
-                </Pressable>
+                    </Pressable>
 
-                <Pressable accessibilityRole="button"
-                           accessibilityLabel={`Subscribe to ${roaster}`}
-                           testID="roaster-offer-subscribe"
-                           onPress={() => answer(true)}>
-                    <XStack height={BUTTON_HEIGHT} alignItems="center" justifyContent="center"
-                            borderRadius="$4" backgroundColor={primary.fill}>
-                        <DotMatrixText fontSize={13} weight="bold" letterSpacing={1.5}
-                                       color={primary.ink}>
-                            SUBSCRIBE
-                        </DotMatrixText>
-                    </XStack>
-                </Pressable>
+                    <Pressable accessibilityRole="button"
+                               accessibilityLabel={`Subscribe to ${roaster}`}
+                               testID="roaster-offer-subscribe"
+                               onPress={() => answer(true)}>
+                        <XStack minHeight={BUTTON_HEIGHT} paddingVertical="$3"
+                                alignItems="center" justifyContent="center"
+                                borderRadius="$4" backgroundColor={palette.text}>
+                            <DotMatrixText fontSize={13} weight="bold" letterSpacing={1.5}
+                                           color={onAccent.text}>
+                                SUBSCRIBE
+                            </DotMatrixText>
+                        </XStack>
+                    </Pressable>
 
-                <Pressable accessibilityRole="button" accessibilityLabel="Not now"
-                           testID="roaster-offer-not-now"
-                           onPress={() => answer(false)}>
-                    <XStack height={BUTTON_HEIGHT} alignItems="center" justifyContent="center"
-                            borderRadius="$4" borderWidth={1} borderColor={palette.line}>
-                        <DotMatrixText fontSize={13} weight="bold" letterSpacing={1.5}
-                                       color={palette.dim}>
-                            NOT NOW
-                        </DotMatrixText>
-                    </XStack>
-                </Pressable>
-            </YStack>
+                    <Pressable accessibilityRole="button" accessibilityLabel="Not now"
+                               testID="roaster-offer-not-now"
+                               onPress={() => answer(false)}>
+                        <XStack minHeight={BUTTON_HEIGHT} paddingVertical="$3"
+                                alignItems="center" justifyContent="center"
+                                borderRadius="$4" borderWidth={1} borderColor={palette.line}>
+                            <DotMatrixText fontSize={13} weight="bold" letterSpacing={1.5}
+                                           color={palette.dim}>
+                                NOT NOW
+                            </DotMatrixText>
+                        </XStack>
+                    </Pressable>
+                </YStack>
+            </ScrollView>
         </XbrwSheet>
     );
 }

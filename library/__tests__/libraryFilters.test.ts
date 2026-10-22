@@ -2,6 +2,8 @@ import {createTestDatabase, type FakeSQLiteDatabase} from "@/test-utils/sqlite";
 import {
     authorFilterId,
     authorFromFilterId,
+    roasterFilterId,
+    roasterFromFilterId,
     availableFilters,
     asLibraryFilters,
     chipFilters,
@@ -15,6 +17,25 @@ import {
     type FilterId
 } from "@/library/libraryFilters";
 import type {LibraryQuery} from "@/library/libraryQuery";
+
+describe("saved roaster namespace", () => {
+    it("binds its canonical key and labels the declared name without FROM", () => {
+        const id = roasterFilterId(" CAFÉ ");
+        expect(resolveLibraryFilter(id)).toEqual({where: "roasterKey = ?", params: ["café"]});
+        expect(roasterFromFilterId(id)).toBe("CAFÉ");
+        expect(filterLabel(id)).toBe("CAFÉ");
+        expect(resolveLibraryFilter(roasterFilterId("x' OR 1=1 --"))).toEqual({
+            where: "roasterKey = ?", params: ["x' or 1=1 --"]
+        });
+    });
+
+    it("retains unknown nonblank roasters but refuses blank namespace ids", () => {
+        expect(asLibraryFilters(["roaster:Unknown", "roaster:", "roaster:  ", 1]))
+            .toEqual(["roaster:Unknown"]);
+        expect(roasterFromFilterId("sharedBy:Acme")).toBeNull();
+        expect(roasterFromFilterId("roaster:  ")).toBeNull();
+    });
+});
 
 /**
  * Two kinds of proof, matching `libraryQuery.test.ts`. The suppression and

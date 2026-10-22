@@ -17,6 +17,7 @@ import RouteWatcher from '@/components/RouteWatcher';
 import {LiveBrewProvider} from '@/hooks/useLiveBrew';
 import {sharedBrewDatabase, sweepOnLaunch} from '@/hooks/useBrewHistory';
 import {useSetting} from '@/hooks/useSetting';
+import {useRoasterForegroundSync} from '@/hooks/useRoasterForegroundSync';
 
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
@@ -46,6 +47,7 @@ const shareIntentOptions = {
 };
 
 export default function RootLayout() {
+    useRoasterForegroundSync();
     const [splashDone, setSplashDone] = useState(false);
     const [loaded] = useFonts({
         SpaceMono:        require('../assets/fonts/SpaceMono-Regular.ttf'),

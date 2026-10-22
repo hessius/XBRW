@@ -54,6 +54,41 @@ beforeEach(() => {
 });
 
 describe("the offer", () => {
+    it("does not report an obsolete subscribed refresh after disarming", async () => {
+        const t = setup([{id: "a"}]);
+        const cached = feedBody([{id: "a"}]);
+        subscribe(t.settings, FEED_URL, cached.feed, cached.body, 100);
+        let reject: ((error: Error) => void) | undefined;
+        t.fetchBody.mockImplementationOnce(() => new Promise((_resolve, fail) => { reject = fail; }));
+        const {result} = await t.render();
+        await importLink(result);
+        await act(() => result.current.disarm());
+        await act(async () => reject?.(new Error("old feed failed")));
+        expect(mockNotify).not.toHaveBeenCalled();
+    });
+
+    it("reports a feed follow-up failure without undoing the imported recipe", async () => {
+        const t = setup([{id: "a"}]);
+        t.fetchBody.mockRejectedValueOnce(new Error("server-controlled detail"));
+        const {result} = await t.render();
+        await importLink(result);
+        await waitFor(() => expect(mockNotify).toHaveBeenCalledWith({
+            tone: "error",
+            message: "Recipe imported, but the roaster's feed couldn't be loaded. Try the import link again."
+        }));
+        expect(result.current.state.phase).toBe("idle");
+    });
+
+    it("discards an in-flight or waiting offer when its import is replaced", async () => {
+        const t = setup([{id: "a"}], {focused: false});
+        const {result} = await t.render();
+        await importLink(result);
+        await act(() => result.current.disarm());
+        t.setFocused(true);
+        await act(() => result.current.ask());
+        expect(result.current.state.phase).toBe("idle");
+    });
+
     it("asks once the import has worked and the library is in front", async () => {
         const t = setup([{id: "a"}, {id: "b", available: false}]);
         const {result} = await t.render();
@@ -71,10 +106,25 @@ describe("the offer", () => {
         await importLink(result);
         await waitFor(() => expect(t.fetchBody).toHaveBeenCalled());
         expect(result.current.state.phase).toBe("idle");
+        await act(() => result.current.ask());
+        expect(result.current.state.phase).toBe("idle");
 
         t.setFocused(true);
         await act(async () => result.current.ask());
         expect(result.current.state.phase).toBe("offer");
+    });
+
+    it("reports a subscribed feed's failed refresh after import", async () => {
+        const t = setup([{id: "a"}]);
+        const cached = feedBody([{id: "a"}]);
+        subscribe(t.settings, FEED_URL, cached.feed, cached.body, 100);
+        t.fetchBody.mockRejectedValueOnce(new Error("private server detail"));
+        const {result} = await t.render();
+        await importLink(result);
+        await waitFor(() => expect(mockNotify).toHaveBeenCalledWith(expect.objectContaining({
+            tone: "error", message: expect.stringContaining("feed couldn't be loaded")
+        })));
+        expect(result.current.state.phase).toBe("idle");
     });
 
     it("fetches nothing for a link whose import failed", async () => {

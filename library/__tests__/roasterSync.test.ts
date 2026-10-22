@@ -1,9 +1,10 @@
 import {readCatalogue} from "@/library/roasterCatalogue";
 import {RoasterFeedError} from "@/library/roasterFeed";
 import {SYNC_INTERVAL_MS, parseSubscriptions, serialiseSubscriptions} from "@/library/roasterSubscription";
+import {selectedImportRoasters} from "@/library/roasterImport";
 import {
-    readSubscriptions, resetSyncLockForTests, setPaused, subscribe, syncDue, syncSubscription,
-    unsubscribe
+    readSubscriptions, resetSyncLockForTests, setPaused, setPinned, subscribe, syncDue, syncSubscription,
+    unsubscribe, updateSubscription
 } from "@/library/roasterSync";
 import {
     FEED_URL, brewable, feedBody, memoryLibrary, memorySettings, type CoffeeSpec
@@ -74,6 +75,31 @@ describe("subscribing", () => {
 });
 
 describe("syncing", () => {
+    it("does not reorder equal legacy Import choices when a feed syncs", async () => {
+        const h = subscribed([{id: "a"}]);
+        const {feed, body} = feedBody([{id: "b"}], "Second");
+        const other = "https://second.example/feed";
+        subscribe(h.settings, other, feed, body, h.now());
+        updateSubscription(h.settings, FEED_URL, (s) => ({...s, pinnedAt: 1}));
+        updateSubscription(h.settings, other, (s) => ({...s, pinnedAt: 1}));
+        const before = selectedImportRoasters(readSubscriptions(h.settings));
+        await syncSubscription(FEED_URL, h.deps, {force: true});
+        expect(selectedImportRoasters(readSubscriptions(h.settings))).toEqual(before);
+    });
+
+    it("preserves a choice and pause changed while a sync request was in flight", async () => {
+        const h = subscribed([{id: "a"}]);
+        let finish!: (value: ReturnType<typeof feedBody>) => void;
+        const fetchBody = () => new Promise<ReturnType<typeof feedBody>>((resolve) => {finish = resolve;});
+        const syncing = syncSubscription(FEED_URL, {...h.deps, fetchBody}, {force: true});
+        setPinned(h.settings, FEED_URL, true, 123);
+        setPaused(h.settings, FEED_URL, true);
+        finish(feedBody([{id: "a"}, {id: "b"}]));
+        await syncing;
+        expect(h.sub()).toMatchObject({pinnedAt: 123, paused: true});
+        expect(selectedImportRoasters(readSubscriptions(h.settings))).toHaveLength(1);
+    });
+
     it("refreshes the cached catalogue: new, sold out and removed coffees", async () => {
         const h = subscribed([{id: "a"}, {id: "b"}]);
         h.setFeed([{id: "a", available: false}, {id: "c"}]);

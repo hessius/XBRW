@@ -7,9 +7,7 @@ import SubscriptionScreen from "@/app/subscription";
 import SubscriptionsScreen from "@/app/subscriptions";
 import {refreshAllMessage} from "@/hooks/useRoasterSubscriptions";
 import {readCatalogue} from "@/library/roasterCatalogue";
-import {
-    readSubscriptions, resetSyncLockForTests, setPinned, subscribe, updateSubscription
-} from "@/library/roasterSync";
+import {readSubscriptions, resetSyncLockForTests, subscribe, updateSubscription} from "@/library/roasterSync";
 import {countLine, rowLine, statusLine} from "@/library/subscriptionStatus";
 import {renderWithProviders, SHEET_PRESS_TIMEOUT, TEST_INSETS} from "@/test-utils/render";
 import {FEED_URL, feedBody, memorySettings} from "@/test-utils/roasterFeed";
@@ -20,6 +18,10 @@ jest.mock("expo-router", () => ({
 }));
 
 const mockNotify = jest.fn();
+let mockRatingNoteOpen = false;
+jest.mock("@/hooks/useLiveBrew", () => ({
+    useLiveBrew: () => ({ratingNoteOpen: mockRatingNoteOpen})
+}));
 jest.mock("@/components/XbrwToast", () => ({
     __esModule: true,
     notify: (...args: unknown[]) => mockNotify(...args)
@@ -63,6 +65,7 @@ async function drawDetail(settings = memorySettings(), fetchBody = fetched()) {
 }
 
 beforeEach(() => {
+    mockRatingNoteOpen = false;
     mockNotify.mockReset();
     (router.push as jest.Mock).mockReset();
     (router.dismissTo as jest.Mock).mockReset();
@@ -133,30 +136,6 @@ describe("the subscriptions list", () => {
         expect(screen.queryByText("Refresh all")).toBeNull();
     });
 
-    it("starts with the home screen switch, which turns the roasters off there", async () => {
-        const {settings} = await drawList(subscribed());
-        const drawn = JSON.stringify(screen.toJSON());
-        expect(drawn.indexOf("Show roasters on the home screen")).toBeLessThan(drawn.indexOf("YOUR ROASTERS"));
-        expect(settings.get("showRoastersOnHome")).toBe(true);
-
-        await fireEvent.press(screen.getByRole("switch", {name: "Show roasters on the home screen"}));
-
-        expect(settings.get("showRoastersOnHome")).toBe(false);
-    });
-
-    it("has no home screen switch with nothing subscribed", async () => {
-        await drawList();
-        expect(screen.queryByText("Show roasters on the home screen")).toBeNull();
-    });
-
-    it("marks a pinned roaster", async () => {
-        const settings = subscribed();
-        setPinned(settings, FEED_URL, true, NOW);
-        await drawList(settings);
-        expect(screen.getByLabelText("Test Roaster, pinned to the home screen, 3 coffees · Updated 2 h ago"))
-            .toBeTruthy();
-    });
-
     it("lists roasters the user asked not to be asked about, and can ask again", async () => {
         const settings = memorySettings();
         settings.set("roasterFeedOptOut", JSON.stringify(["https://other.example/feed"]));
@@ -171,6 +150,66 @@ describe("the subscriptions list", () => {
 });
 
 describe("a roaster's subscription", () => {
+    it.each([false, true])("hides the route behind the global brew note, subscribed: %s", async (hasSubscription) => {
+        const settings = hasSubscription ? subscribed() : memorySettings();
+        mockRatingNoteOpen = true;
+        const route = () => <SubscriptionScreen settings={settings} feedUrl={FEED_URL} now={() => NOW}/>;
+        const view = await renderWithProviders(route());
+        const id = hasSubscription ? "subscription-content" : "subscription-missing";
+        const content = () => screen.getByTestId(id, {includeHiddenElements: true});
+        expect(content().props.accessibilityElementsHidden).toBe(true);
+        expect(content().props.importantForAccessibility).toBe("no-hide-descendants");
+
+        mockRatingNoteOpen = false;
+        await view.rerender(route());
+        expect(content().props.accessibilityElementsHidden).toBe(false);
+        expect(content().props.importantForAccessibility).toBe("auto");
+        expect(screen.getByText(hasSubscription ? "Test Roaster" : "NOT SUBSCRIBED")).toBeTruthy();
+    });
+
+    it("makes Show in Import an explicit, persistent choice that can be removed", async () => {
+        const settings = subscribed();
+        await drawDetail(settings);
+        expect(screen.getByRole("switch", {name: "Show in Import", checked: false})).toBeTruthy();
+        await fireEvent.press(screen.getByRole("switch", {name: "Show in Import"}));
+        expect(readSubscriptions(settings)[0].pinnedAt).toBe(NOW);
+        expect(screen.getByRole("switch", {name: "Show in Import", checked: true})).toBeTruthy();
+        await fireEvent.press(screen.getByRole("switch", {name: "Show in Import"}));
+        expect(readSubscriptions(settings)[0].pinnedAt).toBeUndefined();
+    });
+
+    it("visibly refuses a fourth choice without changing any subscription", async () => {
+        const settings = subscribed();
+        const {feed, body} = feedBody([{id: "a"}]);
+        for (let i = 1; i <= 3; i++) {
+            const url = `https://other${i}.example/feed`;
+            subscribe(settings, url, feed, body, NOW);
+            updateSubscription(settings, url, (s) => ({...s, pinnedAt: i}));
+        }
+        const before = settings.get("roasterSubscriptions");
+        await drawDetail(settings);
+        await fireEvent.press(screen.getByRole("switch", {name: "Show in Import"}));
+        expect(settings.get("roasterSubscriptions")).toBe(before);
+        expect(mockNotify).toHaveBeenCalledWith({
+            tone: "info", message: "Choose up to 3 roasters for Import. Remove a choice first."
+        });
+        expect(screen.getByRole("switch", {name: "Show in Import", checked: false})).toBeTruthy();
+    });
+
+    it("exposes a legacy fourth choice as selected and still allows removal", async () => {
+        const settings = subscribed((s) => ({...s, pinnedAt: 4}));
+        const {feed, body} = feedBody([{id: "a"}]);
+        for (let i = 1; i <= 3; i++) {
+            const url = `https://other${i}.example/feed`;
+            subscribe(settings, url, feed, body, NOW);
+            updateSubscription(settings, url, (s) => ({...s, pinnedAt: i}));
+        }
+        await drawDetail(settings);
+        expect(screen.getByRole("switch", {name: "Show in Import", checked: true})).toBeTruthy();
+        await fireEvent.press(screen.getByRole("switch", {name: "Show in Import"}));
+        expect(readSubscriptions(settings).filter((s) => s.pinnedAt !== undefined)).toHaveLength(3);
+    });
+
     it("names the roaster and says what it holds and how fresh it is", async () => {
         await drawDetail(subscribed());
         expect(screen.getByText("Test Roaster")).toBeTruthy();
@@ -256,26 +295,6 @@ describe("a roaster's subscription", () => {
         }, {timeout: SHEET_PRESS_TIMEOUT});
         expect(readSubscriptions(settings)).toHaveLength(1);
         expect(router.dismissTo).not.toHaveBeenCalled();
-    });
-
-    it("pins the roaster to the home screen and takes the pin away", async () => {
-        const {settings} = await drawDetail(subscribed());
-        expect(screen.getByText("With 3 roasters or fewer, all of them show. Pinned ones come first."))
-            .toBeTruthy();
-
-        await fireEvent.press(screen.getByRole("switch", {name: "Pin to the home screen"}));
-        expect(readSubscriptions(settings)[0].pinnedAt).toBe(NOW);
-
-        await fireEvent.press(screen.getByRole("switch", {name: "Pin to the home screen"}));
-        expect(readSubscriptions(settings)[0].pinnedAt).toBeUndefined();
-    });
-
-    it("says the roasters are hidden from home when the switch is off", async () => {
-        const settings = subscribed();
-        settings.set("showRoastersOnHome", false);
-        await drawDetail(settings);
-        expect(screen.getByText("Roasters are hidden from the home screen. Turn them on in Roaster feeds."))
-            .toBeTruthy();
     });
 
     it("says so when the roaster is no longer subscribed", async () => {

@@ -3,7 +3,7 @@ import {Pressable} from "react-native";
 import {Text, XStack, YStack} from "tamagui";
 
 import DotMatrixText from "@/components/DotMatrixText";
-import {palette, primary} from "@/constants/colors";
+import {onAccent, palette} from "@/constants/colors";
 
 /**
  * The question asked when a recipe is imported again, the user has edited
@@ -31,9 +31,9 @@ export default function NewerVersionPrompt({name, onLatest, onKeep}: {
             <Pressable accessibilityRole="button" accessibilityLabel="Use the roaster's latest"
                        testID="newer-version-latest" onPress={onLatest}>
                 <XStack height={48} alignItems="center" justifyContent="center"
-                        borderRadius="$4" backgroundColor={primary.fill}>
+                        borderRadius="$4" backgroundColor={palette.text}>
                     <DotMatrixText fontSize={12} weight="bold" letterSpacing={1.5}
-                                   color={primary.ink}>
+                                   color={onAccent.text}>
                         USE THE ROASTER&apos;S LATEST
                     </DotMatrixText>
                 </XStack>

@@ -42,12 +42,7 @@ export type RoasterSubscription = {
     paused: boolean;
     /** Why the last attempt failed, or absent when it worked. */
     lastError?: SyncError;
-    /**
-     * Epoch ms the roaster was pinned to the home screen, or absent when it
-     * is not. A time rather than a flag so pins keep the order they were
-     * made in, most recent last. Lives on the subscription so a backup carries
-     * it and unsubscribing takes it away.
-     */
+    /** Epoch ms selected for Import, oldest first. Absent when not selected. */
     pinnedAt?: number;
 };
 
@@ -129,12 +124,13 @@ export function subscriptionFor(
     return key === null ? undefined : list.find((sub) => feedKey(sub.feed) === key);
 }
 
-/** Replace (or add) one subscription, keyed by feed. */
+/** Replace in place (or append), preserving the order of equal legacy pins. */
 export function withSubscription(
     list: readonly RoasterSubscription[], next: RoasterSubscription
 ): RoasterSubscription[] {
     const key = feedKey(next.feed);
-    return [...list.filter((sub) => feedKey(sub.feed) !== key), next];
+    const index = list.findIndex((sub) => feedKey(sub.feed) === key);
+    return index < 0 ? [...list, next] : list.map((sub, i) => i === index ? next : sub);
 }
 
 export function withoutSubscription(

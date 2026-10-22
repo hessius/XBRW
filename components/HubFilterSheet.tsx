@@ -18,9 +18,7 @@ type Props = {
     options: readonly HubFilterOption[];
     selected: readonly string[];
     onChange(values: string[]): void;
-    /** The line above the options. The community catalogue's by default. */
     note?: string;
-    /** What a count counts, singular and plural. Recipes by default. */
     noun?: readonly [string, string];
 };
 

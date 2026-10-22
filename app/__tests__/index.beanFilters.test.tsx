@@ -38,6 +38,8 @@ jest.mock("expo-share-intent", () => ({
 }));
 
 jest.mock("@/library/RecipeDatabase");
+jest.mock("@/hooks/useSetting", () =>
+    jest.requireActual("@/test-utils/settingsMock").settingsMock());
 jest.mock("@/library/XBloomRecipe", () => ({
     XBloomRecipe: jest.fn().mockImplementation(() => ({
         fetchRecipeDetail: jest.fn(),
@@ -168,6 +170,7 @@ function store(recipes: Recipe[]) {
         ),
         countRecipesByTag:    jest.fn(() => []),
         countRecipesByAuthor: jest.fn(() => []),
+        countRecipesByRoaster: jest.fn(() => []),
         shelfMembers:         jest.fn(() => ({})),
         deleteRecipe:         jest.fn(),
         cloneRecipe:          jest.fn(),

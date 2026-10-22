@@ -53,7 +53,7 @@ describe("recipeIndex descriptors", () => {
         // `from` bodies, so changing a projection leaves this green; the
         // golden-projection test below is what catches that. When this does
         // fail: confirm the change was intended, then paste the new hash.
-        expect(schemaHash()).toBe("5e0a07fc");
+        expect(schemaHash()).toBe("ac06759b");
     });
 
     it("folds the revision into the hash", () => {
@@ -63,6 +63,21 @@ describe("recipeIndex descriptors", () => {
 });
 
 describe("projectRecipe", () => {
+    it("projects saved roaster display spelling and a canonical indexed key", () => {
+        const recipe = new Recipe();
+        recipe.coffee = {name: "Coffee", roaster: " CAFE\u0301 "};
+        expect(projectRecipe(recipe)).toMatchObject({roaster: "CAFE\u0301", roasterKey: "café"});
+        expect(INDEX_COLUMNS.find(c => c.name === "roasterKey")?.indexed).toBe(true);
+    });
+
+    it.each([undefined, "", "  "])("stores absent or blank roaster %p as NULL", roaster => {
+        const recipe = new Recipe();
+        recipe.coffee = {name: "Coffee", roaster};
+        expect(projectRecipe(recipe)).toMatchObject({roaster: null, roasterKey: null});
+        recipe.coffee = undefined;
+        expect(projectRecipe(recipe)).toMatchObject({roaster: null, roasterKey: null});
+    });
+
     it("pins the projected value of every column", () => {
         // The guard the schema hash cannot be. The hash covers column shape
         // only -- a changed `from` body leaves it identical -- so without
@@ -83,6 +98,7 @@ describe("projectRecipe", () => {
         recipe.grinder = true;
         recipe.accentIndex = 3;
         recipe.bypassEnabled = false;
+        recipe.coffee = {name: "Reference beans", roaster: " CAFÉ "};
         recipe.pours = [pour(100, 93), pour(120, 88)];
 
         expect(projectRecipe(recipe)).toEqual({
@@ -107,6 +123,8 @@ describe("projectRecipe", () => {
             xid: null,
             sharedBy: null,
             sharedByKey: null,
+            roaster: "CAFÉ",
+            roasterKey: "café",
             favourite: 0,
             hasDescription: 0,
             description: null,

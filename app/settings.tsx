@@ -42,7 +42,6 @@ import {isMachineModel} from "@/library/machine/machineModel";
 import {isSortAxis, isSortDirection} from "@/library/librarySort";
 import {isHistorySort, isHistorySortDirection} from "@/library/brew/historyQuery";
 import {isLibraryView} from "@/library/libraryView";
-import {parseFeedOptOut} from "@/library/roasterFeed";
 import {parseSubscriptions, serialiseSubscriptions} from "@/library/roasterSubscription";
 import {asTemperatureUnit} from "@/library/units";
 import {STABLE_HOST} from "@/constants/views";
@@ -203,21 +202,8 @@ export default function SettingsScreen({settings}: Props) {
     // shelf is promoted from its own tile in the grid, which is where the user
     // is standing when they decide it is one.
     const [myShelves, setMyShelves] = useSetting("myShelves", settings);
-    // Not a row here either: it is answered on the roaster shelf prompt.
-    const [roasterFeedOptOut, setRoasterFeedOptOut] =
-        useSetting("roasterFeedOptOut", settings);
-    const [roasterSubscriptions, setRoasterSubscriptions] =
-        useSetting("roasterSubscriptions", settings);
-    // A row on the Roaster feeds screen, read here for the backup.
-    const [showRoastersOnHome, setShowRoastersOnHome] =
-        useSetting("showRoastersOnHome", settings);
-    const subscriptionCount = parseSubscriptions(roasterSubscriptions).length;
-    // The row only exists once there is something to manage: a subscription,
-    // or a "don't ask again" to take back. Most people never meet a roaster
-    // feed, and a "None yet." row would advertise a feature they can't start
-    // from here (a feed only arrives through a roaster's import link).
-    const optOutCount = parseFeedOptOut(roasterFeedOptOut).length;
-    const showSubscriptions = subscriptionCount > 0 || optOutCount > 0;
+    const [roasterFeedOptOut, setRoasterFeedOptOut] = useSetting("roasterFeedOptOut", settings);
+    const [roasterSubscriptions, setRoasterSubscriptions] = useSetting("roasterSubscriptions", settings);
     const [importFingerprints, setImportFingerprints] = useSetting("importFingerprints", settings);
 
     // Deliberately given no query: this screen's questions are all about the
@@ -267,7 +253,7 @@ export default function SettingsScreen({settings}: Props) {
             brewHistorySort, brewHistorySortDirection,
             librarySort, librarySortDirection, libraryFavouritesFirst,
             libraryView, invertAutoShelves, hiddenShelves, myShelves,
-            roasterFeedOptOut, roasterSubscriptions, showRoastersOnHome, importFingerprints
+            roasterFeedOptOut, roasterSubscriptions, importFingerprints
         };
     }
 
@@ -415,23 +401,16 @@ export default function SettingsScreen({settings}: Props) {
         if (typeof incoming.myShelves === "string") {
             setMyShelves(incoming.myShelves);
         }
-        // Read back through `parseFeedOptOut` wherever it is used, which keeps
-        // only strings, so a malformed value costs a forgotten answer and no
-        // more.
         if (typeof incoming.roasterFeedOptOut === "string") {
             setRoasterFeedOptOut(incoming.roasterFeedOptOut);
         }
-        if (typeof incoming.showRoastersOnHome === "boolean") {
-            setShowRoastersOnHome(incoming.showRoastersOnHome);
-        }
-        // The catalogue cache is not backed up, so its sync timestamps cannot
-        // suppress the first fetch after restore. Paused subscriptions stay paused.
+        // The cache is not restored, so even a recently synced subscription
+        // must fetch again. Paused subscriptions retain the user's choice.
         if (typeof incoming.roasterSubscriptions === "string") {
             setRoasterSubscriptions(incoming.roasterSubscriptions === "" ? "" : serialiseSubscriptions(
                 parseSubscriptions(incoming.roasterSubscriptions).map((sub) =>
                     ({...sub, lastSync: 0, lastAttempt: 0}))));
         }
-        // Validated on read by `parsePrints`.
         if (typeof incoming.importFingerprints === "string") {
             setImportFingerprints(incoming.importFingerprints);
         }
@@ -611,7 +590,7 @@ export default function SettingsScreen({settings}: Props) {
                         onChange={setShowRecipeCardPhotos}/>
                     <SettingsToggleRow
                         label="Shelf photo previews"
-                        description="Show coffee photos in your own, tag and eligible automatic shelves."
+                        description="Show coffee photos in your own shelves, tag shelves and eligible auto shelves."
                         value={showShelfPhotoPreviews}
                         onChange={setShowShelfPhotoPreviews}/>
                     <SettingsToggleRow
@@ -652,18 +631,9 @@ export default function SettingsScreen({settings}: Props) {
                 </SettingsSection>
 
                 <SettingsSection title="Library">
-                    {/* Where roaster subscriptions are managed. Hidden until
-                        there is a subscription or a "don't ask again" to take
-                        back (`showSubscriptions`). */}
-                    {showSubscriptions && (
-                        <SettingsActionRow label="Roaster feeds"
-                                           detail={subscriptionCount === 0
-                                               ? "None. Roasters you said no to are listed here."
-                                               : subscriptionCount === 1
-                                                   ? "1 roaster."
-                                                   : `${subscriptionCount} roasters.`}
-                                           onPress={() => router.push("/subscriptions")}/>
-                    )}
+                    <SettingsActionRow label="Roaster feeds"
+                                       detail="Manage subscriptions and declined offers."
+                                       onPress={() => router.push("/subscriptions")}/>
                     {unreadableCount > 0 && (
                         // Bought off here: `queryRecipes` skips a blob it cannot
                         // read so the library still opens (#124), and this is

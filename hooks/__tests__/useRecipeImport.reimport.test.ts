@@ -71,7 +71,7 @@ describe("importing a held link again", () => {
         const mine = stored();
         const {onOpenRecipe, onSaveExisting} = await importAgain([mine]);
         await waitFor(() => expect(onOpenRecipe).toHaveBeenCalled());
-        expect(onOpenRecipe).toHaveBeenCalledWith(mine, true, false);
+        expect(onOpenRecipe).toHaveBeenCalledWith(mine, true);
         expect(onSaveExisting).not.toHaveBeenCalled();
     });
 
@@ -80,7 +80,7 @@ describe("importing a held link again", () => {
         const originalPrints = sharedSettings().get("importFingerprints");
         mine.grindSize = 55;
         const {onOpenRecipe, onSaveExisting} = await importAgain([mine]);
-        await waitFor(() => expect(onOpenRecipe).toHaveBeenCalledWith(mine, true, false));
+        await waitFor(() => expect(onOpenRecipe).toHaveBeenCalledWith(mine, true));
         expect(mine.grindSize).toBe(55);
         expect(onSaveExisting).not.toHaveBeenCalled();
         expect(sharedSettings().get("importFingerprints")).toBe(originalPrints);
@@ -93,7 +93,7 @@ describe("importing a held link again", () => {
         const {onOpenRecipe, onSaveExisting} = await importAgain([mine]);
 
         await waitFor(() => expect(onOpenRecipe).toHaveBeenCalled());
-        expect(onOpenRecipe).toHaveBeenCalledWith(mine, true, true);
+        expect(onOpenRecipe).toHaveBeenCalledWith(mine, true);
         expect(onSaveExisting).toHaveBeenCalledWith(mine);
         expect(mine).toMatchObject({grindSize: 62, name: "My Monday coffee", description: "My notes"});
         expect(mine.tags).toEqual(["Mornings"]);
@@ -113,7 +113,7 @@ describe("importing a held link again", () => {
         await act(async () => result.current.acceptLatest());
         expect(mine).toMatchObject({grindSize: 62, name: "My Monday coffee"});
         expect(onSaveExisting).toHaveBeenCalledWith(mine);
-        expect(onOpenRecipe).toHaveBeenCalledWith(mine, true, true);
+        expect(onOpenRecipe).toHaveBeenCalledWith(mine, true);
     });
 
     it("KEEP MINE opens the user's copy unchanged", async () => {
@@ -127,7 +127,7 @@ describe("importing a held link again", () => {
 
         expect(mine).toMatchObject({grindSize: 50, dosage: 16});
         expect(onSaveExisting).not.toHaveBeenCalled();
-        expect(onOpenRecipe).toHaveBeenCalledWith(mine, true, false);
+        expect(onOpenRecipe).toHaveBeenCalledWith(mine, true);
     });
 
     it("remembers what a new import looked like, so a later one can tell", async () => {
@@ -215,7 +215,7 @@ describe("when saving an existing import fails", () => {
 
         onSaveExisting.mockImplementation(() => undefined);
         await resolve();
-        await waitFor(() => expect(onOpenRecipe).toHaveBeenCalledWith(mine, true, true));
+        await waitFor(() => expect(onOpenRecipe).toHaveBeenCalledWith(mine, true));
         expect(mine).toMatchObject({grindSize: 62, imageURL: decoration.coffee.imageUrl});
         expect(JSON.parse(sharedSettings().get("importFingerprints"))[mine.uuid])
             .toBe(contentPrint(mine));
@@ -237,7 +237,7 @@ describe("when saving an existing import fails", () => {
 
         onSaveExisting.mockImplementation(() => undefined);
         await resolve();
-        await waitFor(() => expect(onOpenRecipe).toHaveBeenCalledWith(mine, true, false));
+        await waitFor(() => expect(onOpenRecipe).toHaveBeenCalledWith(mine, true));
         expect(mine.imageURL).toBe(decoration.coffee.imageUrl);
     });
 
@@ -261,7 +261,7 @@ describe("when saving an existing import fails", () => {
         await resolve();
         await waitFor(() => expect(result.current.state.status).toBe("newer"));
         await act(async () => result.current.acceptLatest());
-        expect(onOpenRecipe).toHaveBeenCalledWith(mine, true, true);
+        expect(onOpenRecipe).toHaveBeenCalledWith(mine, true);
         expect(mine.grindSize).toBe(62);
     });
 
@@ -285,7 +285,7 @@ describe("when saving an existing import fails", () => {
         await resolve();
         await waitFor(() => expect(result.current.state.status).toBe("newer"));
         await act(async () => result.current.keepMine());
-        expect(onOpenRecipe).toHaveBeenCalledWith(mine, true, false);
+        expect(onOpenRecipe).toHaveBeenCalledWith(mine, true);
         expect(mine).toMatchObject({grindSize: 50, dosage: 16, imageURL: decoration.coffee.imageUrl});
     });
 });

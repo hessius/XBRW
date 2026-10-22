@@ -34,7 +34,6 @@ type Props = {
      */
     titleLines?: number;
     titleSize?: number;
-    /** Catalogue counts and metadata sit below a long coffee title. */
     subtitle?: string;
     /** A trailing action that can wrap below the title when space is tight. */
     action?: React.ReactNode;

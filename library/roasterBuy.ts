@@ -32,9 +32,9 @@ export function buyLink(roaster: RoasterFeed["roaster"], variant: FeedVariant): 
 /**
  * A price as a shopper reads it: `$28`, `$28.50`.
  *
- * The narrow symbol, so an Australian store reads `$28` on any phone rather
- * than `A$28`. A runtime without the currency (or without Intl) falls back to
- * `$28 AUD`, which still names it.
+ * The narrow symbol rather than `A$`, with placement and punctuation following
+ * the phone's locale. A runtime without the currency (or without Intl) falls
+ * back to `$28 AUD`, which still names it.
  */
 export function formatPrice(price: number, currency?: string): string {
     const whole = Number.isInteger(price);

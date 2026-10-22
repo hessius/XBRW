@@ -30,10 +30,7 @@ function countLift(fontSize: number): number {
 type Props = {
     /** Prose, so this is Inter — never rendered in Doto. */
     title: string;
-    /**
-     * Rendered as a small superscript. Hidden when absent, zero or empty. A
-     * string carries a count with words in it, such as `12 OF 30`.
-     */
+    /** Rendered as a small superscript. Hidden when absent or zero. */
     count?: number | string;
     fontSize?: number;
     /**

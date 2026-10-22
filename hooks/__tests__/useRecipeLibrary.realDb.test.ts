@@ -8,6 +8,8 @@ import {useRecipeLibrary} from "@/hooks/useRecipeLibrary";
 import RecipeDatabase from "@/library/RecipeDatabase";
 import Recipe from "@/library/Recipe";
 import type {LibraryQuery} from "@/library/libraryQuery";
+import {resolveAccent} from "@/library/accent";
+import {roasterFilterId} from "@/library/libraryFilters";
 
 jest.mock("expo-sqlite", () => ({
     openDatabaseSync: () => mockCreateTestDatabase()
@@ -29,6 +31,83 @@ function named(name: string): Recipe {
 }
 
 describe("useRecipeLibrary against a real database", () => {
+    it("reads whole-table roaster counts and fallback art on the mutation revision, never from the visible query", async () => {
+        const db = new RecipeDatabase();
+        for (let n = 0; n < 3; n++) {
+            const recipe = named(`Roaster ${n}`);
+            recipe.coffee = {name: "Beans", roaster: "Acme"};
+            db.insertRecipe(recipe);
+        }
+        db.insertRecipe(named("Visible outsider"));
+        const allRecipes = jest.spyOn(db, "retrieveAllRecipes");
+        const photos = jest.spyOn(db, "shelfPhotoMembers");
+        const query: LibraryQuery = {
+            search: "Visible", filters: [], sort: "name", direction: "asc", favouritesFirst: false
+        };
+        const {result} = await renderHook(() => useRecipeLibrary(db, query));
+        expect(result.current.recipes).toHaveLength(1);
+        expect(result.current.roasterCounts).toEqual([{roaster: "Acme", count: 3}]);
+        expect(result.current.shelfMarks["roaster:Acme"].accents).toHaveLength(3);
+        expect(result.current.shelfMarks["roaster:Acme"].coverMembers).toHaveLength(3);
+        expect(result.current.shelfMarks["roaster:Acme"].coverMembers?.every(r => !r.imageURL)).toBe(true);
+        expect(photos.mock.calls.flatMap(call => call[0])).toContain("roaster:Acme");
+        const extra = named("Extra");
+        extra.coffee = {name: "Beans", roaster: "Acme"};
+        db.insertRecipe(extra);
+        await act(async () => result.current.refresh());
+        expect(result.current.roasterCounts).toEqual([{roaster: "Acme", count: 4}]);
+        expect(allRecipes).not.toHaveBeenCalled();
+        await act(async () => result.current.duplicateRecipe(extra));
+        expect(result.current.roasterCounts).toEqual([{roaster: "Acme", count: 5}]);
+        await act(async () => result.current.deleteRecipe(extra));
+        expect(result.current.roasterCounts).toEqual([{roaster: "Acme", count: 4}]);
+        expect(result.current.recipes).toHaveLength(1);
+    });
+
+    it.each([0, 1, 2, 3, 4])(
+        "builds a bounded mixed roaster cover with %s photos beyond the first three, independently of visible search",
+        async photoCount => {
+            const db = new RecipeDatabase();
+            const ordinary: Recipe[] = [];
+            const pictured: Recipe[] = [];
+            for (let n = 0; n < 4 + photoCount; n++) {
+                const recipe = named(`Coffee ${n}`);
+                recipe.coffee = {name: "Beans", roaster: n % 2 ? " CAFÉ " : "cafe\u0301"};
+                if (n >= 4) {
+                    recipe.imageURL = "https://coffee.example/shared.jpg";
+                    pictured.push(recipe);
+                } else ordinary.push(recipe);
+                db.insertRecipe(recipe);
+            }
+            db.insertRecipe(named("Visible outsider"));
+            const allRecipes = jest.spyOn(db, "retrieveAllRecipes");
+            const members = jest.spyOn(db, "shelfMembers");
+            const initial: LibraryQuery = {
+                search: "Visible", filters: [], sort: "name", direction: "desc", favouritesFirst: false
+            };
+            const {result, rerender} = await renderHook(
+                ({query}: {query: LibraryQuery}) => useRecipeLibrary(db, query), {initialProps: {query: initial}}
+            );
+            const id = roasterFilterId(result.current.roasterCounts[0].roaster);
+            const cover = () => result.current.shelfMarks[id].coverMembers;
+            expect(result.current.recipes.map(r => r.name)).toEqual(["Visible outsider"]);
+            expect(cover()).toEqual([
+                ...pictured.map(recipe => ({
+                    uuid: recipe.uuid, accent: resolveAccent(recipe), imageURL: recipe.imageURL
+                })),
+                ...ordinary.slice(0, 4 - photoCount).map(recipe => ({
+                    uuid: recipe.uuid, accent: resolveAccent(recipe)
+                }))
+            ]);
+            expect(members).toHaveBeenCalledWith(
+                expect.arrayContaining([id]), expect.any(Function), 4
+            );
+            await rerender({query: {...initial, search: "Coffee", direction: "asc"}});
+            expect(cover()?.filter(r => r.imageURL)).toHaveLength(photoCount);
+            expect(allRecipes).not.toHaveBeenCalled();
+        }
+    );
+
     it("keeps stock photo covers independent of visible search/sort and refreshes them with the revision", async () => {
         const db = new RecipeDatabase();
         for (let n = 0; n < 8; n++) {

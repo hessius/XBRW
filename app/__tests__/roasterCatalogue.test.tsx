@@ -7,9 +7,9 @@ import {router} from "expo-router";
 import RoasterScreen from "@/app/roaster";
 import RoasterCoffeeScreen from "@/app/roasterCoffee";
 import RoastersScreen from "@/app/roasters";
-import {TYPING_DEBOUNCE_MS} from "@/constants/motion";
 import {parseHidden} from "@/library/hiddenShelves";
-import {contentPrint} from "@/library/importRefresh";
+import {contentPrint, planReimport, readPrints} from "@/library/importRefresh";
+import Recipe from "@/library/Recipe";
 import type {CoffeeBag} from "@/library/coffeeBag";
 import {parseRoasterFeed} from "@/library/roasterFeed";
 import {forgetQueriesForTests} from "@/library/roasterFilters";
@@ -104,25 +104,18 @@ describe("catalogue screen-reader coverage", () => {
 });
 
 describe("the roaster list", () => {
-    it.each([
-        ["roaster list", (settings: ReturnType<typeof subscribed>) => <RoastersScreen settings={settings}/>],
-        ["roaster's coffees", (settings: ReturnType<typeof subscribed>) =>
-            <RoasterScreen settings={settings} feedUrl={FEED_URL}/>]
-    ])("refreshes the %s cache age at midnight", async (_name, page) => {
+    it("ages a cached timestamp that arrives after mount and refreshes on a minute", async () => {
         jest.useFakeTimers();
-        const midnight = new Date(2026, 9, 20).getTime();
-        jest.setSystemTime(midnight - 10_000);
         const settings = memorySettings();
+        let now = 300_000;
+        await renderWithProviders(<RoastersScreen settings={settings} now={() => now}/>);
         const {feed, body} = feedBody([{id: "a"}]);
-        subscribe(settings, FEED_URL, feed, body, midnight - 3 * 86_400_000);
-        try {
-            await renderWithProviders(page(settings));
-            expect(screen.getByText(/Updated 2 d ago/)).toBeTruthy();
-            await act(async () => { jest.advanceTimersByTime(10_000); });
-            expect(screen.getByText(/Updated 3 d ago/)).toBeTruthy();
-        } finally {
-            jest.useRealTimers();
-        }
+        await act(() => subscribe(settings, FEED_URL, feed, body, now));
+        expect(screen.getByLabelText("Test Roaster, 1 coffee · Updated just now")).toBeTruthy();
+        now += 120_000;
+        await act(() => jest.advanceTimersByTime(60_000));
+        expect(screen.getByLabelText(/Updated 2 min ago/)).toBeTruthy();
+        jest.useRealTimers();
     });
 
     it("explains itself when there are no subscriptions", async () => {
@@ -148,19 +141,19 @@ describe("a roaster's coffees", () => {
     it("hides sold-out coffees until IN STOCK is turned off, from the cache alone", async () => {
         const library = memoryLibrary();
         await renderWithProviders(<RoasterScreen settings={subscribed()} feedUrl={FEED_URL}/>);
-        expect(rowIds()).toEqual(["roaster-coffee-b"]);
+        expect(rowIds()).toEqual(["roaster-coffee-id:b"]);
         expect(screen.getByTestId("screen-header-subtitle").props.children).toBe("1 coffee");
         // The count is a line of its own, not a superscript a long name clips.
         expect(screen.queryByTestId("screen-title-count")).toBeNull();
 
         await fireEvent.press(screen.getByTestId("roaster-filter-in-stock"));
-        expect(rowIds()).toEqual(["roaster-coffee-b", "roaster-coffee-a"]);
+        expect(rowIds()).toEqual(["roaster-coffee-id:b", "roaster-coffee-id:a"]);
         expect(screen.getAllByTestId("roaster-row-sold-out")).toHaveLength(1);
         expect(library.fetched).toEqual([]);
 
-        await fireEvent.press(screen.getByTestId("roaster-coffee-b"));
+        await fireEvent.press(screen.getByTestId("roaster-coffee-id:b"));
         expect(router.push).toHaveBeenCalledWith({
-            pathname: "/roasterCoffee", params: {feed: FEED_URL, coffee: "b"}
+            pathname: "/roasterCoffee", params: {feed: FEED_URL, coffee: "id:b"}
         });
     });
 
@@ -207,7 +200,7 @@ describe("searching and filtering a roaster's coffees", () => {
             // take the value off again.
             const row = screen.getByLabelText("Peru, 1 coffee");
             if (!row.props.accessibilityState?.selected) await fireEvent.press(row);
-            expect(rowIds()).toEqual(["roaster-coffee-b"]);
+            expect(rowIds()).toEqual(["roaster-coffee-id:b"]);
         }, {timeout: SHEET_PRESS_TIMEOUT});
         expect(screen.getByTestId("screen-header-subtitle", {includeHiddenElements: true})
             .props.children).toBe("1 of 3 coffees");
@@ -238,7 +231,7 @@ describe("searching and filtering a roaster's coffees", () => {
     it("toggles decaf", async () => {
         await renderWithProviders(<RoasterScreen settings={shelf()} feedUrl={FEED_URL}/>);
         await fireEvent.press(screen.getByTestId("roaster-filter-decaf"));
-        expect(rowIds()).toEqual(["roaster-coffee-b"]);
+        expect(rowIds()).toEqual(["roaster-coffee-id:b"]);
     });
 
     it("searches the producer and says when nothing matches, with a way out", async () => {
@@ -247,14 +240,14 @@ describe("searching and filtering a roaster's coffees", () => {
             await renderWithProviders(<RoasterScreen settings={shelf()} feedUrl={FEED_URL}/>);
             await fireEvent.press(screen.getByTestId("rail-search"));
             await fireEvent.changeText(screen.getByTestId("rail-search-input"), "vergara");
-            await act(async () => { jest.advanceTimersByTime(TYPING_DEBOUNCE_MS); });
-            expect(rowIds()).toEqual(["roaster-coffee-a"]);
+            await act(async () => { jest.advanceTimersByTime(1000); });
+            expect(rowIds()).toEqual(["roaster-coffee-id:a"]);
 
             await fireEvent.changeText(screen.getByTestId("rail-search-input"), "nothing like it");
-            await act(async () => { jest.advanceTimersByTime(TYPING_DEBOUNCE_MS); });
+            await act(async () => { jest.advanceTimersByTime(1000); });
             expect(screen.getByText("No coffees match.")).toBeTruthy();
             await fireEvent.press(screen.getByTestId("roaster-no-matches-action"));
-            expect(rowIds()).toEqual(["roaster-coffee-a", "roaster-coffee-b", "roaster-coffee-c"]);
+            expect(rowIds()).toEqual(["roaster-coffee-id:a", "roaster-coffee-id:b", "roaster-coffee-id:c"]);
         } finally {
             jest.useRealTimers();
         }
@@ -266,22 +259,19 @@ describe("searching and filtering a roaster's coffees", () => {
         await fireEvent.press(screen.getByTestId("roaster-filter-decaf"));
         await first.unmount();
         await renderWithProviders(<RoasterScreen settings={settings} feedUrl={FEED_URL}/>);
-        expect(rowIds()).toEqual(["roaster-coffee-b"]);
+        expect(rowIds()).toEqual(["roaster-coffee-id:b"]);
     });
 });
 
 describe("buying a bag", () => {
-    const NativeNumberFormat = Intl.NumberFormat;
-
-    beforeEach(() => {
-        jest.spyOn(Intl, "NumberFormat").mockImplementation((locales, options) =>
-            new NativeNumberFormat(locales ?? "en-AU", options)
-        );
+    const NumberFormat = Intl.NumberFormat;
+    beforeAll(() => {
+        // Price layout follows the device locale; make this fixture Australian
+        // on Swedish developer machines too.
+        jest.spyOn(Intl, "NumberFormat").mockImplementation((_locale, options) =>
+            new NumberFormat("en-AU", options));
     });
-
-    afterEach(() => {
-        jest.restoreAllMocks();
-    });
+    afterAll(() => jest.mocked(Intl.NumberFormat).mockRestore());
 
     function shop() {
         const parsed = JSON.parse(feedJson([{id: "b"}]));
@@ -457,20 +447,124 @@ describe("tasting notes on a coffee", () => {
 });
 
 describe("one coffee", () => {
+    it("does not save a catalogue action whose feed context was cancelled", async () => {
+        const settings = subscribedTo([{id: "b"}], {b: {roaster: ""}});
+        const other = "https://other.example/feed.json";
+        const otherBody = feedBody([{id: "b"}], "Other roaster");
+        subscribe(settings, other, otherBody.feed, otherBody.body, 1000);
+        const library = memoryLibrary();
+        const recipe = await library.deps.fetchRecipe("https://example.com/?id=b-18g");
+        let finish: ((recipe: Recipe | null) => void) | undefined;
+        const fetchRecipe = jest.fn(library.deps.fetchRecipe)
+            .mockImplementationOnce(library.deps.fetchRecipe)
+            .mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+        const deps = {...library.deps, fetchRecipe};
+        const {rerender} = await renderWithProviders(
+            <RoasterCoffeeScreen settings={settings} feedUrl={FEED_URL} coffeeId="b" library={deps}
+                                 shelves={() => ["Pantry"]}/>
+        );
+        await waitFor(() => expect(screen.queryByTestId("roaster-coffee-loading")).toBeNull());
+        await fireEvent.press(screen.getByTestId("roaster-coffee-shelf"));
+        await bagThen(() => expect(fetchRecipe).toHaveBeenCalledTimes(2));
+        await rerender(
+            <RoasterCoffeeScreen settings={settings} feedUrl={other} coffeeId="b" library={deps}
+                                 shelves={() => ["Pantry"]}/>
+        );
+        await act(async () => finish?.(recipe));
+        expect(library.all()).toEqual([]);
+        expect(mockNotify).not.toHaveBeenCalled();
+    });
+
+    it("cancels the old feed context when another feed has the same share link", async () => {
+        const settings = subscribedTo([{id: "b"}], {b: {roaster: ""}});
+        const other = "https://other.example/feed.json";
+        const parsed = JSON.parse(feedJson([{id: "b"}], "Other roaster"));
+        delete parsed.coffees[0].bean.roaster;
+        const body = JSON.stringify(parsed);
+        subscribe(settings, other, parseRoasterFeed(body)!, body, 1000);
+        const library = memoryLibrary();
+        const fetchRecipe = jest.fn((_share: string, _signal?: AbortSignal) =>
+            new Promise<Recipe | null>(() => {}));
+        const deps = {...library.deps, fetchRecipe};
+        const {rerender} = await renderWithProviders(
+            <RoasterCoffeeScreen settings={settings} feedUrl={FEED_URL} coffeeId="b" library={deps}/>
+        );
+        expect(fetchRecipe).toHaveBeenCalledTimes(1);
+        const first = fetchRecipe.mock.calls[0][1];
+        await rerender(
+            <RoasterCoffeeScreen settings={settings} feedUrl={other} coffeeId="b" library={deps}/>
+        );
+        expect(first?.aborted).toBe(true);
+        expect(fetchRecipe).toHaveBeenCalledTimes(2);
+    });
+
+    it("captures the feed's roaster in the recipe JSON when its bean omitted one", async () => {
+        await open(subscribedTo([{id: "b"}], {b: {roaster: ""}}));
+        await fireEvent.press(screen.getByTestId("roaster-coffee-brew"));
+        await waitFor(() => expect(router.push).toHaveBeenCalled());
+        const call = (router.push as jest.Mock).mock.calls[0][0];
+        expect(JSON.parse(call.params.recipeJSON).coffee.roaster).toBe("Test Roaster");
+    });
+
+    it("reports a storage failure as retryable storage feedback, not a network error", async () => {
+        const library = memoryLibrary();
+        await open(subscribed(), library);
+        library.deps.save = () => { throw new Error("private database detail"); };
+        await fireEvent.press(screen.getByTestId("roaster-coffee-shelf"));
+        await bagThen(() => expect(mockNotify).toHaveBeenCalledWith({
+            tone: "error", message: "Couldn't save the recipe. Try again."
+        }));
+        expect(screen.getByTestId("roaster-coffee-shelf")).toBeTruthy();
+    });
+
+    it("keeps a failed explicit replacement actionable without changing the saved recipe", async () => {
+        const {library} = await open();
+        await shelve();
+        const held = library.find("b-18g")!;
+        held.grindSize = 65;
+        library.deps.save(held);
+        const before = JSON.stringify(library.find("b-18g"));
+        library.serve("b-18g", 61);
+        await fireEvent.press(screen.getByTestId("roaster-coffee-shelf"));
+        await bagThen(() => expect(screen.getByTestId("newer-version")).toBeTruthy());
+        jest.spyOn(library.deps, "save").mockImplementationOnce(() => { throw new Error("disk full"); });
+        await fireEvent.press(screen.getByTestId("newer-version-latest"));
+        expect(mockNotify).toHaveBeenLastCalledWith({
+            tone: "error", message: "Couldn't save the recipe. Try again."
+        });
+        expect(JSON.stringify(library.find("b-18g"))).toBe(before);
+        expect(screen.getByTestId("newer-version")).toBeTruthy();
+        await fireEvent.press(screen.getByTestId("newer-version-latest"));
+        expect(library.find("b-18g")?.grindSize).toBe(61);
+    });
+
+    it("leaves the shelf picker open on a failed shelf save without reporting success", async () => {
+        const {library} = await open();
+        await fireEvent.press(screen.getByTestId("roaster-coffee-shelf"));
+        await bagThen(() => expect(library.all()).toHaveLength(1));
+        const before = JSON.stringify(library.all()[0]);
+        jest.spyOn(library.deps, "save").mockImplementation(() => { throw new Error("disk full"); });
+        await waitFor(async () => {
+            if (mockNotify.mock.calls.length === 0) {
+                await fireEvent.press(screen.getByTestId("shelf-choice-Pantry"));
+            }
+            expect(mockNotify).toHaveBeenLastCalledWith({
+                tone: "error", message: "Couldn't save the recipe. Try again."
+            });
+        }, {timeout: SHEET_PRESS_TIMEOUT});
+        expect(JSON.stringify(library.all()[0])).toBe(before);
+        expect(screen.getByTestId("shelf-choice-Pantry")).toBeTruthy();
+    });
+
     async function open(settings = subscribed(), library = memoryLibrary(), shelves = () => ["Pantry"]) {
         await renderWithProviders(
             <RoasterCoffeeScreen settings={settings} feedUrl={FEED_URL} coffeeId="b"
-                                 library={library.deps} shelves={shelves}
-                                 bagStore={{save: () => {}}}/>
+                                 library={library.deps} shelves={shelves} bagStore={{save: () => {}}}/>
         );
         await waitFor(() => expect(screen.queryByTestId("roaster-coffee-loading")).toBeNull());
         return {settings, library};
     }
 
-    /**
-     * ADD TO SHELF onto Pantry, the one way a coffee is saved from here: it
-     * goes to the library first, then onto the shelf.
-     */
     /** Saves the bag sheet ADD TO SHELF opens here, until `next` holds. */
     async function bagThen(next: () => void): Promise<void> {
         await waitFor(async () => {
@@ -537,6 +631,19 @@ describe("one coffee", () => {
         expect(library.all()).toEqual([]);
     });
 
+    it("preserves the author baseline when a brew-now recipe is edited and saved", async () => {
+        const {settings, library} = await open();
+        await fireEvent.press(screen.getByTestId("roaster-coffee-brew"));
+        await waitFor(() => expect(router.push).toHaveBeenCalled());
+        const call = (router.push as jest.Mock).mock.calls[0][0];
+        const author = new Recipe(undefined, call.params.recipeJSON);
+        const edited = new Recipe(undefined, call.params.recipeJSON);
+        edited.grindSize += 1;
+        library.deps.save(edited);
+        expect(planReimport(library.all(), author, readPrints(settings)))
+            .toEqual({kind: "same", recipe: edited});
+    });
+
     it("names a copy that followed xBloom's own name when it is added again", async () => {
         const settings = subscribed();
         const library = memoryLibrary();
@@ -575,7 +682,7 @@ describe("one coffee", () => {
         const library = memoryLibrary();
         await renderWithProviders(
             <RoasterCoffeeScreen settings={settings} feedUrl={FEED_URL} coffeeId="b"
-                                 library={library.deps} shelves={() => ["Pantry"]}/>
+                                 library={library.deps} shelves={() => ["Pantry"]} bagStore={{save: () => {}}}/>
         );
         await waitFor(() => expect(screen.queryByTestId("roaster-coffee-loading")).toBeNull());
         expect(screen.getByText("DARK CHOCOLATE")).toBeTruthy();
@@ -615,6 +722,22 @@ describe("one coffee", () => {
 
         expect(library.find("b-18g")).toMatchObject({dosage: 20, grindSize: 50});
         expect(library.all()).toHaveLength(1);
+    });
+
+    it("discards a pending author choice when the catalogue size changes", async () => {
+        const {library} = await open();
+        await shelve();
+        const held = library.find("b-18g")!;
+        held.grindSize = 65;
+        library.deps.save(held);
+        library.serve("b-18g", 61);
+        await fireEvent.press(screen.getByTestId("roaster-coffee-shelf"));
+        await bagThen(() => expect(screen.getByTestId("newer-version")).toBeTruthy());
+        await fireEvent.press(screen.getByTestId("roaster-coffee-size-15g"));
+        expect(screen.queryByTestId("newer-version")).toBeNull();
+        await fireEvent.press(screen.getByTestId("roaster-coffee-size-18g"));
+        expect(screen.queryByTestId("newer-version")).toBeNull();
+        expect(library.find("b-18g")?.grindSize).toBe(65);
     });
 
     it("USE THE ROASTER'S LATEST takes the new recipe and keeps the user's name", async () => {

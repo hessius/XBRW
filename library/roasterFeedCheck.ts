@@ -23,7 +23,7 @@ function record(value: unknown): Record<string, unknown> | null {
 
 function label(entry: Record<string, unknown> | null, index: number): string {
     const name = typeof entry?.name === "string" && entry.name.trim() !== "" ? entry.name.trim() : null;
-    return name === null ? `Coffee ${index + 1}` : `"${name}"`;
+    return `Coffee ${index + 1}` + (name === null ? "" : ` ("${name}")`);
 }
 
 export function checkRoasterFeed(text: string): FeedReport {
@@ -69,13 +69,14 @@ export function checkRoasterFeed(text: string): FeedReport {
         lines.push(`Only the first ${MAX_FEED_COFFEES} coffees are read.`);
     }
 
-    // Which listed coffees were dropped, and why. Matched by position among
-    // the first 200, in the order the parser walks them.
-    const readNames = new Set(feed.coffees.map((coffee) => coffee.name));
+    // Parse each original entry independently: names and ids need not be unique.
     listed.slice(0, MAX_FEED_COFFEES).forEach((value, index) => {
+        const single = parseRoasterFeed(JSON.stringify({
+            version: top.version, roaster: top.roaster, coffees: [value]
+        }));
+        if (single !== null && single.coffees.length > 0) return;
         const entry = record(value);
         const name = typeof entry?.name === "string" ? entry.name.trim() : "";
-        if (name !== "" && readNames.has(name)) return;
         if (name === "" || name.length > 120) {
             lines.push(`Skipped ${label(entry, index)}: it needs a "name" of up to 120 characters.`);
         } else {

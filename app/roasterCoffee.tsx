@@ -1,6 +1,7 @@
 import {useLocalSearchParams} from "expo-router";
 import React, {useEffect, useRef, useState} from "react";
 import {Linking, Pressable, ScrollView} from "react-native";
+import {useSafeAreaInsets} from "react-native-safe-area-context";
 import {Text, XStack, YStack} from "tamagui";
 
 import BagSheet, {type BagSheetResult} from "@/components/BagSheet";
@@ -17,23 +18,23 @@ import {notify} from "@/components/XbrwToast";
 import {palette, primary as primaryButton} from "@/constants/colors";
 import {SCREEN_PADDING} from "@/constants/layout";
 import router from "@/hooks/steadyRouter";
-import {useScrollEndPadding} from "@/hooks/useBottomInset";
 import {useLiveBrew} from "@/hooks/useLiveBrew";
-import {sharedSettings, useSetting} from "@/hooks/useSetting";
 import type {BagStore} from "@/hooks/useCoffeeBag";
+import {sharedSettings, useSetting} from "@/hooks/useSetting";
 import {assignAccent, resolveAccent} from "@/library/accent";
 import {bagBeanName, bagBeanNameFixed} from "@/library/brew/handoff/bagBean";
 import {sharedBagDatabase} from "@/library/CoffeeBagDatabase";
 import {resolveBagTracker} from "@/library/coffeeBag";
 import {withRoastAdvice} from "@/library/restPeak";
 import {bagFormFor, beanconquerorBagLink, catalogueBag} from "@/library/roasterBag";
+import {rememberPrint} from "@/library/importRefresh";
 import type Recipe from "@/library/Recipe";
 import {
     bagWatchKey, coffeeBadge, coffeeKey, readAlerts, recordOpened, setWatch
 } from "@/library/roasterAlerts";
 import {
     bagLine, beanFacts, chooseRecipe, detailTitle, findCoffee, readCatalogue,
-    roastAdvice, tasteOf
+    roastAdvice, scrollEndPadding, tasteOf
 } from "@/library/roasterCatalogue";
 import {buyOptions} from "@/library/roasterBuy";
 import type {FeedCoffee} from "@/library/roasterFeed";
@@ -126,7 +127,7 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
     useSetting("roasterCatalogue", store);
     // So the watch switches redraw when they are pressed.
     useSetting("roasterAlerts", store);
-    const scrollEnd = useScrollEndPadding(SCROLL_END);
+    const insets = useSafeAreaInsets();
     const [deps] = useState(() => library ?? realLibraryDeps(store));
     const cached = readCatalogue(store, feed);
     const coffee = cached === null ? undefined : findCoffee(cached.feed, ref);
@@ -148,24 +149,41 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
     const [size, setSize] = useState<string | undefined>(undefined);
     const [retry, setRetry] = useState(0);
     const [loaded, setLoaded] = useState<Loaded | null>(null);
-    const [pending, setPending] = useState<Pending | null>(null);
-    const [naming, setNaming] = useState(false);
-    // ADD TO SHELF asks about the bag first, then the shelf. The answer waits
-    // here until the shelf is chosen, so a cancelled shelf makes no bag.
-    const [bagOpen, setBagOpen] = useState(false);
     const [bagEpoch, setBagEpoch] = useState(0);
-    const [bagInput, setBagInput] = useState<BagSheetResult | null>(null);
+    const [bagAt, setBagAt] = useState<{request: string; input: BagSheetResult | null; open: boolean} | null>(null);
     const [bagTrackerSetting] = useSetting("bagTracker", store);
     const [beanconquerorHandoff] = useSetting("beanconquerorHandoff", store);
     const tracker = resolveBagTracker(bagTrackerSetting, beanconquerorHandoff);
+    const [pendingAt, setPendingAt] = useState<{request: string; value: Pending} | null>(null);
+    const [namingAt, setNamingAt] = useState<string | null>(null);
+    const action = useRef<AbortController | null>(null);
     const chosen = coffee === undefined ? undefined : chooseRecipe(coffee, size);
-    const request = `${chosen?.share ?? ""}:${retry}`;
+    const request = JSON.stringify([feed, cached?.feed.roaster.name, coffee, chosen?.size, retry]);
+    const bagOpen = bagAt?.request === request && bagAt.open;
+    const bagInput = bagAt?.request === request ? bagAt.input : null;
+    if (bagAt !== null && bagAt.request !== request) setBagAt(null);
+    const pending = pendingAt?.request === request ? pendingAt.value : null;
+    const naming = namingAt === request;
+    if (pendingAt !== null && pendingAt.request !== request) setPendingAt(null);
+    if (namingAt !== null && namingAt !== request) setNamingAt(null);
+
+    function setPending(value: Pending | null) {
+        setPendingAt(value === null ? null : {request, value});
+    }
+
+    function setNaming(open: boolean) {
+        setNamingAt(open ? request : null);
+    }
+
+    function setBagOpen(open: boolean) {
+        setBagAt({request, open, input: bagInput});
+    }
 
     useEffect(() => {
         if (coffee === undefined || chosen === undefined) return;
         const controller = new AbortController();
         let alive = true;
-        fetchCoffeeRecipe(coffee, chosen.size, deps, controller.signal)
+        fetchCoffeeRecipe(coffee, chosen.size, deps, controller.signal, cached?.feed.roaster.name)
             .then((fetched) => {
                 if (alive) setLoaded({request, fetched, failed: false});
             })
@@ -175,9 +193,9 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
         return () => {
             alive = false;
             controller.abort();
+            action.current?.abort();
         };
-        // `request` is the share and the retry count, which is everything
-        // this fetch depends on.
+        // Include decoration context: two feeds can publish the same share link.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [request]);
 
@@ -214,7 +232,12 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
 
     /** A fresh copy each time, so one action never mutates what another uses. */
     async function latest(): Promise<FetchedCoffee> {
-        return fetchCoffeeRecipe(coffee as FeedCoffee, chosen?.size, deps);
+        action.current?.abort();
+        const controller = new AbortController();
+        action.current = controller;
+        return fetchCoffeeRecipe(
+            coffee as FeedCoffee, chosen?.size, deps, controller.signal, cached?.feed.roaster.name
+        );
     }
 
     /**
@@ -223,11 +246,19 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
      * TO LIBRARY; shelving already does that.
      */
     async function add() {
+        let fresh: FetchedCoffee;
+        try {
+            fresh = await latest();
+        } catch (error) {
+            if (error instanceof Error && error.name === "AbortError") return;
+            notify({tone: "error", message: "Couldn't reach xBloom. Check your connection."});
+            return;
+        }
         let outcome: AddOutcome;
         try {
-            outcome = addToLibrary(await latest(), deps, store);
+            outcome = addToLibrary(fresh, deps, store);
         } catch {
-            notify({tone: "error", message: "Couldn't reach xBloom. Check your connection."});
+            notify({tone: "error", message: "Couldn't save the recipe. Try again."});
             return;
         }
         if (outcome.kind === "ask") {
@@ -239,28 +270,32 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
 
     function answer(takeLatest: boolean) {
         if (pending === null || pending.kind !== "ask") return;
-        const kept = takeLatest
-            ? takeRoasterLatest(pending.held, pending.latest, deps, store)
-            : pending.held;
-        setPending({kind: "shelf", recipe: kept});
+        try {
+            const kept = takeLatest
+                ? takeRoasterLatest(pending.held, pending.latest, deps, store)
+                : pending.held;
+            setPending({kind: "shelf", recipe: kept});
+        } catch {
+            notify({tone: "error", message: "Couldn't save the recipe. Try again."});
+        }
     }
 
     function shelve(shelf: string): boolean {
         if (pending === null || pending.kind !== "shelf") return false;
-        addToShelf(pending.recipe, shelf, deps, store);
+        try {
+            addToShelf(pending.recipe, shelf, deps, store);
+        } catch {
+            notify({tone: "error", message: "Couldn't save the recipe. Try again."});
+            return false;
+        }
         setPending(null);
         setNaming(false);
         if (bagInput !== null) startBag(pending.recipe, bagInput);
-        setBagInput(null);
+        setBagAt(null);
         notify({tone: "success", message: `Added to ${shelf}.`});
         return true;
     }
 
-    /**
-     * The bag, made as the editor makes one. In Beanconqueror mode it is also
-     * handed over there, and a Beanconqueror that will not open costs nothing
-     * here: the bag is already saved.
-     */
     function startBag(shelved: Recipe, input: BagSheetResult) {
         const bag = catalogueBag(shelved, input, tracker);
         try {
@@ -271,7 +306,7 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
         }
         if (tracker === "beanconqueror") {
             Linking.openURL(beanconquerorBagLink(shelved, bag)).catch(() => notify({
-                tone:    "error",
+                tone: "error",
                 message: "The bag is saved here, but Beanconqueror could not be opened. Make sure it is installed."
             }));
         }
@@ -279,7 +314,7 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
 
     function askBag() {
         setBagEpoch((epoch) => epoch + 1);
-        setBagOpen(true);
+        setBagAt({request, open: true, input: null});
     }
 
     async function brewNow() {
@@ -288,11 +323,13 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
         let fresh: FetchedCoffee;
         try {
             fresh = await latest();
-        } catch {
+        } catch (error) {
+            if (error instanceof Error && error.name === "AbortError") return;
             notify({tone: "error", message: "Couldn't reach xBloom. Check your connection."});
             return;
         }
         assignAccent(fresh.recipe, deps.stored());
+        rememberPrint(store, fresh.recipe, deps.stored().map(recipe => recipe.uuid));
         router.push({pathname: "/editRecipe", params: {recipeJSON: JSON.stringify(fresh.recipe)}});
     }
 
@@ -307,7 +344,7 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
                     end is what lets the last action scroll clear of it. */}
                 <ScrollView testID="roaster-coffee-scroll" showsVerticalScrollIndicator={false}
                             contentContainerStyle={{
-                                paddingBottom: scrollEnd,
+                                paddingBottom: scrollEndPadding(SCROLL_END, insets.bottom),
                                 gap: 18
                             }}>
                     <DetailPhoto uri={coffee.image ?? null} testID="roaster-coffee-photo" whole/>
@@ -486,8 +523,7 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
                       epoch={bagEpoch}
                       {...bagFormFor(coffee)}
                       onSave={(result) => {
-                          setBagOpen(false);
-                          setBagInput(result);
+                          setBagAt({request, open: false, input: result});
                           void add();
                       }}
                       onFinish={() => setBagOpen(false)}

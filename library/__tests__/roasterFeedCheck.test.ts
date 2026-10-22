@@ -1,5 +1,5 @@
 import {checkRoasterFeed} from "@/library/roasterFeedCheck";
-import {feedJson, share} from "@/test-utils/roasterFeed";
+import {feedCoffee, feedJson, share} from "@/test-utils/roasterFeed";
 
 describe("checking a roaster feed", () => {
     it("passes a good feed and says how many coffees the app reads", () => {
@@ -14,8 +14,28 @@ describe("checking a roaster feed", () => {
         parsed.coffees.push({name: "No Recipe", recipes: []}, {recipes: [{size: "18g", share: share("x")}]});
         const report = checkRoasterFeed(JSON.stringify(parsed));
         expect(report.lines).toContain("The app reads 1 of 3 coffees.");
-        expect(report.lines.some((line) => line.startsWith("Skipped \"No Recipe\": no usable recipe"))).toBe(true);
+        expect(report.lines.some((line) => line.startsWith("Skipped Coffee 2 (\"No Recipe\"): no usable recipe"))).toBe(true);
         expect(report.lines.some((line) => line.startsWith("Skipped Coffee 3: it needs a \"name\""))).toBe(true);
+    });
+
+    it.each([false, true])("diagnoses a rejected duplicate name at its original location, invalid first: %s", (invalidFirst) => {
+        const valid = feedCoffee({id: "valid", name: "House Blend"});
+        const invalid = {name: "House Blend", recipes: []};
+        const coffees = invalidFirst ? [invalid, valid] : [valid, invalid];
+        const report = checkRoasterFeed(JSON.stringify({version: 1, roaster: {name: "Roaster"}, coffees}));
+        expect(report.lines).toContain("The app reads 1 of 2 coffees.");
+        expect(report.lines.filter((line) => line.startsWith("Skipped"))).toEqual([
+            `Skipped Coffee ${invalidFirst ? 1 : 2} ("House Blend"): no usable recipe. Each coffee needs ` +
+            '"recipes": [{"size": "18g", "share": "<an xBloom share link>"}].'
+        ]);
+    });
+
+    it("does not warn about accepted duplicate names or ids", () => {
+        const report = checkRoasterFeed(feedJson([
+            {id: "same", name: "House Blend"}, {id: "same", name: "House Blend"}
+        ]));
+        expect(report.lines).toContain("The app reads 2 of 2 coffees.");
+        expect(report.lines.filter((line) => line.startsWith("Skipped"))).toEqual([]);
     });
 
     it("explains a web page served in place of the feed", () => {

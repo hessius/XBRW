@@ -65,6 +65,13 @@ function coffees(n: number): string {
     return n === 1 ? "1 coffee" : `${n} coffees`;
 }
 
+function feedFailed() {
+    notify({
+        tone: "error",
+        message: "Recipe imported, but the roaster's feed couldn't be loaded. Try the import link again."
+    });
+}
+
 export function useRoasterOffer({
     canAsk, settings, fetchBody, now
 }: Options): RoasterOffer {
@@ -106,29 +113,41 @@ export function useRoasterOffer({
     }
 
     function arm(feedUrl: string) {
+        disarm();
         armed.current = feedUrl;
     }
 
     function disarm() {
         armed.current = null;
+        loading.current?.abort();
+        waiting.current = null;
+        asked.current = null;
+        if (phase.current !== "idle") setState({phase: "idle"});
     }
 
     function imported() {
         const url = armed.current;
         armed.current = null;
         if (url === null) return;
+        loading.current?.abort();
+        const controller = new AbortController();
+        loading.current = controller;
 
         // Already subscribed: no question, just a quiet refresh of the
         // catalogue, which reads the feed and nothing else.
         if (subscribed(url)) {
-            void syncSubscription(url, syncDeps(), {force: true}).then(announceBack);
+            void syncSubscription(url, syncDeps(), {force: true, signal: controller.signal}).then(result => {
+                if (controller.signal.aborted) return;
+                if (!result.ok && (result.reason === "network" || result.reason === "unreadable")) {
+                    feedFailed();
+                } else announceBack(result);
+            }).catch(() => {
+                if (!controller.signal.aborted) feedFailed();
+            });
             return;
         }
         if (optedOut(url)) return;
 
-        loading.current?.abort();
-        const controller = new AbortController();
-        loading.current = controller;
         const load = fetchBody
             ?? ((feedUrl: string, signal?: AbortSignal) => fetchRoasterFeedBody(feedUrl, {signal}));
         load(url, controller.signal)
@@ -138,15 +157,14 @@ export function useRoasterOffer({
                 if (latest.current.canAsk()) ask();
             })
             .catch(() => {
-                // A feed that does not load is an offer that is not made. The
-                // recipe the user asked for has already imported, and telling
-                // them about a file they never asked for would be noise.
+                if (controller.signal.aborted) return;
+                feedFailed();
             });
     }
 
     function ask() {
         const pending = waiting.current;
-        if (pending === null || phase.current !== "idle") return;
+        if (pending === null || phase.current !== "idle" || !latest.current.canAsk()) return;
         waiting.current = null;
         if (optedOut(pending.url) || subscribed(pending.url)) return;
         if (pending.feed.coffees.length === 0) return;

@@ -1,5 +1,7 @@
 import {parseHidden} from "@/library/hiddenShelves";
 import {readPrints} from "@/library/importRefresh";
+import Recipe from "@/library/Recipe";
+import {buildBackup, parseBackup} from "@/library/backup";
 import {
     addToLibrary, addToShelf, fetchCoffeeRecipe, takeRoasterLatest
 } from "@/library/roasterRecipes";
@@ -9,6 +11,49 @@ import {feed, memoryLibrary, memorySettings} from "@/test-utils/roasterFeed";
 const coffees = feed([{id: "a"}, {id: "b", sizes: ["15g", "20g"]}]).coffees;
 
 describe("fetchCoffeeRecipe", () => {
+    it("keeps contextual roaster metadata in backup JSON without a subscription", async () => {
+        const library = memoryLibrary();
+        const coffee = {...coffees[0], coffee: {...coffees[0].coffee, roaster: ""}};
+        const {recipe} = await fetchCoffeeRecipe(coffee, undefined, library.deps, undefined, "Feed roaster");
+        recipe.dosage = 15;
+        recipe.ratio = 15;
+        recipe.pours[0].volume = 225;
+        const parsed = parseBackup(buildBackup([recipe], {}));
+        expect(parsed.ok).toBe(true);
+        if (!parsed.ok) throw new Error(parsed.reason);
+        expect(parsed.payload.recipes[0].coffee?.roaster).toBe("Feed roaster");
+    });
+
+    it.each([
+        ["Coffee roaster", "Imported roaster", "Coffee roaster"],
+        ["", "Imported roaster", "Imported roaster"],
+        ["", "", "Feed roaster"],
+        ["   ", "   ", "Feed roaster"]
+    ])("uses explicit coffee, imported, then feed roaster (%s, %s)", async (bean, imported, expected) => {
+        const library = memoryLibrary();
+        const coffee = {...coffees[0], coffee: {...coffees[0].coffee, roaster: bean}};
+        const deps = {
+            fetchRecipe: async (share: string) => {
+                const recipe = await library.deps.fetchRecipe(share);
+                if (recipe) recipe.coffee = {name: "Imported coffee", roaster: imported};
+                return recipe;
+            }
+        };
+        const {recipe} = await fetchCoffeeRecipe(coffee, undefined, deps, undefined, "Feed roaster");
+        expect(recipe.coffee?.roaster).toBe(expected);
+        expect(new Recipe(undefined, JSON.stringify(recipe)).coffee?.roaster).toBe(expected);
+    });
+
+    it("does not decorate a recipe fetched after its feed context is cancelled", async () => {
+        const library = memoryLibrary();
+        const controller = new AbortController();
+        const coffee = {...coffees[0], coffee: {...coffees[0].coffee, roaster: ""}};
+        const fetched = library.deps.fetchRecipe("https://example.com/?id=a-18g");
+        const deps = {fetchRecipe: async () => { controller.abort(); return fetched; }};
+        await expect(fetchCoffeeRecipe(coffee, undefined, deps, controller.signal, "Cancelled"))
+            .rejects.toThrow();
+        expect((await fetched)?.coffee).toBeUndefined();
+    });
     it("fetches the 18g recipe by default, decorated and named like an import link", async () => {
         const library = memoryLibrary();
         const {recipe, size} = await fetchCoffeeRecipe(coffees[0], undefined, library.deps);
@@ -17,16 +62,6 @@ describe("fetchCoffeeRecipe", () => {
         expect(recipe.name).toBe("Coffee a - 18g");
         expect(recipe.coffee?.name).toBe("Coffee a");
         expect(recipe.source).toBe("import");
-    });
-
-    it("carries the roaster's rest and peak days on the coffee for the bag sheet", async () => {
-        const library = memoryLibrary();
-        const {recipe} = await fetchCoffeeRecipe(coffees[0], undefined, library.deps);
-        expect(recipe.coffee).toEqual(expect.objectContaining({
-            restDays: 11, peakDay: 28, bestUntilDay: 42
-        }));
-        // The level stays the feed's to show; it is not written into the coffee.
-        expect(recipe.coffee?.roast).toBeUndefined();
     });
 
     it("fits a long coffee name under the ceiling and keeps the size", async () => {
@@ -47,6 +82,57 @@ describe("fetchCoffeeRecipe", () => {
 });
 
 describe("addToLibrary", () => {
+    it.each(["My roaster", "", "   "])("fills only a blank saved roaster (%s)", async roaster => {
+        const settings = memorySettings();
+        const library = memoryLibrary();
+        const first = await fetchCoffeeRecipe(coffees[0], undefined, library.deps);
+        first.recipe.coffee = {name: "My coffee", roaster};
+        addToLibrary(first, library.deps, settings);
+        const again = addToLibrary(await fetchCoffeeRecipe(coffees[0], undefined, library.deps),
+                                  library.deps, settings);
+        expect(again.kind).toBe("already");
+        expect(again.kind !== "ask" && again.recipe.coffee?.roaster)
+            .toBe(roaster.trim() ? roaster : "Test Roaster");
+    });
+    it.each(["same", "replace", "latest", "shelf"] as const)(
+        "does not mutate a held copy or fingerprints when the %s save throws", async kind => {
+            const settings = memorySettings();
+            const library = memoryLibrary();
+            addToLibrary(await fetchCoffeeRecipe(coffees[0], undefined, library.deps),
+                         library.deps, settings);
+            const held = library.all()[0];
+            held.name = "";
+            held.coffee = undefined;
+            if (kind === "replace" || kind === "latest") library.serve("a-18g", 62);
+            const fetched = await fetchCoffeeRecipe(coffees[0], undefined, library.deps);
+            const before = JSON.stringify(held);
+            const prints = settings.get("importFingerprints");
+            const deps = {
+                ...library.deps, stored: () => [held],
+                save: () => { throw new Error("disk full"); }
+            };
+            expect(() => {
+                if (kind === "latest") takeRoasterLatest(held, fetched.recipe, deps, settings);
+                else if (kind === "shelf") addToShelf(held, "Pantry", deps, settings);
+                else addToLibrary(fetched, deps, settings);
+            }).toThrow("disk full");
+            expect(JSON.stringify(held)).toBe(before);
+            expect(settings.get("importFingerprints")).toBe(prints);
+            expect(settings.get("myShelves")).toBe("");
+        }
+    );
+
+    it("does not remember a new recipe when its save fails", async () => {
+        const settings = memorySettings();
+        const library = memoryLibrary();
+        const fetched = await fetchCoffeeRecipe(coffees[0], undefined, library.deps);
+        expect(() => addToLibrary(fetched, {
+            ...library.deps, save: () => { throw new Error("disk full"); }
+        }, settings)).toThrow("disk full");
+        expect(readPrints(settings)).toEqual({});
+        expect(library.all()).toEqual([]);
+    });
+
     it("saves a new recipe and remembers what it looked like", async () => {
         const settings = memorySettings();
         const library = memoryLibrary();

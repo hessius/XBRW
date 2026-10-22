@@ -212,6 +212,15 @@ async function settleSheet(): Promise<void> {
 }
 
 describe("SettingsScreen", () => {
+    it("keeps feed management reachable with no subscriptions", async () => {
+        const settings = new Settings(memoryStorage());
+        await renderWithProviders(<SettingsScreen settings={settings}/>);
+        await fireEvent.press(screen.getByRole("button", {
+            name: "Roaster feeds, Manage subscriptions and declined offers."
+        }));
+        expect(mockPush).toHaveBeenCalledWith("/subscriptions");
+    });
+
     beforeEach(() => {
         jest.clearAllMocks();
         mockLibraryRecipes = [];
@@ -331,7 +340,7 @@ describe("SettingsScreen", () => {
             .props.accessibilityState.checked).toBe(true);
         expect(screen.getByLabelText("Recipe card photos").props.accessibilityState.checked).toBe(false);
         expect(screen.getByLabelText("Shelf photo previews").props.accessibilityState.checked).toBe(true);
-        expect(screen.getByText("Show coffee photos in your own, tag and eligible automatic shelves.")).toBeTruthy();
+        expect(screen.getByText("Show coffee photos in your own shelves, tag shelves and eligible auto shelves.")).toBeTruthy();
     });
 
     it("changes each picture surface independently", async () => {
@@ -412,9 +421,12 @@ describe("SettingsScreen", () => {
         expect(screen.getByText(/card always stores/i)).toBeTruthy();
     });
 
-    it("hides roaster subscriptions until there is something to manage", async () => {
+    it("keeps roaster feeds reachable before the first subscription", async () => {
         await renderWithProviders(<SettingsScreen settings={new Settings(memoryStorage())}/>);
-        expect(screen.queryByText("Roaster feeds")).toBeNull();
+        await fireEvent.press(screen.getByRole("button", {
+            name: "Roaster feeds, Manage subscriptions and declined offers."
+        }));
+        expect(mockPush).toHaveBeenCalledWith("/subscriptions");
     });
 
     it("shows roaster subscriptions once there is a subscription", async () => {
@@ -425,7 +437,7 @@ describe("SettingsScreen", () => {
         }]));
         await renderWithProviders(<SettingsScreen settings={settings}/>);
         expect(screen.getByText("Roaster feeds")).toBeTruthy();
-        expect(screen.getByText("1 roaster.")).toBeTruthy();
+        expect(screen.getByText("Manage subscriptions and declined offers.")).toBeTruthy();
     });
 
     it("shows roaster subscriptions when only a don't-ask-again is left to undo", async () => {
@@ -433,7 +445,7 @@ describe("SettingsScreen", () => {
         settings.set("roasterFeedOptOut", serialiseFeedOptOut([feedKey("https://roaster.example/feed.json") ?? ""]));
         await renderWithProviders(<SettingsScreen settings={settings}/>);
         expect(screen.getByText("Roaster feeds")).toBeTruthy();
-        expect(screen.getByText("None. Roasters you said no to are listed here.")).toBeTruthy();
+        expect(screen.getByText("Manage subscriptions and declined offers.")).toBeTruthy();
     });
 
     it("offers backup and restore", async () => {
@@ -599,6 +611,38 @@ describe("SettingsScreen", () => {
         }, {timeout: SHEET_PRESS_TIMEOUT});
         expect(new Settings(storage).get("brewTraceBudgetMB")).toBe(expected);
         expect(mockNotify).not.toHaveBeenCalledWith(expect.objectContaining({tone: "error"}));
+    });
+
+    it("refetches restored catalogues while retaining paused subscriptions and import choices", async () => {
+        const storage = memoryStorage();
+        const feed = "https://roaster.example/feed.json";
+        const subscriptions = JSON.stringify([{
+            feed, roaster: "Roaster", paused: true, lastSync: 1000, lastAttempt: 2000, pinnedAt: 123
+        }]);
+        const prints = JSON.stringify({u1: "brewing content"});
+        mockPickBackup.mockResolvedValue(backupOf([recipeNamed("A", "u1")], {
+            roasterSubscriptions: subscriptions,
+            roasterFeedOptOut: JSON.stringify([feed]),
+            importFingerprints: prints,
+            roasterCatalogue: "untrusted cache",
+            roasterAlerts: "untrusted alerts"
+        }));
+        mockApplyRestore.mockReturnValue({status: "restored", added: 1});
+        await renderWithProviders(<SettingsScreen settings={new Settings(storage)}/>);
+        await fireEvent.press(screen.getByRole("button",
+            {name: "Restore from a backup, Adds anything your library does not already have."}));
+        await settleSheet();
+        await fireEvent(screen.getByLabelText(/settings from this backup/i), "checkedChange", true);
+        await fireEvent.press(screen.getByRole("button", {name: /add to my library/i}));
+
+        const restored = new Settings(storage);
+        expect(JSON.parse(restored.get("roasterSubscriptions"))).toEqual([{
+            feed, roaster: "Roaster", paused: true, lastSync: 0, lastAttempt: 0, pinnedAt: 123
+        }]);
+        expect(restored.get("roasterFeedOptOut")).toBe(JSON.stringify([feed]));
+        expect(restored.get("importFingerprints")).toBe(prints);
+        expect(restored.get("roasterCatalogue")).toBe("");
+        expect(restored.get("roasterAlerts")).toBe("");
     });
 
     it("restores every setting a backup carries, not a subset of them", async () => {

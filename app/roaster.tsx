@@ -1,7 +1,9 @@
 import {useLocalSearchParams} from "expo-router";
 import React, {useEffect, useRef, useState} from "react";
+import {useCatalogueNow} from "@/hooks/useCatalogueNow";
 import {Pressable} from "react-native";
 import {FlatList} from "react-native-gesture-handler";
+import {useSafeAreaInsets} from "react-native-safe-area-context";
 import {XStack, YStack} from "tamagui";
 
 import {CatalogueStatus} from "@/components/CatalogueParts";
@@ -15,13 +17,11 @@ import ScreenHeader from "@/components/ScreenHeader";
 import {palette} from "@/constants/colors";
 import {UNCLIPPED_LIST} from "@/constants/lists";
 import router from "@/hooks/steadyRouter";
-import {useScrollEndPadding} from "@/hooks/useBottomInset";
 import {useLiveBrew} from "@/hooks/useLiveBrew";
-import {useNow} from "@/hooks/useNow";
 import {useRailSearch, type RailSearch} from "@/hooks/useRailSearch";
 import {sharedSettings, useSetting} from "@/hooks/useSetting";
 import {coffeeBadge, readAlerts, recordListViewed} from "@/library/roasterAlerts";
-import {coffeeRef, readCatalogue, updatedAgo} from "@/library/roasterCatalogue";
+import {coffeeRef, readCatalogue, scrollEndPadding, updatedAgo} from "@/library/roasterCatalogue";
 import type {FeedCoffee} from "@/library/roasterFeed";
 import {parseSubscriptions, subscriptionFor} from "@/library/roasterSubscription";
 import {
@@ -156,8 +156,8 @@ export default function RoasterScreen({settings, feedUrl, now}: {
     useSetting("roasterAlerts", store);
     const [storedSubscriptions] = useSetting("roasterSubscriptions", store);
     const subscribed = subscriptionFor(parseSubscriptions(storedSubscriptions), feed) !== undefined;
-    const at = useNow(now);
-    const listEnd = useScrollEndPadding(8);
+    const at = useCatalogueNow(now);
+    const insets = useSafeAreaInsets();
     const cached = readCatalogue(store, feed);
     const alerts = readAlerts(store, feed);
 
@@ -231,7 +231,7 @@ export default function RoasterScreen({settings, feedUrl, now}: {
                         data={coffees}
                         keyExtractor={ref}
                         keyboardShouldPersistTaps="handled"
-                        contentContainerStyle={{paddingBottom: listEnd}}
+                        contentContainerStyle={{paddingBottom: scrollEndPadding(8, insets.bottom)}}
                         ListFooterComponent={subscribed ? <ManageSubscription feed={feed}/> : null}
                         renderItem={({item}) => (
                             <RoasterCoffeeRow

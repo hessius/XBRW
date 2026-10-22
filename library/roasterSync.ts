@@ -9,6 +9,7 @@ import {
     fetchRoasterFeedBody, RoasterFeedError, type FeedCoffee, type RoasterFeed
 } from "@/library/roasterFeed";
 import type {LibraryDeps} from "@/library/roasterRecipes";
+import {IMPORT_ROASTER_LIMIT} from "@/library/roasterImport";
 import {
     isDue, parseSubscriptions, serialiseSubscriptions, subscriptionFor, withSubscription,
     withoutSubscription, type RoasterSubscription, type SyncError
@@ -194,14 +195,23 @@ export function setPaused(settings: Settings, feedUrl: string, paused: boolean):
     updateSubscription(settings, feedUrl, (sub) => ({...sub, paused}));
 }
 
-/** Pin a roaster to the home screen, or take the pin away. */
-export function setPinned(settings: Settings, feedUrl: string, pinned: boolean, now: number): void {
+/** Explicit Import choice. Refusal never writes or replaces an existing choice. */
+export function setPinned(settings: Settings, feedUrl: string, pinned: boolean, now: number): boolean {
+    const subscriptions = readSubscriptions(settings);
+    const current = subscriptionFor(subscriptions, feedUrl);
+    if (current === undefined) return false;
+    if (pinned && current.pinnedAt !== undefined) return true;
+    const choices = subscriptions.filter((sub) => sub.pinnedAt !== undefined);
+    if (pinned && choices.length >= IMPORT_ROASTER_LIMIT) return false;
     updateSubscription(settings, feedUrl, (sub) => {
-        const next: RoasterSubscription = {...sub};
-        if (pinned) next.pinnedAt = sub.pinnedAt ?? now;
-        else delete next.pinnedAt;
+        const next = {...sub};
+        if (pinned) {
+            const latest = Math.max(0, ...choices.map((choice) => choice.pinnedAt!));
+            next.pinnedAt = Math.max(Number.isFinite(now) ? now : 1, latest + 1);
+        } else delete next.pinnedAt;
         return next;
     });
+    return true;
 }
 
 /** Test hook: release the lock a test left held. */

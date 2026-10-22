@@ -2,10 +2,12 @@ import {useEffect, useRef, useState} from "react";
 
 import {mergeRecipes, type BackupPayload} from "@/library/backup";
 import {MARK_MEMBERS} from "@/components/ShelfMark";
-import {COVER_MEMBERS, hasStockPhotoCover, type ShelfCoverMember} from "@/library/shelfCover";
+import {
+    COVER_MEMBERS, hasMixedPhotoCover, hasStockPhotoCover, roasterPhotoCover, type ShelfCoverMember
+} from "@/library/shelfCover";
 import {resolveAccent} from "@/library/accent";
 import {
-    authorFilterId, MIN_COUNT, resolveLibraryFilter, resolveStockFilter,
+    authorFilterId, roasterFilterId, MIN_COUNT, resolveLibraryFilter, resolveStockFilter,
     STOCK_FILTER_ORDER,
     tagFilterId
 } from "@/library/libraryFilters";
@@ -51,6 +53,7 @@ export type RecipeStore = {
     countRecipesByTag?: () => {tag: string; count: number}[];
     /** How many recipes arrived from each person, for the per-author shelves. */
     countRecipesByAuthor?: () => {author: string; count: number}[];
+    countRecipesByRoaster?: () => {roaster: string; count: number}[];
     /**
      * What each recipe's brews add up to, for the card's evidence.
      *
@@ -192,7 +195,7 @@ export type ShelfWriteOutcome = {
 /** What a shelf's mark is drawn from: its first few members, in shelf order. */
 export type ShelfMarkMembers = {
     accents: string[];
-    /** First four actual members for tags; four photographed members for eligible stock shelves. */
+    /** Four actual tag members, full stock photos, or roaster photos plus ordinary member accents. */
     coverMembers?: ShelfCoverMember[];
 };
 
@@ -225,6 +228,8 @@ export type RecipeLibrary = {
     tagCounts: {tag: string; count: number}[];
     /** Whole-table counts for every person a recipe arrived from. */
     authorCounts: {author: string; count: number}[];
+    /** Whole-table counts of saved recipes carrying each declared roaster. */
+    roasterCounts: {roaster: string; count: number}[];
     /** What each recipe's brews add up to, keyed by uuid. Absent means none. */
     evidence: Record<string, RecipeEvidence>;
     /** Each recipe's open bag, keyed by uuid. Absent means no bag. */
@@ -294,6 +299,7 @@ export function useRecipeLibrary(
     const filterCounts = readFilterCounts(store, revision);
     const tagCounts = readTagCounts(store, revision);
     const authorCounts = readAuthorCounts(store, revision);
+    const roasterCounts = readRoasterCounts(store, revision);
     const evidence = readEvidence(store, revision);
     const bags = readBags(store, revision);
     const bagRecipes = readBagRecipes(store, JSON.stringify(Object.keys(bags).sort()), revision);
@@ -304,7 +310,7 @@ export function useRecipeLibrary(
     // what lets the compiler cache this across renders -- an array rebuilt each
     // render is a new dependency every time, and this reads SQLite.
     const shelfMarks = readShelfMarks(
-        store, shelfIdsOf(tagCounts, authorCounts, myShelves), revision
+        store, shelfIdsOf(tagCounts, authorCounts, roasterCounts, myShelves), revision
     );
 
     // A restore that a second tap re-enters before the first has repainted
@@ -609,6 +615,7 @@ export function useRecipeLibrary(
         filterCounts,
         tagCounts,
         authorCounts,
+        roasterCounts,
         evidence,
         bags,
         bagRecipes,
@@ -765,6 +772,7 @@ function readBagRecipes(
 function shelfIdsOf(
     tagCounts: readonly {tag: string; count: number}[],
     authorCounts: readonly {author: string; count: number}[],
+    roasterCounts: readonly {roaster: string; count: number}[],
     myShelves: readonly string[]
 ): string {
     const mine = new Set(myShelves.map(canonicalShelfId));
@@ -775,7 +783,9 @@ function shelfIdsOf(
         )
             .map(({tag}) => tagFilterId(tag)),
         ...authorCounts.filter(({count}) => count >= MIN_COUNT)
-            .map(({author}) => authorFilterId(author))
+            .map(({author}) => authorFilterId(author)),
+        ...roasterCounts.filter(({count}) => count >= MIN_COUNT)
+            .map(({roaster}) => roasterFilterId(roaster))
     ]);
 }
 
@@ -793,6 +803,16 @@ function readAuthorCounts(
     return db.countRecipesByAuthor?.() ?? [];
 }
 
+function readRoasterCounts(
+    db: RecipeStore, revision: number
+): {roaster: string; count: number}[] {
+    void revision;
+    if (!db.countRecipesByRoaster) {
+        throw new Error("This store cannot count roasters");
+    }
+    return db.countRecipesByRoaster();
+}
+
 /**
  * The members whose accents a shelf's mark is drawn from.
  *
@@ -804,9 +824,10 @@ function readShelfMarks(
 ): Record<string, ShelfMarkMembers> {
     void revision;
     const allIds = JSON.parse(ids) as string[];
+    const needsFourMembers = (id: string) => id.startsWith("tag:") || hasMixedPhotoCover(id);
     const members = {
-        ...db.shelfMembers?.(allIds.filter(id => !id.startsWith("tag:")), resolveLibraryFilter, MARK_MEMBERS),
-        ...db.shelfMembers?.(allIds.filter(id => id.startsWith("tag:")), resolveLibraryFilter, COVER_MEMBERS)
+        ...db.shelfMembers?.(allIds.filter(id => !needsFourMembers(id)), resolveLibraryFilter, MARK_MEMBERS),
+        ...db.shelfMembers?.(allIds.filter(needsFourMembers), resolveLibraryFilter, COVER_MEMBERS)
     };
 
     const marks: Record<string, ShelfMarkMembers> = {};
@@ -819,12 +840,19 @@ function readShelfMarks(
             }))} : {})
         };
     }
-    const photoMembers = db.shelfPhotoMembers?.(allIds.filter(hasStockPhotoCover), resolveLibraryFilter) ?? {};
+    const photoMembers = db.shelfPhotoMembers?.(
+        allIds.filter(id => hasStockPhotoCover(id) || hasMixedPhotoCover(id)), resolveLibraryFilter
+    ) ?? {};
     for (const [id, recipes] of Object.entries(photoMembers)) {
-        if (!hasStockPhotoCover(id) || !marks[id]) continue;
-        marks[id].coverMembers = recipes.map(recipe => ({
+        if ((!hasStockPhotoCover(id) && !hasMixedPhotoCover(id)) || !marks[id]) continue;
+        const photos = recipes.map(recipe => ({
             uuid: recipe.uuid, accent: resolveAccent(recipe), imageURL: recipe.imageURL
         }));
+        marks[id].coverMembers = hasMixedPhotoCover(id)
+            ? roasterPhotoCover(photos, (members[id] ?? []).map(recipe => ({
+                uuid: recipe.uuid, accent: resolveAccent(recipe)
+            })))
+            : photos;
     }
     return marks;
 }

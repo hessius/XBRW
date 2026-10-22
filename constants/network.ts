@@ -84,7 +84,7 @@ export const OUTBOUND_CALLS: OutboundCall[] = [
     {
         id:      "import",
         title:   "Look up a shared recipe",
-        trigger: "You paste an xBloom link or a pod code, or share a link into the app, or open, brew or add a coffee in a roaster's catalogue.",
+        trigger: "You paste an xBloom link or a pod code, share a link into the app, or open, brew or add a coffee in a roaster's catalogue.",
         host:    "client-api.xbloom.com",
         hostPinned: true,
         owner:   "xBloom",
@@ -106,8 +106,8 @@ export const OUTBOUND_CALLS: OutboundCall[] = [
         carries: [
             "Nothing but the request itself: your IP address, and the address of the list.",
             "No recipe, no account and nothing from your library. XBRW++ drops any address that is not https.",
-            "Only while the app is open. There is no background fetch, and a phone in a pocket asks nobody for anything.",
-            "Only the list is read. Checking it never asks xBloom anything and never changes your library. A coffee's recipe is fetched from xBloom only when you open, brew or add that coffee, which is the Look up a shared recipe entry. Its picture is the Load a photo entry."
+            "Only while the app is open. There is no background fetch.",
+            "Checking the list never asks xBloom anything and never changes your library. A coffee's recipe is fetched from xBloom only when you open, brew or add it."
         ],
         source:  ["library/roasterFeed.ts", "library/roasterSync.ts", "hooks/useRoasterOffer.ts"]
     },
@@ -210,17 +210,15 @@ export const OUTBOUND_CALLS: OutboundCall[] = [
     {
         id:      "images",
         title:   "Load a photo",
-        trigger: "You open the hub, a roaster's catalogue or an import preview. Pictures in ABOUT controls coffee, pod and author pictures in recipe details. Recipe card photos controls coffee or pod photos in your library list, shelf rooms and Ready to brew. Shelf photo previews controls coffee photos in your own, tag and eligible automatic shelves. The home screen also loads coffee photos while you subscribe to a roaster.",
-        host:    "whichever host xBloom named in its own reply",
+        trigger: "You open the hub, a roaster's catalogue, an import preview, or a saved recipe that carries a pod photo or the avatar of whoever shared it. Recipe card photos includes Ready to brew. Recipe card photos, Shelf photo previews and Pictures in ABOUT control their respective placements.",
+        host:    "whichever host xBloom or the roaster named",
         hostPinned: false,
-        owner:   "xBloom, or whoever xBloom points at",
+        owner:   "xBloom, the roaster, or whoever they point at",
         carries: [
             "Nothing but the request itself: your IP address, and the address of the picture.",
             "No recipe, no account and nothing you have typed.",
-            "The address comes from xBloom's reply rather than from this app, so it is not a fixed one. XBRW++ drops any address that is not https, and sends it nothing.",
-            "A roaster's list of coffees names a picture for each coffee too, under the same https rule, and the catalogue shows it.",
-            "This is the one request that can happen while you are only looking at your own library, because a recipe imported from xBloom remembers the photo that came with it.",
-            "If you subscribe to a roaster, the home screen also shows a few of its coffee photos beside its name, and its coffees' photos in a search. They come from the roaster's cached list, so the list itself is not fetched again."
+            "The address comes from xBloom's reply or the roaster's feed rather than from this app, so it is not a fixed one. XBRW++ drops any address that is not https, and sends it nothing.",
+            "This is the one request that can happen while you are only looking at your own library, because a recipe imported from xBloom remembers the photo that came with it."
         ],
         source:  [
             "library/podCoffee.ts",
@@ -231,9 +229,7 @@ export const OUTBOUND_CALLS: OutboundCall[] = [
             "components/HubRow.tsx",
             "components/ImportResult.tsx",
             "components/CatalogueParts.tsx",
-            "components/RoasterCoffeeRow.tsx",
-            "components/RoasterStrip.tsx",
-            "components/RoasterSearchRow.tsx"
+            "components/RoasterCoffeeRow.tsx"
         ]
     }
 ];

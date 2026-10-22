@@ -147,6 +147,7 @@ function store(recipes: Recipe[], bags: Record<string, StoredBagReading> = {}) {
         ),
         countRecipesByTag:    jest.fn(() => []),
         countRecipesByAuthor: jest.fn(() => []),
+        countRecipesByRoaster: jest.fn(() => []),
         shelfMembers:         jest.fn(() => ({})),
         coffeeBags:           jest.fn(() => bags),
         deleteRecipe:         jest.fn(),

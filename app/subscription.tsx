@@ -1,5 +1,7 @@
 import {useLocalSearchParams} from "expo-router";
 import React, {useState} from "react";
+import {useCatalogueNow} from "@/hooks/useCatalogueNow";
+import {useSafeAreaInsets} from "react-native-safe-area-context";
 import {ScrollView, Text, YStack} from "tamagui";
 
 import {CatalogueStatus} from "@/components/CatalogueParts";
@@ -11,13 +13,11 @@ import SettingsToggleRow from "@/components/SettingsToggleRow";
 import UnsubscribeSheet from "@/components/UnsubscribeSheet";
 import {palette} from "@/constants/colors";
 import router from "@/hooks/steadyRouter";
-import {useScrollEndPadding} from "@/hooks/useBottomInset";
-import {sharedSettings, useSetting} from "@/hooks/useSetting";
+import {sharedSettings} from "@/hooks/useSetting";
 import {useLiveBrew} from "@/hooks/useLiveBrew";
 import {useRoasterSubscriptions} from "@/hooks/useRoasterSubscriptions";
-import {readCatalogue} from "@/library/roasterCatalogue";
+import {readCatalogue, scrollEndPadding} from "@/library/roasterCatalogue";
 import type {RoasterFeed} from "@/library/roasterFeed";
-import {pinDescription} from "@/library/roasterHome";
 import {subscriptionFor} from "@/library/roasterSubscription";
 import {countLine, shownKey, statusLine} from "@/library/subscriptionStatus";
 import type {Settings} from "@/library/Settings";
@@ -28,8 +28,7 @@ import type {Settings} from "@/library/Settings";
  * Opened from a row on the subscriptions list, or straight from the roaster's
  * coffee list by MANAGE FEED. Says how many coffees the subscription
  * holds and how fresh they are, then offers what a person might want: browse
- * the coffees, go to the roaster, update now, stop for a while, stop for good,
- * and pin it to the home screen.
+ * the coffees, go to the roaster, update now, stop for a while, stop for good.
  *
  * Unsubscribing lands on the subscriptions list: popped back to when this was
  * opened from it, put in this screen's place when it was not, so the screen
@@ -48,17 +47,17 @@ export default function SubscriptionScreen({settings, feedUrl, fetchBody, now: c
     const store = settings ?? sharedSettings();
     const subs = useRoasterSubscriptions({settings: store, fetchBody, now: clock});
     // Read once and again after each action, as the list does.
-    const [now, setNow] = useState(() => (clock ?? Date.now)());
+    const now = useCatalogueNow(clock);
     const [ending, setEnding] = useState(false);
-    const tick = () => setNow((clock ?? Date.now)());
-    const scrollEnd = useScrollEndPadding(48);
+    const insets = useSafeAreaInsets();
     const sub = subscriptionFor(subs.subscriptions, feed);
-    const [onHome] = useSetting("showRoastersOnHome", store);
     const covered = ratingNoteOpen || ending;
 
     if (sub === undefined) {
         return (
-            <YStack testID="subscription-missing" flex={1} backgroundColor={palette.base}>
+            <YStack testID="subscription-missing" flex={1} backgroundColor={palette.base}
+                    accessibilityElementsHidden={covered}
+                    importantForAccessibility={covered ? "no-hide-descendants" : "auto"}>
                 <ScreenHeader title="Roaster feed" onBack={() => router.back()}/>
                 <CatalogueStatus title="NOT SUBSCRIBED"
                                  body="Roasters appear here when you subscribe from a roaster's import link."/>
@@ -73,7 +72,7 @@ export default function SubscriptionScreen({settings, feedUrl, fetchBody, now: c
                     importantForAccessibility={covered ? "no-hide-descendants" : "auto"}>
                 <ScreenHeader title={sub.roaster} titleLines={2} onBack={() => router.back()}/>
                 <ScrollView testID="subscription-scroll"
-                            contentContainerStyle={{padding: 16, paddingBottom: scrollEnd}}>
+                            contentContainerStyle={{padding: 16, paddingBottom: scrollEndPadding(48, insets.bottom)}}>
                     <SettingsSection>
                         <YStack testID="subscription-status" paddingVertical="$3"
                                 paddingHorizontal="$4" gap="$1" accessible>
@@ -87,6 +86,10 @@ export default function SubscriptionScreen({settings, feedUrl, fetchBody, now: c
                     </SettingsSection>
 
                     <SettingsSection>
+                        <SettingsToggleRow label="Show in Import"
+                                           description="Choose up to 3 roasters, in the order you select them."
+                                           value={sub.pinnedAt !== undefined}
+                                           onChange={(shown) => subs.showInImport(sub, shown)}/>
                         <SettingsActionRow label="Browse coffees"
                                            onPress={() => router.push({pathname: "/roaster",
                                                                        params: {feed: sub.feed}})}/>
@@ -99,29 +102,18 @@ export default function SubscriptionScreen({settings, feedUrl, fetchBody, now: c
                                            detail={`Checks ${sub.roaster} for new and sold-out coffees.`}
                                            onPress={() => {
                                                if (subs.refreshing !== null) return;
-                                               void subs.refresh(sub).then(tick);
+                                               void subs.refresh(sub);
                                            }}/>
                         {sub.paused ? (
                             <SettingsActionRow label="Resume updates"
                                                onPress={() => {
                                                    subs.resume(sub);
-                                                   tick();
                                                }}/>
                         ) : (
                             <SettingsActionRow label="Pause updates"
                                                detail="The catalogue stays as it is until you resume."
                                                onPress={() => subs.pause(sub)}/>
                         )}
-                    </SettingsSection>
-
-                    <SettingsSection>
-                        <SettingsToggleRow label="Pin to the home screen"
-                                           description={pinDescription(subs.subscriptions.length, onHome)}
-                                           value={sub.pinnedAt !== undefined}
-                                           onChange={(next) => subs.pin(sub, next)}/>
-                    </SettingsSection>
-
-                    <SettingsSection>
                         <SettingsActionRow label="Unsubscribe" tone="danger"
                                            detail="Recipes in your library stay."
                                            onPress={() => setEnding(true)}/>

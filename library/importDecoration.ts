@@ -21,18 +21,10 @@ export type ImportDecoration = {
      * never to `xbloomName`, which stays what xBloom published.
      */
     recipeName?: string;
-    /**
-     * Labels the producer tags the coffee with (`bean.tags`). Added to the
-     * recipe's tags through `setTags`, so they are normalised and capped and
-     * the recipe's own tags come first and are never removed.
-     */
     tags?: readonly string[];
-    /**
-     * The roaster's own colour for the coffee, `#RRGGBB`. Becomes the card
-     * accent through `roasterAccent`, and is never stored as a hex: see
-     * `library/roasterColour.ts`.
-     */
     colour?: string;
+    /** A validated catalogue URL, followed only after this import succeeds. */
+    feed?: string;
 };
 
 /**
@@ -66,23 +58,6 @@ function tagsFrom(coffee: Partial<PodCoffee>): string[] {
 }
 
 /**
- * Give the recipe the accent nearest the roaster's colour, if it has none yet.
- *
- * Only an unset accent is filled. A recipe that already holds one keeps it,
- * so a colour can never move an accent under the user; and since the caller
- * decorates the fetched candidate before de-duplication, a re-import of a
- * recipe already in the library keeps the stored recipe and its accent.
- *
- * No answer leaves the accent unset, and the library assigns one on save as
- * it does for any new recipe.
- */
-function applyRoasterColour(recipe: Recipe, colour: string | undefined): void {
-    if (colour === undefined || recipe.accentIndex !== undefined) return;
-    const index = roasterAccent(colour, accentGroupFor(recipe));
-    if (index !== null) recipe.accentIndex = index;
-}
-
-/**
  * Apply an import link's decoration to the recipe it fetched.
  *
  * Mutates, in keeping with the way a `Recipe` is handled everywhere else in
@@ -103,7 +78,10 @@ export function decorateImport(recipe: Recipe, decoration: ImportDecoration): Re
     // cached underneath for USE THIS NAME to restore.
     if (recipeName !== undefined) recipe.name = recipeName;
     if (tags !== undefined && tags.length > 0) recipe.setTags([...recipe.tags, ...tags]);
-    applyRoasterColour(recipe, colour);
+    if (colour !== undefined && recipe.accentIndex === undefined) {
+        const index = roasterAccent(colour, accentGroupFor(recipe));
+        if (index !== null) recipe.accentIndex = index;
+    }
     if (coffee === undefined) return recipe;
 
     recipe.coffee = coffee;
@@ -181,9 +159,9 @@ export function fillImportBlanks(recipe: Recipe, decoration: ImportDecoration): 
     } else {
         const held = recipe.coffee as Record<string, unknown>;
         for (const [key, value] of Object.entries(coffee)) {
-            if (value === undefined || value === "") continue;
+            if (value === undefined || (typeof value === "string" && value.trim() === "")) continue;
             const current = held[key];
-            if (current !== undefined && current !== "") continue;
+            if (current !== undefined && !(typeof current === "string" && current.trim() === "")) continue;
             held[key] = value;
             (filled as Record<string, unknown>)[key] = value;
         }

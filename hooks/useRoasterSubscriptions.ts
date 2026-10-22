@@ -133,9 +133,11 @@ export function useRoasterSubscriptions({settings, fetchBody, now}: Options = {}
         refreshAll,
         pause:  (sub: RoasterSubscription) => setPaused(store, sub.feed, true),
         resume: (sub: RoasterSubscription) => setPaused(store, sub.feed, false),
-        /** Pin to the home screen, or unpin. */
-        pin: (sub: RoasterSubscription, pinned: boolean) =>
-            setPinned(store, sub.feed, pinned, (now ?? Date.now)()),
+        showInImport: (sub: RoasterSubscription, shown: boolean) => {
+            if (!setPinned(store, sub.feed, shown, (now ?? Date.now)())) {
+                notify({tone: "info", message: "Choose up to 3 roasters for Import. Remove a choice first."});
+            }
+        },
         unsubscribe: (sub: RoasterSubscription) => {
             unsubscribe(store, sub.feed);
             notify({tone: "success", message: `Unsubscribed from ${sub.roaster}.`});

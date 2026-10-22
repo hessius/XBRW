@@ -10,7 +10,7 @@ import {onAccent, palette} from "@/constants/colors";
 import {shelfGlyph} from "@/constants/shelfGlyphs";
 import type {ShelfMarkMembers} from "@/hooks/useRecipeLibrary";
 import type {Shelf} from "@/library/shelves";
-import {COVER_MEMBERS, hasStockPhotoCover, stockPhotoCover} from "@/library/shelfCover";
+import {COVER_MEMBERS, hasMixedPhotoCover, hasStockPhotoCover, stockPhotoCover} from "@/library/shelfCover";
 
 /**
  * The tile's height: the mark's 44 pt square, two lines of type, and padding.
@@ -99,10 +99,16 @@ export default function ShelfTile({
     // out here, so the two have to read it from the same place or the tile and
     // its square would disagree about which colour this shelf is.
     const field = members?.accents?.[0] ?? palette.surface;
+    const roaster = shelf.kind === "auto" && hasMixedPhotoCover(shelf.id);
+    const leading = roaster ? shelf.label.normalize("NFC").match(/[\p{L}\p{N}]/u)?.[0] : undefined;
+    const upper = leading?.toUpperCase();
+    const initial = upper && Array.from(upper).length === 1 ? upper : leading;
     const mark = <ShelfMark kind={shelf.kind} glyph={shelfGlyph(shelf.id)}
+                            roasterInitial={initial}
                             accents={members?.accents} inverted={inverted}/>;
     const cover = shelf.kind === "auto"
-        ? (hasStockPhotoCover(shelf.id) && shelf.count >= COVER_MEMBERS
+        ? (roaster ? members?.coverMembers ?? []
+            : hasStockPhotoCover(shelf.id) && shelf.count >= COVER_MEMBERS
             ? stockPhotoCover(members?.coverMembers ?? []) : [])
         : members?.coverMembers ?? [];
     const actions = [
@@ -144,8 +150,8 @@ export default function ShelfTile({
                     borderWidth={manual || inverted ? 0 : 1}
                     borderColor={palette.line}>
                 <XStack alignItems="flex-start" justifyContent="space-between">
-                    <ShelfPhotoMark members={cover}
-                        count={shelf.count} fallback={mark} automatic={shelf.kind === "auto"}/>
+                    <ShelfPhotoMark key={shelf.id} members={cover}
+                        count={shelf.count} fallback={mark} automatic={shelf.kind === "auto"} mixed={roaster}/>
                     {onActions && (
                         <Pressable accessibilityRole="button"
                                    accessibilityLabel={`Actions for the ${shelf.label} shelf`}

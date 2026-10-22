@@ -3,7 +3,6 @@ import {Pressable, ScrollView} from "react-native";
 import {FlatList} from "react-native-gesture-handler";
 import {Button, Text, XStack, YStack} from "tamagui";
 
-import {AlertDot} from "@/components/CatalogueParts";
 import HubFilterSheet from "@/components/HubFilterSheet";
 import HubRow from "@/components/HubRow";
 import HubSaveBar from "@/components/HubSaveBar";
@@ -19,9 +18,6 @@ import router from "@/hooks/steadyRouter";
 import {useBottomInset} from "@/hooks/useBottomInset";
 import {useHubBrowse} from "@/hooks/useHubBrowse";
 import {useHubSave} from "@/hooks/useHubSave";
-import {useSetting} from "@/hooks/useSetting";
-import {totalAlertSummary, type AlertSummary} from "@/library/roasterAlerts";
-import {parseSubscriptions} from "@/library/roasterSubscription";
 import {loadHubCriteria, roastLabel} from "@/library/hub/hubCriteria";
 import {HUB_SORTS, type HubFacet, type HubSort} from "@/library/hub/hubQuery";
 import type {HubCriteria} from "@/library/hub/hubApi";
@@ -109,44 +105,6 @@ function successMessage(saved: number, alreadyHeld: number): string {
             : `${alreadyHeld} recipes are already in your library.`;
     }
     return "Nothing new was saved.";
-}
-
-/**
- * The door to the roasters the user subscribed to.
- *
- * Drawn only when there is at least one: a row that leads to an empty screen
- * on every phone that never opened a roaster's link would be clutter. It sits
- * above the rail because it is a different catalogue, not a filter of this
- * one.
- */
-function RoastersEntry({count, alerts}: {
-    count: number;
-    /** New and back-in-stock coffees across every roaster, and the words for them. */
-    alerts: AlertSummary;
-}) {
-    const label = count === 1 ? "1 roaster" : `${count} roasters`;
-    const spoken = alerts.spoken === undefined ? label : `${label}, ${alerts.spoken}`;
-    return (
-        <Pressable accessibilityRole="button" accessibilityLabel={`Roasters, ${spoken}`}
-                   testID="hub-roasters" onPress={() => router.push("/roasters")}>
-            <XStack alignItems="center" gap="$3" marginHorizontal="$3" marginBottom="$2"
-                    paddingHorizontal="$3" paddingVertical="$3" borderRadius="$4"
-                    backgroundColor={palette.raised}>
-                <DotIcon name="shelves" size={16} color={palette.text}/>
-                <YStack flex={1}>
-                    <DotMatrixText fontSize={12} weight="bold" letterSpacing={1.6}
-                                   color={palette.text}>
-                        ROASTERS
-                    </DotMatrixText>
-                    <Text fontSize={13} color={palette.dim}>{label}</Text>
-                </YStack>
-                <AlertDot count={alerts.count} testID="hub-roasters-dot"/>
-                <XStack style={{transform: [{rotate: "180deg"}]}}>
-                    <DotIcon name="back" size={14} color={palette.muted}/>
-                </XStack>
-            </XStack>
-        </Pressable>
-    );
 }
 
 function HubRail({
@@ -391,11 +349,6 @@ export default function HubScreen() {
     const [choosing, setChoosing] = useState(false);
     const [chosen, setChosen] = useState<ReadonlySet<number>>(new Set());
     const [criteria, setCriteria] = useState<HubCriteria | null>(null);
-    const [storedSubscriptions] = useSetting("roasterSubscriptions");
-    const [storedAlerts] = useSetting("roasterAlerts");
-    const subscriptions = parseSubscriptions(storedSubscriptions);
-    const roasterCount = subscriptions.length;
-    const roasterAlerts = totalAlertSummary(storedAlerts, subscriptions.map((sub) => sub.feed));
 
     useEffect(() => {
         let alive = true;
@@ -524,9 +477,8 @@ export default function HubScreen() {
             <YStack {...STABLE_HOST} flex={1} backgroundColor={palette.base}
                     accessibilityElementsHidden={screenCovered}
                     importantForAccessibility={screenCovered ? "no-hide-descendants" : "auto"}>
-                <ScreenHeader title="CATALOGUE" count={rows.length}
+                <ScreenHeader title="XBLOOM CATALOGUE" count={rows.length}
                               onBack={() => router.back()}/>
-                {roasterCount > 0 && <RoastersEntry count={roasterCount} alerts={roasterAlerts}/>}
                 <HubRail
                     browse={browse}
                     criteria={criteria}

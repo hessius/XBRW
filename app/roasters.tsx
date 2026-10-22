@@ -1,5 +1,6 @@
 import React from "react";
 import {Pressable, ScrollView} from "react-native";
+import {useSafeAreaInsets} from "react-native-safe-area-context";
 import {Text, XStack, YStack} from "tamagui";
 
 import {AlertDot, CatalogueStatus} from "@/components/CatalogueParts";
@@ -8,12 +9,11 @@ import DotMatrixText from "@/components/DotMatrixText";
 import ScreenHeader from "@/components/ScreenHeader";
 import {palette} from "@/constants/colors";
 import router from "@/hooks/steadyRouter";
-import {useScrollEndPadding} from "@/hooks/useBottomInset";
 import {useLiveBrew} from "@/hooks/useLiveBrew";
-import {useNow} from "@/hooks/useNow";
+import {useCatalogueNow} from "@/hooks/useCatalogueNow";
 import {sharedSettings, useSetting} from "@/hooks/useSetting";
 import {alertSummary, readAlerts} from "@/library/roasterAlerts";
-import {readCatalogue, updatedAgo} from "@/library/roasterCatalogue";
+import {readCatalogue, scrollEndPadding, updatedAgo} from "@/library/roasterCatalogue";
 import {parseSubscriptions} from "@/library/roasterSubscription";
 import type {Settings} from "@/library/Settings";
 
@@ -36,8 +36,8 @@ export default function RoastersScreen({settings, now}: {
     useSetting("roasterCatalogue", store);
     // And so the dots follow a coffee being opened or a sync flagging one.
     useSetting("roasterAlerts", store);
-    const at = useNow(now);
-    const scrollEnd = useScrollEndPadding(48);
+    const at = useCatalogueNow(now);
+    const insets = useSafeAreaInsets();
     const subscriptions = parseSubscriptions(stored);
 
     return (
@@ -50,7 +50,7 @@ export default function RoastersScreen({settings, now}: {
                                  body="Roasters appear here when you subscribe from a roaster's import link."/>
             ) : (
                 <ScrollView testID="roasters-scroll"
-                            contentContainerStyle={{paddingTop: 8, paddingBottom: scrollEnd}}>
+                            contentContainerStyle={{paddingTop: 8, paddingBottom: scrollEndPadding(48, insets.bottom)}}>
                     {subscriptions.map((sub) => {
                         const cached = readCatalogue(store, sub.feed);
                         const count = cached?.feed.coffees.length ?? 0;

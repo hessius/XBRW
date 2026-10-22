@@ -7,8 +7,7 @@
 // differently without it), then the body is read by the app's parser under
 // jest (scripts/check-feed.test.ts), which prints what the app would show.
 import {spawnSync} from "node:child_process";
-import {mkdtempSync, readFileSync, writeFileSync} from "node:fs";
-import {tmpdir} from "node:os";
+import {readFileSync} from "node:fs";
 import {dirname, join, resolve} from "node:path";
 import {fileURLToPath} from "node:url";
 
@@ -20,6 +19,7 @@ if (!source) {
 }
 
 let file;
+let body;
 if (/^https?:\/\//i.test(source)) {
   if (!source.toLowerCase().startsWith("https://")) {
     console.error("The app only reads feeds over https.");
@@ -34,8 +34,7 @@ if (/^https?:\/\//i.test(source)) {
   }
   console.log(`HTTP ${response.status}, ${response.headers.get("content-type") ?? "no content type"}`);
   if (!response.ok) process.exit(1);
-  file = join(mkdtempSync(join(tmpdir(), "xbrw-feed-")), "feed.json");
-  writeFileSync(file, await response.text());
+  body = await response.text();
 } else {
   file = resolve(source);
   readFileSync(file); // Fails here, plainly, if the file is not there.
@@ -44,5 +43,10 @@ if (/^https?:\/\//i.test(source)) {
 const jest = join(root, "node_modules", "jest", "bin", "jest.js");
 const result = spawnSync(process.execPath,
   [jest, "--selectProjects", "ios", "--runTestsByPath", "scripts/check-feed.test.ts", "--silent"],
-  {cwd: root, stdio: "inherit", env: {...process.env, CHECK_FEED_FILE: file}});
+  {
+    cwd: root,
+    stdio: body === undefined ? "inherit" : ["pipe", "inherit", "inherit"],
+    input: body,
+    env: {...process.env, CHECK_FEED_FILE: file ?? "", CHECK_FEED_STDIN: body === undefined ? "" : "1"}
+  });
 process.exit(result.status ?? 1);

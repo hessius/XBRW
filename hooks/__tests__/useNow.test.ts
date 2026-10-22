@@ -2,10 +2,6 @@ import {AppState, type AppStateStatus} from "react-native";
 import {act, renderHook} from "@testing-library/react-native";
 
 import {useNow} from "@/hooks/useNow";
-import {useHomeRoasters} from "@/hooks/useHomeRoasters";
-import {writeCatalogue} from "@/library/roasterCatalogue";
-import {serialiseSubscriptions} from "@/library/roasterSubscription";
-import {FEED_URL, feedBody, memorySettings} from "@/test-utils/roasterFeed";
 
 const BEFORE = new Date(2026, 9, 19, 23, 59, 50).getTime();
 const MIDNIGHT = new Date(2026, 9, 20).getTime();
@@ -65,18 +61,4 @@ it("reschedules after foregrounding with a changed clock and clears resources on
     await unmount();
     expect(remove).toHaveBeenCalledTimes(1);
     expect(cancel).toHaveBeenCalledWith(schedule.mock.results[pending].value);
-});
-
-it("refreshes home roaster age at midnight while the screen stays mounted", async () => {
-    const settings = memorySettings();
-    const fetchedAt = MIDNIGHT - 3 * 86_400_000;
-    settings.set("roasterSubscriptions", serialiseSubscriptions([{
-        feed: FEED_URL, roaster: "Test Roaster", lastSync: fetchedAt,
-        lastAttempt: fetchedAt, paused: false, lastError: "network"
-    }]));
-    writeCatalogue(settings, FEED_URL, feedBody([{id: "a"}]).body, fetchedAt);
-    const {result} = await renderHook(() => useHomeRoasters(settings));
-    expect(result.current.strip.rows[0].detail).toBe("1 coffee · Updated 2 d ago");
-    await act(async () => { jest.advanceTimersByTime(MIDNIGHT - BEFORE); });
-    expect(result.current.strip.rows[0].detail).toBe("1 coffee · Updated 3 d ago");
 });

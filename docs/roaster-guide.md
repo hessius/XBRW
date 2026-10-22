@@ -1,5 +1,9 @@
 # XBRW++ for roasters: a setup guide
 
+> Integration status: Package E connects the catalogue, Import choices,
+> subscription offers and staged re-imports. This guide is not a release
+> readiness or physical-device qualification claim.
+
 This guide is for coffee roasters who publish xBloom recipes for their coffees
 and want customers to find them in XBRW++. You do not need to be a developer.
 If you can edit your website's theme or upload a file, you can do this.
@@ -17,6 +21,19 @@ the practical version.
   catalogue. Nothing else is added to their library.
 - **Your catalogue.** They can browse every coffee you have a recipe for, with
   photos, roast level, tasting notes and bag sizes, and search or filter it.
+  Subscribed roasters are reached through **Import → All roasters**, not the
+  xBloom catalogue. Under **Manage feeds**, each roaster has **Show in Import**:
+  customers can choose up to three shortcuts, shown in selection order.
+  Subscribing does not select a shortcut automatically; removing one leaves
+  the subscription and saved recipes alone. **Settings → Library → Roaster
+  feeds** also opens management, including declined offers when no subscriptions
+  remain.
+- **A shelf for saved recipes.** A saved recipe keeps its declared roaster even
+  after unsubscribing. Three saved recipes can form an automatic roaster shelf,
+  provided they are no more than 80% of the library. Publish `bean.roaster` for
+  a coffee-specific name; otherwise the app keeps the recipe import's roaster
+  or uses your feed's name. Re-import never replaces a customer's saved
+  nonblank roaster. Home and its search never mix in unsaved catalogue coffees.
 - **New coffees and restocks.** When you add a coffee, it shows as NEW in their
   catalogue the next time the app updates. If a coffee is sold out, they can
   ask to be told when it is back, and the app tells them when your list says
@@ -450,7 +467,7 @@ app's page.
    iPhone without the app, Safari says it cannot open the page. That is
    normal.)
 5. **Go back to the app's library.** It should ask "Subscribe to {your
-   name}?". Say yes, then open Catalogue, then Roasters, and check your
+   name}?". Say yes, then open Import, then All roasters, and check your
    coffees, photos and prices look right.
 6. **Tap BUY on a bag** and check it opens the right product in the browser.
 
