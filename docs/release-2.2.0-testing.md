@@ -24,7 +24,7 @@ each device result. Software transports do not qualify BLE or NFC hardware.
 - [ ] Exercise newer-author choices, local edits and unchanged-author
   fingerprints. Check feed offers on return and cancellation, replacement,
   failed lookup and failed feed without losing a valid imported recipe.
-  Edit and save a catalogue Brew now recipe, then reimport its unchanged author:
+  Edit and save a catalogue OPEN RECIPE recipe, then reimport its unchanged author:
   it must keep the edit without claiming there is a newer author version.
 - [ ] Save catalogue recipes with coffee-, import- and feed-level roaster
   metadata; check precedence and fill-only-blank existing metadata. Copy,
