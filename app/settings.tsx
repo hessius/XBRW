@@ -140,6 +140,8 @@ export default function SettingsScreen({settings}: Props) {
         useSetting("showRecipeAvatars", settings);
     const [showRecipeCardPhotos, setShowRecipeCardPhotos] = useSetting("showRecipeCardPhotos", settings);
     const [showShelfPhotoPreviews, setShowShelfPhotoPreviews] = useSetting("showShelfPhotoPreviews", settings);
+    const [appearanceTheme] = useSetting("appearanceTheme", settings);
+    const [recipeColourMode] = useSetting("recipeColourMode", settings);
     // Not shown as a row on this screen -- the hints switch lives on the editor's
     // own caret, which is where a user is when they want it. Read here anyway,
     // because a backup carries every preference and this is one.
@@ -224,6 +226,7 @@ export default function SettingsScreen({settings}: Props) {
     // a key someone forgot.
     function settingsSnapshot(): Record<Exclude<SettingKey, BackupExcluded>, unknown> {
         return {
+            appearanceTheme, recipeColourMode,
             showCoffeeMarker, dotMatrixProfile, showRecipeAvatars, showRecipeCardPhotos, showShelfPhotoPreviews, showHints,
             temperatureUnit,
             bypassTempEncoding,

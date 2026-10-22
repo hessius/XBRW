@@ -3,11 +3,14 @@ import {render, type RenderOptions} from "@testing-library/react-native";
 import {SafeAreaProvider, type Metrics} from "react-native-safe-area-context";
 import {TamaguiProvider} from "tamagui";
 import config from "@/tamagui.config";
+import {AppearanceScope} from "@/hooks/useAppearance";
+import {DEFAULT_APPEARANCE, type AppearanceChoice} from "@/library/appearance";
 
 /**
  * Every component in this app renders Tamagui primitives, which render nothing
  * useful without a provider above them. Tests should use this instead of RNTL's
  * bare `render`.
+ * Appearance is scoped purely, without opening the production settings store.
  *
  * Note that `render` is asynchronous as of @testing-library/react-native 14, so
  * this must be awaited before `screen` is populated.
@@ -22,11 +25,14 @@ const METRICS: Metrics = {
     insets:  {top: 47, left: 0, right: 0, bottom: 34}
 };
 
-function Providers({children}: { children: React.ReactNode }) {
+export function Providers({children, appearance = DEFAULT_APPEARANCE}: {
+    children: React.ReactNode;
+    appearance?: AppearanceChoice;
+}) {
     return (
         <SafeAreaProvider initialMetrics={METRICS}>
-            <TamaguiProvider config={config} defaultTheme="dark">
-                {children}
+            <TamaguiProvider config={config} defaultTheme={appearance.theme === "light" ? "light" : "dark"}>
+                <AppearanceScope choice={appearance}>{children}</AppearanceScope>
             </TamaguiProvider>
         </SafeAreaProvider>
     );

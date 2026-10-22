@@ -12,6 +12,43 @@ function fakeStorage(seed: Record<string, string> = {}): SettingsStorage {
 }
 
 describe("Settings", () => {
+    it("defaults both appearance preferences independently", () => {
+        expect(new Settings(fakeStorage()).get("appearanceTheme")).toBe("original");
+        expect(new Settings(fakeStorage()).get("recipeColourMode")).toBe("original");
+        expect(new Settings(fakeStorage({appearanceTheme: '"light"'}))
+            .get("recipeColourMode")).toBe("original");
+        expect(new Settings(fakeStorage({recipeColourMode: '"themed"'}))
+            .get("appearanceTheme")).toBe("original");
+    });
+
+    it("persists each appearance preference without replacing the other", () => {
+        const storage = fakeStorage();
+        const settings = new Settings(storage);
+        settings.set("appearanceTheme", "light");
+        settings.set("recipeColourMode", "themed");
+        const reopened = new Settings(storage);
+        expect(reopened.get("appearanceTheme")).toBe("light");
+        expect(reopened.get("recipeColourMode")).toBe("themed");
+    });
+
+    it("does not notify or replace either preference when a theme write fails", () => {
+        const storage = fakeStorage();
+        const settings = new Settings(storage);
+        settings.set("appearanceTheme", "light");
+        settings.set("recipeColourMode", "themed");
+        const listener = jest.fn();
+        settings.subscribe(listener);
+        const write = storage.write;
+        storage.write = (key, value) => {
+            if (key === "appearanceTheme") throw new Error("storage unavailable");
+            write(key, value);
+        };
+        expect(() => settings.set("appearanceTheme", "blue")).toThrow("storage unavailable");
+        expect(listener).not.toHaveBeenCalled();
+        expect(settings.get("appearanceTheme")).toBe("light");
+        expect(settings.get("recipeColourMode")).toBe("themed");
+    });
+
     it("defaults history to newest date and persists both ordering preferences", () => {
         const storage = fakeStorage();
         const settings = new Settings(storage);

@@ -18,6 +18,8 @@ import {LiveBrewProvider} from '@/hooks/useLiveBrew';
 import {sharedBrewDatabase, sweepOnLaunch} from '@/hooks/useBrewHistory';
 import {useSetting} from '@/hooks/useSetting';
 import {useRoasterForegroundSync} from '@/hooks/useRoasterForegroundSync';
+import {AppearanceProvider} from '@/hooks/useAppearance';
+import {notify} from '@/components/XbrwToast';
 
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
@@ -88,6 +90,7 @@ export default function RootLayout() {
         <ShareIntentProvider options={shareIntentOptions}>
             <GestureHandlerRootView style={{flex: 1}}>
                 <TamaguiProvider config={config} defaultTheme="dark">
+                    <AppearanceProvider onInvalidPreferences={notify}>
                     <Theme name="dark">
                             <SafeAreaProvider>
                                 <ThemeProvider value={AppTheme}>
@@ -191,6 +194,7 @@ export default function RootLayout() {
                                 </ThemeProvider>
                             </SafeAreaProvider>
                     </Theme>
+                    </AppearanceProvider>
                 </TamaguiProvider>
             </GestureHandlerRootView>
         </ShareIntentProvider>
