@@ -1,45 +1,7 @@
-import {mix, palette, type Appearance} from "@/constants/colors";
+import type {Appearance} from "@/constants/colors";
 
 /** The waking breath's trough; shared by the animation and contrast regressions. */
 export const PLAN_MIN_OPACITY = 0.45;
-
-/**
- * Fit the plan after its outer SVG opacity, not just its opaque stroke.
- * Runs on the JS side; the SVG still owns the unchanged breathing multiplier.
- */
-export function planInk(
-    appearance: Appearance, colour: string, grounds: readonly string[], opacity: number
-): string {
-    const floor = 3.05;
-    const candidate = appearance.chartInk(colour, grounds, floor);
-    if (opacity <= 0 || opacity >= 1) return candidate;
-    const channels = (hex: string) => [1, 3, 5].map(at => parseInt(hex.slice(at, at + 2), 16));
-    const luminance = (rgb: number[]) => {
-        const linear = rgb.map(value => {
-            const c = value / 255;
-            return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
-        });
-        return linear[0] * 0.2126 + linear[1] * 0.7152 + linear[2] * 0.0722;
-    };
-    const backgrounds = grounds.map(ground => {
-        const rgb = channels(ground);
-        return {rgb, luminance: luminance(rgb)};
-    });
-    const ground = backgrounds[0].luminance;
-    const endpoint = (ground + 0.05) / 0.05 >= 1.05 / (ground + 0.05)
-        ? palette.base : palette.text;
-    for (let step = 0; step <= 100; step++) {
-        const ink = step === 0 ? candidate : mix(candidate, endpoint, step / 100);
-        const rgb = channels(ink);
-        if (backgrounds.every(background => {
-            const displayed = luminance(rgb.map((channel, i) =>
-                channel * opacity + background.rgb[i] * (1 - opacity)));
-            return (Math.max(displayed, background.luminance) + 0.05)
-                / (Math.min(displayed, background.luminance) + 0.05) >= floor;
-        })) return ink;
-    }
-    throw new Error(`No readable plan colour at opacity ${opacity} on ${grounds.join(", ")}`);
-}
 
 /**
  * What the lines on a brew chart look like.

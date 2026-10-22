@@ -472,7 +472,7 @@ export type Appearance = Readonly<{
     chromeSwitch: SwitchPair;
     recipe: (canonical: string) => DisplayRecipeColour;
     /** Chart marks on their actual (possibly composited) grounds; never remaps identity. */
-    chartInk: (displayColour: string, grounds: readonly string[], floor?: number) => string;
+    chartInk: (displayColour: string, grounds: readonly string[], floor?: number, opacity?: number) => string;
     onFill: (fill: string) => AccentForeground;
     switchOn: (fill: string) => SwitchPair;
     machineColour: (canonical: MachineColour) => MachineColour;
@@ -580,11 +580,12 @@ function neutralFor(background: string): string {
 }
 
 /** First passing one-percent mix, bounded even for an impossible composition. */
-function fit(candidate: string, grounds: readonly string[], floor: number): string {
+function fit(candidate: string, grounds: readonly string[], floor: number, opacity = 1): string {
     const endpoint = neutralFor(grounds[0]);
     for (let step = 0; step <= 100; step++) {
         const ink = step === 0 ? candidate : mix(candidate, endpoint, step / 100);
-        if (grounds.every(ground => contrastRatio(ink, ground) >= floor)) return ink;
+        if (grounds.every(ground =>
+            ratio(composite(ink, ground, opacity), rgb(ground)) >= floor)) return ink;
     }
     throw new Error("No readable colour for these backgrounds");
 }
@@ -707,8 +708,8 @@ export function resolveAppearance(supplied: AppearanceChoice): Appearance {
         choice, scheme: choice.theme === "light" ? "light" : "dark",
         palette: p, primary, selection, onBrand: {...onBrand}, chromeSwitch,
         recipe,
-        chartInk: (displayColour, grounds, floor = 3) =>
-            fit(effectiveHex(displayColour, grounds[0]), grounds, floor),
+        chartInk: (displayColour, grounds, floor = 3, opacity = 1) =>
+            fit(effectiveHex(displayColour, grounds[0]), grounds, floor, opacity),
         onFill: fill => foregroundFor(fill, p.base), switchOn,
         machineColour: canonical => ({
             ...canonical,

@@ -2,7 +2,6 @@ import {accents, cupLineFor, mix, palette, resolveAppearance} from "@/constants/
 import {THEME_IDS} from "@/library/appearance";
 import {
     channelStyle,
-    planInk,
     PLAN_MIN_OPACITY,
     referenceCupColour,
     referenceWaterColour
@@ -35,8 +34,8 @@ describe("explicit chart appearance", () => {
                 const appearance = resolveAppearance({theme, recipeColours});
                 const {base, muted} = appearance.palette;
                 for (const accent of [...accents.coffee, ...accents.tea]) {
-                    const ink = planInk(appearance, mix(muted, appearance.recipe(accent).ink, 0),
-                        [base], PLAN_MIN_OPACITY);
+                    const ink = appearance.chartInk(mix(muted, appearance.recipe(accent).ink, 0),
+                        [base], 3.05, PLAN_MIN_OPACITY);
                     const background = rgb(base);
                     const displayed = rgb(ink).map((channel, i) =>
                         channel * PLAN_MIN_OPACITY + background[i] * (1 - PLAN_MIN_OPACITY));

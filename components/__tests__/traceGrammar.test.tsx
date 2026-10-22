@@ -249,8 +249,13 @@ describe("historical appearance is presentation, never a history migration", () 
             </Providers>
         );
         const band = tree.getByTestId("trace-pause-manual-0").props;
+        const fillTop = choice.theme === "blue" ? 0.24 : 0.28;
+        const alphaByte = Math.round(fillTop * 255);
+        const nativeFill = Number(processColor(appearance.recipe(accent).ink));
+        expect(JSON.stringify(tree.toJSON()))
+            .toContain(`"gradient":[0,${(nativeFill & 0x00ffffff) | (alphaByte << 24)},`);
         const ground = composite(rgb(appearance.recipe(accent).ink),
-            composite(rgb(band.fill), raised, band.fillOpacity), 0.28);
+            composite(rgb(band.fill), raised, band.fillOpacity), alphaByte / 255);
         const plan = tree.getByTestId("trace-plan").props;
         expect(contrast(composite(rgb(plan.stroke), ground, plan.strokeOpacity), ground))
             .toBeGreaterThanOrEqual(3);

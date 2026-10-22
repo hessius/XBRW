@@ -17,7 +17,7 @@ import {tracePauseSpoken} from "@/constants/brewCopy";
 import {stageAtX, stageBounds} from "@/library/brew/stagePick";
 import {bandY, hasSetTemperature, temperatureBand,
         temperatureInBand, temperatureMarks} from "@/library/brew/tempBand";
-import {channelStyle, planInk, PLAN_MIN_OPACITY, type Role} from "@/library/brew/traceStyle";
+import {channelStyle, PLAN_MIN_OPACITY, type Role} from "@/library/brew/traceStyle";
 import {mix} from "@/constants/colors";
 import type Pour from "@/library/Pour";
 
@@ -206,19 +206,23 @@ export default function BrewTrace({
     const appearance = useAppearance();
     const {palette} = appearance;
     const displayAccent = appearance.recipe(accent).ink;
+    // Keep temperature text readable where the blue page, pause and water overlap.
+    const fillTop = appearance.choice.theme === "blue" ? 0.24 : FILL_TOP;
     const pauseFill = {manual: palette.dim, overflow: palette.warnMuted};
     const chartGrounds = (compact || selectedIndex === null
         ? [palette.base] : [palette.base, palette.raised]).flatMap(ground =>
         [ground, ...pauseIntervals.map(({reason}) => mix(ground, pauseFill[reason], PAUSE_OPACITY))]
             .flatMap(paused => compact || samples.length === 0
-                ? [paused] : [paused, mix(paused, displayAccent, FILL_TOP)]));
+                ? [paused] : [paused, mix(paused, displayAccent, fillTop)]));
     const neutralInk = appearance.chartInk(palette.muted, chartGrounds, 3.05);
     // Before water arrives the live screen supplies animated colours. Fit the
     // entire breath at its trough, including the peak, so ink correction cannot
     // cancel the breathing or jump back to an opaque fit at the peak.
     const planFitOpacity = samples.length === 0 && suppliedPlanColor !== undefined
         ? Math.min(planOpacity, PLAN_MIN_OPACITY) : planOpacity;
-    const planColor = planInk(appearance, suppliedPlanColor ?? palette.muted, chartGrounds, planFitOpacity);
+    // History summaries deliberately hide the plan rather than dimming it.
+    const planColor = appearance.chartInk(suppliedPlanColor ?? palette.muted,
+        chartGrounds, 3.05, planFitOpacity === 0 ? 1 : planFitOpacity);
     const temperatureInk = appearance.chartInk(palette.dim, chartGrounds, 4.55);
     const markInk = appearance.chartInk(displayAccent, chartGrounds, 3.05);
     const id = useId().replace(/[^a-zA-Z0-9]/g, "");
@@ -422,7 +426,7 @@ export default function BrewTrace({
              accessibilityLabel={accessibilityLabel}>
                 <Defs>
                     <LinearGradient id={waterFillId} x1="0" y1="0" x2="0" y2="1">
-                        <Stop offset="0" stopColor={displayAccent} stopOpacity={FILL_TOP} />
+                        <Stop offset="0" stopColor={displayAccent} stopOpacity={fillTop} />
                         <Stop offset="1" stopColor={displayAccent} stopOpacity={FILL_BOTTOM} />
                     </LinearGradient>
                 </Defs>
