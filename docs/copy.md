@@ -397,10 +397,21 @@ Neither host adds a save action, and closing discards the adjustment.
 |----|--------|-----------------------------------|--------------|
 | `editor.action.brew.a11y` | `app/editRecipe.tsx:610` (a11y) | (a11y) Brew button in the editor action bar. | `Brew` |
 | `editor.action.brew.label` | `app/editRecipe.tsx:616` | Doto label on the Brew button. | `BREW` |
-| `editor.action.write.a11y` | `app/editRecipe.tsx:623` (a11y) | (a11y) Write-card button. | `Write card` |
+| `editor.action.write.a11y` | `app/editRecipe.tsx` (a11y) | (a11y) Write button with no machine remembered; writes a card. | `Write card` |
+| `editor.action.write.chooser.a11y` | `app/editRecipe.tsx` (a11y) | (a11y) Write button with a machine remembered; opens the write chooser. | `Write to Easy Mode or card` |
 | `editor.action.write.label` | `app/editRecipe.tsx:635` | Doto label on the Write button. | `WRITE` |
 | `editor.action.save.a11y` | `app/editRecipe.tsx:641` (a11y) | (a11y) Save button. | `Save` |
 | `editor.action.save.label` | `app/editRecipe.tsx:647` | Doto label on the Save button. | `SAVE` |
+
+### Write chooser (`components/WriteChooserSheet.tsx`)
+
+| ID | Source | Context — when the user sees this | Current text |
+|----|--------|-----------------------------------|--------------|
+| `editor.writeChooser.title` | `components/WriteChooserSheet.tsx` | Sheet title after WRITE, machine remembered. | `WRITE TO` |
+| `editor.writeChooser.easyMode` | `components/WriteChooserSheet.tsx` | Row: go to Assign to Easy Mode. | `EASY MODE SLOT` |
+| `editor.writeChooser.easyMode.detail` | `components/WriteChooserSheet.tsx` | Line under the Easy Mode row, also its a11y hint. | `Put it in slot A, B or C on your machine.` |
+| `editor.writeChooser.card` | `components/WriteChooserSheet.tsx` | Row: write an NFC card. | `NFC CARD` |
+| `editor.writeChooser.card.detail` | `components/WriteChooserSheet.tsx` | Line under the card row, also its a11y hint. | `Write it to an xBloom recipe card.` |
 
 ### Editor toasts and errors
 

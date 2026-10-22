@@ -411,3 +411,14 @@ Home slot markers still match by uuid only; USE UPDATED RECIPE relinks a slot.
 Easy Mode help now says only the first write needs all three recipes, since the
 phone keeps every written slot and resends the other two. With empty slots the
 WRITE reason names them ("Choose a recipe for slots B and C before writing").
+
+## Proposed: WRITE asks Easy Mode slot or NFC card
+
+Branch `feat/write-chooser`, stacked on `fix/easy-mode-slot-link`, not yet
+accepted into `develop`. With a machine remembered, the editor's WRITE opens a
+small WRITE TO sheet: Easy Mode slot (the existing Assign to Easy Mode, which
+saves an unsaved recipe first) or NFC card (the existing card write, bypass
+question included). With no machine WRITE writes the card straight away as
+before. WRITE's spoken name with a machine is "Write to Easy Mode or card".
+The card limits still gate WRITE; Assign to Easy Mode in the more menu is
+unchanged.

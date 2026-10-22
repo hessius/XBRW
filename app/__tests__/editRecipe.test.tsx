@@ -1946,6 +1946,9 @@ describe("grind-too-fine banner", () => {
  * which leaves `machineDeviceId` unset and falling back to its `""` default,
  * so no separate clear is needed.
  */
+/** WRITE's spoken name once a machine is remembered: it asks slot or card. */
+const MACHINE_WRITE = "Write to Easy Mode or card";
+
 function rememberMachine(id: string) {
     mockSettings = {...mockSettings, machineDeviceId: id};
 }
@@ -1963,7 +1966,7 @@ describe("the action bar", () => {
         rememberMachine("AA:BB");
         await renderEditor();
         expect(screen.getByLabelText("Brew")).toBeTruthy();
-        expect(screen.getByLabelText("Write card")).toBeTruthy();
+        expect(screen.getByLabelText(MACHINE_WRITE)).toBeTruthy();
     });
 
     it("tells its three buttons apart by fill, not by one step of grey", async () => {
@@ -1975,8 +1978,8 @@ describe("the action bar", () => {
 
         expect(inkOf("Brew", "BREW")).toBe(palette.muted);
         expect(fillOf("Brew")).toBe("transparent");
-        expect(inkOf("Write card", "WRITE")).toBe(palette.muted);
-        expect(fillOf("Write card")).toBe("transparent");
+        expect(inkOf(MACHINE_WRITE, "WRITE")).toBe(palette.muted);
+        expect(fillOf(MACHINE_WRITE)).toBe("transparent");
         // SAVE is never refused -- a half-finished recipe is still worth
         // keeping -- so it is the live neutral the other two are read against.
         expect(inkOf("Save", "SAVE")).toBe(palette.text);
@@ -1992,8 +1995,8 @@ describe("the action bar", () => {
         expect(inkOf("Brew", "BREW")).toBe(resolveAppearance({theme: "original", recipeColours: "original"})
             .recipe(pinnedAccent()).onAccent.text);
         // WRITE and SAVE are live but secondary: filled, not accented.
-        expect(fillOf("Write card")).toBe(palette.raised);
-        expect(inkOf("Write card", "WRITE")).toBe(palette.text);
+        expect(fillOf(MACHINE_WRITE)).toBe(palette.raised);
+        expect(inkOf(MACHINE_WRITE, "WRITE")).toBe(palette.text);
     });
 
     it("hands the accent to WRITE when there is no machine to brew on", async () => {
@@ -2037,10 +2040,49 @@ describe("the action bar", () => {
 
         expect(screen.getByLabelText("Brew").props.accessibilityState.disabled)
             .toBe(false);
-        expect(screen.getByLabelText("Write card").props.accessibilityState.disabled)
+        expect(screen.getByLabelText(MACHINE_WRITE).props.accessibilityState.disabled)
             .toBe(true);
         expect(screen.getByText(/can still be saved and brewed over Bluetooth/i))
             .toBeTruthy();
+    });
+});
+
+describe("WRITE with a machine remembered", () => {
+    it("asks between an Easy Mode slot and a card, and NFC card writes the card", async () => {
+        rememberMachine("chooser-card");
+        await renderEditor();
+        await fireEvent.press(screen.getByLabelText(MACHINE_WRITE));
+        expect(mockWriteCard).not.toHaveBeenCalled();
+        expect(await screen.findByText("WRITE TO")).toBeTruthy();
+        expect(screen.getByRole("button", {name: "Easy Mode slot"})).toBeTruthy();
+        await waitFor(async () => {
+            if (mockWriteCard.mock.calls.length === 0) {
+                await fireEvent.press(screen.getByRole("button", {name: "NFC card"}));
+            }
+            expect(mockWriteCard).toHaveBeenCalledTimes(1);
+        }, {timeout: SHEET_PRESS_TIMEOUT});
+    });
+
+    it("sends Easy Mode slot to Assign to Easy Mode", async () => {
+        const deviceId = "chooser-slot";
+        rememberMachine(deviceId);
+        await renderEditor({name: "Chooser slot recipe"});
+        await fireEvent.press(screen.getByLabelText(MACHINE_WRITE));
+        await waitFor(async () => {
+            if (mockPush.mock.calls.length === 0) {
+                await fireEvent.press(screen.getByRole("button", {name: "Easy Mode slot"}));
+            }
+            expect(mockPush).toHaveBeenCalledWith({pathname: "/easyMode"});
+        }, {timeout: SHEET_PRESS_TIMEOUT});
+        expect(mockWriteCard).not.toHaveBeenCalled();
+        expect(sharedSlotDatabase().read(deviceId).drafts[0]?.name).toBe("Chooser slot recipe");
+    });
+
+    it("writes the card straight away with no machine, with no chooser", async () => {
+        await renderEditor();
+        await fireEvent.press(screen.getByLabelText("Write card"));
+        expect(mockWriteCard).toHaveBeenCalledTimes(1);
+        expect(screen.queryByText("WRITE TO")).toBeNull();
     });
 });
 
