@@ -206,8 +206,9 @@ export default function BrewTrace({
     const appearance = useAppearance();
     const {palette} = appearance;
     const displayAccent = appearance.recipe(accent).ink;
-    // Keep temperature text readable where the blue page, pause and water overlap.
-    const fillTop = appearance.choice.theme === "blue" ? 0.24 : FILL_TOP;
+    // Bound the brightest possible legacy wash, not just the twelve stock accents.
+    const fillTop = appearance.choice.theme === "blue" ? 0.20
+        : appearance.choice.theme === "magenta" ? 0.26 : FILL_TOP;
     const pauseFill = {manual: palette.dim, overflow: palette.warnMuted};
     const chartGrounds = (compact || selectedIndex === null
         ? [palette.base] : [palette.base, palette.raised]).flatMap(ground =>

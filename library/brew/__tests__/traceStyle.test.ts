@@ -27,6 +27,20 @@ function contrast(a: string | number[], b: string | number[]): number {
 }
 
 describe("explicit chart appearance", () => {
+    it.each(THEME_IDS)("bounds every RGB wash between its black and white extremes on %s", theme => {
+        const appearance = resolveAppearance({theme, recipeColours: "themed"});
+        const {base, raised, dim, warnMuted} = appearance.palette;
+        const grounds = [base, raised].flatMap(ground =>
+            [ground, mix(ground, dim, 0.18), mix(ground, warnMuted, 0.18)])
+            .flatMap(ground => [ground, ...["#000000", "#FFFFFF"].map(extreme =>
+                mix(ground, extreme, theme === "blue" ? 0.20 : theme === "magenta" ? 0.26 : 0.28))]);
+        // Each RGB channel and luminance are monotonic between these extrema.
+        const ink = appearance.chartInk(dim, grounds, 4.55);
+        for (const ground of grounds) {
+            expect(contrast(ink, ground)).toBeGreaterThanOrEqual(4.5);
+        }
+    });
+
     it("fits the alpha-composited waking minimum across all twelve identities and eight choices", () => {
         let minimum = Infinity;
         for (const theme of THEME_IDS) {

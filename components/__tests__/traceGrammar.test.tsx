@@ -56,7 +56,7 @@ const FLOW_SERIES: FlowPoint[] = [
 const CHOICES = THEME_IDS.flatMap(theme =>
     (["original", "themed"] as const).map(recipeColours => ({theme, recipeColours})));
 const TRACE_CHOICES = CHOICES.flatMap(choice =>
-    [...accents.coffee, ...accents.tea].map(accent => ({...choice, accent})));
+    [...accents.coffee, ...accents.tea, "#FFFFFF"].map(accent => ({...choice, accent})));
 
 function rgb(colour: string | {payload: number}): number[] {
     const value = typeof colour === "string" ? Number(processColor(colour)) : colour.payload;
@@ -249,7 +249,7 @@ describe("historical appearance is presentation, never a history migration", () 
             </Providers>
         );
         const band = tree.getByTestId("trace-pause-manual-0").props;
-        const fillTop = choice.theme === "blue" ? 0.24 : 0.28;
+        const fillTop = choice.theme === "blue" ? 0.20 : choice.theme === "magenta" ? 0.26 : 0.28;
         const alphaByte = Math.round(fillTop * 255);
         const nativeFill = Number(processColor(appearance.recipe(accent).ink));
         expect(JSON.stringify(tree.toJSON()))
@@ -280,6 +280,25 @@ describe("historical appearance is presentation, never a history migration", () 
             expect(contrast(composite(rgb(line.stroke), base, line.strokeOpacity ?? 1), base))
                 .toBeGreaterThanOrEqual(3);
         }
+    });
+
+    it("renders a selected, paused legacy-white history trace with its plan hidden", async () => {
+        const accent = "#FFFFFF";
+        const before = JSON.stringify(SAMPLES);
+        const tree = await renderWithProviders(
+            <Providers appearance={{theme: "blue", recipeColours: "themed"}}>
+                <BrewTrace pours={POURS} stages={POURS} samples={SAMPLES} accent={accent}
+                           width={300} height={160} plannedSeconds={30} selectedIndex={0}
+                           planOpacity={0} pauseIntervals={[
+                               {from: 1_000, to: 20_000, pour: 1, reason: "manual"}
+                           ]}/>
+            </Providers>
+        );
+        expect(tree.getByTestId("trace-plan").props.strokeOpacity).toBe(0);
+        expect(tree.getByTestId("trace-temp-label-0")).toBeTruthy();
+        expect(JSON.stringify(SAMPLES)).toBe(before);
+        expect(resolveAppearance({theme: "blue", recipeColours: "themed"})
+            .recipe(accent).fill).toBe(accent);
     });
 
     it.each(TRACE_CHOICES)("keeps the actual waking trough readable on $theme/$recipeColours/$accent", async choice => {

@@ -848,10 +848,12 @@ expect(contrast(cup.stroke, appearance.palette.base)).toBeGreaterThanOrEqual(3);
   future brew stages. Move informational “NOT WATCHED” text to `palette.dim`.
   Do not change held-time/rate arithmetic, `FLOW_WINDOW_MS`, bypass exclusion,
   staircase time scaling or PourProfile's intentionally even stage division.
-  Qualification across all twelve slots found that three Blue/Themed
-  combinations could not clear 4.5:1 over the overlapping selection, pause
-  and water shading. Blue's water-gradient top opacity is therefore 0.24
-  rather than 0.28; other presets, geometry and animation are unchanged.
+  Qualification found Blue/Themed combinations could not clear 4.5:1 over
+  overlapping selection, pause and water shading. A legacy-white record
+  also exceeds the stock slots' brightest wash. Blue's water-gradient top
+  opacity is therefore 0.20 rather than 0.28; Magenta uses 0.26. Both are
+  bounded against the black and white extremes of every RGB channel.
+  Original, Light, geometry and animation are unchanged.
   Fit the waking plan at its shared 0.45 opacity trough through the existing
   colour fitter, including actual alpha composition. A deliberately hidden
   history plan (`planOpacity: 0`) requires no visible-ink fit.
