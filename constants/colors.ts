@@ -527,9 +527,17 @@ const BLACK = "#000000";
 const WHITE = "#FFFFFF";
 type RGB = readonly [number, number, number];
 
-/** Presentation fills share mix/cupLineFor's opaque six-digit hex contract. */
-function rgb(colour: string): RGB {
+/** Expand historical opaque shorthand for calculations, never persisted identity. */
+function opaqueHex(colour: string): string {
+    if (/^#[0-9a-f]{3}$/i.test(colour)) {
+        return `#${colour.slice(1).split("").map(channel => channel + channel).join("")}`;
+    }
     if (!/^#[0-9a-f]{6}$/i.test(colour)) throw new Error(`Invalid colour: ${colour}`);
+    return colour;
+}
+
+function rgb(colour: string): RGB {
+    colour = opaqueHex(colour);
     return [
         parseInt(colour.slice(1, 3), 16),
         parseInt(colour.slice(3, 5), 16),
@@ -638,6 +646,7 @@ export function resolveAppearance(supplied: AppearanceChoice): Appearance {
                 }
             }
         }
+        const computedFill = opaqueHex(fill);
         const foreground = foregroundFor(fill);
         const stock = hasFill(accents, fill);
         const keyParts = foreground.key.match(/^rgba\((\d+),(\d+),(\d+),([\d.]+)\)$/)!;
@@ -650,8 +659,8 @@ export function resolveAppearance(supplied: AppearanceChoice): Appearance {
         const tones = stock ? palette : p;
         return {
             canonical, fill,
-            ink: fit(fill, [p.base], 4.5),
-            cupInk: fit(cupLineFor(fill), [p.base], 3),
+            ink: fit(computedFill, [p.base], 4.5),
+            cupInk: fit(cupLineFor(computedFill), [p.base], 3),
             onAccent: foreground,
             keyInk: {
                 normal: fit(tones.text, [keyGround], 3),

@@ -235,7 +235,32 @@ describe.each(choices)("$theme / $recipeColours", choice => {
             expectSwitch(a.switchOn(c.fill), [c.fill]);
         });
 
-    it.each(["", "#xyzxyz", "#12345g", "#1234567", "not-a-colour", "rgba(0,0,0,0.5)"])(
+    it.each([
+        ["#f00", "#ff0000"],
+        ["#F00", "#FF0000"],
+        ["#aBc", "#aaBBcc"],
+        ["#000", "#000000"],
+        ["#FFF", "#FFFFFF"]
+    ])("preserves historic shorthand %s while computing with %s", (canonical, expanded) => {
+        const a = resolveAppearance(choice);
+        const c = a.recipe(canonical);
+        const equivalent = a.recipe(expanded);
+        expect(c.canonical).toBe(canonical);
+        expect(c.fill).toBe(canonical);
+        expect(c).toEqual({...equivalent, canonical, fill: canonical});
+        // The independent contrast oracle deliberately takes six-digit hex only.
+        expectCard({...c, fill: expanded}, a);
+        expect(c.ink).toBe(firstPassing(expanded, a.palette.base, 4.5));
+        expect(c.cupInk).toBe(firstPassing(cupLineFor(expanded), a.palette.base, 3));
+        expect(a.onFill(canonical)).toEqual(equivalent.onAccent);
+        expect(a.switchOn(canonical)).toEqual(a.switchOn(expanded));
+        expectSwitch(a.switchOn(canonical), [expanded]);
+    });
+
+    it.each([
+        "", "#xyzxyz", "#12345g", "#1234567", "#12", "#1234", "#12345",
+        "#12345678", "#f0g", " #f00", "#f00 ", "not-a-colour", "rgba(0,0,0,0.5)"
+    ])(
         "rejects invalid opaque hex syntax %p explicitly", value => {
             const a = resolveAppearance(choice);
             expect(() => a.recipe(value)).toThrow(/colour/i);
