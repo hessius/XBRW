@@ -10,6 +10,7 @@ import {
 } from "@/library/slots/slotModel";
 import {SLOT_INTEGRATION_BLOCK} from "@/library/slots/slotWriter";
 import {slotSourceRecipe} from "@/library/slots/slotSource";
+import {searchRoasterRecipes, type RoasterRecipeChoice, type SubscribedCatalogue} from "@/library/roasterSearch";
 import {useBottomInset} from "@/hooks/useBottomInset";
 import type {SlotAttempt} from "@/hooks/useEasyModeSlots";
 import {useLiveBrewBarGuard} from "@/hooks/useLiveBrewBarGuard";
@@ -181,6 +182,16 @@ export type EasyModeSlotsProps = {
     onCancel: () => void;
     onDismissWrite?: () => void;
     onRestoreOriginal?: () => void;
+    /**
+     * The subscribed roasters' cached catalogues. A search in the picker lists
+     * their recipes under the library's as FROM YOUR ROASTERS.
+     */
+    roasterCatalogues?: readonly SubscribedCatalogue[];
+    /**
+     * Fetch a roaster's recipe, keep it in the library and put it in the slot.
+     * A failure the host has not already reported comes back as a message.
+     */
+    onAssignRoaster?: (index: SlotIndex, choice: RoasterRecipeChoice) => Promise<{ok: true} | {ok: false; message?: string}>;
     teaProbe?: Pick<TeaSlotProbePanelProps, "onWriteProbe" | "onRestore" | "onObserve"
         | "onWriteLab" | "onRecoveryCommand" | "onClearRecovery">;
     teaProbeOpen?: boolean;
@@ -236,6 +247,29 @@ function RecipeChoice({recipe, onPick}: {recipe: Recipe; onPick: () => void}) {
     );
 }
 
+function RoasterChoiceRow({choice, loading, disabled, onPick}: {
+    choice: RoasterRecipeChoice; loading: boolean; disabled: boolean; onPick: () => void;
+}) {
+    const {palette} = useAppearance();
+    const roast = choice.coffee.roast?.level;
+    const detail = [choice.roaster, roast === undefined ? undefined : `${roast} roast`,
+        choice.coffee.available ? undefined : "Sold out"].filter(Boolean).join(" · ");
+    return (
+        <Pressable accessibilityRole="button" accessibilityLabel={`Choose ${choice.name} from ${choice.roaster}`}
+            accessibilityHint="Loads the recipe from xBloom and saves it to your library."
+            accessibilityState={{disabled, busy: loading}} disabled={disabled} onPress={onPick}
+            testID={`roaster-choice-${choice.key}`}>
+            <YStack gap="$1" padding="$3" marginBottom="$2" borderRadius="$3"
+                backgroundColor={palette.raised} borderWidth={1} borderColor={palette.line}>
+                <Text color={palette.text} fontSize={16} fontWeight="600">{choice.name}</Text>
+                <Text color={palette.dim} fontSize={13}>
+                    {loading ? "Loading the recipe from xBloom." : detail}
+                </Text>
+            </YStack>
+        </Pressable>
+    );
+}
+
 function StoppedWrite({journal, failure}: {journal: SlotJournal; failure: string | null}) {
     const appearance = useAppearance();
     const {palette} = appearance;
@@ -285,7 +319,8 @@ export default function EasyModeSlots({
     record, recipes, incoming, header, deviceId, serial, connected, available, running, error,
     attempt = null, onDismissSuccess, writeControlRef, busy = false, serialMatches = true,
     guardLiveBrewBar = false, teaProbe, teaProbeOpen = false, onTeaProbeOpenChange,
-    onAssign, onSetScaleEnabled, onWrite, onRecover, onCancel, onDismissWrite, onRestoreOriginal
+    onAssign, onSetScaleEnabled, onWrite, onRecover, onCancel, onDismissWrite, onRestoreOriginal,
+    roasterCatalogues = [], onAssignRoaster
 }: EasyModeSlotsProps) {
     const appearance = useAppearance();
     const {palette} = appearance;
@@ -295,6 +330,8 @@ export default function EasyModeSlots({
     const [usedIncoming, setUsedIncoming] = useState<string | null>(null);
     const [confirmation, setConfirmation] = useState<{deviceId: string; kind: "retry" | "cancel"} | null>(null);
     const [help, setHelp] = useState(false);
+    const [fetching, setFetching] = useState<string | null>(null);
+    const [roasterError, setRoasterError] = useState<string | null>(null);
     const changeA = useRef<React.ComponentRef<typeof Button>>(null);
     const changeB = useRef<React.ComponentRef<typeof Button>>(null);
     const changeC = useRef<React.ComponentRef<typeof Button>>(null);
@@ -354,6 +391,23 @@ export default function EasyModeSlots({
         && overflowFor(new Recipe(undefined, snapshot.recipeJSON)) !== undefined);
     const filteredRecipes = recipes.filter(recipe =>
         recipe.displayName().toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
+    const roasterChoices = pickerOpen && onAssignRoaster !== undefined
+        ? searchRoasterRecipes(roasterCatalogues, search, recipes) : [];
+
+    async function pickRoaster(choice: RoasterRecipeChoice): Promise<void> {
+        if (pickerIndex === null || locked || fetching !== null || onAssignRoaster === undefined) return;
+        setFetching(choice.key);
+        setRoasterError(null);
+        let result: Awaited<ReturnType<typeof onAssignRoaster>>;
+        try {
+            result = await onAssignRoaster(pickerIndex, choice);
+        } catch {
+            result = {ok: false, message: "Couldn't load that recipe. Try again."};
+        }
+        setFetching(null);
+        if (result.ok) setPicker(null);
+        else if (result.message !== undefined) setRoasterError(result.message);
+    }
 
     return (
         <YStack flex={1} backgroundColor={palette.base}>
@@ -443,7 +497,7 @@ export default function EasyModeSlots({
                                 : enabled => onSetScaleEnabled(slotIndex, enabled)}
                             onChange={() => {
                                 focusOrigin.current = changeRefs[index];
-                                setSearch(""); setPicker({deviceId, index: slotIndex});
+                                setSearch(""); setRoasterError(null); setPicker({deviceId, index: slotIndex});
                             }}
                             onUpdate={() => { if (current !== undefined) onAssign(slotIndex, current); }}/>;
                     })}
@@ -493,6 +547,16 @@ export default function EasyModeSlots({
                         ListEmptyComponent={<Text color={palette.dim}>
                             {recipes.length === 0 ? "No recipes in your library." : "No matching recipes."}
                         </Text>}
+                        ListFooterComponent={roasterChoices.length === 0 ? null : <YStack gap="$2" paddingTop="$3">
+                            <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.5} color={palette.dim}>
+                                FROM YOUR ROASTERS</DotMatrixText>
+                            {roasterError !== null && <Text selectable accessibilityRole="alert" color={palette.danger}>
+                                {roasterError}
+                            </Text>}
+                            {roasterChoices.map(choice => <RoasterChoiceRow key={choice.key} choice={choice}
+                                loading={fetching === choice.key} disabled={locked || fetching !== null}
+                                onPick={() => void pickRoaster(choice)}/>)}
+                        </YStack>}
                         renderItem={({item}) => <RecipeChoice recipe={item} onPick={() => {
                             if (pickerIndex !== null && !locked && onAssign(pickerIndex, item) !== false) setPicker(null);
                         }}/>}/>

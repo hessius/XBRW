@@ -20,6 +20,12 @@ import {isActiveBrewPhase} from "@/library/machine/Machine";
 import {unavailableSlotPort} from "@/library/slots/slotWriter";
 import {unwrittenSlotCount} from "@/library/slots/slotModel";
 import {STABLE_HOST} from "@/constants/views";
+import {sharedSettings} from "@/hooks/useSetting";
+import {realLibraryDeps} from "@/library/roasterSync";
+import {
+    saveRoasterChoice, subscribedCatalogues, type RoasterRecipeChoice
+} from "@/library/roasterSearch";
+import type {SlotIndex} from "@/library/slots/slotModel";
 
 export default function EasyModeScreen() {
     const appearance = useAppearance();
@@ -41,6 +47,10 @@ export default function EasyModeScreen() {
         ?? (slots.record.experiment?.phase === "active" ? slots.record.experiment.serial : null);
     const serialMatches = retainedSerial == null || actual === null || retainedSerial === actual.serial;
     const [incoming] = useState(() => incomingEasyModeRecipe(recipeJSON));
+    // Read once from the cached feeds: opening or searching the picker costs
+    // no request. A recipe is fetched only when one is picked.
+    const [roasterCatalogues] = useState(() => subscribedCatalogues(sharedSettings()));
+    const [libraryDeps] = useState(() => realLibraryDeps(sharedSettings()));
     const [leavePrompt, setLeavePrompt] = useState<{
         deviceId: string; serial: string | null; exit: () => void
     } | null>(null);
@@ -103,6 +113,24 @@ export default function EasyModeScreen() {
         return () => cancelAnimationFrame(frame);
     }, [departureOpen, focused, active, overlay, ratingNoteOpen]);
 
+    /**
+     * FROM YOUR ROASTERS: fetch the recipe, keep it in the library (as ADD TO
+     * SHELF does), then assign the library's copy so the slot's link holds.
+     */
+    async function assignRoaster(
+        index: SlotIndex, choice: RoasterRecipeChoice
+    ): Promise<{ok: true} | {ok: false; message?: string}> {
+        let recipe;
+        try {
+            recipe = await saveRoasterChoice(choice, libraryDeps, sharedSettings());
+        } catch {
+            return {ok: false, message: "Couldn't load that recipe from xBloom. Check your connection and try again."};
+        }
+        library.refresh();
+        // A refusal is reported by the slot hook, which the picker already shows.
+        return slots.assign(index, recipe) ? {ok: true} : {ok: false};
+    }
+
     function stay(): void {
         setLeavePrompt(null);
     }
@@ -147,6 +175,7 @@ export default function EasyModeScreen() {
                            onRestoreOriginal={() => void slots.restoreTeaOriginal()}
                            onDismissWrite={() => void slots.dismissWrite()}
                            onAssign={slots.assign} onWrite={slots.write}
+                           roasterCatalogues={roasterCatalogues} onAssignRoaster={assignRoaster}
                            onSetScaleEnabled={slots.setScaleEnabled}
                            onRecover={slots.recover} onCancel={slots.cancel}/>
             </YStack>

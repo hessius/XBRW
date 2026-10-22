@@ -45,6 +45,9 @@ const mockClearRecovery = jest.fn();
 const mockRestore = jest.fn();
 const mockStopWrite = jest.fn();
 const mockObserve = jest.fn();
+const mockAssign = jest.fn((..._args: unknown[]) => true);
+const mockRefresh = jest.fn();
+let mockLibraryDeps: import("@/library/roasterRecipes").LibraryDeps | null = null;
 const dev = __DEV__;
 type Action = {type: string; payload?: {count: number}};
 type PreventionCallback = (event: {data: {action: Action}}) => void;
@@ -99,14 +102,21 @@ jest.mock("@/hooks/useEasyModeSlots", () => ({
         available: mockAvailable, running: mockRunning, attempt: mockAttempt,
         resetAttempt: mockReset,
         setScaleEnabled: mockSetScaleEnabled,
-        assign: jest.fn(), write: mockWrite, recover: jest.fn(), cancel: jest.fn(), dismissWrite: mockStopWrite,
+        assign: mockAssign, write: mockWrite, recover: jest.fn(), cancel: jest.fn(), dismissWrite: mockStopWrite,
         writeTeaProbe: mockProbe, restoreTeaOriginal: mockRestore, observeTeaProbe: mockObserve,
         writeSlotLab: mockLab, sendRecoveryProbe: mockRecoveryProbe, clearRecoveryProbe: mockClearRecovery
     })
 }));
-jest.mock("@/hooks/useRecipeLibrary", () => ({
-    useRecipeLibrary: () => ({allRecipes: () => mockAllRecipes})
+jest.mock("expo-sqlite", () => ({
+    openDatabaseSync: () => jest.requireActual("@/test-utils/sqlite").createTestDatabase()
 }));
+jest.mock("@/hooks/useRecipeLibrary", () => ({
+    useRecipeLibrary: () => ({allRecipes: () => mockAllRecipes, refresh: mockRefresh})
+}));
+jest.mock("@/library/roasterSync", () => {
+    const actual = jest.requireActual("@/library/roasterSync");
+    return {...actual, realLibraryDeps: (...args: unknown[]) => mockLibraryDeps ?? actual.realLibraryDeps(...args)};
+});
 
 beforeEach(() => {
     mockParams = {}; mockRatingNoteOpen = false; mockRecord = emptySlotRecord();
@@ -120,6 +130,7 @@ beforeEach(() => {
     mockLab.mockClear(); mockRecoveryProbe.mockClear(); mockClearRecovery.mockClear();
     mockStopWrite.mockClear();
     mockSetScaleEnabled.mockClear();
+    mockAssign.mockClear(); mockRefresh.mockClear(); mockLibraryDeps = null;
     Object.defineProperty(global, "__DEV__", {value: dev});
     forgetLastMove();
 });
@@ -732,4 +743,33 @@ describe("the reference ABC comparison on the route", () => {
         expect(mockObserve).not.toHaveBeenCalled();
         expect(mockWrite).not.toHaveBeenCalled();
     });
+});
+
+it("finds a subscribed roaster's coffee in the picker, saves it to the library and assigns that copy", async () => {
+    const {sharedSettings} = jest.requireActual<typeof import("@/hooks/useSetting")>("@/hooks/useSetting");
+    const {subscribe, unsubscribe} = jest.requireActual<typeof import("@/library/roasterSync")>("@/library/roasterSync");
+    const {FEED_URL, feedBody, memoryLibrary} = jest.requireActual<typeof import("@/test-utils/roasterFeed")>(
+        "@/test-utils/roasterFeed");
+    const library = memoryLibrary();
+    mockLibraryDeps = library.deps;
+    const {feed, body} = feedBody([{id: "kenya", name: "Kenya Nyeri", sizes: ["18g"]}], "Hill Roasters");
+    subscribe(sharedSettings(), FEED_URL, feed, body, 1000);
+    try {
+        await renderWithProviders(<EasyModeScreen/>);
+        await fireEvent.press(screen.getByRole("button", {name: "Change slot C recipe"}));
+        await fireEvent.changeText(await screen.findByLabelText("Search recipes"), "kenya");
+        await waitFor(async () => {
+            if (mockAssign.mock.calls.length === 0) {
+                await fireEvent.press(screen.getByRole("button", {name: "Choose Kenya Nyeri - 18g from Hill Roasters"}));
+            }
+            expect(mockAssign).toHaveBeenCalledTimes(1);
+        }, {timeout: SHEET_PRESS_TIMEOUT});
+        const [index, assigned] = mockAssign.mock.calls[0] as [number, {uuid: string; name: string}];
+        expect(index).toBe(2);
+        expect(assigned.name).toBe("Kenya Nyeri - 18g");
+        expect(library.all().map((recipe) => recipe.uuid)).toEqual([assigned.uuid]);
+        expect(mockRefresh).toHaveBeenCalled();
+    } finally {
+        unsubscribe(sharedSettings(), FEED_URL);
+    }
 });

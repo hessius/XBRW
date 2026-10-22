@@ -19,6 +19,9 @@ import * as motion from "@/constants/motion";
 import {restoreTeaSlotOriginal, writeTeaSlotProbe} from "@/library/slots/teaSlotProbe";
 import {buildProfilePath, PROFILE_BLEED} from "@/components/PourProfile";
 import {DOTO_FAMILIES} from "@/components/DotMatrixText";
+import {subscribedCatalogues} from "@/library/roasterSearch";
+import {subscribe} from "@/library/roasterSync";
+import {FEED_URL, feedBody, memorySettings} from "@/test-utils/roasterFeed";
 
 const recipes = [coffee("Morning"), coffee("Evening")];
 const native = jest.requireActual<typeof import("react-native")>("react-native");
@@ -525,6 +528,61 @@ it("keeps the picker selection on storage failure and searches the full supplied
     }, {timeout: SHEET_PRESS_TIMEOUT});
     expect(screen.getByRole("button", {name: "Choose Evening"})).toBeOnTheScreen();
     expect(screen.queryByRole("button", {name: "Write all three slots"})).toBeNull();
+});
+
+describe("FROM YOUR ROASTERS", () => {
+    function roasterCatalogues() {
+        const settings = memorySettings();
+        const {feed, body} = feedBody([{id: "kenya", name: "Kenya Nyeri", sizes: ["18g"]}], "Hill Roasters");
+        subscribe(settings, FEED_URL, feed, body, 1000);
+        return subscribedCatalogues(settings);
+    }
+
+    it("lists matching roaster recipes under the library's and assigns the picked one", async () => {
+        const options = props();
+        const onAssignRoaster = jest.fn().mockResolvedValue({ok: true});
+        await renderWithProviders(<EasyModeSlots {...options} roasterCatalogues={roasterCatalogues()}
+            onAssignRoaster={onAssignRoaster}/>);
+        await fireEvent.press(screen.getByRole("button", {name: "Change slot B recipe"}));
+        expect(screen.queryByText("FROM YOUR ROASTERS")).toBeNull();
+        await fireEvent.changeText(await screen.findByLabelText("Search recipes"), "kenya");
+        expect(screen.getByText("No matching recipes.")).toBeOnTheScreen();
+        expect(screen.getByText("FROM YOUR ROASTERS")).toBeOnTheScreen();
+        expect(screen.getByText("Hill Roasters · Light roast")).toBeOnTheScreen();
+        await waitFor(async () => {
+            if (onAssignRoaster.mock.calls.length === 0) {
+                await fireEvent.press(screen.getByRole("button", {name: "Choose Kenya Nyeri - 18g from Hill Roasters"}));
+            }
+            expect(onAssignRoaster).toHaveBeenCalledWith(1, expect.objectContaining({
+                name: "Kenya Nyeri - 18g", size: "18g", roaster: "Hill Roasters"
+            }));
+        }, {timeout: SHEET_PRESS_TIMEOUT});
+        await waitFor(() => expect(screen.queryByText("FROM YOUR ROASTERS")).toBeNull());
+    });
+
+    it("keeps the picker open and says why when the recipe cannot be loaded", async () => {
+        const options = props();
+        const onAssignRoaster = jest.fn().mockResolvedValue({ok: false, message: "Couldn't load that recipe."});
+        await renderWithProviders(<EasyModeSlots {...options} roasterCatalogues={roasterCatalogues()}
+            onAssignRoaster={onAssignRoaster}/>);
+        await fireEvent.press(screen.getByRole("button", {name: "Change slot A recipe"}));
+        await fireEvent.changeText(await screen.findByLabelText("Search recipes"), "hill");
+        await waitFor(async () => {
+            if (onAssignRoaster.mock.calls.length === 0) {
+                await fireEvent.press(screen.getByRole("button", {name: "Choose Kenya Nyeri - 18g from Hill Roasters"}));
+            }
+            expect(await screen.findByText("Couldn't load that recipe.")).toBeOnTheScreen();
+        }, {timeout: SHEET_PRESS_TIMEOUT});
+        expect(screen.getByText("FROM YOUR ROASTERS")).toBeOnTheScreen();
+        expect(options.onAssign).not.toHaveBeenCalled();
+    });
+
+    it("shows no roaster section without a handler", async () => {
+        await renderWithProviders(<EasyModeSlots {...props()} roasterCatalogues={roasterCatalogues()}/>);
+        await fireEvent.press(screen.getByRole("button", {name: "Change slot A recipe"}));
+        await fireEvent.changeText(await screen.findByLabelText("Search recipes"), "kenya");
+        expect(screen.queryByText("FROM YOUR ROASTERS")).toBeNull();
+    });
 });
 
 it.each([null, 1] as const)("offers deliberate still-saving recovery for B boundary %p", async (inFlight) => {
