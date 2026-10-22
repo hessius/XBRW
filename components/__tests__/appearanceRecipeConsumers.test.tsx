@@ -1,6 +1,6 @@
 import React from "react";
 import {processColor, StyleSheet} from "react-native";
-import {screen, within} from "@testing-library/react-native";
+import {fireEvent, screen, within} from "@testing-library/react-native";
 
 import RecipeCard from "@/components/RecipeCard";
 import RecipeHero from "@/components/RecipeHero";
@@ -12,6 +12,9 @@ import CloudImportRow from "@/components/CloudImportRow";
 import EasyModeSlotCard from "@/components/EasyModeSlotCard";
 import {BeanProfileDeck} from "@/components/BeanProfileDeck";
 import {BeanProfileSheet} from "@/components/BeanProfileSheet";
+import QuickEditPanel from "@/components/QuickEditPanel";
+import StageDetail from "@/components/StageDetail";
+import {StageValue} from "@/components/StageTile";
 import {accents, resolveAppearance} from "@/constants/colors";
 import {AppearanceScope} from "@/hooks/useAppearance";
 import {THEME_IDS, type AppearanceChoice} from "@/library/appearance";
@@ -19,6 +22,7 @@ import Recipe, {CUP_TYPE} from "@/library/Recipe";
 import Pour from "@/library/Pour";
 import {renderWithProviders} from "@/test-utils/render";
 import {measureCardPicture, measureTilePicture, pictureLayout} from "@/test-utils/pictureLayout";
+import {contrast} from "@/test-utils/contrast";
 
 const choices = THEME_IDS.flatMap(theme =>
     (["original", "themed"] as const).map(recipeColours => ({theme, recipeColours})));
@@ -26,6 +30,74 @@ const noop = () => {};
 const style = (node: ReturnType<typeof screen.getByTestId>) => StyleSheet.flatten(node.props.style);
 const scoped = (choice: AppearanceChoice, children: React.ReactNode) =>
     <AppearanceScope choice={choice}>{children}</AppearanceScope>;
+
+// Walk only rendered native nodes: transparent wrappers inherit their ground.
+function renderedGround(node: ReturnType<typeof screen.getByTestId>): string {
+    for (let parent = node.parent; parent; parent = parent.parent) {
+        const background = StyleSheet.flatten(parent.props.style)?.backgroundColor;
+        if (background && background !== "transparent") return background;
+    }
+    throw new Error("No rendered background for numeric foreground");
+}
+
+describe.each(choices)("numeric chrome foregrounds: $theme / $recipeColours", choice => {
+    it.each(["readout", "input"])("keeps the unaccented %s at neutral text", async state => {
+        const view = await renderWithProviders(scoped(choice,
+            <StageValue topic="volume" value={90} min={1} max={240} step={1} onChange={noop}/>
+        ));
+        if (state === "input") await fireEvent.press(screen.getByRole("button", {name: /^Edit /}));
+        const node = screen.getByTestId(state === "input" ? "stepper-input" : "stepper-value");
+        expect(style(node).color).toBe(resolveAppearance(choice).palette.text);
+        expect(contrast(style(node).color, renderedGround(node))).toBeGreaterThanOrEqual(4.5);
+        await view.unmount();
+    });
+
+    it.each(accents.coffee.flatMap(canonical =>
+        (["readout", "input"] as const).map(state => ({canonical, state}))
+    ))("keeps $canonical $state readable on actual surface and raised consumers", async ({canonical, state}) => {
+        const recipe = new Recipe();
+        recipe.dosage = 18;
+        recipe.ratio = 16;
+        recipe.pours = [new Pour(1, 90)];
+        const before = JSON.stringify(recipe);
+        const view = await renderWithProviders(scoped(choice, <>
+            <QuickEditPanel recipe={recipe} adjustments={{}} accent={canonical}
+                            temperatureUnit="C" onChange={noop}/>
+            <StageValue topic="volume" value={90} min={1} max={240} step={1}
+                        accent={canonical} onChange={noop}/>
+        </>));
+        if (state === "input") {
+            for (const button of screen.getAllByRole("button", {name: /^Edit /})) {
+                await fireEvent.press(button);
+            }
+        }
+        const nodes = screen.getAllByTestId(state === "input" ? "stepper-input" : "stepper-value");
+        const grounds = nodes.map(renderedGround);
+        expect(grounds).toContain(resolveAppearance(choice).palette.surface);
+        expect(grounds).toContain(resolveAppearance(choice).palette.raised);
+        for (const node of nodes) {
+            expect(contrast(style(node).color, renderedGround(node))).toBeGreaterThanOrEqual(4.5);
+        }
+        expect(JSON.stringify(recipe)).toBe(before);
+        await view.unmount();
+    });
+});
+
+it.each([accents.coffee[1], accents.tea[1]])(
+    "keeps Blue Themed %s small stage labels readable on the rendered raised panel", async canonical => {
+        const stage = new Pour(1, 90, 92);
+        await renderWithProviders(scoped({theme: "blue", recipeColours: "themed"},
+            <StageDetail index={0} stage={stage} deliveredMl={90} stalls={[]} samples={[]}
+                         hasStream={false} outcome="done" accent={canonical} onClose={noop}/>
+        ));
+        const panel = screen.getByTestId("stage-detail");
+        for (const text of ["STAGE 1", "90 ML · 92°"]) {
+            const label = within(panel).getByText(text);
+            expect(renderedGround(label)).toBe(style(panel).backgroundColor);
+            expect(contrast(style(label).color, renderedGround(label))).toBeGreaterThanOrEqual(4.5);
+        }
+    }
+);
 
 it.each(choices)("draws all twelve canonical slots with paired card, hero, tile and page inks: %o", async choice => {
     const appearance = resolveAppearance(choice);

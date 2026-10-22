@@ -1510,3 +1510,66 @@ focused G PR targets `develop`, gets at most one automated review round
 task-branch pushes alone do not prove PR CI. The controller owns final
 review/push and coordination updates. No `main`/`develop` changes or worktree
 deletion are authorized.
+
+### Final cross-task foreground findings — corrected and requalified
+
+Both P2 findings are fixed in the coherent local checkpoint following
+`b9c3effbdaa2a07d724437be3b3b0bc107484639`. This section supersedes the
+previous automated-gate counts, not the pending native/manual matrix or
+permission boundary above. The exact resulting checkpoint SHA is recorded in
+the session handoff artifact, avoiding a self-referential commit.
+
+`Stepper` now accepts its existing canonical recipe accent and resolves it
+once to presentation ink for both the Doto readout and editable input.
+Omitting the accent still uses `palette.text`. All production callers were
+traced: editor dose/ratio use canonical `resolveAccent(recipe)` on surface;
+editor grind size/speed omit it; `StageTile`'s `StageValue` passes canonical
+accent for volume on raised and omits it for the other numeric fields;
+`QuickEditPanel` passes canonical accent for dose/ratio/grind/temperature offset
+on surface, from both the editor and home sheet. There are no actual-fill or
+on-card Stepper callers and no double-remapping exception is required.
+Callbacks, drafts, focus, values, limits and geometry are unchanged.
+
+The shared `recipe().ink` now fits the existing base/surface/raised grounds
+together at 4.5:1, reusing the central fitter. Independent first-passing-step
+expectations consciously use all three grounds; `cupInk` retains its base-only
+3:1 contract. The twelve slots across all eight choices, historic shorthand,
+RN native colour formats and base-composited alpha inputs retain their
+identity/foreground/switch/key tests. All 96 stock card fills, on-card
+foregrounds, key inks and cup inks match the previous head exactly; canonical
+palette/slot exports and Original Dark stock inks also match. Fifteen derived
+stock page inks change to meet the broader chrome contract, without changing
+any approved palette value. The existing chart-water opacity bounds remain
+untouched.
+
+Measured independently against actual rendered consumer backgrounds:
+
+| Foreground | Before | After |
+| --- | --- | --- |
+| Light Original Sky numeric readout/input, white / raised | 1.820 / 1.525 | 5.467 / 4.580 |
+| Light Themed Sky numeric readout/input, white / raised | 1.820 / 1.525 | 8.413 / 7.048 |
+| Blue Themed Peach small StageDetail labels, raised | 4.076 | 4.518 |
+| Blue Themed Rose small StageDetail labels, raised | 4.028 | 4.516 |
+
+TDD RED: 4 failing / 6 passing targeted suites, 376 failing / 998 passing
+tests, both platforms. The failures include both numeric modes and both raised
+StageDetail labels. GREEN: all 10 targeted suites / 1,374 tests pass.
+Rendered regressions exercise eight coffee accents across all eight choices
+in both numeric modes on real QuickEditPanel surface and StageValue raised
+nodes; unaccented values remain neutral. No new native IDs or custom-child
+prop inspection are used. Typecheck, lint and diff-check also pass.
+
+Fresh exact serial full chain after the final implementation:
+`npm run typecheck && npm run lint && npm test && npx expo-doctor` exited 0.
+Jest: **866 passing / 2 skipped suites; 19,920 passing / 26 skipped tests;
+2 passing snapshots**, 348.597 seconds. Lint: **0 errors / 32 warnings**.
+Doctor: **21/21**. The full log contains 1,248 React/animation `act` warning
+occurrences, two `TimeoutOverflowWarning` occurrences and one non-graceful
+worker-exit warning; no new warning-free or teardown-baseline claim is made.
+
+Full RED, GREEN and exact-chain logs, independent before/after contrast and
+unchanged-identity audit, caller/diff evidence and exact Git handoff are in
+the session's existing `files/appearance-final-foregrounds-*` artifacts.
+The worktree remains owned by this appearance task, retained for controller
+review and native qualification. This checkpoint is local only; no push,
+PR/review, merge, cleanup, native build/prebuild or deployment was performed.

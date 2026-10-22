@@ -679,7 +679,7 @@ export function resolveAppearance(supplied: AppearanceChoice): Appearance {
         const tones = stock ? palette : p;
         return {
             canonical, fill,
-            ink: fit(computedFill, [p.base], 4.5),
+            ink: fit(computedFill, grounds, 4.5),
             cupInk: fit(cupLineFor(computedFill), [p.base], 3),
             onAccent: foreground,
             keyInk: {

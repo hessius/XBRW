@@ -69,7 +69,9 @@ function expectCard(c: DisplayRecipeColour, appearance: Appearance) {
     for (const ink of Object.values(c.keyInk)) {
         expect(contrast(ink, key)).toBeGreaterThanOrEqual(3);
     }
-    expect(contrast(c.ink, appearance.palette.base)).toBeGreaterThanOrEqual(4.5);
+    for (const ground of [appearance.palette.base, appearance.palette.surface, appearance.palette.raised]) {
+        expect(contrast(c.ink, ground)).toBeGreaterThanOrEqual(4.5);
+    }
     expect(contrast(c.cupInk, appearance.palette.base)).toBeGreaterThanOrEqual(3);
 }
 
@@ -85,12 +87,12 @@ function expectSwitch(pair: Appearance["chromeSwitch"], grounds: string[]) {
     expect(contrast(pair.on.thumb, pair.on.track)).toBeGreaterThanOrEqual(3);
 }
 
-function firstPassing(candidate: string, ground: string, floor: number): string {
-    const endpoint = contrast("#000000", ground) >= contrast("#FFFFFF", ground)
+function firstPassing(candidate: string, grounds: string[], floor: number): string {
+    const endpoint = contrast("#000000", grounds[0]) >= contrast("#FFFFFF", grounds[0])
         ? "0,0,0" : "255,255,255";
     for (let step = 0; step <= 100; step++) {
         const ink = step === 0 ? candidate : over(`rgba(${endpoint},${step / 100})`, candidate);
-        if (contrast(ink, ground) >= floor) return ink;
+        if (grounds.every(ground => contrast(ink, ground) >= floor)) return ink;
     }
     throw new Error("Test fixture has no passing endpoint");
 }
@@ -154,8 +156,8 @@ describe.each(choices)("$theme / $recipeColours", choice => {
         const a = resolveAppearance(choice);
         const c = a.recipe(canonical);
         expectCard(c, a);
-        expect(c.ink).toBe(firstPassing(c.fill, a.palette.base, 4.5));
-        expect(c.cupInk).toBe(firstPassing(cupLineFor(c.fill), a.palette.base, 3));
+        expect(c.ink).toBe(firstPassing(c.fill, [a.palette.base, a.palette.surface, a.palette.raised], 4.5));
+        expect(c.cupInk).toBe(firstPassing(cupLineFor(c.fill), [a.palette.base], 3));
         expect(a.onFill(c.fill)).toEqual(c.onAccent);
         const themed = choice.recipeColours === "themed" && choice.theme !== "original";
         if (!themed) {
@@ -250,8 +252,8 @@ describe.each(choices)("$theme / $recipeColours", choice => {
         expect(c).toEqual({...equivalent, canonical, fill: canonical});
         // The independent contrast oracle deliberately takes six-digit hex only.
         expectCard({...c, fill: expanded}, a);
-        expect(c.ink).toBe(firstPassing(expanded, a.palette.base, 4.5));
-        expect(c.cupInk).toBe(firstPassing(cupLineFor(expanded), a.palette.base, 3));
+        expect(c.ink).toBe(firstPassing(expanded, [a.palette.base, a.palette.surface, a.palette.raised], 4.5));
+        expect(c.cupInk).toBe(firstPassing(cupLineFor(expanded), [a.palette.base], 3));
         expect(a.onFill(canonical)).toEqual(equivalent.onAccent);
         expect(a.switchOn(canonical)).toEqual(a.switchOn(expanded));
         expectSwitch(a.switchOn(canonical), [expanded]);
@@ -285,8 +287,8 @@ describe.each(choices)("$theme / $recipeColours", choice => {
         expect(c.fill).toBe(canonical);
         expect(c).toEqual({...equivalent, canonical, fill: canonical});
         expectCard({...c, fill: effective}, a);
-        expect(c.ink).toBe(firstPassing(effective, a.palette.base, 4.5));
-        expect(c.cupInk).toBe(firstPassing(cupLineFor(effective), a.palette.base, 3));
+        expect(c.ink).toBe(firstPassing(effective, [a.palette.base, a.palette.surface, a.palette.raised], 4.5));
+        expect(c.cupInk).toBe(firstPassing(cupLineFor(effective), [a.palette.base], 3));
         expect(a.onFill(canonical)).toEqual(a.onFill(effective));
         expect(a.switchOn(canonical)).toEqual(a.switchOn(effective));
         expectSwitch(a.switchOn(canonical), [effective]);

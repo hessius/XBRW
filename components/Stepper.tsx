@@ -86,7 +86,7 @@ type Props = {
      * from `min`, `max` and `step` as before.
      */
     values?: readonly number[];
-    /** Draw the number in the recipe's accent. For dose and ratio. */
+    /** Canonical recipe accent, resolved to readable ink on app chrome. */
     accent?: string;
     /** Appended to the spoken value, e.g. "g". */
     unit?: string;
@@ -113,7 +113,9 @@ type Props = {
 export default function Stepper({
     label, value, min, max, step, values, accent, unit, formatValue, signedInput, onChange
 }: Props) {
-    const {palette} = useAppearance();
+    const appearance = useAppearance();
+    const {palette} = appearance;
+    const ink = accent === undefined ? palette.text : appearance.recipe(accent).ink;
     const activeStepStyle = {...stepStyle, backgroundColor: palette.control, borderColor: palette.line};
     // null means the Doto readout is showing; a string means the field is
     // open and holds the in-progress text.
@@ -241,13 +243,13 @@ export default function Stepper({
                            onBlur={commit}
                            onSubmitEditing={commit}
                            textAlign="center" minWidth={54} fontSize={20}
-                           color={accent ?? palette.text}/>
+                           color={ink}/>
                 ) : (
                     <Pressable accessibilityRole="button"
                                accessibilityLabel={`Edit ${label}`}
                                onPress={() => setDraft(String(value))}>
                         <DotMatrixText testID="stepper-value" fontSize={22}
-                                       weight="extrabold" color={accent ?? palette.text}
+                                       weight="extrabold" color={ink}
                                        style={{minWidth: 54, textAlign: "center"}}>
                             {shownValue}
                         </DotMatrixText>
