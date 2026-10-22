@@ -17,6 +17,7 @@ import type {SlotMarkerValue} from "@/library/slots/slotModel";
 import {accentGroupFor, resolveAccent} from "@/library/accent";
 import {canWriteToCard} from "@/library/cardLimits";
 import {useAppearance} from "@/hooks/useAppearance";
+import {varietyProcessLine} from "@/library/coffeeDetails";
 import type {DotIconName} from "@/constants/dotIcons";
 
 const CARD_HEIGHT = 116;
@@ -232,11 +233,15 @@ export default function RecipeCard({
     // this label or it is, to a screen reader, conveyed by the accent colour
     // alone -- which is the state the TEA/COFFEE marker exists to prevent.
     const hasNote = recipe.description.length > 0;
+    // Without a note, the second line says what the bean is ("Gesha · Washed"),
+    // so a card for a catalogue coffee is not left with a blank line.
+    const secondary = hasNote ? recipe.description : varietyProcessLine(recipe.coffee);
+    const hasSecondary = secondary !== undefined;
 
     const shownEvidence = [evidenceLine(evidence), bagBadge?.label].filter(Boolean).join(" · ") || null;
     const {width, fontScale} = useWindowDimensions();
     const signature = JSON.stringify([
-        recipe.uuid, recipe.displayName(), recipe.description, recipe.favourite, recipe.dosage,
+        recipe.uuid, recipe.displayName(), secondary, recipe.favourite, recipe.dosage,
         recipe.ratio, recipe.grindSize, recipe.grinder, recipe.pours.map(pour => pour.volume),
         isTea, showMarker, shownEvidence, slotMarker?.slots, editing,
         !!onDuplicate, !!onDelete, picture, width, fontScale
@@ -261,7 +266,7 @@ export default function RecipeCard({
 
     const summary = [
         recipe.displayName(),
-        hasNote ? recipe.description : undefined,
+        secondary?.replace(/ · /g, ", "),
         marker.toLowerCase(),
         recipe.favourite ? "starred" : undefined,
         slotMarker?.label,
@@ -425,22 +430,22 @@ export default function RecipeCard({
                         doing the note's job. */}
                     <YStack testID="recipe-card-prose" flex={1} gap="$1">
                         <Text fontSize={17} fontWeight="700"
-                              numberOfLines={hasNote ? 1 : 2}
+                              numberOfLines={hasSecondary ? 1 : 2}
                               maxFontSizeMultiplier={DOTO_MAX_FONT_SCALE}
                               color={recipe.hasName() ? onAccent.text : onAccent.label}>
                             {recipe.displayName()}
                         </Text>
-                        {hasNote && (
+                        {hasSecondary && (
                             // Out of the accessibility tree: it is already in
                             // the card's own label above, which is the single
                             // announced element here.
-                            <Text testID="recipe-card-note"
+                            <Text testID={hasNote ? "recipe-card-note" : "recipe-card-bean"}
                                   accessibilityElementsHidden
                                   importantForAccessibility="no-hide-descendants"
                                   fontSize={13} numberOfLines={1}
                                   maxFontSizeMultiplier={DOTO_MAX_FONT_SCALE}
                                   color={onAccent.label}>
-                                {recipe.description}
+                                {secondary}
                             </Text>
                         )}
                     </YStack>

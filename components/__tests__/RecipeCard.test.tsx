@@ -630,6 +630,36 @@ describe("RecipeCard", () => {
             .toBeNull();
     });
 
+    it("says what the bean is when there is no note, in the same line budget", async () => {
+        await renderWithProviders(
+            <RecipeCard recipe={makeRecipe({coffee: {name: "Guji", variety: "Heirloom", processing: "Natural"}})}
+                        onPress={jest.fn()}/>
+        );
+        const line = screen.getByTestId("recipe-card-bean", {includeHiddenElements: true});
+        expect(line).toHaveTextContent("Heirloom · Natural");
+        expect(screen.getByText("Ethiopia Guji").props.numberOfLines + line.props.numberOfLines).toBe(2);
+        expect(screen.getByLabelText(/Ethiopia Guji, Heirloom, Natural, coffee/)).toBeTruthy();
+    });
+
+    it("keeps the note ahead of the bean, and shows one part of the bean alone", async () => {
+        await renderWithProviders(
+            <RecipeCard recipe={makeRecipe({
+                description: "Good for mornings", coffee: {name: "Guji", variety: "Heirloom", processing: "Natural"}
+            })} onPress={jest.fn()}/>
+        );
+        expect(screen.getByTestId("recipe-card-note", {includeHiddenElements: true}))
+            .toHaveTextContent("Good for mornings");
+        expect(screen.queryByTestId("recipe-card-bean", {includeHiddenElements: true})).toBeNull();
+
+        await act(async () => { screen.unmount(); });
+        await renderWithProviders(
+            <RecipeCard recipe={makeRecipe({coffee: {name: "Guji", processing: " Washed "}})}
+                        onPress={jest.fn()}/>
+        );
+        expect(screen.getByTestId("recipe-card-bean", {includeHiddenElements: true}))
+            .toHaveTextContent("Washed");
+    });
+
     it("puts the note in what a screen reader hears, once", async () => {
         // The card is one announced element, so anything drawn on it has to be
         // in that label or it is conveyed visually alone.
