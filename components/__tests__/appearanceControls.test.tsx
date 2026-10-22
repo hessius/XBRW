@@ -183,7 +183,7 @@ describe.each(CHOICES)("$theme / $recipeColours core controls", choice => {
         });
     });
 
-    it("wires the current slot card's actual fill, without migrating the card ahead of Task 6", async () => {
+    it("wires the slot card's actual themed fill to its switch", async () => {
         const recipe = blankRecipe("coffee");
         recipe.accentIndex = 0;
         recipe.pours = [new Pour(1, 240, 93, 30, 0, 0, 0)];
@@ -192,7 +192,7 @@ describe.each(CHOICES)("$theme / $recipeColours core controls", choice => {
             needsWrite={false} status={null} recovery={false} locked={false} updateProblem={null}
             onChange={() => {}} onUpdate={() => {}} onSetScaleEnabled={onSetScaleEnabled}/>);
         const displayFill = style(screen.getByTestId("slot-A")).backgroundColor;
-        expect(displayFill).toBe(accents.coffee[0]);
+        expect(displayFill).toBe(appearance.recipe(accents.coffee[0]).fill);
         const node = screen.getByRole("switch", {name: "Scale for slot A"});
         expect(style(node).backgroundColor).toBe(appearance.switchOn(displayFill).on.track);
         await fireEvent.press(node);

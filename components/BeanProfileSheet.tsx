@@ -21,14 +21,16 @@ type Props = {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     profile: BeanProfile;
+    /** Canonical recipe accent; resolved here to page ink, never a display fill. */
     accent?: string;
 };
 
 export function BeanProfileSheet({
     open, onOpenChange, profile, accent: suppliedAccent
 }: Props) {
-    const {palette} = useAppearance();
-    const accent = suppliedAccent ?? palette.info;
+    const appearance = useAppearance();
+    const {palette} = appearance;
+    const accent = suppliedAccent === undefined ? palette.info : appearance.recipe(suppliedAccent).ink;
     const rows = rankProfileRows(profile.rows);
     const hasUntagged = profile.untagged.brews > 0;
 

@@ -61,7 +61,8 @@ type Props = {
 };
 
 export default function CloudImportRow({entry, onToggle}: Props) {
-    const {palette} = useAppearance();
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const tones: Record<ImportStatus, string> = {
         new: palette.text,
         updated: palette.text,
@@ -73,7 +74,7 @@ export default function CloudImportRow({entry, onToggle}: Props) {
     // and falls back to the same hash every other screen uses, so a recipe
     // with a missing or bogus index is the same colour here as it will be in
     // the list this screen is feeding.
-    const accent = resolveAccent(entry.recipe);
+    const colour = appearance.recipe(resolveAccent(entry.recipe));
 
     return (
         <Pressable
@@ -105,7 +106,7 @@ export default function CloudImportRow({entry, onToggle}: Props) {
                     // `$` token: the radius is a consequence of this bar's
                     // geometry, and a token would drift away from it.
                     borderRadius={BAR_WIDTH / 2}
-                    backgroundColor={entry.selected ? accent : palette.dim}/>
+                    backgroundColor={entry.selected ? colour.fill : palette.dim}/>
                 <YStack flex={1} gap="$1">
                     <Text testID="cloud-import-name" color={palette.text} fontSize={16}>
                         {entry.name}
@@ -121,7 +122,7 @@ export default function CloudImportRow({entry, onToggle}: Props) {
                 </YStack>
                 <Text
                     testID="cloud-import-tick"
-                    color={entry.selected ? accent : palette.dim}
+                    color={entry.selected ? colour.ink : palette.dim}
                     fontSize={18}>
                     {entry.selected ? "✓" : "○"}
                 </Text>

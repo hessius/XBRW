@@ -1,4 +1,5 @@
 import {act, renderHook} from "@testing-library/react-native";
+import React from "react";
 
 import {useMachinePicker} from "@/hooks/useMachinePicker";
 import {sharedSettings} from "@/hooks/useSetting";
@@ -6,6 +7,31 @@ import {FakeTransport} from "@/library/machine/__tests__/FakeTransport";
 import Machine from "@/library/machine/Machine";
 import {serialiseSavedMachines} from "@/library/machine/savedMachines";
 import {coffee} from "@/library/slots/__tests__/fixtures";
+import {Providers} from "@/test-utils/render";
+import {machineColours, resolveAppearance} from "@/constants/colors";
+
+function LightProviders({children}: {children: React.ReactNode}) {
+    return <Providers appearance={{theme: "light", recipeColours: "themed"}}>{children}</Providers>;
+}
+
+it("returns display machine ink without writing appearance values into saved identities", async () => {
+    const settings = sharedSettings();
+    const saved = serialiseSavedMachines(machineColours.map((colour, index) => ({
+        id: colour.name, label: colour.name, colour: index, model: "studio",
+        modelString: "", advertisedName: "", serial: ""
+    })));
+    settings.set("savedMachines", saved);
+    settings.set("machineDeviceId", "Green");
+    const {result} = await renderHook(() => useMachinePicker(), {wrapper: LightProviders});
+    for (const canonical of machineColours) {
+        await act(async () => { settings.set("machineDeviceId", canonical.name); });
+        expect(result.current.colour).toEqual(resolveAppearance({
+            theme: "light", recipeColours: "themed"
+        }).machineColour(canonical));
+        expect(result.current.label).toBe(canonical.name);
+        expect(settings.get("savedMachines")).toBe(saved);
+    }
+});
 
 const mockShared = jest.fn();
 const mockSurvey = jest.fn(async () => []);
@@ -37,14 +63,14 @@ beforeEach(() => {
 });
 
 it("does not construct Bluetooth while drawing a closed picker", async () => {
-    await renderHook(() => useMachinePicker());
+    await renderHook(() => useMachinePicker(), {wrapper: Providers});
 
     expect(mockShared).not.toHaveBeenCalled();
 });
 
 it("updates connection status if the link drops while the picker is open", async () => {
     await machine.connect("HOME");
-    const {result} = await renderHook(() => useMachinePicker());
+    const {result} = await renderHook(() => useMachinePicker(), {wrapper: Providers});
     await act(async () => { result.current.show(); });
     expect(result.current.connected).toBe(true);
 
@@ -55,7 +81,7 @@ it("updates connection status if the link drops while the picker is open", async
 
 it("locks the open picker when a brew starts", async () => {
     await machine.connect("HOME");
-    const {result} = await renderHook(() => useMachinePicker());
+    const {result} = await renderHook(() => useMachinePicker(), {wrapper: Providers});
     await act(async () => { result.current.show(); });
     expect(result.current.blocker).toBeNull();
 
@@ -67,7 +93,7 @@ it("locks the open picker when a brew starts", async () => {
 it("unlocks rescan after the brew ends without reopening the picker", async () => {
     await machine.connect("HOME");
     await machine.brew(coffee());
-    const {result} = await renderHook(() => useMachinePicker());
+    const {result} = await renderHook(() => useMachinePicker(), {wrapper: Providers});
     await act(async () => { result.current.show(); });
     expect(mockSurvey).not.toHaveBeenCalled();
 

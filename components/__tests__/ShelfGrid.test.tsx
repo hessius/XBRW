@@ -198,7 +198,7 @@ describe("ShelfGrid", () => {
     describe("the art it hands its tiles", () => {
         it("gives an auto shelf the glyph drawn for it", async () => {
             await renderWithProviders(
-                <ShelfGrid shelves={[shelf()]} marks={{tea: {accents: ["#A"]}}}
+                <ShelfGrid shelves={[shelf()]} marks={{tea: {accents: ["#AAA"]}}}
                            onOpen={jest.fn()} onNewShelf={jest.fn()} onShelfActions={jest.fn()}/>
             );
 
@@ -208,7 +208,7 @@ describe("ShelfGrid", () => {
         it("gives a manual shelf a mosaic of its members", async () => {
             await renderWithProviders(
                 <ShelfGrid shelves={[shelf({id: "tag:morning", label: "morning", kind: "manual"})]}
-                           marks={{"tag:morning": {accents: ["#A"]}}}
+                           marks={{"tag:morning": {accents: ["#AAA"]}}}
                            onOpen={jest.fn()} onNewShelf={jest.fn()} onShelfActions={jest.fn()}/>
             );
 
@@ -218,7 +218,7 @@ describe("ShelfGrid", () => {
         it("gives a tag shelf a mosaic of its members", async () => {
             await renderWithProviders(
                 <ShelfGrid shelves={[shelf({id: "tag:espresso", label: "espresso", kind: "tag"})]}
-                           marks={{"tag:espresso": {accents: ["#A"]}}}
+                           marks={{"tag:espresso": {accents: ["#AAA"]}}}
                            onOpen={jest.fn()} onNewShelf={jest.fn()} onShelfActions={jest.fn()}/>
             );
 

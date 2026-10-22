@@ -3,7 +3,7 @@ import {Text, XStack, YStack} from "tamagui";
 
 import DotIcon from "@/components/DotIcon";
 import DotMatrixText from "@/components/DotMatrixText";
-import {onAccent, palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 import type {DotIconName} from "@/constants/dotIcons";
 
 /**
@@ -83,6 +83,8 @@ export default function ShelfMark({
      */
     inverted?: boolean;
 }) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     // An auto shelf with no glyph draws the mosaic rather than an empty square.
     // Every auto shelf is supposed to have one -- the stock shelves are a
     // closed set drawn at design time, and the per-author shelves share a
@@ -90,12 +92,13 @@ export default function ShelfMark({
     // is expected to take.
     const asked = markFor(kind);
     const mark = asked === "glyph" && glyph == null ? "mosaic" : asked;
-    const members = accents.slice(0, MARK_MEMBERS);
+    const members = accents.slice(0, MARK_MEMBERS).map(canonical => appearance.recipe(canonical).fill);
     const field = members[0] ?? palette.surface;
+    const onAccent = appearance.onFill(field);
 
     if (kind === "auto" && roasterInitial) {
         const ink = inverted
-            ? (members.length > 0 ? field : palette.text)
+            ? (members.length > 0 ? appearance.recipe(accents[0]).ink : palette.text)
             : (members.length > 0 ? onAccent.text : palette.text);
         return (
             <Square testID="shelf-mark-initial" background={inverted ? palette.surface : field}>
@@ -114,7 +117,7 @@ export default function ShelfMark({
         // no members there is no accent to draw in, and the plain ink that the
         // upright mark already falls back to is the right answer either way.
         const ink = inverted
-            ? (members.length > 0 ? field : palette.text)
+            ? (members.length > 0 ? appearance.recipe(accents[0]).ink : palette.text)
             : (members.length > 0 ? onAccent.text : palette.text);
         return (
             // The test id carries the inversion because Tamagui resolves colour

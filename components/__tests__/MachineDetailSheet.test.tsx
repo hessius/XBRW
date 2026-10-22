@@ -4,6 +4,9 @@ import {fireEvent, screen} from "@testing-library/react-native";
 import MachineDetailSheet from "@/components/MachineDetailSheet";
 import type {SavedMachine} from "@/library/machine/savedMachines";
 import {renderWithProviders} from "@/test-utils/render";
+import {machineColours, resolveAppearance} from "@/constants/colors";
+import {AppearanceScope} from "@/hooks/useAppearance";
+import {THEME_IDS} from "@/library/appearance";
 
 jest.mock("@/components/XbrwToast", () => ({notify: jest.fn()}));
 
@@ -121,6 +124,25 @@ describe("a saved machine's sheet", () => {
 });
 
 describe("a machine's colour", () => {
+    it.each(THEME_IDS.flatMap(theme => (["original", "themed"] as const).map(recipeColours =>
+        ({theme, recipeColours}))))("shows active inks in canonical order and saves every canonical integer: %o", async choice => {
+        const before = JSON.stringify(MACHINES);
+        await renderWithProviders(<AppearanceScope choice={choice}>
+            <MachineDetailSheet machineId="WORK" onClose={jest.fn()}/>
+        </AppearanceScope>);
+        for (const [index, canonical] of machineColours.entries()) {
+            const swatch = screen.getByTestId(`machine-colour-${index}`);
+            expect(swatch.props.accessibilityLabel).toBe(canonical.name);
+            const nativeSwatch = swatch.children[0];
+            if (typeof nativeSwatch === "string") throw new Error("Expected native swatch");
+            const dot = nativeSwatch.children[0];
+            if (typeof dot === "string") throw new Error("Expected native dot");
+            expect(dot).toHaveStyle({backgroundColor: resolveAppearance(choice).machineColour(canonical).ink});
+            await fireEvent.press(swatch);
+            expect(mockSetColour).toHaveBeenLastCalledWith("WORK", index);
+        }
+        expect(JSON.stringify(MACHINES)).toBe(before);
+    });
     it("offers the four colours beside the name, with this machine's chosen", async () => {
         await renderWithProviders(<MachineDetailSheet machineId="WORK" onClose={jest.fn()}/>);
 

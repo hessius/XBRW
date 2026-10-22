@@ -4,7 +4,7 @@ import {XStack, YStack} from "tamagui";
 
 import DotIcon from "@/components/DotIcon";
 import RecipeCard from "@/components/RecipeCard";
-import {onAccent, palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 import type Recipe from "@/library/Recipe";
 import type {SlotMarkerValue} from "@/library/slots/slotModel";
 
@@ -49,6 +49,7 @@ export default function SelectableRecipeRow({
     showPicture?: boolean;
     slotMarker?: SlotMarkerValue;
 }) {
+    const {palette, selection} = useAppearance();
     return (
         <Pressable accessibilityRole="checkbox"
                    accessibilityState={{checked: selected}}
@@ -78,10 +79,10 @@ export default function SelectableRecipeRow({
                         borderRadius={TICK_SIZE / 2}
                         alignItems="center" justifyContent="center"
                         borderWidth={1}
-                        borderColor={selected ? palette.text : palette.line}
-                        backgroundColor={selected ? palette.text : palette.none}>
+                        borderColor={selected ? selection.fill : palette.line}
+                        backgroundColor={selected ? selection.fill : palette.none}>
                     {selected && (
-                        <DotIcon name="success" size={14} color={onAccent.text}/>
+                        <DotIcon name="success" size={14} color={selection.ink}/>
                     )}
                 </YStack>
             </XStack>

@@ -21,6 +21,7 @@ export const NOT_TAGGED_LABEL = "NOT TAGGED";
 type Props = {
     profile: BeanProfile;
     onShowAll: () => void;
+    /** Canonical recipe accent; resolved here to page ink, never a display fill. */
     accent?: string;
 };
 
@@ -29,8 +30,9 @@ export function beanProfileSubtitle(profile: BeanProfile): string {
 }
 
 export function BeanProfileDeck({profile, onShowAll, accent: suppliedAccent}: Props) {
-    const {palette} = useAppearance();
-    const accent = suppliedAccent ?? palette.info;
+    const appearance = useAppearance();
+    const {palette} = appearance;
+    const accent = suppliedAccent === undefined ? palette.info : appearance.recipe(suppliedAccent).ink;
     if (profile.counted === 0) return null;
 
     const rows = rankProfileRows(profile.rows).slice(0, PROFILE_CAP);

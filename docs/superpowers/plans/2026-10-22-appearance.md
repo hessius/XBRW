@@ -657,6 +657,56 @@ const colour = appearance.recipe(resolveAccent(recipe));
   appearance consumer tests, then typecheck. Commit
   `feat: theme recipe and machine presentation without changing identities`.
 
+### Task 6 implementation checkpoint — 2026-10-22
+
+The listed recipe, shelf and machine presentation consumers now resolve
+appearance at their drawing boundaries. Two additional components were necessary:
+`ShelfPhotoMark` resolves each canonical cover-cell accent and passes its actual
+fill to `RecipePhoto`; `SlotMarker` accepts the card's resolved foreground.
+No photo eligibility, caching, shelf queries or model/storage code changed.
+
+`RecipeHero`, `BeanProfileDeck` and `BeanProfileSheet` still accept **canonical**
+recipe accents. Bean figures use the resulting page ink, or chrome `info` when
+no recipe accent is supplied. `useMachinePicker` instead returns an
+**already-resolved display pair**, passed unchanged through the home header to
+the link glyph; machine management continues saving canonical colour integers.
+Neither boundary should be mapped a second time by its caller.
+
+There is no recipe-accent index-editing chooser in this revision. The existing
+`NewRecipeSheet` category previews already map canonical swatches (Task 4) and
+remain unchanged. Rendered regressions cover every corresponding coffee/tea
+slot (8 + 4) across all eight choices, all four machine colours and missing-colour
+green, canonical names/order/assignments, unchanged recipe/snapshot/saved-machine
+payloads, exact historical colour strings, and stable card instances across
+appearance changes.
+
+The 44 pt shelf mark, three-member accent cap, accepted stock/manual/roaster
+photo rules, 21 pt cover cells, 20 pt bottom-right list photos and full-width
+profiles are preserved. Photo backing is the actual displayed card/cell fill,
+including dark Light/Themed cards. Stat/action/metadata helpers remain at module
+scope; no state-reset effects, new manual memoisation or root-provider changes
+were introduced.
+
+Verification:
+
+- RED: the Sky Light/Themed card regression failed on both platforms
+  (`#9FC3F0` instead of `#254E83`); additional consumer/chooser RED failures
+  demonstrated unmapped shelf/cloud/slot/machine presentation.
+- GREEN: one serialized targeted Jest invocation covered **62 suites / 1,836
+  tests**, both platforms, with no failures. It included the existing card,
+  hero, tile, photo, shelf, slot, bean, import, machine, header and category
+  chooser suites, shared appearance controls/consumers, the new
+  `appearanceRecipeConsumers` suite, `useMachinePicker`, `accent`,
+  `savedMachines` and `savedMachineSettings`.
+- `npm run typecheck`, changed-file ESLint and `git diff --check` all passed.
+- Intentional expectation changes follow actual-ground roles: header/slot
+  action wells use `keyInk`, neutral slot actions use `onFill(palette.text)`,
+  and roaster initials use their real field's foreground. Shelf-grid art
+  fixtures now use valid RN shorthand `#AAA` instead of invalid `#A`.
+- No native build, deployment, screenshot qualification or NFC/BLE hardware
+  claim is part of this checkpoint. Route/chart/native/capture/Settings stages
+  remain the later tasks below.
+
 ## Task 7: Complete screen, sheet and overlay reactivity
 
 **Files:** All remaining production UI files in the inventory at the end.

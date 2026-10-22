@@ -7,7 +7,7 @@ import {SLOT_NAMES, type SlotIndex, type SlotSnapshot} from "@/library/slots/slo
 import DotMatrixText from "@/components/DotMatrixText";
 import PourProfile, {PROFILE_BLEED} from "@/components/PourProfile";
 import XbrwSwitch from "@/components/XbrwSwitch";
-import {onAccent, palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 import {isTeaProbeSnapshot} from "@/library/slots/teaSlotCandidate";
 
 type Props = {
@@ -37,12 +37,17 @@ export default function EasyModeSlotCard({
     index, snapshot, needsWrite, status, recovery, locked, updateProblem, changeRef, onChange, onUpdate,
     onSetScaleEnabled
 }: Props) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const [profileWidth, setProfileWidth] = useState(0);
     const name = SLOT_NAMES[index];
     const recipe = snapshot === null ? null : new Recipe(undefined, snapshot.recipeJSON);
     const probe = isTeaProbeSnapshot(snapshot);
-    const ink = recipe === null ? palette.text : onAccent.text;
-    const accent = recipe === null ? palette.text : resolveAccent(recipe);
+    const colour = recipe === null ? null : appearance.recipe(resolveAccent(recipe));
+    const ink = colour?.onAccent.text ?? palette.text;
+    const accent = colour?.fill ?? palette.raised;
+    const actionInk = colour?.keyInk.normal ?? palette.text;
+    const actionFill = colour?.onAccent.key ?? palette.base;
     const scaleEnabled = snapshot?.scaleEnabled === true;
     const scaleLocked = locked || onSetScaleEnabled === undefined;
     return (
@@ -70,7 +75,9 @@ export default function EasyModeSlotCard({
                 onLayout={event => setProfileWidth(event.nativeEvent.layout.width)}
                 style={{height: 45, marginHorizontal: -14, overflow: "hidden"}}>
                 {profileWidth > 0 && <View style={{position: "absolute", left: -PROFILE_BLEED, top: -PROFILE_BLEED}}>
-                    <PourProfile testID={`slot-${name}-profile`} pours={recipe.pours} width={profileWidth} height={45}/>
+                    <PourProfile testID={`slot-${name}-profile`} pours={recipe.pours} width={profileWidth} height={45}
+                        stroke={colour?.onAccent.profileStroke} fill={colour?.onAccent.profileFill}
+                        dot={colour?.onAccent.profileDot}/>
                 </View>}
             </View>}
             <XStack testID={`slot-${name}-footer`} alignItems="center" justifyContent="space-between"
@@ -90,8 +97,8 @@ export default function EasyModeSlotCard({
                 {!locked && <Button ref={changeRef} height="auto" minHeight={44} paddingVertical="$2"
                     paddingHorizontal="$3" borderRadius={8}
                     accessibilityLabel={`Change slot ${name} recipe`} onPress={onChange}
-                    backgroundColor={palette.base} color={accent}>
-                    <DotMatrixText fontSize={11} weight="bold" color={accent}>
+                    backgroundColor={actionFill} color={actionInk}>
+                    <DotMatrixText fontSize={11} weight="bold" color={actionInk}>
                         {snapshot === null ? "CHOOSE RECIPE" : "CHANGE"}
                     </DotMatrixText>
                 </Button>}
@@ -101,7 +108,7 @@ export default function EasyModeSlotCard({
                 {!locked && <Button height="auto" minHeight={44} paddingVertical="$3"
                     accessibilityLabel={`Update slot ${name} from library`}
                     disabled={updateProblem !== null} onPress={onUpdate}
-                    backgroundColor={palette.base} color={accent}>USE UPDATED RECIPE</Button>}
+                    backgroundColor={actionFill} color={actionInk}>USE UPDATED RECIPE</Button>}
                 {updateProblem !== null && <Text color={ink}>{updateProblem}</Text>}
             </YStack>}
             {!probe && status === "removed" && <DotMatrixText fontSize={11} weight="bold" color={ink}>

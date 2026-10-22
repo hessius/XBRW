@@ -8,7 +8,7 @@ import DotMatrixText from "@/components/DotMatrixText";
 import RecipeShelfTile from "@/components/RecipeShelfTile";
 import type {RecipeEvidence} from "@/library/libraryQuery";
 import type {SlotMarkerValue} from "@/library/slots/slotModel";
-import {onAccent, palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 import type Recipe from "@/library/Recipe";
 import {UNCLIPPED_LIST} from "@/constants/lists";
 
@@ -123,6 +123,7 @@ export default function ShelfRoom({
     onScroll?: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
     paddingBottom?: number;
 }) {
+    const {palette} = useAppearance();
     const rows: Recipe[][] = [];
     for (let i = 0; i < recipes.length; i += COLUMNS) {
         rows.push(recipes.slice(i, i + COLUMNS) as Recipe[]);
@@ -134,7 +135,7 @@ export default function ShelfRoom({
         <XStack alignItems="center" gap="$3" paddingBottom="$2">
             <Pressable accessibilityRole="button" accessibilityLabel="Back to shelves"
                        testID="shelf-room-back" onPress={onBack} hitSlop={12}>
-                <YStack backgroundColor={onAccent.key} borderRadius="$3"
+                <YStack backgroundColor={palette.control} borderRadius="$3"
                         width={KEY_SIZE} height={KEY_SIZE}
                         alignItems="center" justifyContent="center">
                     <DotIcon name="back" size={16} color={palette.text}/>

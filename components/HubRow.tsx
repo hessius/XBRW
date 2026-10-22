@@ -4,7 +4,7 @@ import {Text, XStack, YStack} from "tamagui";
 
 import DotIcon from "@/components/DotIcon";
 import DotMatrixText from "@/components/DotMatrixText";
-import {onAccent, palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 import {heldHubCriteria, roastLabel} from "@/library/hub/hubCriteria";
 import {hubAccent, type HubRecipe} from "@/library/hub/hubRow";
 
@@ -25,9 +25,11 @@ type Props = {
 export default function HubRow({
     recipe, selecting, selected, onPress, onLongPress
 }: Props) {
+    const appearance = useAppearance();
+    const {palette, selection} = appearance;
     const [failed, setFailed] = useState(false);
 
-    const accent = hubAccent(recipe.id);
+    const accent = appearance.recipe(hubAccent(recipe.id)).ink;
     const imageURL = recipe.imageURL;
     const provenance = [...recipe.origin, ...recipe.process].join(" · ").toUpperCase();
     const roast = roastLabel(recipe.roast, heldHubCriteria());
@@ -111,11 +113,11 @@ export default function HubRow({
                             alignItems="center"
                             justifyContent="center"
                             borderWidth={1}
-                            borderColor={selected ? palette.text : palette.line}
-                            backgroundColor={selected ? palette.text : palette.none}>
+                            borderColor={selected ? selection.fill : palette.line}
+                            backgroundColor={selected ? selection.fill : palette.none}>
                         {selected && (
                             <YStack testID="hub-row-tick-icon">
-                                <DotIcon name="success" size={14} color={onAccent.text}/>
+                                <DotIcon name="success" size={14} color={selection.ink}/>
                             </YStack>
                         )}
                     </YStack>
@@ -133,6 +135,7 @@ function Figure({
     value: string;
     accent: string;
 }) {
+    const {palette} = useAppearance();
     return (
         <YStack gap="$1">
             <DotMatrixText testID={testID}

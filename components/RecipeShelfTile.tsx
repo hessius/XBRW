@@ -14,7 +14,7 @@ import {canWriteToCard} from "@/library/cardLimits";
 import type {RecipeEvidence} from "@/library/libraryQuery";
 import type {SlotMarkerValue} from "@/library/slots/slotModel";
 import {evidenceLine, isSet, spokenEvidence} from "@/library/recipeEvidence";
-import {onAccent} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 
 /**
  * How far past the tile's corner the pour profile is pushed, matching the card.
@@ -99,8 +99,9 @@ type MetadataProps = {
 };
 
 function RecipeTileMetadata({
-    evidence, slot, marker, favourite, editing, uuid, measuring = false, onActions
-}: MetadataProps) {
+    evidence, slot, marker, favourite, editing, uuid, measuring = false, onActions, displayFill
+}: MetadataProps & {displayFill: string}) {
+    const onAccent = useAppearance().onFill(displayFill);
     const id = (name: string) => measuring ? undefined : `recipe-tile-${name}`;
     return (
         <XStack testID={measuring ? "recipe-tile-metadata-intrinsic" : id("badges")} alignItems="center" gap={PHOTO_GAP}
@@ -217,7 +218,8 @@ export default function RecipeShelfTile({
     evidence, onBrew, onShare, onWrite, onDuplicate, onDelete, onToggleFavourite,
     onHistory, editing = false, slotMarker, onEasyMode, showPicture = false
 }: Props) {
-    const accent = resolveAccent(recipe);
+    const colour = useAppearance().recipe(resolveAccent(recipe));
+    const {fill: accent, onAccent} = colour;
     const picture = showPicture ? recipe.imageURL ?? "" : "";
     const isTea = accentGroupFor(recipe) === "tea";
     const marker = isTea ? "TEA" : "COFFEE";
@@ -334,16 +336,16 @@ export default function RecipeShelfTile({
                         <XStack key={signature} testID="recipe-tile-metadata-width" alignItems="center" gap={PHOTO_GAP}
                             onLayout={event => setAvailable({key: signature, value: event.nativeEvent.layout.width})}>
                             {requested && <RecipePhoto testID="recipe-tile-photo" uri={picture} visible={showPhoto}
-                                size={TILE_PHOTO_SIZE} radius={TILE_PHOTO_SIZE / 2} backing={onAccent.key}
+                                size={TILE_PHOTO_SIZE} radius={TILE_PHOTO_SIZE / 2} backing={accent}
                                 onError={() => setFailed(picture)}/>}
-                            <YStack flex={1}><RecipeTileMetadata {...metadata} onActions={onLongPress}/></YStack>
+                            <YStack flex={1}><RecipeTileMetadata {...metadata} displayFill={accent} onActions={onLongPress}/></YStack>
                         </XStack>
                         {requested && <ScrollView key={naturalKey} horizontal
                             testID="recipe-tile-metadata-measure" pointerEvents="none"
                             accessible={false} accessibilityElementsHidden importantForAccessibility="no-hide-descendants"
                             style={{height: 0, opacity: 0, position: "absolute", width: "100%"}}
                             onContentSizeChange={value => setIntrinsic({key: naturalKey, value})}>
-                            <RecipeTileMetadata {...metadata} measuring/>
+                            <RecipeTileMetadata {...metadata} displayFill={accent} measuring/>
                         </ScrollView>}
 
                         <Text fontSize={15} fontWeight="700"
@@ -377,6 +379,8 @@ export default function RecipeShelfTile({
                             bottom:   -(PROFILE_BLEED + PROFILE_OVERHANG)
                         }}>
                             <PourProfile testID="recipe-tile-profile" pours={recipe.pours}
+                                         stroke={onAccent.profileStroke} fill={onAccent.profileFill}
+                                         dot={onAccent.profileDot}
                                          width={140} height={profileHeight}
                                          dotted={dottedProfile}/>
                         </View>
