@@ -6,8 +6,10 @@ Revised: 2026-10-22
 
 Status: Combined Package G design, incorporating #257 and an adapted #243.
 The maintainer approved the combined scope, action/state distinction, complete
-palette directions and presentation boundary. This written revision requires
-review before implementation planning. No application implementation is included.
+palette directions and presentation boundary, then approved this written
+revision for implementation planning. The implementation plan is
+`docs/superpowers/plans/2026-10-22-appearance.md`. No application implementation
+is included or authorised by this design checkpoint.
 
 The original #257 design was committed at
 `4dc0b2dee8ac3c7d6b73c92de64068b075c306dd`. The #243 proposal was inspected at
