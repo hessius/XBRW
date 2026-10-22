@@ -1,9 +1,10 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React, {useState} from "react";
 import {TextInput} from "react-native";
 import {Text, XStack, YStack} from "tamagui";
 
 import XbrwSheet from "@/components/XbrwSheet";
-import {onAccent, palette} from "@/constants/colors";
+
 import DotMatrixText, {dotMatrixTextProps} from "@/components/DotMatrixText";
 
 /**
@@ -44,6 +45,9 @@ export default function BeanNameSheet({
     /** Called with the trimmed name, or an empty string when there is none. */
     onConfirm: (name: string) => void;
 }) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
+    const onAccent = appearance.onFill(palette.text);
     // Stored with the brew it was typed against and discarded at render when
     // the two no longer agree, so opening the sheet on a second brew does not
     // greet the user with the first brew's answer. The house answer to state

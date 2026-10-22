@@ -1,6 +1,6 @@
 import React from "react";
 import {PixelRatio, StyleSheet} from "react-native";
-import {fireEvent, screen, within} from "@testing-library/react-native";
+import {fireEvent, screen, waitFor, within} from "@testing-library/react-native";
 import {SafeAreaProvider} from "react-native-safe-area-context";
 
 import NewerVersionPrompt from "@/components/NewerVersionPrompt";
@@ -10,7 +10,7 @@ import {palette} from "@/constants/colors";
 import ShelfChoiceSheet from "@/components/ShelfChoiceSheet";
 import UnsubscribeSheet from "@/components/UnsubscribeSheet";
 import type {RoasterOfferState} from "@/hooks/useRoasterOffer";
-import {renderWithProviders} from "@/test-utils/render";
+import {renderWithProviders, SHEET_PRESS_TIMEOUT} from "@/test-utils/render";
 import {feed} from "@/test-utils/roasterFeed";
 
 async function drawNarrowSheet(sheet: React.ReactElement) {
@@ -84,8 +84,10 @@ describe("RoasterOfferSheet", () => {
         await view.rerender(draw({phase: "idle"}));
         await view.rerender(draw({phase: "offer", roaster, count: 2}));
         expect(screen.getByRole("checkbox")).not.toBeChecked();
-        await fireEvent.press(screen.getByTestId("roaster-offer-not-now"));
-        expect(onDecline).toHaveBeenLastCalledWith(false);
+        await waitFor(async () => {
+            await fireEvent.press(screen.getByTestId("roaster-offer-not-now"));
+            expect(onDecline).toHaveBeenLastCalledWith(false);
+        }, {timeout: SHEET_PRESS_TIMEOUT});
         expect(onAccept).not.toHaveBeenCalled();
     });
 

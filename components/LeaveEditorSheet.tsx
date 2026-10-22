@@ -1,8 +1,9 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React from "react";
 import {Button, Text, YStack} from "tamagui";
 
 import XbrwSheet from "@/components/XbrwSheet";
-import {onAccent, palette} from "@/constants/colors";
+
 
 /**
  * What the user was trying to do when the unsaved work was noticed.
@@ -47,6 +48,9 @@ const WORDS = {
 export default function LeaveEditorSheet({
     open, intent, inLibrary = true, onSave, onDiscard, onCancel
 }: Props) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
+    const onAccent = appearance.onFill(palette.text);
     // BREW saves a rowless recipe before navigating, so the rowless wording is
     // unreachable there; only leaving can be about discarding the whole recipe.
     const words = intent === "brew"

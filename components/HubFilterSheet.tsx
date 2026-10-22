@@ -1,10 +1,11 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React, {useState} from "react";
 import {Input, ScrollView, Text, XStack, YStack} from "tamagui";
 import type {ColorTokens} from "tamagui";
 
 import DotMatrixText from "@/components/DotMatrixText";
 import XbrwSheet from "@/components/XbrwSheet";
-import {onAccent, palette} from "@/constants/colors";
+
 
 type HubFilterOption = {
     value: string;
@@ -70,6 +71,9 @@ function HubFilterRow({
     onChange(values: string[]): void;
     noun: readonly [string, string];
 }) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
+    const onAccent = appearance.onFill(palette.text);
     const optionKey = key(option.value);
     const active = selected.some((value) => key(value) === optionKey);
     const recipes = countLabel(option.count, noun);
@@ -121,6 +125,8 @@ export default function HubFilterSheet({
     note = "Options are counted from recipes already loaded.",
     noun = RECIPES
 }: Props) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const [term, setTerm] = useState("");
     const found = matching(options, term);
     const shown = found.slice(0, SHOWN);

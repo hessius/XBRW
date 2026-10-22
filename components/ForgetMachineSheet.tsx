@@ -1,10 +1,11 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React, {useState} from "react";
 import {Pressable} from "react-native";
 import {Text, XStack, YStack} from "tamagui";
 
 import DotMatrixText from "@/components/DotMatrixText";
 import XbrwSheet from "@/components/XbrwSheet";
-import {onAccent, palette} from "@/constants/colors";
+
 import {useMachine} from "@/hooks/useMachine";
 import {machineLabel} from "@/library/machine/savedMachines";
 import type {Settings} from "@/library/Settings";
@@ -31,6 +32,9 @@ type Props = {
  * still protected.
  */
 export default function ForgetMachineSheet({machineId, onClose, settings}: Props) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
+    const onAccent = appearance.onFill(palette.danger);
     const {machines, forgetMachine} = useMachine(undefined, {settings});
     const index = machines.findIndex((entry) => entry.id === machineId);
     // Kept while the sheet closes, so the title does not fall back to a

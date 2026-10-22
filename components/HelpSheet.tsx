@@ -1,8 +1,9 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React from "react";
 import {ScrollView, Text, YStack} from "tamagui";
 
 import XbrwSheet from "@/components/XbrwSheet";
-import {palette} from "@/constants/colors";
+
 import {DETAILED_TOPICS, helpQuestion} from "@/constants/recipeHelp";
 
 type Props = {
@@ -35,6 +36,8 @@ export const HELP_HEIGHT = 75;
  * for the glossary entry they have just come from.
  */
 export default function HelpSheet({open, onOpenChange}: Props) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     return (
         <XbrwSheet open={open} onOpenChange={onOpenChange} title="Help"
                    heightPercent={HELP_HEIGHT} prewarm>

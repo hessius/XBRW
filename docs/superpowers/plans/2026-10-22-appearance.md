@@ -722,8 +722,13 @@ Task 10.
   `components/__tests__/appearanceBoundary.test.ts` that parses imports with
   the installed TypeScript compiler, not a text search. Scan production
   `app/`, `components/`, `hooks/` and reject static imports of `palette`,
-  `onAccent`, `switchColours`, `onBrand`, `referenceCupColour` and
-  `referenceWaterColour`. Allow only explicitly documented launch art;
+  `onAccent`, `switchColours` and `onBrand`. Task 8 refined
+  `referenceCupColour` and `referenceWaterColour` into pure factories taking a
+  required explicit `Appearance`; keep these shared grammar imports allowed.
+  An AST assertion must keep their definitions explicit functions with that
+  required argument, rejecting any reintroduction of frozen reference values.
+  Existing trace-style tests prove their per-theme outputs. Do not duplicate
+  reference values in callers to satisfy a name ban. Allow only explicitly documented launch art;
   canonical `accents` and `machineColours` imports remain permitted.
   Run it to print the remaining concrete filenames as failures.
 
@@ -744,8 +749,7 @@ function sources(directory: string): string[] {
 it("has no frozen presentation imports outside fixed launch artwork", () => {
     const violations: string[] = [];
     const banned = new Set([
-        "palette", "onAccent", "onBrand", "switchColours",
-        "referenceCupColour", "referenceWaterColour"
+        "palette", "onAccent", "onBrand", "switchColours"
     ]);
     for (const directory of ["app", "components", "hooks"]) {
         for (const file of sources(path.join(root, directory))) {

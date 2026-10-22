@@ -1,8 +1,9 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React from "react";
 import {Button, Text, YStack} from "tamagui";
 
 import XbrwSheet from "@/components/XbrwSheet";
-import {onAccent, palette} from "@/constants/colors";
+
 import type Recipe from "@/library/Recipe";
 
 type Props = {
@@ -13,6 +14,9 @@ type Props = {
 };
 
 export default function BypassWriteSheet({open, recipe, onCancel, onConfirm}: Props) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
+    const onAccent = appearance.onFill(palette.warn);
     const bypassVolume = recipe?.bypassVolume ?? 0;
 
     return (

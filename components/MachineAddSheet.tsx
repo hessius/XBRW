@@ -1,10 +1,11 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React from "react";
 import {Pressable, ScrollView} from "react-native";
 import {Text, XStack, YStack} from "tamagui";
 
 import DotMatrixText from "@/components/DotMatrixText";
 import XbrwSheet from "@/components/XbrwSheet";
-import {palette} from "@/constants/colors";
+
 import type {MachineAdder} from "@/hooks/useMachineAdder";
 import {machineTag} from "@/library/machine/savedMachines";
 import type {FoundMachine} from "@/library/machine/Transport";
@@ -17,6 +18,8 @@ function FoundRow({machine, nearest, busy, adding, onPick}: {
     adding: boolean;
     onPick: (id: string) => void;
 }) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const name = machine.name.trim() === "" ? "xBloom" : machine.name.trim();
     const tag = machineTag(machine);
     const hint = adding ? "CONNECTING…" : nearest ? "NEAREST" : "";
@@ -55,6 +58,8 @@ function FoundRow({machine, nearest, busy, adding, onPick}: {
  * took the right one, and its serial is in its sheet afterwards.
  */
 export default function MachineAddSheet({adder}: {adder: MachineAdder}) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const {open, close, looking, found, adding, error, pick, start} = adder;
     const machines = found ?? [];
     const loudest = machines.length > 1 && machines[0].rssi !== undefined ? machines[0].id : null;

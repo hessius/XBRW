@@ -1,3 +1,4 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React from "react";
 import {Pressable, ScrollView} from "react-native";
 import {Text, XStack, YStack} from "tamagui";
@@ -5,7 +6,7 @@ import {Text, XStack, YStack} from "tamagui";
 import DotIcon from "@/components/DotIcon";
 import DotMatrixText from "@/components/DotMatrixText";
 import XbrwSheet from "@/components/XbrwSheet";
-import {palette} from "@/constants/colors";
+
 
 /**
  * Which shelf a catalogue coffee goes on.
@@ -22,6 +23,8 @@ export default function ShelfChoiceSheet({open, shelves, onOpenChange, onChoose,
     onChoose: (shelf: string) => void;
     onNew: () => void;
 }) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const row = (label: string, icon: "shelves" | "plus", onPress: () => void, testID: string) => (
         <Pressable key={testID} accessibilityRole="button" accessibilityLabel={label}
                    testID={testID} onPress={onPress}>

@@ -1,10 +1,11 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React, {useState} from "react";
 import {Pressable, ScrollView} from "react-native";
 import {Text, XStack, YStack} from "tamagui";
 
 import DotMatrixText from "@/components/DotMatrixText";
 import XbrwSheet from "@/components/XbrwSheet";
-import {onAccent, palette} from "@/constants/colors";
+
 import type {RoasterOfferState} from "@/hooks/useRoasterOffer";
 
 const BUTTON_HEIGHT = 48;
@@ -29,6 +30,9 @@ export default function RoasterOfferSheet({state, onAccept, onDecline}: {
     onAccept: (dontAskAgain: boolean) => void;
     onDecline: (dontAskAgain: boolean) => void;
 }) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
+    const onAccent = appearance.onFill(palette.text);
     // The hook creates a new state object for each offer, even for the same feed.
     const [choice, setChoice] = useState({offer: state, dontAsk: false});
     if (choice.offer !== state) setChoice({offer: state, dontAsk: false});

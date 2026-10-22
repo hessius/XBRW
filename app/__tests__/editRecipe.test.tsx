@@ -9,7 +9,8 @@ import {sharedSlotDatabase} from "@/hooks/useEasyModeSlots";
 
 import Pour, {POUR_PATTERN} from "@/library/Pour";
 import Recipe, {CUP_TYPE} from "@/library/Recipe";
-import {palette} from "@/constants/colors";
+import {palette, resolveAppearance} from "@/constants/colors";
+import {AppearanceScope} from "@/hooks/useAppearance";
 import {RECIPE_HELP} from "@/constants/recipeHelp";
 import {resolveAccent} from "@/library/accent";
 import type {BeanProfile} from "@/library/beanProfile";
@@ -224,6 +225,32 @@ async function renderEditor(overrides: Partial<Recipe> = {}) {
     );
     return view;
 }
+
+it("recolours the editor header and already-open help without losing its draft", async () => {
+    mockRecipeJSON = JSON.stringify(Object.assign(fixture(), {name: "Kept draft", accentIndex: PINNED_ACCENT_INDEX}));
+    const view = await renderWithProviders(
+        <AppearanceScope choice={{theme: "original", recipeColours: "original"}}><EditRecipe/></AppearanceScope>
+    );
+    await fireEvent.press(screen.getByLabelText("Increase Ratio"));
+    await fireEvent.press(screen.getByLabelText("Help"));
+    const question = String(RECIPE_HELP.ratio.question);
+    await waitFor(() => expect(screen.getByText(question)).toBeTruthy());
+    await view.rerender(
+        <AppearanceScope choice={{theme: "light", recipeColours: "themed"}}><EditRecipe/></AppearanceScope>
+    );
+    const light = resolveAppearance({theme: "light", recipeColours: "themed"});
+    expect(screen.getByText(question)).toHaveStyle({color: light.palette.text});
+    expect(screen.getByTestId("hero-name", {includeHiddenElements: true}))
+        .toHaveTextContent("Kept draft");
+    expect(screen.getByTestId("recipe-hero", {includeHiddenElements: true}))
+        .toHaveStyle({backgroundColor: light.recipe(pinnedAccent()).fill});
+    expect(screen.getByTestId("editor-content", {includeHiddenElements: true}).props.accessibilityElementsHidden).toBe(true);
+    await waitFor(async () => {
+        await fireEvent.press(screen.getByLabelText("Close"));
+        expect(screen.getByTestId("editor-content").props.accessibilityElementsHidden).toBe(false);
+    }, {timeout: SHEET_PRESS_TIMEOUT});
+    expect(screen.getByLabelText("Ratio, 16.5")).toBeTruthy();
+});
 
 it("keeps the selected machine outside the scrolling recipe content", async () => {
     mockSettings = {
@@ -1725,7 +1752,8 @@ describe("the action bar", () => {
 
         // BREW runs the recipe, so it wears the recipe's own colour.
         expect(fillOf("Brew")).toBe(pinnedAccent());
-        expect(inkOf("Brew", "BREW")).toBe(palette.base);
+        expect(inkOf("Brew", "BREW")).toBe(resolveAppearance({theme: "original", recipeColours: "original"})
+            .recipe(pinnedAccent()).onAccent.text);
         // WRITE and SAVE are live but secondary: filled, not accented.
         expect(fillOf("Write card")).toBe(palette.raised);
         expect(inkOf("Write card", "WRITE")).toBe(palette.text);
