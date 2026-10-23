@@ -8,6 +8,7 @@ import Recipe from "@/library/Recipe";
 import DotIcon from "@/components/DotIcon";
 import DotMatrixText from "@/components/DotMatrixText";
 import RecipeCard from "@/components/RecipeCard";
+import type {BagBadge} from "@/library/readyToBrew";
 import type {RecipeEvidence} from "@/library/libraryQuery";
 import type {SlotMarkerValue} from "@/library/slots/slotModel";
 import type {DotIconName} from "@/constants/dotIcons";
@@ -62,6 +63,7 @@ type Props = {
     showPicture?: boolean;
     /** Forwarded to the card: what this recipe's brews add up to. */
     evidence?: RecipeEvidence;
+    bagBadge?: BagBadge;
     /** Brew this recipe. Present only when there is a machine to brew on. */
     onBrew?: () => void;
     /** Open a one-brew edit surface for this recipe. */
@@ -185,6 +187,7 @@ export default function SwipeableRecipeRow({
                                                dottedProfile = false,
                                                showPicture = false,
                                                evidence,
+                                               bagBadge,
                                                onBrew,
                                                onQuickEdit,
                                                onShare,
@@ -451,6 +454,7 @@ export default function SwipeableRecipeRow({
                 renderRightActions={renderRightActions}>
                 <RecipeCard recipe={recipe} onPress={onPress} editing={editing}
                             evidence={evidence}
+                            bagBadge={bagBadge}
                             showCoffeeMarker={showCoffeeMarker}
                             dottedProfile={dottedProfile}
                             showPicture={showPicture}

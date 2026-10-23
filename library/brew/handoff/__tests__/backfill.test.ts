@@ -7,6 +7,7 @@ import {
 import {brew} from "@/library/brew/handoff/__tests__/fixtures";
 import type {StoredBrew} from "@/library/BrewDatabase";
 import Recipe from "@/library/Recipe";
+import {bagRunFixture} from "@/test-utils/bags";
 
 function recipe(overrides: Partial<Pick<
     Recipe,
@@ -33,6 +34,13 @@ const backfilledFields: BackfilledField[] = [
 function acceptsStored(_record: StoredBrew): void {}
 
 describe("backfillFromRecipe", () => {
+    it("never backfills later recipe coffee into a historically attributed bag brew", () => {
+        const record = brew({coffee: undefined, bag: bagRunFixture({beanName: "Original coffee"})});
+        const later = recipe({coffee: {name: "Later pod", roaster: "Wrong roaster"}});
+        expect(backfillFromRecipe(record, later).record.coffee).toBeUndefined();
+        expect(handoffCoffee(record, later)).toBeUndefined();
+    });
+
     it("fills absent brew figures from the recipe in stable order", () => {
         const old = brew({
             dose: undefined,

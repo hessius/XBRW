@@ -11,6 +11,7 @@ import {encodeHandoff} from "@/library/brew/handoff/encode";
 import {brew, samples} from "@/library/brew/handoff/__tests__/fixtures";
 import Recipe from "@/library/Recipe";
 import RecipeDatabase from "@/library/RecipeDatabase";
+import {bagRunFixture} from "@/test-utils/bags";
 
 jest.mock("@/components/XbrwToast", () => ({notify: jest.fn()}));
 jest.mock("@/library/RecipeDatabase", () => jest.fn());
@@ -64,6 +65,30 @@ function decode(url: string): HandoffEnvelope {
 }
 
 describe("useBrewHandoff", () => {
+    it("requires an explicit name for an attributed bag rather than guessing from a pod", async () => {
+        const {result} = await renderHook(() => useBrewHandoff(
+            () => ({record: brew({bag: bagRunFixture(), coffee: {name: "Same pod"}}), samples})
+        ));
+        await act(async () => { expect(await result.current.send()).toBeNull(); });
+        expect(openURL).not.toHaveBeenCalled();
+        expect(RecipeDatabaseMock).not.toHaveBeenCalled();
+        await act(async () => { await result.current.send("Second bag"); });
+        expect(decode(openURL.mock.calls[0][0]).bean?.name).toBe("Second bag");
+    });
+
+    it("keeps historic bag identity when the saved recipe's current coffee has changed", async () => {
+        const current = recipe();
+        current.coffee = {name: "Different coffee"};
+        RecipeDatabaseMock.mockImplementation(() => recipeStore(current));
+        const {result} = await renderHook(() => useBrewHandoff(() => ({
+            record: brew({bag: bagRunFixture({beanName: "Original bag"}),
+                coffee: {name: "Original pod", roaster: "Original roaster"}}), samples
+        })));
+        await act(async () => { await result.current.send(); });
+        expect(decode(openURL.mock.calls[0][0]).bean)
+            .toMatchObject({name: "Original bag", roaster: "Original roaster"});
+    });
+
     it("refuses tea before opening the recipe database or marking it sent", async () => {
         const markSent = jest.fn();
         const {result} = await renderHook(() => useBrewHandoff(

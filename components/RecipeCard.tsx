@@ -12,6 +12,7 @@ import SlotMarker from "@/components/SlotMarker";
 import Recipe from "@/library/Recipe";
 import {evidenceLine, isSet, spokenEvidence} from "@/library/recipeEvidence";
 import type {RecipeEvidence} from "@/library/libraryQuery";
+import type {BagBadge} from "@/library/readyToBrew";
 import type {SlotMarkerValue} from "@/library/slots/slotModel";
 import {accentGroupFor, resolveAccent} from "@/library/accent";
 import {canWriteToCard} from "@/library/cardLimits";
@@ -185,6 +186,7 @@ type Props = {
      * either.
      */
     evidence?: RecipeEvidence;
+    bagBadge?: BagBadge;
     slotMarker?: SlotMarkerValue;
     onEasyMode?: () => void;
 };
@@ -201,6 +203,7 @@ export default function RecipeCard({
     onPress,
     editing = false,
     evidence,
+    bagBadge,
     onDuplicate,
     onDelete,
     showCoffeeMarker = true,
@@ -230,7 +233,7 @@ export default function RecipeCard({
     // alone -- which is the state the TEA/COFFEE marker exists to prevent.
     const hasNote = recipe.description.length > 0;
 
-    const shownEvidence = evidenceLine(evidence);
+    const shownEvidence = [evidenceLine(evidence), bagBadge?.label].filter(Boolean).join(" · ") || null;
     const {width, fontScale} = useWindowDimensions();
     const signature = JSON.stringify([
         recipe.uuid, recipe.displayName(), recipe.description, recipe.favourite, recipe.dosage,
@@ -272,7 +275,7 @@ export default function RecipeCard({
         // reader would otherwise have the figures conveyed by the glyphs
         // alone. Kept out of the editing case for the same reason the drawn
         // line is: it is not on screen then.
-        ...(editing ? [] : spokenEvidence(evidence))
+        ...(editing ? [] : [...spokenEvidence(evidence), bagBadge?.spoken])
     ].filter((part) => part !== undefined).join(", ");
 
     // The row actions are nested inside that same group, so VoiceOver cannot

@@ -160,6 +160,11 @@ export function buildEnvelope(
  * ask for.
  */
 function beanFor(brew: StoredBrew, hint?: string): HandoffBean | undefined {
+    if (brew.bag !== undefined) {
+        const name = hint?.trim() || brew.bag.beanName?.trim();
+        if (!name) return undefined;
+        return brew.coffee === undefined ? {name} : {...handoffBean(brew.coffee), name};
+    }
     if (brew.coffee !== undefined) return handoffBean(brew.coffee);
     const typed = hint?.trim();
     const name = typed !== undefined && typed !== ""

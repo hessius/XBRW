@@ -24,6 +24,7 @@ import type {BypassView} from "@/library/brew/bypassState";
 import Recipe, {CUP_TYPE} from "@/library/Recipe";
 import type {QuickEditRecordAdjustments} from "@/library/quickEdit";
 import {HANDOFF_TARGETS} from "@/library/brew/handoff/targets";
+import type {BagRunRequest} from "@/library/bagRun";
 
 const mockUseKeepAwake = jest.fn();
 const mockNotify = jest.fn();
@@ -92,6 +93,7 @@ const mockStart = jest.fn();
 const mockStartInPro = jest.fn();
 let mockView: string | undefined = undefined;
 let mockQuickEditAdjustments: string | undefined = undefined;
+let mockBagSelection: string | undefined = undefined;
 let mockSavedRecipe: Recipe | null = null;
 
 function namedPhase(name: BrewPhase["name"]): BrewPhase {
@@ -222,7 +224,8 @@ jest.mock("expo-router", () => ({
     useLocalSearchParams: () => ({
         view: mockView,
         recipeJSON: mockRecipeJSON,
-        quickEditAdjustments: mockQuickEditAdjustments
+        quickEditAdjustments: mockQuickEditAdjustments,
+        bagSelection: mockBagSelection
     }),
     useNavigation: () => ({setOptions: jest.fn()})
 }));
@@ -231,6 +234,7 @@ beforeEach(() => {
     mockUseKeepAwake.mockClear();
     mockView = undefined;
     mockQuickEditAdjustments = undefined;
+    mockBagSelection = undefined;
     mockSavedRecipe = null;
     mockRecipeJSON = JSON.stringify({
         name: "Ethiopia Guji",
@@ -289,6 +293,24 @@ async function drawDone() {
 }
 
 describe("brew route", () => {
+    it.each<[string, BagRunRequest]>([
+        ["null", {kind: "explicit", bagId: null}],
+        ['"bag-a"', {kind: "explicit", bagId: "bag-a"}],
+        ["{}", {kind: "invalid", reason: "Invalid bag selection."}]
+    ])("passes the transient bag request %s to the accepted owner", async (raw, expected) => {
+        mockBagSelection = raw;
+        await renderWithProviders(<Brew/>);
+        expect(mockStart).toHaveBeenCalledWith(expect.any(Recipe), undefined, expected);
+    });
+
+    it("does not attribute or start a viewed brew even with a bag route parameter", async () => {
+        mockView = "1";
+        mockBagSelection = '"bag-a"';
+        await renderWithProviders(<Brew/>);
+        expect(mockStart).not.toHaveBeenCalled();
+        expect(mockStartInPro).not.toHaveBeenCalled();
+    });
+
     it.each(["completion", "failure"])("freezes only the actual live image subtree until %s, then captures the new appearance", async (ending) => {
         const light = {theme: "light", recipeColours: "themed"} as const;
         const blue = {theme: "blue", recipeColours: "original"} as const;

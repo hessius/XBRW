@@ -221,6 +221,8 @@ export type RecipeLibrary = {
     /** The art each shelf's tile draws, keyed by shelf id. */
     shelfMarks: Record<string, ShelfMarkMembers>;
     allRecipes: () => Recipe[];
+    /** Invalidates other whole-library reads after mutations or regaining focus. */
+    revision: number;
     refresh: () => void;
     deleteRecipe: (recipe: Recipe) => void;
     duplicateRecipe: (recipe: Recipe) => void;
@@ -564,6 +566,7 @@ export function useRecipeLibrary(
 
     return {
         recipes,
+        revision,
         librarySize,
         countUnreadable,
         deleteUnreadable,

@@ -23,10 +23,9 @@ export type HandoffStore = {markSent: (id: string, at: number) => void};
  * until somebody actually asks to send it.
  *
  * `send` takes an optional bean name, which a screen collects from the user
- * before calling. It is a hint, not a requirement: with none, the envelope
- * falls back to a name derived from the recipe, and Beanconqueror falls back
- * again from there. The batch path passes nothing, because asking once per
- * brew across a selection would be a questionnaire.
+ * before calling. Legacy brews keep their recipe-name fallback. An attributed
+ * bag instead requires a frozen external name or this explicit confirmation;
+ * another same-named bag must not be guessed from pod metadata.
  *
  * The handoff is guarded against a second press while the deep link is still in
  * flight: the guard is a ref, set synchronously before the first `await`, so a
@@ -47,6 +46,10 @@ export function useBrewHandoff(
         if (opened === null) return null;
         if (opened.record.beverageKind === "tea") {
             notify({tone: "error", message: HANDOFF_TEA_UNSUPPORTED});
+            return null;
+        }
+        if (opened.record.bag !== undefined && !opened.record.bag.beanName?.trim() && !beanName?.trim()) {
+            notify({tone: "error", message: "Confirm this bag's Beanconqueror name before sending the brew."});
             return null;
         }
         isSendingRef.current = true;
