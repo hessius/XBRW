@@ -18,7 +18,7 @@ import {restoreTeaSlotOriginal, writeTeaSlotProbe} from "@/library/slots/teaSlot
 
 const mockAllRecipes = [coffee("Whole library recipe")];
 let mockRecord = emptySlotRecord();
-let mockParams: {recipeJSON?: string} = {};
+let mockParams: {recipeJSON?: string; place?: string} = {};
 let mockRatingNoteOpen = false;
 let mockDeviceId = "one";
 let mockSerial = "serial";
@@ -36,6 +36,9 @@ const mockPrompt = {
     rate: jest.fn(), annotate: jest.fn(), dismiss: jest.fn(), refresh: jest.fn()
 };
 const mockWrite = jest.fn();
+const mockBack = jest.fn(() => mockRemove());
+const mockAssign = jest.fn((..._args: unknown[]) => true);
+const mockConnect = jest.fn(async () => {});
 const mockSetScaleEnabled = jest.fn();
 const mockReset = jest.fn();
 const mockProbe = jest.fn();
@@ -80,12 +83,13 @@ jest.mock("expo-router", () => ({
     useLocalSearchParams: () => mockParams,
     useNavigation: () => mockNavigation,
     usePathname: () => mockFocused ? "/easyMode" : "/settings",
-    router: {push: mockPush, back: () => mockRemove(), canGoBack: () => true},
+    router: {push: mockPush, back: () => mockBack(), canGoBack: () => true},
     useRouter: () => ({push: mockPush, back: jest.fn()})
 }));
 jest.mock("@/hooks/useMachine", () => ({
     useMachine: () => ({
         remembered: mockDeviceId, status: mockConnected ? "connected" : "disconnected",
+        connect: mockConnect,
         machine: {slotIdentity: mockConnected ? {deviceId: mockDeviceId, serial: mockSerial} : null,
             info: {model: "X15", firmware: "V12.0D.500"},
             modelNumber: "X15", advertisedName: "XBLOOM",
@@ -99,7 +103,7 @@ jest.mock("@/hooks/useEasyModeSlots", () => ({
         available: mockAvailable, running: mockRunning, attempt: mockAttempt,
         resetAttempt: mockReset,
         setScaleEnabled: mockSetScaleEnabled,
-        assign: jest.fn(), write: mockWrite, recover: jest.fn(), cancel: jest.fn(), dismissWrite: mockStopWrite,
+        assign: mockAssign, write: mockWrite, recover: jest.fn(), cancel: jest.fn(), dismissWrite: mockStopWrite,
         writeTeaProbe: mockProbe, restoreTeaOriginal: mockRestore, observeTeaProbe: mockObserve,
         writeSlotLab: mockLab, sendRecoveryProbe: mockRecoveryProbe, clearRecoveryProbe: mockClearRecovery
     })
@@ -113,6 +117,8 @@ beforeEach(() => {
     mockDeviceId = "one"; mockSerial = "serial"; mockConnected = true; mockBusy = false;
     mockRunning = false; mockAvailable = false; mockAttempt = null;
     mockDispatch.mockClear(); mockWrite.mockClear(); mockReset.mockClear();
+    mockBack.mockClear();
+    mockAssign.mockReset(); mockAssign.mockImplementation(() => true); mockConnect.mockReset(); mockConnect.mockImplementation(async () => {});
     mockFocused = true; mockRun = null; mockPrompt.brew = null;
     mockPreventRemove.mockClear(); mockPush.mockClear(); mockDismiss.mockClear();
     mockPrompt.rate.mockClear(); mockPrompt.dismiss.mockClear();
@@ -731,5 +737,101 @@ describe("the reference ABC comparison on the route", () => {
         expect(mockRestore).toHaveBeenCalledTimes(1);
         expect(mockObserve).not.toHaveBeenCalled();
         expect(mockWrite).not.toHaveBeenCalled();
+    });
+});
+
+describe("placing a recipe from the editor's WRITE", () => {
+    const placed = coffee("Placed recipe");
+
+    function placeParams() {
+        mockParams = {recipeJSON: snapshotRecipe(placed).recipeJSON, place: "1"};
+    }
+
+    it("names the recipe, offers REPLACE on each slot and drops the chooser and WRITE panel", async () => {
+        changedDrafts();
+        placeParams();
+        await renderWithProviders(<EasyModeScreen/>);
+        expect(screen.getByTestId("easy-mode-placing")).toBeOnTheScreen();
+        expect(screen.getByText("Placed recipe")).toBeOnTheScreen();
+        expect(screen.queryByText(/Choose a slot for/i)).toBeNull();
+        expect(screen.getAllByText("REPLACE")).toHaveLength(3);
+        expect(screen.queryByText("CHANGE")).toBeNull();
+        expect(screen.queryByRole("button", {name: "Write all three slots"})).toBeNull();
+    });
+
+    it("assigns the chosen slot and starts the write at once", async () => {
+        changedDrafts();
+        placeParams();
+        await renderWithProviders(<EasyModeScreen/>);
+        await fireEvent.press(screen.getByRole("button", {name: "Put Placed recipe in slot B"}));
+        expect(mockAssign).toHaveBeenCalledWith(1, expect.objectContaining({uuid: placed.uuid}));
+        await waitFor(() => expect(mockWrite).toHaveBeenCalledTimes(1));
+        expect(mockConnect).not.toHaveBeenCalled();
+    });
+
+    it("connects first when the machine is not connected, then writes", async () => {
+        changedDrafts();
+        placeParams();
+        mockConnected = false;
+        mockConnect.mockImplementation(async () => { mockConnected = true; });
+        await renderWithProviders(<EasyModeScreen/>);
+        await fireEvent.press(screen.getByRole("button", {name: "Put Placed recipe in slot A"}));
+        await waitFor(() => expect(mockConnect).toHaveBeenCalledTimes(1));
+        await waitFor(() => expect(mockWrite).toHaveBeenCalledTimes(1));
+    });
+
+    it("falls back to the normal screen with the reason when the machine does not connect", async () => {
+        changedDrafts();
+        placeParams();
+        mockConnected = false;
+        mockConnect.mockImplementation(async () => { throw new Error("Machine not found"); });
+        await renderWithProviders(<EasyModeScreen/>);
+        await fireEvent.press(screen.getByRole("button", {name: "Put Placed recipe in slot C"}));
+        expect(await screen.findByTestId("easy-mode-place-notice")).toHaveTextContent(
+            "Placed recipe is in slot C. The machine did not connect: Machine not found. "
+            + "Connect it, then choose WRITE TO MACHINE.");
+        expect(mockWrite).not.toHaveBeenCalled();
+        expect(screen.getAllByText("CHANGE").length).toBeGreaterThan(0);
+        expect(screen.getByRole("button", {name: "Write all three slots"})).toBeOnTheScreen();
+    });
+
+    it("offers ADD on an empty slot and explains why the first write must wait", async () => {
+        placeParams();
+        mockAvailable = true;
+        mockAssign.mockImplementation((index: unknown) => {
+            mockRecord = {...mockRecord, drafts: mockRecord.drafts.map((slot, i) =>
+                i === index ? snapshotRecipe(placed) : slot) as typeof mockRecord.drafts};
+            return true;
+        });
+        await renderWithProviders(<EasyModeScreen/>);
+        expect(screen.getAllByText("ADD")).toHaveLength(3);
+        await fireEvent.press(screen.getByRole("button", {name: "Put Placed recipe in slot A"}));
+        expect(await screen.findByTestId("easy-mode-place-notice")).toHaveTextContent(
+            "Placed recipe is in slot A. Choose a recipe for slots B and C before writing.", {exact: false});
+        expect(mockWrite).not.toHaveBeenCalled();
+        expect(mockConnect).not.toHaveBeenCalled();
+    });
+
+    it("after the written set is confirmed, goes back to the editor", async () => {
+        changedDrafts();
+        const saved = snapshotRecipe(mockAllRecipes[0]);
+        mockRecord.written = {at: 1, slots: [saved, saved, saved]};
+        placeParams();
+        const view = await renderWithProviders(<EasyModeScreen/>);
+        await fireEvent.press(screen.getByRole("button", {name: "Put Placed recipe in slot A"}));
+        await waitFor(() => expect(mockWrite).toHaveBeenCalledTimes(1));
+        mockAttempt = {deviceId: "one", serial: "serial", operation: "write", status: "success"};
+        await view.rerender(<EasyModeScreen/>);
+        expect(screen.getByText("SLOTS WRITTEN")).toBeOnTheScreen();
+        await waitFor(() => expect(mockBack).toHaveBeenCalledTimes(1), {timeout: 5000});
+        expect(mockReset).toHaveBeenCalled();
+    });
+
+    it("keeps CHANGE and WRITE TO MACHINE on a normal entry", async () => {
+        changedDrafts();
+        await renderWithProviders(<EasyModeScreen/>);
+        expect(screen.queryByTestId("easy-mode-placing")).toBeNull();
+        expect(screen.getAllByText("CHANGE")).toHaveLength(3);
+        expect(screen.getByRole("button", {name: "Write all three slots"})).toBeOnTheScreen();
     });
 });

@@ -10,25 +10,28 @@ import {useLiveBrew} from "@/hooks/useLiveBrew";
 import {useLiveBrewBarGuard} from "@/hooks/useLiveBrewBarGuard";
 import {useRecipeLibrary} from "@/hooks/useRecipeLibrary";
 import {incomingEasyModeRecipe, useEasyModeSlots} from "@/hooks/useEasyModeSlots";
-import EasyModeSlots, {slotWriteAvailability} from "@/components/EasyModeSlots";
+import EasyModeSlots, {emptySlotsMessage, slotWriteAvailability} from "@/components/EasyModeSlots";
 import {slotOverlayVisible} from "@/components/EasyModeWriteOverlay";
 import XbrwSheet from "@/components/XbrwSheet";
+import {notify} from "@/components/XbrwToast";
 import ScreenHeader from "@/components/ScreenHeader";
 
 import DotMatrixText from "@/components/DotMatrixText";
 import {isActiveBrewPhase} from "@/library/machine/Machine";
 import {unavailableSlotPort} from "@/library/slots/slotWriter";
-import {unwrittenSlotCount} from "@/library/slots/slotModel";
+import {
+    SLOT_NAMES, snapshotRecipe, unwrittenSlotCount, type SlotIndex, type SlotRecord
+} from "@/library/slots/slotModel";
 import {STABLE_HOST} from "@/constants/views";
 
 export default function EasyModeScreen() {
     const appearance = useAppearance();
     const {palette} = appearance;
     const {primary} = appearance;
-    const {recipeJSON} = useLocalSearchParams<{recipeJSON?: string | string[]}>();
+    const {recipeJSON, place} = useLocalSearchParams<{recipeJSON?: string | string[]; place?: string | string[]}>();
     const navigation = useNavigation();
     const focused = useIsFocused();
-    const {remembered, machine, status, slotPort} = useMachine();
+    const {remembered, machine, status, slotPort, connect} = useMachine();
     const {ratingNoteOpen} = useLiveBrew();
     const library = useRecipeLibrary();
     const actual = machine.slotIdentity ?? null;
@@ -41,6 +44,12 @@ export default function EasyModeScreen() {
         ?? (slots.record.experiment?.phase === "active" ? slots.record.experiment.serial : null);
     const serialMatches = retainedSerial == null || actual === null || retainedSerial === actual.serial;
     const [incoming] = useState(() => incomingEasyModeRecipe(recipeJSON));
+    // WRITE, Easy Mode slot: choosing a slot assigns the recipe and writes the set.
+    const placeMode = place === "1" && incoming.recipe !== undefined;
+    const [placement, setPlacement] = useState<{
+        index: SlotIndex; stage: "assigned" | "connecting" | "connected" | "writing"
+    } | null>(null);
+    const [placeNotice, setPlaceNotice] = useState<string | null>(null);
     const [leavePrompt, setLeavePrompt] = useState<{
         deviceId: string; serial: string | null; exit: () => void
     } | null>(null);
@@ -59,6 +68,78 @@ export default function EasyModeScreen() {
         record: slots.record, deviceId, connected, busy, serialMatches, available: slots.available
     });
     const journal = slots.record.journal;
+    const placing = placeMode && placeNotice === null && placement?.stage !== "writing";
+
+    function placeIn(index: SlotIndex): void {
+        const recipe = incoming.recipe;
+        if (recipe === undefined || placement !== null || active) return;
+        if (slots.assign(index, recipe) === false) return;
+        const where = `${recipe.displayName()} is in slot ${SLOT_NAMES[index]}.`;
+        // The other two come from the remembered drafts, so the first write
+        // still needs all three: say which are missing rather than connect.
+        const drafts = slots.record.drafts.map((slot, at) => at === index ? snapshotRecipe(recipe) : slot);
+        const empty = emptySlotsMessage(drafts as SlotRecord["drafts"]);
+        if (empty !== null) {
+            stopPlacing(`${where} ${empty}`);
+            return;
+        }
+        if (connected) {
+            writePlaced(index, drafts as SlotRecord["drafts"]);
+            return;
+        }
+        setPlacement({index, stage: "connecting"});
+        connect().then(
+            () => setPlacement(was => was?.stage === "connecting" ? {...was, stage: "connected"} : was),
+            (error: unknown) => stopPlacing(`${where} The machine did not connect${
+                error instanceof Error && error.message !== "" ? `: ${error.message}` : ""
+            }. Connect it, then choose WRITE TO MACHINE.`)
+        );
+    }
+
+    function stopPlacing(notice: string): void {
+        setPlaceNotice(notice);
+        setPlacement(null);
+    }
+
+    function writePlaced(index: SlotIndex, drafts: SlotRecord["drafts"]): void {
+        // Checked against the set as it is now, with the placed recipe in it.
+        const blocked = slotWriteAvailability({
+            record: {...slots.record, drafts}, deviceId, connected, busy, serialMatches,
+            available: slots.available
+        });
+        if (blocked !== null) {
+            stopPlacing(`${incoming.recipe?.displayName()} is in slot ${SLOT_NAMES[index]}. ${blocked}`);
+            return;
+        }
+        setPlacement({index, stage: "writing"});
+        void slots.write();
+    }
+
+    // Connected after asking: write, or say why not. The connection is the
+    // external system this effect follows.
+    const reconnected = placement?.stage === "connected" ? placement.index : null;
+    useEffect(() => {
+        if (reconnected === null) return;
+        const recipe = incoming.recipe;
+        const where = `${recipe?.displayName()} is in slot ${SLOT_NAMES[reconnected]}.`;
+        if (!connected) {
+            stopPlacing(`${where} The machine did not connect. Connect it, then choose WRITE TO MACHINE.`);
+            return;
+        }
+        writePlaced(reconnected, slots.record.drafts);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per connection result
+    }, [reconnected, connected]);
+
+    function dismissSuccess(): void {
+        slots.resetAttempt();
+        if (placement?.stage !== "writing" || incoming.recipe === undefined) return;
+        notify({
+            tone: "success",
+            message: `Written. ${incoming.recipe.displayName()} is in slot ${SLOT_NAMES[placement.index]}.`
+        });
+        setPlacement(null);
+        router.back();
+    }
 
     function requestDeparture(navigate: () => void): void {
         if (active) return;
@@ -131,18 +212,30 @@ export default function EasyModeScreen() {
             <EasyModeSlots record={slots.record} recipes={library.allRecipes()}
                            header={<>
                                <ScreenHeader title="EASY MODE" onBack={() => router.back()}/>
+                               {placeNotice !== null && (
+                                   <Text selectable accessibilityRole="alert" color={palette.text}
+                                         testID="easy-mode-place-notice" padding="$4" paddingBottom={0}>
+                                       {placeNotice}
+                                   </Text>
+                               )}
                                {incoming.error !== null && (
                                    <Text selectable accessibilityRole="alert" color={palette.danger} padding="$4">
                                        {incoming.error}
                                    </Text>
                                )}
                            </>}
-                           incoming={incoming.recipe} deviceId={deviceId} serial={serial}
+                           incoming={placeMode && !placing ? undefined : incoming.recipe}
+                           placing={placing ? {
+                               onPlace: placeIn,
+                               status: placement?.stage === "connecting" || placement?.stage === "connected"
+                                   ? "Connecting to your machine." : null
+                           } : undefined}
+                           deviceId={deviceId} serial={serial}
                            connected={connected} busy={busy}
                            serialMatches={serialMatches} available={slots.available}
                            running={slots.running} error={slots.error}
                            guardLiveBrewBar={focused}
-                           attempt={slots.attempt} onDismissSuccess={slots.resetAttempt}
+                           attempt={slots.attempt} onDismissSuccess={dismissSuccess}
                            writeControlRef={writeRef}
                            onRestoreOriginal={() => void slots.restoreTeaOriginal()}
                            onDismissWrite={() => void slots.dismissWrite()}

@@ -42,12 +42,23 @@ export function useSlotRecord(deviceId: string, supplied?: SlotDatabase): SlotRe
     );
 }
 
+/**
+ * Where Easy Mode opens for a recipe.
+ *
+ * `place` is the editor's WRITE, Easy Mode slot: the screen shows the recipe
+ * being placed, each slot offers REPLACE or ADD, and choosing one writes the
+ * set. So the recipe is never put in an empty slot here; the person picks.
+ * Without `place`, a free slot takes the recipe straight away, as before.
+ */
 export function prepareEasyModeEntry(
-    store: SlotDatabase, deviceId: string, recipe: Recipe
-): {pathname: "/easyMode"; params?: {recipeJSON: string}} {
+    store: SlotDatabase, deviceId: string, recipe: Recipe, {place = false}: {place?: boolean} = {}
+): {pathname: "/easyMode"; params?: {recipeJSON: string; place?: "1"}} {
     const record = store.read(deviceId);
     if (record.journal !== null || record.experiment?.phase === "active") return {pathname: "/easyMode"};
     const snapshot = snapshotRecipe(recipe);
+    if (place && deviceId !== "") {
+        return {pathname: "/easyMode", params: {recipeJSON: snapshot.recipeJSON, place: "1"}};
+    }
     const empty = record.drafts.findIndex((slot) => slot === null);
     if (deviceId !== "" && record.journal === null && (empty === 0 || empty === 1 || empty === 2)) {
         store.assign(deviceId, empty, snapshot);
@@ -56,10 +67,12 @@ export function prepareEasyModeEntry(
     return {pathname: "/easyMode", params: {recipeJSON: snapshot.recipeJSON}};
 }
 
-export function openEasyModeRecipe(recipe: Recipe, deviceId: string): void {
+export function openEasyModeRecipe(
+    recipe: Recipe, deviceId: string, options: {place?: boolean} = {}
+): void {
     try {
-        pushPrepared(JSON.stringify(["easyMode", deviceId, recipe.uuid]),
-            () => prepareEasyModeEntry(sharedSlotDatabase(), deviceId, recipe));
+        pushPrepared(JSON.stringify(["easyMode", deviceId, recipe.uuid, options.place === true]),
+            () => prepareEasyModeEntry(sharedSlotDatabase(), deviceId, recipe, options));
     } catch (error) {
         notify({tone: "error", message: error instanceof Error ? error.message : String(error)});
     }

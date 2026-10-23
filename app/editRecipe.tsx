@@ -1337,7 +1337,7 @@ export default function EditRecipe(
      * library's uuid. Assigned unsaved, the slot later read REMOVED FROM
      * LIBRARY.
      */
-    async function openInEasyMode() {
+    async function openInEasyMode(place = false) {
         await flushDrafts();
         if (!recipe || rememberedMachine === "") return;
         let target: Recipe = recipe;
@@ -1353,7 +1353,7 @@ export default function EditRecipe(
                 return;
             }
         }
-        openEasyModeRecipe(target, rememberedMachine);
+        openEasyModeRecipe(target, rememberedMachine, {place});
     }
 
     async function deleteRecipe() {
@@ -1598,7 +1598,7 @@ export default function EditRecipe(
                                  showHints={showHint} onShowHintsChange={setShowHint}
                                  onShare={onSharePress}
                                  onDuplicate={duplicateRecipe}
-                                 onEasyMode={rememberedMachine !== "" ? openInEasyMode : undefined}
+                                 onEasyMode={rememberedMachine !== "" ? () => void openInEasyMode() : undefined}
                                  onRefreshName={async () => {
                                      // Refresh fetches against the recipe ID, so
                                      // a just-typed ID has to be committed first
@@ -1646,7 +1646,7 @@ export default function EditRecipe(
                                 onChoose={machinePicker.choose}/>
 
             <WriteChooserSheet open={writeChooserOpen} onOpenChange={setWriteChooserOpen}
-                               onEasyMode={() => void openInEasyMode()}
+                               onEasyMode={() => void openInEasyMode(true)}
                                onCard={() => void writeToCard()}/>
 
             <BypassWriteSheet open={bypassWriteOpen}

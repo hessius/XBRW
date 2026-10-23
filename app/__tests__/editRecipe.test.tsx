@@ -2063,7 +2063,7 @@ describe("WRITE with a machine remembered", () => {
         }, {timeout: SHEET_PRESS_TIMEOUT});
     });
 
-    it("sends Easy Mode slot to Assign to Easy Mode", async () => {
+    it("sends Easy Mode slot to Easy Mode to place the recipe, without filling a slot", async () => {
         const deviceId = "chooser-slot";
         rememberMachine(deviceId);
         await renderEditor({name: "Chooser slot recipe"});
@@ -2072,10 +2072,13 @@ describe("WRITE with a machine remembered", () => {
             if (mockPush.mock.calls.length === 0) {
                 await fireEvent.press(screen.getByRole("button", {name: "Easy Mode slot"}));
             }
-            expect(mockPush).toHaveBeenCalledWith({pathname: "/easyMode"});
+            expect(mockPush).toHaveBeenCalledWith({
+                pathname: "/easyMode",
+                params: {recipeJSON: expect.stringContaining("Chooser slot recipe"), place: "1"}
+            });
         }, {timeout: SHEET_PRESS_TIMEOUT});
         expect(mockWriteCard).not.toHaveBeenCalled();
-        expect(sharedSlotDatabase().read(deviceId).drafts[0]?.name).toBe("Chooser slot recipe");
+        expect(sharedSlotDatabase().read(deviceId).drafts.every(slot => slot === null)).toBe(true);
     });
 
     it("writes the card straight away with no machine, with no chooser", async () => {

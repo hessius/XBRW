@@ -73,6 +73,15 @@ it("context entry fills only an empty slot and full sets require replacement cho
     expect(store.read("one").drafts.every((slot) => slot?.sourceUuid === recipe.uuid)).toBe(true);
 });
 
+it("placing from WRITE never fills a slot itself and asks the screen to place", () => {
+    const store = new SlotDatabase(createTestDatabase());
+    const recipe = coffee();
+    expect(prepareEasyModeEntry(store, "one", recipe, {place: true})).toEqual({
+        pathname: "/easyMode", params: {recipeJSON: JSON.stringify(recipe), place: "1"}
+    });
+    expect(store.read("one").drafts.every((slot) => slot === null)).toBe(true);
+});
+
 it("notifies both screen and library subscribers after a durable assignment", async () => {
     const store = new SlotDatabase(createTestDatabase());
     const editor = await renderHook(() => useEasyModeSlots(

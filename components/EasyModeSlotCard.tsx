@@ -20,6 +20,11 @@ type Props = {
     updateProblem: string | null;
     changeRef?: React.Ref<React.ComponentRef<typeof Button>>;
     onChange: () => void;
+    /**
+     * Placing a recipe (WRITE, Easy Mode slot): the slot's button says what
+     * choosing it does (REPLACE, or ADD when empty) instead of CHANGE.
+     */
+    action?: {label: string; spoken: string};
     onUpdate: () => void;
     onSetScaleEnabled?: (enabled: boolean) => boolean | void;
 };
@@ -34,8 +39,8 @@ export function teaSlotFigures(recipe: Recipe, historicalProbe = false): string 
 }
 
 export default function EasyModeSlotCard({
-    index, snapshot, needsWrite, status, recovery, locked, updateProblem, changeRef, onChange, onUpdate,
-    onSetScaleEnabled
+    index, snapshot, needsWrite, status, recovery, locked, updateProblem, changeRef, onChange, action,
+    onUpdate, onSetScaleEnabled
 }: Props) {
     const appearance = useAppearance();
     const {palette} = appearance;
@@ -96,14 +101,14 @@ export default function EasyModeSlotCard({
                 </XStack>}
                 {!locked && <Button ref={changeRef} height="auto" minHeight={44} paddingVertical="$2"
                     paddingHorizontal="$3" borderRadius={8}
-                    accessibilityLabel={`Change slot ${name} recipe`} onPress={onChange}
+                    accessibilityLabel={action?.spoken ?? `Change slot ${name} recipe`} onPress={onChange}
                     backgroundColor={actionFill} color={actionInk}>
                     <DotMatrixText fontSize={11} weight="bold" color={actionInk}>
-                        {snapshot === null ? "CHOOSE RECIPE" : "CHANGE"}
+                        {action?.label ?? (snapshot === null ? "CHOOSE RECIPE" : "CHANGE")}
                     </DotMatrixText>
                 </Button>}
             </XStack>
-            {!probe && status === "edited" && <YStack gap="$2">
+            {!probe && status === "edited" && action === undefined && <YStack gap="$2">
                 <DotMatrixText fontSize={11} weight="bold" color={ink}>RECIPE UPDATED</DotMatrixText>
                 {!locked && <Button height="auto" minHeight={44} paddingVertical="$3"
                     accessibilityLabel={`Update slot ${name} from library`}

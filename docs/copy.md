@@ -413,6 +413,20 @@ Neither host adds a save action, and closing discards the adjustment.
 | `editor.writeChooser.card` | `components/WriteChooserSheet.tsx` | Row: write an NFC card. | `NFC CARD` |
 | `editor.writeChooser.card.detail` | `components/WriteChooserSheet.tsx` | Line under the card row, also its a11y hint. | `Write it to an xBloom recipe card.` |
 
+### Easy Mode placing (`components/EasyModeSlots.tsx`, `app/easyMode.tsx`)
+
+| ID | Source | Context — when the user sees this | Current text |
+|----|--------|-----------------------------------|--------------|
+| `easyMode.placing.label` | `components/EasyModeSlots.tsx` | Above the recipe name, arriving from WRITE, Easy Mode slot. | `PLACING` |
+| `easyMode.placing.help` | `components/EasyModeSlots.tsx` | Under the recipe name. | `Choose a slot. It is written to your machine straight away, with the other two slots as they are.` |
+| `easyMode.placing.connecting` | `app/easyMode.tsx` | In place of the help line while connecting. | `Connecting to your machine.` |
+| `easyMode.placing.replace` | `components/EasyModeSlotCard.tsx` | Slot button when placing, slot filled. | `REPLACE` |
+| `easyMode.placing.add` | `components/EasyModeSlotCard.tsx` | Slot button when placing, slot empty. | `ADD` |
+| `easyMode.placing.a11y` | `components/EasyModeSlotCard.tsx` (a11y) | Slot button's spoken name when placing. | `Put {recipe} in slot {A}` |
+| `easyMode.placing.notice` | `app/easyMode.tsx` | The write could not start; starts the normal screen. | `{recipe} is in slot {A}. {reason}` |
+| `easyMode.placing.noConnect` | `app/easyMode.tsx` | Reason when connecting failed. | `The machine did not connect: {error}. Connect it, then choose WRITE TO MACHINE.` |
+| `easyMode.placing.written` | `app/easyMode.tsx` | Toast after the write, back in the editor. | `Written. {recipe} is in slot {A}.` |
+
 ### Editor toasts and errors
 
 | ID | Source | Context — when the user sees this | Current text |
