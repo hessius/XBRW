@@ -4,7 +4,7 @@ import {screen, fireEvent, waitFor} from "@testing-library/react-native";
 import RestoreSheet from "@/components/RestoreSheet";
 import Recipe from "@/library/Recipe";
 import {renderWithProviders, SHEET_PRESS_TIMEOUT} from "@/test-utils/render";
-import {bagFixture} from "@/test-utils/bags";
+import {bagBrewFixture, bagFixture} from "@/test-utils/bags";
 
 function recipeNamed(name: string, uuid: string): Recipe {
     const recipe = new Recipe();
@@ -23,6 +23,13 @@ const PAYLOAD = {
     appVersion: "2.6.0",
     exportedAt: "2026-08-26T21:00:00.000Z"
 };
+
+it("allows history-only restore without taking settings or adding recipes", async () => {
+    await renderWithProviders(<RestoreSheet open payload={{
+        ...PAYLOAD, recipes: [], brews: [bagBrewFixture()]
+    }} existing={[]} onCancel={() => {}} onRestore={() => {}}/>);
+    expect(screen.getByRole("button", {name: /add.*librar/i})).not.toBeDisabled();
+});
 
 describe("RestoreSheet", () => {
     it("allows independent bags to be restored when no recipes are new", async () => {
