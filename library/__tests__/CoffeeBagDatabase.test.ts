@@ -1,5 +1,5 @@
 import {createTestDatabase} from "@/test-utils/sqlite";
-import {bagFixture, bagRecipe} from "@/test-utils/bags";
+import {bagFixture, bagRecipe, bagRunFixture as run} from "@/test-utils/bags";
 import CoffeeBagDatabase, {bagRevision, subscribeBagChanges} from "@/library/CoffeeBagDatabase";
 import RecipeDatabase from "@/library/RecipeDatabase";
 
@@ -26,6 +26,155 @@ describe("physical bag relationships in SQLite", () => {
         expect(bags.linked("a").map(bag => bag.id).sort()).toEqual(["bag-a", "bag-b"]);
         expect(bags.selection("b")?.bagId).toBe("bag-a");
         expect(bags.get("bag-a")?.finishedAt).toBeUndefined();
+    });
+
+    const used = {consumption: "used" as const, possible: true, closed: false};
+    const uncertain = {consumption: "uncertain" as const, possible: true, closed: false};
+
+    describe("durable bag accounting in SQLite", () => {
+        it("combines actual intended doses of two recipes sharing a bag", () => {
+            const {bags} = stores();
+            bags.beginRun(run());
+            bags.updateRun("run-a", {...used, closed: true});
+            bags.beginRun(run({runId: "run-b", recipeUuid: "b", dose: 30}));
+            bags.updateRun("run-b", {...used, closed: true});
+            expect(bags.balance("bag-a", 18, "xbrw"))
+                .toMatchObject({kind: "estimate", remainingGrams: 202, usedGrams: 48});
+        });
+
+        it("keeps spent coffee spent when history is deleted", () => {
+            const {bags} = stores();
+            bags.beginRun(run());
+            bags.updateRun("run-a", {...used, closed: true});
+            mockDb.runSync("DELETE FROM brews;");
+            expect(new CoffeeBagDatabase().balance("bag-a", 18, "xbrw"))
+                .toMatchObject({kind: "estimate", remainingGrams: 232});
+        });
+
+        it("does not reset or duplicate an existing allocation", () => {
+            const {bags} = stores();
+            bags.beginRun(run());
+            bags.updateRun("run-a", {...used, closed: true});
+            expect(bags.beginRun(run())).toEqual({...used, closed: true});
+            expect(() => bags.beginRun(run({dose: 20}))).toThrow();
+            bags.updateRun("run-a", {...used, closed: true});
+            expect(bags.balance("bag-a", 18, "xbrw"))
+                .toMatchObject({kind: "estimate", remainingGrams: 232});
+        });
+
+        it("a preflight refusal costs no coffee and can rearm the same allocation", () => {
+            const {bags} = stores();
+            bags.beginRun(run());
+            bags.updateRun("run-a", {consumption: "unused", possible: false, closed: true});
+            expect(bags.balance("bag-a", 18, "xbrw"))
+                .toMatchObject({kind: "estimate", remainingGrams: 250});
+            bags.correct("bag-a", 100);
+            bags.updateRun("run-a", {consumption: "pending", possible: false, closed: false});
+            bags.updateRun("run-a", {...used, closed: true});
+            expect(bags.balance("bag-a", 18, "xbrw"))
+                .toMatchObject({kind: "estimate", remainingGrams: 82});
+        });
+
+        it("does not recharge pre-correction consumption on a late terminal callback", () => {
+            const {bags} = stores();
+            bags.beginRun(run());
+            bags.updateRun("run-a", used);
+            bags.correct("bag-a", 100);
+            bags.updateRun("run-a", {...used, closed: true});
+            expect(bags.balance("bag-a", 18, "xbrw"))
+                .toMatchObject({kind: "estimate", remainingGrams: 100});
+        });
+
+        it("still charges consumption after a correction before sending", () => {
+            const {bags} = stores();
+            bags.beginRun(run());
+            bags.correct("bag-a", 100);
+            bags.updateRun("run-a", {...used, closed: true});
+            expect(bags.balance("bag-a", 18, "xbrw"))
+                .toMatchObject({kind: "estimate", remainingGrams: 82});
+        });
+
+        it("keeps overlapping unresolved grinding uncertain until a later correction", () => {
+            const {bags} = stores();
+            bags.beginRun(run());
+            bags.updateRun("run-a", uncertain);
+            bags.correct("bag-a", 100);
+            bags.updateRun("run-a", {...used, closed: true});
+            expect(bags.balance("bag-a", 18, "xbrw")).toEqual({kind: "needsCheck"});
+            bags.correct("bag-a", 100);
+            expect(bags.balance("bag-a", 18, "xbrw"))
+                .toMatchObject({kind: "estimate", remainingGrams: 100});
+        });
+
+        it("a confirmed zero-use refusal resolves overlap without a charge", () => {
+            const {bags} = stores();
+            bags.beginRun(run());
+            bags.updateRun("run-a", uncertain);
+            bags.correct("bag-a", 100);
+            bags.updateRun("run-a", {consumption: "unused", possible: false, closed: true});
+            expect(bags.balance("bag-a", 18, "xbrw"))
+                .toMatchObject({kind: "estimate", remainingGrams: 100});
+        });
+
+        it("recovers pending runs honestly while retaining observed consumption", () => {
+            const {bags} = stores();
+            bags.beginRun(run());
+            bags.recoverPending();
+            expect(bags.balance("bag-a", 18, "xbrw")).toEqual({kind: "needsCheck"});
+            bags.correct("bag-a", 250);
+            bags.beginRun(run({runId: "run-b"}));
+            bags.updateRun("run-b", used);
+            bags.recoverPending();
+            expect(bags.balance("bag-a", 18, "xbrw"))
+                .toMatchObject({kind: "estimate", remainingGrams: 232});
+        });
+
+        it("marks gaps without replaying old history and does not reset them on fact edits", () => {
+            const {bags} = stores();
+            bags.markAllNeedsCheck();
+            bags.edit(bagFixture({name: "Renamed", sizeGrams: 320}));
+            expect(bags.balance("bag-a", 18, "xbrw")).toEqual({kind: "needsCheck"});
+            bags.correct("bag-a", 100);
+            expect(bags.balance("bag-a", 18, "xbrw"))
+                .toMatchObject({kind: "estimate", remainingGrams: 100});
+        });
+
+        it("external ownership creates no competing local charge or quantity", () => {
+            const {bags} = stores();
+            bags.beginRun(run({tracker: "beanconqueror"}));
+            expect(mockDb.getAllSync("SELECT * FROM coffee_bag_runs;")).toEqual([]);
+            expect(bags.balance("bag-a", 18, "beanconqueror")).toEqual({kind: "external"});
+        });
+
+        it("keeps positive insufficient coffee distinct from a reliably empty bag", () => {
+            const {bags} = stores();
+            bags.correct("bag-a", 1);
+            expect(bags.balance("bag-a", 18, "xbrw"))
+                .toMatchObject({kind: "estimate", remainingGrams: 1, brewsLeft: 0, empty: false});
+            bags.correct("bag-a", 0);
+            expect(bags.balance("bag-a", 18, "xbrw"))
+                .toMatchObject({kind: "estimate", remainingGrams: 0, empty: true});
+        });
+
+        it("retains over-consumption while clamping only the displayed remaining grams", () => {
+            const {bags} = stores();
+            bags.correct("bag-a", 5);
+            bags.beginRun(run());
+            bags.updateRun("run-a", {...used, closed: true});
+            expect(bags.balance("bag-a", 18, "xbrw"))
+                .toMatchObject({remainingGrams: 0, usedGrams: 18});
+        });
+
+        it("rejects invalid operations and corrupt stored attribution explicitly", () => {
+            const {bags} = stores();
+            expect(() => bags.correct("bag-a", -1)).toThrow();
+            expect(() => bags.correct("missing", 100)).toThrow();
+            expect(() => bags.beginRun(run({dose: NaN}))).toThrow();
+            expect(() => bags.updateRun("missing", used)).toThrow();
+            bags.beginRun(run());
+            mockDb.runSync("UPDATE coffee_bag_runs SET snapshot = ?;", ["{}"]);
+            expect(() => bags.balance("bag-a", 18, "xbrw")).toThrow(/read/i);
+        });
     });
 
     it("remembers explicit No bag after reopening", () => {

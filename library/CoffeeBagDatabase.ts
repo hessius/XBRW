@@ -1,7 +1,13 @@
 import type {SQLiteDatabase} from "expo-sqlite";
 
 import {appDatabase} from "@/library/appDatabase";
-import {isBagId, reviveBag, type CoffeeBag} from "@/library/coffeeBag";
+import {
+    isBagId, isGramsLeft, reviveBag, type BagBalance, type BagTracker, type CoffeeBag
+} from "@/library/coffeeBag";
+import {
+    INITIAL_BAG_PROGRESS, nextBagProgress, reviveBagRunProgress, reviveBagRunSnapshot,
+    type BagAccountingStore, type BagRunProgress, type BagRunSnapshot
+} from "@/library/bagRun";
 
 export type BagSelection = {
     recipeUuid: string;
@@ -82,6 +88,33 @@ export function ensureBagTables(db: SQLiteDatabase): void {
 }
 
 type BagRow = {id: string; bag: string};
+type RunRow = {
+    runId: string;
+    bagId: string;
+    snapshot: string;
+    consumption: string;
+    possible: number;
+    closed: number;
+    coveredByBaseline: number;
+    overlapsBaseline: number;
+};
+
+function readRun(row: RunRow): {snapshot: BagRunSnapshot; progress: BagRunProgress} {
+    let value: unknown;
+    try { value = JSON.parse(row.snapshot); }
+    catch (cause) { throw new Error("Could not read the saved bag attribution.", {cause}); }
+    const snapshot = reviveBagRunSnapshot(value);
+    const flags = [row.possible, row.closed, row.coveredByBaseline, row.overlapsBaseline];
+    const progress = reviveBagRunProgress({
+        consumption: row.consumption, possible: row.possible === 1, closed: row.closed === 1
+    });
+    if (snapshot === null || progress === null || snapshot.runId !== row.runId
+        || snapshot.bagId !== row.bagId || snapshot.tracker !== "xbrw"
+        || flags.some(flag => flag !== 0 && flag !== 1)) {
+        throw new Error("Could not read the saved bag attribution.");
+    }
+    return {snapshot, progress};
+}
 
 function readBag(row: BagRow): CoffeeBag {
     let value: unknown;
@@ -98,7 +131,7 @@ function checkedBag(bag: CoffeeBag): CoffeeBag {
     return value;
 }
 
-export default class CoffeeBagDatabase implements BagFactsStore {
+export default class CoffeeBagDatabase implements BagFactsStore, BagAccountingStore {
     private readonly db: SQLiteDatabase;
     private transactionDepth = 0;
 
@@ -253,4 +286,156 @@ export default class CoffeeBagDatabase implements BagFactsStore {
             this.db.runSync("DELETE FROM coffee_bags_v2 WHERE id = ?;", [bagId]);
         });
     }
+
+    public beginRun(proposed: BagRunSnapshot): BagRunProgress {
+        const snapshot = reviveBagRunSnapshot(proposed);
+        if (snapshot === null) throw new Error("The bag attribution is invalid.");
+        if (this.get(snapshot.bagId) === null) throw new Error("That bag is no longer available.");
+        if (snapshot.tracker === "beanconqueror") return {...INITIAL_BAG_PROGRESS};
+        let progress = {...INITIAL_BAG_PROGRESS};
+        this.atomically(() => {
+            const existing = this.db.getFirstSync<RunRow>(
+                "SELECT * FROM coffee_bag_runs WHERE runId = ?;", [snapshot.runId]
+            );
+            if (existing !== null) {
+                const saved = readRun(existing);
+                if (JSON.stringify(saved.snapshot) !== JSON.stringify(snapshot)) {
+                    throw new Error("That brew already has a different bag attribution.");
+                }
+                progress = saved.progress;
+                return;
+            }
+            this.db.runSync(
+                "INSERT INTO coffee_bag_runs (runId, bagId, snapshot) VALUES (?, ?, ?);",
+                [snapshot.runId, snapshot.bagId, JSON.stringify(snapshot)]
+            );
+        });
+        return progress;
+    }
+
+    public updateRun(runId: string, proposed: BagRunProgress): void {
+        const progress = reviveBagRunProgress(proposed);
+        if (progress === null) throw new Error("The bag progress is invalid.");
+        this.atomically(() => {
+            const row = this.db.getFirstSync<RunRow>(
+                "SELECT * FROM coffee_bag_runs WHERE runId = ?;", [runId]
+            );
+            if (row === null) throw new Error("The bag attribution is no longer available.");
+            const previous = readRun(row).progress;
+            if (previous.consumption === progress.consumption
+                && previous.possible === progress.possible
+                && previous.closed === progress.closed) return;
+            const rearming = previous.closed && previous.consumption === "unused"
+                && progress.consumption === "pending" && !progress.possible && !progress.closed;
+            if ((!rearming && previous.closed)
+                || (previous.consumption === "used" && progress.consumption !== "used")
+                || (!rearming && previous.consumption !== "pending"
+                    && progress.consumption === "pending")) {
+                throw new Error("The saved bag progress cannot be rewound.");
+            }
+            this.db.runSync(`
+                UPDATE coffee_bag_runs SET consumption = ?, possible = ?, closed = ?,
+                    coveredByBaseline = CASE WHEN ? THEN 0 ELSE coveredByBaseline END,
+                    overlapsBaseline = CASE WHEN ? THEN 0 ELSE overlapsBaseline END
+                WHERE runId = ?;`,
+                [progress.consumption, progress.possible, progress.closed, rearming, rearming, runId]
+            );
+        });
+    }
+
+    public balance(bagId: string, dose: number, tracker: BagTracker): BagBalance {
+        if (this.get(bagId) === null) throw new Error("That bag is no longer available.");
+        if (tracker === "beanconqueror") return {kind: "external"};
+        const runs = this.db.getAllSync<RunRow>(
+            "SELECT * FROM coffee_bag_runs WHERE bagId = ?;", [bagId]
+        );
+        for (const row of runs) readRun(row);
+        const row = this.db.getFirstSync<{
+            baselineGrams: number; needsCheck: number; usedGrams: number; unresolved: number
+        }>(`
+            SELECT b.baselineGrams, b.needsCheck,
+                COALESCE(SUM(CASE WHEN r.coveredByBaseline = 0 AND r.consumption = 'used'
+                    THEN json_extract(r.snapshot, '$.dose') ELSE 0 END), 0) AS usedGrams,
+                COALESCE(MAX(CASE
+                    WHEN (r.coveredByBaseline = 0 AND r.consumption = 'uncertain')
+                        OR (r.overlapsBaseline = 1 AND r.consumption <> 'unused')
+                    THEN 1 ELSE 0 END), 0) AS unresolved
+            FROM coffee_bags_v2 b
+            LEFT JOIN coffee_bag_runs r ON r.bagId = b.id
+            WHERE b.id = ? GROUP BY b.id;`, [bagId]
+        );
+        if (row === null || !isGramsLeft(row.baselineGrams)
+            || (row.needsCheck !== 0 && row.needsCheck !== 1)
+            || (row.unresolved !== 0 && row.unresolved !== 1)
+            || !Number.isFinite(row.usedGrams) || row.usedGrams < 0) {
+            throw new Error("Could not read the saved quantity estimate.");
+        }
+        if (row.needsCheck || row.unresolved) return {kind: "needsCheck"};
+        const remainingGrams = Math.max(0, row.baselineGrams - row.usedGrams);
+        const validDose = Number.isFinite(dose) && dose > 0;
+        return {
+            kind: "estimate", remainingGrams, usedGrams: row.usedGrams,
+            brewsLeft: validDose ? Math.floor(remainingGrams / dose) : null,
+            low: validDose && remainingGrams < dose * 2, empty: remainingGrams === 0
+        };
+    }
+
+    public correct(bagId: string, grams: number): void {
+        if (!isGramsLeft(grams)) throw new Error("Enter remaining coffee from 0 to 5000 g.");
+        if (this.get(bagId) === null) throw new Error("That bag is no longer available.");
+        this.atomically(() => {
+            for (const row of this.db.getAllSync<RunRow>(
+                "SELECT * FROM coffee_bag_runs WHERE bagId = ?;", [bagId]
+            )) readRun(row);
+            this.db.runSync(`
+                UPDATE coffee_bag_runs SET
+                    coveredByBaseline = CASE
+                        WHEN consumption IN ('used', 'uncertain')
+                            OR (consumption = 'pending' AND possible = 1)
+                        THEN 1 ELSE coveredByBaseline END,
+                    overlapsBaseline = CASE
+                        WHEN closed = 0 AND possible = 1
+                            AND consumption IN ('pending', 'uncertain') THEN 1 ELSE 0 END
+                WHERE bagId = ?;`, [bagId]
+            );
+            this.db.runSync(
+                "UPDATE coffee_bags_v2 SET baselineGrams = ?, needsCheck = 0 WHERE id = ?;",
+                [grams, bagId]
+            );
+        });
+    }
+
+    public markAllNeedsCheck(): void {
+        this.atomically(() => {
+            this.db.runSync(`
+                UPDATE coffee_bags_v2 SET needsCheck = 1
+                WHERE json_extract(bag, '$.finishedAt') IS NULL;`
+            );
+        });
+    }
+
+    public recoverPending(): void {
+        const rows = this.db.getAllSync<RunRow>(
+            "SELECT * FROM coffee_bag_runs WHERE closed = 0;"
+        );
+        if (rows.length === 0) return;
+        this.atomically(() => {
+            for (const row of rows) {
+                const {progress} = readRun(row);
+                this.updateRun(row.runId, nextBagProgress(progress, "recovered"));
+            }
+        });
+    }
+}
+
+let shared: CoffeeBagDatabase | undefined;
+
+export function sharedBagDatabase(): CoffeeBagDatabase {
+    const db = appDatabase();
+    if (shared === undefined || !shared.uses(db)) {
+        const opened = new CoffeeBagDatabase();
+        opened.recoverPending();
+        shared = opened;
+    }
+    return shared;
 }

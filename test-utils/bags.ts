@@ -1,5 +1,6 @@
 import type {CoffeeBag} from "@/library/coffeeBag";
 import Recipe from "@/library/Recipe";
+import type {BagRunSnapshot} from "@/library/bagRun";
 
 export const BAG_NOW = 1_792_756_800_000;
 
@@ -18,4 +19,12 @@ export function bagRecipe(uuid = "recipe-a"): Recipe {
     recipe.dosage = 18;
     recipe.ratio = 16;
     return recipe;
+}
+
+export function bagRunFixture(changes: Partial<BagRunSnapshot> = {}): BagRunSnapshot {
+    return {
+        runId: "run-a", bagId: "bag-a", bagName: "Colombia Oct 12",
+        recipeUuid: "a", dose: 18, tracker: "xbrw", acceptedAt: BAG_NOW,
+        ...changes
+    };
 }
