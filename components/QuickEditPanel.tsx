@@ -3,6 +3,7 @@ import {useWindowDimensions} from "react-native";
 import {Button, Text, XStack, YStack} from "tamagui";
 
 import DotMatrixText from "@/components/DotMatrixText";
+import RailChip from "@/components/RailChip";
 import Stepper from "@/components/Stepper";
 import {useAppearance} from "@/hooks/useAppearance";
 import {
@@ -11,6 +12,7 @@ import {
     describeKnobBaseline,
     describeTemperatureBaseline,
     effectiveGrind,
+    dosePresets,
     quickEditBounds,
     quickEditProblems,
     type QuickEditKnob,
@@ -127,6 +129,7 @@ function baselineDetail(
 export default function QuickEditPanel({
     recipe, adjustments, accent, temperatureUnit, onChange, renderBrewAction
 }: QuickEditPanelProps) {
+    "use no memo";
     const appearance = useAppearance();
     const {palette} = appearance;
     const {fontScale} = useWindowDimensions();
@@ -183,6 +186,19 @@ export default function QuickEditPanel({
                                  adjustments, "dose", value, savedDose
                              ))}/>
                 </QuickEditRow>
+
+                {!recipe.isTea() && (
+                    <XStack testID="quick-edit-dose-presets" gap="$2" flexWrap="wrap">
+                        {dosePresets(recipe).map(preset => (
+                            <RailChip key={preset} active={dose === preset} accent={accent}
+                                label={`${preset} g`}
+                                accessibilityLabel={`Quick edit dose ${preset} grams`}
+                                onPress={() => onChange(updateAdjustment(
+                                    adjustments, "dose", preset, savedDose
+                                ))}/>
+                        ))}
+                    </XStack>
+                )}
 
                 {bounds.ratio !== null && (
                     <QuickEditRow label="RATIO" fontScale={fontScale}

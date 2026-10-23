@@ -52,6 +52,10 @@ function slotsKeyedOnMutatedModels(code: string): string[] {
 }
 
 describe("the React Compiler and the models this app mutates in place", () => {
+    it("does not cache quick-edit source dose shortcuts on the mutable recipe", () => {
+        expect(slotsKeyedOnMutatedModels(compile("components/QuickEditPanel.tsx"))).toEqual([]);
+    });
+
     it("does not memoise the editor's derivations on the recipe it mutates", () => {
         const slots = slotsKeyedOnMutatedModels(compile("hooks/useRecipeEditor.ts"));
 

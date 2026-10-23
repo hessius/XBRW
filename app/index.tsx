@@ -1,6 +1,6 @@
 import {useAppearance} from "@/hooks/useAppearance";
 import React, {useEffect, useRef, useState} from "react";
-import {BackHandler, Platform, Share} from "react-native";
+import {BackHandler, Platform, ScrollView, Share} from "react-native";
 // gesture-handler's FlatList, not React Native's: it keeps the list scroll
 // gesture and each row's swipe gesture from fighting each other on Android.
 import {FlatList} from "react-native-gesture-handler";
@@ -272,27 +272,30 @@ function HomeQuickEditSheet({
         <XbrwSheet open={recipe !== null} onOpenChange={onOpenChange}
                    title="QUICK EDIT" heightPercent={72}>
             {recipe !== null && (
-                <QuickEditPanel
-                    recipe={recipe}
-                    adjustments={adjustments}
-                    accent={accent}
-                    temperatureUnit={temperatureUnit}
-                    onChange={onChange}
-                    renderBrewAction={(brewability) => (
-                        <Button
-                            testID="home-quick-edit-brew"
-                            accessibilityRole="button"
-                            accessibilityLabel="Brew with quick edits"
-                            accessibilityState={{disabled: !brewability.brewable}}
-                            disabled={!brewability.brewable}
-                            opacity={brewability.brewable ? 1 : 0.45}
-                            backgroundColor={brewability.brewable ? colour.fill : palette.raised}
-                            color={brewability.brewable ? colour.onAccent.text : palette.dim}
-                            borderRadius="$5"
-                            onPress={onBrew}>
-                            BREW THIS
-                        </Button>
-                    )}/>
+                <ScrollView testID="home-quick-edit-scroll" style={{flex: 1}}
+                            keyboardShouldPersistTaps="handled">
+                    <QuickEditPanel
+                        recipe={recipe}
+                        adjustments={adjustments}
+                        accent={accent}
+                        temperatureUnit={temperatureUnit}
+                        onChange={onChange}
+                        renderBrewAction={(brewability) => (
+                            <Button
+                                testID="home-quick-edit-brew"
+                                accessibilityRole="button"
+                                accessibilityLabel="Brew with quick edits"
+                                accessibilityState={{disabled: !brewability.brewable}}
+                                disabled={!brewability.brewable}
+                                opacity={brewability.brewable ? 1 : 0.45}
+                                backgroundColor={brewability.brewable ? colour.fill : palette.raised}
+                                color={brewability.brewable ? colour.onAccent.text : palette.dim}
+                                borderRadius="$5"
+                                onPress={onBrew}>
+                                BREW THIS
+                            </Button>
+                        )}/>
+                </ScrollView>
             )}
         </XbrwSheet>
     );

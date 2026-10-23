@@ -362,6 +362,7 @@ type StagesDeckProps = {
     editStage: (index: number, field: StageField, value: number) => void;
     setBypassEnabled: (on: boolean) => void;
     editBypass: (field: BypassField, value: number) => void;
+    bypassDoseNotice: string | null;
     showHint: boolean;
     addPour: (pourNumber: number) => void;
     deletePour: (pourNumber: number) => void;
@@ -456,7 +457,7 @@ function StageProfileCard({
 function StagesDeck({
     recipe, balance, accent, isTea, openStage, setOpenStage, onStageLayout,
     onBypassLayout, editStage, addPour, deletePour, autoAdjustPourVolumes,
-    temperatureUnit, setBypassEnabled, editBypass, showHint, maxStages,
+    temperatureUnit, setBypassEnabled, editBypass, bypassDoseNotice, showHint, maxStages,
 }: StagesDeckProps) {
     "use no memo";
     const appearance = useAppearance();
@@ -585,6 +586,7 @@ function StagesDeck({
                 bypass is the last thing that happens in the cup. */}
             <View onLayout={(event) => onBypassLayout(event.nativeEvent.layout.y)}>
                 <BypassRung recipe={recipe} isTea={isTea}
+                            doseNotice={bypassDoseNotice}
                             open={openStage === "bypass"}
                             showHint={showHint} temperatureUnit={temperatureUnit}
                             onToggle={() =>
@@ -813,18 +815,22 @@ function QuickEditLayer({
                                backgroundColor: palette.scrim
                            }}/>
             </Animated.View>
-            <Animated.View entering={entering} exiting={exiting}
+            <Animated.View testID="editor-quick-edit-frame" entering={entering} exiting={exiting}
                            style={{
                                position: "absolute",
                                left:     QUICK_EDIT_HORIZONTAL_PADDING,
                                right:    QUICK_EDIT_HORIZONTAL_PADDING,
-                               bottom:   0
+                               bottom:   0,
+                               maxHeight: "100%"
                            }}>
-                <QuickEditPanel recipe={recipe}
-                                adjustments={adjustments}
-                                accent={accent}
-                                temperatureUnit={temperatureUnit}
-                                onChange={onChange}/>
+                <ScrollView testID="editor-quick-edit-scroll" style={{flexShrink: 1}}
+                            keyboardShouldPersistTaps="handled">
+                    <QuickEditPanel recipe={recipe}
+                                    adjustments={adjustments}
+                                    accent={accent}
+                                    temperatureUnit={temperatureUnit}
+                                    onChange={onChange}/>
+                </ScrollView>
             </Animated.View>
         </View>
     );
@@ -951,7 +957,7 @@ export default function EditRecipe(
         bumpKey, handleReloadTitlePress, persistRecipe, saveRecipe, saveMetadata,
         hasPendingEdits, recipeInLibrary, toggleFavourite, editTags,
         editInputComplete, setVolumeError, setInputError, editStage,
-        setBypassEnabled, editBypass, addPour, deletePour, autoAdjustPourVolumes,
+        setBypassEnabled, editBypass, bypassDoseNotice, addPour, deletePour, autoAdjustPourVolumes,
         coarsenGrindToMinimum, setOverflowProtection, xidLookupFailed, externalEpoch, setXidFocused
     } = useRecipeEditor({
         recipeJSON: recipeJSON as string | undefined,
@@ -1471,7 +1477,8 @@ export default function EditRecipe(
                                     bypassOffset.current = y;
                                 }}
                                 setBypassEnabled={setBypassEnabled}
-                                editBypass={editBypass} showHint={showHint}
+                                editBypass={editBypass} bypassDoseNotice={bypassDoseNotice}
+                                showHint={showHint}
                                 addPour={addPour} deletePour={deletePour}
                                 autoAdjustPourVolumes={autoAdjustPourVolumes}
                                 temperatureUnit={temperatureUnit}

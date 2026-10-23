@@ -1,10 +1,13 @@
 import React from "react";
-import {fireEvent, screen} from "@testing-library/react-native";
+import {fireEvent, screen, within} from "@testing-library/react-native";
 import {Dimensions, StyleSheet} from "react-native";
 import {Text} from "tamagui";
 
 import QuickEditPanel from "@/components/QuickEditPanel";
-import {palette} from "@/constants/colors";
+import {accents, palette, resolveAppearance} from "@/constants/colors";
+import {AppearanceScope} from "@/hooks/useAppearance";
+import {THEME_IDS} from "@/library/appearance";
+import {contrast} from "@/test-utils/contrast";
 import Pour from "@/library/Pour";
 import Recipe, {CUP_TYPE, GRINDER_OFF_VALUE} from "@/library/Recipe";
 import type {QuickEditAdjustments} from "@/library/quickEdit";
@@ -66,6 +69,58 @@ async function draw(
 describe("QuickEditPanel", () => {
     beforeEach(() => {
         mockWindowFontScale(1);
+    });
+
+    it("offers sorted coffee dose shortcuts with gram labels and selected state", async () => {
+        await draw({dose: 18}, coffeeRecipe({dosage: 17}));
+        const chips = within(screen.getByTestId("quick-edit-dose-presets")).getAllByRole("button");
+        expect(chips.map(chip => chip.props.accessibilityLabel)).toEqual([
+            "Quick edit dose 15 grams", "Quick edit dose 17 grams",
+            "Quick edit dose 18 grams", "Quick edit dose 20 grams"
+        ]);
+        expect(screen.getByLabelText("Quick edit dose 18 grams").props.accessibilityState)
+            .toEqual({selected: true});
+        expect(screen.queryByText(/SAVE AS/)).toBeNull();
+    });
+
+    it("preserves other knobs and removes dose when its own shortcut is selected", async () => {
+        const {onChange} = await draw({dose: 18, grind: 60}, coffeeRecipe({dosage: 17}));
+        await fireEvent.press(screen.getByLabelText("Quick edit dose 20 grams"));
+        expect(onChange).toHaveBeenLastCalledWith({dose: 20, grind: 60});
+        await fireEvent.press(screen.getByLabelText("Quick edit dose 17 grams"));
+        expect(onChange).toHaveBeenLastCalledWith({grind: 60});
+    });
+
+    it("refreshes its own shortcut after an in-place source edit", async () => {
+        const recipe = coffeeRecipe({dosage: 17});
+        const {rerender} = await draw({}, recipe);
+        recipe.dosage = 19;
+        await rerender(<QuickEditPanel recipe={recipe} adjustments={{}} accent={palette.brand}
+            temperatureUnit="C" onChange={jest.fn()}/>);
+        expect(screen.queryByLabelText("Quick edit dose 17 grams")).toBeNull();
+        expect(screen.getByLabelText("Quick edit dose 19 grams").props.accessibilityState)
+            .toEqual({selected: true});
+    });
+
+    it("does not offer coffee dose shortcuts for tea", async () => {
+        await draw({}, teaRecipe());
+        expect(screen.queryByTestId("quick-edit-dose-presets")).toBeNull();
+    });
+
+    it.each(THEME_IDS.flatMap(theme =>
+        (["original", "themed"] as const).map(recipeColours => ({theme, recipeColours}))
+    ))("keeps selected shortcuts readable in $theme/$recipeColours", async choice => {
+        const accent = accents.coffee[0];
+        const appearance = resolveAppearance(choice);
+        await renderWithProviders(<AppearanceScope choice={choice}>
+            <QuickEditPanel recipe={coffeeRecipe()} adjustments={{dose: 18}} accent={accent}
+                temperatureUnit="C" onChange={jest.fn()}/>
+        </AppearanceScope>);
+        const chip = screen.getByLabelText("Quick edit dose 18 grams");
+        const fill = appearance.recipe(accent).fill;
+        expect(chip).toHaveStyle({backgroundColor: fill, height: 44});
+        expect(contrast(StyleSheet.flatten(within(chip).getByText("18 g").props.style).color, fill))
+            .toBeGreaterThanOrEqual(4.5);
     });
 
     it("reports dose changes as deviations from the saved recipe", async () => {

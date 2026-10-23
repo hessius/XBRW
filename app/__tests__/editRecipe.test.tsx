@@ -1,5 +1,5 @@
 import React from "react";
-import {Platform, Share, StyleSheet, TextInput} from "react-native";
+import {Dimensions, Platform, Share, StyleSheet, TextInput} from "react-native";
 import {SafeAreaProvider} from "react-native-safe-area-context";
 import {act, fireEvent, screen, waitFor, within} from "@testing-library/react-native";
 
@@ -757,6 +757,41 @@ describe("the editor", () => {
         expect(await screen.findByTestId("quick-edit-panel")).toBeTruthy();
         expect(screen.queryByLabelText("Brew quick edit")).toBeNull();
         expect(screen.getAllByLabelText("Brew")).toHaveLength(1);
+    });
+
+    it("bounds and scrolls quick edits above the sole BREW at short height and large text", async () => {
+        const window = Dimensions.get("window");
+        const display = Dimensions.get("screen");
+        await act(async () => {
+            const small = {...window, width: 320, height: 568, fontScale: 2};
+            Dimensions.set({window: small, screen: small});
+        });
+        try {
+            await openTheQuickEditPanel();
+            expect(screen.getByTestId("editor-quick-edit-frame")).toHaveStyle({maxHeight: "100%"});
+            expect(screen.getByTestId("editor-quick-edit-scroll").props.keyboardShouldPersistTaps)
+                .toBe("handled");
+            expect(screen.getByLabelText("Quick edit dose 20 grams")).toBeTruthy();
+            expect(screen.getByLabelText("Increase Temperature offset")).toBeTruthy();
+            expect(screen.getAllByLabelText("Brew")).toHaveLength(1);
+            expect(screen.queryByText(/SAVE AS/)).toBeNull();
+        } finally {
+            await act(async () => { Dimensions.set({window, screen: display}); });
+        }
+    });
+
+    it("brews a dose shortcut with proportional bypass without saving the source", async () => {
+        mockSettings = {machineDeviceId: "AA:BB:CC:DD:EE:FF"};
+        await renderEditor({bypassEnabled: true, bypassVolume: 30, bypassTemp: 81});
+        await fireEvent.press(screen.getByLabelText("Quick edit brew"));
+        await fireEvent.press(screen.getByLabelText("Quick edit dose 20 grams"));
+        expect(screen.getByTestId("quick-edit-explainer")).toHaveTextContent(/353 ml/);
+        await fireEvent.press(screen.getByLabelText("Brew"));
+        const route = mockPush.mock.calls[0][0];
+        expect(JSON.parse(route.params.recipeJSON)).toMatchObject({
+            dosage: 20, bypassVolume: 33, bypassTemp: 81
+        });
+        expect(JSON.parse(route.params.quickEditAdjustments)).toEqual({dose: 20});
     });
 
     it("closes the panel from the arrow it opened with", async () => {
