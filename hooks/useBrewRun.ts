@@ -201,8 +201,9 @@ export function useBrewRun(
             recipe: started,
             quickEdit: edits,
             onRecord: (record, taken, frames) => {
-                setRecorded({runId: id, record});
-                database.current?.insert(record, taken, frames);
+                const attributed = attribution === undefined ? record : {...record, bag: attribution};
+                setRecorded({runId: id, record: attributed});
+                database.current?.insert(attributed, taken, frames);
                 try {
                     void database.current?.sweepWhenReady(sharedSettings().get("brewTraceBudgetMB"))
                         .catch((error) => {

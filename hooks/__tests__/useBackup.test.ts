@@ -2,6 +2,8 @@ import {renderHook, act} from "@testing-library/react-native";
 
 import {useBackup} from "@/hooks/useBackup";
 import Recipe from "@/library/Recipe";
+import {bagFixture} from "@/test-utils/bags";
+import type {BagInventoryBackup} from "@/library/bagBackup";
 
 /**
  * expo-file-system's SDK 57 API replaced `documentDirectory` /
@@ -85,6 +87,18 @@ describe("exportBackup", () => {
         mockWrite.mockReset();
         mockIsAvailableAsync.mockResolvedValue(true);
         mockShareAsync.mockResolvedValue(undefined);
+    });
+
+    it("carries optional independent inventory into the exported file", async () => {
+        const inventory: BagInventoryBackup = {version: 2, bags: [{
+            bag: bagFixture(), baselineGrams: 100, needsCheck: false,
+            linkedRecipeUuids: [], runs: []
+        }], selections: []};
+        const {result} = await renderHook(() => useBackup());
+        await act(async () => {
+            await result.current.exportBackup([recipeNamed("A", "u1")], {}, "2.2.0", [], inventory);
+        });
+        expect(JSON.parse(mockWrite.mock.calls[0][0]).bagInventory).toEqual(inventory);
     });
 
     it("writes to the cache, not to the documents the user keeps", async () => {

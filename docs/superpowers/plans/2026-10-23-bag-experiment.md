@@ -23,8 +23,8 @@ Branch: `feat/2.2.0-bag-labs-20261023`.
 Pinned base: `8f2638dfa2e75928ff447fbbd0ee03ba14986886`.
 
 The approved spec was pushed at `a372fd51f1519b7a6051ba7d4041cd5a15ac9c1c`.
-Implementation is authorised for inline execution. Tasks 1-4 now have local
-iOS/Android qualification; Tasks 5-11 and all native/manual gates remain pending.
+Implementation is authorised for inline execution. Tasks 1-5 now have local
+iOS/Android qualification; Tasks 6-11 and all native/manual gates remain pending.
 The default-off gate and device-local tracker keys were introduced with Task 4
 so the live-owner integration is type-safe before the settings UI arrives.
 
@@ -1134,7 +1134,7 @@ git commit -m "feat(bags): freeze optional attribution for the live brew owner" 
 `library/backup.ts`, `hooks/useBackup.ts`, `app/settings.tsx`,
 `components/RestoreSheet.tsx` and their existing tests.
 
-- [ ] **Step 1: Write persistence and restoration red cases.**
+- [x] **Step 1: Write persistence and restoration red cases.**
 
 Add tests to `library/__tests__/BrewDatabase.test.ts` and the real-SQLite
 coverage for insert/restore/hydrate of the optional bag snapshot. Old records
@@ -1163,7 +1163,7 @@ database.current?.insert(attributed, taken, frames);
 `heldBag` is the frozen callback value for that recorder, never a live lookup.
 Downstream dial updates preserve the extra field.
 
-- [ ] **Step 2: Add the portable inventory contracts and validators.**
+- [x] **Step 2: Add the portable inventory contracts and validators.**
 
 ```ts
 export type BagRunBackup = {
@@ -1219,7 +1219,7 @@ Keep outer backup version 1 and existing old-file semantics. Validate optional
 BrewRecord.bag at `backup.ts`'s existing brew validator and preserve it in the
 field-by-field rebuild. No samples enter the inventory bundle.
 
-- [ ] **Step 3: Implement portable export and non-overwriting restore.**
+- [x] **Step 3: Implement portable export and non-overwriting restore.**
 
 Add `exportInventory(): BagInventoryBackup` and
 `restoreInventory(inventory): {added: number; skippedRows: number}` to the
@@ -1228,6 +1228,9 @@ sequence number nor a timestamp comparison is needed in the portable format.
 
 Restore each new bag and all its run rows as a transaction, preserving each
 coverage/overlap flag exactly. A locally existing bag wins as a complete unit.
+An imported unclosed run has no live owner on this device, so recover only
+that imported run to closed used/uncertain, retaining both coverage flags.
+Do not run global pending recovery over an existing local live owner.
 Existing per-recipe preference rows, including null, win even for a newly
 restored bag. Only link saved recipe UUIDs that exist after recipe restore;
 keep valid orphan bags but report broken links. Reject conflicting global
@@ -1249,7 +1252,7 @@ expect(second.balance("bag-a", 18, "xbrw"))
 Expose a constructor/test handle seam only if necessary; use the shared
 real-SQLite harness, not an object that simulates arithmetic.
 
-- [ ] **Step 4: Wire all backup doors without making Labs a data-loss switch.**
+- [x] **Step 4: Wire all backup doors without making Labs a data-loss switch.**
 
 Settings export reads `exportInventory` even with the experiment disabled,
 but only when inventory tables exist; an ordinary empty install does not open
@@ -1267,7 +1270,7 @@ Do not clear local bags for a replace-library restore; local bags win and only
 links to recipes genuinely removed by the replace are pruned. Do not restore
 the experiment enable flag or indirect current-selection changes.
 
-- [ ] **Step 5: Run green and commit.**
+- [x] **Step 5: Run green and commit.**
 
 ```bash
 npx jest --runTestsByPath library/__tests__/bagBackup.test.ts library/__tests__/BrewDatabase.test.ts library/__tests__/backup.test.ts hooks/__tests__/useBackup.test.ts components/__tests__/RestoreSheet.test.tsx app/__tests__/settings.test.tsx --runInBand

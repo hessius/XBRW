@@ -146,6 +146,7 @@ describe("LiveBrewProvider", () => {
         mockBagEnabled = false;
         await h.setPhase({name: "cancelled"});
         expect(live.run?.bag?.bagName).toBe(bagFixture().name);
+        expect(h.written[0].record.bag).toEqual(live.run?.bag);
         expect(bags.updateRun).toHaveBeenLastCalledWith(expect.any(String), {
             consumption: "used", possible: true, closed: true
         });

@@ -8,6 +8,7 @@ import {
     INITIAL_BAG_PROGRESS, nextBagProgress, reviveBagRunProgress, reviveBagRunSnapshot,
     type BagAccountingStore, type BagRunProgress, type BagRunSnapshot
 } from "@/library/bagRun";
+import {parseBagInventory, type BagBundle, type BagInventoryBackup} from "@/library/bagBackup";
 
 export type BagSelection = {
     recipeUuid: string;
@@ -316,6 +317,11 @@ export default class CoffeeBagDatabase implements BagFactsStore, BagAccountingSt
             this.db.runSync("DELETE FROM coffee_bag_links WHERE bagId = ?;", [bagId]);
             this.db.runSync("DELETE FROM coffee_bag_runs WHERE bagId = ?;", [bagId]);
             this.db.runSync("DELETE FROM coffee_bags_v2 WHERE id = ?;", [bagId]);
+            this.afterCommit.push(() => {
+                for (const [id, failed] of failedRuns(this.db)) {
+                    if (failed.snapshot.bagId === bagId) failedRuns(this.db).delete(id);
+                }
+            });
         });
     }
 
@@ -423,11 +429,7 @@ export default class CoffeeBagDatabase implements BagFactsStore, BagAccountingSt
         if (!isGramsLeft(grams)) throw new Error("Enter remaining coffee from 0 to 5000 g.");
         if (this.get(bagId) === null) throw new Error("That bag is no longer available.");
         this.atomically(() => {
-            for (const {snapshot, progress} of failedRuns(this.db).values()) {
-                if (snapshot.bagId !== bagId) continue;
-                this.beginRun(snapshot);
-                this.updateRun(snapshot.runId, progress);
-            }
+            this.flushFailed(bagId);
             for (const row of this.db.getAllSync<RunRow>(
                 "SELECT * FROM coffee_bag_runs WHERE bagId = ?;", [bagId]
             )) readRun(row);
@@ -449,6 +451,132 @@ export default class CoffeeBagDatabase implements BagFactsStore, BagAccountingSt
         });
     }
 
+    private flushFailed(bagId?: string): void {
+        for (const {snapshot, progress} of failedRuns(this.db).values()) {
+            if (bagId !== undefined && snapshot.bagId !== bagId) continue;
+            this.beginRun(snapshot);
+            this.updateRun(snapshot.runId, progress);
+        }
+    }
+
+    public exportInventory(): BagInventoryBackup {
+        if (failedRuns(this.db).size > 0) this.atomically(() => this.flushFailed());
+        const bags = new Map<string, BagBundle>();
+        for (const row of this.db.getAllSync<BagRow & {baselineGrams: number; needsCheck: number}>(
+            "SELECT * FROM coffee_bags_v2 ORDER BY id;"
+        )) {
+            if (!isGramsLeft(row.baselineGrams) || (row.needsCheck !== 0 && row.needsCheck !== 1)) {
+                throw new Error("Could not read the saved quantity estimate.");
+            }
+            bags.set(row.id, {
+                bag: readBag(row), baselineGrams: row.baselineGrams,
+                needsCheck: row.needsCheck === 1, linkedRecipeUuids: [], runs: []
+            });
+        }
+        for (const row of this.db.getAllSync<RunRow>("SELECT * FROM coffee_bag_runs ORDER BY runId;")) {
+            const saved = readRun(row);
+            const bundle = bags.get(row.bagId);
+            if (bundle === undefined) throw new Error("Could not read the saved bag attribution.");
+            bundle.runs.push({
+                ...saved, coveredByBaseline: row.coveredByBaseline === 1,
+                overlapsBaseline: row.overlapsBaseline === 1
+            });
+        }
+        for (const row of this.db.getAllSync<{recipeUuid: string; bagId: string}>(
+            "SELECT recipeUuid, bagId FROM coffee_bag_links ORDER BY recipeUuid, bagId;"
+        )) {
+            const bundle = bags.get(row.bagId);
+            if (bundle === undefined) throw new Error("Could not read a saved bag link.");
+            bundle.linkedRecipeUuids.push(row.recipeUuid);
+        }
+        const selections = this.db.getAllSync<BagSelection>(
+            "SELECT recipeUuid, bagId, selectedAt FROM coffee_bag_selections ORDER BY recipeUuid;"
+        );
+        const parsed = parseBagInventory({version: 2, bags: [...bags.values()], selections});
+        if (parsed.inventory === null || parsed.skippedBags || parsed.skippedBagRows) {
+            throw new Error("Could not read the saved bag inventory.");
+        }
+        return parsed.inventory;
+    }
+
+    public restoreInventory(inventory: BagInventoryBackup): {added: number; skippedRows: number} {
+        const parsed = parseBagInventory(inventory);
+        if (parsed.inventory === null || parsed.skippedBags || parsed.skippedBagRows) {
+            throw new Error("The bag inventory is invalid.");
+        }
+        const restored = parsed.inventory;
+        let added = 0;
+        let skippedRows = 0;
+        this.atomically(() => {
+            for (const bundle of restored.bags) {
+                if (this.get(bundle.bag.id) !== null) continue;
+                this.create(bundle.bag);
+                let needsCheck = bundle.needsCheck;
+                for (const run of bundle.runs) {
+                    const existing = this.db.getFirstSync(
+                        "SELECT runId FROM coffee_bag_runs WHERE runId = ?;", [run.snapshot.runId]
+                    );
+                    if (existing !== null) {
+                        needsCheck = true;
+                        skippedRows++;
+                        continue;
+                    }
+                    // An imported run has no live owner on this device.
+                    const progress = nextBagProgress(run.progress, "recovered");
+                    this.db.runSync(`
+                        INSERT INTO coffee_bag_runs (
+                            runId, bagId, snapshot, consumption, possible, closed,
+                            coveredByBaseline, overlapsBaseline
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?);`,
+                        [run.snapshot.runId, bundle.bag.id, JSON.stringify(run.snapshot),
+                            progress.consumption, progress.possible, progress.closed,
+                            run.coveredByBaseline, run.overlapsBaseline]
+                    );
+                }
+                this.db.runSync(
+                    "UPDATE coffee_bags_v2 SET baselineGrams = ?, needsCheck = ? WHERE id = ?;",
+                    [bundle.baselineGrams, needsCheck, bundle.bag.id]
+                );
+                for (const uuid of bundle.linkedRecipeUuids) {
+                    if (this.db.getFirstSync("SELECT uuid FROM recipes WHERE uuid = ?;", [uuid]) === null) {
+                        skippedRows++;
+                    } else {
+                        this.db.runSync(
+                            "INSERT OR IGNORE INTO coffee_bag_links (recipeUuid, bagId) VALUES (?, ?);",
+                            [uuid, bundle.bag.id]
+                        );
+                    }
+                }
+                added++;
+            }
+            for (const choice of restored.selections) {
+                if (this.db.getFirstSync(
+                    "SELECT uuid FROM recipes WHERE uuid = ?;", [choice.recipeUuid]
+                ) === null) { skippedRows++; continue; }
+                if (this.db.getFirstSync(
+                    "SELECT recipeUuid FROM coffee_bag_selections WHERE recipeUuid = ?;",
+                    [choice.recipeUuid]
+                ) !== null) continue;
+                if (choice.bagId !== null) {
+                    const bag = this.get(choice.bagId);
+                    const link = this.db.getFirstSync(
+                        "SELECT bagId FROM coffee_bag_links WHERE recipeUuid = ? AND bagId = ?;",
+                        [choice.recipeUuid, choice.bagId]
+                    );
+                    if (bag === null || bag.finishedAt !== undefined || link === null) {
+                        skippedRows++;
+                        continue;
+                    }
+                }
+                this.db.runSync(
+                    "INSERT INTO coffee_bag_selections (recipeUuid, bagId, selectedAt) VALUES (?, ?, ?);",
+                    [choice.recipeUuid, choice.bagId, choice.selectedAt]
+                );
+            }
+        });
+        return {added, skippedRows};
+    }
+
     public invalidateBagEstimate(snapshot: BagRunSnapshot, progress: BagRunProgress): void {
         const attribution = reviveBagRunSnapshot(snapshot);
         const observed = reviveBagRunProgress(progress);
@@ -456,12 +584,24 @@ export default class CoffeeBagDatabase implements BagFactsStore, BagAccountingSt
             throw new Error("The unsaved bag progress is invalid.");
         }
         if (attribution.tracker !== "xbrw") return;
-        failedRuns(this.db).set(attribution.runId, {snapshot: attribution, progress: observed});
+        const failed = {snapshot: attribution, progress: observed};
+        failedRuns(this.db).set(attribution.runId, failed);
         publishBagChanges();
         this.atomically(() => {
-            this.db.runSync(
+            const result = this.db.runSync(
                 "UPDATE coffee_bags_v2 SET needsCheck = 1 WHERE id = ?;", [attribution.bagId]
             );
+            if (result.changes === 0) {
+                if (this.db.getFirstSync(
+                    "SELECT id FROM coffee_bags_v2 WHERE id = ?;", [attribution.bagId]
+                ) !== null) throw new Error("Could not save the bag quantity warning.");
+                this.afterCommit.push(() => {
+                    if (failedRuns(this.db).get(attribution.runId) === failed) {
+                        failedRuns(this.db).delete(attribution.runId);
+                    }
+                    console.warn("Bag progress was not retained because the bag was deleted.");
+                });
+            }
         });
     }
 

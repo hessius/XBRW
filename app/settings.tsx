@@ -31,6 +31,9 @@ import {useSetting} from "@/hooks/useSetting";
 import {useLiveBrew} from "@/hooks/useLiveBrew";
 import {useScrollEndPadding} from "@/hooks/useBottomInset";
 import {type BackupPayload} from "@/library/backup";
+import {appDatabase} from "@/library/appDatabase";
+import CoffeeBagDatabase, {bagTablesExist} from "@/library/CoffeeBagDatabase";
+import type {BagInventoryBackup} from "@/library/bagBackup";
 import {isThemeId, isRecipeColourMode, type ThemeId, type RecipeColourMode} from "@/library/appearance";
 import type {BrewRecord} from "@/library/brew/BrewRecord";
 import {RATING_PROMPT_WINDOW_MS} from "@/library/brew/ratingPrompt";
@@ -88,10 +91,11 @@ function brewHistory(): BrewRecord[] {
  * places: a user who sees only "12 recipes restored" has no way to tell whether
  * their history came back with them.
  */
-function restoredMessage(recipes: number, brews: number): string {
+function restoredMessage(recipes: number, brews: number, bags = 0): string {
     const parts: string[] = [];
     if (recipes > 0) parts.push(recipes === 1 ? "1 recipe" : `${recipes} recipes`);
     if (brews > 0) parts.push(brews === 1 ? "1 brew" : `${brews} brews`);
+    if (bags > 0) parts.push(bags === 1 ? "1 coffee bag" : `${bags} coffee bags`);
     if (parts.length === 0) return "0 recipes restored";
     return `${parts.join(" and ")} restored`;
 }
@@ -285,9 +289,20 @@ export default function SettingsScreen({settings}: Props) {
             });
             return;
         }
-        const outcome = await exportBackup(
-            everything, settingsSnapshot(), VERSION, brewHistory()
-        );
+        let inventory: BagInventoryBackup | undefined;
+        try {
+            if (bagTablesExist(appDatabase())) inventory = new CoffeeBagDatabase().exportInventory();
+        } catch (error) {
+            console.warn("Could not export coffee bags", error);
+            notify({tone: "error",
+                message: "Your coffee bags could not be read, so the backup was not made."});
+            return;
+        }
+        const snapshot = settingsSnapshot();
+        const history = brewHistory();
+        const outcome = inventory === undefined
+            ? await exportBackup(everything, snapshot, VERSION, history)
+            : await exportBackup(everything, snapshot, VERSION, history, inventory);
         if (!outcome.ok) notify({tone: "error", message: outcome.reason});
     }
 
@@ -468,14 +483,32 @@ export default function SettingsScreen({settings}: Props) {
             brews = 0;
         }
 
-        // A restore that took only the settings did happen, and reporting it as
-        // "0 recipes restored" reads as a failure the app is being coy about.
-        if (outcome.added === 0 && brews === 0 && choice.includeSettings) {
-            notify({tone: "success", message: "Settings restored"});
-            return;
+        let bags = 0;
+        let skippedBagRows = payload.skippedBagRows;
+        if (payload.bagInventory !== undefined) {
+            try {
+                const restored = new CoffeeBagDatabase().restoreInventory(payload.bagInventory);
+                bags = restored.added;
+                skippedBagRows += restored.skippedRows;
+            } catch (error) {
+                console.warn("Could not restore coffee bags after restoring recipes", error);
+                notify({tone: "error",
+                    message: "Recipes were restored, but coffee bags could not be restored."});
+                return;
+            }
         }
 
-        notify({tone: "success", message: restoredMessage(outcome.added, brews)});
+        // A restore that took only the settings did happen, and reporting it as
+        // "0 recipes restored" reads as a failure the app is being coy about.
+        if (outcome.added === 0 && brews === 0 && bags === 0 && choice.includeSettings) {
+            notify({tone: "success", message: "Settings restored"});
+        } else {
+            notify({tone: "success", message: restoredMessage(outcome.added, brews, bags)});
+        }
+        if (payload.skippedBags > 0 || skippedBagRows > 0 || payload.bagWarnings.length > 0) {
+            notify({tone: "error",
+                message: "Some coffee bag data could not be restored. Check affected quantities and choices."});
+        }
 
         // Said out loud, and after the good news rather than instead of it. A
         // history that came back short is not a failed restore, but a user who

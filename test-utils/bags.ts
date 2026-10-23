@@ -1,6 +1,7 @@
 import type {CoffeeBag} from "@/library/coffeeBag";
 import Recipe from "@/library/Recipe";
 import type {BagRunSnapshot} from "@/library/bagRun";
+import type {BrewRecord} from "@/library/brew/BrewRecord";
 
 export const BAG_NOW = 1_792_756_800_000;
 
@@ -25,6 +26,15 @@ export function bagRunFixture(changes: Partial<BagRunSnapshot> = {}): BagRunSnap
     return {
         runId: "run-a", bagId: "bag-a", bagName: "Colombia Oct 12",
         recipeUuid: "a", dose: 18, tracker: "xbrw", acceptedAt: BAG_NOW,
+        ...changes
+    };
+}
+
+export function bagBrewFixture(changes: Partial<BrewRecord> = {}): BrewRecord {
+    return {
+        id: "brew-a", recipeUuid: "a", recipeName: "Colombia", accent: "#C86A3B",
+        startedAt: BAG_NOW, endedAt: BAG_NOW + 60_000, outcome: "done", failure: null,
+        pours: 1, waterTotal: 288, cupTotal: 280, heldSeconds: 0,
         ...changes
     };
 }
