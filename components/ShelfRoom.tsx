@@ -6,6 +6,7 @@ import {Text, XStack, YStack} from "tamagui";
 import DotIcon from "@/components/DotIcon";
 import DotMatrixText from "@/components/DotMatrixText";
 import RecipeShelfTile from "@/components/RecipeShelfTile";
+import type {BagBadge} from "@/library/readyToBrew";
 import type {RecipeEvidence} from "@/library/libraryQuery";
 import type {SlotMarkerValue} from "@/library/slots/slotModel";
 import {useAppearance} from "@/hooks/useAppearance";
@@ -76,7 +77,7 @@ export type RoomRecipeActions = {
 export default function ShelfRoom({
     label, recipes, onBack, actionsFor, evidence = {}, namedByUser = false,
     showCoffeeMarker = true, dottedProfile = false, onScroll, paddingBottom = 0,
-    editing = false, showPicture = false
+    editing = false, showPicture = false, bagBadges = {}
 }: {
     /** The shelf's name, drawn as the room's heading. */
     label: string;
@@ -103,6 +104,7 @@ export default function ShelfRoom({
      * same brews.
      */
     evidence?: Readonly<Record<string, RecipeEvidence>>;
+    bagBadges?: Readonly<Record<string, BagBadge>>;
     /**
      * True for any shelf whose name is a word the user typed, which is both a
      * shelf they made and a tag not yet promoted into one. It draws in a plain
@@ -196,6 +198,7 @@ export default function ShelfRoom({
                                     dottedProfile={dottedProfile}
                                     showPicture={showPicture}
                                     evidence={evidence[recipe.uuid]}
+                                    bagBadge={bagBadges[recipe.uuid]}
                                     onBrew={acts.onBrew}
                                     onShare={acts.onShare}
                                     onWrite={acts.onWrite}

@@ -1,7 +1,12 @@
 import {useAppearance} from "@/hooks/useAppearance";
 import {useBagManager, type BagManager} from "@/hooks/useBagManager";
 import {BagChoice, BagManagementSheets} from "@/components/BagManagement";
-import {resolveBagTracker} from "@/library/coffeeBag";
+import {balanceLine, resolveBagTracker, roastDayLabel} from "@/library/coffeeBag";
+import {bagRunParam} from "@/library/bagRun";
+import {httpsUrl} from "@/library/podCoffee";
+import {freshnessLine} from "@/library/restPeak";
+import {useBagSuggestions} from "@/hooks/useBagSuggestions";
+import ReadyToBrewCard from "@/components/ReadyToBrewCard";
 import React, {useEffect, useRef, useState} from "react";
 import {BackHandler, Platform, Share} from "react-native";
 // gesture-handler's FlatList, not React Native's: it keeps the list scroll
@@ -342,6 +347,10 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
     const [bagExperimentEnabled] = useSetting("bagExperimentEnabled", settings);
     const [bagTracker] = useSetting("bagTracker", settings);
     const [beanconquerorHandoff] = useSetting("beanconquerorHandoff", settings);
+    const [readyDismissedOn, setReadyDismissedOn] = useSetting("readyToBrewDismissedOn", settings);
+    const bagSuggestions = useBagSuggestions(bagExperimentEnabled,
+        resolveBagTracker(bagTracker, beanconquerorHandoff), library.revision);
+    const ready = bagSuggestions.entry;
     const [showShelfPhotoPreviews] = useSetting("showShelfPhotoPreviews", settings);
     const [invertAutoShelves] = useSetting("invertAutoShelves", settings);
     const [hiddenShelves, setHiddenShelves] = useSetting("hiddenShelves", settings);
@@ -1288,7 +1297,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
         }
     }
 
-    function openBrew(recipe: Recipe, adjustments?: QuickEditAdjustments): boolean {
+    function openBrew(recipe: Recipe, adjustments?: QuickEditAdjustments, bagId?: string): boolean {
         // There is one machine, and `LiveBrewProvider.start` refuses a second
         // run while the first is still going. Without this the tap would push
         // a brew screen that quietly showed the *other* recipe brewing, which
@@ -1314,7 +1323,8 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
             };
         router.push({
             pathname: "/brew",
-            params: {...params, ...bagManager.paramsFor(recipe)}
+            params: {...params, ...(bagExperimentEnabled && bagId !== undefined
+                ? {bagSelection: bagRunParam(bagId)} : bagManager.paramsFor(recipe))}
         });
         return true;
     }
@@ -1551,6 +1561,40 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                         }/>
                 )}
 
+                {bagSuggestions.reading.status === "error" && (
+                    <Text accessibilityRole="alert" color={palette.warn} paddingHorizontal="$4">
+                        {bagSuggestions.reading.message}
+                    </Text>
+                )}
+                {!picker.active && !inShelfRoom && !editing && ready !== null
+                    && bagSuggestions.today !== null && readyDismissedOn !== bagSuggestions.today && (
+                    <ReadyToBrewCard item={ready} name={ready.recipe.displayName()}
+                        accent={resolveAccent(ready.recipe)}
+                        imageUri={showRecipeCardPhotos ? ready.recipe.imageURL : undefined}
+                        freshnessLine={bagSuggestions.problem
+                            ?? (ready.freshness ? freshnessLine(ready.freshness) : undefined)}
+                        bagLine={[ready.bag.name,
+                            ready.bag.roastedOn
+                                ? `Roasted ${roastDayLabel(ready.bag.roastedOn, bagSuggestions.today)}`
+                                : "Roast date not set",
+                            balanceLine(ready.balance)].join(", ")}
+                        emphasised={ready.balance.kind === "estimate"
+                            && ready.balance.remainingGrams >= ready.recipe.dosage}
+                        onOpen={entry => openRecipe(entry.recipe)}
+                        onBrew={remembered !== ""
+                            ? entry => openBrew(entry.recipe, undefined, entry.bag.id) : undefined}
+                        low={ready.balance.kind === "estimate" && ready.balance.low
+                            ? {line: `${ready.bag.name} is running low`,
+                                reorderUrl: httpsUrl(ready.recipe.coffee?.url)
+                                    ?? httpsUrl(ready.recipe.recipeUrl) ?? undefined} : undefined}
+                        onReorder={bagManager.reorder}
+                        moreLine={bagSuggestions.count > 1 ? `+${bagSuggestions.count - 1} more bags` : undefined}
+                        onMore={bagSuggestions.next}
+                        onDismiss={() => {
+                            if (bagSuggestions.today !== null) setReadyDismissedOn(bagSuggestions.today);
+                        }}/>
+                )}
+
                 {wholeLibraryEmpty ? (
                     <EmptyLibrary/>
                 ) : inShelfRoom && !picker.active ? (
@@ -1568,6 +1612,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                         onScroll={onScroll}
                         actionsFor={roomActionsFor}
                         evidence={library.evidence}
+                        bagBadges={bagSuggestions.badges}
                         showCoffeeMarker={showCoffeeMarker}
                         dottedProfile={dottedProfile}
                         showPicture={showRecipeCardPhotos}
@@ -1648,6 +1693,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                                 dottedProfile={dottedProfile}
                                 showPicture={showRecipeCardPhotos}
                                 evidence={library.evidence[item.recipe.uuid]}
+                                bagBadge={bagSuggestions.badges[item.recipe.uuid]}
                                 slotMarker={slotMarkers(slotRecord, item.recipe)}
                                 onEasyMode={remembered !== ""
                                     ? () => openEasyModeRecipe(item.recipe, remembered) : undefined}

@@ -1745,7 +1745,7 @@ calendar still requires a separately authorised rebuilt development client.
 `components/RecipeCard.tsx`, `components/RecipeShelfTile.tsx`,
 `components/SwipeableRecipeRow.tsx`, `components/ShelfRoom.tsx`.
 
-- [ ] **Step 1: Add pure selection tests before UI wiring.**
+- [x] **Step 1: Add pure selection tests before UI wiring.**
 
 Define this ranking input and output; `ReadyEntry` retains the whole explicit
 pair through navigation:
@@ -1789,7 +1789,7 @@ explicit selection wins; ID ties are stable; resting, finished and known-zero
 are omitted; insufficient-for-current-dose but positive quantity is not
 treated as empty; unknown advice and uncertain quantity do not invent status.
 
-- [ ] **Step 2: Wire the card and all library badge surfaces.**
+- [x] **Step 2: Wire the card and all library badge surfaces.**
 
 Extract only the remaining appearance-qualified card after creating its
 ranking module:
@@ -1821,7 +1821,7 @@ Only the selected bag contributes; explicit No bag has no badge. Disabled
 screens pass nothing and do not read inventory. Use the existing card metadata
 line, not a new stacked information panel.
 
-- [ ] **Step 3: Run the red/green UI cases and commit.**
+- [x] **Step 3: Run the red/green UI cases and commit.**
 
 Render the home route with source Ready card tests adapted to the new input.
 Assert off/no selections hides it, a filtered library still recommends from
@@ -1835,6 +1835,13 @@ git add library/readyToBrew.ts library/__tests__/readyToBrew.test.ts app/index.t
 git commit -m "feat(bags): suggest one explicit bag and recipe at a time" \
   -m "Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
 ```
+
+Task 9 qualification: 826 affected tests passed across both platforms (four
+existing skips), with typecheck and targeted lint green apart from the existing
+home-test require warning. Whole-inventory reads now share the library refresh
+revision so returning from recipe edits cannot leave a stale suggestion. Daily
+dismissal, explicit No bag, exact-pair navigation, photo failures and both
+metadata surfaces have regression coverage.
 
 ## Task 10: Beanconqueror identity must follow the brewed bag
 

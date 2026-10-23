@@ -1478,6 +1478,61 @@ describe("HomeScreen, opening one editor at a time", () => {
             .props.importantForAccessibility).toBe("no-hide-descendants");
     });
 
+    it("suggests the whole-inventory recipe and bag even when only another recipe is visible", async () => {
+        mockRemembered = "machine-device-id";
+        const {default: RealRecipes} = jest.requireActual("@/library/RecipeDatabase");
+        const {default: Bags} = jest.requireActual("@/library/CoffeeBagDatabase");
+        const {bagFixture} = jest.requireActual("@/test-utils/bags");
+        const hidden = writable("Hidden from this filter");
+        new RealRecipes().insertRecipes([hidden]);
+        const bags = new Bags();
+        bags.create(bagFixture({roastedOn: undefined}));
+        bags.select(hidden.uuid, "bag-a", 1);
+        const settings = new Settings(memoryStorage());
+        settings.set("bagExperimentEnabled", true);
+        await renderWithProviders(<HomeScreen db={store([writable("Visible")])} settings={settings}/>);
+        await screen.findByText("Visible");
+        expect(screen.getByTestId("ready-to-brew-name")).toHaveTextContent("Hidden from this filter");
+        expect(screen.getByTestId("ready-to-brew-bag")).toHaveTextContent(/Colombia, roasted 12 Oct/);
+        await fireEvent.press(screen.getByTestId("ready-to-brew-brew"));
+        const pushed = mockPush.mock.calls.at(-1)![0];
+        expect(JSON.parse(pushed.params.recipeJSON).uuid).toBe(hidden.uuid);
+        expect(pushed.params.bagSelection).toBe(JSON.stringify("bag-a"));
+    });
+
+    it("gates bag badges, honours explicit No bag and dismisses Ready only for the current local day", async () => {
+        jest.useFakeTimers({now: new Date(2026, 9, 23, 23, 59, 50)});
+        const {default: RealRecipes} = jest.requireActual("@/library/RecipeDatabase");
+        const {default: Bags} = jest.requireActual("@/library/CoffeeBagDatabase");
+        const {bagFixture} = jest.requireActual("@/test-utils/bags");
+        const recipe = writable("Selected bag");
+        new RealRecipes().insertRecipes([recipe]);
+        const bags = new Bags();
+        bags.create(bagFixture({restDays: 7, peakDay: 11, bestUntilDay: 25}));
+        bags.select(recipe.uuid, "bag-a", 1);
+        const settings = new Settings(memoryStorage());
+        await renderWithProviders(<HomeScreen db={store([recipe])} settings={settings}/>);
+        await screen.findByText("Selected bag");
+        expect(screen.queryByTestId("ready-to-brew")).toBeNull();
+        expect(screen.queryByText("PEAK")).toBeNull();
+        await act(async () => { settings.set("bagExperimentEnabled", true); });
+        await act(async () => { jest.advanceTimersByTime(0); });
+        expect(screen.getByTestId("ready-to-brew")).toBeTruthy();
+        expect(screen.getByText("PEAK")).toBeTruthy();
+        await fireEvent.press(screen.getByLabelText("Hide until tomorrow"));
+        expect(settings.get("readyToBrewDismissedOn")).toBe("2026-10-23");
+        expect(screen.queryByTestId("ready-to-brew")).toBeNull();
+        await act(async () => { jest.advanceTimersByTime(10_000); });
+        expect(screen.getByTestId("ready-to-brew")).toBeTruthy();
+        await fireEvent.press(screen.getByLabelText("Edit recipes"));
+        expect(screen.queryByTestId("ready-to-brew")).toBeNull();
+        await fireEvent.press(screen.getByLabelText("Done editing"));
+        expect(screen.getByTestId("ready-to-brew")).toBeTruthy();
+        await act(async () => { bags.select(recipe.uuid, null, 2); });
+        expect(screen.queryByTestId("ready-to-brew")).toBeNull();
+        expect(screen.queryByText("PEAK")).toBeNull();
+    });
+
     it("uses the editor's bag chooser in TUNE and hides the sheet underneath it", async () => {
         const {default: RealRecipes} = jest.requireActual("@/library/RecipeDatabase");
         const {default: Bags} = jest.requireActual("@/library/CoffeeBagDatabase");
@@ -1490,7 +1545,7 @@ describe("HomeScreen, opening one editor at a time", () => {
         const settings = new Settings(memoryStorage());
         settings.set("bagExperimentEnabled", true);
         await renderWithProviders(<HomeScreen db={store([recipe])} settings={settings}/>);
-        await screen.findByText("Ethiopia");
+        await screen.findAllByText("Ethiopia");
         await fireEvent.press(screen.getByLabelText("Quick edit Ethiopia", {includeHiddenElements: true}));
         await settleSheet();
         await waitFor(async () => {
@@ -1516,7 +1571,7 @@ describe("HomeScreen, opening one editor at a time", () => {
         const settings = new Settings(memoryStorage());
         settings.set("bagExperimentEnabled", true);
         await renderWithProviders(<HomeScreen db={store([recipe])} settings={settings}/>);
-        await screen.findByText("Ethiopia");
+        await screen.findAllByText("Ethiopia");
         await fireEvent.press(screen.getByLabelText("Quick edit Ethiopia", {includeHiddenElements: true}));
         await settleSheet();
         await fireEvent.press(screen.getByLabelText("Increase Quick edit dose"));

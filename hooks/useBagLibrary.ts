@@ -8,8 +8,10 @@ import type {BagTracker} from "@/library/coffeeBag";
 
 export type BagLibraryReading = BagReadProblem | {status: "ready"; rows: SelectedBagRecipe[]};
 
-function read(enabled: boolean, tracker: BagTracker, open: () => CoffeeBagDatabase, revision: number): BagLibraryReading {
+function read(enabled: boolean, tracker: BagTracker, open: () => CoffeeBagDatabase,
+    revision: number, recipeRevision: number): BagLibraryReading {
     void revision;
+    void recipeRevision;
     if (!enabled) return {status: "off"};
     try {
         return {status: "ready", rows: open().selectedRecipes(tracker)};
@@ -19,8 +21,10 @@ function read(enabled: boolean, tracker: BagTracker, open: () => CoffeeBagDataba
     }
 }
 
-export function useBagLibrary(enabled: boolean, tracker: BagTracker, open = sharedBagDatabase): BagLibraryReading {
+export function useBagLibrary(
+    enabled: boolean, tracker: BagTracker, open = sharedBagDatabase, recipeRevision = 0
+): BagLibraryReading {
     const revision = useSyncExternalStore(enabled ? subscribeBagChanges : noBagSubscription,
         enabled ? bagRevision : disabledBagRevision);
-    return read(enabled, tracker, open, revision);
+    return read(enabled, tracker, open, revision, recipeRevision);
 }

@@ -36,6 +36,13 @@ const HANDLERS = {
     onDelete:          jest.fn()
 };
 
+it("keeps selected-bag metadata and its spoken meaning together on a shelf tile", async () => {
+    await renderWithProviders(<RecipeShelfTile recipe={writable("Selected")} {...HANDLERS}
+        bagBadge={{label: "PEAK", spoken: "Bag October, estimated peak window"}}/>);
+    expect(screen.getByTestId("recipe-tile-evidence")).toHaveTextContent("PEAK");
+    expect(screen.getByRole("button", {name: /Bag October, estimated peak window/})).toBeTruthy();
+});
+
 it("measures the same child gaps as the visible metadata, including its collapsed spacer", async () => {
     const recipe = writable("Exact fit");
     recipe.imageURL = "https://coffee.example/bag.jpg";
