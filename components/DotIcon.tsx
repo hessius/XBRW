@@ -8,7 +8,7 @@ import Animated, {
 } from "react-native-reanimated";
 
 import {DOT_ICONS, DOT_ICON_GRID, litCells, type DotIconName} from "@/constants/dotIcons";
-import {palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 import {DURATION, EASING, STAGGER, useReducedMotion} from "@/constants/motion";
 
 /** Dot diameter as a fraction of a cell, at `LOOSE_AT` points and above. */
@@ -124,11 +124,13 @@ function AnimatedDot({delay, ...rest}: DotProps & {delay: number}) {
 export default function DotIcon({
     name,
     size = 20,
-    color = palette.text,
+    color: suppliedColor,
     animated = false,
     accessibilityLabel,
     testID = "dot-icon"
 }: Props) {
+    const {palette} = useAppearance();
+    const color = suppliedColor ?? palette.text;
     const reduced = useReducedMotion();
     const cell = size / DOT_ICON_GRID;
     const dot = cell * dotRatio(size);

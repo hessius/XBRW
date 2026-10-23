@@ -1,3 +1,4 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React from "react";
 import {Pressable} from "react-native";
 import {ScrollView, Text, XStack, YStack} from "tamagui";
@@ -5,7 +6,7 @@ import {ScrollView, Text, XStack, YStack} from "tamagui";
 import BrewStars from "@/components/BrewStars";
 import DotMatrixText from "@/components/DotMatrixText";
 import XbrwSheet from "@/components/XbrwSheet";
-import {palette} from "@/constants/colors";
+
 import type {StoredBrew} from "@/library/BrewDatabase";
 import {formatBrewDate, formatBrewTime} from "@/library/brew/brewFormat";
 
@@ -22,6 +23,8 @@ function ratingAccessibilityLabel(rating: number): string {
 }
 
 function CandidateRow({brew, onPick}: {brew: StoredBrew; onPick: (id: string) => void}) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const when = `${formatBrewDate(brew.startedAt)} · ${formatBrewTime(brew.startedAt)}`;
     const rating = brew.rating ?? 0;
     // Only the absence is worth saying. A trace being present is the ordinary
@@ -71,6 +74,8 @@ function CandidateRow({brew, onPick}: {brew: StoredBrew; onPick: (id: string) =>
 
 /** Pick another brew of the same recipe to compare with this one. */
 export default function CompareWithSheet({open, candidates, onPick, onClose}: Props) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const ordered = [...candidates].sort((one, two) => two.startedAt - one.startedAt);
 
     return (

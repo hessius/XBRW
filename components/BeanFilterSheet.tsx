@@ -1,10 +1,11 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React from "react";
 import {ScrollView, Text, XStack, YStack} from "tamagui";
 
 import DotMatrixText from "@/components/DotMatrixText";
 import XbrwSheet from "@/components/XbrwSheet";
 import XbrwSwitch from "@/components/XbrwSwitch";
-import {onAccent, palette} from "@/constants/colors";
+
 import {beanFilterId, parseBeanFilterId} from "@/library/beanFilters";
 import {BEAN_FIELDS} from "@/library/brew/beanTags";
 import {PROFILE_FIELD_LABEL, type ProfileField} from "@/library/beanProfile";
@@ -56,6 +57,9 @@ function BeanFilterRow({
     ratedOnly: boolean;
     onChange: (ids: string[]) => void;
 }) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
+    const onAccent = appearance.onFill(palette.text);
     const active = selected.some((id) => sameValue(id, entry));
     const recipes = countLabel(entry.recipes);
     const label = `${entry.value}, ${recipes}`;
@@ -108,6 +112,8 @@ export default function BeanFilterSheet({
     onRatedOnlyChange,
     onChange
 }: Props) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const groups = groupedVocabulary(vocabulary);
 
     function setRatedOnly(next: boolean) {

@@ -1,3 +1,4 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React, {useState} from "react";
 import {Image, Pressable} from "react-native";
 import {Text, View, XStack} from "tamagui";
@@ -5,7 +6,7 @@ import {Text, View, XStack} from "tamagui";
 import DeckSection from "@/components/DeckSection";
 import DotIcon from "@/components/DotIcon";
 import {openLink} from "@/components/openLink";
-import {palette} from "@/constants/colors";
+
 import Recipe from "@/library/Recipe";
 
 /** The mark's diameter, from the design: a small promise, not a hero image. */
@@ -50,6 +51,8 @@ export default function FromSection({recipe, accent, showAvatar}: {
     /** `showRecipeAvatars`. Off, the accent mark is all that is ever drawn. */
     showAvatar: boolean;
 }) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const [failed, setFailed] = useState(false);
 
     const sharedBy = recipe.sharedBy?.trim() ?? "";
@@ -75,7 +78,7 @@ export default function FromSection({recipe, accent, showAvatar}: {
                     <View testID="from-mark"
                           width={MARK_SIZE} height={MARK_SIZE}
                           borderRadius={MARK_SIZE / 2}
-                          backgroundColor={accent}/>
+                          backgroundColor={appearance.recipe(accent).fill}/>
                 )}
 
                 <Text flex={1} fontSize={sharedBy.length > 0 ? 16 : 13}
@@ -98,7 +101,7 @@ export default function FromSection({recipe, accent, showAvatar}: {
                     <XStack alignItems="center" justifyContent="space-between"
                             gap="$3" minHeight={44} marginTop="$3"
                             paddingVertical="$2" paddingHorizontal="$3"
-                            borderWidth={1} borderColor={accent}
+                            borderWidth={1} borderColor={appearance.recipe(accent).ink}
                             borderRadius="$5">
                         <Text flex={1} fontSize={14} fontWeight="600"
                               color={palette.text}>
@@ -106,7 +109,7 @@ export default function FromSection({recipe, accent, showAvatar}: {
                         </Text>
                         {/* Decorative: the row is already one labelled link. */}
                         <XStack style={{transform: [{rotate: "180deg"}]}}>
-                            <DotIcon name="back" size={12} color={accent}/>
+                            <DotIcon name="back" size={12} color={appearance.recipe(accent).ink}/>
                         </XStack>
                     </XStack>
                 </Pressable>

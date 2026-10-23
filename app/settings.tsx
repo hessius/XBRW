@@ -1,3 +1,4 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import * as Application from "expo-application";
 import {pictureSettingsFromBackup} from "@/library/pictureSettings";
 
@@ -5,6 +6,7 @@ import React, {useState} from "react";
 import {ScrollView, Text, YStack} from "tamagui";
 
 import DeleteAllSheet from "@/components/DeleteAllSheet";
+import AppearanceSheet from "@/components/AppearanceSheet";
 import MachineAddSheet from "@/components/MachineAddSheet";
 import ForgetMachineSheet from "@/components/ForgetMachineSheet";
 import MachineDetailSheet from "@/components/MachineDetailSheet";
@@ -19,7 +21,7 @@ import SettingsSection from "@/components/SettingsSection";
 import SettingsToggleRow from "@/components/SettingsToggleRow";
 import {SupportAction} from "@/components/SupportTile";
 import {notify} from "@/components/XbrwToast";
-import {palette} from "@/constants/colors";
+
 import {useBackup} from "@/hooks/useBackup";
 import {useSteadyRouter} from "@/hooks/steadyRouter";
 import {sharedBrewDatabase} from "@/hooks/useBrewHistory";
@@ -29,6 +31,7 @@ import {useSetting} from "@/hooks/useSetting";
 import {useLiveBrew} from "@/hooks/useLiveBrew";
 import {useScrollEndPadding} from "@/hooks/useBottomInset";
 import {type BackupPayload} from "@/library/backup";
+import {isThemeId, isRecipeColourMode, type ThemeId, type RecipeColourMode} from "@/library/appearance";
 import type {BrewRecord} from "@/library/brew/BrewRecord";
 import {RATING_PROMPT_WINDOW_MS} from "@/library/brew/ratingPrompt";
 import type {BackupExcluded, Settings, SettingKey} from "@/library/Settings";
@@ -107,6 +110,8 @@ function restoredMessage(recipes: number, brews: number): string {
  * decision in place.
  */
 export default function SettingsScreen({settings}: Props) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     // The end of the scroll clears whatever is under the screen: the
     // navigation bar on Android, the home indicator on iOS.
     const scrollEnd = useScrollEndPadding(48);
@@ -140,6 +145,25 @@ export default function SettingsScreen({settings}: Props) {
         useSetting("showRecipeAvatars", settings);
     const [showRecipeCardPhotos, setShowRecipeCardPhotos] = useSetting("showRecipeCardPhotos", settings);
     const [showShelfPhotoPreviews, setShowShelfPhotoPreviews] = useSetting("showShelfPhotoPreviews", settings);
+    const [appearanceTheme, setAppearanceTheme] = useSetting("appearanceTheme", settings);
+    const [recipeColourMode, setRecipeColourMode] = useSetting("recipeColourMode", settings);
+    const [appearanceOpen, setAppearanceOpen] = useState(false);
+
+    function chooseTheme(theme: ThemeId) {
+        try {
+            setAppearanceTheme(theme);
+        } catch {
+            notify({tone: "error", message: "Could not save this appearance. Please try again."});
+        }
+    }
+
+    function chooseRecipeColours(mode: RecipeColourMode) {
+        try {
+            setRecipeColourMode(mode);
+        } catch {
+            notify({tone: "error", message: "Could not save recipe colours. Please try again."});
+        }
+    }
     // Not shown as a row on this screen -- the hints switch lives on the editor's
     // own caret, which is where a user is when they want it. Read here anyway,
     // because a backup carries every preference and this is one.
@@ -224,6 +248,7 @@ export default function SettingsScreen({settings}: Props) {
     // a key someone forgot.
     function settingsSnapshot(): Record<Exclude<SettingKey, BackupExcluded>, unknown> {
         return {
+            appearanceTheme, recipeColourMode,
             showCoffeeMarker, dotMatrixProfile, showRecipeAvatars, showRecipeCardPhotos, showShelfPhotoPreviews, showHints,
             temperatureUnit,
             bypassTempEncoding,
@@ -290,10 +315,18 @@ export default function SettingsScreen({settings}: Props) {
         setRestoreOpen(true);
     }
 
-    function applySettings(incoming: Record<string, unknown>) {
+    function applySettings(incoming: Record<string, unknown>, invalidAppearanceKeys: string[]) {
         // Only the keys this app knows, and only values of the right shape. A
         // backup is a document from anywhere, so its settings block is input
         // rather than instruction.
+        if (incoming.appearanceTheme !== undefined) {
+            if (isThemeId(incoming.appearanceTheme)) setAppearanceTheme(incoming.appearanceTheme);
+            else invalidAppearanceKeys.push("appearanceTheme");
+        }
+        if (incoming.recipeColourMode !== undefined) {
+            if (isRecipeColourMode(incoming.recipeColourMode)) setRecipeColourMode(incoming.recipeColourMode);
+            else invalidAppearanceKeys.push("recipeColourMode");
+        }
         if (typeof incoming.showCoffeeMarker === "boolean") {
             setShowCoffeeMarker(incoming.showCoffeeMarker);
         }
@@ -397,6 +430,7 @@ export default function SettingsScreen({settings}: Props) {
     }
 
     function applyRestore(payload: BackupPayload, choice: RestoreChoice) {
+        const invalidAppearanceKeys: string[] = [];
         const outcome = library.applyRestore(payload, {replace: choice.replace});
         // A second press landing before the first repaint. The library ignored
         // it; the screen says nothing, because nothing happened.
@@ -412,7 +446,16 @@ export default function SettingsScreen({settings}: Props) {
         // Only after the recipes have landed: the settings are a preference, and
         // changing them for a restore that then failed would be the worst of
         // both outcomes.
-        if (choice.includeSettings) applySettings(payload.settings);
+        try {
+            if (choice.includeSettings) applySettings(payload.settings, invalidAppearanceKeys);
+        } catch {
+            // Recipes already landed; do not promise rollback or announce success.
+            notify({tone: "error", message: "The restore could not be completed. Some settings could not be saved."});
+            return;
+        }
+        if (invalidAppearanceKeys.length > 0) {
+            notify({tone: "error", message: "Some appearance preferences were not restored."});
+        }
 
         // After the recipes, and never overwriting: a brew already here may
         // carry a rating the user gave it since the backup was made. A history
@@ -483,9 +526,9 @@ export default function SettingsScreen({settings}: Props) {
             `app/editRecipe.tsx` both already use this shape. */}
         <YStack {...STABLE_HOST} testID="settings-screen" flex={1} backgroundColor={palette.base}
                 accessibilityElementsHidden={restoreOpen || confirmingDeleteAll || ratingNoteOpen
-                    || machineSheetOpen}
+                    || machineSheetOpen || appearanceOpen}
                 importantForAccessibility={restoreOpen || confirmingDeleteAll || ratingNoteOpen
-                    || machineSheetOpen
+                    || machineSheetOpen || appearanceOpen
                     ? "no-hide-descendants"
                     : "auto"}>
             <ScreenHeader title="Settings" onBack={() => router.back()}
@@ -524,6 +567,11 @@ export default function SettingsScreen({settings}: Props) {
                         value={temperatureUnit}
                         options={TEMPERATURE_OPTIONS}
                         onChange={(value) => setTemperatureUnit(asTemperatureUnit(value))}/>
+                </SettingsSection>
+
+                <SettingsSection>
+                    <SettingsActionRow label="Appearance" detail="Theme and recipe colours."
+                                       onPress={() => setAppearanceOpen(true)}/>
                 </SettingsSection>
 
                 <SettingsSection title="Recipe list">
@@ -679,6 +727,10 @@ export default function SettingsScreen({settings}: Props) {
                                 onClose={() => setForgetSheetId(null)}/>
 
             <MachineAddSheet adder={machineAdder}/>
+
+            <AppearanceSheet open={appearanceOpen} onOpenChange={setAppearanceOpen}
+                             choice={appearance.choice} chooseTheme={chooseTheme}
+                             chooseRecipeColours={chooseRecipeColours}/>
 
             <RestoreSheet open={restoreOpen} payload={pending} existing={library.recipes}
                           onCancel={() => setRestoreOpen(false)}

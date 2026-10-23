@@ -14,10 +14,12 @@ import CompareWithSheet from "@/components/CompareWithSheet";
 import StageDetail from "@/components/StageDetail";
 import TeaStageDetail from "@/components/TeaStageDetail";
 import DotMatrixText from "@/components/DotMatrixText";
+import HistoricalColourNotice from "@/components/HistoricalColourNotice";
+import {historicalAccent} from "@/library/brew/historicalColour";
 
 import ExportButton from "@/components/ExportButton";
 import ScreenHeader from "@/components/ScreenHeader";
-import {palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 import {useBrewExport} from "@/hooks/useBrewExport";
 import {useBrewRecordHandoff} from "@/hooks/useBrewRecordHandoff";
 import {useLiveBrew} from "@/hooks/useLiveBrew";
@@ -171,6 +173,7 @@ type Props = {
  * a short note; figures and trace remain.
  */
 export default function BrewRecord({recipeLookup}: Props) {
+    const {palette} = useAppearance();
     const {id, latest} = useLocalSearchParams<{id?: string; latest?: string}>();
     const {width} = useWindowDimensions();
     const insets = useSafeAreaInsets();
@@ -257,7 +260,7 @@ export default function BrewRecord({recipeLookup}: Props) {
                                color={palette.dim}>
                     BREW NOT FOUND
                 </DotMatrixText>
-                <Text color={palette.muted} fontSize={13} textAlign="center">
+                <Text color={palette.dim} fontSize={13} textAlign="center">
                     That brew is no longer here.
                 </Text>
                 </YStack>
@@ -270,7 +273,7 @@ export default function BrewRecord({recipeLookup}: Props) {
     // means revisiting this selection rather than assuming it appears here.
     const [handoffTarget] = HANDOFF_TARGETS;
     const showHandoff = handoffEnabled && canHandOff(record);
-    const accent = record.accent;
+    const accent = historicalAccent(record.accent);
 
     // Measured from the first drop, because that is where the sample stream is
     // zeroed. From `startedAt` the axis would also carry waking and grinding,
@@ -513,6 +516,7 @@ export default function BrewRecord({recipeLookup}: Props) {
                 meta={`${formatBrewDate(record.startedAt)} · ${formatBrewTime(record.startedAt)}`}
                 onBack={() => router.back()}
             />
+            <HistoricalColourNotice accent={record.accent}/>
             {/* BrewSummary owns its own background and padding because the
                 story card still captures the same subtree at a different
                 ratio. */}
@@ -553,7 +557,7 @@ export default function BrewRecord({recipeLookup}: Props) {
                     </DotMatrixText>
                     <DotMatrixText testID="record-not-watched" fontSize={13}
                                    weight="bold" letterSpacing={1.6}
-                                   color={palette.muted}>
+                                   color={palette.dim}>
                         NOT WATCHED
                     </DotMatrixText>
                 </YStack>
@@ -655,6 +659,7 @@ export default function BrewRecord({recipeLookup}: Props) {
                 }/>
             <BrewStorySheet open={storyOpen} onOpenChange={setStoryOpen}
                             shotRef={story.shotRef} busy={story.busy}
+                            captureChoice={story.captureChoice}
                             onShare={() => void story.shareImage()}
                             layout={(cardWidth) => {
                                 const storyFontScale = PixelRatio.getFontScale();

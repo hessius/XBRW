@@ -1,3 +1,4 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React from "react";
 import {ActivityIndicator, Modal} from "react-native";
 import {useSafeAreaInsets} from "react-native-safe-area-context";
@@ -6,7 +7,7 @@ import type {ShouldStartLoadRequest} from "react-native-webview/lib/WebViewTypes
 import {Button, Text, XStack, YStack} from "tamagui";
 
 import DotMatrixText from "@/components/DotMatrixText";
-import {palette} from "@/constants/colors";
+
 
 type Props = {
     visible: boolean;
@@ -48,6 +49,8 @@ export default function BrewMindBrowser({
     onShouldStartLoadWithRequest,
     onNavigationStateChange
 }: Props) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const insets = useSafeAreaInsets();
 
     return (

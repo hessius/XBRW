@@ -1,9 +1,10 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React from "react";
 import {Pressable, type FlexAlignType} from "react-native";
 import {Text} from "tamagui";
 
 import {openLink} from "@/components/openLink";
-import {palette} from "@/constants/colors";
+
 
 /**
  * A tappable line.
@@ -29,6 +30,8 @@ export default function LinkText({
     textAlign?: "auto" | "left" | "right" | "center" | "justify";
     alignItems?: FlexAlignType;
 }) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     return (
         <Pressable
             accessibilityRole="link"

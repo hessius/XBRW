@@ -1,3 +1,4 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React, {useState} from "react";
 import {Pressable} from "react-native";
 import {Text, XStack, YStack} from "tamagui";
@@ -5,7 +6,7 @@ import {Text, XStack, YStack} from "tamagui";
 import Collapsible from "@/components/Collapsible";
 import DotMatrixText from "@/components/DotMatrixText";
 import LinkText from "@/components/LinkText";
-import {palette} from "@/constants/colors";
+
 import {
     coffeeDetails,
     NOTE_INLINE_MAX,
@@ -39,6 +40,8 @@ export const PRODUCT_PAGE_LABEL = "View the product page";
  * list of flavours can be read whole.
  */
 function DetailRow({row}: {row: CoffeeDetailRow}) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     return (
         <XStack testID={`coffee-${row.field}`}
                 accessible
@@ -65,6 +68,8 @@ function DetailRow({row}: {row: CoffeeDetailRow}) {
  * machine panel use, so it honours Reduced Motion without a second rule.
  */
 function CoffeeNote({note}: {note: string}) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const [open, setOpen] = useState(false);
 
     if (note.length <= NOTE_INLINE_MAX) {
@@ -117,6 +122,8 @@ function CoffeeNote({note}: {note: string}) {
  * with nothing else to say draws nothing at all.
  */
 export default function PodCoffeeRows({recipe}: {recipe: Recipe}) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const details = coffeeDetails(recipe.coffee, {
         podName:   recipe.xbloomName,
         recipeUrl: recipe.recipeUrl

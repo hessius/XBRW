@@ -1,17 +1,18 @@
 import React from "react";
 import {fireEvent, within} from "@testing-library/react-native";
-import {processColor} from "react-native";
+import {processColor, StyleSheet} from "react-native";
 
 import BrewCompareScreen from "@/app/brewCompare";
 import {COMPARE_COPY, COMPARE_DEGRADED} from "@/constants/brewCopy";
-import {cupLineFor} from "@/constants/colors";
+import {accents, cupLineFor, resolveAppearance} from "@/constants/colors";
+import {THEME_IDS} from "@/library/appearance";
 import {
     makeBrewRecordFixture,
     makeBrewRecordSamples,
     createBrewHistoryMock,
     createExpoRouterMock
 } from "@/test-utils/brewRecordMocks";
-import {renderWithProviders} from "@/test-utils/render";
+import {Providers, renderWithProviders} from "@/test-utils/render";
 import {planFromPours} from "@/library/brew/BrewRecord";
 import {toPath} from "@/library/brew/brewShape";
 import {compareTracePlotHeight} from "@/components/CompareTrace";
@@ -99,6 +100,55 @@ function pair(over: Parameters<typeof makeBrewRecordFixture>[0] = {}) {
 }
 
 describe("the comparison screen", () => {
+    it.each(["", "not-a-colour"])(
+        "renders stored invalid accent %j in overlay and separate comparison without changing either record",
+        async accent => {
+            const a = makeBrewRecordFixture({id: "a", accent, plan: comparisonPlan, grindSize: 58});
+            const b = makeBrewRecordFixture({id: "b", accent: "red", plan: comparisonPlan, grindSize: 62});
+            const samples = makeBrewRecordSamples(comparisonSamples);
+            const before = JSON.stringify({a, b, samples});
+            setRecords({a: {record: a, samples}, b: {record: b, samples}});
+            setParams({a: "a", b: "b"});
+            const tree = await renderWithProviders(<BrewCompareScreen/>);
+            expect(tree.getByText("Stored brew colour is invalid; using a display fallback.")).toBeTruthy();
+            expect(tree.getByTestId("trace-cup-subject")).toBeTruthy();
+            await fireEvent.press(tree.getByRole("button", {name: "Show the brews separately"}));
+            expect(tree.getByTestId("compare-a-GRIND")).toBeTruthy();
+            await fireEvent.press(tree.getByRole("button", {name: "Swap which brew leads"}));
+            expect(tree.getByText("Stored brew colour is invalid; using a display fallback.")).toBeTruthy();
+            await fireEvent.press(tree.getByRole("button", {name: "Show the brews overlaid"}));
+            expect(tree.getByTestId("trace-cup-subject")).toBeTruthy();
+            expect(JSON.stringify({a, b, samples})).toBe(before);
+        }
+    );
+    it.each(THEME_IDS.flatMap(theme => (["original", "themed"] as const)
+        .map(recipeColours => ({theme, recipeColours}))))(
+        "renders canonical history and comparison columns in $theme/$recipeColours",
+        async choice => {
+            const appearance = resolveAppearance(choice);
+            const canonical = accents.coffee[0];
+            const a = makeBrewRecordFixture({id: "a", accent: canonical,
+                plan: comparisonPlan, grindSize: 58});
+            const b = makeBrewRecordFixture({id: "b", accent: canonical.toLowerCase(),
+                plan: comparisonPlan, grindSize: 62});
+            const samples = makeBrewRecordSamples(comparisonSamples);
+            const before = JSON.stringify({a, b, samples});
+            setRecords({a: {record: a, samples}, b: {record: b, samples}});
+            setParams({a: "a", b: "b"});
+            const tree = await renderWithProviders(
+                <Providers appearance={choice}><BrewCompareScreen/></Providers>
+            );
+            expect(tree.getByTestId("trace-cup-subject").props.stroke).toEqual(
+                expect.objectContaining({payload: processColor(appearance.recipe(canonical).cupInk)})
+            );
+            expect(StyleSheet.flatten(tree.getByTestId("compare-a-GRIND").props.style).color)
+                .toBe(appearance.recipe(canonical).ink);
+            expect(StyleSheet.flatten(tree.getByTestId("compare-b-GRIND").props.style).color)
+                .toBe(appearance.palette.dim);
+            expect(JSON.stringify({a, b, samples})).toBe(before);
+        }
+    );
+
     it("compares tea leaf, water, cup and time without coffee metrics", async () => {
         const tea = {beverageKind: "tea" as const, dose: 5, ratio: 18,
             grindSize: 81, grinderRpm: 120, drawdownAt: 0};
@@ -367,7 +417,8 @@ describe("the comparison screen", () => {
         expect(subjectCup.props.stroke)
             .toEqual(expect.objectContaining({payload: processColor(cupLineFor(a.accent))}));
         expect(referenceCup.props.stroke)
-            .toEqual(expect.objectContaining({payload: processColor(referenceCupColour)}));
+            .toEqual(expect.objectContaining({payload: processColor(referenceCupColour(
+                resolveAppearance({theme: "original", recipeColours: "original"})))}));
     });
 
     it("draws no rate lanes when one retained stream is too short to derive rate", async () => {

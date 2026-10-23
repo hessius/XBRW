@@ -1,10 +1,11 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React, {useState} from "react";
 import {Image, Pressable} from "react-native";
 import {Text, XStack, YStack} from "tamagui";
 
 import {CoffeeBadgeTag} from "@/components/CatalogueParts";
 import DotMatrixText from "@/components/DotMatrixText";
-import {palette} from "@/constants/colors";
+
 import type {CoffeeBadge} from "@/library/roasterAlerts";
 import {bagLine, notesLine} from "@/library/roasterCatalogue";
 import type {FeedCoffee} from "@/library/roasterFeed";
@@ -32,6 +33,8 @@ export default function RoasterCoffeeRow({coffee, badge, onPress, testID}: {
     onPress: () => void;
     testID: string;
 }) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const [failedUri, setFailedUri] = useState<string | null>(null);
     const image = coffee.image ?? null;
     const roast = coffee.roast?.level;

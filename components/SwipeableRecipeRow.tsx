@@ -1,3 +1,4 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React, {useEffect, useRef, useState} from "react";
 import {View} from "react-native";
 import Swipeable, {type SwipeableMethods} from "react-native-gesture-handler/ReanimatedSwipeable";
@@ -10,7 +11,7 @@ import RecipeCard from "@/components/RecipeCard";
 import type {RecipeEvidence} from "@/library/libraryQuery";
 import type {SlotMarkerValue} from "@/library/slots/slotModel";
 import type {DotIconName} from "@/constants/dotIcons";
-import {palette} from "@/constants/colors";
+
 import {canWriteToCard} from "@/library/cardLimits";
 import {resolveAccent} from "@/library/accent";
 import {BOUNCE_CLOSE_DELAY, BOUNCE_OPEN_DELAY, TRAY_ACTION_FALLBACK} from "@/constants/motion";
@@ -135,6 +136,8 @@ type TileProps = {
  * management tray's two guesses is unrecoverable.
  */
 function Tile({icon, caption, tone, label, testID, onPress, disabled = false}: TileProps) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     return (
         <YStack
             accessible
@@ -192,6 +195,8 @@ export default function SwipeableRecipeRow({
                                                slotMarker,
                                                onEasyMode
                                            }: Props) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const swipeableRef = useRef<SwipeableMethods | null>(null);
     /**
      * An action waiting for the tray to finish closing.
@@ -354,7 +359,7 @@ export default function SwipeableRecipeRow({
                           // retained elsewhere in the app ("KEPT IN YOUR BREW
                           // HISTORY", "NO TRACE KEPT").
                           caption={recipe.favourite ? "STARRED" : "STAR"}
-                          tone={resolveAccent(recipe)}
+                          tone={appearance.recipe(resolveAccent(recipe)).ink}
                           // Named, like every other tile in both trays. A tray
                           // is reached by swiping one row among many, so a
                           // label that omits the recipe leaves a screen reader
@@ -389,7 +394,7 @@ export default function SwipeableRecipeRow({
                     // The one tile carrying the recipe's own accent: it is the
                     // act on this specific recipe. Same helper the card uses, so
                     // the tile and the card it slid off cannot disagree.
-                    <Tile icon="brew" caption="BREW" tone={resolveAccent(recipe)}
+                    <Tile icon="brew" caption="BREW" tone={appearance.recipe(resolveAccent(recipe)).ink}
                           testID="recipe-row-brew"
                           label={`Brew ${recipe.displayName()}`}
                           onPress={() => closeNow(onBrew)}/>

@@ -1,9 +1,10 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React from "react";
 import {Pressable, ScrollView} from "react-native";
 import {Text, XStack, YStack} from "tamagui";
 
 import DotMatrixText from "@/components/DotMatrixText";
-import {palette} from "@/constants/colors";
+
 import type {
     TeaObservationStatus,
     TeaStageView
@@ -35,7 +36,9 @@ function Phase({label, status, detail, accent, note}: {
     accent: string;
     note?: string;
 }) {
-    const colour = status === "observing" ? accent
+    const appearance = useAppearance();
+    const {palette} = appearance;
+    const colour = status === "observing" ? appearance.recipe(accent).ink
         : status === "interrupted" ? palette.warn
             : status === "paused" ? palette.dim : palette.muted;
     return (
@@ -73,6 +76,8 @@ export default function TeaStageLadder({
     /** The parent owns the scroll viewport; this flag labels its contents. */
     scrolls?: boolean;
 }) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const rows = stages.map((stage) => {
                 const {fill, steep, ending} = stage;
                 const elapsed = steep.elapsedSeconds;
@@ -92,7 +97,7 @@ export default function TeaStageLadder({
                 const row = (
                     <YStack key={stage.index} gap="$2" padding="$2"
                             borderWidth={selectedIndex === stage.index ? 1 : 0}
-                            borderColor={accent} borderRadius="$3">
+                            borderColor={appearance.recipe(accent).ink} borderRadius="$3">
                         <DotMatrixText fontSize={12} weight="bold" letterSpacing={1.4}
                                        color={palette.text}>
                             {`STEEP ${String(stage.index + 1).padStart(2, "0")}`}

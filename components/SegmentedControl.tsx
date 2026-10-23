@@ -3,7 +3,7 @@ import {Pressable} from "react-native";
 import {Text, XStack} from "tamagui";
 
 import DotIcon from "@/components/DotIcon";
-import {palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 import type {DotIconName} from "@/constants/dotIcons";
 
 export type SegmentOption = {
@@ -27,7 +27,7 @@ type Props = {
     value: string;
     options: readonly SegmentOption[];
     onChange: (value: string) => void;
-    /** Fill of the selected segment. The editor passes the recipe's accent. */
+    /** Canonical recipe accent for recipe-local choices; absent is neutral. */
     accent?: string;
     /**
      * Names the group for a screen reader. The editor's `FieldRow` names the
@@ -50,6 +50,9 @@ type Props = {
 export default function SegmentedControl({
     value, options, onChange, accent, accessibilityLabel
 }: Props) {
+    const appearance = useAppearance();
+    const {selection, palette} = appearance;
+    const recipe = accent === undefined ? undefined : appearance.recipe(accent);
     return (
         // No `accessible` here. On iOS that would collapse the group into a
         // single element and hide the segments inside it, leaving a control
@@ -63,27 +66,29 @@ export default function SegmentedControl({
                     <Pressable key={option.value} accessibilityRole="radio"
                                accessibilityLabel={option.label}
                                accessibilityState={{checked: selected}}
+                               style={({pressed}) => ({
+                                   opacity: 1,
+                                   transform: [{scale: pressed && recipe !== undefined ? 0.98 : 1}]
+                               })}
                                onPress={() => onChange(option.value)}>
-                        {option.icon ? (
-                            <XStack paddingHorizontal="$2.5" paddingVertical="$2"
-                                    borderRadius="$2"
-                                    backgroundColor={
-                                        selected ? (accent ?? palette.text) : palette.none
-                                    }>
-                                <DotIcon name={option.icon} size={ICON_SIZE}
-                                         color={selected ? palette.base : palette.dim}/>
-                            </XStack>
-                        ) : (
-                            <Text fontSize={11} fontWeight="600"
-                                  paddingHorizontal="$2.5" paddingVertical="$1.5"
-                                  borderRadius="$2"
-                                  backgroundColor={
-                                      selected ? (accent ?? palette.text) : palette.none
-                                  }
-                                  color={selected ? palette.base : palette.dim}>
-                                {option.label}
-                            </Text>
-                        )}
+                        {({pressed}) => {
+                            const fill = selected
+                                ? recipe?.fill ?? (pressed ? selection.pressedFill : selection.fill)
+                                : pressed ? palette.surface : palette.none;
+                            const ink = selected ? recipe?.onAccent.text ?? selection.ink : palette.dim;
+                            return option.icon ? (
+                                <XStack paddingHorizontal="$2.5" paddingVertical="$2"
+                                        borderRadius="$2" backgroundColor={fill}>
+                                    <DotIcon name={option.icon} size={ICON_SIZE} color={ink}/>
+                                </XStack>
+                            ) : (
+                                <Text fontSize={11} fontWeight="600"
+                                      paddingHorizontal="$2.5" paddingVertical="$1.5"
+                                      borderRadius="$2" backgroundColor={fill} color={ink}>
+                                    {option.label}
+                                </Text>
+                            );
+                        }}
                     </Pressable>
                 );
             })}

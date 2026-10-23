@@ -1,3 +1,4 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import router from "@/hooks/steadyRouter";
 import React, {useState} from "react";
 import {FlatList} from "react-native-gesture-handler";
@@ -6,7 +7,7 @@ import {Button, Input, Text, YStack, type ColorTokens} from "tamagui";
 import CloudImportRow from "@/components/CloudImportRow";
 import {notify} from "@/components/XbrwToast";
 import ScreenHeader from "@/components/ScreenHeader";
-import {palette} from "@/constants/colors";
+
 import {useBottomInset} from "@/hooks/useBottomInset";
 import {useCloudImport} from "@/hooks/useCloudImport";
 
@@ -48,6 +49,8 @@ const ERRORS: Record<CloudErrorKind, string> = {
 };
 
 export default function ImportCloudScreen() {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     // One store for the screen's lifetime. Every `new RecipeDatabase()` opens
     // SQLite and replays the table setup, and this screen re-renders on every
     // keystroke into the email and password fields. `useRecipeLibrary` guards

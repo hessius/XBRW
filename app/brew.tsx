@@ -20,6 +20,7 @@ import BrewWakeLock from "@/components/BrewWakeLock";
 import ScrollFade from "@/components/ScrollFade";
 import ExportButton from "@/components/ExportButton";
 import BrewTrace from "@/components/BrewTrace";
+import {AppearanceScope, useAppearance} from "@/hooks/useAppearance";
 import DotIcon from "@/components/DotIcon";
 import OverflowStatus from "@/components/OverflowStatus";
 import DotMatrixText from "@/components/DotMatrixText";
@@ -31,7 +32,7 @@ import {BLOCKED_HEADLINE, BLOCKED_WATER_HEADLINE, blockedWaterCopy,
         FIRST_BREW_REMINDER, LONGEST_ACTIVE_HEADLINE, NO_RETRY, PAUSABLE,
         OVERFLOW_PAUSED_HEADLINE, PAUSED_NOTE, PHASE_COPY,
         PRO_MODE_PROMPT, RATING_CAN_WAIT} from "@/constants/brewCopy";
-import {mix, palette} from "@/constants/colors";
+import {mix} from "@/constants/colors";
 import {useBrewExport, type BrewExportSource} from "@/hooks/useBrewExport";
 import {sharedBrewDatabase, useBrewJudgement, type HistoryStore, type JudgementStore}
     from "@/hooks/useBrewHistory";
@@ -208,6 +209,8 @@ function Action({label, color, onPress}: {label: string; color: string; onPress:
 }
 
 export default function Brew({historyStore}: {historyStore?: ExportStore} = {}) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const {recipeJSON, view, quickEditAdjustments} =
         useLocalSearchParams<{recipeJSON: string; view: string; quickEditAdjustments?: string}>();
     // Opened to look at a run that already exists, from the mini bar, rather
@@ -395,7 +398,7 @@ export default function Brew({historyStore}: {historyStore?: ExportStore} = {}) 
     // between the two colours, and grinding beats between 1 and 0.15, both of
     // which are "greater than zero", so a threshold drew the two halves of the
     // beat identically and the flicker never appeared at all.
-    const planColor = mix(palette.muted, accent, motion.warmth);
+    const planColor = mix(appearance.palette.muted, appearance.recipe(accent).ink, motion.warmth);
     const {status, connect, machine} = useMachine();
 
     /**
@@ -445,7 +448,7 @@ export default function Brew({historyStore}: {historyStore?: ExportStore} = {}) 
             outcome: finalOutcome("done", brewWater, plannedWater)
         });
     }
-    const {shotRef, shareImage, shareData, busy} = useBrewExport(
+    const {shotRef, shareImage, shareData, busy, captureChoice} = useBrewExport(
         () => latestExport(historyStore ?? sharedBrewDatabase())
     );
     // Beanconqueror reads the same just-written row the exports do. It is
@@ -598,6 +601,7 @@ export default function Brew({historyStore}: {historyStore?: ExportStore} = {}) 
                             scrollEventThrottle={16}
                             contentContainerStyle={{flexGrow: 1}}>
                 <ViewShot ref={shotRef} options={{format: "png", quality: 1}}>
+                    <AppearanceScope choice={captureChoice ?? appearance.choice}>
                     <BrewSummary
                         beverageKind={beverageKind}
                         recipeName={recipe.displayName()}
@@ -640,6 +644,7 @@ export default function Brew({historyStore}: {historyStore?: ExportStore} = {}) 
                         onSelectStage={teaStages === undefined ? undefined
                             : (index) => setSelectedTeaStage((was) => was === index ? null : index)}
                     />
+                    </AppearanceScope>
                 </ViewShot>
                     {selectedTeaStage !== null && teaStages?.[selectedTeaStage] !== undefined && (
                         <TeaStageDetail stage={teaStages[selectedTeaStage]} accent={accent}

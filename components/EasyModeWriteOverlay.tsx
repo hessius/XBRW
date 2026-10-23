@@ -1,3 +1,4 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React, {useEffect, useEffectEvent, useState} from "react";
 import {AccessibilityInfo, AppState, ScrollView, View} from "react-native";
 import Animated, {FadeIn} from "react-native-reanimated";
@@ -8,7 +9,7 @@ import {resolveAccent} from "@/library/accent";
 import {SLOT_NAMES, type SlotRecord} from "@/library/slots/slotModel";
 import DotBloom from "@/components/DotBloom";
 import DotMatrixText from "@/components/DotMatrixText";
-import {palette} from "@/constants/colors";
+
 import {
     DURATION, EASING, SLOT_WRITE_ESTIMATE_MS, SLOT_WRITE_ESTIMATE_TICK_MS,
     SLOT_WRITE_SUCCESS_HOLD_MS, useReducedMotion
@@ -29,6 +30,8 @@ export function slotOverlayVisible(record: SlotRecord, attempt: SlotAttempt | nu
 }
 
 export default function EasyModeWriteOverlay({record, attempt, onDismissSuccess}: EasyModeWriteOverlayProps) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const reduced = useReducedMotion();
     const visible = slotOverlayVisible(record, attempt);
     const success = visible && attempt?.status === "success";
@@ -39,7 +42,7 @@ export default function EasyModeWriteOverlay({record, attempt, onDismissSuccess}
     const saving = !cancelling && !recovery && !success && received === 3;
     const active = record.journal?.slots[received];
     const colour = active === undefined ? palette.text
-        : resolveAccent(new Recipe(undefined, active.recipeJSON));
+        : appearance.recipe(resolveAccent(new Recipe(undefined, active.recipeJSON))).ink;
     const title = attempt?.operation === "dismiss" ? "STOPPING THIS WRITE"
         : recovery ? "TRYING RECOVERY" : partial ? "WRITING ONLY A"
         : success ? "SLOTS WRITTEN" : cancelling ? "CANCELLING THIS WRITE"

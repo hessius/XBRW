@@ -1,3 +1,4 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React from "react";
 import {Pressable, ScrollView} from "react-native";
 import {useSafeAreaInsets} from "react-native-safe-area-context";
@@ -7,7 +8,7 @@ import {AlertDot, CatalogueStatus} from "@/components/CatalogueParts";
 import DotIcon from "@/components/DotIcon";
 import DotMatrixText from "@/components/DotMatrixText";
 import ScreenHeader from "@/components/ScreenHeader";
-import {palette} from "@/constants/colors";
+
 import router from "@/hooks/steadyRouter";
 import {useLiveBrew} from "@/hooks/useLiveBrew";
 import {useCatalogueNow} from "@/hooks/useCatalogueNow";
@@ -29,6 +30,8 @@ export default function RoastersScreen({settings, now}: {
     settings?: Settings;
     now?: () => number;
 } = {}) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const {ratingNoteOpen} = useLiveBrew();
     const store = settings ?? sharedSettings();
     const [stored] = useSetting("roasterSubscriptions", store);

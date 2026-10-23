@@ -9,6 +9,13 @@ import {SlotOperationError} from "@/library/machine/errors";
 import type {Notification} from "@/library/machine/protocol";
 import Pour from "@/library/Pour";
 import Recipe from "@/library/Recipe";
+import {AppearanceProvider, useAppearance} from "@/hooks/useAppearance";
+import {Settings, SqliteSettingsStorage} from "@/library/Settings";
+import * as databaseModule from "@/library/appDatabase";
+import {createTestDatabase} from "@/test-utils/sqlite";
+import {renderWithProviders} from "@/test-utils/render";
+import {THEME_IDS} from "@/library/appearance";
+import {resolveAccent} from "@/library/accent";
 
 jest.mock("@/hooks/useSetting", () => ({
     ...jest.requireActual("@/hooks/useSetting"),
@@ -91,6 +98,95 @@ function harness() {
 }
 
 describe("LiveBrewProvider", () => {
+    it("keeps one run and continuous samples across eight persisted choices, navigation and a failed SQL write", async () => {
+        const h = harness();
+        const db = createTestDatabase();
+        jest.spyOn(databaseModule, "appDatabase").mockReturnValue(
+            db as unknown as ReturnType<typeof databaseModule.appDatabase>);
+        const settings = new Settings(new SqliteSettingsStorage());
+        const r = recipe();
+        const canonical = JSON.stringify(r);
+        const accent = resolveAccent(r);
+        let live!: ReturnType<typeof useLiveBrew>;
+        let appearance!: ReturnType<typeof useAppearance>;
+        const notice = jest.fn();
+        function Reader() {
+            live = useLiveBrew();
+            appearance = useAppearance();
+            return null;
+        }
+        function BrewScreen() {
+            const {start} = useLiveBrew();
+            React.useEffect(() => {
+                start(r);
+                // A route starts on mount, not when the provider publishes new controls.
+                // eslint-disable-next-line react-hooks/exhaustive-deps
+            }, []);
+            return null;
+        }
+        const tree = (show: boolean) =>
+            <AppearanceProvider settings={settings} onInvalidPreferences={notice}>
+                <LiveBrewProvider store={h.store}>
+                    {show && <BrewScreen/>}
+                    <Reader/>
+                </LiveBrewProvider>
+            </AppearanceProvider>;
+        const view = await renderWithProviders(tree(true));
+        await h.setPhase({name: "pouring", pour: 1, pours: 2});
+        const listeners = h.listenerCounts();
+        const startedAt = live.run?.startedAt;
+        let grams = 0;
+        const expectedWater: number[] = [];
+        for (const theme of THEME_IDS) {
+            for (const mode of ["original", "themed"] as const) {
+                await act(async () => {
+                    settings.set("appearanceTheme", theme);
+                    settings.set("recipeColourMode", mode);
+                });
+                expect(appearance.choice).toEqual({theme, recipeColours: mode});
+                await view.rerender(tree(false));
+                await h.water(grams += 10);
+                expectedWater.push(grams);
+                await act(async () => { jest.advanceTimersByTime(250); });
+                await view.rerender(tree(true));
+                expect(live.run?.startedAt).toBe(startedAt);
+                expect(h.listenerCounts()).toEqual(listeners);
+                expect(resolveAccent(r)).toBe(accent);
+                expect(JSON.stringify(r)).toBe(canonical);
+                expect(global.__brewer.brew).toHaveBeenCalledTimes(1);
+            }
+        }
+        db.execSync(`CREATE TRIGGER reject_appearance BEFORE UPDATE ON settings
+            WHEN NEW.key = 'appearanceTheme' BEGIN SELECT RAISE(FAIL, 'disk full'); END;`);
+        await act(async () => {
+            expect(() => settings.set("appearanceTheme", "light")).toThrow("disk full");
+        });
+        expect(appearance.choice).toEqual({theme: "magenta", recipeColours: "themed"});
+        await h.water(grams += 10);
+        expectedWater.push(grams);
+        await act(async () => { jest.advanceTimersByTime(250); await live.pauseBrew(); });
+        expect(global.__brewer.pauseBrew).toHaveBeenCalledTimes(1);
+        await h.setPhase({name: "paused", pour: 1, pours: 2,
+            was: {name: "pouring", pour: 1, pours: 2}});
+        await act(async () => { jest.advanceTimersByTime(500); await live.resumeBrew(); });
+        expect(global.__brewer.resumeBrew).toHaveBeenCalledTimes(1);
+        await h.setPhase({name: "pouring", pour: 2, pours: 2});
+        await h.water(200);
+        grams = 200;
+        expectedWater.push(grams);
+        await act(async () => { jest.advanceTimersByTime(250); });
+        await h.setPhase({name: "done"});
+        await h.setPhase({name: "done"});
+        expect(h.written).toHaveLength(1);
+        expect(h.written[0].record.outcome).toBe("done");
+        expect(h.written[0].record.accent).toBe(accent);
+        expect(h.written[0].samples.map(sample => sample.water)).toEqual(expectedWater);
+        const times = h.written[0].samples.map(sample => sample.at);
+        expect(times).toEqual([...times].sort((a, b) => a - b));
+        expect(global.__brewer.brew).toHaveBeenCalledTimes(1);
+        expect(notice).not.toHaveBeenCalled();
+    });
+
     beforeEach(() => {
         jest.useFakeTimers();
         Object.defineProperty(AppState, "currentState", {configurable: true, value: "active"});

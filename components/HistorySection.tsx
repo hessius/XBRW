@@ -1,9 +1,10 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React from "react";
 import {Text, XStack, YStack} from "tamagui";
 
 import BrewStars from "@/components/BrewStars";
 import DeckSection from "@/components/DeckSection";
-import {palette} from "@/constants/colors";
+
 import {formatBrewDate} from "@/library/brew/brewFormat";
 import type {BrewSummary} from "@/library/BrewDatabase";
 
@@ -32,6 +33,8 @@ export default function HistorySection({summary, onRate}: {
     /** Absent leaves the section a reading rather than a control. */
     onRate?: (rating: number) => void;
 }) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const {avgRating, rated} = summary;
 
     return (

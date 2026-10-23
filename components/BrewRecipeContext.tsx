@@ -3,7 +3,7 @@ import {useWindowDimensions} from "react-native";
 import {XStack, YStack} from "tamagui";
 
 import DotMatrixText from "@/components/DotMatrixText";
-import {palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 import {
     BREW_RECIPE_AFTER_GAP,
     BREW_RECIPE_LABEL_GAP,
@@ -29,6 +29,7 @@ function InputUnit({entry, columnWidth, textScale}: {
     columnWidth: number;
     textScale: number;
 }) {
+    const {palette} = useAppearance();
     const {unit, badgeBelow, height} = entry;
     const badge = brewFigureBadgeGeometry(textScale);
     const Segment = badgeBelow ? YStack : XStack;

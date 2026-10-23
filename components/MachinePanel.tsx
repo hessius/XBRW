@@ -1,3 +1,4 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React from "react";
 import {Pressable} from "react-native";
 import {XStack, YStack} from "tamagui";
@@ -6,7 +7,7 @@ import DotMatrixText from "@/components/DotMatrixText";
 import DotIcon from "@/components/DotIcon";
 import Collapsible from "@/components/Collapsible";
 import MachineColourDot from "@/components/MachineColourDot";
-import {palette} from "@/constants/colors";
+
 import {useRefreshRequest} from "@/hooks/useRefreshRequest";
 import type {LinkStatus} from "@/hooks/useMachine";
 
@@ -53,6 +54,8 @@ function age(askedAt: number, now: number): string {
 }
 
 function Row({label, children}: {label: string; children: React.ReactNode}) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     return (
         <XStack alignItems="center" justifyContent="space-between" paddingVertical="$1.5">
             <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.6}
@@ -85,6 +88,8 @@ function MachineChoiceRow({label, model, colour, connected, onPress}: {
     connected: boolean;
     onPress: () => void;
 }) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const state = connected ? "CONNECTED" : "SELECTED";
     const detail = model === undefined || model === "" ? state : `${model.toUpperCase()} · ${state}`;
     return (
@@ -142,6 +147,8 @@ const REFRESH_LABEL = {
 function RefreshButton({accent, onRefresh}: {
     accent: string; onRefresh: () => Promise<boolean>;
 }) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const {state, press} = useRefreshRequest(onRefresh);
     const colour = state === "noAnswer" ? palette.warn : accent;
 
@@ -191,6 +198,8 @@ export default function MachinePanel({
     open, status, accent, vitals, now, onRefreshWater, onConnect, onEasyMode,
     machineLabel, machineModel, machineColour, onChooseMachine
 }: Props) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     let body: React.ReactNode;
 
     if (status === "connected" && vitals !== null) {

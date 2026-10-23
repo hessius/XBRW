@@ -7,7 +7,7 @@ import Animated, {
 } from "react-native-reanimated";
 
 import {DURATION, EASING} from "@/constants/motion";
-import {palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 
 export type BlockState = "written" | "active" | "pending";
 
@@ -40,12 +40,6 @@ export function blockState(index: number, blocksWritten: number): BlockState {
     return index === written ? "active" : "pending";
 }
 
-const COLOURS: Record<BlockState, string> = {
-    written: palette.success,
-    active:  palette.text,
-    pending: palette.line
-};
-
 /**
  * The gap either side of a block.
  *
@@ -63,6 +57,12 @@ type CellProps = {
 };
 
 function SweepBlock({state, margin}: CellProps) {
+    const {palette} = useAppearance();
+    const colours: Record<BlockState, string> = {
+        written: palette.success,
+        active: palette.text,
+        pending: palette.line
+    };
     const fade = useSharedValue(state === "pending" ? 0.4 : 1);
 
     useEffect(() => {
@@ -87,7 +87,7 @@ function SweepBlock({state, margin}: CellProps) {
                     height:          10,
                     borderRadius:    2,
                     marginHorizontal: margin,
-                    backgroundColor: COLOURS[state]
+                    backgroundColor: colours[state]
                 },
                 animatedStyle
             ]}

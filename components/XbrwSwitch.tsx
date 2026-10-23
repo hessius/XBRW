@@ -2,7 +2,7 @@ import React from "react";
 import type {Insets} from "react-native";
 import {Switch} from "tamagui";
 
-import {switchColours, type SwitchGround} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 
 /**
  * Tamagui's `$3`: 36pt, which Switch draws as a 23 x 46pt track. Every switch
@@ -24,13 +24,16 @@ type Props = {
     /** Set only by a switch that can be locked, so the others keep reporting `{checked}` alone. */
     disabled?: boolean;
     hitSlop?: Insets;
-    /** What the switch is drawn on. Defaults to the dark surfaces. */
-    ground?: SwitchGround;
-};
+} & (
+    /** Omitted (or legacy "dark") means appearance-aware chrome. */
+    | {ground?: "dark"; displayFill?: never}
+    /** The colour actually behind this switch, not a canonical recipe identity. */
+    | {ground: "accent"; displayFill: string}
+);
 
 /**
  * The app's on/off switch. Every switch goes through here so the two states
- * look the same wherever they appear; `switchColours` says why each colour.
+ * share the appearance's measured chrome or actual-fill treatment.
  *
  * The on colours go in `activeStyle`, not in a `backgroundColor` chosen from
  * `checked`. When a Tamagui Switch is on and has no `activeStyle`, it spreads
@@ -43,9 +46,11 @@ type Props = {
  */
 export default function XbrwSwitch({
     checked, onCheckedChange, accessibilityLabel, accessibilityHint, disabled, hitSlop,
-    ground = "dark"
+    ground, displayFill
 }: Props) {
-    const {on, off} = switchColours[ground];
+    const appearance = useAppearance();
+    const {on, off} = ground === "accent"
+        ? appearance.switchOn(displayFill) : appearance.chromeSwitch;
     return (
         <Switch accessibilityRole="switch" accessibilityLabel={accessibilityLabel}
                 accessibilityHint={accessibilityHint}

@@ -1,3 +1,4 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React, {useEffect} from "react";
 import {Pressable, View} from "react-native";
 import Animated, {
@@ -7,7 +8,7 @@ import Animated, {
 } from "react-native-reanimated";
 import {XStack} from "tamagui";
 
-import {palette} from "@/constants/colors";
+
 import {DOT_ICON_GRID, litCells} from "@/constants/dotIcons";
 import {ATTRACT, EASING, SPRING, useReducedMotion} from "@/constants/motion";
 
@@ -363,6 +364,8 @@ function FieldBand({cells, position, dot, gap, glimmer}: {
     gap: number;
     glimmer: SharedValue<number>;
 }) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const style = useAnimatedStyle(() => {
         const glow = glowAt(crestAt(glimmer.value), position);
         return {opacity: FIELD_REST + glow * (1 - FIELD_REST)};
@@ -414,6 +417,10 @@ type DotProps = {
  * every dot, taking each one's animation with it.
  */
 function MarkDot({cell, dot, gap, breath, scatter, variant, reduced}: DotProps) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
+    const brand = palette.brand;
+    const text = palette.text;
     const style = useAnimatedStyle(() => {
         const phased = reduced
             ? 0
@@ -466,11 +473,11 @@ function MarkDot({cell, dot, gap, breath, scatter, variant, reduced}: DotProps) 
                 // Magenta to the field's own white and back: the flash reads as
             // the mark being briefly overexposed rather than as it changing
             // into some third colour that appears nowhere else in the app.
-            colour, [0, 1], [palette.brand, palette.text]
+            colour, [0, 1], [brand, text]
             ),
             transform: [{translateX: x}, {translateY: y}, {scale}]
         };
-    });
+    }, [brand, text, cell, dot, gap, breath, scatter, variant, reduced]);
 
     return (
         <Animated.View testID="living-mark-dot" style={[
@@ -481,7 +488,7 @@ function MarkDot({cell, dot, gap, breath, scatter, variant, reduced}: DotProps) 
                 width: dot,
                 height: dot,
                 borderRadius: dot / 2,
-                backgroundColor: palette.brand
+                backgroundColor: brand
             },
             style
         ]}/>

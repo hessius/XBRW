@@ -1,3 +1,4 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React from "react";
 import {Pressable} from "react-native";
 import Animated, {FadeIn, SlideOutDown} from "react-native-reanimated";
@@ -13,7 +14,7 @@ import {
     RATING_PROMPT_OPEN_LABEL,
     RATING_PROMPT_QUESTION
 } from "@/constants/brewCopy";
-import {palette} from "@/constants/colors";
+
 import {DURATION} from "@/constants/motion";
 import {plannedSeconds} from "@/library/brew/brewShape";
 import type Pour from "@/library/Pour";
@@ -54,6 +55,8 @@ export default function BrewRatingBar({
     onRate: (rating: number) => void;
     onDismiss: () => void;
 }) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const insets = useSafeAreaInsets();
     // This bar pads itself by the inset, so the screen above it has none left
     // to clear. See `hooks/useBottomInset.ts`.

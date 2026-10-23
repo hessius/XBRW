@@ -1,3 +1,4 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import {useLocalSearchParams} from "expo-router";
 import React, {useEffect, useState} from "react";
 import {Image, Pressable, ScrollView} from "react-native";
@@ -7,7 +8,7 @@ import BrewStageLadder from "@/components/BrewStageLadder";
 import DotMatrixText from "@/components/DotMatrixText";
 import ScreenHeader from "@/components/ScreenHeader";
 import {notify} from "@/components/XbrwToast";
-import {onAccent, palette} from "@/constants/colors";
+
 import {SCREEN_PADDING} from "@/constants/layout";
 import router from "@/hooks/steadyRouter";
 import {useBottomInset} from "@/hooks/useBottomInset";
@@ -101,6 +102,9 @@ function ErrorState({
     error: Error;
     onRetry: () => void;
 }) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
+    const onAccent = appearance.onFill(palette.text);
     const said = saying(error);
     return (
         <YStack flex={1} alignItems="center" justifyContent="center"
@@ -132,6 +136,8 @@ function ErrorState({
 }
 
 function LoadingState() {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     return (
         <YStack flex={1} alignItems="center" justifyContent="center"
                 gap="$2" paddingHorizontal="$6" paddingVertical="$8">
@@ -155,9 +161,11 @@ function Figure({
     value: string;
     accent: string;
 }) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     return (
         <YStack flex={1} minWidth={88} gap="$1">
-            <DotMatrixText fontSize={22} weight="bold" color={accent}>
+            <DotMatrixText fontSize={22} weight="bold" color={appearance.recipe(accent).ink}>
                 {value}
             </DotMatrixText>
             <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.2}
@@ -169,6 +177,8 @@ function Figure({
 }
 
 function Chip({label}: {label: string}) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     return (
         <YStack paddingHorizontal="$2" paddingVertical="$1"
                 borderRadius="$3" backgroundColor={palette.raised}
@@ -182,6 +192,8 @@ function Chip({label}: {label: string}) {
 }
 
 function DetailPhoto({uri}: {uri: string | null}) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const [failed, setFailed] = useState(false);
     if (uri !== null && !failed) {
         return (
@@ -216,6 +228,9 @@ function RecipeDetail({
     saving: boolean;
     onSave: () => void;
 }) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
+    const {primary} = appearance;
     const row = rowFromDetail(detail);
     const accent = hubAccent(row.id);
     const stages = hubPours(detail.pourList);
@@ -279,10 +294,10 @@ function RecipeDetail({
                            accessibilityState={{disabled: saving}}
                            onPress={saving ? undefined : onSave}>
                     <XStack height={48} alignItems="center" justifyContent="center"
-                            borderRadius="$4" backgroundColor={palette.text}
+                            borderRadius="$4" backgroundColor={primary.fill}
                             opacity={saving ? 0.35 : 1}>
                         <DotMatrixText fontSize={12} weight="bold" letterSpacing={1.6}
-                                       color={onAccent.text}>
+                                       color={primary.ink}>
                             {saving ? "SAVING" : "SAVE"}
                         </DotMatrixText>
                     </XStack>
@@ -293,6 +308,8 @@ function RecipeDetail({
 }
 
 export default function HubRecipeScreen() {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const {id} = useLocalSearchParams<{id: string}>();
     const recipeId = hubIdIn(id);
     const bottomInset = useBottomInset();

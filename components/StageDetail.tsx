@@ -1,3 +1,4 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React from "react";
 import {Pressable} from "react-native";
 import {Text, XStack, YStack} from "tamagui";
@@ -15,7 +16,7 @@ import {
     STAGE_TIMING_UNAVAILABLE,
     stageShortLine
 } from "@/constants/brewCopy";
-import {palette} from "@/constants/colors";
+
 import type {BrewOutcome, BrewSample} from "@/library/brew/BrewRecord";
 import type {Stall} from "@/library/brew/stalls";
 import {stageStory} from "@/library/brew/stageStory";
@@ -47,6 +48,8 @@ type Props = {
 
 /** A Doto label above one part of the story. Module scope: never a fresh type. */
 function Section({label, children}: {label: string; children: React.ReactNode}) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     return (
         <YStack gap="$1">
             <DotMatrixText fontSize={10} weight="bold" letterSpacing={1.6}
@@ -72,6 +75,8 @@ function Section({label, children}: {label: string; children: React.ReactNode}) 
 export default function StageDetail({
     index, stage, deliveredMl, stalls, samples, hasStream, outcome, accent, onClose
 }: Props) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const story = stageStory({index, stage, deliveredMl, stalls, samples, hasStream});
 
     // The same sentences the live brew card uses, so a stage reads the same way
@@ -92,7 +97,7 @@ export default function StageDetail({
                 borderRadius="$4" padding="$3" gap="$3">
             <XStack alignItems="center" justifyContent="space-between">
                 <DotMatrixText fontSize={12} weight="bold" letterSpacing={1.6}
-                               color={accent}>
+                               color={appearance.recipe(accent).ink}>
                     {`STAGE ${story.stageNumber}`}
                 </DotMatrixText>
                 <Pressable accessibilityRole="button" accessibilityLabel="Close"
@@ -105,7 +110,7 @@ export default function StageDetail({
             </XStack>
 
             <Section label={STAGE_DETAIL_LABEL.askedFor}>
-                <DotMatrixText fontSize={13} weight="bold" color={accent}>
+                <DotMatrixText fontSize={13} weight="bold" color={appearance.recipe(accent).ink}>
                     {`${story.plannedMl} ML · ${story.temperature}°`}
                 </DotMatrixText>
                 <Text color={palette.dim} fontSize={13}>{askedProse}</Text>

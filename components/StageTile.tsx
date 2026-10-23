@@ -1,3 +1,4 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React from "react";
 import {Pressable, View} from "react-native";
 // Gesture Handler's press, for the tile header only.
@@ -21,7 +22,7 @@ import DotIcon from "@/components/DotIcon";
 import DotMatrixText from "@/components/DotMatrixText";
 import PourGlyph, {glyphForPattern} from "@/components/PourGlyph";
 import Stepper from "@/components/Stepper";
-import {palette} from "@/constants/colors";
+
 import {RECIPE_HELP, type HelpTopic} from "@/constants/recipeHelp";
 import Pour, {POUR_PATTERN} from "@/library/Pour";
 import {pauseSeconds, pourSeconds} from "@/library/brew/brewShape";
@@ -66,6 +67,8 @@ export default function StageTile({
     pour, index, count, open, accent, isTea, temperatureUnit = "C", onToggle, onChange, onDelete
 }: Props) {
     "use no memo";
+    const appearance = useAppearance();
+    const {palette} = appearance;
 
     // These components draw a model that is mutated in place: `pour.getVolume()`
     // is a method call, not a property read, so the React Compiler cannot see
@@ -106,14 +109,14 @@ export default function StageTile({
     return (
         <YStack backgroundColor={open ? palette.surface : palette.raised}
                 borderRadius="$5" padding="$3" marginTop="$2.5"
-                borderWidth={open ? 1 : 0} borderColor={accent}>
+                borderWidth={open ? 1 : 0} borderColor={appearance.recipe(accent).ink}>
             <GesturePressable accessibilityRole="button"
                               accessibilityLabel={`Stage ${index + 1} of ${count}`}
                               accessibilityState={{expanded: open}}
                               onPress={() => onToggle(index)}>
                 <XStack alignItems="center" gap="$2.5">
                     <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.4}
-                                   color={accent}>
+                                   color={appearance.recipe(accent).ink}>
                         {String(index + 1).padStart(2, "0")}
                     </DotMatrixText>
                     <PourGlyph
@@ -188,7 +191,7 @@ export default function StageTile({
                     <View testID="stage-caret"
                           style={{transform: [{rotate: open ? "180deg" : "0deg"}]}}>
                         <DotIcon name="more" size={14}
-                                 color={open ? accent : palette.muted}/>
+                                 color={open ? appearance.recipe(accent).ink : palette.muted}/>
                     </View>
                 </XStack>
             </GesturePressable>
@@ -315,6 +318,8 @@ export function StageRow({topics, row = true, children}: {
  * nobody wrote a note for cannot be drawn.
  */
 export function StageLabel({topic}: {topic: HelpTopic}) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     return (
         <XStack alignItems="center" gap="$1.5">
             <Text fontSize={9.5} letterSpacing={1.4} textTransform="uppercase"
@@ -341,6 +346,8 @@ type StageValueProps = {
  * the stepper the pill's full width and costs one line of height.
  */
 export function StageValue({topic, value, min, max, step, values, accent, onChange}: StageValueProps) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     return (
         <YStack flex={1} alignItems="center" gap="$1"
                 backgroundColor={palette.raised} borderRadius="$3"
@@ -360,6 +367,9 @@ type StageChoiceProps = {
 };
 
 function StageChoice({topic, value, accent, options, onChange}: StageChoiceProps) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
+    const colour = appearance.recipe(accent);
     return (
         // `alignSelf="stretch"`, never `flex`. These two groups are the only
         // controls here that sit directly in the tile's column rather than in a
@@ -382,8 +392,8 @@ function StageChoice({topic, value, accent, options, onChange}: StageChoiceProps
                             <Text fontSize={10.5} fontWeight="600"
                                   paddingHorizontal="$2" paddingVertical="$1"
                                   borderRadius="$2"
-                                  backgroundColor={selected ? accent : undefined}
-                                  color={selected ? palette.base : palette.dim}>
+                                  backgroundColor={selected ? colour.fill : undefined}
+                                  color={selected ? colour.onAccent.text : palette.dim}>
                                 {option.label}
                             </Text>
                         </Pressable>
@@ -417,6 +427,9 @@ type StageTogglesProps = {
  * work out that the right-hand pair was a second question.
  */
 function StageToggles({topic, accent, toggles}: StageTogglesProps) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
+    const colour = appearance.recipe(accent);
     return (
         // See `StageChoice`: stretch, not flex. Same column, same trap.
         <XStack testID={`stage-group-${topic}`} alignSelf="stretch" alignItems="center"
@@ -431,8 +444,8 @@ function StageToggles({topic, accent, toggles}: StageTogglesProps) {
                         <Text fontSize={10.5} fontWeight="600"
                               paddingHorizontal="$2" paddingVertical="$1"
                               borderRadius="$2"
-                              backgroundColor={toggle.on ? accent : palette.raised}
-                              color={toggle.on ? palette.base : palette.dim}>
+                              backgroundColor={toggle.on ? colour.fill : palette.raised}
+                              color={toggle.on ? colour.onAccent.text : palette.dim}>
                             {toggle.label}
                         </Text>
                     </Pressable>

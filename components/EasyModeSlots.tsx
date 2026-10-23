@@ -20,7 +20,7 @@ import XbrwSheet from "@/components/XbrwSheet";
 import TeaSlotProbePanel, {type TeaSlotProbePanelProps} from "@/components/TeaSlotProbePanel";
 import {teaProbeStatus} from "@/library/slots/teaSlotProbe";
 import {isTeaProbeSnapshot} from "@/library/slots/teaSlotCandidate";
-import {onAccent, palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 import {STABLE_HOST} from "@/constants/views";
 
 const BREW_BUSY = "The machine is busy with a running or held brew. Finish the brew before writing or recovering.";
@@ -192,13 +192,15 @@ export function slotWriteAvailability({
 }
 
 function RecipeChoice({recipe, onPick}: {recipe: Recipe; onPick: () => void}) {
+    const colour = useAppearance().recipe(resolveAccent(recipe));
+    const {onAccent} = colour;
     const problem = recipeProblem(recipe);
     return (
         <Pressable accessibilityRole="button" accessibilityLabel={`Choose ${recipe.displayName()}`}
             accessibilityHint={problem ?? undefined}
             accessibilityState={{disabled: problem !== null}} disabled={problem !== null} onPress={onPick}>
-            <YStack gap="$2" padding="$3" marginBottom="$2" borderRadius="$3"
-                backgroundColor={resolveAccent(recipe)}>
+            <YStack testID="recipe-choice-surface" gap="$2" padding="$3" marginBottom="$2" borderRadius="$3"
+                backgroundColor={colour.fill}>
                 <Text color={onAccent.text} fontSize={16} fontWeight="600">{recipe.displayName()}</Text>
                 <XStack gap="$2" alignItems="center" justifyContent="space-between" flexWrap="wrap">
                     <DotMatrixText fontSize={11} color={onAccent.text}>
@@ -206,7 +208,9 @@ function RecipeChoice({recipe, onPick}: {recipe: Recipe; onPick: () => void}) {
                             : `${recipe.dosage}G · 1:${recipe.ratio} · GRIND ${recipe.grinder ? recipe.grindSize : "OFF"}`}
                     </DotMatrixText>
                     <View pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-                        <PourProfile pours={recipe.pours} width={80} height={24}/>
+                        <PourProfile pours={recipe.pours} width={80} height={24}
+                            stroke={onAccent.profileStroke} fill={onAccent.profileFill}
+                            dot={onAccent.profileDot}/>
                     </View>
                 </XStack>
                 {problem !== null && <Text color={onAccent.text} fontSize={13}>{problem}</Text>}
@@ -216,6 +220,8 @@ function RecipeChoice({recipe, onPick}: {recipe: Recipe; onPick: () => void}) {
 }
 
 function StoppedWrite({journal, failure}: {journal: SlotJournal; failure: string | null}) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const heading = journal.acknowledged === 3 ? "Saving was not confirmed."
         : `Writing stopped at ${SLOT_NAMES[journal.acknowledged]}.`;
     const mapped = failure === null ? null : writeError(failure, journal);
@@ -234,7 +240,7 @@ function StoppedWrite({journal, failure}: {journal: SlotJournal; failure: string
                 <XStack gap="$3" justifyContent="space-around" flexWrap="wrap">
                     {SLOT_NAMES.map((name, index) => <YStack key={name} alignItems="center" gap="$2">
                         <DotMatrixText fontSize={28} weight="bold"
-                            color={index < journal.acknowledged ? resolveAccent(new Recipe(undefined, journal.slots[index].recipeJSON))
+                            color={index < journal.acknowledged ? appearance.recipe(resolveAccent(new Recipe(undefined, journal.slots[index].recipeJSON))).ink
                                 : index === journal.acknowledged ? colour : palette.dim}>{name}</DotMatrixText>
                         <Text color={palette.dim} fontSize={12}>
                             {`${name}: ${index < journal.acknowledged ? "received"
@@ -264,6 +270,9 @@ export default function EasyModeSlots({
     guardLiveBrewBar = false, teaProbe, teaProbeOpen = false, onTeaProbeOpenChange,
     onAssign, onSetScaleEnabled, onWrite, onRecover, onCancel, onDismissWrite, onRestoreOriginal
 }: EasyModeSlotsProps) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
+    const onAccent = appearance.onFill(palette.text);
     const [picker, setPicker] = useState<{deviceId: string; index: SlotIndex} | null>(null);
     const [search, setSearch] = useState("");
     const [usedIncoming, setUsedIncoming] = useState<string | null>(null);

@@ -9,7 +9,7 @@ import SettingsActionRow from "@/components/SettingsActionRow";
 import SettingsChoiceRow from "@/components/SettingsChoiceRow";
 import SettingsSection, {SettingsSectionTitle} from "@/components/SettingsSection";
 import {notify} from "@/components/XbrwToast";
-import {palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 import {useMachine} from "@/hooks/useMachine";
 import {useSetting} from "@/hooks/useSetting";
 import type {Settings} from "@/library/Settings";
@@ -59,6 +59,7 @@ const CONNECT_NEEDS_ORIGINAL =
 
 /** One label-and-value line of the machine's own vitals. */
 function Vital({label, value}: {label: string; value: string}) {
+    const {palette} = useAppearance();
     return (
         <XStack justifyContent="space-between" gap="$3" paddingVertical="$2" paddingHorizontal="$4">
             <Text color={palette.dim} fontSize={13} flexShrink={1}>{label}</Text>
@@ -69,6 +70,7 @@ function Vital({label, value}: {label: string; value: string}) {
 
 /** A card's own surface, for the rows that are not a machine. */
 function Card({children}: {children: React.ReactNode}) {
+    const {palette} = useAppearance();
     return (
         <YStack backgroundColor={palette.surface} borderRadius="$5" overflow="hidden">
             {children}
@@ -128,6 +130,8 @@ export default function MachineSection({settings, onOpenMachine, onAddMachine}: 
     /** Open the add-a-machine sheet, which the screen owns for the same reason. */
     onAddMachine?: () => void;
 }) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     // The injected store matters: the link writes `machineModel` through it
     // when it recognises a Studio, and a test that injected a store while the
     // hook wrote to the shared one would watch the correction land somewhere
@@ -271,7 +275,7 @@ export default function MachineSection({settings, onOpenMachine, onAddMachine}: 
                         ranked={several}
                         // With one machine there is nothing to tell apart, so
                         // one machine's card looks as it always has.
-                        colour={several ? machineColourOf(entry).ink : undefined}
+                        colour={several ? appearance.machineColour(machineColourOf(entry)).ink : undefined}
                         connected={linked}
                         failed={active && error !== null}
                         initiallyOpen={active && error !== null}

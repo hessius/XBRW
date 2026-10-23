@@ -147,17 +147,15 @@ describe("BrewStageLadder", () => {
         ).backgroundColor).toBe(palette.muted);
     });
 
-    it("dims the stages still to come and not the ones already poured", async () => {
+    it("keeps every stage's information opaque across the active-stage boundary", async () => {
         // The mid-brew case, which is the only one where the boundary matters:
         // the all-done and not-yet-started tests either side of this one are
         // both satisfied by a component that ignores `activeIndex` entirely.
         const {getByTestId} = await draw({activeIndex: 1, stageWater: [40, 20, 0, 0]});
 
-        const dim = expect.objectContaining({opacity: 0.45});
-        expect(getByTestId("rung-0").props.style).not.toEqual(dim);
-        expect(getByTestId("rung-1").props.style).not.toEqual(dim);
-        expect(getByTestId("rung-2").props.style).toEqual(dim);
-        expect(getByTestId("rung-3").props.style).toEqual(dim);
+        for (const index of [0, 1, 2, 3]) {
+            expect(StyleSheet.flatten(getByTestId(`rung-${index}`).props.style).opacity ?? 1).toBe(1);
+        }
     });
 
     it("survives a recipe with no pours", async () => {
@@ -170,14 +168,12 @@ describe("BrewStageLadder", () => {
         expect(queryByTestId("rung-0")).toBeNull();
     });
 
-    it("marks everything pending before it starts", async () => {
+    it("retains readable pending stage information before it starts", async () => {
         const {getByTestId} = await draw({
             activeIndex: null, stageWater: [0, 0, 0, 0]
         });
 
-        expect(getByTestId("rung-0").props.style).toEqual(
-            expect.objectContaining({opacity: 0.45})
-        );
+        expect(StyleSheet.flatten(getByTestId("rung-0").props.style).opacity ?? 1).toBe(1);
     });
 
     it("centres the rungs in the room it is given", async () => {

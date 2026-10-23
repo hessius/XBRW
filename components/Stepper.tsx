@@ -4,7 +4,7 @@ import {Input, XStack} from "tamagui";
 
 import DotIcon from "@/components/DotIcon";
 import DotMatrixText from "@/components/DotMatrixText";
-import {palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 
 /** Delay before a held button starts repeating, and the fastest it repeats. */
 const REPEAT_START_MS = 200;
@@ -86,7 +86,7 @@ type Props = {
      * from `min`, `max` and `step` as before.
      */
     values?: readonly number[];
-    /** Draw the number in the recipe's accent. For dose and ratio. */
+    /** Canonical recipe accent, resolved to readable ink on app chrome. */
     accent?: string;
     /** Appended to the spoken value, e.g. "g". */
     unit?: string;
@@ -113,6 +113,10 @@ type Props = {
 export default function Stepper({
     label, value, min, max, step, values, accent, unit, formatValue, signedInput, onChange
 }: Props) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
+    const ink = accent === undefined ? palette.text : appearance.recipe(accent).ink;
+    const activeStepStyle = {...stepStyle, backgroundColor: palette.control, borderColor: palette.line};
     // null means the Doto readout is showing; a string means the field is
     // open and holds the in-progress text.
     const [draft, setDraft] = useState<string | null>(null);
@@ -207,7 +211,7 @@ export default function Stepper({
                        // stopRepeating on a plain tap is intentional and safe —
                        // it is a no-op when no repeat timer is pending.
                        onPressOut={stopRepeating}
-                       style={stepStyle}>
+                       style={activeStepStyle}>
                 <DotIcon name="minus" size={16} color={palette.dim}/>
             </Pressable>
 
@@ -239,13 +243,13 @@ export default function Stepper({
                            onBlur={commit}
                            onSubmitEditing={commit}
                            textAlign="center" minWidth={54} fontSize={20}
-                           color={accent ?? palette.text}/>
+                           color={ink}/>
                 ) : (
                     <Pressable accessibilityRole="button"
                                accessibilityLabel={`Edit ${label}`}
                                onPress={() => setDraft(String(value))}>
                         <DotMatrixText testID="stepper-value" fontSize={22}
-                                       weight="extrabold" color={accent ?? palette.text}
+                                       weight="extrabold" color={ink}
                                        style={{minWidth: 54, textAlign: "center"}}>
                             {shownValue}
                         </DotMatrixText>
@@ -257,7 +261,7 @@ export default function Stepper({
                        onPress={() => nudge(1)}
                        onLongPress={() => startRepeating(1)}
                        onPressOut={stopRepeating}
-                       style={stepStyle}>
+                       style={activeStepStyle}>
                 <DotIcon name="plus" size={16} color={palette.dim}/>
             </Pressable>
         </XStack>
@@ -275,7 +279,5 @@ const stepStyle = {
     // and the glyphs read as a stray dash and a stray cross rather than as two
     // buttons. The hairline is the other half of that: an edge is what says a
     // thing is a separate object you can press.
-    backgroundColor: palette.control,
-    borderWidth:     1,
-    borderColor:     palette.line
+    borderWidth:     1
 };

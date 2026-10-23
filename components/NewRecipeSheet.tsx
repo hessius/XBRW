@@ -5,7 +5,8 @@ import {Text, XStack, YStack} from "tamagui";
 import BrewMindMark from "@/components/BrewMindMark";
 import DotMatrixText from "@/components/DotMatrixText";
 import XbrwSheet from "@/components/XbrwSheet";
-import {accents, palette, type AccentGroup} from "@/constants/colors";
+import {accents, type AccentGroup} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 
 /** How many swatches a door shows. The tea half only has four. */
 const SWATCH_COUNT = 4;
@@ -65,6 +66,8 @@ type Props = {
 export default function NewRecipeSheet({
     open, onOpenChange, onChoose, onBrewMind, brewMindBusy = false
 }: Props) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     return (
         <XbrwSheet open={open} onOpenChange={onOpenChange}
                    title="New recipe" heightPercent={42}>
@@ -87,7 +90,7 @@ export default function NewRecipeSheet({
                                     <YStack key={colour}
                                             width={SWATCH_SIZE} height={SWATCH_SIZE}
                                             borderRadius="$1"
-                                            backgroundColor={colour}/>
+                                            backgroundColor={appearance.recipe(colour).fill}/>
                                 ))}
                             </XStack>
                             <YStack gap="$1.5" flex={1}>
@@ -122,7 +125,7 @@ export default function NewRecipeSheet({
                             disabled={brewMindBusy}
                             onPress={brewMindBusy ? undefined : onBrewMind}
                             style={({pressed}) => ({
-                                opacity: brewMindBusy ? 0.45 : pressed ? 0.7 : 1,
+                                opacity: brewMindBusy ? 0.45 : 1,
                                 transform: [{scale: !brewMindBusy && pressed ? 0.98 : 1}]
                             })}>
                             <XStack alignItems="center" gap="$3"
@@ -155,6 +158,7 @@ export default function NewRecipeSheet({
 }
 
 function DoorHeading({children}: {children: string}) {
+    const {palette} = useAppearance();
     return (
         <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.6} color={palette.dim}>
             {children}

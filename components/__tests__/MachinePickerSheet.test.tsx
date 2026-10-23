@@ -4,7 +4,9 @@ import {fireEvent, screen} from "@testing-library/react-native";
 
 import MachineChip from "@/components/MachineChip";
 import MachinePickerSheet from "@/components/MachinePickerSheet";
-import {machineColours} from "@/constants/colors";
+import {machineColours, resolveAppearance} from "@/constants/colors";
+import {AppearanceScope} from "@/hooks/useAppearance";
+import {THEME_IDS} from "@/library/appearance";
 import type {SavedMachine} from "@/library/machine/savedMachines";
 import {renderWithProviders} from "@/test-utils/render";
 
@@ -37,6 +39,24 @@ function props(over: Partial<React.ComponentProps<typeof MachinePickerSheet>> = 
 }
 
 describe("the machine picker", () => {
+    it.each(THEME_IDS)("draws every canonical identity plus missing-colour green without changing order: %s", async theme => {
+        const choice = {theme, recipeColours: "themed"} as const;
+        const machines = machineColours.map((colour, index) => entry(colour.name, {colour: index}));
+        machines.push(entry("Historical"));
+        const before = JSON.stringify(machines);
+        await renderWithProviders(<AppearanceScope choice={choice}>
+            <MachinePickerSheet {...props({machines, activeId: "", connected: false,
+                survey: {heard: machines.map(machine => machine.id), looking: false, error: null}})}/>
+        </AppearanceScope>);
+        expect(screen.getAllByTestId(/^machine-pick-colour-/, {includeHiddenElements: true}).map(node => node.props.testID))
+            .toEqual(machines.map(machine => `machine-pick-colour-${machine.id}`));
+        for (const [index, machine] of machines.entries()) {
+            expect(screen.getByTestId(`machine-pick-colour-${machine.id}`, {includeHiddenElements: true})).toHaveStyle({
+                backgroundColor: resolveAppearance(choice).machineColour(machineColours[index % 4]).ink
+            });
+        }
+        expect(JSON.stringify(machines)).toBe(before);
+    });
     it("keeps the connected machine connected before the first survey returns", async () => {
         await renderWithProviders(<MachinePickerSheet {...props({
             survey: {heard: null, looking: true, error: null}

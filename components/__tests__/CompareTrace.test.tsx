@@ -3,7 +3,7 @@ import {processColor} from "react-native";
 
 import CompareTrace, {compareTracePlotHeight} from "@/components/CompareTrace";
 import {LEGEND_SIZE, rowHeight} from "@/components/TraceLegendItem";
-import {cupLineFor} from "@/constants/colors";
+import {cupLineFor, resolveAppearance} from "@/constants/colors";
 import type {BrewSample} from "@/library/brew/BrewRecord";
 import {toPath} from "@/library/brew/brewShape";
 import type {PauseInterval} from "@/library/brew/pauseIntervals";
@@ -11,6 +11,7 @@ import {referenceCupColour, referenceWaterColour} from "@/library/brew/traceStyl
 import {renderWithProviders} from "@/test-utils/render";
 
 const ACCENT = "#C86A3B";
+const defaultAppearance = resolveAppearance({theme: "original", recipeColours: "original"});
 
 function stream(...rows: [number, number, number][]): BrewSample[] {
     return rows.map(([at, water, cup]) => ({at: at * 1000, water, cup, pour: 1}));
@@ -77,7 +78,7 @@ describe("CompareTrace", () => {
             expect(reference.props).toMatchObject({x: 120, width: 150});
             expect(subject.props.fill).toEqual(expect.objectContaining({payload: processColor(ACCENT)}));
             expect(reference.props.fill).toEqual(expect.objectContaining({
-                payload: processColor(referenceWaterColour)
+                payload: processColor(referenceWaterColour(defaultAppearance))
             }));
             expect(getByLabelText("This brew: paused for overflow 6 seconds")).toBeTruthy();
             expect(getByLabelText("That brew: paused by you 5 seconds")).toBeTruthy();
@@ -159,10 +160,10 @@ describe("CompareTrace", () => {
     it("greys the reference and colours the subject", async () => {
         const {getByTestId} = await draw({verdict: "differed"});
         expect(getByTestId("trace-water-reference").props.stroke).toEqual(
-            expect.objectContaining({payload: processColor(referenceWaterColour)})
+            expect.objectContaining({payload: processColor(referenceWaterColour(defaultAppearance))})
         );
         expect(getByTestId("trace-cup-reference").props.stroke).toEqual(
-            expect.objectContaining({payload: processColor(referenceCupColour)})
+            expect.objectContaining({payload: processColor(referenceCupColour(defaultAppearance))})
         );
         expect(getByTestId("trace-cup-subject").props.stroke).toEqual(
             expect.objectContaining({payload: processColor(cupLineFor(ACCENT))})
@@ -219,11 +220,11 @@ describe("CompareTrace", () => {
             .toBe(compareTracePlotHeight(height));
     });
 
-    it("draws one faint plan, or two when the plans differ in shape", async () => {
+    it("draws one readable dashed plan, or two when the plans differ in shape", async () => {
         const plan = "M0 100 L300 0";
         const one = await draw({subjectPlan: plan});
         expect(one.getByTestId("trace-plan-subject").props.strokeOpacity)
-            .toBeLessThan(1);
+            .toBe(1);
         expect(one.queryByTestId("trace-plan-reference")).toBeNull();
 
         const two = await draw({subjectPlan: plan, referencePlan: "M0 100 L300 20"});

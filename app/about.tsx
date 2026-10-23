@@ -1,3 +1,4 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import * as Application from "expo-application";
 import router from "@/hooks/steadyRouter";
 import React, {useState} from "react";
@@ -12,7 +13,7 @@ import ScreenHeader from "@/components/ScreenHeader";
 import {SUPPORT_URL} from "@/components/SupportTile";
 import Wordmark from "@/components/Wordmark";
 import {notify} from "@/components/XbrwToast";
-import {palette} from "@/constants/colors";
+
 import {LICENCES} from "@/constants/licences";
 import {useLiveBrew} from "@/hooks/useLiveBrew";
 import {useSetting} from "@/hooks/useSetting";
@@ -98,6 +99,8 @@ const BUILD = Application.nativeBuildVersion ?? "unknown";
  * anywhere.
  */
 export default function AboutScreen({settings}: Props = {}) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     // The end of the scroll clears whatever is under the screen: the
     // navigation bar on Android, the home indicator on iOS.
     const scrollEnd = useScrollEndPadding(48);
@@ -284,6 +287,8 @@ export default function AboutScreen({settings}: Props = {}) {
  * is the one screen in the app that is allowed to be about the app.
  */
 function AboutSection({title, children}: {title: string; children: React.ReactNode}) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     return (
         <YStack gap="$2" paddingTop="$4">
             <DotMatrixText fontSize={11} weight="bold" letterSpacing={2}
@@ -300,6 +305,8 @@ function AboutSection({title, children}: {title: string; children: React.ReactNo
 
 /** Body copy. At module scope; see the note in every other component here. */
 function AboutParagraph({children}: {children: React.ReactNode}) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     return (
         <Text fontSize={14} lineHeight={21} color={palette.dim} paddingBottom="$2">
             {children}

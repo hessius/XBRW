@@ -6,7 +6,7 @@ import DotIcon from "@/components/DotIcon";
 import DotMatrixText from "@/components/DotMatrixText";
 import MachineColourDot from "@/components/MachineColourDot";
 import XbrwSheet from "@/components/XbrwSheet";
-import {palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 import type {MachineModel} from "@/library/machine/machineModel";
 import {
     machineColourOf,
@@ -63,6 +63,8 @@ function MachineRow({machine, index, count, kind, selectable, onChoose}: {
     selectable: boolean;
     onChoose: (id: string) => void;
 }) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const name = machineLabel(machine, index);
     const order = machineOrderWord(index, count);
     const detail = [MODEL_NAMES[machine.model], order, machineTag(machine)]
@@ -97,7 +99,7 @@ function MachineRow({machine, index, count, kind, selectable, onChoose}: {
                 <YStack flex={1} gap="$1">
                     <XStack alignItems="center" gap="$2">
                         <MachineColourDot testID={`machine-pick-colour-${machine.id}`}
-                                          colour={machineColourOf(machine).ink}/>
+                                          colour={appearance.machineColour(machineColourOf(machine)).ink}/>
                         <Text fontSize={16} color={kind === "away" ? palette.dim : palette.text}
                               numberOfLines={1} flexShrink={1}>{name}</Text>
                     </XStack>
@@ -113,6 +115,7 @@ function MachineRow({machine, index, count, kind, selectable, onChoose}: {
 
 /** A group heading, announced as one by a screen reader. */
 function Heading({group, children}: {group: RowKind; children: string}) {
+    const {palette} = useAppearance();
     return (
         <View accessible accessibilityRole="header" accessibilityLabel={children}
               style={{marginTop: 8}}>
@@ -140,6 +143,7 @@ function Heading({group, children}: {group: RowKind; children: string}) {
 export default function MachinePickerSheet({
     open, onOpenChange, machines, activeId, connected, survey, onRescan, blocker, onChoose
 }: Props) {
+    const {palette} = useAppearance();
     const connectedId = connected ? activeId : null;
     const {inRange, away} = splitByRange(machines, survey.heard, connectedId);
     const current = inRange.filter(({machine}) => machine.id === connectedId);

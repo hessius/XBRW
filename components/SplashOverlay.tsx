@@ -10,7 +10,7 @@ import Animated, {
 
 import Wordmark from "@/components/Wordmark";
 import {DURATION, EASING} from "@/constants/motion";
-import {palette} from "@/constants/colors";
+import {palette as brandedPalette} from "@/constants/colors";
 
 /**
  * Width of the mark, in points.
@@ -109,7 +109,7 @@ export default function SplashOverlay({visible, onFinished}: Props) {
                    source={require("../assets/images/splash-icon.png")}
                    style={styles.mark} resizeMode="contain"/>
             <Animated.View testID="splash-wordmark" style={[styles.wordmark, wordmarkStyle]}>
-                <Wordmark fontSize={24}/>
+                <Wordmark fontSize={24} color={brandedPalette.text} plusColor={brandedPalette.text}/>
             </Animated.View>
         </Animated.View>
     );
@@ -119,7 +119,9 @@ const styles = StyleSheet.create({
     backdrop: {
         alignItems:      "center",
         justifyContent:  "center",
-        backgroundColor: palette.base
+        // The launch-art exception: this must match the fixed OS splash,
+        // independent of the persisted app appearance beneath the overlay.
+        backgroundColor: brandedPalette.base
     },
     mark:      {
         width:  MARK_SIZE,

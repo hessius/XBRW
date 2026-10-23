@@ -1,3 +1,4 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React from "react";
 import {View} from "react-native";
 import {YStack} from "tamagui";
@@ -6,7 +7,7 @@ import DotMatrixText from "@/components/DotMatrixText";
 import {glyphForPattern, type GlyphKind} from "@/components/PourGlyph";
 import {AGITATION_SENTENCE, LONGEST_NOW_SENTENCE, PATTERN_SENTENCE}
     from "@/constants/brewCopy";
-import {palette} from "@/constants/colors";
+
 import {pauseSeconds} from "@/library/brew/brewShape";
 import type Pour from "@/library/Pour";
 import {STABLE_HOST} from "@/constants/views";
@@ -67,6 +68,8 @@ function say(pour: Pour, resting: boolean): {heading: string; sentence: string} 
  * card is the sentence.
  */
 export default function BrewNowCard({pour, accent, resting, hold = false}: Props) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     if (pour === undefined && !hold) return null;
 
     const said = pour === undefined ? undefined : say(pour, resting);
@@ -89,7 +92,7 @@ export default function BrewNowCard({pour, accent, resting, hold = false}: Props
             {/* One line, always. The heading is short enough on any phone, and
                 pinning it means only the sentence below decides the height. */}
             <DotMatrixText testID="brew-now-heading" fontSize={11} weight="bold"
-                           letterSpacing={1.6} color={accent} numberOfLines={1}>
+                           letterSpacing={1.6} color={appearance.recipe(accent).ink} numberOfLines={1}>
                 {said?.heading ?? HELD_HEADING}
             </DotMatrixText>
             <View>

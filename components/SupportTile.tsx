@@ -4,7 +4,7 @@ import {Text, XStack, YStack} from "tamagui";
 
 import DotIcon from "@/components/DotIcon";
 import {openLink} from "@/components/openLink";
-import {onBrand, palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 
 /** Where the tap goes. */
 export const SUPPORT_URL = "https://buymeacoffee.com/hsus";
@@ -14,6 +14,7 @@ export const SUPPORT_BODY =
     "Built by one person in his own time. Free and open source. If you want to, I won't refuse.";
 
 export function SupportAction() {
+    const {palette, onBrand} = useAppearance();
     return (
         <Pressable testID="support-action" accessibilityRole="link"
                    accessibilityLabel={`${SUPPORT_TITLE}. Opens in your browser.`}
@@ -23,7 +24,8 @@ export function SupportAction() {
                        justifyContent: "center",
                        paddingHorizontal: 12, paddingVertical: 10,
                        borderRadius: 12, backgroundColor: palette.brandFill,
-                       opacity: pressed ? 0.7 : 1
+                       opacity: 1,
+                       transform: [{scale: pressed ? 0.98 : 1}]
                    })}>
             <Text color={onBrand.text} fontSize={13} fontWeight="700">
                 {SUPPORT_TITLE}
@@ -58,21 +60,22 @@ export function SupportAction() {
  * size and weight, as it did when the ink was dark.
  */
 export default function SupportTile() {
+    const {palette, onBrand} = useAppearance();
     return (
         // One label for the whole tile, the way `SettingsActionRow` composes
         // its label and detail: the body is the reason for the tap, not a hint,
         // and a VoiceOver hint can be switched off. "Opens in your browser"
         // because a link that leaves the app should say so before it is taken.
         //
-        // The press response is CtaTile's, which every primary tap in the app
-        // shares, on the Pressable's own pressed state rather than a Tamagui
+        // Scale preserves the measured brand pair, including its translucent
+        // chevron, on the Pressable's own pressed state rather than a Tamagui
         // `pressStyle` -- this is a plain React Native Pressable and RN's press
         // system does not drive Tamagui's.
         <Pressable accessibilityRole="link"
                    accessibilityLabel={`${SUPPORT_TITLE}. ${SUPPORT_BODY} Opens in your browser.`}
                    onPress={() => openLink(SUPPORT_URL)}
                    style={({pressed}) => ({
-                       opacity:   pressed ? 0.7 : 1,
+                       opacity:   1,
                        transform: [{scale: pressed ? 0.98 : 1}]
                    })}>
             <XStack testID="support-tile"

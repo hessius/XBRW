@@ -1,3 +1,4 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React, {useState} from "react";
 import {Pressable} from "react-native";
 import {Input, Text, YStack} from "tamagui";
@@ -10,7 +11,7 @@ import {
     OVERFLOW_LIMIT_LABEL, OVERFLOW_LIMIT_PLACEHOLDER, OVERFLOW_OFF_ACTION, OVERFLOW_OFF_LABEL,
     overflowIntervalLabel
 } from "@/constants/brewCopy";
-import {palette} from "@/constants/colors";
+
 import {OVERFLOW_INTERVALS, type OverflowInterval, type OverflowProtection} from "@/library/brew/overflowConfig";
 
 const INTERVAL_OPTIONS = OVERFLOW_INTERVALS.map((seconds) => ({
@@ -39,6 +40,8 @@ function parseLimit(text: string): number | null {
  * resetting this one.
  */
 export default function OverflowSection({config, onChange}: Props) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const [draft, setDraft] = useState(config === undefined ? "" : String(config.retainedGrams));
     const [interval, setInterval] = useState<OverflowInterval>(config?.checkSeconds ?? OVERFLOW_INTERVALS[0]);
 

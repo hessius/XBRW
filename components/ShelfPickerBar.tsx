@@ -1,9 +1,10 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React from "react";
 import {Pressable} from "react-native";
 import {Text, XStack, YStack} from "tamagui";
 
 import DotMatrixText from "@/components/DotMatrixText";
-import {onAccent, palette} from "@/constants/colors";
+
 
 /**
  * How tall the bar is above the safe-area inset.
@@ -39,7 +40,11 @@ export default function ShelfPickerBar({
     onDone: () => void;
     paddingBottom?: number;
 }) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const emptying = editing && count === 0;
+    const fill = emptying ? palette.danger : palette.text;
+    const onAccent = appearance.onFill(fill);
     // Creating a shelf with nobody on it is the one thing the bar refuses.
     // There would be nothing to name and nothing to put the name on.
     const blocked = !editing && count === 0;
@@ -87,7 +92,7 @@ export default function ShelfPickerBar({
                         // colour that says so. Nothing else in this bar is
                         // destructive, so the colour only ever appears when the
                         // button's meaning has actually changed.
-                        backgroundColor={emptying ? palette.danger : palette.text}>
+                        backgroundColor={fill}>
                     <DotMatrixText fontSize={12} weight="bold" letterSpacing={1.5}
                                    color={onAccent.text}>
                         {label}

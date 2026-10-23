@@ -4,7 +4,7 @@ import {XStack} from "tamagui";
 
 import DotIcon from "@/components/DotIcon";
 import DotMatrixText from "@/components/DotMatrixText";
-import {palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 
 /** The HIG's smallest comfortable target, as in `HomeHeader` and `MachineDot`. */
 const TOUCH_TARGET = 44;
@@ -34,6 +34,7 @@ export default function MachineChip({label, onPress}: {
      */
     onPress: () => void;
 }) {
+    const {palette} = useAppearance();
     return (
         <XStack justifyContent="center">
             <Pressable testID="machine-chip"

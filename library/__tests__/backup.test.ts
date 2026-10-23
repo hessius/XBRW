@@ -4,6 +4,44 @@ import {buildBackup, mergeBrews, mergeRecipes, parseBackup, reviveBrew,
 import type {BrewRecord} from "@/library/brew/BrewRecord";
 import Recipe, {MAX_DESCRIPTION} from "@/library/Recipe";
 import {DEFAULTS, NOT_IN_BACKUP, type SettingKey} from "@/library/Settings";
+import {resolveAppearance} from "@/constants/colors";
+import {THEME_IDS} from "@/library/appearance";
+import {resolveAccent} from "@/library/accent";
+import {buildCard, XPOD_CARD} from "./cardFixtures";
+import {buildEnvelope} from "@/library/brew/handoff/envelope";
+import {encodeHandoff} from "@/library/brew/handoff/encode";
+import {brew, samples} from "@/library/brew/handoff/__tests__/fixtures";
+import {buildSharePayload} from "@/library/shareLink";
+
+it("keeps backup, cloud data, handoff URL and canonical JSON unchanged by appearance resolution alone", () => {
+    jest.useFakeTimers().setSystemTime(new Date("2026-10-22T12:00:00Z"));
+    try {
+        const recipe = new Recipe(buildCard(XPOD_CARD));
+        const record = brew({accent: resolveAccent(recipe)});
+        const settings = {appearanceTheme: "blue", recipeColourMode: "original"};
+        const before = {
+            backup: buildBackup([recipe], settings, "2.2.0", [record]),
+            data: JSON.stringify(buildSharePayload(recipe, "studio")),
+            handoff: encodeHandoff(buildEnvelope(record, samples)),
+            model: JSON.stringify(recipe),
+            record: JSON.stringify(record)
+        };
+        for (const theme of THEME_IDS) {
+            for (const recipeColours of ["original", "themed"] as const) {
+                const appearance = resolveAppearance({theme, recipeColours});
+                appearance.recipe(resolveAccent(recipe));
+                appearance.recipe(record.accent);
+                expect(buildBackup([recipe], settings, "2.2.0", [record])).toBe(before.backup);
+                expect(JSON.stringify(buildSharePayload(recipe, "studio"))).toBe(before.data);
+                expect(encodeHandoff(buildEnvelope(record, samples))).toEqual(before.handoff);
+                expect(JSON.stringify(recipe)).toBe(before.model);
+                expect(JSON.stringify(record)).toBe(before.record);
+            }
+        }
+    } finally {
+        jest.useRealTimers();
+    }
+});
 
 function recipeNamed(name: string, uuid: string): Recipe {
     const recipe = new Recipe();

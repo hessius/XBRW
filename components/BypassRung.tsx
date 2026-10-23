@@ -1,3 +1,4 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React from "react";
 import {Pressable, View} from "react-native";
 import {Pressable as GesturePressable} from "react-native-gesture-handler";
@@ -7,7 +8,7 @@ import Collapsible from "@/components/Collapsible";
 import DotIcon from "@/components/DotIcon";
 import DotMatrixText from "@/components/DotMatrixText";
 import {StageRow, StageValue} from "@/components/StageTile";
-import {palette} from "@/constants/colors";
+
 import {RECIPE_HELP} from "@/constants/recipeHelp";
 import type {BypassField} from "@/hooks/useRecipeEditor";
 import {BYPASS_VOLUME} from "@/library/bypassLimits";
@@ -54,6 +55,8 @@ export default function BypassRung({
     onToggle, onEnabledChange, onChange
 }: Props) {
     "use no memo";
+    const appearance = useAppearance();
+    const {palette} = appearance;
 
     // The model is mutated in place, so the compiler cannot see that a value
     // moved and would serve a cached render.

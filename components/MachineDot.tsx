@@ -9,7 +9,8 @@ import Animated, {
 } from "react-native-reanimated";
 
 import DotIcon from "@/components/DotIcon";
-import {palette, type MachineColour} from "@/constants/colors";
+import type {MachineColour, Palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 import type {DotIconName} from "@/constants/dotIcons";
 import {DURATION, EASING, LOW_WATER_FLASH_MS, useReducedMotion} from "@/constants/motion";
 import type {LinkStatus} from "@/hooks/useMachine";
@@ -80,20 +81,22 @@ const LABELS: Record<LinkStatus, string> = {
  * `dim` is null where the colour is already grey: cross-fading `muted` to
  * `muted` is a pixel-identical overdraw on every frame of every scroll.
  */
-const LOOKS: Record<LinkStatus, {icon: DotIconName; lit: string; dim: string | null}> = {
-    connected:    {icon: "link-on",   lit: palette.success,     dim: palette.successMuted},
-    connecting:   {icon: "link-wait", lit: palette.warn,        dim: palette.warnMuted},
-    // Not connected and not trying. The whole diamond, broken, so the
-    // indicator reads as present and answering rather than as a speck, but
-    // grey: nobody has asked for a machine yet and nothing is missing.
-    idle:         {icon: "link-gone", lit: palette.muted,       dim: null},
-    // Asked for, and not there. The same broken shape in the faint red, which
-    // is the one difference between "no machine yet" and "your machine is not
-    // answering" -- and the reason `dangerFaint` is weighted to match `muted`
-    // rather than to stand out.
-    disconnected: {icon: "link-gone", lit: palette.dangerFaint, dim: null},
-    failed:       {icon: "link-gone", lit: palette.dangerFaint, dim: null}
-};
+function machineLooks(palette: Palette): Record<LinkStatus, {icon: DotIconName; lit: string; dim: string | null}> {
+    return {
+        connected:    {icon: "link-on",   lit: palette.success,     dim: palette.successMuted},
+        connecting:   {icon: "link-wait", lit: palette.warn,        dim: palette.warnMuted},
+        // Not connected and not trying. The whole diamond, broken, so the
+        // indicator reads as present and answering rather than as a speck, but
+        // grey: nobody has asked for a machine yet and nothing is missing.
+        idle:         {icon: "link-gone", lit: palette.muted,       dim: null},
+        // Asked for, and not there. The same broken shape in the faint red, which
+        // is the one difference between "no machine yet" and "your machine is not
+        // answering" -- and the reason `dangerFaint` is weighted to match `muted`
+        // rather than to stand out.
+        disconnected: {icon: "link-gone", lit: palette.dangerFaint, dim: null},
+        failed:       {icon: "link-gone", lit: palette.dangerFaint, dim: null}
+    };
+}
 
 /**
  * The machine link, left of the settings glyph.
@@ -138,10 +141,12 @@ export default function MachineDot({
     status, collapsed, alarm = false, machine, onPress, onLongPress, accessibilityHint,
     longPressActionLabel
 }: Props) {
+    const {palette} = useAppearance();
+    const looks = machineLooks(palette);
     const reduced = useReducedMotion();
     const look = status === "connected" && machine !== undefined
-        ? {...LOOKS.connected, lit: machine.colour.ink, dim: machine.colour.muted}
-        : LOOKS[status];
+        ? {...looks.connected, lit: machine.colour.ink, dim: machine.colour.muted}
+        : looks[status];
     const hold = onLongPress ?? onPress;
 
     /**

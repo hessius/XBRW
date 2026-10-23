@@ -3,7 +3,7 @@ import {Text, XStack} from "tamagui";
 
 import DotMatrixText from "@/components/DotMatrixText";
 import {CHIP_HEIGHT} from "@/components/RailChip";
-import {palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 import {PROFILE_FLOOR} from "@/library/beanProfile";
 
 const FIELD_WIDTH = 82;
@@ -52,6 +52,7 @@ function spokenFigures(rating: number, rated: number): string {
 export function BeanProfileRow({
     field, value, brews, rating, rated, accent, accessibilityLabel
 }: Props) {
+    const {palette} = useAppearance();
     // No rated brews means no average: 0.0 would claim a measurement nobody
     // took. What is left is the count, and where the count has already been
     // shown there is nothing left to print at all.

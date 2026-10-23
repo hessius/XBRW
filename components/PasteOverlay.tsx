@@ -1,3 +1,4 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import * as Clipboard from "expo-clipboard";
 import React, {type ReactNode} from "react";
 import {
@@ -9,7 +10,7 @@ import {
     type ViewStyle
 } from "react-native";
 
-import {palette} from "@/constants/colors";
+
 
 type Props = {
     /**
@@ -74,6 +75,8 @@ export default function PasteOverlay({
     faceStyle,
     children
 }: Props) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const wrapperStyle = ({pressed}: PressableStateCallbackType): StyleProp<ViewStyle> => [
         style,
         // Press feedback belongs to the house affordance only: in native mode

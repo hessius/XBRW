@@ -3,7 +3,9 @@ import {Pressable} from "react-native";
 import {YStack} from "tamagui";
 
 import DotMatrixText from "@/components/DotMatrixText";
-import {palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
+import {isValidColour} from "@/constants/colors";
+import {historicalAccent, HISTORICAL_COLOUR_WARNING} from "@/library/brew/historicalColour";
 
 /**
  * One of the two export actions on a finished brew.
@@ -32,7 +34,7 @@ type Props = {
      * the rows it acts on and bare read aloud with no rows in earshot.
      */
     accessibilityLabel?: string;
-    /** Recipe accent for the outlined record action treatment. */
+    /** Canonical recipe accent for the outlined record action treatment. */
     accent?: string;
     testID?: string;
     onPress: () => void;
@@ -41,9 +43,13 @@ type Props = {
 export default function ExportButton(
     {label, busy, disabled = false, accessibilityLabel, accent, testID, onPress}: Props
 ) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
+    const recipeInk = accent === undefined
+        ? undefined : appearance.recipe(historicalAccent(accent)).ink;
     const inert = busy || disabled;
-    const borderColor = accent ?? palette.line;
-    const labelColor = accent ?? palette.dim;
+    const borderColor = recipeInk ?? palette.line;
+    const labelColor = recipeInk ?? palette.dim;
     const surfaceStyle = accent === undefined
         ? {borderColor}
         : {borderColor, backgroundColor: palette.base};
@@ -52,10 +58,15 @@ export default function ExportButton(
             testID={testID}
             accessibilityRole="button"
             accessibilityLabel={accessibilityLabel ?? label}
+            accessibilityHint={accent !== undefined && !isValidColour(accent)
+                ? HISTORICAL_COLOUR_WARNING : undefined}
             accessibilityState={{disabled: inert}}
             disabled={inert}
             onPress={onPress}
-            style={{flex: 1, opacity: inert ? 0.5 : 1}}
+            style={({pressed}) => ({
+                flex: 1, opacity: inert ? 0.5 : 1,
+                transform: [{scale: !inert && pressed ? 0.98 : 1}]
+            })}
         >
             <YStack testID={testID === undefined ? undefined : `${testID}-surface`}
                     alignItems="center" paddingVertical="$3" borderRadius="$4"

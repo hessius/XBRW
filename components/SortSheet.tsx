@@ -7,7 +7,7 @@ import DotMatrixText from "@/components/DotMatrixText";
 import SegmentedControl from "@/components/SegmentedControl";
 import XbrwSheet from "@/components/XbrwSheet";
 import XbrwSwitch from "@/components/XbrwSwitch";
-import {palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 import {
     defaultDirection,
     directionLabels,
@@ -65,6 +65,7 @@ export default function SortSheet({
     open, onOpenChange, sort, direction, favouritesFirst,
     onSortChange, onFavouritesFirstChange
 }: Props) {
+    const {palette} = useAppearance();
     // The two direction words belong to the chosen axis, not to a fixed
     // ascending or descending, so the pair relabels itself when the axis
     // changes. Read from the vocabulary rather than restated so the words
@@ -116,7 +117,7 @@ export default function SortSheet({
 
                 <YStack gap="$2">
                     <DotMatrixText fontSize={10} weight="bold" letterSpacing={2}
-                                   color={palette.muted}>
+                                   color={palette.dim}>
                         DIRECTION
                     </DotMatrixText>
                     <SegmentedControl value={direction} options={directionOptions}

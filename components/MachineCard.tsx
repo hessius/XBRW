@@ -5,7 +5,7 @@ import {Text, XStack, YStack} from "tamagui";
 import Collapsible from "@/components/Collapsible";
 import DotIcon from "@/components/DotIcon";
 import MachineColourDot from "@/components/MachineColourDot";
-import {palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 
 /**
  * Rows with a hairline between each pair, the way `SettingsSection` draws its
@@ -14,6 +14,7 @@ import {palette} from "@/constants/colors";
  * hairline of its own, because it always sits under the header.
  */
 function Rows({children}: {children: React.ReactNode}) {
+    const {palette} = useAppearance();
     return (
         <YStack>
             {React.Children.toArray(children).map((row, index) => (
@@ -30,6 +31,7 @@ function Rows({children}: {children: React.ReactNode}) {
 
 /** The caret beside a heading that opens. Decorative: the button carries the state. */
 function Caret({open}: {open: boolean}) {
+    const {palette} = useAppearance();
     return (
         <View style={{transform: [{rotate: open ? "90deg" : "-90deg"}]}}>
             <DotIcon name="back" size={14} color={palette.muted}/>
@@ -82,6 +84,7 @@ export default function MachineCard({
     title, summary, isDefault, ranked, colour, connected, failed = false, initiallyOpen = false, testID,
     children, details
 }: Props) {
+    const {palette} = useAppearance();
     const [open, setOpen] = useState(initiallyOpen);
     const [detailsOpen, setDetailsOpen] = useState(false);
 

@@ -1,3 +1,4 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React, {useEffect, useState} from "react";
 import {Pressable, ScrollView} from "react-native";
 import {FlatList} from "react-native-gesture-handler";
@@ -13,7 +14,7 @@ import DotIcon from "@/components/DotIcon";
 import DotMatrixText from "@/components/DotMatrixText";
 import XbrwSheet from "@/components/XbrwSheet";
 import {notify} from "@/components/XbrwToast";
-import {onAccent, palette} from "@/constants/colors";
+
 import router from "@/hooks/steadyRouter";
 import {useBottomInset} from "@/hooks/useBottomInset";
 import {useHubBrowse} from "@/hooks/useHubBrowse";
@@ -126,6 +127,8 @@ function HubRail({
     onFacetOpen: (facet: HubFacet) => void;
     onRoastOpen: () => void;
 }) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const search = browse.search;
     const state = searchState(search.text);
     const roastsActive = browse.query.roasts.length > 0;
@@ -204,6 +207,8 @@ function SortRow({
     selected: boolean;
     onPress: () => void;
 }) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     return (
         <Pressable accessibilityRole="radio"
                    accessibilityLabel={HUB_SORTS[sort].label}
@@ -262,6 +267,9 @@ function HubStatus({
     action?: string;
     onAction?: () => void;
 }) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
+    const onAccent = appearance.onFill(palette.text);
     return (
         <YStack flex={1} alignItems="center" justifyContent="center"
                 gap="$4" paddingHorizontal="$6" paddingVertical="$8">
@@ -301,6 +309,9 @@ function HubFooter({
     totalPage: number;
     onRetry: () => void;
 }) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
+    const onAccent = appearance.onFill(palette.text);
     if (arriving) {
         const progress = totalPage > 0 && page > 0 ? `Page ${page} of ${totalPage}.` : "";
         return (
@@ -340,6 +351,8 @@ function HubFooter({
 }
 
 export default function HubScreen() {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const bottomInset = useBottomInset();
     const browse = useHubBrowse();
     const save = useHubSave();

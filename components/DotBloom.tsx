@@ -1,3 +1,4 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React from "react";
 import {View} from "react-native";
 import Animated, {
@@ -9,7 +10,7 @@ import Animated, {
 } from "react-native-reanimated";
 
 import {DURATION, EASING, useReducedMotion} from "@/constants/motion";
-import {palette} from "@/constants/colors";
+
 
 /** How dim an unlit dot sits against the background. */
 const UNLIT_OPACITY = 0.18;
@@ -53,6 +54,8 @@ type DotProps = {
 };
 
 function BloomDot({lit, leading, index, total, centre, radius, size, pulse}: DotProps) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const angle = (index / total) * Math.PI * 2 - Math.PI / 2;
 
     const animatedStyle = useAnimatedStyle(() => ({

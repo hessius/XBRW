@@ -4,6 +4,7 @@ import {
     Dimensions,
     Linking,
     PixelRatio,
+    processColor,
     StyleSheet,
     type StyleProp,
     type TextStyle,
@@ -11,14 +12,16 @@ import {
 } from "react-native";
 import {act, fireEvent, screen, waitFor, within} from "@testing-library/react-native";
 import * as Sharing from "expo-sharing";
+import * as viewShotModule from "react-native-view-shot";
 import {File as FSFile} from "expo-file-system";
 import {gunzipSync} from "fflate";
 
 import BrewRecord from "@/app/brewRecord";
 import type {RecipeLookup} from "@/app/brewRecord";
 import {sharedSettings} from "@/hooks/useSetting";
-import {palette} from "@/constants/colors";
-import {renderWithProviders, SHEET_PRESS_TIMEOUT, TEST_INSETS} from "@/test-utils/render";
+import {accents, palette, resolveAppearance} from "@/constants/colors";
+import {THEME_IDS} from "@/library/appearance";
+import {renderWithProviders, Providers, SHEET_PRESS_TIMEOUT, TEST_INSETS} from "@/test-utils/render";
 import {
     brewRecordFixture as record,
     makeBrewRecordFixture,
@@ -225,6 +228,68 @@ describe("brew record", () => {
         mockJudgementStore.brewsFor.mockReset();
         mockJudgementStore.brewsFor.mockReturnValue([record]);
     });
+
+    it.each(["", "not-a-colour"])(
+        "renders stored invalid accent %j in record, trace, capture and export without changing the snapshot",
+        async accent => {
+            mockOpened = {
+                record: {...record, accent},
+                samples: [{at: 0, water: 0, cup: 0, pour: 1},
+                    {at: 228_000, water: 250, cup: 244, pour: 2}]
+            };
+            const before = JSON.stringify(mockOpened);
+            const tree = await renderWithProviders(<BrewRecord/>);
+            expect(tree.getByText("Stored brew colour is invalid; using a display fallback.")).toBeTruthy();
+            expect(tree.getByTestId("trace-cup", {includeHiddenElements: true})).toBeTruthy();
+            await fireEvent.press(tree.getByLabelText("Share this brew as a story card"));
+            await waitFor(() => expect(screen.getByTestId("story-stage")).toBeTruthy());
+            await fireEvent(screen.getByTestId("story-stage"), "layout", {
+                nativeEvent: {layout: {width: 360, height: 740, x: 0, y: 0}}
+            });
+            await waitFor(() => expect(screen.getByTestId("brew-story-card")).toBeTruthy());
+            const {mockCapture} = viewShotModule as unknown as {mockCapture: jest.Mock};
+            const captures = mockCapture.mock.calls.length;
+            await waitFor(async () => {
+                await fireEvent.press(screen.getByLabelText("Share the card"));
+                expect(mockCapture.mock.calls.length).toBe(captures + 1);
+            }, {timeout: SHEET_PRESS_TIMEOUT});
+            expect(JSON.stringify(mockOpened)).toBe(before);
+        }
+    );
+
+    it.each(THEME_IDS.flatMap(theme => (["original", "themed"] as const)
+        .map(recipeColours => ({theme, recipeColours}))))(
+        "renders the snapshotted identity after recolouring and deleting its source in $theme/$recipeColours",
+        async choice => {
+            const appearance = resolveAppearance(choice);
+            const canonical = accents.coffee[0];
+            mockOpened = {
+                record: {...record, accent: canonical.toLowerCase()},
+                samples: [{at: 0, water: 0, cup: 0, pour: 1},
+                    {at: 228_000, water: 250, cup: 244, pour: 2}]
+            };
+            const before = JSON.stringify(mockOpened);
+            const source = new Recipe();
+            source.pours = twoPours.pours;
+            source.accentIndex = 6;
+            const recoloured = await renderWithProviders(
+                <Providers appearance={choice}>
+                    <BrewRecord recipeLookup={{getRecipe: () => source}}/>
+                </Providers>
+            );
+            expect(recoloured.getByTestId("trace-water").props.stroke).toEqual(
+                expect.objectContaining({payload: processColor(appearance.recipe(canonical).ink)})
+            );
+            await recoloured.unmount();
+            const deleted = await renderWithProviders(
+                <Providers appearance={choice}><BrewRecord recipeLookup={noRecipeLookup}/></Providers>
+            );
+            expect(deleted.getByTestId("trace-water").props.stroke).toEqual(
+                expect.objectContaining({payload: processColor(appearance.recipe(canonical).ink)})
+            );
+            expect(JSON.stringify(mockOpened)).toBe(before);
+        }
+    );
 
     it("draws the trace and the figures", async () => {
         await renderWithProviders(<BrewRecord recipeLookup={mockLookup} />);
@@ -1429,6 +1494,72 @@ describe("brew record's story card", () => {
         });
         await waitFor(() => expect(screen.getByTestId("brew-story-card")).toBeTruthy());
     }
+
+    it.each(["completion", "failure"].flatMap(ending =>
+        [undefined, "not-a-colour"].map(accent => ({ending, accent}))
+    ))("freezes the actual story image until $ending with accent $accent but not the record, then captures a fresh current appearance", async ({ending, accent}) => {
+        if (accent !== undefined) {
+            if (mockOpened === null) throw new Error("Missing story fixture");
+            mockOpened = {...mockOpened, record: {...mockOpened.record, accent}};
+        }
+        const light = {theme: "light", recipeColours: "themed"} as const;
+        const blue = {theme: "blue", recipeColours: "original"} as const;
+        const {mockCapture} = viewShotModule as unknown as {mockCapture: jest.Mock};
+        const originalCapture = mockCapture.getMockImplementation();
+        mockCapture.mockClear();
+        const bytes = JSON.stringify(mockOpened);
+        let release!: (uri: string) => void;
+        let reject!: (error: Error) => void;
+        mockCapture.mockImplementation(() => new Promise<string>((resolve, fail) => {
+            release = resolve;
+            reject = fail;
+        }));
+        const draw = (choice: typeof light | typeof blue) => (
+            <Providers appearance={choice}><BrewRecord recipeLookup={lookup}/></Providers>
+        );
+        const capturedColours = () => within(screen.getByTestId("viewshot"))
+            .getAllByTestId(/./)
+            .map(node => ({style: node.props.style, fill: node.props.fill, stroke: node.props.stroke}));
+        try {
+            const tree = await renderWithProviders(draw(light));
+            await openCard(600);
+            const shot = screen.getByTestId("viewshot");
+            const card = screen.getByTestId("brew-story-card");
+            const initial = capturedColours();
+            await pressOnSheet(() => screen.getByLabelText("Share the card"),
+                () => mockCapture.mock.calls.length > 0);
+            await tree.rerender(draw(blue));
+            expect(screen.getByTestId("viewshot")).toBe(shot);
+            expect(screen.getByTestId("brew-story-card")).toBe(card);
+            expect(capturedColours()).toEqual(initial);
+            expect(screen.getByTestId("brew-story-card")).toHaveStyle({
+                backgroundColor: resolveAppearance(light).palette.base
+            });
+            expect(screen.getByTestId("brew-capture", {includeHiddenElements: true})).toHaveStyle({
+                backgroundColor: resolveAppearance(blue).palette.base
+            });
+            await act(() => {
+                if (ending === "failure") reject(new Error("capture failed"));
+                else release("file:///first-story.png");
+            });
+            await waitFor(() => expect(screen.getByTestId("brew-story-card")).toHaveStyle({
+                backgroundColor: resolveAppearance(blue).palette.base
+            }));
+            const current = capturedColours();
+            expect(screen.getByTestId("brew-story-card")).toBe(card);
+            expect(current).not.toEqual(initial);
+            await fireEvent.press(screen.getByLabelText("Share the card"));
+            await waitFor(() => expect(mockCapture).toHaveBeenCalledTimes(2));
+            expect(capturedColours()).toEqual(current);
+            await act(() => release("file:///second-story.png"));
+            await waitFor(() => expect(Sharing.shareAsync).toHaveBeenCalledWith(
+                "file:///second-story.png", expect.objectContaining({mimeType: "image/png"})
+            ));
+            expect(JSON.stringify(mockOpened)).toBe(bytes);
+        } finally {
+            mockCapture.mockReset().mockImplementation(originalCapture!);
+        }
+    });
 
     async function pressStoryToggle(label: string): Promise<void> {
         await waitFor(

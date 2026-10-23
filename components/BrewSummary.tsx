@@ -1,5 +1,5 @@
 import React, {useState} from "react";
-import {StyleSheet, View} from "react-native";
+import {View} from "react-native";
 import {Text, YStack} from "tamagui";
 
 import BrewFigures, {type BrewFigureAdjustments} from "@/components/BrewFigures";
@@ -10,7 +10,7 @@ import TeaStageLadder from "@/components/TeaStageLadder";
 import BrewTrace from "@/components/BrewTrace";
 import MarqueeText from "@/components/MarqueeText";
 import DotMatrixText from "@/components/DotMatrixText";
-import {palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 import {SCREEN_PADDING} from "@/constants/layout";
 import {summaryBands} from "@/library/brew/bands";
 import {traceAxisFor} from "@/library/brew/brewShape";
@@ -185,6 +185,7 @@ export default function BrewSummary({
     chartWidth,
     testID = "brew-capture"
 }: Props) {
+    const {palette} = useAppearance();
     const shownKind = beverageKind ?? recipeInputs?.beverageKind;
     // The drawable width inside the capture's own padding.
     const traceWidth = width - capturePadding * 2;
@@ -210,7 +211,7 @@ export default function BrewSummary({
     const bands = storyBands ?? summaryBands(ladderHeight, stages.length);
 
     return (
-        <View testID={testID} style={[styles.capture, {padding: capturePadding}]}>
+        <View testID={testID} style={{backgroundColor: palette.base, padding: capturePadding}}>
             <View
                 testID="summary-chrome"
                 onLayout={(e) => setChromeHeight(e.nativeEvent.layout.height)}
@@ -257,10 +258,10 @@ export default function BrewSummary({
                 <YStack height={traceHeight} alignItems="center"
                         justifyContent="center">
                     <DotMatrixText fontSize={13} weight="bold" letterSpacing={1.6}
-                                   color={palette.muted}>
+                                   color={palette.dim}>
                         NO TRACE KEPT
                     </DotMatrixText>
-                    <Text color={palette.muted} fontSize={12} marginTop="$2"
+                    <Text color={palette.dim} fontSize={12} marginTop="$2"
                           textAlign="center">
                         No trace was kept for this brew.
                     </Text>
@@ -314,7 +315,7 @@ export default function BrewSummary({
             <View testID="summary-ladder-slot"
                   style={{marginTop: ladderTopGap}}>
             {stagesUnavailable ? (
-                <DotMatrixText fontSize={11} letterSpacing={1.2} color={palette.muted}>
+                <DotMatrixText fontSize={11} letterSpacing={1.2} color={palette.dim}>
                     Recipe deleted. Stages not available.
                 </DotMatrixText>
             ) : teaStages !== undefined ? (
@@ -356,14 +357,3 @@ export default function BrewSummary({
         </View>
     );
 }
-
-const styles = StyleSheet.create({
-    /**
-     * The captured subtree needs its own background and padding: a ViewShot
-     * renders what is inside it, so anything the screen supplies from further
-     * out is simply not in the PNG. The extra margin gives the image a border.
-     */
-    capture: {
-        backgroundColor: palette.base
-    }
-});

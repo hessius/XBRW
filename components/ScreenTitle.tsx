@@ -1,3 +1,4 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React from "react";
 import Animated, {
     useAnimatedStyle,
@@ -7,7 +8,7 @@ import Animated, {
 import {XStack} from "tamagui";
 
 import DotMatrixText from "@/components/DotMatrixText";
-import {palette} from "@/constants/colors";
+
 import {DURATION, EASING, useReducedMotion} from "@/constants/motion";
 
 /** The size a screen title uses when the header is at rest. */
@@ -65,6 +66,8 @@ type Props = {
  */
 export default function ScreenTitle({title, count, fontSize = TITLE_FONT_SIZE,
                                      heading = false, lines = 1}: Props) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const showCount = typeof count === "string" ? count.length > 0
         : typeof count === "number" && count > 0;
     const reduced = useReducedMotion();

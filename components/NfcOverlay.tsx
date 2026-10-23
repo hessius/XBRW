@@ -1,3 +1,4 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React from "react";
 import {Dimensions, Platform, Pressable, View} from "react-native";
 import Animated, {FadeIn, FadeOut} from "react-native-reanimated";
@@ -5,7 +6,7 @@ import {Text, YStack} from "tamagui";
 
 import DotBloom from "@/components/DotBloom";
 import DotMatrixText from "@/components/DotMatrixText";
-import {palette} from "@/constants/colors";
+
 import {HOLD_CARD, NFC_DISABLED, NFC_UNSUPPORTED} from "@/constants/copy";
 import {openNfcSettings, type NfcAvailability} from "@/library/NFC";
 import {DURATION, useReducedMotion} from "@/constants/motion";
@@ -56,6 +57,8 @@ type Props = {
  * visual language from everything around it.
  */
 export default function NfcOverlay({visible, mode, progress, onCancel, unavailable = null}: Props) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const reduced = useReducedMotion();
 
     if (!visible) {

@@ -3,7 +3,8 @@ import {fireEvent, screen} from "@testing-library/react-native";
 import ShelfTile from "@/components/ShelfTile";
 import {withShelfPhotos} from "@/components/ShelfPhotoMark";
 import {renderWithProviders} from "@/test-utils/render";
-import {onAccent, palette} from "@/constants/colors";
+import {palette, resolveAppearance} from "@/constants/colors";
+import {DEFAULT_APPEARANCE} from "@/library/appearance";
 
 const shelf = {id: "roaster:Acme", label: "Acme", kind: "auto" as const, count: 9};
 const photos = () => screen.queryAllByTestId("shelf-photo", {includeHiddenElements: true});
@@ -40,7 +41,8 @@ it.each([false, true])("uses the initial and correct contrast when photos are di
     expect(photos()).toHaveLength(0);
     expect(screen.getByTestId("shelf-mark-initial")).toHaveTextContent("A");
     expect(screen.getByTestId("shelf-mark-initial-text"))
-        .toHaveStyle({color: inverted ? palette.text : onAccent.text});
+        .toHaveStyle({color: inverted ? palette.text
+            : resolveAppearance(DEFAULT_APPEARANCE).onFill(palette.text).text});
 });
 
 it("uses accents on individual failures, the initial on all failures, and retries a replacement URI", async () => {

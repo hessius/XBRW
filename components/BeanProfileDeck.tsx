@@ -4,7 +4,7 @@ import {Text, XStack, YStack} from "tamagui";
 import {BeanProfileRow} from "@/components/BeanProfileRow";
 import DeckSection from "@/components/DeckSection";
 import DotMatrixText from "@/components/DotMatrixText";
-import {palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 import {
     PROFILE_CAP,
     PROFILE_FIELD_LABEL,
@@ -21,6 +21,7 @@ export const NOT_TAGGED_LABEL = "NOT TAGGED";
 type Props = {
     profile: BeanProfile;
     onShowAll: () => void;
+    /** Canonical recipe accent; resolved here to page ink, never a display fill. */
     accent?: string;
 };
 
@@ -28,7 +29,10 @@ export function beanProfileSubtitle(profile: BeanProfile): string {
     return `${profile.counted - profile.untagged.brews} OF ${profile.counted} BREWS TAGGED`;
 }
 
-export function BeanProfileDeck({profile, onShowAll, accent = palette.info}: Props) {
+export function BeanProfileDeck({profile, onShowAll, accent: suppliedAccent}: Props) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
+    const accent = suppliedAccent === undefined ? palette.info : appearance.recipe(suppliedAccent).ink;
     if (profile.counted === 0) return null;
 
     const rows = rankProfileRows(profile.rows).slice(0, PROFILE_CAP);

@@ -15,6 +15,7 @@ import {
 import {DOSE, TEMPERATURE} from "./cardLimits";
 import Recipe, {GRINDER_OFF_VALUE, MAX_DESCRIPTION} from "./Recipe";
 import {XBLOOM_SHARE_HOST} from "./shareLink";
+import {isValidColour} from "@/constants/colors";
 
 /**
  * The backup file, and the only door it comes back in through.
@@ -579,7 +580,7 @@ const BREW_FIELDS: Record<string, (value: unknown) => boolean> = {
     id:          (v) => typeof v === "string" && v !== "",
     recipeUuid:  (v) => typeof v === "string",
     recipeName:  (v) => typeof v === "string",
-    accent:      (v) => typeof v === "string",
+    accent:      isValidColour,
     startedAt:   isNumber,
     endedAt:     isNumber,
     outcome:     (v) => typeof v === "string" && BREW_OUTCOMES.has(v),

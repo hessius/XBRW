@@ -3,7 +3,7 @@ import {PixelRatio, Text, type StyleProp, type TextStyle} from "react-native";
 import Animated, {useAnimatedStyle, type SharedValue}
     from "react-native-reanimated";
 
-import {palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 import {
     DOTO_MAX_FONT_SCALE,
     DOTO_MIN_FONT_SIZE,
@@ -194,20 +194,24 @@ type Props = {
  *
  * This is the only place in the app that names the Doto font family.
  */
-export default function DotMatrixText(props: Props) {
+export default function DotMatrixText({
+    children, fontSize = 14, minFontSize = DOTO_MIN_FONT_SIZE,
+    maxFontSizeMultiplier = DOTO_MAX_FONT_SCALE,
+    weight = "bold", color: suppliedColor,
+    letterSpacing = 0.5, numberOfLines, style, testID, animatedFontSize
+}: Props) {
+    const {palette} = useAppearance();
+    const color = suppliedColor ?? palette.text;
     // The animated path lives in its own component, because hooks cannot be
     // called conditionally and this one is rendered by the hundred: every list
     // row and every figure on a dense screen would otherwise allocate a shared
     // value and register a worklet whose style is then thrown away.
-    if (props.animatedFontSize !== undefined) {
-        return <AnimatedDotMatrixText {...props} animatedFontSize={props.animatedFontSize}/>;
+    if (animatedFontSize !== undefined) {
+        return <AnimatedDotMatrixText {...{
+            children, fontSize, minFontSize, maxFontSizeMultiplier, weight, color,
+            letterSpacing, numberOfLines, style, testID, animatedFontSize
+        }}/>;
     }
-    const {
-        children, fontSize = 14, minFontSize = DOTO_MIN_FONT_SIZE,
-        maxFontSizeMultiplier = DOTO_MAX_FONT_SCALE,
-        weight = "bold", color = palette.text,
-        letterSpacing = 0.5, numberOfLines, style, testID
-    } = props;
     return (
         <Text
             testID={testID}
@@ -251,12 +255,14 @@ function AnimatedDotMatrixText({
     maxFontSizeMultiplier = DOTO_MAX_FONT_SCALE,
     animatedFontSize,
     weight = "bold",
-    color = palette.text,
+    color: suppliedColor,
     letterSpacing = 0.5,
     numberOfLines,
     style,
     testID
 }: Props & {animatedFontSize: SharedValue<number>}) {
+    const {palette} = useAppearance();
+    const color = suppliedColor ?? palette.text;
     // `PixelRatio` cannot be read from the UI thread, so the floor is worked
     // out here and the worklet closes over the number.
     const floor = minFontSize / Math.min(PixelRatio.getFontScale(), 1);

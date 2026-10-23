@@ -1,9 +1,10 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React from "react";
 import {Pressable} from "react-native";
 import {Text, XStack, YStack} from "tamagui";
 
 import DotMatrixText from "@/components/DotMatrixText";
-import {palette} from "@/constants/colors";
+
 import {type TeaObservationStatus, type TeaStageView} from "@/library/brew/teaCycle";
 
 const STATUS_TEXT: Record<TeaObservationStatus, string> = {
@@ -24,6 +25,8 @@ function amount(value: number | undefined): string {
 }
 
 function DetailLine({label, value, testID}: {label: string; value: string; testID?: string}) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     return (
         <XStack justifyContent="space-between" gap="$3" testID={testID}>
             <Text color={palette.dim} fontSize={13}>{label}</Text>
@@ -37,6 +40,8 @@ export default function TeaStageDetail({stage, accent, onClose}: {
     accent: string;
     onClose: () => void;
 }) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const steepElapsed = stage.steep.elapsedSeconds === undefined
         ? "Elapsed unknown" : `${duration(stage.steep.elapsedSeconds)} elapsed`;
     const endingElapsed = stage.ending.elapsedSeconds === undefined
@@ -46,7 +51,7 @@ export default function TeaStageDetail({stage, accent, onClose}: {
                 borderRadius="$4" padding="$3" gap="$3">
             <XStack alignItems="center" justifyContent="space-between">
                 <DotMatrixText fontSize={12} weight="bold" letterSpacing={1.6}
-                               color={accent}>
+                               color={appearance.recipe(accent).ink}>
                     {`STEEP ${String(stage.index + 1).padStart(2, "0")}`}
                 </DotMatrixText>
                 <Pressable accessibilityRole="button" accessibilityLabel="Close"

@@ -1,8 +1,9 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React from "react";
 import {Button, Text, YStack} from "tamagui";
 
 import XbrwSheet from "@/components/XbrwSheet";
-import {onAccent, palette} from "@/constants/colors";
+
 
 type Props = {
     open: boolean;
@@ -32,6 +33,9 @@ type Props = {
 export default function DeleteAllSheet({
     open, count, onCancel, onBackUpFirst, onDelete
 }: Props) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
+    const onAccent = appearance.onFill(palette.success);
     const subject = count === 1 ? "1 recipe" : `${count} recipes`;
     const deleteLabel = `Delete all ${subject}`;
 
@@ -51,7 +55,8 @@ export default function DeleteAllSheet({
 
                 <Button accessibilityRole="button"
                         accessibilityLabel={deleteLabel}
-                        backgroundColor={palette.danger} onPress={onDelete}>
+                        backgroundColor={palette.danger} color={appearance.onFill(palette.danger).text}
+                        onPress={onDelete}>
                     {deleteLabel}
                 </Button>
 

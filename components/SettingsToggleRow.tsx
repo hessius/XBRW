@@ -1,8 +1,9 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React from "react";
 import {Text, XStack, YStack} from "tamagui";
 
 import XbrwSwitch from "@/components/XbrwSwitch";
-import {palette} from "@/constants/colors";
+
 
 type Props = {
     label: string;
@@ -13,6 +14,8 @@ type Props = {
 
 /** A setting that is on or off. */
 export default function SettingsToggleRow({label, description, value, onChange}: Props) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     return (
         // No borderBottom, and `paddingHorizontal="$4"` / `minHeight={44}` to
         // match the other rows inside `SettingsSection`'s card: the section owns
