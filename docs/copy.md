@@ -75,6 +75,37 @@ usually a mistake, but they are surfaced here so you can change them deliberatel
 
 ---
 
+## Package F: optional coffee bag experiment
+
+One device-local Labs switch enables bags, freshness and Ready to brew together.
+It starts off and is a beta experiment, not a permanent product commitment.
+Quantity is an estimate of intended doses spent, never a scale reading.
+Freshness describes estimated windows, not guaranteed taste or an expiry date.
+Beanconqueror owns quantities in its mode; there is no inventory synchronisation.
+Saving a bag never opens another app. The separate explicit action opens an
+add-bean form, not a confirmed external creation.
+
+| ID | Source | Context | Current text |
+|----|--------|---------|--------------|
+| `bags.labs` | `app/settings.tsx:798` | Labs toggle. | `Coffee bags` |
+| `bags.labsDescription` | `app/settings.tsx:799` | Default-off experiment disclosure. | `Experimental bag tracking, freshness estimates and brew suggestions. Off by default and may not stay in the app.` |
+| `bags.noBag` | `components/BagPickerSheet.tsx:40` | Explicit untracked selection. | `No bag` |
+| `bags.noBagDetail` | `components/BagPickerSheet.tsx:40` | Choosing no physical bag. | `Brew without tracking` |
+| `bags.check` | `library/coffeeBag.ts:124` | Missing or uncertain quantity, not zero. | `Check remaining coffee` |
+| `bags.external` | `library/coffeeBag.ts:125` | Quantity belongs to the other app. | `Tracked in Beanconqueror` |
+| `bags.remaining` | `library/coffeeBag.ts:126` | Reliable local estimate. | `Approx. ${balance.remainingGrams} g remaining` |
+| `bags.resting` | `library/restPeak.ts:105` | Still within estimated rest. | `Resting, estimated ready from ${shortDay(reading.readyOn)}.` |
+| `bags.beforePeak` | `library/restPeak.ts:107` | Ready, before the estimated peak. | `Estimated peak around ${shortDay(reading.peakOn)}.` |
+| `bags.ready` | `library/restPeak.ts:107` | Ready, after the estimated peak. | `Within the estimated window.` |
+| `bags.peak` | `library/restPeak.ts:108` | Around the estimated peak. | `Within the estimated peak window.` |
+| `bags.past` | `library/restPeak.ts:109` | Past the estimated window, not expired. | `Outside the estimated window.` |
+| `bags.externalSave` | `components/BagSheet.tsx:244` | External mode, before saving. | `Quantities are tracked in Beanconqueror. Nothing is sent when you save.` |
+| `bags.externalName` | `components/BagSheet.tsx:379` | Optional confirmed external identity. | `Optional. Match the name of this physical bag in Beanconqueror.` |
+| `bags.externalOpen` | `components/BagSheet.tsx:408` | Separate, explicit action. | `OPEN IN BEANCONQUEROR` |
+| `bags.externalOpened` | `hooks/useBagManager.ts:109` | The form opened; creation is not confirmed. | `Opened Beanconqueror's add-bean screen. Confirm the bag there.` |
+| `bags.externalSaveFailed` | `hooks/useBagManager.ts:114` | The other app opened, but local saving failed. | `Beanconqueror opened, but the bag could not be saved here. Check it before trying again.` |
+| `bags.externalOpenFailed` | `hooks/useBagManager.ts:115` | No confirmed opening; identity remains unsaved. | `Could not open this bag in Beanconqueror. Check the bag details and that Beanconqueror is installed.` |
+
 ## Home / recipe library
 
 ### Package E Import source labels

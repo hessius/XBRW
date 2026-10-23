@@ -33,6 +33,7 @@ import {useScrollEndPadding} from "@/hooks/useBottomInset";
 import {type BackupPayload} from "@/library/backup";
 import {appDatabase} from "@/library/appDatabase";
 import CoffeeBagDatabase, {bagTablesExist} from "@/library/CoffeeBagDatabase";
+import {BagAttributionError} from "@/library/BrewDatabase";
 import {legacyBagTableExists} from "@/library/bagMigration";
 import {isBagTrackerSetting, resolveBagTracker} from "@/library/coffeeBag";
 import type {BagInventoryBackup} from "@/library/bagBackup";
@@ -76,12 +77,14 @@ const VERSION = Application.nativeApplicationVersion ?? "unknown";
  *
  * A history that will not read is not worth failing the export over -- the
  * recipes are the thing a backup exists to protect -- so the file is written
- * without it rather than not written at all.
+ * without it rather than not written at all. Unreadable bag attribution is
+ * different: dropping it would lose which physical bag an accepted brew used.
  */
 function brewHistory(): BrewRecord[] {
     try {
         return sharedBrewDatabase().all();
-    } catch {
+    } catch (error) {
+        if (error instanceof BagAttributionError) throw error;
         return [];
     }
 }
@@ -347,7 +350,15 @@ export default function SettingsScreen({settings}: Props) {
             return;
         }
         const snapshot = settingsSnapshot();
-        const history = brewHistory();
+        let history: BrewRecord[];
+        try {
+            history = brewHistory();
+        } catch (error) {
+            console.warn("Could not export historical bag attribution", error);
+            notify({tone: "error",
+                message: "A brew's saved bag could not be read, so the backup was not made."});
+            return;
+        }
         const outcome = inventory === undefined
             ? await exportBackup(everything, snapshot, VERSION, history)
             : await exportBackup(everything, snapshot, VERSION, history, inventory);

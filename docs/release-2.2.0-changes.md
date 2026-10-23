@@ -6,6 +6,56 @@ draft #252 also contain proposals that have not been accepted; they must not be
 merged wholesale. Issue #249 records source heads, decisions and integration.
 The shipped 2.1.0 ledger remains unchanged.
 
+## Package F: Optional coffee bag beta experiment
+
+Adapted from #238, #241 and #242. Off by default in Labs. Physical bags can
+be shared by recipes, and a recipe can remember one of several bags or No bag.
+Remaining coffee and freshness windows are estimates, not measurements or
+guarantees. Ready to brew suggests one explicit recipe and bag.
+
+This adaptation uses independent many-to-many bag records and a durable
+accepted-run accounting ledger instead of inferring identity or consumption
+from a recipe name or the remaining history. Actual intended dose and bag
+identity freeze at acceptance. Confirmed preflight refusal spends nothing;
+observed pouring spends the dose even if the run is cancelled or fails.
+Unknown consumption requires a quantity check. History deletion never refunds.
+
+Disabling preserves data and stops new attribution. A brew already accepted
+keeps its bag. Beanconqueror mode does not claim synchronised local inventory.
+Backups preserve inventory without enabling it on another device. Historical
+handoff uses the bag captured for that brew, not today's selection. The
+explicit add-bean action opens a form and never claims it created a bean.
+
+The implementation is on `feat/2.2.0-bag-labs-20261023`, based on
+`8f2638dfa2e75928ff447fbbd0ee03ba14986886`. It is not accepted development
+or release-qualified. The implementation plan records software evidence.
+No focused PR, source closure, additional source review or preview integration
+is implied by this checkpoint. Each source proposal already used its one
+automated Copilot review round.
+
+Local software qualification passed: typecheck; lint with zero errors and
+32 warnings; both Jest projects with 20,550 passed tests, 26 skipped tests,
+918 passed suites, two skipped suites and both snapshots passing; Expo Doctor
+21/21. The appearance matrix covers all eight combinations. Real-SQLite
+checks cover the accepted live owner and the inventory/backup lifecycle.
+Canonical recipe/card and legacy handoff compatibility, and existing image
+captures remain covered. Animation/act warnings are recorded, not hidden.
+This is local evidence, not PR CI or permission to merge.
+
+Manual native, accessibility, interruption and Beanconqueror qualification
+remain pending until separately recorded. Exercise enable/disable/re-enable;
+small-screen large text and keyboard; VoiceOver/TalkBack sheet coverage;
+same-coffee bags and shared recipes; uncertain/empty estimates and corrections;
+interruption after beans are spent; termination/reopen; and actual add-bean
+and historic-brew handoff. Confirm that saving never opens another app.
+
+Fresh native clients are required for datetimepicker 9.1.0 and the already
+accepted native appearance dependencies. No build is authorised here; Metro
+cannot qualify the native change. Existing BLE/NFC physical-device gates
+remain in force, though no card write is needed to qualify the bag model.
+Final inclusion requires an explicit retain, revise or remove decision after
+beta feedback. #239 dose presets remain separate and unimplemented.
+
 ## Package G: appearance and recipe palettes — local implementation only
 
 The approved combined #257/#243 adaptation is implemented on

@@ -18,6 +18,9 @@ import {THEME_IDS} from "@/library/appearance";
 import {resolveAccent} from "@/library/accent";
 import {bagFixture} from "@/test-utils/bags";
 import {INITIAL_BAG_PROGRESS} from "@/library/bagRun";
+import CoffeeBagDatabase from "@/library/CoffeeBagDatabase";
+import BrewDatabase from "@/library/BrewDatabase";
+import RecipeDatabase from "@/library/RecipeDatabase";
 
 let mockBagEnabled = false;
 jest.mock("@/hooks/useSetting", () => ({
@@ -104,6 +107,45 @@ function harness() {
 }
 
 describe("LiveBrewProvider", () => {
+    it("keeps a real SQLite allocation spent after disable, post-pour cancellation and history deletion", async () => {
+        const h = harness();
+        const db = createTestDatabase();
+        jest.spyOn(databaseModule, "appDatabase").mockReturnValue(
+            db as unknown as ReturnType<typeof databaseModule.appDatabase>);
+        const first = recipe();
+        first.uuid = "a";
+        first.dosage = 21;
+        new RecipeDatabase().insertRecipes([first]);
+        const bags = new CoffeeBagDatabase();
+        const history = new BrewDatabase();
+        bags.create(bagFixture());
+        bags.select("a", "bag-a", 1);
+        mockBagEnabled = true;
+        let live!: ReturnType<typeof useLiveBrew>;
+        function Read() { live = useLiveBrew(); return null; }
+        await renderWithProviders(
+            <LiveBrewProvider bagStore={bags} store={{
+                insert: (record, samples) => history.insert(record, samples),
+                sweepWhenReady: h.store.sweepWhenReady
+            }}><Read/></LiveBrewProvider>
+        );
+        await act(async () => live.start(first));
+        await h.setPhase({name: "sending"});
+        await h.setPhase({name: "pouring", pour: 1, pours: 2});
+        await h.water(40);
+        mockBagEnabled = false;
+        await h.setPhase({name: "cancelled"});
+        expect(history.all()).toHaveLength(1);
+        const saved = history.all()[0];
+        expect(saved).toMatchObject({
+            outcome: "cancelled", bag: {bagId: "bag-a", recipeUuid: "a", dose: 21}
+        });
+        expect(bags.balance("bag-a", 21, "xbrw")).toMatchObject({remainingGrams: 229});
+        history.remove(saved.id);
+        expect(new CoffeeBagDatabase().balance("bag-a", 21, "xbrw"))
+            .toMatchObject({remainingGrams: 229});
+    });
+
     function bagStore() {
         const bag = bagFixture();
         return {

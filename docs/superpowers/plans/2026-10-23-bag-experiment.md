@@ -1956,7 +1956,7 @@ creation. Legacy handoff behaviour remains covered.
 **Modify:** existing route/restore tests, `docs/copy.md`,
 `docs/release-2.2.0-changes.md`, this plan's completion checkboxes.
 
-- [ ] **Step 1: Add the cross-surface qualification matrix.**
+- [x] **Step 1: Add the cross-surface qualification matrix.**
 
 Reuse the existing AppearanceProvider test construction and iterate all
 THEME_IDS with both recipe colour modes. Render chooser, selected row,
@@ -1974,7 +1974,7 @@ untracked handoff output before/after opt-in. Verify existing frozen-image
 capture tests remain unchanged and pass; the bag feature does not add
 inventory content to story cards.
 
-- [ ] **Step 2: Run targeted checks, then existing full gates once.**
+- [x] **Step 2: Run targeted checks, then existing full gates once.**
 
 ```bash
 npm run typecheck
@@ -1988,7 +1988,7 @@ Expo Doctor succeeds. Record actual warnings/skips rather than calling them
 zero. Serialize full suites; do not launch duplicate heavy validation from
 agents or reuse another worktree's node_modules.
 
-- [ ] **Step 3: Document manual and native gates without claiming them passed.**
+- [x] **Step 3: Document manual and native gates without claiming them passed.**
 
 In the release ledger, record this experiment as default-off and removable.
 Credit the three source proposals and the explicit many-to-many/accounting
@@ -2027,10 +2027,10 @@ explicit retain, revise or remove decision after beta feedback. #239 is
 separate.
 ```
 
-- [ ] **Step 4: Commit/push the verified task and stop at the permission boundary.**
+- [x] **Step 4: Commit/push the verified task and stop at the permission boundary.**
 
 ```bash
-git add components/__tests__/bagAppearance.test.tsx docs/copy.md docs/release-2.2.0-changes.md docs/superpowers/plans/2026-10-23-bag-experiment.md
+git add components/__tests__/bagAppearance.test.tsx library/__tests__/bagExperiment.integration.test.ts library/__tests__/bagHistory.test.ts hooks/__tests__/useLiveBrew.test.tsx app/__tests__/settings.test.tsx app/settings.tsx library/BrewDatabase.ts docs/copy.md docs/release-2.2.0-changes.md docs/superpowers/plans/2026-10-23-bag-experiment.md
 git commit -m "test(bags): qualify the optional beta experiment" \
   -m "Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
 git push origin HEAD:refs/heads/feat/2.2.0-bag-labs-20261023
@@ -2043,6 +2043,36 @@ Ask separately before opening a focused PR or integrating into the cumulative
 preview. Request no second review on #238/#241/#242. Do not merge or close
 source PRs just because this task is implemented. Do not create a new #239
 spec or implementation as an incidental follow-up.
+
+### Task 11 software qualification
+
+- `npm run typecheck`: passed.
+- `npm run lint`: no errors, 32 warnings. The warnings are recorded, not
+  treated as zero; they include existing require imports and hook dependencies.
+- `npm test -- --runInBand`: both projects passed. 918 suites passed and two
+  were skipped; 20,550 tests passed and 26 were skipped; both snapshots passed.
+  Runtime was 857.709 seconds. Animation/act warnings remain visible in the log.
+- `npx expo-doctor`: all 21 checks passed.
+- The final focused matrix passed 266 tests; the additional real-SQLite live
+  owner check passed on both platforms and is also included in the full suite.
+- All eight appearance combinations cover the chooser, selected row, ABOUT
+  facts, uncertain quantity, Ready action and disabled form controls.
+- The real-SQLite lifecycle covers shared bags, two actual intended doses,
+  preflight refusal, post-pour cancellation, explicit correction, history
+  deletion without refund, portable backup and repeat restore. Explicit No bag
+  survives and restore does not enable the device-local experiment.
+- Canonical recipe JSON/card bytes and untracked handoff remain unchanged.
+  Existing story-card/capture tests pass without adding inventory to images.
+- A typed historical-attribution error now blocks an incomplete Settings
+  backup instead of silently dropping that history. A failing regression was
+  observed before the export guard; both platforms pass after the fix.
+- Source heads for #238, #241 and #242 were re-read and still match the approved
+  pins. No follow-up source commits were found and no review was requested.
+
+These are software checks, not native visual, accessibility, Beanconqueror or
+BLE/NFC evidence. All manual gates above remain pending. Implementation stops
+here pending separate permission for a focused PR, native builds or preview
+integration. #239 remains outside this implementation.
 
 ## Plan self-review coverage index
 

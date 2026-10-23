@@ -38,6 +38,13 @@ import type {PodCoffee} from "./podCoffee";
 import {podCoffeeFromStored} from "./podCoffee";
 import {tagKey} from "./tagKey";
 
+export class BagAttributionError extends Error {
+    constructor(brewId: string, options?: ErrorOptions) {
+        super(`Could not read bag attribution for brew ${brewId}.`, options);
+        this.name = "BagAttributionError";
+    }
+}
+
 /** A record as it comes back out, with whether its stream survived retention. */
 export type StoredBrew = BrewRecord & {hasStream: boolean};
 
@@ -1301,9 +1308,9 @@ function hydrate(row: BrewRow): StoredBrew {
     if (row.bag !== "") {
         let value: unknown;
         try { value = JSON.parse(row.bag); }
-        catch (cause) { throw new Error(`Could not read bag attribution for brew ${row.id}.`, {cause}); }
+        catch (cause) { throw new BagAttributionError(row.id, {cause}); }
         const parsed = reviveBagRunSnapshot(value);
-        if (parsed === null) throw new Error(`Could not read bag attribution for brew ${row.id}.`);
+        if (parsed === null) throw new BagAttributionError(row.id);
         bag = parsed;
     }
     let pauseIntervals: unknown;

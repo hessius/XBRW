@@ -14,6 +14,7 @@ import {palette} from "@/constants/colors";
 import Recipe from "@/library/Recipe";
 import {buildBackup, parseBackup} from "@/library/backup";
 import CoffeeBagDatabase from "@/library/CoffeeBagDatabase";
+import {BagAttributionError} from "@/library/BrewDatabase";
 import {bagFixture} from "@/test-utils/bags";
 import type {BagInventoryBackup} from "@/library/bagBackup";
 import {brew} from "@/library/brew/handoff/__tests__/fixtures";
@@ -584,6 +585,19 @@ describe("SettingsScreen", () => {
         expect(mockNotify).toHaveBeenCalledWith(
             expect.objectContaining({tone: "error", message: "That file could not be read."})
         );
+    });
+
+    it("refuses a backup that would silently drop unreadable historical bag attribution", async () => {
+        mockBrewStore.all.mockImplementationOnce(() => { throw new BagAttributionError("brew-a"); });
+        mockExportBackup.mockResolvedValue({ok: true});
+        await renderWithProviders(<SettingsScreen settings={new Settings(memoryStorage())}/>);
+        await fireEvent.press(screen.getByRole("button",
+            {name: "Back up my recipes, Writes a file and hands it to the share sheet."}));
+        expect(mockExportBackup).not.toHaveBeenCalled();
+        expect(mockNotify).toHaveBeenCalledWith(expect.objectContaining({
+            tone: "error",
+            message: "A brew's saved bag could not be read, so the backup was not made."
+        }));
     });
 
     it("hands the whole library and the live settings to the exporter", async () => {

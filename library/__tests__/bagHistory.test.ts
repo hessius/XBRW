@@ -1,4 +1,4 @@
-import BrewDatabase from "@/library/BrewDatabase";
+import BrewDatabase, {BagAttributionError} from "@/library/BrewDatabase";
 import {buildBackup, parseBackup, reviveBrew} from "@/library/backup";
 import {bagBrewFixture, bagRecipe, bagRunFixture} from "@/test-utils/bags";
 import {createTestDatabase} from "@/test-utils/sqlite";
@@ -54,6 +54,7 @@ describe("historical bag identity in real SQLite", () => {
             db.insert(bagBrewFixture({bag: bagRunFixture()}), []);
             mockDb.runSync("UPDATE brews SET bag = ? WHERE id = 'brew-a';", [raw]);
             expect(() => db.get("brew-a")).toThrow(/bag/i);
+            expect(() => db.all()).toThrow(BagAttributionError);
             expect(mockDb.getFirstSync("SELECT bag FROM brews WHERE id = 'brew-a';"))
                 .toEqual({bag: raw});
         }
