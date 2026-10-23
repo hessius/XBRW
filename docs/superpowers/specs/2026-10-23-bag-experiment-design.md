@@ -81,7 +81,7 @@ layer or an unnecessarily generic schema:
 | Bag | Stable physical-bag ID, display name, size, remaining-quantity baseline, dates, optional price, saved roast advice/source, optional Beanconqueror name, finished state |
 | Recipe/bag link | Unique pair of recipe UUID and bag ID; any number of open bags or recipes may participate |
 | Recipe selection | Selected linked, unfinished bag, or explicit No bag; last explicit selection time for stable recommendations |
-| Run attribution | Immutable run/brew ID, recipe identity, selected bag ID and name snapshot, intended dose, responsible tracker |
+| Run attribution | Immutable run/brew ID, recipe identity, selected bag ID and local/Beanconqueror name snapshots, intended dose, responsible tracker |
 | Bag accounting | Durable consumption/uncertainty entries and correction baseline, independent of brew-history retention or deletion |
 
 No bag is inferred from a matching name, pod, recipe clone or machine model.
@@ -108,7 +108,7 @@ the coffee taken from a bag. Show approximate language consistently.
 
 | Observation | Local accounting |
 | --- | --- |
-| Labs off, No bag, or an ineligible tea/water-only run | No bag charge |
+| New run accepted with Labs off, No bag, or an ineligible tea/water-only recipe | No bag charge |
 | Confirmed pre-flight refusal before sending | No bag charge |
 | Pouring observed for an attributed coffee brew | Count its intended dose once |
 | Failure, cancellation or lost contact after pouring was observed | Keep that dose counted; coffee was not returned |
@@ -130,6 +130,11 @@ Use transactional, ordered accounting so a correction during an active brew
 does not get charged again by a late terminal callback. Consumption already
 accounted for before a correction is covered by its new baseline; subsequent
 consumption is not.
+
+If a correction overlaps unresolved consumption, preserve that uncertainty
+rather than assuming which side of the baseline the beans were used on. In
+particular, a later first-pour or terminal event must not blindly charge the
+full dose again when grinding may already be covered by the correction.
 
 For uncertainty, show Check remaining coffee with an optional correction action.
 Do not show a trusted zero, an authoritative number of brews left or a confident
@@ -167,6 +172,10 @@ edit facts and advice, correct remaining quantity, finish a bag and inspect
 its linked recipes. Existing bags can be found beyond this recipe's current
 links. There is no new inventory tab. Bag changes are independent of unsaved
 recipe edits and must not save or discard those edits.
+
+A new unsaved recipe must be saved before its bag links are persisted.
+Explain that requirement in bag management; never save the draft implicitly
+or block an untracked brew.
 
 ### Chooser and other brew entry points
 
@@ -264,6 +273,8 @@ success-shaped, trusted remaining figure.
 Merge without overwriting local changes. An existing local bag and its
 selection/correction/accounting state win as one coherent unit; do not import
 older accounting into its newer baseline. Repeated imports are idempotent.
+Existing per-recipe selections, including No bag, also win when an incoming
+bag is new; restore cannot replace the person's current choice indirectly.
 New valid bags may be retained without a surviving recipe link because a
 physical bag is independent of a recipe. Reject or report broken recipe links
 without deleting the valid bag.
@@ -294,7 +305,7 @@ Required evidence before a future merge:
 
 | Area | Acceptance evidence |
 | --- | --- |
-| Disabled path | Fresh install and restored data leave Labs off; no experimental UI or routine library reads; normal brew and recipe behaviour unchanged |
+| Disabled path | Fresh install stays off; restore does not change the device's opt-in; disabled means no experimental UI or routine library reads, with normal brewing unchanged |
 | Relationships | Two recipes share one bag; one recipe uses two simultaneously open bags; explicit No bag survives reload; deleting a recipe only unlinks |
 | Attribution | Every existing in-app brew entry point uses the correct frozen pair and quick-edited dose; a second start cannot rebind an existing run |
 | Accounting | Success and post-pour interruptions count once; preflight refuses count zero; unresolved grinding/disconnect/app termination produces visible uncertainty |
