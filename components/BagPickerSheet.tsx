@@ -22,6 +22,10 @@ export default function BagPickerSheet({
     const {palette} = useAppearance();
     const rows = (mode === "choose" ? linked : all)
         .filter(bag => mode === "inventory" || bag.finishedAt === undefined);
+    function detailFor(bag: CoffeeBag): string {
+        return [bag.roastedOn === undefined ? "" : `Roasted ${bag.roastedOn}.`, summaryFor(bag)]
+            .filter(Boolean).join(" ");
+    }
     function choice(id: string | null, label: string, detail: string) {
         return <XStack key={id ?? "none"} accessible accessibilityRole="radio"
             accessibilityLabel={`${label}, ${detail}`}
@@ -39,11 +43,11 @@ export default function BagPickerSheet({
             <YStack paddingHorizontal="$4" paddingBottom="$4" gap="$2">
                 {mode === "choose" && choice(null, "No bag", "Brew without tracking")}
                 {rows.map(bag => mode !== "inventory"
-                    ? choice(bag.id, bag.name, summaryFor(bag))
+                    ? choice(bag.id, bag.name, detailFor(bag))
                     : <XStack key={bag.id} minHeight={48} alignItems="center" gap="$3">
                         <YStack flex={1}><Text color={palette.text}>{bag.name}</Text>
                             <Text color={palette.dim} fontSize={12}>
-                                {bag.finishedAt !== undefined ? "Finished. " : ""}{summaryFor(bag)}
+                                {bag.finishedAt !== undefined ? "Finished. " : ""}{detailFor(bag)}
                             </Text></YStack>
                         <XStack accessible accessibilityRole="button" accessibilityLabel={`Edit ${bag.name}`}
                             onPress={() => onEdit?.(bag)} minHeight={44} padding="$3">

@@ -29,9 +29,12 @@ explicit add-bean action opens a form and never claims it created a bean.
 The implementation is on `feat/2.2.0-bag-labs-20261023`, based on
 `8f2638dfa2e75928ff447fbbd0ee03ba14986886`. It is not accepted development
 or release-qualified. The implementation plan records software evidence.
-No focused PR, source closure, additional source review or preview integration
-is implied by this checkpoint. Each source proposal already used its one
-automated Copilot review round.
+Focused PR #266 has received its single Copilot review. The four findings are
+addressed: visible and spoken roast dates distinguish bag choices; attributed
+handoffs never acquire a later recipe's coffee; a known rest period works
+without peak advice; and catalogue roast level supplies the freshness fallback.
+Each source proposal already used its one automated Copilot review round.
+Integration still requires exact-head CI and cumulative-preview reconciliation.
 
 Local software qualification passed: typecheck; lint with zero errors and
 32 warnings; both Jest projects with 20,550 passed tests, 26 skipped tests,
@@ -40,7 +43,10 @@ Local software qualification passed: typecheck; lint with zero errors and
 checks cover the accepted live owner and the inventory/backup lifecycle.
 Canonical recipe/card and legacy handoff compatibility, and existing image
 captures remain covered. Animation/act warnings are recorded, not hidden.
-This is local evidence, not PR CI or permission to merge.
+Those full-suite figures precede review fixes. Review-fix qualification passed
+316 affected tests across both platforms, typecheck and lint with the same
+32 warnings and no errors. The new regressions failed before the fixes.
+This is software evidence, not physical-device qualification.
 
 Manual native, accessibility, interruption and Beanconqueror qualification
 remain pending until separately recorded. Exercise enable/disable/re-enable;

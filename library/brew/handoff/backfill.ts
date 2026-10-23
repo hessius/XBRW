@@ -50,8 +50,9 @@ export function backfillFromRecipe<T extends BrewRecord>(record: T, recipe: Reci
     //
     // Deliberately not a `BackfilledField`: that list names the figures the
     // note tells the user were read from the recipe rather than measured. The
-    // coffee is the same coffee either way, so saying so would be noise.
-    if (record.coffee === undefined && recipe.coffee !== undefined) {
+    // An attributed bag is historical identity, not evidence that the recipe's
+    // current pod describes it. Only old unattributed records use this fallback.
+    if (record.bag === undefined && record.coffee === undefined && recipe.coffee !== undefined) {
         updates.coffee = {...recipe.coffee};
     }
 
@@ -71,7 +72,7 @@ export function backfillFromRecipe<T extends BrewRecord>(record: T, recipe: Reci
  * the machine read off the pod.
  */
 export function handoffCoffee(record: BrewRecord, recipe: Recipe | null): PodCoffee | undefined {
-    return record.coffee ?? recipe?.coffee;
+    return record.coffee ?? (record.bag === undefined ? recipe?.coffee : undefined);
 }
 
 export function handoffNeedsName(record: BrewRecord, recipe: Recipe | null): boolean {

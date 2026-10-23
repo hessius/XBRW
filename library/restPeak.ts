@@ -72,7 +72,7 @@ export function roastAdviceFromFeed(value: unknown): RoastAdvice {
 export type Freshness = "resting" | "ready" | "peak" | "past";
 export const PEAK_WINDOW_DAYS = 3;
 export type FreshnessReading = {
-    state: Freshness; days: number; readyOn: Date; peakDay: number; peakOn: Date;
+    state: Freshness; days: number; readyOn: Date; peakDay?: number; peakOn?: Date;
 };
 type RoastedBag = Pick<CoffeeBag, "roastedOn"> & RoastAdvice;
 
@@ -89,12 +89,13 @@ export function freshnessOf(bag: RoastedBag, now = Date.now()): FreshnessReading
     if (roasted === null || days === null || !Number.isFinite(days)
         || freshnessProblem(bag, now) !== null) return null;
     const {restDays, peakDay, bestUntilDay} = bag;
-    if (restDays === undefined || peakDay === undefined) return null;
+    if (restDays === undefined) return null;
     const add = (n: number) => new Date(roasted.getFullYear(), roasted.getMonth(), roasted.getDate() + n);
     const state: Freshness = bestUntilDay !== undefined && days > bestUntilDay ? "past"
         : days < restDays ? "resting"
-            : Math.abs(days - peakDay) <= PEAK_WINDOW_DAYS ? "peak" : "ready";
-    return {state, days, readyOn: add(restDays), peakDay, peakOn: add(peakDay)};
+            : peakDay !== undefined && Math.abs(days - peakDay) <= PEAK_WINDOW_DAYS ? "peak" : "ready";
+    return {state, days, readyOn: add(restDays),
+        ...(peakDay !== undefined ? {peakDay, peakOn: add(peakDay)} : {})};
 }
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -103,8 +104,10 @@ export function shortDay(day: Date): string { return `${day.getDate()} ${MONTHS[
 export function freshnessLine(reading: FreshnessReading): string {
     switch (reading.state) {
         case "resting": return `Resting, estimated ready from ${shortDay(reading.readyOn)}.`;
-        case "ready": return reading.days < reading.peakDay
-            ? `Estimated peak around ${shortDay(reading.peakOn)}.` : "Within the estimated window.";
+        case "ready": return reading.peakDay === undefined || reading.peakOn === undefined
+            ? "The stated rest period has ended."
+            : reading.days < reading.peakDay
+                ? `Estimated peak around ${shortDay(reading.peakOn)}.` : "Within the estimated window.";
         case "peak": return "Within the estimated peak window.";
         case "past": return "Outside the estimated window.";
     }

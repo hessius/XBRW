@@ -26,6 +26,19 @@ const at = (y: number, m: number, d: number, h = 9) => new Date(y, m - 1, d, h).
 const BAG = {roastedOn: "2026-10-01", restDays: 11, peakDay: 28, bestUntilDay: 42};
 
 describe("freshnessOf", () => {
+    it("honors known rest without inventing a missing peak", () => {
+        const bag = {roastedOn: "2026-10-01", restDays: 14};
+        const resting = freshnessOf(bag, at(2026, 10, 4));
+        expect(resting?.state).toBe("resting");
+        expect(resting?.peakDay).toBeUndefined();
+        expect(resting?.peakOn).toBeUndefined();
+        expect(freshnessLine(resting!)).toBe("Resting, estimated ready from 15 Oct.");
+        const ready = freshnessOf(bag, at(2026, 10, 15));
+        expect(ready?.state).toBe("ready");
+        expect(freshnessLine(ready!)).toBe("The stated rest period has ended.");
+        expect(freshnessOf({...bag, bestUntilDay: 20}, at(2026, 10, 22))?.state).toBe("past");
+    });
+
     it("says nothing without a roast day or without rest figures", () => {
         expect(freshnessOf({restDays: 11, peakDay: 28}, at(2026, 10, 5))).toBeNull();
         expect(freshnessOf({roastedOn: "2026-10-01"}, at(2026, 10, 5))).toBeNull();

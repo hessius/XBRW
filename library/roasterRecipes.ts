@@ -73,7 +73,9 @@ export async function fetchCoffeeRecipe(
     // them on its coffee, where ABOUT reads them.
     const roaster = coffee.coffee.roaster?.trim()
         || recipe.coffee?.roaster?.trim() || feedRoaster?.trim();
-    const bean = {...coffee.coffee, ...reviveRoastAdvice(coffee.roast ?? {}), ...(roaster ? {roaster} : {})};
+    const roast = coffee.coffee.roast?.trim() || coffee.roast?.level?.trim();
+    const bean = {...coffee.coffee, ...reviveRoastAdvice(coffee.roast ?? {}),
+        ...(roast ? {roast} : {}), ...(roaster ? {roaster} : {})};
     const withFlavours = coffee.flavours.length > 0
         ? {...bean, flavours: coffee.flavours}
         : bean;

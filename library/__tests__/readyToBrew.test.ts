@@ -1,7 +1,7 @@
 import {readyToBrew, selectedBagBadge, type ReadyEntry} from "@/library/readyToBrew";
 import {bagFixture, bagRecipe} from "@/test-utils/bags";
 import Pour from "@/library/Pour";
-import type {Freshness} from "@/library/restPeak";
+import {freshnessOf, type Freshness} from "@/library/restPeak";
 
 function entry(bagId: string, uuid: string, selectedAt: number, state?: Freshness): ReadyEntry {
     const recipe = bagRecipe(uuid);
@@ -12,6 +12,13 @@ function entry(bagId: string, uuid: string, selectedAt: number, state?: Freshnes
         freshness: state ? {state, days: 18, readyOn: new Date(2026, 9, 19),
             peakDay: 18, peakOn: new Date(2026, 9, 30)} : null};
 }
+
+it("does not recommend a restored bag still within its known rest period without peak advice", () => {
+    const row = entry("rest-only", "a", 1);
+    row.bag = bagFixture({roastedOn: "2026-10-01", restDays: 14});
+    row.freshness = freshnessOf(row.bag, new Date(2026, 9, 4).getTime());
+    expect(readyToBrew([row])).toEqual([]);
+});
 
 it("deduplicates physical bags by the latest explicit recipe choice, with stable ties", () => {
     const a = entry("shared", "a", 1);
