@@ -2,7 +2,7 @@
 
 Date: 2026-10-23
 
-Status: Product decisions and layout A approved. Written-spec review pending.
+Status: Written spec and layout A approved. Implementation planning authorised.
 
 ## 1. Purpose and source scope
 
@@ -343,5 +343,6 @@ permission and at most one review round of its own. Source closeout, merging,
 preview integration, native builds and destructive worktree cleanup remain
 separate authorised operations.
 
-Next gate: maintainer review of this committed spec. Only after that approval,
-write the implementation plan for this experiment. Discuss #239 separately.
+The maintainer approved this written spec and authorised pushing the branch
+and writing its implementation plan. Application implementation remains a
+separate execution gate. Discuss #239 separately.
