@@ -1855,7 +1855,7 @@ metadata surfaces have regression coverage.
 `app/brew.tsx`, `app/brewRecord.tsx`, `components/BagSheet.tsx`,
 `constants/network.ts`, related tests.
 
-- [ ] **Step 1: Reuse the existing pinned bean-link codec and independent tests.**
+- [x] **Step 1: Reuse the existing pinned bean-link codec and independent tests.**
 
 ```bash
 git diff --binary 7108d0c3ad2563014de18dfa9879994942716eea 06ba667e143baf05f7ab89ec1af48493b39febf5 -- library/brew/handoff/beanLink.ts library/brew/handoff/__tests__/beanLink.test.ts | git apply --3way
@@ -1867,7 +1867,7 @@ instead of letting Date roll it into March. Add the add-bean deep-link prefix
 to the existing network inventory and its test if that inventory enumerates
 outbound transports; do not introduce a service endpoint or automatic launch.
 
-- [ ] **Step 2: Write the historic identity regression first.**
+- [x] **Step 2: Write the historic identity regression first.**
 
 In the existing envelope fixtures, add a record whose coffee.name is the same
 for two physical bags but `record.bag.beanName` is bag-specific. Change the
@@ -1875,7 +1875,7 @@ current recipe's selected bag after the record. Assert the historic envelope
 still names its original bag; a confirmed hint may override that name, while
 records without bag metadata preserve the existing pod-first behaviour.
 
-- [ ] **Step 3: Replace the bag-aware branch of `beanFor`, preserving legacy behaviour.**
+- [x] **Step 3: Replace the bag-aware branch of `beanFor`, preserving legacy behaviour.**
 
 ```ts
 if (brew.bag !== undefined) {
@@ -1933,7 +1933,7 @@ The brew and record screens use their record's snapshot, never
 `sharedBagDatabase().openFor(record.recipeUuid)`. Batch handoff uses saved
 historic identity when present and does not start a questionnaire per row.
 
-- [ ] **Step 4: Run green and commit.**
+- [x] **Step 4: Run green and commit.**
 
 ```bash
 npx jest --runTestsByPath library/brew/handoff/__tests__/beanLink.test.ts library/brew/handoff/__tests__/bagBean.test.ts library/brew/handoff/__tests__/envelope.test.ts hooks/__tests__/useBrewHandoff.test.ts hooks/__tests__/useBrewRecordHandoff.test.ts hooks/__tests__/useBrewBatchHandoff.test.ts library/__tests__/networkInventory.test.ts --runInBand
@@ -1941,6 +1941,13 @@ git add library/brew/handoff/beanLink.ts library/brew/handoff/bagBean.ts library
 git commit -m "feat(bags): hand off the bag actually used by each brew" \
   -m "Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
 ```
+
+Task 10 qualification: 938 affected tests passed on both platforms. Frozen
+bag identity precedes pod-name matching; unnamed attributed bags require an
+explicit name or remain unsent, including batch sends. The add-bean action
+does not persist an identity on open failure, and distinguishes an opened
+external form from a later failed local save. It never claims external
+creation. Legacy handoff behaviour remains covered.
 
 ## Task 11: Qualification, release notes and an explicit execution stop
 

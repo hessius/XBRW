@@ -1,4 +1,5 @@
 import {act, cleanup, renderHook} from "@testing-library/react-native";
+import {Linking} from "react-native";
 import {useBagManager} from "@/hooks/useBagManager";
 import CoffeeBagDatabase from "@/library/CoffeeBagDatabase";
 import RecipeDatabase from "@/library/RecipeDatabase";
@@ -20,6 +21,56 @@ function fixture(saved = true) {
     if (saved) recipes.insertRecipes([recipe]);
     return {recipe, recipes, store: new CoffeeBagDatabase()};
 }
+
+it("opens add-bean only explicitly and saves its confirmed identity after the link opens", async () => {
+    const {recipe, store} = fixture();
+    store.create(bagFixture());
+    const open = jest.spyOn(Linking, "openURL").mockResolvedValue(undefined);
+    const {result} = await renderHook(() => useBagManager(recipe, true, "beanconqueror", () => store));
+    await act(async () => { result.current.edit(bagFixture()); });
+    expect(open).not.toHaveBeenCalled();
+    await act(async () => { await result.current.addBean({
+        name: "Physical bag", beanName: "Confirmed second bag", sizeGrams: 250, adviceSource: "estimate"
+    }); });
+    expect(open).toHaveBeenCalledWith(expect.stringMatching(/^beanconqueror:\/\/ADD_USER_BEAN\?/));
+    expect(store.get("bag-a")?.beanName).toBe("Confirmed second bag");
+    expect(notify).toHaveBeenCalledWith(expect.objectContaining({message: expect.stringMatching(/Confirm the bag there/)}));
+});
+
+it("keeps the form open and does not save an external identity when opening the other app fails", async () => {
+    jest.spyOn(console, "warn").mockImplementation(() => {});
+    const {recipe, store} = fixture();
+    store.create(bagFixture());
+    jest.spyOn(Linking, "openURL").mockRejectedValue(new Error("unavailable"));
+    const {result} = await renderHook(() => useBagManager(recipe, true, "beanconqueror", () => store));
+    await act(async () => { result.current.edit(bagFixture()); });
+    await act(async () => { await result.current.addBean({
+        name: "Unsaved", beanName: "Unsaved external", sizeGrams: 250, adviceSource: "estimate"
+    }); });
+    expect(store.get("bag-a")?.beanName).toBeUndefined();
+    expect(store.get("bag-a")?.name).toBe(bagFixture().name);
+    expect(result.current.panel.kind).toBe("form");
+    expect(result.current.beanBusy).toBe(false);
+    expect(notify).toHaveBeenCalledWith(expect.objectContaining({tone: "error"}));
+});
+
+it("reports that the app opened when its subsequent local save fails, without claiming creation", async () => {
+    jest.spyOn(console, "warn").mockImplementation(() => {});
+    const {recipe, store} = fixture();
+    store.create(bagFixture());
+    jest.spyOn(Linking, "openURL").mockResolvedValue(undefined);
+    jest.spyOn(store, "editAndCorrect").mockImplementation(() => { throw new Error("disk full"); });
+    const {result} = await renderHook(() => useBagManager(recipe, true, "beanconqueror", () => store));
+    await act(async () => { result.current.edit(bagFixture()); });
+    await act(async () => { await result.current.addBean({
+        name: "Bag", beanName: "Confirmed", sizeGrams: 250, adviceSource: "estimate"
+    }); });
+    expect(notify).toHaveBeenCalledWith(expect.objectContaining({
+        tone: "error", message: expect.stringMatching(/opened, but the bag could not be saved/)
+    }));
+    expect(store.get("bag-a")?.beanName).toBeUndefined();
+    expect(result.current.panel.kind).toBe("form");
+});
 
 it("creates, links and selects a bag without saving unsaved recipe parameters", async () => {
     const {recipe, recipes, store} = fixture();

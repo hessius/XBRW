@@ -6,6 +6,12 @@ import {SHARE_API_URL} from "@/constants/share";
 
 const ROOT = path.join(__dirname, "..", "..");
 
+it("discloses the explicit add-bean transport and does not describe opening it as creation", () => {
+    const capability = SILENT_CAPABILITIES.find(row => row.id === "beanconqueror");
+    expect(capability?.detail).toContain("beanconqueror://ADD_USER_BEAN");
+    expect(capability?.detail).toContain("opening the form does not prove the bag was added");
+});
+
 /**
  * What the walk does not enter.
  *

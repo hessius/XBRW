@@ -59,7 +59,7 @@ import {
     retrospectiveFlowSeries
 } from "@/library/brew/flowRate";
 import {canHandOff, HANDOFF_TARGETS} from "@/library/brew/handoff/targets";
-import {handoffCoffee} from "@/library/brew/handoff/backfill";
+import {handoffNeedsName} from "@/library/brew/handoff/backfill";
 import {beanNameFromRecipe} from "@/library/brew/handoff/beanName";
 import {liveDrawdown} from "@/library/brew/liveDrawdown";
 import {buildTeaCycleViews} from "@/library/brew/teaCycle";
@@ -471,12 +471,12 @@ export default function Brew({historyStore}: {historyStore?: ExportStore} = {}) 
     const handoffStore = historyStore?.markSent === undefined
         ? undefined
         : {markSent: historyStore.markSent};
+    const [namingSource, setNamingSource] = useState<BrewExportSource | null>(null);
     const {send: sendHandoff, busy: handoffBusy} = useBrewHandoff(
-        () => canHandOffCurrentBrew() ? latestExport(historyStore ?? sharedBrewDatabase()) : null,
+        () => namingSource ?? (canHandOffCurrentBrew() ? latestExport(historyStore ?? sharedBrewDatabase()) : null),
         handoffStore
     );
-    // The machine knows what a pod was and never what a hopper held, so the
-    // coffee is only ever a question for a brew that came from beans.
+    // A pod identifies coffee, not which physical bag Beanconqueror holds.
     const [namingBean, setNamingBean] = useState(false);
     const [handoffTarget] = HANDOFF_TARGETS;
     // The verdict goes on the row the run has just written, which is why the id
@@ -889,7 +889,8 @@ export default function Brew({historyStore}: {historyStore?: ExportStore} = {}) 
                                               );
                                               if (source !== null && !canHandOff(source.record)) return;
                                               if (source == null
-                                                  || handoffCoffee(source.record, recipe) === undefined) {
+                                                  || handoffNeedsName(source.record, recipe)) {
+                                                  setNamingSource(source);
                                                   setNamingBean(true);
                                                   return;
                                               }
@@ -905,8 +906,12 @@ export default function Brew({historyStore}: {historyStore?: ExportStore} = {}) 
             )}
         </YStack>
 
-        <BeanNameSheet open={namingBean} onOpenChange={setNamingBean}
-                       suggestion={beanNameFromRecipe(recipe.name) ?? ""}
+        <BeanNameSheet open={namingBean} onOpenChange={open => {
+                           setNamingBean(open);
+                           if (!open) setNamingSource(null);
+                       }}
+                       requireName={namingSource?.record.bag !== undefined}
+                       suggestion={namingSource?.record.bag?.bagName ?? beanNameFromRecipe(recipe.name) ?? ""}
                        onConfirm={(name) => void sendHandoff(name)} />
         </KeyboardAvoidingView>
     );

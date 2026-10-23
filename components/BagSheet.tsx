@@ -58,7 +58,7 @@ type Props = {
      * states guidance, the sheet prefills it while keeping all three values editable.
      */
     coffee?: AdvisedCoffee;
-    /** The name Beanconqueror will see on this recipe's brews. */
+    /** An unconfirmed placeholder suggestion, never saved just by opening the form. */
     beanName: string;
     /** Bumped by the caller on each open, so the fields start fresh. */
     epoch: number;
@@ -78,6 +78,8 @@ type Props = {
     onSave: (result: BagSheetResult) => void;
     onFinish: () => void;
     onRemove: () => void;
+    onAddBean?: (result: BagSheetResult) => void;
+    beanBusy?: boolean;
 };
 
 const fieldLayout = {
@@ -158,7 +160,7 @@ function priceNumber(text: string): number | undefined {
  */
 function BagForm({
     tracker, bag, gramsLeft, suggestedRoastedOn, coffee, beanName,
-    onSave, onFinish, onRemove, sizes, suggestedSize, priceFor
+    onSave, onFinish, onRemove, sizes, suggestedSize, priceFor, onAddBean, beanBusy = false
 }: Omit<Props, "open" | "onOpenChange" | "epoch">) {
     const {palette} = useAppearance();
     const fieldStyle = {...fieldLayout, color: palette.text, backgroundColor: palette.raised};
@@ -179,7 +181,7 @@ function BagForm({
     // Follows the chosen size until the person types a price of their own.
     const [priceTyped, setPriceTyped] = useState(false);
     const [name, setName] = useState(bag?.name ?? "");
-    const [externalName, setExternalName] = useState(bag?.beanName ?? beanName);
+    const [externalName, setExternalName] = useState(bag?.beanName ?? "");
     const [left, setLeft] = useState(gramsLeft !== null ? String(gramsLeft) : "");
     const [leftTouched, setLeftTouched] = useState(false);
     const [level, setLevel] = useState<RoastLevelKey | null>(
@@ -219,9 +221,9 @@ function BagForm({
         setBest(String(ROAST_LEVEL_DEFAULTS[key].bestUntilDay));
     }
 
-    function save() {
+    function save(action = onSave) {
         if (!valid || sizeGrams === undefined) return;
-        onSave({
+        action({
             name: nameValue,
             sizeGrams,
             ...(roastedOn !== undefined ? {roastedOn} : {}),
@@ -369,6 +371,7 @@ function BagForm({
                             <Label>BEAN NAME</Label>
                                 <TextInput testID="bag-bean-name-field" accessibilityLabel="Beanconqueror bean name"
                                            value={externalName} onChangeText={setExternalName}
+                                           placeholder={beanName || "Optional bean name"}
                                            maxLength={BAG_BEAN_NAME_MAX} autoCorrect={false}
                                            placeholderTextColor={palette.placeholder}
                                            style={fieldStyle}/>
@@ -399,18 +402,26 @@ function BagForm({
 
                 <ActionButton label={bag === null ? "ADD AND USE BAG" : "SAVE"}
                               spoken={bag === null ? "Add and use bag" : "Save bag"}
-                              testID="bag-save" tone={palette.text} filled disabled={!valid}
-                              onPress={save}/>
+                              testID="bag-save" tone={palette.text} filled disabled={!valid || beanBusy}
+                              onPress={() => save()}/>
+                {bag !== null && tracker === "beanconqueror" && onAddBean && (
+                    <ActionButton label="OPEN IN BEANCONQUEROR" spoken="Add this bag in Beanconqueror"
+                        testID="bag-add-bean" tone={palette.text}
+                        disabled={!valid || !externalValue || beanBusy}
+                        onPress={() => save(onAddBean)}/>
+                )}
                 {bag !== null && (
                     <XStack gap="$2">
                         {bag.finishedAt === undefined && <YStack flex={1}>
                             <ActionButton label="FINISHED" spoken="Mark this bag finished"
                                           testID="bag-sheet-finish" tone={palette.text}
+                                          disabled={beanBusy}
                                           onPress={onFinish}/>
                         </YStack>}
                         <YStack flex={1}>
                             <ActionButton label="REMOVE" spoken="Remove this bag"
                                           testID="bag-sheet-remove" tone={palette.danger}
+                                          disabled={beanBusy}
                                           onPress={onRemove}/>
                         </YStack>
                     </XStack>

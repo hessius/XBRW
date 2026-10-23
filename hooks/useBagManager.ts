@@ -1,11 +1,13 @@
-import {useState} from "react";
+import {useRef, useState} from "react";
 import {Linking} from "react-native";
 import {useCoffeeBag} from "@/hooks/useCoffeeBag";
 import {useNow} from "@/hooks/useNow";
 import {sharedBagDatabase} from "@/library/CoffeeBagDatabase";
 import type CoffeeBagDatabase from "@/library/CoffeeBagDatabase";
 import {bagEligible, bagRunParam} from "@/library/bagRun";
-import {balanceLine, dayOf, newBag, type BagTracker, type CoffeeBag} from "@/library/coffeeBag";
+import {BAG_BEAN_NAME_MAX, balanceLine, dayOf, newBag, reviveBag, type BagTracker, type CoffeeBag} from "@/library/coffeeBag";
+import {bagShareBean} from "@/library/brew/handoff/bagBean";
+import {beanLink} from "@/library/brew/handoff/beanLink";
 import type {BagSheetResult} from "@/components/BagSheet";
 import {notify} from "@/components/XbrwToast";
 import type Recipe from "@/library/Recipe";
@@ -24,6 +26,8 @@ export function useBagManager(
     const active = enabled && recipe !== null && bagEligible(recipe);
     const uuid = recipe?.uuid ?? "";
     const [scope, setScope] = useState({uuid, active, epoch: 0, panel: CLOSED});
+    const sendingBean = useRef(false);
+    const [beanBusy, setBeanBusy] = useState(false);
     if (scope.uuid !== uuid || scope.active !== active) {
         setScope({uuid, active, epoch: scope.epoch + 1, panel: CLOSED});
     }
@@ -67,20 +71,52 @@ export function useBagManager(
     function select(id: string | null) {
         perform(store => store.select(uuid, id, Date.now()));
     }
+    function detailsFor(result: BagSheetResult, previous: CoffeeBag | null) {
+        return {
+            name: result.name, sizeGrams: result.sizeGrams,
+            boughtOn: previous?.boughtOn ?? dayOf(Date.now()), roastedOn: result.roastedOn,
+            price: result.price, beanName: result.beanName,
+            ...result.figures, adviceSource: result.adviceSource
+        };
+    }
     function save(result: BagSheetResult) {
         perform(store => {
             if (panel.kind !== "form") throw new Error("Open a bag before saving it.");
             const previous = panel.id === null ? null : store.get(panel.id);
             if (panel.id !== null && previous === null) throw new Error("That bag has been removed.");
-            const details = {
-                name: result.name, sizeGrams: result.sizeGrams,
-                boughtOn: previous?.boughtOn ?? dayOf(Date.now()), roastedOn: result.roastedOn,
-                price: result.price, beanName: result.beanName,
-                ...result.figures, adviceSource: result.adviceSource
-            };
+            const details = detailsFor(result, previous);
             if (previous === null) store.createAndSelect(newBag(details), uuid, Date.now());
             else store.editAndCorrect({...previous, ...details}, result.gramsLeft);
         });
+    }
+    async function addBean(result: BagSheetResult) {
+        if (sendingBean.current) return;
+        sendingBean.current = true;
+        setBeanBusy(true);
+        let opened = false;
+        try {
+            if (reading.status !== "ready" || recipe === null || tracker !== "beanconqueror"
+                || panel.kind !== "form" || panel.id === null) throw new Error("Open a saved bag first.");
+            const saved = reading.store.get(panel.id);
+            if (saved === null) throw new Error("That bag has been removed.");
+            const name = result.beanName?.trim();
+            if (!name || name.length > BAG_BEAN_NAME_MAX) throw new Error("Confirm the external bean name.");
+            const bag = reviveBag({...saved, ...detailsFor(result, saved), beanName: name});
+            if (bag === null) throw new Error("The bag details are invalid.");
+            await Linking.openURL(beanLink(bagShareBean(recipe, bag, name)));
+            opened = true;
+            reading.store.editAndCorrect(bag, result.gramsLeft);
+            notify({tone: "info", message: "Opened Beanconqueror's add-bean screen. Confirm the bag there."});
+            close();
+        } catch (error) {
+            console.warn("Could not open or save the Beanconqueror bag.", error);
+            notify({tone: "error", message: opened
+                ? "Beanconqueror opened, but the bag could not be saved here. Check it before trying again."
+                : "Could not open this bag in Beanconqueror. Check the bag details and that Beanconqueror is installed."});
+        } finally {
+            sendingBean.current = false;
+            setBeanBusy(false);
+        }
     }
     function currentId() {
         const id = panel.kind === "form" ? panel.id
@@ -120,7 +156,7 @@ export function useBagManager(
         reading, tracker, now, panel, epoch: scope.epoch, formBag,
         covered: active && panel.kind !== "closed",
         choose, inventory, existing, add, edit, select, save, finish, remove, unlink,
-        summaryFor, paramsFor, reorder, close
+        summaryFor, paramsFor, reorder, close, addBean, beanBusy
     };
 }
 

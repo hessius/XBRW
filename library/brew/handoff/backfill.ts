@@ -73,3 +73,8 @@ export function backfillFromRecipe<T extends BrewRecord>(record: T, recipe: Reci
 export function handoffCoffee(record: BrewRecord, recipe: Recipe | null): PodCoffee | undefined {
     return record.coffee ?? recipe?.coffee;
 }
+
+export function handoffNeedsName(record: BrewRecord, recipe: Recipe | null): boolean {
+    return record.bag !== undefined ? !record.bag.beanName?.trim()
+        : handoffCoffee(record, recipe) === undefined;
+}

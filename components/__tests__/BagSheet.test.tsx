@@ -6,6 +6,25 @@ import {renderWithProviders, SHEET_PRESS_TIMEOUT} from "@/test-utils/render";
 import {dayOf} from "@/library/coffeeBag";
 
 const noop = () => {};
+it("does not silently confirm a pod name and opens add-bean only from its explicit action", async () => {
+    const onSave = jest.fn();
+    const onAddBean = jest.fn();
+    await renderWithProviders(<BagSheet open epoch={1} onOpenChange={noop}
+        bag={bagFixture()} tracker="beanconqueror" gramsLeft={null} beanName="Pod guess"
+        onSave={onSave} onAddBean={onAddBean} onFinish={noop} onRemove={noop}/>);
+    expect(screen.getByLabelText("Beanconqueror bean name")).toHaveDisplayValue("");
+    expect(screen.getByTestId("bag-add-bean")).toBeDisabled();
+    await pressSave(onSave);
+    expect(onSave.mock.calls[0][0]).not.toHaveProperty("beanName");
+    expect(onAddBean).not.toHaveBeenCalled();
+    await fireEvent.changeText(screen.getByLabelText("Beanconqueror bean name"), "Second bag");
+    await waitFor(async () => {
+        await fireEvent.press(screen.getByTestId("bag-add-bean"));
+        expect(onAddBean).toHaveBeenCalledWith(expect.objectContaining({beanName: "Second bag"}));
+    }, {timeout: SHEET_PRESS_TIMEOUT});
+    expect(onSave).toHaveBeenCalledTimes(1);
+});
+
 async function pressSave(onSave: jest.Mock) {
     await waitFor(async () => {
         await fireEvent.press(screen.getByTestId("bag-save"));

@@ -68,5 +68,6 @@ export function BagManagementSheets({manager, recipe}: {manager: BagManager; rec
         tracker={manager.tracker} bag={formBag} gramsLeft={panel.gramsLeft}
         coffee={recipe?.coffee} suggestedRoastedOn={roastDayFromCoffee(recipe?.coffee?.roastingDate)}
         beanName={(recipe?.coffee?.name ?? recipe?.displayName() ?? "").slice(0, BAG_BEAN_NAME_MAX)}
-        onSave={manager.save} onFinish={manager.finish} onRemove={manager.remove}/>;
+        onSave={manager.save} onFinish={manager.finish} onRemove={manager.remove}
+        onAddBean={manager.addBean} beanBusy={manager.beanBusy}/>;
 }

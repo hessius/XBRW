@@ -2,7 +2,7 @@ import {useRef, useState} from "react";
 
 import {useBrewHandoff} from "@/hooks/useBrewHandoff";
 import type {BrewExportSource} from "@/hooks/useBrewExport";
-import {handoffCoffee} from "@/library/brew/handoff/backfill";
+import {handoffNeedsName} from "@/library/brew/handoff/backfill";
 import {canHandOff} from "@/library/brew/handoff/targets";
 import type Recipe from "@/library/Recipe";
 
@@ -72,7 +72,7 @@ export function useBrewRecordHandoff(
         if (opened === null || !canHandOff(opened.record)) return;
         commitNoteDraft();
         setRatingBeforeSend(false);
-        if (handoffCoffee(opened.record, recipe) === undefined) {
+        if (handoffNeedsName(opened.record, recipe)) {
             setNamingBean(true);
             return;
         }
@@ -87,7 +87,7 @@ export function useBrewRecordHandoff(
             setRatingBeforeSend(true);
             return;
         }
-        if (handoffCoffee(opened.record, recipe) === undefined) {
+        if (handoffNeedsName(opened.record, recipe)) {
             setNamingBean(true);
             return;
         }
