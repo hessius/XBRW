@@ -1478,6 +1478,58 @@ describe("HomeScreen, opening one editor at a time", () => {
             .props.importantForAccessibility).toBe("no-hide-descendants");
     });
 
+    it("uses the editor's bag chooser in TUNE and hides the sheet underneath it", async () => {
+        const {default: RealRecipes} = jest.requireActual("@/library/RecipeDatabase");
+        const {default: Bags} = jest.requireActual("@/library/CoffeeBagDatabase");
+        const {bagFixture} = jest.requireActual("@/test-utils/bags");
+        const recipe = writable("Ethiopia");
+        new RealRecipes().insertRecipes([recipe]);
+        const bags = new Bags();
+        bags.create(bagFixture());
+        bags.select(recipe.uuid, "bag-a", 1);
+        const settings = new Settings(memoryStorage());
+        settings.set("bagExperimentEnabled", true);
+        await renderWithProviders(<HomeScreen db={store([recipe])} settings={settings}/>);
+        await screen.findByText("Ethiopia");
+        await fireEvent.press(screen.getByLabelText("Quick edit Ethiopia", {includeHiddenElements: true}));
+        await settleSheet();
+        await waitFor(async () => {
+            await fireEvent.press(screen.getByTestId("selected-bag-row"));
+            expect(screen.getByRole("radio", {name: /No bag/})).toBeTruthy();
+        }, {timeout: SHEET_PRESS_TIMEOUT});
+        expect(screen.queryByTestId("quick-edit-panel")).toBeNull();
+        expect(screen.getByTestId("quick-edit-panel", {includeHiddenElements: true})).toBeTruthy();
+        expect(screen.getByTestId("home-content", {includeHiddenElements: true})
+            .props.importantForAccessibility).toBe("no-hide-descendants");
+    });
+
+    it("passes the selected physical bag with a home quick-edited brew", async () => {
+        mockRemembered = "machine-device-id";
+        const {default: RealRecipes} = jest.requireActual("@/library/RecipeDatabase");
+        const {default: Bags} = jest.requireActual("@/library/CoffeeBagDatabase");
+        const {bagFixture} = jest.requireActual("@/test-utils/bags");
+        const recipe = writable("Ethiopia");
+        new RealRecipes().insertRecipes([recipe]);
+        const bags = new Bags();
+        bags.create(bagFixture());
+        bags.select(recipe.uuid, "bag-a", 1);
+        const settings = new Settings(memoryStorage());
+        settings.set("bagExperimentEnabled", true);
+        await renderWithProviders(<HomeScreen db={store([recipe])} settings={settings}/>);
+        await screen.findByText("Ethiopia");
+        await fireEvent.press(screen.getByLabelText("Quick edit Ethiopia", {includeHiddenElements: true}));
+        await settleSheet();
+        await fireEvent.press(screen.getByLabelText("Increase Quick edit dose"));
+        await waitFor(async () => {
+            await fireEvent.press(screen.getByTestId("home-quick-edit-brew"));
+            expect(mockPush).toHaveBeenCalledTimes(1);
+        }, {timeout: SHEET_PRESS_TIMEOUT});
+        expect(mockPush).toHaveBeenLastCalledWith(expect.objectContaining({
+            params: expect.objectContaining({bagSelection: JSON.stringify("bag-a"),
+                quickEditAdjustments: JSON.stringify({dose: 16})})
+        }));
+    });
+
     it("brews a quick edited clone from the action tray without saving it", async () => {
         mockRemembered = "machine-device-id";
         const original = writable("Ethiopia");

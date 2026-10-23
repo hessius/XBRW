@@ -10,6 +10,7 @@ import {
 } from "@/library/bagRun";
 import {parseBagInventory, type BagBundle, type BagInventoryBackup} from "@/library/bagBackup";
 import {migrateLegacyBags} from "@/library/bagMigration";
+import Recipe from "@/library/Recipe";
 
 export type BagSelection = {
     recipeUuid: string;
@@ -112,6 +113,18 @@ type RunRow = {
     coveredByBaseline: number;
     overlapsBaseline: number;
 };
+type BalanceRow = {baselineGrams: number; needsCheck: number; usedGrams: number; unresolved: number};
+export type SelectedBagRecipe = {
+    recipe: Recipe; bag: CoffeeBag; balance: BagBalance; selectedAt: number;
+};
+const ACCOUNTING_COLUMNS = `
+    b.baselineGrams, b.needsCheck,
+    COALESCE(SUM(CASE WHEN r.coveredByBaseline = 0 AND r.consumption = 'used'
+        THEN json_extract(r.snapshot, '$.dose') ELSE 0 END), 0) AS usedGrams,
+    COALESCE(MAX(CASE
+        WHEN (r.coveredByBaseline = 0 AND r.consumption = 'uncertain')
+            OR (r.overlapsBaseline = 1 AND r.consumption <> 'unused')
+        THEN 1 ELSE 0 END), 0) AS unresolved`;
 
 function readRun(row: RunRow): {snapshot: BagRunSnapshot; progress: BagRunProgress} {
     let value: unknown;
@@ -203,6 +216,50 @@ export default class CoffeeBagDatabase implements BagFactsStore, BagAccountingSt
             "SELECT id, bag FROM coffee_bags_v2 ORDER BY id;"
         ).map(readBag);
     }
+
+    public hasRecipe(uuid: string): boolean {
+        return this.db.getFirstSync("SELECT uuid FROM recipes WHERE uuid = ?;", [uuid]) !== null;
+    }
+
+    public editAndCorrect(bag: CoffeeBag, gramsLeft?: number): void {
+        this.atomically(() => {
+            this.edit(bag);
+            if (gramsLeft !== undefined) this.correct(bag.id, gramsLeft);
+        });
+    }
+
+    public selectedRecipes(tracker: BagTracker): SelectedBagRecipe[] {
+        if (tracker === "xbrw") {
+            for (const row of this.db.getAllSync<RunRow>(`
+                SELECT * FROM coffee_bag_runs WHERE bagId IN (
+                    SELECT bagId FROM coffee_bag_selections WHERE bagId IS NOT NULL
+                );`
+            )) readRun(row);
+        }
+        return this.db.getAllSync<BalanceRow & BagRow & {
+            recipeUuid: string; recipeJSON: string; selectedAt: number
+        }>(`
+            SELECT s.recipeUuid, s.selectedAt, b.id, b.bag, p.recipeJSON,
+                ${tracker === "xbrw" ? ACCOUNTING_COLUMNS
+                    : "b.baselineGrams, b.needsCheck, 0 AS usedGrams, 0 AS unresolved"}
+            FROM coffee_bag_selections s
+            JOIN coffee_bag_links l ON l.recipeUuid = s.recipeUuid AND l.bagId = s.bagId
+            JOIN coffee_bags_v2 b ON b.id = s.bagId
+            JOIN recipes p ON p.uuid = s.recipeUuid
+            LEFT JOIN coffee_bag_runs r ON r.bagId = b.id
+            WHERE json_extract(b.bag, '$.finishedAt') IS NULL
+            GROUP BY s.recipeUuid ORDER BY s.recipeUuid;`
+        ).map(row => {
+            const bag = readBag(row);
+            const recipe = new Recipe(undefined, row.recipeJSON);
+            if (recipe.uuid !== row.recipeUuid || !Number.isFinite(row.selectedAt) || row.selectedAt < 0) {
+                throw new Error("Could not read the recipe's bag selection.");
+            }
+            return {recipe, bag, selectedAt: row.selectedAt,
+                balance: this.balanceFrom(row, bag.id, recipe.dosage, tracker)};
+        });
+    }
+
 
     public create(bag: CoffeeBag): void {
         const value = checkedBag(bag);
@@ -401,20 +458,20 @@ export default class CoffeeBagDatabase implements BagFactsStore, BagAccountingSt
             "SELECT * FROM coffee_bag_runs WHERE bagId = ?;", [bagId]
         );
         for (const row of runs) readRun(row);
-        const row = this.db.getFirstSync<{
-            baselineGrams: number; needsCheck: number; usedGrams: number; unresolved: number
-        }>(`
-            SELECT b.baselineGrams, b.needsCheck,
-                COALESCE(SUM(CASE WHEN r.coveredByBaseline = 0 AND r.consumption = 'used'
-                    THEN json_extract(r.snapshot, '$.dose') ELSE 0 END), 0) AS usedGrams,
-                COALESCE(MAX(CASE
-                    WHEN (r.coveredByBaseline = 0 AND r.consumption = 'uncertain')
-                        OR (r.overlapsBaseline = 1 AND r.consumption <> 'unused')
-                    THEN 1 ELSE 0 END), 0) AS unresolved
+        const row = this.db.getFirstSync<BalanceRow>(`
+            SELECT ${ACCOUNTING_COLUMNS}
             FROM coffee_bags_v2 b
             LEFT JOIN coffee_bag_runs r ON r.bagId = b.id
             WHERE b.id = ? GROUP BY b.id;`, [bagId]
         );
+        return this.balanceFrom(row, bagId, dose, tracker);
+    }
+
+    private balanceFrom(row: BalanceRow | null, bagId: string, dose: number, tracker: BagTracker): BagBalance {
+        if (tracker === "beanconqueror") return {kind: "external"};
+        if ([...failedRuns(this.db).values()].some(run => run.snapshot.bagId === bagId)) {
+            return {kind: "needsCheck"};
+        }
         if (row === null || !isGramsLeft(row.baselineGrams)
             || (row.needsCheck !== 0 && row.needsCheck !== 1)
             || (row.unresolved !== 0 && row.unresolved !== 1)

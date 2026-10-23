@@ -34,6 +34,7 @@ import {type BackupPayload} from "@/library/backup";
 import {appDatabase} from "@/library/appDatabase";
 import CoffeeBagDatabase, {bagTablesExist} from "@/library/CoffeeBagDatabase";
 import {legacyBagTableExists} from "@/library/bagMigration";
+import {isBagTrackerSetting, resolveBagTracker} from "@/library/coffeeBag";
 import type {BagInventoryBackup} from "@/library/bagBackup";
 import {isThemeId, isRecipeColourMode, type ThemeId, type RecipeColourMode} from "@/library/appearance";
 import type {BrewRecord} from "@/library/brew/BrewRecord";
@@ -125,6 +126,50 @@ export default function SettingsScreen({settings}: Props) {
     const [labsUnlocked, setLabsUnlocked] = useSetting("labsUnlocked", settings);
     const [beanconquerorHandoff, setBeanconquerorHandoff] =
         useSetting("beanconquerorHandoff", settings);
+    const [bagExperimentEnabled, setBagExperimentEnabled] = useSetting("bagExperimentEnabled", settings);
+    const [bagTracker, setBagTracker] = useSetting("bagTracker", settings);
+
+    function changeBagExperiment(enabled: boolean) {
+        try {
+            if (enabled) new CoffeeBagDatabase().markAllNeedsCheck();
+            setBagExperimentEnabled(enabled);
+        } catch (error) {
+            console.warn("Could not change the coffee bag experiment.", error);
+            notify({tone: "error", message: "Could not enable coffee bags. Your setting has not changed."});
+        }
+    }
+
+    function changeTracker(next: string) {
+        if (!isBagTrackerSetting(next)) {
+            notify({tone: "error", message: "Choose a coffee bag tracker."});
+            return;
+        }
+        try {
+            if (bagExperimentEnabled
+                && resolveBagTracker(next, beanconquerorHandoff) === "xbrw"
+                && resolveBagTracker(bagTracker, beanconquerorHandoff) !== "xbrw") {
+                new CoffeeBagDatabase().markAllNeedsCheck();
+            }
+            setBagTracker(next);
+        } catch (error) {
+            console.warn("Could not change the coffee bag tracker.", error);
+            notify({tone: "error", message: "Could not change the bag tracker. Your setting has not changed."});
+        }
+    }
+
+    function changeHandoff(enabled: boolean) {
+        try {
+            if (bagExperimentEnabled
+                && resolveBagTracker(bagTracker, enabled) === "xbrw"
+                && resolveBagTracker(bagTracker, beanconquerorHandoff) !== "xbrw") {
+                new CoffeeBagDatabase().markAllNeedsCheck();
+            }
+            setBeanconquerorHandoff(enabled);
+        } catch (error) {
+            console.warn("Could not change the Beanconqueror handoff.", error);
+            notify({tone: "error", message: "Could not change the handoff. Check your coffee bags first."});
+        }
+    }
     const cloud = useCloudSession();
 
     async function signOutOfCloud() {
@@ -738,7 +783,17 @@ export default function SettingsScreen({settings}: Props) {
                     <SettingsToggleRow
                         label="Send brews to Beanconqueror"
                         description="Needs a version of Beanconqueror that can read the link. Older ones will say they do not recognise it."
-                        value={beanconquerorHandoff} onChange={setBeanconquerorHandoff}/>
+                        value={beanconquerorHandoff} onChange={changeHandoff}/>
+                    <SettingsToggleRow label="Coffee bags"
+                        description="Experimental bag tracking, freshness estimates and brew suggestions. Off by default and may not stay in the app."
+                        value={bagExperimentEnabled} onChange={changeBagExperiment}/>
+                    {bagExperimentEnabled && <SettingsChoiceRow label="Coffee bag tracker"
+                        description="Auto follows the Beanconqueror handoff preference. There is no live synchronisation."
+                        value={bagTracker} onChange={changeTracker} stacked options={[
+                            {value: "auto", label: "AUTO"},
+                            {value: "xbrw", label: "XBRW++"},
+                            {value: "beanconqueror", label: "BEANCONQUEROR"}
+                        ]}/>}
                     <SettingsActionRow label="Hide Labs"
                                        detail="Anything you switched on here stays on."
                                        onPress={() => setLabsUnlocked(false)}/>

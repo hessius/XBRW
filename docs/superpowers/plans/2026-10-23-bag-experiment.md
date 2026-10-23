@@ -1509,7 +1509,7 @@ git commit -m "feat(bags): distinguish supplied guidance from freshness estimate
 `app/editRecipe.tsx`, `app/index.tsx`, `components/AboutDeck.tsx`, relevant tests,
 `package.json`, `package-lock.json`, `jest.setup.js`, generated licences.
 
-- [ ] **Step 1: Add disabled-path tests before adding the settings row.**
+- [x] **Step 1: Add disabled-path tests before adding the settings row.**
 
 In `app/__tests__/settings.test.tsx`, `app/__tests__/editRecipe.test.tsx`
 and new `hooks/__tests__/useCoffeeBag.test.ts`, assert literal default false;
@@ -1530,7 +1530,7 @@ Add all three to `BackupExcluded` and `NOT_IN_BACKUP`; never add them to
 `applySettings`. The tracker follows the local Beanconqueror preference in
 auto mode, so copying it between devices is not appropriate here.
 
-- [ ] **Step 2: Add the single explicit opt-in and enabled-only hooks.**
+- [x] **Step 2: Add the single explicit opt-in and enabled-only hooks.**
 
 ```tsx
 <SettingsToggleRow
@@ -1559,7 +1559,7 @@ accounting. Return `{recipe, bag, balance, selectedAt}` rows after validation.
 Never call `getRecipe` once per card or use the currently filtered
 `library.recipes` as a whole-inventory lookup.
 
-- [ ] **Step 3: Reuse only the three named bag presentation files.**
+- [x] **Step 3: Reuse only the three named bag presentation files.**
 
 ```bash
 git diff --binary 8f2638dfa2e75928ff447fbbd0ee03ba14986886 dcf0343a2e6501027781738dc35ab78a0d27acd3 -- components/BagSection.tsx components/BagSheet.tsx components/RoastDayField.tsx | git apply --3way
@@ -1587,7 +1587,7 @@ Do not overwrite current app.json with #238's old version/runtime settings;
 the task base uses the accepted 2.2.0/fingerprint configuration. Native clients
 will need separate authorised rebuilds.
 
-- [ ] **Step 4: Add the complete selected-bag row and chooser bindings.**
+- [x] **Step 4: Add the complete selected-bag row and chooser bindings.**
 
 ```tsx
 import {Text, XStack, YStack} from "tamagui";
@@ -1689,7 +1689,7 @@ stale prefilled reading. Initial creation seeds size; later size edits change
 purchase facts only. A needsCheck balance may be corrected explicitly but
 does not force a correction to save unrelated bag facts.
 
-- [ ] **Step 5: Integrate layout A and cover screen accessibility.**
+- [x] **Step 5: Integrate layout A and cover screen accessibility.**
 
 Wrap the existing editor action buttons in a measured YStack containing the
 selected-bag row only when enabled and linked bags exist. Preserve the
@@ -1710,7 +1710,7 @@ Add `bagSelection: bagRunParam(selectedId)` to the editor/home navigation
 payloads only when the experiment is enabled; absent remains the existing
 normal path. An explicit No bag is encoded as JSON null.
 
-- [ ] **Step 6: Run green and commit.**
+- [x] **Step 6: Run green and commit.**
 
 Add `components/__tests__/SelectedBagRow.test.tsx`,
 `BagPickerSheet.test.tsx`, adapt source `BagSheet.test.tsx` and
@@ -1726,6 +1726,13 @@ git add library/Settings.ts library/CoffeeBagDatabase.ts hooks/useCoffeeBag.ts h
 git commit -m "feat(bags): add default-off Labs controls and optional bag chooser" \
   -m "Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
 ```
+
+Task 8 qualification: 958 affected tests passed on iOS/Android (four existing
+skips), typecheck and targeted lint passed (one existing test-harness warning),
+and Expo Doctor passed all 21 checks. Editor and TUNE use one shared manager;
+the measured action stack includes the bag row, and a covered underlying sheet
+retains its state while hiding its controls on both platforms. The new native
+calendar still requires a separately authorised rebuilt development client.
 
 ## Task 9: Selected-bag badges and one deduplicated Ready suggestion
 

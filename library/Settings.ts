@@ -293,6 +293,7 @@ export const DEFAULTS = {
     /** Device-local opt-in; inventory survives when this is off. */
     bagExperimentEnabled: false,
     bagTracker: "auto" as BagTrackerSetting,
+    readyToBrewDismissedOn: "",
     /**
      * Whether the LABS section is visible in settings.
      *
@@ -421,13 +422,13 @@ export type SettingKey = keyof typeof DEFAULTS;
  */
 export type BackupExcluded =
     "machineDeviceId" | "savedMachines" | "lastCardRead" | "labsUnlocked" | "beanconquerorHandoff" |
-    "bagExperimentEnabled" | "bagTracker" |
+    "bagExperimentEnabled" | "bagTracker" | "readyToBrewDismissedOn" |
     "machineModelString" | "machineName" | "ratingPromptDismissed" |
     "drawerHintLastShownAt" | "drawerHintShownCount" | "drawerHintManualOpens" |
     "drawerHintSignature" | "drawerHintLastSeenAt" | "roasterCatalogue" | "roasterAlerts";
 export const NOT_IN_BACKUP: readonly SettingKey[] = [
     "machineDeviceId", "savedMachines", "lastCardRead", "labsUnlocked", "beanconquerorHandoff",
-    "bagExperimentEnabled", "bagTracker",
+    "bagExperimentEnabled", "bagTracker", "readyToBrewDismissedOn",
     "machineModelString", "machineName", "ratingPromptDismissed",
     "drawerHintLastShownAt", "drawerHintShownCount", "drawerHintManualOpens",
     "drawerHintSignature", "drawerHintLastSeenAt", "roasterCatalogue", "roasterAlerts"

@@ -1,4 +1,7 @@
 import {useAppearance} from "@/hooks/useAppearance";
+import {useBagManager, type BagManager} from "@/hooks/useBagManager";
+import {BagChoice, BagManagementSheets} from "@/components/BagManagement";
+import {resolveBagTracker} from "@/library/coffeeBag";
 import React, {useEffect, useRef, useState} from "react";
 import {BackHandler, Platform, Share} from "react-native";
 // gesture-handler's FlatList, not React Native's: it keeps the list scroll
@@ -253,13 +256,15 @@ function HomeQuickEditSheet({
     onOpenChange,
     onChange,
     onBrew,
-    temperatureUnit
+    temperatureUnit,
+    bagManager
 }: {
     state: HomeQuickEditState | null;
     onOpenChange: (open: boolean) => void;
     onChange: (adjustments: QuickEditAdjustments) => void;
     onBrew: () => void;
     temperatureUnit: TemperatureUnit;
+    bagManager: BagManager;
 }) {
     const appearance = useAppearance();
     const {palette} = appearance;
@@ -270,8 +275,10 @@ function HomeQuickEditSheet({
 
     return (
         <XbrwSheet open={recipe !== null} onOpenChange={onOpenChange}
-                   title="QUICK EDIT" heightPercent={72}>
+                   title="QUICK EDIT" heightPercent={72} covered={bagManager.covered}>
             {recipe !== null && (
+                <YStack flex={1} gap="$2">
+                <BagChoice manager={bagManager}/>
                 <QuickEditPanel
                     recipe={recipe}
                     adjustments={adjustments}
@@ -293,6 +300,7 @@ function HomeQuickEditSheet({
                             BREW THIS
                         </Button>
                     )}/>
+                </YStack>
             )}
         </XbrwSheet>
     );
@@ -331,6 +339,9 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
     const [showCoffeeMarker] = useSetting("showCoffeeMarker", settings);
     const [dottedProfile] = useSetting("dotMatrixProfile", settings);
     const [showRecipeCardPhotos] = useSetting("showRecipeCardPhotos", settings);
+    const [bagExperimentEnabled] = useSetting("bagExperimentEnabled", settings);
+    const [bagTracker] = useSetting("bagTracker", settings);
+    const [beanconquerorHandoff] = useSetting("beanconquerorHandoff", settings);
     const [showShelfPhotoPreviews] = useSetting("showShelfPhotoPreviews", settings);
     const [invertAutoShelves] = useSetting("invertAutoShelves", settings);
     const [hiddenShelves, setHiddenShelves] = useSetting("hiddenShelves", settings);
@@ -380,6 +391,8 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
     // every tile and every row, rather than one sheet per recipe.
     const [overflowRecipe, setOverflowRecipe] = useState<Recipe | null>(null);
     const [quickEdit, setQuickEdit] = useState<HomeQuickEditState | null>(null);
+    const bagManager = useBagManager(quickEdit?.recipe ?? null, bagExperimentEnabled,
+        resolveBagTracker(bagTracker, beanconquerorHandoff));
 
     // Advance the displayed age while the popover is open.
     //
@@ -1301,7 +1314,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
             };
         router.push({
             pathname: "/brew",
-            params
+            params: {...params, ...bagManager.paramsFor(recipe)}
         });
         return true;
     }
@@ -1345,7 +1358,8 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
         || namingShelf || renamingShelf !== null || shelfActions !== null
         || deletingShelf !== null || beanFilterOpen
         || removingShelf !== null || overflowRecipe !== null || quickEdit !== null
-        || ratingNoteOpen || machinePicker.open || roasterOffer.state.phase === "offer";
+        || ratingNoteOpen || machinePicker.open || roasterOffer.state.phase === "offer"
+        || bagManager.covered;
 
     // The sheet's own row, reachable without the long press that opens it. A
     // reader cannot make that gesture, so every verb the sheet offers is also an
@@ -1848,6 +1862,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                 }}/>
 
             <HomeQuickEditSheet
+                bagManager={bagManager}
                 state={quickEdit}
                 onOpenChange={(next) => {
                     if (!next) setQuickEdit(null);
@@ -1855,6 +1870,8 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                 onChange={onQuickEditChange}
                 onBrew={brewQuickEdit}
                 temperatureUnit={temperatureUnit}/>
+
+            <BagManagementSheets manager={bagManager} recipe={quickEdit?.recipe ?? null}/>
 
             <MachinePickerSheet open={machinePicker.open}
                                 onOpenChange={machinePicker.setOpen}

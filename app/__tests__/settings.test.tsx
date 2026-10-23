@@ -1633,6 +1633,79 @@ describe("SettingsScreen", () => {
             expect(settings.get("beanconquerorHandoff")).toBe(true);
         });
 
+        it("offers one default-off coffee bag experiment and marks old estimates before enabling", async () => {
+            const settings = new Settings(memoryStorage());
+            settings.set("labsUnlocked", true);
+            const bags = new CoffeeBagDatabase();
+            bags.create(bagFixture());
+            expect(settings.get("bagExperimentEnabled")).toBe(false);
+            await renderWithProviders(<SettingsScreen settings={settings}/>);
+            await fireEvent.press(screen.getByRole("switch", {name: "Coffee bags"}));
+            expect(settings.get("bagExperimentEnabled")).toBe(true);
+            expect(bags.balance("bag-a", 18, "xbrw")).toEqual({kind: "needsCheck"});
+            await fireEvent.press(screen.getByRole("button", {name: /^Hide Labs,/}));
+            expect(settings.get("bagExperimentEnabled")).toBe(true);
+        });
+
+        it("does not claim the experiment is enabled when the baseline warning cannot be saved", async () => {
+            jest.spyOn(console, "warn").mockImplementation(() => {});
+            jest.spyOn(CoffeeBagDatabase.prototype, "markAllNeedsCheck").mockImplementation(() => {
+                throw new Error("disk full");
+            });
+            const settings = new Settings(memoryStorage());
+            settings.set("labsUnlocked", true);
+            await renderWithProviders(<SettingsScreen settings={settings}/>);
+            await fireEvent.press(screen.getByRole("switch", {name: "Coffee bags"}));
+            expect(settings.get("bagExperimentEnabled")).toBe(false);
+            expect(mockNotify).toHaveBeenCalledWith(expect.objectContaining({tone: "error"}));
+        });
+
+        it("can disable the experiment even if inventory access is broken", async () => {
+            const access = jest.spyOn(CoffeeBagDatabase.prototype, "markAllNeedsCheck")
+                .mockImplementation(() => { throw new Error("disk full"); });
+            const settings = new Settings(memoryStorage());
+            settings.set("labsUnlocked", true);
+            settings.set("bagExperimentEnabled", true);
+            await renderWithProviders(<SettingsScreen settings={settings}/>);
+            await fireEvent.press(screen.getByRole("switch", {name: "Coffee bags"}));
+            expect(settings.get("bagExperimentEnabled")).toBe(false);
+            expect(access).not.toHaveBeenCalled();
+        });
+
+        it.each(["explicit", "auto"] as const)("requires a check when %s tracking returns to this app", async (mode) => {
+            const settings = new Settings(memoryStorage());
+            settings.set("labsUnlocked", true);
+            settings.set("bagExperimentEnabled", true);
+            settings.set("bagTracker", mode === "explicit" ? "beanconqueror" : "auto");
+            settings.set("beanconquerorHandoff", true);
+            const bags = new CoffeeBagDatabase();
+            bags.create(bagFixture());
+            await renderWithProviders(<SettingsScreen settings={settings}/>);
+            await fireEvent.press(mode === "explicit" ? screen.getByText("XBRW++")
+                : screen.getByRole("switch", {name: "Send brews to Beanconqueror"}));
+            expect(bags.balance("bag-a", 18, "xbrw")).toEqual({kind: "needsCheck"});
+            if (mode === "explicit") expect(settings.get("bagTracker")).toBe("xbrw");
+            else expect(settings.get("beanconquerorHandoff")).toBe(false);
+        });
+
+        it.each(["explicit", "auto"] as const)("retains %s ownership if its required check cannot be saved", async (mode) => {
+            jest.spyOn(console, "warn").mockImplementation(() => {});
+            jest.spyOn(CoffeeBagDatabase.prototype, "markAllNeedsCheck").mockImplementation(() => {
+                throw new Error("disk full");
+            });
+            const settings = new Settings(memoryStorage());
+            settings.set("labsUnlocked", true);
+            settings.set("bagExperimentEnabled", true);
+            settings.set("bagTracker", mode === "explicit" ? "beanconqueror" : "auto");
+            settings.set("beanconquerorHandoff", true);
+            await renderWithProviders(<SettingsScreen settings={settings}/>);
+            await fireEvent.press(mode === "explicit" ? screen.getByText("XBRW++")
+                : screen.getByRole("switch", {name: "Send brews to Beanconqueror"}));
+            expect(settings.get("bagTracker")).toBe(mode === "explicit" ? "beanconqueror" : "auto");
+            expect(settings.get("beanconquerorHandoff")).toBe(true);
+            expect(mockNotify).toHaveBeenCalledWith(expect.objectContaining({tone: "error"}));
+        });
+
         it("closes Labs from inside it, and leaves the rest of settings alone", async () => {
             // The way in can afford to be undiscoverable because nobody
             // arrives at it by accident. A way out that nobody can find is
@@ -1662,6 +1735,7 @@ describe("SettingsScreen", () => {
             mockPickBackup.mockResolvedValue(backupOf(
                 [recipeNamed("A", "u1")],
                 {labsUnlocked: true, beanconquerorHandoff: true,
+                 bagExperimentEnabled: true, bagTracker: "beanconqueror", readyToBrewDismissedOn: "2026-10-23",
                  dotMatrixProfile: true}
             ));
             mockApplyRestore.mockReturnValue({status: "restored", added: 1});
@@ -1677,6 +1751,9 @@ describe("SettingsScreen", () => {
             const restored = new Settings(storage);
             expect(restored.get("labsUnlocked")).toBe(false);
             expect(restored.get("beanconquerorHandoff")).toBe(false);
+            expect(restored.get("bagExperimentEnabled")).toBe(false);
+            expect(restored.get("bagTracker")).toBe("auto");
+            expect(restored.get("readyToBrewDismissedOn")).toBe("");
             // The rest of the block still landed, so this is the Labs keys
             // being refused and not the restore quietly failing.
             expect(restored.get("dotMatrixProfile")).toBe(true);

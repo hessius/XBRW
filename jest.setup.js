@@ -189,3 +189,12 @@ jest.mock("react-native-webview", () => {
     }
     return {__esModule: true, WebView, default: WebView};
 });
+jest.mock("@react-native-community/datetimepicker", () => {
+    const React = require("react");
+    const {View} = require("react-native");
+    const DateTimePickerAndroid = {open: jest.fn(), dismiss: jest.fn(async () => true)};
+    function DateTimePicker(props) {
+        return React.createElement(View, props);
+    }
+    return {__esModule: true, default: DateTimePicker, DateTimePickerAndroid};
+});

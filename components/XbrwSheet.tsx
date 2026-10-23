@@ -23,6 +23,8 @@ type Props = {
      * to look at.
      */
     showTitle?: boolean;
+    /** Another sheet is above this one; retain its state but hide its controls. */
+    covered?: boolean;
     /**
      * How much of the screen the sheet takes, as a percentage.
      *
@@ -87,7 +89,7 @@ export function insetSnapPoint(heightPercent: number, inset: number, screenHeigh
 /** The house sheet: a bottom sheet with a dot-matrix title and CLOSE affordance. */
 export default function XbrwSheet({
     open, onOpenChange, title, showTitle = true, heightPercent = 70,
-    prewarm = false, children
+    prewarm = false, covered = false, children
 }: Props) {
     const {palette} = useAppearance();
     const bottomInset = useBottomInset();
@@ -263,7 +265,11 @@ export default function XbrwSheet({
                     separates rows within the content. The heading is a label
                     for the sheet rather than its first row, and at `$3` it
                     crowded the first control enough to read as part of it. */}
-                <YStack {...STABLE_HOST} flex={1} gap="$5" aria-label={title} accessibilityViewIsModal={shown}>
+                <YStack {...STABLE_HOST} flex={1} gap="$5" aria-label={title}
+                        pointerEvents={covered ? "none" : "auto"}
+                        accessibilityElementsHidden={covered}
+                        importantForAccessibility={covered ? "no-hide-descendants" : "auto"}
+                        accessibilityViewIsModal={shown && !covered}>
                     {heading}
                     {children}
                 </YStack>
