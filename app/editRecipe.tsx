@@ -1,9 +1,12 @@
 import {useAppearance} from "@/hooks/useAppearance";
+import {useBagManager} from "@/hooks/useBagManager";
+import {BagAbout, BagChoice, BagManagementSheets} from "@/components/BagManagement";
+import {resolveBagTracker} from "@/library/coffeeBag";
 import {useLocalSearchParams, useNavigation} from "expo-router";
 import router from "@/hooks/steadyRouter";
 import {openEasyModeRecipe} from "@/hooks/useEasyModeSlots";
 import React, {useEffect, useRef, useState} from "react";
-import {Linking, Pressable, ScrollView, Share, View, useWindowDimensions} from "react-native";
+import {Pressable, ScrollView, Share, View, useWindowDimensions} from "react-native";
 import Animated, {FadeIn, FadeOut, SlideInDown, SlideOutDown} from "react-native-reanimated";
 import {Text, XStack, YStack} from "tamagui";
 
@@ -19,7 +22,6 @@ import LeaveEditorSheet, {type LeaveIntent} from "@/components/LeaveEditorSheet"
 import NfcOverlay from "@/components/NfcOverlay";
 import RecipeHero, {heroFoldAway} from "@/components/RecipeHero";
 import RecipeOverflowSheet from "@/components/RecipeOverflowSheet";
-import BagSheet, {type BagSheetResult} from "@/components/BagSheet";
 import RenameSheet from "@/components/RenameSheet";
 import MachineChip from "@/components/MachineChip";
 import MachinePickerSheet from "@/components/MachinePickerSheet";
@@ -50,24 +52,7 @@ import {
     type BeanProfileStore,
     type RecipeRatingStore
 } from "@/hooks/useBrewHistory";
-import {sharedSettings, useSetting} from "@/hooks/useSetting";
-import {useCoffeeBag} from "@/hooks/useCoffeeBag";
-import {useNow} from "@/hooks/useNow";
-import {freshnessOf} from "@/library/restPeak";
-import {openLink} from "@/components/openLink";
-import {
-    newBag,
-    readBag,
-    reorderUrl,
-    resolveBagTracker,
-    roastDayFromCoffee,
-    withGramsLeft,
-    withSize,
-    type CoffeeBag
-} from "@/library/coffeeBag";
-import {bagBeanName, bagBeanNameFixed, bagShareBean} from "@/library/brew/handoff/bagBean";
-import {beanLink} from "@/library/brew/handoff/beanLink";
-import {reorderLink} from "@/library/roasterBuy";
+import {useSetting} from "@/hooks/useSetting";
 import {resolveAccent} from "@/library/accent";
 import {CARD_GRIND_MIN, grindBand} from "@/library/grindBands";
 import {BLE_GRIND_SIZE} from "@/library/cardLimits";
@@ -104,18 +89,6 @@ const AUTOSAVED_LABELS: string[] = [RECIPE_LABELS.TITLE, RECIPE_LABELS.NOTE];
  * this is trying to save the user from.
  */
 const FALLBACK_MAX_STAGES = 10;
-
-/**
- * The catalogue's buy link for the same bag, or undefined. A settings store
- * that cannot be read costs the reorder its catalogue link and nothing else.
- */
-function catalogueReorder(coffeeUrl: string | undefined, grams: number | undefined): string | undefined {
-    try {
-        return reorderLink(sharedSettings(), coffeeUrl, grams);
-    } catch {
-        return undefined;
-    }
-}
 
 function maxStagesFromLastCard(lastCardRead: string): number {
     const info = parseCapture(lastCardRead)?.systemInfo;
@@ -663,6 +636,7 @@ type ActionBarProps = {
     onSave: () => void;
     /** Reports how much of the screen the bar covers, once laid out. */
     onHeight: (height: number) => void;
+    bagChoice?: React.ReactNode;
 };
 
 /**
@@ -742,7 +716,7 @@ function readKnownTags(database: RecipeDatabase): string[] {
 
 function ActionBar({
     accent, canBrewAtAll, canBrew, quickEditOpen, onBrew, onQuickEdit, canWrite, canSave,
-    onWrite, onSave, onHeight
+    onWrite, onSave, onHeight, bagChoice
 }: ActionBarProps) {
     const appearance = useAppearance();
     const {palette} = appearance;
@@ -759,12 +733,14 @@ function ActionBar({
         // the sides'. The bar is
         // pinned over the deck, so every point above the buttons is a point
         // taken off the control being edited underneath it.
-        <XStack testID="editor-actions"
+        <YStack testID="editor-actions"
                 position="absolute" bottom={0} left={0} right={0} gap="$2"
                 paddingHorizontal="$4" paddingTop="$2"
                 paddingBottom={pinnedBarPadding(bottomInset, ACTION_BAR_SINK)}
                 backgroundColor={palette.base}
                 onLayout={(event) => onHeight(event.nativeEvent.layout.height)}>
+            {bagChoice}
+            <XStack gap="$2">
             {/* The accent goes to the one act that runs the recipe. With no
                 machine there is nothing to run it on, so WRITE inherits it:
                 putting a recipe on a card is then the primary act. */}
@@ -781,7 +757,8 @@ function ActionBar({
                        onPress={onWrite}/>
             <BarButton label="SAVE" accessibilityLabel="Save"
                        enabled={canSave} flex={1} onPress={onSave}/>
-        </XStack>
+            </XStack>
+        </YStack>
     );
 }
 
@@ -899,6 +876,9 @@ export default function EditRecipe(
 
     const [showHint, setShowHint] = useSetting("showHints");
     const [showRecipeAvatars] = useSetting("showRecipeAvatars");
+    const [bagExperimentEnabled] = useSetting("bagExperimentEnabled");
+    const [bagTracker] = useSetting("bagTracker");
+    const [beanconquerorHandoff] = useSetting("beanconquerorHandoff");
     const [rememberedMachine] = useSetting("machineDeviceId");
     const [rawTemperatureUnit] = useSetting("temperatureUnit");
     const [lastCardRead] = useSetting("lastCardRead");
@@ -956,9 +936,6 @@ export default function EditRecipe(
     const [renameOpen, setRenameOpen] = useState(false);
     const machinePicker = useMachinePicker();
     const [beanProfileOpen, setBeanProfileOpen] = useState(false);
-    const [bagSheetOpen, setBagSheetOpen] = useState(false);
-    // Bumped on each open so the bag sheet's fields start from the stored bag.
-    const [bagSheetEpoch, setBagSheetEpoch] = useState(0);
     const [bypassWriteOpen, setBypassWriteOpen] = useState(false);
     const [quickEditOpen, setQuickEditOpen] = useState(false);
     const [quickEditAdjustments, setQuickEditAdjustments] =
@@ -1094,16 +1071,8 @@ export default function EditRecipe(
         historyStore
     );
 
-    // The bag, re-read on focus: coming back from a brew this screen opened is
-    // exactly when a dose has just left it. The subscriber is held in state so
-    // its identity is stable on a screen the compiler does not memoise.
-    const [bagTrackerSetting] = useSetting("bagTracker");
-    const [beanconquerorHandoff] = useSetting("beanconquerorHandoff");
-    const bagTracker = resolveBagTracker(bagTrackerSetting, beanconquerorHandoff);
-    const [subscribeFocus] = useState(() =>
-        (listener: () => void) => navigation.addListener("focus", listener));
-    const coffeeBag = useCoffeeBag(recipe?.uuid ?? "", subscribeFocus);
-    const now = useNow();
+    const bagManager = useBagManager(recipe ?? null, bagExperimentEnabled,
+        resolveBagTracker(bagTracker, beanconquerorHandoff));
 
     if (!recipe) return null;
 
@@ -1124,68 +1093,6 @@ export default function EditRecipe(
      * on the deck behind the panel is not something to brew over.
      */
     const canBrewNow = quickEditOpen ? !quickEditBlocked && !inputError : canBrew;
-
-    const openBag = coffeeBag.stored;
-    // Grams are this app's estimate only while this app is the tracker.
-    const bagReading = openBag !== null && bagTracker === "xbrw"
-        ? readBag(openBag.bag, openBag.usedGrams, recipe.dosage) : null;
-    // The same bag again from the roaster's catalogue when it still sells
-    // that size, otherwise the coffee's page.
-    const bagReorderUrl = catalogueReorder(recipe.coffee?.url, openBag?.bag.sizeGrams)
-        ?? reorderUrl(recipe);
-    // Freshness is the roast day's, so it is drawn in both tracker modes.
-    const bagFreshness = openBag === null ? null : freshnessOf(openBag.bag, now);
-
-    function openBagSheet() {
-        setBagSheetEpoch((epoch) => epoch + 1);
-        setBagSheetOpen(true);
-    }
-
-    /**
-     * Save what the sheet says, and in Beanconqueror mode hand a new bag over.
-     *
-     * The bag is saved here first either way: its roast date is needed in both
-     * modes, and a Beanconqueror that will not open must not cost the person
-     * what they typed. The link goes out only for a new bag; an edit stays
-     * local, because sending again would add a second bean on their side.
-     */
-    function saveBag(result: BagSheetResult) {
-        if (!recipe) return;
-        setBagSheetOpen(false);
-        const existing = openBag?.bag ?? null;
-        if (existing !== null) {
-            let next: CoffeeBag = withSize(existing, result.sizeGrams);
-            next = {...next, roastedOn: result.roastedOn, price: result.price, ...result.figures};
-            if (result.roastedOn === undefined) delete next.roastedOn;
-            if (result.price === undefined) delete next.price;
-            if (result.beanName !== undefined) next.beanName = result.beanName;
-            const before = bagReading?.remainingGrams;
-            if (result.gramsLeft !== undefined && result.gramsLeft !== before) {
-                next = withGramsLeft(next, result.gramsLeft);
-            }
-            coffeeBag.save(next);
-            return;
-        }
-        const bag = newBag(recipe.uuid, {
-            sizeGrams: result.sizeGrams,
-            roastedOn: result.roastedOn,
-            price: result.price,
-            ...result.figures,
-            beanName: bagTracker === "beanconqueror"
-                ? (result.beanName ?? bagBeanName(recipe)) : undefined
-        });
-        coffeeBag.save(bag);
-        if (bagTracker === "beanconqueror") {
-            const url = beanLink(bagShareBean(recipe, bag, bag.beanName ?? bagBeanName(recipe)));
-            // No canOpenURL preflight, for the reason `useBrewHandoff` gives:
-            // iOS answers false without a query-schemes entry even when
-            // Beanconqueror is installed.
-            Linking.openURL(url).catch(() => notify({
-                tone:    "error",
-                message: "The bag is saved here, but Beanconqueror could not be opened. Make sure it is installed."
-            }));
-        }
-    }
 
     function closeQuickEdit() {
         setQuickEditOpen(false);
@@ -1363,7 +1270,7 @@ export default function EditRecipe(
             };
         router.push({
             pathname: "/brew",
-            params
+            params: {...params, ...bagManager.paramsFor(brewing)}
         });
     }
 
@@ -1440,7 +1347,7 @@ export default function EditRecipe(
     // `accessibilityViewIsModal` does on iOS.
     const screenCovered = showNfcOverlay || overflowOpen || revertOpen || helpOpen
         || bypassWriteOpen || renameOpen || beanProfileOpen || leavePrompt !== null
-        || ratingNoteOpen || machinePicker.open || bagSheetOpen;
+        || ratingNoteOpen || machinePicker.open || bagManager.covered;
     // The quick edit panel covers the deck but not the action bar, which holds
     // the BREW it adjusts. So it hides the deck rather than the screen.
     const deckCovered = screenCovered || quickEditOpen;
@@ -1583,6 +1490,7 @@ export default function EditRecipe(
                               setOverflowProtection={setOverflowProtection}/>
                 ) : deck === "about" ? (
                     <AboutDeck recipe={recipe} accent={accent}
+                               bagManagement={<BagAbout manager={bagManager} recipe={recipe}/>}
                                showAvatar={showRecipeAvatars} brews={brewSummary}
                                beanProfile={beanProfile}
                                onRate={(rating) => {
@@ -1590,16 +1498,6 @@ export default function EditRecipe(
                                    refreshBeanProfile();
                                }}
                                onShowBeanProfile={() => setBeanProfileOpen(true)}
-                               bag={{
-                                   tracker:     bagTracker,
-                                   bag:         openBag?.bag ?? null,
-                                   reading:     bagReading,
-                                   freshness:   bagFreshness,
-                                   reorderUrl:  bagReorderUrl,
-                                   onOpenSheet: openBagSheet,
-                                   onFinish:    coffeeBag.finish,
-                                   onReorder:   openLink
-                               }}
                                knownTags={knownTags}
                                onTags={editTags}
                                showHint={showHint} dispatch={dispatch}
@@ -1633,6 +1531,7 @@ export default function EditRecipe(
             </YStack>
 
             <ActionBar accent={accent} canWrite={canWrite} canSave={canSave}
+                       bagChoice={<BagChoice manager={bagManager}/>}
                        canBrewAtAll={rememberedMachine !== ""}
                        canBrew={canBrewNow}
                        quickEditOpen={quickEditOpen}
@@ -1654,7 +1553,9 @@ export default function EditRecipe(
 
             </YStack>
 
-            <QuickEditLayer open={quickEditOpen}
+            <BagManagementSheets manager={bagManager} recipe={recipe}/>
+
+            <QuickEditLayer open={quickEditOpen && !bagManager.covered}
                             recipe={recipe}
                             adjustments={quickEditAdjustments}
                             accent={accent}
@@ -1684,28 +1585,7 @@ export default function EditRecipe(
                                  onRevert={() => setRevertOpen(true)}
                                  onToggleFavourite={toggleFavourite}
                                  favourite={recipe.favourite}
-                                 onBag={openBagSheet}
-                                 hasBag={openBag !== null}
                                  onDelete={deleteRecipe}/>
-
-            <BagSheet open={bagSheetOpen} onOpenChange={setBagSheetOpen}
-                      epoch={bagSheetEpoch}
-                      tracker={bagTracker}
-                      bag={openBag?.bag ?? null}
-                      gramsLeft={bagReading?.remainingGrams ?? null}
-                      suggestedRoastedOn={roastDayFromCoffee(recipe.coffee?.roastingDate)}
-                      coffee={recipe.coffee}
-                      beanName={bagBeanName(recipe)}
-                      beanNameFixed={bagBeanNameFixed(recipe)}
-                      onSave={saveBag}
-                      onFinish={() => {
-                          setBagSheetOpen(false);
-                          coffeeBag.finish();
-                      }}
-                      onRemove={() => {
-                          setBagSheetOpen(false);
-                          coffeeBag.remove();
-                      }}/>
 
             <RevertSheet open={revertOpen} sources={revertSources}
                          onOpenChange={setRevertOpen} onReverted={onRecipeReplaced}/>

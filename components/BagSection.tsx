@@ -5,8 +5,8 @@ import DeckSection from "@/components/DeckSection";
 import DotMatrixText from "@/components/DotMatrixText";
 import {useAppearance} from "@/hooks/useAppearance";
 import {
-    remainingLine,
-    type BagReading,
+    balanceLine,
+    type BagBalance,
     type BagTracker,
     type CoffeeBag
 } from "@/library/coffeeBag";
@@ -17,7 +17,13 @@ export type BagSectionProps = {
     /** The open bag, or null when there is none. */
     bag: CoffeeBag | null;
     /** What is left, in `xbrw` mode only. Null in `beanconqueror` mode. */
-    reading: BagReading | null;
+    balance: BagBalance | null;
+    saved?: boolean;
+    problem?: string | null;
+    warning?: string;
+    onChoose: () => void;
+    onInventory: () => void;
+    onUnlink?: () => void;
     /**
      * How fresh the bag is today, in both tracker modes, or null without a
      * roast day and rest figures. Optional so older callers draw nothing.
@@ -75,41 +81,40 @@ function roastLine(bag: CoffeeBag): string | null {
  * here knows the bag is low.
  */
 export default function BagSection({
-    tracker, bag, reading, freshness, reorderUrl, onOpenSheet, onFinish, onReorder
+    tracker, bag, balance, saved = true, problem, warning, freshness, reorderUrl,
+    onOpenSheet, onChoose, onInventory, onUnlink, onFinish, onReorder
 }: BagSectionProps) {
     const {palette} = useAppearance();
     if (bag === null) {
         return (
             <DeckSection title="BAG" testID="about-bag">
                 <Text testID="bag-none" fontSize={13} color={palette.dim}>
-                    {tracker === "xbrw"
-                        ? "Add the bag you bought to count down what is left as you brew."
-                        : "Add the bag you bought and it goes to Beanconqueror, which counts it down as you send brews."}
+                    {saved ? "No bag selected. You can brew without tracking."
+                        : "Save this recipe before linking a bag. You can still brew without tracking."}
                 </Text>
                 <XStack>
-                    <BagButton label="I BOUGHT A BAG" spoken="I bought a bag" testID="bag-add"
-                               onPress={onOpenSheet}/>
+                    {saved && <BagButton label="CHOOSE A BAG" spoken="Choose a bag" testID="bag-add"
+                               onPress={onChoose}/>}
+                    <BagButton label="ALL BAGS" spoken="Manage all coffee bags" testID="bag-inventory"
+                               onPress={onInventory}/>
                 </XStack>
+                {warning && <Text color={palette.warn} fontSize={13}>{warning}</Text>}
             </DeckSection>
         );
     }
 
     const roast = roastLine(bag);
+    const reading = balance?.kind === "estimate" ? balance : null;
     const showReorder = reorderUrl !== undefined
         && (tracker === "beanconqueror" || reading?.low === true);
 
     return (
         <DeckSection title="BAG" testID="about-bag">
             <YStack gap="$1">
-                {tracker === "xbrw" && reading !== null ? (
-                    <Text testID="bag-remaining" fontSize={13} color={palette.text}>
-                        {`${remainingLine(reading)}.`}
-                    </Text>
-                ) : (
-                    <Text testID="bag-elsewhere" fontSize={13} color={palette.text}>
-                        Bag tracked in Beanconqueror.
-                    </Text>
-                )}
+                <Text fontSize={14} color={palette.text}>{bag.name}</Text>
+                {balance !== null && <Text testID="bag-remaining" fontSize={13} color={palette.text}>
+                    {balanceLine(balance)}
+                </Text>}
                 <Text testID="bag-facts" fontSize={12} color={palette.dim}>
                     {[`${bag.sizeGrams} g bag.`, roast].filter((part) => part !== null).join(" ")}
                 </Text>
@@ -120,6 +125,8 @@ export default function BagSection({
                         {freshnessLine(freshness)}
                     </Text>
                 )}
+                {problem && <Text fontSize={13} color={palette.warn}>{problem}</Text>}
+                {warning && <Text fontSize={13} color={palette.warn}>{warning}</Text>}
                 {tracker === "xbrw" && reading?.low === true && !reading.empty && (
                     <Text testID="bag-low" fontSize={13} color={palette.warn}>
                         Running low.
@@ -137,13 +144,19 @@ export default function BagSection({
                                hint="Opens the roaster's page in your browser."
                                testID="bag-reorder" onPress={() => onReorder(reorderUrl)}/>
                 )}
-                {tracker === "xbrw" && reading?.empty === true && (
+                {bag.finishedAt === undefined && (
                     <BagButton label="MARK FINISHED" spoken="Mark this bag finished"
-                               hint="Stops counting this bag. Your brews stay in history."
+                               hint="Clears its selections. Accepted brews and history are kept."
                                testID="bag-finish" onPress={onFinish}/>
                 )}
                 <BagButton label="EDIT BAG" spoken="Edit bag" testID="bag-edit"
                            onPress={onOpenSheet}/>
+                {saved && <BagButton label="CHOOSE A BAG" spoken="Choose a bag" testID="bag-choose"
+                           onPress={onChoose}/>}
+                {onUnlink && <BagButton label="UNLINK" spoken="Unlink this bag from this recipe"
+                    testID="bag-unlink" onPress={onUnlink}/>}
+                <BagButton label="ALL BAGS" spoken="Manage all coffee bags" testID="bag-inventory"
+                           onPress={onInventory}/>
             </XStack>
         </DeckSection>
     );

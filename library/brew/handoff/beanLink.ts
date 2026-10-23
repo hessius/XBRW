@@ -34,6 +34,8 @@
  * midnight with the zone offset, so the calendar day survives every time zone.
  */
 
+import {calendarDay, dayDate} from "@/library/coffeeBag";
+
 /** The bean as this app describes it. Only `name` is required. */
 export type ShareBean = {
     name: string;
@@ -153,16 +155,15 @@ export function toBase64(bytes: Uint8Array): string {
  * `2026-10-12T00:00:00+11:00`. Undefined for anything that is not a day.
  */
 export function beanconquerorDate(day: string | undefined): string | undefined {
-    if (day === undefined) return undefined;
-    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day);
-    if (match === null) return undefined;
-    const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
-    if (Number.isNaN(date.getTime())) return undefined;
+    const valid = calendarDay(day);
+    if (valid === undefined) return undefined;
+    const date = dayDate(valid);
+    if (date === null) return undefined;
     const offset = -date.getTimezoneOffset();
     const sign = offset >= 0 ? "+" : "-";
     const abs = Math.abs(offset);
     const pad = (n: number) => String(n).padStart(2, "0");
-    return `${day}T00:00:00${sign}${pad(Math.floor(abs / 60))}:${pad(abs % 60)}`;
+    return `${valid}T00:00:00${sign}${pad(Math.floor(abs / 60))}:${pad(abs % 60)}`;
 }
 
 /** The `BeanProto` bytes for a bean. */

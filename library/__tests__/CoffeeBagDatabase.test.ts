@@ -1,216 +1,350 @@
-import BrewDatabase from "@/library/BrewDatabase";
-import type {BrewRecord} from "@/library/brew/BrewRecord";
-import {unobservedBrew} from "@/library/brew/BrewRecord";
-import CoffeeBagDatabase, {
-    openBagBeanName,
-    sharedBagDatabase
-} from "@/library/CoffeeBagDatabase";
-import {newBag, readBag, withGramsLeft, type CoffeeBag} from "@/library/coffeeBag";
-import Recipe from "@/library/Recipe";
+import {createTestDatabase} from "@/test-utils/sqlite";
+import {bagFixture, bagRecipe, bagRunFixture as run} from "@/test-utils/bags";
+import CoffeeBagDatabase, {bagRevision, subscribeBagChanges} from "@/library/CoffeeBagDatabase";
 import RecipeDatabase from "@/library/RecipeDatabase";
-import {createTestDatabase, type FakeSQLiteDatabase} from "@/test-utils/sqlite";
 
-let mockBacking: FakeSQLiteDatabase;
+let mockDb: ReturnType<typeof createTestDatabase>;
+jest.mock("expo-sqlite", () => ({openDatabaseSync: () => mockDb}));
 
-jest.mock("expo-sqlite", () => ({
-    openDatabaseSync: () => mockBacking
-}));
+beforeEach(() => { mockDb = createTestDatabase(); });
 
-beforeEach(() => {
-    mockBacking = createTestDatabase();
-});
-
-const T0 = 1_760_000_000_000;
-
-function brew(over: Partial<BrewRecord> = {}): BrewRecord {
-    return {
-        id: `b-${Math.random()}`, recipeUuid: "r1", recipeName: "Guji", accent: "#ff8800",
-        startedAt: T0 + 1000, pouringAt: T0 + 1100, endedAt: T0 + 2000, outcome: "done",
-        failure: null, pours: 3, waterTotal: 288, cupTotal: 260, heldSeconds: 0, dose: 18,
-        ...over
-    } as BrewRecord;
+function stores() {
+    const recipes = new RecipeDatabase();
+    recipes.insertRecipes([bagRecipe("a"), bagRecipe("b")]);
+    const bags = new CoffeeBagDatabase();
+    bags.create(bagFixture());
+    return {recipes, bags};
 }
 
-function bagAt(over: Partial<CoffeeBag> = {}): CoffeeBag {
-    return {...newBag("r1", {sizeGrams: 250}, T0), id: "bag-1", ...over};
-}
-
-describe("brews draw a bag down", () => {
-    it("subtracts the dose of each completed brew after the bag was added", () => {
-        const bags = new CoffeeBagDatabase();
-        const brews = new BrewDatabase();
-        bags.save(bagAt());
-        brews.insert(brew({id: "done"}), []);
-        brews.insert(brew({id: "short", outcome: "endedOnMachine", dose: 20}), []);
-
-        const stored = bags.openFor("r1");
-        expect(stored?.usedGrams).toBe(38);
-        expect(readBag(stored!.bag, stored!.usedGrams, 18).remainingGrams).toBe(212);
+describe("physical bag relationships in SQLite", () => {
+    it("supports two recipes and two simultaneously open bags", () => {
+        const {bags} = stores();
+        bags.create(bagFixture({id: "bag-b"}));
+        bags.select("a", "bag-a", 1);
+        bags.select("b", "bag-a", 2);
+        bags.link("a", "bag-b");
+        expect(bags.linked("a").map(bag => bag.id).sort()).toEqual(["bag-a", "bag-b"]);
+        expect(bags.selection("b")?.bagId).toBe("bag-a");
+        expect(bags.get("bag-a")?.finishedAt).toBeUndefined();
     });
 
-    it("does not count cancelled, failed or lost brews", () => {
-        const bags = new CoffeeBagDatabase();
-        const brews = new BrewDatabase();
-        bags.save(bagAt());
-        brews.insert(brew({id: "c", outcome: "cancelled"}), []);
-        brews.insert(brew({id: "f", outcome: "failed"}), []);
-        brews.insert(brew({id: "l", outcome: "lostContact"}), []);
-        expect(bags.openFor("r1")?.usedGrams).toBe(0);
+    const used = {consumption: "used" as const, possible: true, closed: false};
+    const uncertain = {consumption: "uncertain" as const, possible: true, closed: false};
+
+    describe("durable bag accounting in SQLite", () => {
+        it("combines actual intended doses of two recipes sharing a bag", () => {
+            const {bags} = stores();
+            bags.beginRun(run());
+            bags.updateRun("run-a", {...used, closed: true});
+            bags.beginRun(run({runId: "run-b", recipeUuid: "b", dose: 30}));
+            bags.updateRun("run-b", {...used, closed: true});
+            expect(bags.balance("bag-a", 18, "xbrw"))
+                .toMatchObject({kind: "estimate", remainingGrams: 202, usedGrams: 48});
+        });
+
+        it("keeps spent coffee spent when history is deleted", () => {
+            const {bags} = stores();
+            bags.beginRun(run());
+            bags.updateRun("run-a", {...used, closed: true});
+            mockDb.runSync("DELETE FROM brews;");
+            expect(new CoffeeBagDatabase().balance("bag-a", 18, "xbrw"))
+                .toMatchObject({kind: "estimate", remainingGrams: 232});
+        });
+
+        it("does not reset or duplicate an existing allocation", () => {
+            const {bags} = stores();
+            bags.beginRun(run());
+            bags.updateRun("run-a", {...used, closed: true});
+            expect(bags.beginRun(run())).toEqual({...used, closed: true});
+            expect(() => bags.beginRun(run({dose: 20}))).toThrow();
+            bags.updateRun("run-a", {...used, closed: true});
+            expect(bags.balance("bag-a", 18, "xbrw"))
+                .toMatchObject({kind: "estimate", remainingGrams: 232});
+        });
+
+        it("a preflight refusal costs no coffee and can rearm the same allocation", () => {
+            const {bags} = stores();
+            bags.beginRun(run());
+            bags.updateRun("run-a", {consumption: "unused", possible: false, closed: true});
+            expect(bags.balance("bag-a", 18, "xbrw"))
+                .toMatchObject({kind: "estimate", remainingGrams: 250});
+            bags.correct("bag-a", 100);
+            bags.updateRun("run-a", {consumption: "pending", possible: false, closed: false});
+            bags.updateRun("run-a", {...used, closed: true});
+            expect(bags.balance("bag-a", 18, "xbrw"))
+                .toMatchObject({kind: "estimate", remainingGrams: 82});
+        });
+
+        it("does not recharge pre-correction consumption on a late terminal callback", () => {
+            const {bags} = stores();
+            bags.beginRun(run());
+            bags.updateRun("run-a", used);
+            bags.correct("bag-a", 100);
+            bags.updateRun("run-a", {...used, closed: true});
+            expect(bags.balance("bag-a", 18, "xbrw"))
+                .toMatchObject({kind: "estimate", remainingGrams: 100});
+        });
+
+        it("still charges consumption after a correction before sending", () => {
+            const {bags} = stores();
+            bags.beginRun(run());
+            bags.correct("bag-a", 100);
+            bags.updateRun("run-a", {...used, closed: true});
+            expect(bags.balance("bag-a", 18, "xbrw"))
+                .toMatchObject({kind: "estimate", remainingGrams: 82});
+        });
+
+        it("keeps overlapping unresolved grinding uncertain until a later correction", () => {
+            const {bags} = stores();
+            bags.beginRun(run());
+            bags.updateRun("run-a", uncertain);
+            bags.correct("bag-a", 100);
+            bags.updateRun("run-a", {...used, closed: true});
+            expect(bags.balance("bag-a", 18, "xbrw")).toEqual({kind: "needsCheck"});
+            bags.correct("bag-a", 100);
+            expect(bags.balance("bag-a", 18, "xbrw"))
+                .toMatchObject({kind: "estimate", remainingGrams: 100});
+        });
+
+        it("a confirmed zero-use refusal resolves overlap without a charge", () => {
+            const {bags} = stores();
+            bags.beginRun(run());
+            bags.updateRun("run-a", uncertain);
+            bags.correct("bag-a", 100);
+            bags.updateRun("run-a", {consumption: "unused", possible: false, closed: true});
+            expect(bags.balance("bag-a", 18, "xbrw"))
+                .toMatchObject({kind: "estimate", remainingGrams: 100});
+        });
+
+        it("recovers pending runs honestly while retaining observed consumption", () => {
+            const {bags} = stores();
+            bags.beginRun(run());
+            bags.recoverPending();
+            expect(bags.balance("bag-a", 18, "xbrw")).toEqual({kind: "needsCheck"});
+            bags.correct("bag-a", 250);
+            bags.beginRun(run({runId: "run-b"}));
+            bags.updateRun("run-b", used);
+            bags.recoverPending();
+            expect(bags.balance("bag-a", 18, "xbrw"))
+                .toMatchObject({kind: "estimate", remainingGrams: 232});
+        });
+
+        it("marks gaps without replaying old history and does not reset them on fact edits", () => {
+            const {bags} = stores();
+            bags.markAllNeedsCheck();
+            bags.edit(bagFixture({name: "Renamed", sizeGrams: 320}));
+            expect(bags.balance("bag-a", 18, "xbrw")).toEqual({kind: "needsCheck"});
+            bags.correct("bag-a", 100);
+            expect(bags.balance("bag-a", 18, "xbrw"))
+                .toMatchObject({kind: "estimate", remainingGrams: 100});
+        });
+
+        it("external ownership creates no competing local charge or quantity", () => {
+            const {bags} = stores();
+            bags.beginRun(run({tracker: "beanconqueror"}));
+            expect(mockDb.getAllSync("SELECT * FROM coffee_bag_runs;")).toEqual([]);
+            expect(bags.balance("bag-a", 18, "beanconqueror")).toEqual({kind: "external"});
+        });
+
+        it("keeps positive insufficient coffee distinct from a reliably empty bag", () => {
+            const {bags} = stores();
+            bags.correct("bag-a", 1);
+            expect(bags.balance("bag-a", 18, "xbrw"))
+                .toMatchObject({kind: "estimate", remainingGrams: 1, brewsLeft: 0, empty: false});
+            bags.correct("bag-a", 0);
+            expect(bags.balance("bag-a", 18, "xbrw"))
+                .toMatchObject({kind: "estimate", remainingGrams: 0, empty: true});
+        });
+
+        it("retains over-consumption while clamping only the displayed remaining grams", () => {
+            const {bags} = stores();
+            bags.correct("bag-a", 5);
+            bags.beginRun(run());
+            bags.updateRun("run-a", {...used, closed: true});
+            expect(bags.balance("bag-a", 18, "xbrw"))
+                .toMatchObject({remainingGrams: 0, usedGrams: 18});
+        });
+
+        it("rejects invalid operations and corrupt stored attribution explicitly", () => {
+            const {bags} = stores();
+            expect(() => bags.correct("bag-a", -1)).toThrow();
+            expect(() => bags.correct("missing", 100)).toThrow();
+            expect(() => bags.beginRun(run({dose: NaN}))).toThrow();
+            expect(() => bags.updateRun("missing", used)).toThrow();
+            bags.beginRun(run());
+            mockDb.runSync("UPDATE coffee_bag_runs SET snapshot = ?;", ["{}"]);
+            expect(() => bags.balance("bag-a", 18, "xbrw")).toThrow(/read/i);
+        });
+
+        it("flushes an observed unsaved pour before correcting, without a late second charge", () => {
+            const {bags} = stores();
+            bags.beginRun(run());
+            mockDb.execSync(`CREATE TRIGGER reject_progress BEFORE UPDATE ON coffee_bag_runs
+                BEGIN SELECT RAISE(FAIL, 'disk full'); END;`);
+            expect(() => bags.updateRun("run-a", used)).toThrow("disk full");
+            bags.invalidateBagEstimate(run(), used);
+            expect(bags.balance("bag-a", 18, "xbrw")).toEqual({kind: "needsCheck"});
+            mockDb.execSync("DROP TRIGGER reject_progress;");
+            bags.correct("bag-a", 100);
+            bags.updateRun("run-a", {...used, closed: true});
+            expect(bags.balance("bag-a", 18, "xbrw"))
+                .toMatchObject({kind: "estimate", remainingGrams: 100});
+        });
+
+        it("retains failed observations if even the marker and correction cannot be saved", () => {
+            const {bags} = stores();
+            bags.beginRun(run());
+            mockDb.execSync(`CREATE TRIGGER reject_quantity BEFORE UPDATE ON coffee_bags_v2
+                BEGIN SELECT RAISE(FAIL, 'unavailable'); END;`);
+            expect(() => bags.invalidateBagEstimate(run(), used)).toThrow("unavailable");
+            expect(new CoffeeBagDatabase().balance("bag-a", 18, "xbrw"))
+                .toEqual({kind: "needsCheck"});
+            expect(() => bags.correct("bag-a", 100)).toThrow("unavailable");
+            expect(bags.balance("bag-a", 18, "xbrw")).toEqual({kind: "needsCheck"});
+            expect(mockDb.getFirstSync(
+                "SELECT consumption FROM coffee_bag_runs WHERE runId = 'run-a';"
+            )).toEqual({consumption: "pending"});
+            mockDb.execSync("DROP TRIGGER reject_quantity;");
+            bags.correct("bag-a", 100);
+            bags.updateRun("run-a", {...used, closed: true});
+            expect(bags.balance("bag-a", 18, "xbrw"))
+                .toMatchObject({kind: "estimate", remainingGrams: 100});
+        });
+
+        it("a successful later write cannot clear a persistent gap from another cause", () => {
+            const {bags} = stores();
+            bags.beginRun(run());
+            bags.markAllNeedsCheck();
+            bags.invalidateBagEstimate(run(), used);
+            bags.updateRun("run-a", {...used, closed: true});
+            expect(bags.balance("bag-a", 18, "xbrw")).toEqual({kind: "needsCheck"});
+        });
+
+        it("cannot discard a cached observed pour with an older successful callback", () => {
+            const {bags} = stores();
+            bags.beginRun(run());
+            bags.invalidateBagEstimate(run(), used);
+            expect(() => bags.updateRun("run-a", uncertain)).toThrow(/rewound/i);
+            bags.correct("bag-a", 100);
+            bags.updateRun("run-a", {...used, closed: true});
+            expect(bags.balance("bag-a", 18, "xbrw"))
+                .toMatchObject({kind: "estimate", remainingGrams: 100});
+        });
     });
 
-    it("does not count brews from before the bag, or of another recipe", () => {
-        const bags = new CoffeeBagDatabase();
-        const brews = new BrewDatabase();
-        bags.save(bagAt());
-        brews.insert(brew({id: "old", startedAt: T0 - 5000}), []);
-        brews.insert(brew({id: "other", recipeUuid: "r2"}), []);
-        expect(bags.openFor("r1")?.usedGrams).toBe(0);
+    it("remembers explicit No bag after reopening", () => {
+        const {bags} = stores();
+        bags.select("a", "bag-a", 1);
+        bags.select("a", null, 2);
+        expect(new CoffeeBagDatabase().selection("a"))
+            .toEqual({recipeUuid: "a", bagId: null, selectedAt: 2});
+        expect(bags.linked("a")).toHaveLength(1);
     });
 
-    it("costs nothing for a brew logged by hand, which carries no dose", () => {
-        const bags = new CoffeeBagDatabase();
-        const brews = new BrewDatabase();
-        bags.save(bagAt());
-        brews.insert(unobservedBrew({
-            recipeUuid: "r1", recipeName: "Guji", accent: "#ff8800", rating: 4, at: T0 + 10
-        }), []);
-        expect(bags.openFor("r1")?.usedGrams).toBe(0);
+    it("deleting one recipe unlinks only it", () => {
+        const {recipes, bags} = stores();
+        bags.select("a", "bag-a", 1);
+        bags.select("b", "bag-a", 2);
+        recipes.deleteRecipe("b");
+        expect(bags.get("bag-a")).not.toBeNull();
+        expect(bags.selection("b")).toBeNull();
+        expect(bags.linked("b")).toEqual([]);
+        expect(bags.selection("a")?.bagId).toBe("bag-a");
     });
 
-    it("counts from a manual correction onward", () => {
-        const bags = new CoffeeBagDatabase();
-        const brews = new BrewDatabase();
-        bags.save(bagAt());
-        brews.insert(brew({id: "before", startedAt: T0 + 1000}), []);
-        bags.save(withGramsLeft(bagAt(), 100, T0 + 5000));
-        brews.insert(brew({id: "after", startedAt: T0 + 6000}), []);
-
-        const stored = bags.openFor("r1")!;
-        expect(stored.usedGrams).toBe(18);
-        expect(readBag(stored.bag, stored.usedGrams, 18).remainingGrams).toBe(82);
+    it("replace retains choices for surviving UUIDs and prunes removed links", () => {
+        const {recipes, bags} = stores();
+        recipes.insertRecipe(bagRecipe("c"));
+        bags.select("a", "bag-a", 1);
+        bags.link("b", "bag-a");
+        bags.select("b", null, 2);
+        bags.select("c", "bag-a", 3);
+        recipes.replaceAllRecipes([bagRecipe("a"), bagRecipe("b")]);
+        expect(bags.selection("a")?.bagId).toBe("bag-a");
+        expect(bags.selection("b")?.bagId).toBeNull();
+        expect(bags.selection("c")).toBeNull();
+        expect(bags.linked("c")).toEqual([]);
+        expect(bags.all()).toHaveLength(1);
     });
 
-    it("serves every open bag in one read for the library", () => {
-        const bags = new CoffeeBagDatabase();
-        const brews = new BrewDatabase();
-        bags.save(bagAt());
-        bags.save({...newBag("r2", {sizeGrams: 160}, T0), id: "bag-2"});
-        brews.insert(brew({id: "a"}), []);
-        brews.insert(brew({id: "b", recipeUuid: "r2", dose: 15}), []);
-        brews.insert(brew({id: "c", recipeUuid: "r2", dose: 15, outcome: "cancelled"}), []);
-
-        const open = new RecipeDatabase().coffeeBags();
-        expect(open.r1.usedGrams).toBe(18);
-        expect(open.r2.usedGrams).toBe(15);
-    });
-});
-
-describe("one open bag per recipe", () => {
-    it("finishes the old bag when a new one is bought", () => {
-        const bags = new CoffeeBagDatabase();
-        bags.save(bagAt());
-        bags.save({...newBag("r1", {sizeGrams: 500}, T0 + 10), id: "bag-2"}, T0 + 10);
-
-        expect(bags.openFor("r1")?.bag.id).toBe("bag-2");
-        expect(bags.get("bag-1")?.finishedAt).toBe(T0 + 10);
-        expect(bags.all()).toHaveLength(2);
+    it("a failed replace rolls back links, choices and recipe rows", () => {
+        const {recipes, bags} = stores();
+        bags.select("a", "bag-a", 1);
+        const changed = jest.fn();
+        const unsubscribe = subscribeBagChanges(changed);
+        try {
+            expect(() => recipes.replaceAllRecipes([bagRecipe("x"), bagRecipe("x")])).toThrow();
+            expect(bags.selection("a")?.bagId).toBe("bag-a");
+            expect(bags.linked("a")).toHaveLength(1);
+            expect(recipes.getRecipe("a")?.uuid).toBe("a");
+            expect(recipes.getRecipe("x")).toBeNull();
+            expect(changed).not.toHaveBeenCalled();
+        } finally { unsubscribe(); }
     });
 
-    it("keeps a finished bag in the table but stops reading it as open", () => {
-        const bags = new CoffeeBagDatabase();
-        bags.save(bagAt());
-        bags.finish("bag-1", T0 + 99);
-        expect(bags.openFor("r1")).toBeNull();
-        expect(bags.all()[0].finishedAt).toBe(T0 + 99);
+    it("delete all removes links and choices without deleting physical bags", () => {
+        const {recipes, bags} = stores();
+        bags.select("a", "bag-a", 1);
+        recipes.deleteAllRecipes();
+        expect(bags.selection("a")).toBeNull();
+        expect(bags.linked("a")).toEqual([]);
+        expect(bags.all()).toHaveLength(1);
     });
 
-    it("removes a bag outright, and with its recipe", () => {
-        const bags = new CoffeeBagDatabase();
-        bags.save(bagAt());
-        bags.remove("bag-1");
-        expect(bags.all()).toHaveLength(0);
+    it.each(["finish", "unlink", "remove"] as const)(
+        "%s clears the selected bag without choosing its neighbour", action => {
+            const {bags} = stores();
+            bags.select("a", "bag-a", 1);
+            bags.create(bagFixture({id: "bag-b"}));
+            bags.link("a", "bag-b");
+            if (action === "finish") bags.finish("bag-a", 2_000);
+            if (action === "unlink") bags.unlink("a", "bag-a");
+            if (action === "remove") bags.remove("bag-a");
+            expect(bags.selection("a")?.bagId).toBeNull();
+            expect(bags.get("bag-b")?.finishedAt).toBeUndefined();
+            expect(() => bags.select("a", "missing", 3)).toThrow();
+            expect(bags.selection("a")?.bagId).toBeNull();
+        }
+    );
 
-        const recipes = new RecipeDatabase();
-        const recipe = new Recipe();
-        recipes.insertRecipe(recipe);
-        bags.save({...newBag(recipe.uuid, {sizeGrams: 250}, T0), id: "bag-3"});
-        recipes.deleteRecipe(recipe.uuid);
-        expect(bags.all()).toHaveLength(0);
-    });
-});
-
-describe("restoring bags", () => {
-    it.each([false, true])("preserves a retained recipe's newer local bag during replace (finished: %s)", finished => {
-        const recipes = new RecipeDatabase();
-        const retained = new Recipe();
-        retained.uuid = "r1";
-        const removed = new Recipe();
-        removed.uuid = "r2";
-        recipes.insertRecipes([retained, removed]);
-        const bags = new CoffeeBagDatabase();
-        bags.save(bagAt({gramsAtCount: 90}));
-        if (finished) bags.finish("bag-1", T0 + 100);
-        const local = bags.get("bag-1");
-        bags.save({...newBag("r2", {sizeGrams: 160}, T0), id: "removed-bag"});
-
-        recipes.replaceAllRecipes([retained]);
-        bags.restore([bagAt({gramsAtCount: 250})], new Set(["r1"]));
-
-        expect(bags.get("bag-1")).toEqual(local);
-        expect(bags.get("removed-bag")).toBeNull();
+    it("does not link a finished bag or an unsaved recipe", () => {
+        const {bags} = stores();
+        bags.finish("bag-a", 2_000);
+        expect(() => bags.select("a", "bag-a", 3)).toThrow();
+        expect(() => bags.select("unsaved", null, 3)).toThrow();
+        expect(() => bags.link("unsaved", "bag-a")).toThrow();
     });
 
-    it("rolls recipe and bag deletion back when replacement fails", () => {
-        const recipes = new RecipeDatabase();
-        const recipe = new Recipe();
-        recipe.uuid = "r1";
-        recipes.insertRecipe(recipe);
-        const bags = new CoffeeBagDatabase();
-        bags.save(bagAt());
-        const local = bags.all();
-        const incoming = new Recipe();
-
-        expect(() => recipes.replaceAllRecipes([incoming, incoming])).toThrow();
-
-        expect(recipes.getRecipe(recipe.uuid)?.uuid).toBe(recipe.uuid);
-        expect(recipes.getRecipe(incoming.uuid)).toBeNull();
-        expect(bags.all()).toEqual(local);
+    it("creates and selects atomically and publishes only after commit", () => {
+        const {bags} = stores();
+        const changed = jest.fn();
+        const unsubscribe = subscribeBagChanges(changed);
+        try {
+            const before = bagRevision();
+            expect(() => bags.createAndSelect(bagFixture({id: "bag-b"}), "missing", 1))
+                .toThrow();
+            expect(bags.get("bag-b")).toBeNull();
+            expect(changed).not.toHaveBeenCalled();
+            bags.createAndSelect(bagFixture({id: "bag-b"}), "a", 2);
+            expect(bags.selection("a")?.bagId).toBe("bag-b");
+            expect(changed).toHaveBeenCalledTimes(1);
+            expect(bagRevision()).toBe(before + 1);
+        } finally { unsubscribe(); }
     });
 
-    it("adds missing bags and never overwrites one already here", () => {
-        const bags = new CoffeeBagDatabase();
-        bags.save(bagAt({gramsAtCount: 90}));
-        const added = bags.restore([
-            bagAt({gramsAtCount: 250}),
-            {...newBag("r2", {sizeGrams: 160}, T0), id: "bag-2"}
-        ], new Set(["r1", "r2"]));
-
-        expect(added).toBe(1);
-        expect(bags.get("bag-1")?.gramsAtCount).toBe(90);
+    it("editing purchase facts does not reset a quantity baseline", () => {
+        const {bags} = stores();
+        bags.edit(bagFixture({name: "Renamed", sizeGrams: 320}));
+        expect(bags.get("bag-a")?.name).toBe("Renamed");
+        expect(mockDb.getFirstSync(
+            "SELECT baselineGrams FROM coffee_bags_v2 WHERE id = ?", ["bag-a"]
+        )).toEqual({baselineGrams: 250});
     });
 
-    it("skips a bag for a recipe not in the library", () => {
-        const bags = new CoffeeBagDatabase();
-        expect(bags.restore([bagAt()], new Set(["r9"]))).toBe(0);
-    });
-
-    it("keeps the open bag on this phone over a restored open one", () => {
-        const bags = new CoffeeBagDatabase();
-        bags.save(bagAt());
-        const added = bags.restore([
-            {...newBag("r1", {sizeGrams: 1000}, T0 - 10), id: "old-open"},
-            {...newBag("r1", {sizeGrams: 160}, T0 - 20), id: "old-done", finishedAt: T0 - 15}
-        ], new Set(["r1"]));
-        expect(added).toBe(1);
-        expect(bags.openFor("r1")?.bag.id).toBe("bag-1");
-    });
-});
-
-describe("the name a bag was sent under", () => {
-    it("is offered for the recipe while the bag is open", () => {
-        sharedBagDatabase().save(bagAt({beanName: "Ethiopia Guji"}));
-        expect(openBagBeanName("r1")).toBe("Ethiopia Guji");
-        sharedBagDatabase().finish("bag-1");
-        expect(openBagBeanName("r1")).toBeUndefined();
+    it("surfaces corrupt stored facts rather than silently dropping them", () => {
+        const {bags} = stores();
+        mockDb.runSync("UPDATE coffee_bags_v2 SET bag = ? WHERE id = ?", ["{", "bag-a"]);
+        expect(() => bags.get("bag-a")).toThrow(/read/i);
+        expect(() => bags.all()).toThrow(/read/i);
     });
 });

@@ -1,4 +1,12 @@
 import {useAppearance} from "@/hooks/useAppearance";
+import {useBagManager, type BagManager} from "@/hooks/useBagManager";
+import {BagChoice, BagManagementSheets} from "@/components/BagManagement";
+import {balanceLine, resolveBagTracker, roastDayLabel} from "@/library/coffeeBag";
+import {bagRunParam} from "@/library/bagRun";
+import {httpsUrl} from "@/library/podCoffee";
+import {freshnessLine} from "@/library/restPeak";
+import {useBagSuggestions} from "@/hooks/useBagSuggestions";
+import ReadyToBrewCard from "@/components/ReadyToBrewCard";
 import React, {useEffect, useRef, useState} from "react";
 import {BackHandler, Platform, Share} from "react-native";
 // gesture-handler's FlatList, not React Native's: it keeps the list scroll
@@ -101,27 +109,8 @@ import {asTemperatureUnit, type TemperatureUnit} from "@/library/units";
 import {tagKey} from "@/library/tagKey";
 import {shareBlockReason} from "@/library/shareLink";
 import {type Settings} from "@/library/Settings";
-import {dayOf, resolveBagTracker} from "@/library/coffeeBag";
-import {
-    brewEmphasised,
-    dismissedToday,
-    moreReadyLine,
-    readyBagLine,
-    readyFreshnessLine,
-    readyName,
-    readyToBrew,
-    runningLowLine
-} from "@/library/readyToBrew";
-import ReadyToBrewCard from "@/components/ReadyToBrewCard";
-import {openLink} from "@/components/openLink";
-import {freshnessOf, type Freshness} from "@/library/restPeak";
-import {useNow} from "@/hooks/useNow";
-import type {StoredBagReading} from "@/library/CoffeeBagDatabase";
 import {UNCLIPPED_LIST} from "@/constants/lists";
 import {STABLE_HOST} from "@/constants/views";
-
-/** No bags to draw, one object so a render does not mint a new empty map. */
-const NO_BAGS: Readonly<Record<string, StoredBagReading>> = {};
 
 /**
  * How long one import link stays claimed after it is acted on.
@@ -273,7 +262,8 @@ function HomeQuickEditSheet({
     onChange,
     onBrew,
     onSaveDose,
-    temperatureUnit
+    temperatureUnit,
+    bagManager
 }: {
     state: HomeQuickEditState | null;
     onOpenChange: (open: boolean) => void;
@@ -281,6 +271,7 @@ function HomeQuickEditSheet({
     onBrew: () => void;
     onSaveDose: (dose: number) => void;
     temperatureUnit: TemperatureUnit;
+    bagManager: BagManager;
 }) {
     const appearance = useAppearance();
     const {palette} = appearance;
@@ -291,8 +282,10 @@ function HomeQuickEditSheet({
 
     return (
         <XbrwSheet open={recipe !== null} onOpenChange={onOpenChange}
-                   title="QUICK EDIT" heightPercent={84}>
+                   title="QUICK EDIT" heightPercent={84} covered={bagManager.covered}>
             {recipe !== null && (
+                <YStack flex={1} gap="$2">
+                <BagChoice manager={bagManager}/>
                 <QuickEditPanel
                     recipe={recipe}
                     adjustments={adjustments}
@@ -315,6 +308,7 @@ function HomeQuickEditSheet({
                             BREW THIS
                         </Button>
                     )}/>
+                </YStack>
             )}
         </XbrwSheet>
     );
@@ -351,34 +345,15 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
     const [deletingShelf, setDeletingShelf] = useState<string | null>(null);
     const [onlySelected, setOnlySelected] = useState(false);
     const [showCoffeeMarker] = useSetting("showCoffeeMarker", settings);
-    const [bagTrackerSetting] = useSetting("bagTracker", settings);
-    const [beanconquerorHandoff] = useSetting("beanconquerorHandoff", settings);
-    // Grams left are this app's estimate only while this app is the tracker.
-    // With Beanconqueror counting the bag, a badge here would be a second,
-    // drifting answer, so the cards draw none.
-    const bagTracker = resolveBagTracker(bagTrackerSetting, beanconquerorHandoff);
-    const shownBags = bagTracker === "xbrw" ? library.bags : NO_BAGS;
-    // Freshness is the roast day's, not a count, so it shows in both modes.
-    const now = useNow();
-    const bagFreshness: Record<string, Freshness> = {};
-    for (const [uuid, stored] of Object.entries(library.bags)) {
-        const reading = freshnessOf(stored.bag, now);
-        if (reading !== null) bagFreshness[uuid] = reading.state;
-    }
-    // The "Ready to brew" card: the one open bag worth brewing now. Nothing
-    // at all without an open bag, and nothing for the rest of a day it was
-    // closed on. `readyShown` is the good candidate "+2 more ready" stepped
-    // to, discarded at render once it is no longer a good candidate.
-    const [readyDismissedOn, setReadyDismissedOn] = useSetting("readyToBrewDismissedOn", settings);
-    const [readyShown, setReadyShown] = useState<string | null>(null);
-    const ready = dismissedToday(readyDismissedOn, dayOf(now))
-        ? null
-        : readyToBrew(library.bagRecipes, library.bags, library.evidence, bagTracker, now);
-    const readyEntry = ready === null ? null
-        : ready.good.find((entry) => entry.recipe.uuid === readyShown) ?? ready.entries[0];
-
     const [dottedProfile] = useSetting("dotMatrixProfile", settings);
     const [showRecipeCardPhotos] = useSetting("showRecipeCardPhotos", settings);
+    const [bagExperimentEnabled] = useSetting("bagExperimentEnabled", settings);
+    const [bagTracker] = useSetting("bagTracker", settings);
+    const [beanconquerorHandoff] = useSetting("beanconquerorHandoff", settings);
+    const [readyDismissedOn, setReadyDismissedOn] = useSetting("readyToBrewDismissedOn", settings);
+    const bagSuggestions = useBagSuggestions(bagExperimentEnabled,
+        resolveBagTracker(bagTracker, beanconquerorHandoff), library.revision);
+    const ready = bagSuggestions.entry;
     const [showShelfPhotoPreviews] = useSetting("showShelfPhotoPreviews", settings);
     const [invertAutoShelves] = useSetting("invertAutoShelves", settings);
     const [hiddenShelves, setHiddenShelves] = useSetting("hiddenShelves", settings);
@@ -428,6 +403,8 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
     // every tile and every row, rather than one sheet per recipe.
     const [overflowRecipe, setOverflowRecipe] = useState<Recipe | null>(null);
     const [quickEdit, setQuickEdit] = useState<HomeQuickEditState | null>(null);
+    const bagManager = useBagManager(quickEdit?.recipe ?? null, bagExperimentEnabled,
+        resolveBagTracker(bagTracker, beanconquerorHandoff));
 
     // Advance the displayed age while the popover is open.
     //
@@ -1330,13 +1307,11 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
             notify({tone: "error", message: "Could not save the recipe."});
             return;
         }
-        // The sheet now edits the saved recipe, so the dose is no longer an
-        // adjustment; anything else moved for this brew stays moved.
         setQuickEdit({recipe: saved, adjustments: withoutDose(quickEdit.adjustments)});
         notify({tone: "success", message: `Saved at ${dose} g.`});
     }
 
-    function openBrew(recipe: Recipe, adjustments?: QuickEditAdjustments): boolean {
+    function openBrew(recipe: Recipe, adjustments?: QuickEditAdjustments, bagId?: string): boolean {
         // There is one machine, and `LiveBrewProvider.start` refuses a second
         // run while the first is still going. Without this the tap would push
         // a brew screen that quietly showed the *other* recipe brewing, which
@@ -1362,7 +1337,8 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
             };
         router.push({
             pathname: "/brew",
-            params
+            params: {...params, ...(bagExperimentEnabled && bagId !== undefined
+                ? {bagSelection: bagRunParam(bagId)} : bagManager.paramsFor(recipe))}
         });
         return true;
     }
@@ -1406,7 +1382,8 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
         || namingShelf || renamingShelf !== null || shelfActions !== null
         || deletingShelf !== null || beanFilterOpen
         || removingShelf !== null || overflowRecipe !== null || quickEdit !== null
-        || ratingNoteOpen || machinePicker.open || roasterOffer.state.phase === "offer";
+        || ratingNoteOpen || machinePicker.open || roasterOffer.state.phase === "offer"
+        || bagManager.covered;
 
     // The sheet's own row, reachable without the long press that opens it. A
     // reader cannot make that gesture, so every verb the sheet offers is also an
@@ -1444,12 +1421,6 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
     // shelf's library-wide tally: the two agree except in the instant a delete
     // is settling, and what is on screen is the honest answer.
     const openShelf = shelves.find((shelf) => shelf.id === libraryQuery.openShelfId);
-
-    // The "Ready to brew" card. Not while picking, editing or standing in a
-    // shelf, where the screen is about something else.
-    const readyCard = ready === null || readyEntry === null || picker.active || inShelfRoom
-        || editing || wholeLibraryEmpty
-        ? null : {entry: readyEntry, good: ready.good, low: ready.low};
 
     return (
         <>
@@ -1604,31 +1575,38 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                         }/>
                 )}
 
-                {readyCard !== null && (
-                    <Collapsible open={!collapsed}>
-                        <ReadyToBrewCard
-                            item={readyCard.entry.recipe}
-                            name={readyName(readyCard.entry.recipe)}
-                            accent={resolveAccent(readyCard.entry.recipe)}
-                            imageUri={showRecipeCardPhotos ? readyCard.entry.recipe.imageURL : undefined}
-                            freshnessLine={readyFreshnessLine(readyCard.entry.freshness)}
-                            bagLine={readyBagLine(readyCard.entry.reading)}
-                            emphasised={brewEmphasised(readyCard.entry)}
-                            onOpen={openRecipe}
-                            onBrew={remembered !== "" ? openBrew : undefined}
-                            low={readyCard.low === null ? null : {
-                                line: runningLowLine(readyCard.low.name),
-                                reorderUrl: readyCard.low.reorderUrl
-                            }}
-                            onReorder={openLink}
-                            moreLine={readyCard.good.includes(readyCard.entry)
-                                ? moreReadyLine(readyCard.good.length - 1) : null}
-                            onMore={() => {
-                                const {good, entry} = readyCard;
-                                setReadyShown(good[(good.indexOf(entry) + 1) % good.length].recipe.uuid);
-                            }}
-                            onDismiss={() => setReadyDismissedOn(dayOf(now))}/>
-                    </Collapsible>
+                {bagSuggestions.reading.status === "error" && (
+                    <Text accessibilityRole="alert" color={palette.warn} paddingHorizontal="$4">
+                        {bagSuggestions.reading.message}
+                    </Text>
+                )}
+                {!picker.active && !inShelfRoom && !editing && ready !== null
+                    && bagSuggestions.today !== null && readyDismissedOn !== bagSuggestions.today && (
+                    <ReadyToBrewCard item={ready} name={ready.recipe.displayName()}
+                        accent={resolveAccent(ready.recipe)}
+                        imageUri={showRecipeCardPhotos ? ready.recipe.imageURL : undefined}
+                        freshnessLine={bagSuggestions.problem
+                            ?? (ready.freshness ? freshnessLine(ready.freshness) : undefined)}
+                        bagLine={[ready.bag.name,
+                            ready.bag.roastedOn
+                                ? `Roasted ${roastDayLabel(ready.bag.roastedOn, bagSuggestions.today)}`
+                                : "Roast date not set",
+                            balanceLine(ready.balance)].join(", ")}
+                        emphasised={ready.balance.kind === "estimate"
+                            && ready.balance.remainingGrams >= ready.recipe.dosage}
+                        onOpen={entry => openRecipe(entry.recipe)}
+                        onBrew={remembered !== ""
+                            ? entry => openBrew(entry.recipe, undefined, entry.bag.id) : undefined}
+                        low={ready.balance.kind === "estimate" && ready.balance.low
+                            ? {line: `${ready.bag.name} is running low`,
+                                reorderUrl: httpsUrl(ready.recipe.coffee?.url)
+                                    ?? httpsUrl(ready.recipe.recipeUrl) ?? undefined} : undefined}
+                        onReorder={bagManager.reorder}
+                        moreLine={bagSuggestions.count > 1 ? `+${bagSuggestions.count - 1} more bags` : undefined}
+                        onMore={bagSuggestions.next}
+                        onDismiss={() => {
+                            if (bagSuggestions.today !== null) setReadyDismissedOn(bagSuggestions.today);
+                        }}/>
                 )}
 
                 {wholeLibraryEmpty ? (
@@ -1648,8 +1626,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                         onScroll={onScroll}
                         actionsFor={roomActionsFor}
                         evidence={library.evidence}
-                        bags={shownBags}
-                        freshness={bagFreshness}
+                        bagBadges={bagSuggestions.badges}
                         showCoffeeMarker={showCoffeeMarker}
                         dottedProfile={dottedProfile}
                         showPicture={showRecipeCardPhotos}
@@ -1730,8 +1707,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                                 dottedProfile={dottedProfile}
                                 showPicture={showRecipeCardPhotos}
                                 evidence={library.evidence[item.recipe.uuid]}
-                                bag={shownBags[item.recipe.uuid]}
-                                freshness={bagFreshness[item.recipe.uuid]}
+                                bagBadge={bagSuggestions.badges[item.recipe.uuid]}
                                 slotMarker={slotMarkers(slotRecord, item.recipe)}
                                 onEasyMode={remembered !== ""
                                     ? () => openEasyModeRecipe(item.recipe, remembered) : undefined}
@@ -1946,6 +1922,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                 }}/>
 
             <HomeQuickEditSheet
+                bagManager={bagManager}
                 state={quickEdit}
                 onOpenChange={(next) => {
                     if (!next) setQuickEdit(null);
@@ -1954,6 +1931,8 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                 onBrew={brewQuickEdit}
                 onSaveDose={saveQuickEditDose}
                 temperatureUnit={temperatureUnit}/>
+
+            <BagManagementSheets manager={bagManager} recipe={quickEdit?.recipe ?? null}/>
 
             <MachinePickerSheet open={machinePicker.open}
                                 onOpenChange={machinePicker.setOpen}

@@ -1,5 +1,5 @@
-import {readLabels} from "@/library/coffeeLabels";
 import {fitSizedName} from "@/library/fitName";
+import {readLabels} from "@/library/coffeeLabels";
 import {MAX_NAME} from "@/library/Recipe";
 import {LEGACY_NAMES, PodCoffee, httpsUrl, podCoffeeFromStored} from "@/library/podCoffee";
 import {readRoasterColour} from "@/library/roasterColour";
@@ -41,12 +41,12 @@ export const BREWMIND_SOURCE = "brewmind";
  * is roughly 3 kB before gzip against a 131 kB budget.
  */
 export const SHORT_TEXT = 120;
-/**
- * A URL's cap, shared by the coffee's link, its image, `recipe.url`, and a
- * roaster `feed`.
- */
+/** A URL's cap, shared by the coffee's link, its image, and `recipe.url`. */
 export const MAX_URL = 2000;
 const CAPS: Readonly<Record<string, number>> = {
+    restDays: 4,
+    peakDay: 4,
+    bestUntilDay: 4,
     name: SHORT_TEXT,
     roaster: SHORT_TEXT,
     roastingDate: SHORT_TEXT,
@@ -66,12 +66,7 @@ const CAPS: Readonly<Record<string, number>> = {
     aromatics: 500,
     note: 2000,
     url: MAX_URL,
-    imageUrl: MAX_URL,
-    // Whole days, 0 to 540, read by `roastDays`. Four digits is room for any
-    // of them and nothing else.
-    restDays: 4,
-    peakDay: 4,
-    bestUntilDay: 4
+    imageUrl: MAX_URL
 };
 
 /**
@@ -93,11 +88,10 @@ const CAPS: Readonly<Record<string, number>> = {
  * exactly like the current one.
  */
 const PARAM_ALIASES: Readonly<Record<string, string>> = {
-    image: "imageUrl",
-    // The roaster feed's spelling, so a roaster mints both with one set of names.
     rest_days: "restDays",
     peak_day: "peakDay",
     best_until_day: "bestUntilDay",
+    image: "imageUrl",
     ...LEGACY_NAMES
 };
 
@@ -128,32 +122,11 @@ export type BrewMindLink = {
      * still has something to go back to.
      */
     recipeName?: string;
-    /**
-     * `feed`: where the roaster publishes every coffee it has a recipe for.
-     *
-     * Only an address. Nothing is fetched here, and nothing is fetched at all
-     * until the recipe this link carries has imported: the feed is an offer
-     * made after the fact, read by `library/roasterFeed.ts`. https only and
-     * capped like every other URL, so an older build that ignores the
-     * parameter and a newer one that refuses a bad value both import the
-     * recipe exactly as before.
-     */
+    /** Address of the producer's catalogue; parsing never fetches it. */
     feed?: string;
-    /**
-     * `bean.flavours`: a short list of tasting notes, comma separated, for
-     * the catalogue's chips. Kept out of the coffee block, which is the
-     * Beanconqueror contract and has no such field.
-     */
-    flavours?: string[];
-    /** `bean.tags`: labels the recipe is tagged with on import, comma separated. */
-    tags?: string[];
-    /**
-     * `bean.colour` (or `bean.color`): the roaster's own colour for this
-     * coffee, strictly `#RRGGBB`. Kept beside the coffee rather than in it:
-     * the coffee block is the Beanconqueror contract and is stored whole, and
-     * the colour is only ever used to pick the card accent on import.
-     */
     colour?: string;
+    flavours?: string[];
+    tags?: string[];
 };
 
 /**
@@ -195,6 +168,8 @@ export function parseBrewMindLink(link: string): BrewMindLink | null {
     const result: BrewMindLink = {share};
     const source = params.get("source")?.trim();
     if (source) result.source = source;
+    const colour = readRoasterColour(params.get("bean.colour") ?? params.get("bean.color"));
+    if (colour !== undefined) result.colour = colour;
 
     const coffee = coffeeFrom(params);
     if (coffee !== null) result.coffee = coffee;
@@ -224,27 +199,17 @@ export function parseBrewMindLink(link: string): BrewMindLink | null {
     if (recipeName !== undefined && recipeName !== "") {
         result.recipeName = fitSizedName(recipeName, MAX_NAME);
     }
-
     const flavours = readLabels(params.get("bean.flavours") ?? "");
     if (flavours.length > 0) result.flavours = flavours;
     const tags = readLabels(params.get("bean.tags") ?? "");
     if (tags.length > 0) result.tags = tags;
-
     const feed = params.get("feed")?.trim();
     if (feed !== undefined && feed.length <= MAX_URL) {
         const checked = httpsUrl(feed);
         if (checked !== undefined) result.feed = checked;
     }
-
-    // British spelling first, then the American one. A value that is not a
-    // strict `#RRGGBB` is dropped and the recipe imports as before.
-    const colour = readRoasterColour(params.get("bean.colour") ?? params.get("bean.color"));
-    if (colour !== undefined) result.colour = colour;
     return result;
 }
-
-/** The colour's two spellings, which are not coffee fields. */
-const COLOUR_PARAMS: ReadonlySet<string> = new Set(["colour", "color"]);
 
 /**
  * Collect the `bean.*` parameters into a record and validate it.
@@ -259,27 +224,15 @@ const COLOUR_PARAMS: ReadonlySet<string> = new Set(["colour", "color"]);
 function coffeeFrom(params: URLSearchParams): PodCoffee | null {
     const fields: [string, string][] = [];
     for (const [key, value] of params.entries()) {
-        if (!key.startsWith("bean.")) continue;
-        const param = key.slice("bean.".length);
-        // Read by `parseBrewMindLink` and not part of the coffee block.
-        if (!COLOUR_PARAMS.has(param)) fields.push([param, value]);
+        if (key.startsWith("bean.")) fields.push([key.slice("bean.".length), value]);
     }
     if (fields.length === 0) return null;
     return coffeeFromFields(fields);
 }
 
-/**
- * Turn named coffee fields from outside the app into a validated coffee.
- *
- * Shared by the link's `bean.*` parameters and a roaster feed's `bean` block
- * (`library/roasterFeed.ts`), so the two doors apply the same aliases and the
- * same caps. A URL only ever carries strings; a feed is JSON and may send a
- * number or a boolean, which is passed through for `podCoffeeFromStored` to
- * judge exactly as it judges a stored one. Anything else is dropped.
- */
+/** Share the link's aliases and caps with a feed's JSON bean fields. */
 export function coffeeFromFields(fields: Iterable<[string, unknown]>): PodCoffee | null {
     const record: Record<string, unknown> = {};
-
     for (const [param, value] of fields) {
         const field = PARAM_ALIASES[param] ?? param;
         if (typeof value === "number" || typeof value === "boolean") {

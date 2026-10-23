@@ -6,13 +6,13 @@ import {reassignIfCrossed} from './accent';
 import {copyName} from './duplicates';
 import {tagKey} from './tagKey';
 import {ensureBrewTables} from './BrewDatabase';
-import {ensureBagTable, readOpenBags, type StoredBagReading} from './CoffeeBagDatabase';
 import {brewEvidenceAggregates} from './brew/brewPopulation';
 import {buildLibraryQuery, type FilterResolver, type LibraryQuery,
         type RecipeEvidence} from './libraryQuery';
 import {columnDefinitions, indexStatements, INDEX_COLUMNS, type IndexValue,
         projectRecipe, schemaHash} from './recipeIndex';
 import {COVER_MEMBERS, hasMixedPhotoCover, hasStockPhotoCover} from './shelfCover';
+import {bagTablesExist, publishBagChanges} from './CoffeeBagDatabase';
 
 /**
  * Turn one stored row into a `Recipe`, or `null` if its blob cannot be read.
@@ -79,6 +79,13 @@ class RecipeDatabase {
         } finally {
             this.inTransaction = false;
         }
+        publishBagChanges();
+    }
+
+    private pruneBagLinks(): void {
+        if (!bagTablesExist(this.db)) return;
+        this.db.runSync("DELETE FROM coffee_bag_links WHERE recipeUuid NOT IN (SELECT uuid FROM recipes);");
+        this.db.runSync("DELETE FROM coffee_bag_selections WHERE recipeUuid NOT IN (SELECT uuid FROM recipes);");
     }
 
     /**
@@ -186,7 +193,6 @@ class RecipeDatabase {
         // reference a table that does not exist and throw on first render. The
         // DDL is shared, not copied, so the two openers cannot drift.
         ensureBrewTables(this.db);
-        ensureBagTable(this.db);
         this.migrateIndex();
     }
 
@@ -426,9 +432,7 @@ class RecipeDatabase {
         this.atomically(() => {
             this.db.runSync("DELETE FROM recipes WHERE uuid = ?;", [uuid]);
             this.db.runSync("DELETE FROM recipe_tags WHERE uuid = ?;", [uuid]);
-            // A bag belongs to the recipe it was bought for. Its brews stay in
-            // history, which is kept on purpose; the bag has nothing to hang on.
-            this.db.runSync("DELETE FROM coffee_bags WHERE recipeUuid = ?;", [uuid]);
+            this.pruneBagLinks();
         });
     }
 
@@ -443,7 +447,7 @@ class RecipeDatabase {
         this.atomically(() => {
             this.db.runSync("DELETE FROM recipes");
             this.db.runSync("DELETE FROM recipe_tags");
-            this.db.runSync("DELETE FROM coffee_bags");
+            this.pruneBagLinks();
         });
     }
 
@@ -470,14 +474,13 @@ class RecipeDatabase {
      * method rather than a delete followed by a loop of inserts: if any insert
      * throws, the delete is rolled back with it, so a failed replace leaves the
      * original library exactly as it was instead of an emptied, half-filled one.
-     * Retained recipes keep their local bags, which take precedence over backups.
      */
     public replaceAllRecipes(recipes: Recipe[]): void {
         this.atomically(() => {
             this.db.runSync("DELETE FROM recipes");
             this.db.runSync("DELETE FROM recipe_tags");
             for (const recipe of recipes) this.insertRecipe(recipe);
-            this.db.runSync("DELETE FROM coffee_bags WHERE recipeUuid NOT IN (SELECT uuid FROM recipes);");
+            this.pruneBagLinks();
         });
     }
 
@@ -616,6 +619,7 @@ class RecipeDatabase {
                 this.db.runSync("DELETE FROM recipes WHERE uuid = ?;", [uuid]);
                 this.db.runSync("DELETE FROM recipe_tags WHERE uuid = ?;", [uuid]);
             }
+            this.pruneBagLinks();
         });
         return doomed.length;
     }
@@ -832,17 +836,6 @@ class RecipeDatabase {
      * stopped brews does get an entry with `brews` 0, and the card reads that
      * the same way: no evidence line, because there was no cup.
      */
-    /**
-     * Every open bag and the grams its brews have used, keyed by recipe uuid.
-     *
-     * Served from here, on the library's revision counter, for the same reason
-     * `brewEvidence` is: the card reads it beside the list without the hook
-     * opening a second store.
-     */
-    public coffeeBags(): Record<string, StoredBagReading> {
-        return readOpenBags(this.db);
-    }
-
     public brewEvidence(): Record<string, RecipeEvidence> {
         const rows = this.db.getAllSync(
             `SELECT recipeUuid,

@@ -4,8 +4,8 @@ import type {SortAxis, SortDirection} from './librarySort';
 import type {LibraryView} from './libraryView';
 import type {MachineModel} from './machine/machineModel';
 import type {HistorySort, HistorySortDirection} from './brew/historyQuery';
-import type {BagTrackerSetting} from './coffeeBag';
 import type {ThemeId, RecipeColourMode} from './appearance';
+import type {BagTrackerSetting} from './coffeeBag';
 
 /**
  * Every setting, with its default.
@@ -277,13 +277,6 @@ export const DEFAULTS = {
     drawerHintSignature:   "",
     drawerHintLastSeenAt:  0,
     /**
-     * The local day (`YYYY-MM-DD`) the home screen's "Ready to brew" card was
-     * closed, or empty. The card stays away for the rest of that day and comes
-     * back the next, so it can be put away without being turned off. Held out
-     * of backups with the drawer hint: it is this phone's state, not a choice.
-     */
-    readyToBrewDismissedOn: "",
-    /**
      * Offer to send a finished brew to Beanconqueror.
      *
      * Off until the reader is in Beanconqueror's own release. Before then the
@@ -297,17 +290,10 @@ export const DEFAULTS = {
      * feature deserves, and it survives a relaunch like any other preference.
      */
     beanconquerorHandoff: false,
-    /**
-     * Which app counts what is left in a bag: this one, Beanconqueror, or
-     * `auto`, which is Beanconqueror exactly while brews are being handed to it.
-     *
-     * One tracker, because Beanconqueror subtracts each brew it is handed from
-     * the matching bean, and a second count here would drift from it. See
-     * `library/coffeeBag.ts`; `resolveBagTracker` is the only reader that
-     * should interpret it. Held out of backups with the handoff switch it
-     * follows (below).
-     */
+    /** Device-local opt-in; inventory survives when this is off. */
+    bagExperimentEnabled: false,
     bagTracker: "auto" as BagTrackerSetting,
+    readyToBrewDismissedOn: "",
     /**
      * Whether the LABS section is visible in settings.
      *
@@ -358,45 +344,15 @@ export const DEFAULTS = {
      * tag starts as a tag and one tap promotes the ones that were not.
      */
     myShelves: "",
-    /**
-     * Roaster feeds the user said not to be asked about again, as a JSON array
-     * of feed keys (origin and path, see `library/roasterFeed.ts`).
-     *
-     * Per feed rather than one switch, because saying no to one roaster's
-     * shelf is not saying no to every roaster's. Carried in a backup for the
-     * reason `hiddenShelves` is: it is an answer the user gave, and a restored
-     * phone that asked again would be asking a question already answered.
-     */
+    /** Feed keys the user has declined; carried in backups with their choices. */
     roasterFeedOptOut: "",
-    /**
-     * Roasters the user subscribed to, as a JSON array of records
-     * (`library/roasterSubscription.ts`). Carried in a backup: a subscription
-     * is something the user set up. Read back through `parseSubscriptions`,
-     * which validates every field, because a backup file is untrusted.
-     */
+    /** Validated subscription records; carried in backups. */
     roasterSubscriptions: "",
-    /**
-     * The cached catalogue: each subscription's last feed body
-     * (`library/roasterCatalogue.ts`). Held out of backups below: it is a copy
-     * of somebody else's file, up to a megabyte each, and the next sync
-     * fetches it again.
-     */
+    /** Cached feed bodies, refetched after restore rather than backed up. */
     roasterCatalogue: "",
-    /**
-     * What is new and what has come back in each subscribed catalogue
-     * (`library/roasterAlerts.ts`): coffees seen, NEW flags, and the coffees
-     * and bags the user asked to hear about. Held out of backups below:
-     * it is bookkeeping about the cached feeds, and a restored phone starts it
-     * again from its first sync rather than flagging a whole list NEW.
-     */
+    /** Alert bookkeeping for the cached feeds, also excluded from backups. */
     roasterAlerts: "",
-    /**
-     * What each imported recipe's brewing content was when it arrived, by
-     * uuid (`library/importRefresh.ts`). It is how importing the same link
-     * again tells an untouched copy, which takes the author's latest quietly,
-     * from one the user edited, which is asked about first. Carried in a
-     * backup with the recipes it names, and validated on the way back in.
-     */
+    /** Imported brewing-content fingerprints, backed up with their recipes. */
     importFingerprints: "",
     /**
      * Draw an auto shelf's tile the other way round: the accent fills the card
@@ -456,28 +412,26 @@ export type SettingKey = keyof typeof DEFAULTS;
  * evidence any more. The whole reason they are stored is to be trustworthy
  * about what a real machine said.
  *
- * The drawer hint counters and the day the "Ready to brew" card was closed are
- * held out because they describe what this phone has already taught or been
- * told, and a restored phone has not seen or forgotten the same lessons.
- *
- * `roasterCatalogue` is a cache of roasters' feeds, refetched on the next sync,
- * and `roasterAlerts` is bookkeeping about that cache.
+ * The drawer hint counters are held out because they describe what this phone
+ * has already taught, and a restored phone has not seen or forgotten the same
+ * lessons.
  *
  * Named here rather than simply omitted from the snapshot so that the
  * exhaustiveness test still holds every other key to account: a key is either
  * in a backup or on this list, never quietly missing from both.
  */
 export type BackupExcluded =
-    "machineDeviceId" | "savedMachines" | "lastCardRead" | "labsUnlocked" | "beanconquerorHandoff" | "bagTracker" |
+    "machineDeviceId" | "savedMachines" | "lastCardRead" | "labsUnlocked" | "beanconquerorHandoff" |
+    "bagExperimentEnabled" | "bagTracker" | "readyToBrewDismissedOn" |
     "machineModelString" | "machineName" | "ratingPromptDismissed" |
     "drawerHintLastShownAt" | "drawerHintShownCount" | "drawerHintManualOpens" |
-    "drawerHintSignature" | "drawerHintLastSeenAt" | "roasterCatalogue" | "roasterAlerts" |
-    "readyToBrewDismissedOn";
+    "drawerHintSignature" | "drawerHintLastSeenAt" | "roasterCatalogue" | "roasterAlerts";
 export const NOT_IN_BACKUP: readonly SettingKey[] = [
-    "machineDeviceId", "savedMachines", "lastCardRead", "labsUnlocked", "beanconquerorHandoff", "bagTracker",
+    "machineDeviceId", "savedMachines", "lastCardRead", "labsUnlocked", "beanconquerorHandoff",
+    "bagExperimentEnabled", "bagTracker", "readyToBrewDismissedOn",
     "machineModelString", "machineName", "ratingPromptDismissed",
     "drawerHintLastShownAt", "drawerHintShownCount", "drawerHintManualOpens",
-    "drawerHintSignature", "drawerHintLastSeenAt", "roasterCatalogue", "roasterAlerts", "readyToBrewDismissedOn"
+    "drawerHintSignature", "drawerHintLastSeenAt", "roasterCatalogue", "roasterAlerts"
 ];
 
 /**

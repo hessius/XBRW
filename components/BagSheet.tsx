@@ -8,6 +8,7 @@ import XbrwSheet from "@/components/XbrwSheet";
 import {useAppearance} from "@/hooks/useAppearance";
 import {
     BAG_BEAN_NAME_MAX,
+    BAG_NAME_MAX,
     BAG_PRESETS,
     calendarDay,
     dayOf,
@@ -15,22 +16,23 @@ import {
     isBagPrice,
     isGramsLeft,
     type BagTracker,
-    type CoffeeBag
+    type CoffeeBag,
+    type AdviceSource
 } from "@/library/coffeeBag";
 import {
     ROAST_LEVELS,
     ROAST_LEVEL_DEFAULTS,
-    figuresFrom,
-    figuresProblem,
     roastDays,
     startingFigures,
     type AdvisedCoffee,
     type RoastFigures,
     type RoastLevelKey
 } from "@/library/restPeak";
+import {roastAdviceProblem} from "@/library/roastAdvice";
 
 /** What the sheet hands back. `gramsLeft` only when editing in `xbrw` mode. */
 export type BagSheetResult = {
+    name: string;
     sizeGrams: number;
     roastedOn?: string;
     price?: number;
@@ -38,6 +40,7 @@ export type BagSheetResult = {
     gramsLeft?: number;
     /** Rest and peak, only with a roast day to count them from. */
     figures?: RoastFigures;
+    adviceSource: AdviceSource;
 };
 
 type Props = {
@@ -52,14 +55,11 @@ type Props = {
     suggestedRoastedOn?: string;
     /**
      * The recipe's coffee, for its roast advice and roast level. When it
-     * states a rest and a peak (a BrewMind link, the roaster catalogue) the
-     * sheet shows them rather than asking.
+     * states guidance, the sheet prefills it while keeping all three values editable.
      */
     coffee?: AdvisedCoffee;
-    /** The name Beanconqueror will see on this recipe's brews. */
+    /** An unconfirmed placeholder suggestion, never saved just by opening the form. */
     beanName: string;
-    /** True when a pod fixes the name, so it is shown but not editable. */
-    beanNameFixed: boolean;
     /** Bumped by the caller on each open, so the fields start fresh. */
     epoch: number;
     /**
@@ -78,6 +78,8 @@ type Props = {
     onSave: (result: BagSheetResult) => void;
     onFinish: () => void;
     onRemove: () => void;
+    onAddBean?: (result: BagSheetResult) => void;
+    beanBusy?: boolean;
 };
 
 const fieldLayout = {
@@ -124,7 +126,7 @@ function ActionButton({label, spoken, testID, tone, filled, disabled, onPress}: 
         <XStack accessible accessibilityRole="button" accessibilityLabel={spoken}
                 accessibilityState={{disabled: disabled === true}} testID={testID}
                 onPress={disabled === true ? undefined : onPress}
-                height={48} alignItems="center" justifyContent="center" borderRadius="$4"
+                minHeight={48} paddingVertical="$2" alignItems="center" justifyContent="center" borderRadius="$4"
                 opacity={disabled === true && !filled ? 0.4 : 1}
                 backgroundColor={filled === true
                     ? disabled ? primary.disabledFill : primary.fill : palette.raised}
@@ -157,8 +159,8 @@ function priceNumber(text: string): number | undefined {
  * effect.
  */
 function BagForm({
-    tracker, bag, gramsLeft, suggestedRoastedOn, coffee, beanName, beanNameFixed,
-    onSave, onFinish, onRemove, sizes, suggestedSize, priceFor
+    tracker, bag, gramsLeft, suggestedRoastedOn, coffee, beanName,
+    onSave, onFinish, onRemove, sizes, suggestedSize, priceFor, onAddBean, beanBusy = false
 }: Omit<Props, "open" | "onOpenChange" | "epoch">) {
     const {palette} = useAppearance();
     const fieldStyle = {...fieldLayout, color: palette.text, backgroundColor: palette.raised};
@@ -170,81 +172,84 @@ function BagForm({
     const startPrice = bag?.price ?? (bag === null ? priceFor?.(startSize) : undefined);
     const [size, setSize] = useState(String(startSize));
     const [custom, setCustom] = useState(!presets.includes(startSize));
-    // Read once: the picker's limits and the new-bag default both hang off it.
+    // Read once for this form's calendar limit.
     const [today] = useState(() => dayOf(Date.now()));
-    // A new bag starts on today, the likeliest day for a bag opened on the
-    // spot, unless the pod names its own roast day. An edited bag keeps what
-    // it has, including nothing.
+    // A missing roast day stays unknown, rather than inventing one.
     const [roasted, setRoasted] = useState(
-        bag !== null ? bag.roastedOn ?? "" : suggestedRoastedOn ?? today);
+        bag !== null ? bag.roastedOn ?? "" : suggestedRoastedOn ?? "");
     const [price, setPrice] = useState(startPrice !== undefined ? String(startPrice) : "");
     // Follows the chosen size until the person types a price of their own.
     const [priceTyped, setPriceTyped] = useState(false);
-    const askPrice = tracker === "beanconqueror" || priceFor !== undefined;
-    const [name, setName] = useState(bag?.beanName ?? beanName);
+    const [name, setName] = useState(bag?.name ?? "");
+    const [externalName, setExternalName] = useState(bag?.beanName ?? "");
     const [left, setLeft] = useState(gramsLeft !== null ? String(gramsLeft) : "");
+    const [leftTouched, setLeftTouched] = useState(false);
     const [level, setLevel] = useState<RoastLevelKey | null>(
-        bag?.restDays === undefined ? advised.level : null);
+        bag === null ? advised.level ?? null : null);
     const [rest, setRest] = useState(String(startRest));
     const [peak, setPeak] = useState(String(startPeak));
-    const [windowBase, setWindowBase] = useState<RoastFigures>({
-        restDays: startRest,
-        peakDay: startPeak,
-        bestUntilDay: bag?.bestUntilDay ?? advised.figures.bestUntilDay
-    });
+    const [best, setBest] = useState(String(bag?.bestUntilDay ?? advised.figures.bestUntilDay));
+    const [adviceEdited, setAdviceEdited] = useState(false);
 
     const sizeGrams = wholeNumber(size);
     const sizeOk = isBagGrams(sizeGrams);
     const roastedOn = roasted.trim() === "" ? undefined : calendarDay(roasted);
-    const roastOk = roasted.trim() === "" || roastedOn !== undefined;
+    const roastOk = roasted.trim() === "" || (roastedOn !== undefined && roastedOn <= today);
     const priceValue = price.trim() === "" ? undefined : priceNumber(price);
     const priceOk = price.trim() === "" || isBagPrice(priceValue);
     const editingLeft = bag !== null && tracker === "xbrw";
     const leftValue = wholeNumber(left);
-    const leftOk = !editingLeft || isGramsLeft(leftValue);
-    const nameValue = (beanNameFixed ? beanName : name).trim();
-    const nameOk = tracker === "xbrw" || nameValue !== "";
-    // New bags show the roaster's advice. Saved bags keep their own figures.
-    const fromRoaster = bag === null && advised.source === "coffee";
+    const leftOk = !editingLeft || !leftTouched || isGramsLeft(leftValue);
+    const nameValue = name.trim();
+    const nameOk = nameValue.length > 0 && nameValue.length <= BAG_NAME_MAX;
+    const externalValue = externalName.trim();
     const restValue = roastDays(rest);
     const peakValue = roastDays(peak);
-    const figuresError = fromRoaster ? null : figuresProblem(restValue, peakValue);
-    const figures: RoastFigures | undefined = roastedOn === undefined ? undefined
-        : fromRoaster ? advised.figures
-        : figuresError === null && restValue !== undefined && peakValue !== undefined
-            ? figuresFrom(restValue, peakValue, windowBase) : undefined;
-    const figuresOk = roastedOn === undefined || figures !== undefined;
-    const valid = sizeOk && roastOk && priceOk && leftOk && nameOk && figuresOk;
+    const bestValue = roastDays(best);
+    const figures = restValue !== undefined && peakValue !== undefined && bestValue !== undefined
+        ? {restDays: restValue, peakDay: peakValue, bestUntilDay: bestValue} : undefined;
+    const figuresError = figures === undefined ? "Enter whole days, 0 to 540." : roastAdviceProblem(figures);
+    const source = adviceEdited ? "user" : bag?.adviceSource ?? advised.source;
+    const valid = sizeOk && roastOk && priceOk && leftOk && nameOk && figuresError === null
+        && externalValue.length <= BAG_BEAN_NAME_MAX;
 
     function pickLevel(key: RoastLevelKey) {
         setLevel(key);
-        setWindowBase(ROAST_LEVEL_DEFAULTS[key]);
+        setAdviceEdited(true);
         setRest(String(ROAST_LEVEL_DEFAULTS[key].restDays));
         setPeak(String(ROAST_LEVEL_DEFAULTS[key].peakDay));
+        setBest(String(ROAST_LEVEL_DEFAULTS[key].bestUntilDay));
     }
 
-    function save() {
+    function save(action = onSave) {
         if (!valid || sizeGrams === undefined) return;
-        onSave({
+        action({
+            name: nameValue,
             sizeGrams,
             ...(roastedOn !== undefined ? {roastedOn} : {}),
             ...(priceValue !== undefined ? {price: priceValue} : {}),
-            ...(tracker === "beanconqueror" ? {beanName: nameValue} : {}),
-            ...(editingLeft && leftValue !== undefined ? {gramsLeft: leftValue} : {}),
-            ...(figures !== undefined ? {figures} : {})
+            ...(externalValue ? {beanName: externalValue} : {}),
+            ...(editingLeft && leftTouched && leftValue !== undefined ? {gramsLeft: leftValue} : {}),
+            ...(figures !== undefined ? {figures} : {}),
+            adviceSource: source
         });
     }
-
-    const sending = tracker === "beanconqueror" && bag === null;
 
     return (
         <ScrollView keyboardShouldPersistTaps="handled">
             <YStack gap="$3" paddingHorizontal="$4" paddingBottom="$4">
                 <Text fontSize={13} color={palette.dim}>
                     {tracker === "xbrw"
-                        ? "Each brew of this recipe takes its dose from the bag."
-                        : "The bag goes to Beanconqueror, which takes each brew you send it from the bag."}
+                        ? "Only brews explicitly assigned to this bag count towards its estimate."
+                        : "Quantities are tracked in Beanconqueror. Nothing is sent when you save."}
                 </Text>
+
+                <YStack gap="$2">
+                    <Label>BAG NAME</Label>
+                    <TextInput accessibilityLabel="Bag name" value={name} onChangeText={setName}
+                               maxLength={BAG_NAME_MAX} style={fieldStyle}/>
+                    {!nameOk && <Text fontSize={12} color={palette.danger}>Give this physical bag a name.</Text>}
+                </YStack>
 
                 <YStack gap="$2">
                     <Label>BAG SIZE</Label>
@@ -283,17 +288,18 @@ function BagForm({
                     <Text fontSize={12} color={palette.dim}>
                         Optional. The date on the bag.
                     </Text>
+                    {!roastOk && <Text color={palette.danger} fontSize={12}>
+                        Check the roast date. It cannot be in the future.
+                    </Text>}
                 </YStack>
 
-                {roastedOn !== undefined && (
                     <YStack gap="$2" testID="bag-rest-peak">
-                        <Label>REST AND PEAK</Label>
-                        {fromRoaster ? (
-                            <Text testID="bag-rest-peak-roaster" fontSize={13} color={palette.text}>
-                                {`From the roaster: rest ${advised.figures.restDays} days, peak on day ${advised.figures.peakDay}.`}
-                            </Text>
-                        ) : (
-                            <>
+                        <Label>ESTIMATED WINDOW</Label>
+                        <Text fontSize={12} color={palette.dim}>
+                            {source === "coffee" ? "Provided with coffee"
+                                : source === "user" ? "Your guidance"
+                                    : advised.level ? "Estimated peak window" : "Generic estimate"}
+                        </Text>
                                 <XStack gap="$2" flexWrap="wrap" accessibilityRole="radiogroup"
                                         accessibilityLabel="Roast">
                                     {ROAST_LEVELS.map(({key, label, spoken}) => (
@@ -312,6 +318,7 @@ function BagForm({
                                                    onChangeText={(text) => {
                                                        setRest(text);
                                                        setLevel(null);
+                                                       setAdviceEdited(true);
                                                    }}
                                                    style={fieldStyle}/>
                                     </YStack>
@@ -323,24 +330,32 @@ function BagForm({
                                                    onChangeText={(text) => {
                                                        setPeak(text);
                                                        setLevel(null);
+                                                       setAdviceEdited(true);
                                                    }}
                                                    style={fieldStyle}/>
+                                    </YStack>
+                                    <YStack flex={1} gap="$1">
+                                        <Label>WINDOW END</Label>
+                                        <TextInput accessibilityLabel="Estimated window ends after roasting"
+                                                   value={best} keyboardType="number-pad"
+                                                   onChangeText={text => {
+                                                       setBest(text); setLevel(null); setAdviceEdited(true);
+                                                   }} style={fieldStyle}/>
                                     </YStack>
                                 </XStack>
                                 <Text testID="bag-rest-peak-note" fontSize={12}
                                       color={figuresError === null ? palette.dim : palette.danger}>
                                     {figuresError ?? "Days after the roast date. Pick a roast to fill them in, or type your own."}
                                 </Text>
-                            </>
-                        )}
                     </YStack>
-                )}
 
                 {editingLeft && (
                     <YStack gap="$2">
                         <Label>GRAMS LEFT</Label>
                         <TextInput testID="bag-left-field" accessibilityLabel="Grams left in the bag"
-                                   value={left} onChangeText={setLeft} keyboardType="number-pad"
+                                   value={left} onChangeText={text => {
+                                       setLeft(text); setLeftTouched(true);
+                                   }} keyboardType="number-pad"
                                    placeholderTextColor={palette.placeholder} style={fieldStyle}/>
                         <Text fontSize={12} color={leftOk ? palette.dim : palette.danger}>
                             {leftOk
@@ -354,27 +369,19 @@ function BagForm({
                     <>
                         <YStack gap="$2">
                             <Label>BEAN NAME</Label>
-                            {beanNameFixed ? (
-                                <Text testID="bag-bean-name" fontSize={16} color={palette.text}>
-                                    {beanName}
-                                </Text>
-                            ) : (
-                                <TextInput testID="bag-bean-name-field" accessibilityLabel="Bean name"
-                                           value={name} onChangeText={setName}
+                                <TextInput testID="bag-bean-name-field" accessibilityLabel="Beanconqueror bean name"
+                                           value={externalName} onChangeText={setExternalName}
+                                           placeholder={beanName || "Optional bean name"}
                                            maxLength={BAG_BEAN_NAME_MAX} autoCorrect={false}
                                            placeholderTextColor={palette.placeholder}
                                            style={fieldStyle}/>
-                            )}
-                            <Text fontSize={12} color={nameOk ? palette.dim : palette.danger}>
-                                {nameOk
-                                    ? "Brews you send from this recipe go to the bean with this name."
-                                    : "Give the bean a name."}
+                            <Text fontSize={12} color={palette.dim}>
+                                Optional. Match the name of this physical bag in Beanconqueror.
                             </Text>
                         </YStack>
                     </>
                 )}
 
-                {askPrice && (
                     <YStack gap="$2">
                         <Label>PRICE</Label>
                         <TextInput testID="bag-price-field" accessibilityLabel="Price"
@@ -392,22 +399,29 @@ function BagForm({
                             </Text>
                         )}
                     </YStack>
-                )}
 
-                <ActionButton label={sending ? "SEND TO BEANCONQUEROR" : "SAVE"}
-                              spoken={sending ? "Save the bag and send it to Beanconqueror" : "Save bag"}
-                              testID="bag-save" tone={palette.text} filled disabled={!valid}
-                              onPress={save}/>
+                <ActionButton label={bag === null ? "ADD AND USE BAG" : "SAVE"}
+                              spoken={bag === null ? "Add and use bag" : "Save bag"}
+                              testID="bag-save" tone={palette.text} filled disabled={!valid || beanBusy}
+                              onPress={() => save()}/>
+                {bag !== null && tracker === "beanconqueror" && onAddBean && (
+                    <ActionButton label="OPEN IN BEANCONQUEROR" spoken="Add this bag in Beanconqueror"
+                        testID="bag-add-bean" tone={palette.text}
+                        disabled={!valid || !externalValue || beanBusy}
+                        onPress={() => save(onAddBean)}/>
+                )}
                 {bag !== null && (
                     <XStack gap="$2">
-                        <YStack flex={1}>
+                        {bag.finishedAt === undefined && <YStack flex={1}>
                             <ActionButton label="FINISHED" spoken="Mark this bag finished"
                                           testID="bag-sheet-finish" tone={palette.text}
+                                          disabled={beanBusy}
                                           onPress={onFinish}/>
-                        </YStack>
+                        </YStack>}
                         <YStack flex={1}>
                             <ActionButton label="REMOVE" spoken="Remove this bag"
                                           testID="bag-sheet-remove" tone={palette.danger}
+                                          disabled={beanBusy}
                                           onPress={onRemove}/>
                         </YStack>
                     </XStack>

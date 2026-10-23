@@ -318,9 +318,10 @@ manual gates.
 
 - [ ] After a catalogue photo fails, refresh that coffee with a different image
   URL and confirm the replacement loads without recreating its search row.
-- [ ] In Beanconqueror mode, add a catalogue coffee to a shelf with a bag.
-  Confirm the bean name is read-only when coffee metadata fixes it, then send
-  a subsequent brew and verify it matches that bag in the external app.
+- [ ] In Beanconqueror mode, save a catalogue coffee to a shelf without opening
+  another app. Explicitly create or link a physical bag in ABOUT; confirm its
+  optional external identity, then separately open the add-bean form and verify
+  that later historical handoff retains that bag even after changing selection.
 
 Add focused checks when each package is reviewed. Keep the existing BLE, NFC,
 both-platform and external-app release gates; this checklist does not waive them.

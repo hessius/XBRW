@@ -1,6 +1,5 @@
 import React from "react";
-import {Linking, Platform, StyleSheet} from "react-native";
-import {DateTimePickerAndroid} from "@react-native-community/datetimepicker";
+import {Linking, StyleSheet} from "react-native";
 import {act, fireEvent, screen, waitFor} from "@testing-library/react-native";
 import {router} from "expo-router";
 
@@ -10,7 +9,6 @@ import RoastersScreen from "@/app/roasters";
 import {parseHidden} from "@/library/hiddenShelves";
 import {contentPrint, planReimport, readPrints} from "@/library/importRefresh";
 import Recipe from "@/library/Recipe";
-import type {CoffeeBag} from "@/library/coffeeBag";
 import {parseRoasterFeed} from "@/library/roasterFeed";
 import {forgetQueriesForTests} from "@/library/roasterFilters";
 import {subscribe} from "@/library/roasterSync";
@@ -317,111 +315,6 @@ describe("buying a bag", () => {
     });
 });
 
-describe("adding to a shelf with a bag", () => {
-    function shop(tracker?: string) {
-        const parsed = JSON.parse(feedJson([{id: "b"}]));
-        parsed.coffees[0].variants = [
-            {id: 11, grams: 320, price: 53, currency: "AUD", available: true},
-            {id: 22, grams: 160, price: 28, currency: "AUD", available: true}
-        ];
-        const text = JSON.stringify(parsed);
-        const settings = memorySettings();
-        if (tracker !== undefined) settings.set("bagTracker", tracker);
-        subscribe(settings, FEED_URL, parseRoasterFeed(text)!, text, 1000);
-        return settings;
-    }
-
-    /** Press until the sheet takes it: its entrance discards early presses. */
-    async function pressUntil(testID: string, landed: () => void) {
-        await waitFor(async () => {
-            await fireEvent.press(screen.getByTestId(testID));
-            landed();
-        }, {timeout: SHEET_PRESS_TIMEOUT});
-    }
-
-    const shelfOffered = () => expect(screen.getByTestId("shelf-choice-Pantry")).toBeTruthy();
-
-    it("asks for the bag first, from the roaster's sizes and prices, then makes it on the shelf", async () => {
-        const settings = shop();
-        const library = memoryLibrary();
-        const saved: CoffeeBag[] = [];
-        await renderWithProviders(
-            <RoasterCoffeeScreen settings={settings} feedUrl={FEED_URL} coffeeId="b"
-                                 library={library.deps} shelves={() => ["Pantry"]}
-                                 bagStore={{save: (bag) => saved.push(bag)}}/>
-        );
-        await waitFor(() => expect(screen.queryByTestId("roaster-coffee-loading")).toBeNull());
-        await fireEvent.press(screen.getByTestId("roaster-coffee-shelf"));
-
-        // The catalogue's sizes, not the usual presets, and the price follows.
-        await waitFor(() => expect(screen.getByTestId("bag-size-160")).toBeTruthy());
-        expect(screen.queryByTestId("roaster-coffee-scroll")).toBeNull();
-        expect(screen.getByTestId("roaster-coffee-scroll", {includeHiddenElements: true})).toBeTruthy();
-        expect(screen.queryByTestId("bag-size-250")).toBeNull();
-        expect(screen.getByTestId("bag-price-field").props.value).toBe("53");
-        await pressUntil("bag-size-160",
-                         () => expect(screen.getByTestId("bag-price-field").props.value).toBe("28"));
-        // The same calendar as the editor's sheet, starting on today.
-        expect(screen.getByTestId("bag-roasted-value")).toHaveTextContent(/^Today, \d+ \w+$/);
-        await fireEvent.press(screen.getByTestId("bag-roasted-field"));
-        const pick = Platform.OS === "android"
-            ? (DateTimePickerAndroid.open as jest.Mock).mock.calls.at(-1)[0].onValueChange
-            : screen.getByTestId("bag-roasted-calendar").props.onValueChange;
-        await act(() => pick({nativeEvent: {}}, new Date(2026, 9, 12, 21, 30)));
-        await pressUntil("bag-save", shelfOffered);
-
-        await waitFor(async () => {
-            await fireEvent.press(screen.getByTestId("shelf-choice-Pantry"));
-            expect(library.find("b-18g")?.tags[0]).toBe("Pantry");
-        }, {timeout: SHEET_PRESS_TIMEOUT});
-        expect(saved).toHaveLength(1);
-        expect(saved[0]).toMatchObject({
-            recipeUuid: library.find("b-18g")!.uuid, sizeGrams: 160, price: 28, roastedOn: "2026-10-12"
-        });
-        expect(saved[0].beanName).toBeUndefined();
-        expect(screen.getByTestId("roaster-coffee-scroll")).toBeTruthy();
-    });
-
-    it("hands the bag to Beanconqueror in that mode, as the editor does", async () => {
-        const open = jest.spyOn(Linking, "openURL").mockResolvedValue(true);
-        const settings = shop("beanconqueror");
-        const library = memoryLibrary();
-        const saved: CoffeeBag[] = [];
-        await renderWithProviders(
-            <RoasterCoffeeScreen settings={settings} feedUrl={FEED_URL} coffeeId="b"
-                                 library={library.deps} shelves={() => ["Pantry"]}
-                                 bagStore={{save: (bag) => saved.push(bag)}}/>
-        );
-        await waitFor(() => expect(screen.queryByTestId("roaster-coffee-loading")).toBeNull());
-        await fireEvent.press(screen.getByTestId("roaster-coffee-shelf"));
-        await waitFor(() => expect(screen.getByTestId("bag-save")).toBeTruthy());
-        expect(screen.queryByTestId("bag-bean-name-field")).toBeNull();
-        expect(screen.getByTestId("bag-bean-name")).toHaveTextContent("Coffee b");
-        await pressUntil("bag-save", shelfOffered);
-        await waitFor(async () => {
-            await fireEvent.press(screen.getByTestId("shelf-choice-Pantry"));
-            expect(saved).toHaveLength(1);
-        }, {timeout: SHEET_PRESS_TIMEOUT});
-        expect(saved[0].beanName).toBeTruthy();
-        expect(open).toHaveBeenCalledWith(expect.stringMatching(/beanconqueror|^https:/i));
-        open.mockRestore();
-    });
-
-    it("makes no bag when the shelf is never chosen", async () => {
-        const settings = shop();
-        const saved: CoffeeBag[] = [];
-        await renderWithProviders(
-            <RoasterCoffeeScreen settings={settings} feedUrl={FEED_URL} coffeeId="b"
-                                 library={memoryLibrary().deps} shelves={() => ["Pantry"]}
-                                 bagStore={{save: (bag) => saved.push(bag)}}/>
-        );
-        await waitFor(() => expect(screen.queryByTestId("roaster-coffee-loading")).toBeNull());
-        await fireEvent.press(screen.getByTestId("roaster-coffee-shelf"));
-        await pressUntil("bag-save", shelfOffered);
-        expect(saved).toHaveLength(0);
-    });
-});
-
 describe("tasting notes on a coffee", () => {
     async function openWith(aromatics: string) {
         const settings = subscribedTo([{id: "b"}], {b: {aromatics}});
@@ -465,7 +358,6 @@ describe("one coffee", () => {
         );
         await waitFor(() => expect(screen.queryByTestId("roaster-coffee-loading")).toBeNull());
         await fireEvent.press(screen.getByTestId("roaster-coffee-shelf"));
-        await bagThen(() => expect(fetchRecipe).toHaveBeenCalledTimes(2));
         await rerender(
             <RoasterCoffeeScreen settings={settings} feedUrl={other} coffeeId="b" library={deps}
                                  shelves={() => ["Pantry"]}/>
@@ -511,7 +403,7 @@ describe("one coffee", () => {
         await open(subscribed(), library);
         library.deps.save = () => { throw new Error("private database detail"); };
         await fireEvent.press(screen.getByTestId("roaster-coffee-shelf"));
-        await bagThen(() => expect(mockNotify).toHaveBeenCalledWith({
+        await waitFor(() => expect(mockNotify).toHaveBeenCalledWith({
             tone: "error", message: "Couldn't save the recipe. Try again."
         }));
         expect(screen.getByTestId("roaster-coffee-shelf")).toBeTruthy();
@@ -526,7 +418,7 @@ describe("one coffee", () => {
         const before = JSON.stringify(library.find("b-18g"));
         library.serve("b-18g", 61);
         await fireEvent.press(screen.getByTestId("roaster-coffee-shelf"));
-        await bagThen(() => expect(screen.getByTestId("newer-version")).toBeTruthy());
+        await waitFor(() => expect(screen.getByTestId("newer-version")).toBeTruthy());
         jest.spyOn(library.deps, "save").mockImplementationOnce(() => { throw new Error("disk full"); });
         await fireEvent.press(screen.getByTestId("newer-version-latest"));
         expect(mockNotify).toHaveBeenLastCalledWith({
@@ -541,7 +433,7 @@ describe("one coffee", () => {
     it("leaves the shelf picker open on a failed shelf save without reporting success", async () => {
         const {library} = await open();
         await fireEvent.press(screen.getByTestId("roaster-coffee-shelf"));
-        await bagThen(() => expect(library.all()).toHaveLength(1));
+        await waitFor(() => expect(library.all()).toHaveLength(1));
         const before = JSON.stringify(library.all()[0]);
         jest.spyOn(library.deps, "save").mockImplementation(() => { throw new Error("disk full"); });
         await waitFor(async () => {
@@ -559,26 +451,19 @@ describe("one coffee", () => {
     async function open(settings = subscribed(), library = memoryLibrary(), shelves = () => ["Pantry"]) {
         await renderWithProviders(
             <RoasterCoffeeScreen settings={settings} feedUrl={FEED_URL} coffeeId="b"
-                                 library={library.deps} shelves={shelves} bagStore={{save: () => {}}}/>
+                                 library={library.deps} shelves={shelves}/>
         );
         await waitFor(() => expect(screen.queryByTestId("roaster-coffee-loading")).toBeNull());
         return {settings, library};
     }
 
-    /** Saves the bag sheet ADD TO SHELF opens here, until `next` holds. */
-    async function bagThen(next: () => void): Promise<void> {
-        await waitFor(async () => {
-            const save = screen.queryByTestId("bag-save");
-            if (save !== null) await fireEvent.press(save);
-            next();
-        }, {timeout: SHEET_PRESS_TIMEOUT});
-    }
-
+    /**
+     * ADD TO SHELF onto Pantry, the one way a coffee is saved from here: it
+     * goes to the library first, then onto the shelf.
+     */
     async function shelve(): Promise<void> {
         const before = mockNotify.mock.calls.length;
         await fireEvent.press(screen.getByTestId("roaster-coffee-shelf"));
-        // The bag comes first on this branch; see "adding to a shelf with a bag".
-        await bagThen(() => expect(screen.getByTestId("shelf-choice-Pantry")).toBeTruthy());
         await waitFor(async () => {
             if (mockNotify.mock.calls.length === before) {
                 await fireEvent.press(screen.getByTestId("shelf-choice-Pantry"));
@@ -682,7 +567,7 @@ describe("one coffee", () => {
         const library = memoryLibrary();
         await renderWithProviders(
             <RoasterCoffeeScreen settings={settings} feedUrl={FEED_URL} coffeeId="b"
-                                 library={library.deps} shelves={() => ["Pantry"]} bagStore={{save: () => {}}}/>
+                                 library={library.deps} shelves={() => ["Pantry"]}/>
         );
         await waitFor(() => expect(screen.queryByTestId("roaster-coffee-loading")).toBeNull());
         expect(screen.getByText("DARK CHOCOLATE")).toBeTruthy();
@@ -717,7 +602,7 @@ describe("one coffee", () => {
         library.serve("b-18g", 61);
 
         await fireEvent.press(screen.getByTestId("roaster-coffee-shelf"));
-        await bagThen(() => expect(screen.getByTestId("newer-version")).toBeTruthy());
+        await waitFor(() => expect(screen.getByTestId("newer-version")).toBeTruthy());
         await fireEvent.press(screen.getByTestId("newer-version-keep"));
 
         expect(library.find("b-18g")).toMatchObject({dosage: 20, grindSize: 50});
@@ -732,7 +617,7 @@ describe("one coffee", () => {
         library.deps.save(held);
         library.serve("b-18g", 61);
         await fireEvent.press(screen.getByTestId("roaster-coffee-shelf"));
-        await bagThen(() => expect(screen.getByTestId("newer-version")).toBeTruthy());
+        await waitFor(() => expect(screen.getByTestId("newer-version")).toBeTruthy());
         await fireEvent.press(screen.getByTestId("roaster-coffee-size-15g"));
         expect(screen.queryByTestId("newer-version")).toBeNull();
         await fireEvent.press(screen.getByTestId("roaster-coffee-size-18g"));
@@ -754,7 +639,7 @@ describe("one coffee", () => {
         library.serve("b-18g", 61);
 
         await fireEvent.press(screen.getByTestId("roaster-coffee-shelf"));
-        await bagThen(() => expect(screen.getByTestId("newer-version")).toBeTruthy());
+        await waitFor(() => expect(screen.getByTestId("newer-version")).toBeTruthy());
         await fireEvent.press(screen.getByTestId("newer-version-latest"));
 
         expect(library.find("b-18g")).toMatchObject({grindSize: 61, name: "Mine"});
@@ -763,11 +648,6 @@ describe("one coffee", () => {
     it("adds it to a shelf the user picks", async () => {
         const {library, settings} = await open();
         await fireEvent.press(screen.getByTestId("roaster-coffee-shelf"));
-        // The bag comes first on this branch; see "adding to a shelf with a bag".
-        await waitFor(async () => {
-            await fireEvent.press(screen.getByTestId("bag-save"));
-            expect(screen.getByTestId("shelf-choice-Pantry")).toBeTruthy();
-        }, {timeout: SHEET_PRESS_TIMEOUT});
         await waitFor(async () => {
             await fireEvent.press(screen.getByTestId("shelf-choice-Pantry"));
             expect(library.find("b-18g")?.tags[0]).toBe("Pantry");

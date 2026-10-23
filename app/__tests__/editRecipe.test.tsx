@@ -1,12 +1,11 @@
 import React from "react";
-import {Linking, Platform, Share, StyleSheet, TextInput} from "react-native";
+import {Platform, Share, StyleSheet, TextInput} from "react-native";
 import {SafeAreaProvider} from "react-native-safe-area-context";
 import {act, fireEvent, screen, waitFor, within} from "@testing-library/react-native";
 
 import EditRecipe, {PROFILE_HEIGHT, stageScrollTarget} from "@/app/editRecipe";
 import {renderWithProviders, SHEET_PRESS_TIMEOUT, THREE_BUTTON_METRICS} from "@/test-utils/render";
 import {sharedSlotDatabase} from "@/hooks/useEasyModeSlots";
-import {sharedBagDatabase} from "@/library/CoffeeBagDatabase";
 
 import Pour, {POUR_PATTERN} from "@/library/Pour";
 import Recipe, {CUP_TYPE} from "@/library/Recipe";
@@ -233,6 +232,79 @@ async function renderEditor(overrides: Partial<Recipe> = {}) {
     );
     return view;
 }
+
+describe("experimental bag controls", () => {
+    afterEach(() => {
+        jest.requireMock("@/library/RecipeDatabase").default.prototype.getRecipe.mockReset();
+        jest.restoreAllMocks();
+    });
+
+    async function withBag() {
+        const {default: RealRecipes} = jest.requireActual("@/library/RecipeDatabase");
+        const {default: Bags} = jest.requireActual("@/library/CoffeeBagDatabase");
+        const {bagFixture} = jest.requireActual("@/test-utils/bags");
+        const recipe = fixture();
+        new RealRecipes().insertRecipes([recipe]);
+        const bags = new Bags();
+        bags.create(bagFixture());
+        bags.select(recipe.uuid, "bag-a", 1);
+        jest.requireMock("@/library/RecipeDatabase").default.prototype.getRecipe.mockReturnValue(recipe);
+        mockSettings = {bagExperimentEnabled: true, machineDeviceId: "machine"};
+        await renderEditor(recipe);
+        return {recipe, bags};
+    }
+
+    it("does not open a bag store while the experiment is off", async () => {
+        const module = jest.requireActual("@/library/CoffeeBagDatabase");
+        const open = jest.spyOn(module, "sharedBagDatabase");
+        await renderEditor();
+        expect(open).not.toHaveBeenCalled();
+        expect(screen.queryByTestId("selected-bag-row")).toBeNull();
+    });
+
+    it("keeps the same selected bag above the single brew action across all decks", async () => {
+        await withBag();
+        for (const label of ["About this recipe", "Stages, 3", "Brew settings"]) {
+            await fireEvent.press(screen.getByLabelText(label));
+            expect(screen.getByTestId("selected-bag-row")).toBeTruthy();
+            expect(screen.getAllByLabelText("Brew")).toHaveLength(1);
+        }
+    });
+
+    it("isolates the bag chooser from the editor and quick-edit layer", async () => {
+        await withBag();
+        await fireEvent.press(screen.getByLabelText("Quick edit brew"));
+        await fireEvent.press(screen.getByTestId("selected-bag-row"));
+        await waitFor(() => expect(screen.getByText("No bag")).toBeTruthy());
+        expect(screen.getByTestId("editor-content", {includeHiddenElements: true})
+            .props.importantForAccessibility).toBe("no-hide-descendants");
+        expect(screen.queryByLabelText("Increase Quick edit dose")).toBeNull();
+        expect(screen.queryByLabelText("Brew")).toBeNull();
+    });
+
+    it("passes the selected physical bag to the existing brew navigation", async () => {
+        const {recipe} = await withBag();
+        await fireEvent.press(screen.getByLabelText("Brew"));
+        await waitFor(() => expect(mockPush).toHaveBeenCalled());
+        expect(mockPush).toHaveBeenLastCalledWith(expect.objectContaining({
+            pathname: "/brew",
+            params: expect.objectContaining({
+                recipeJSON: JSON.stringify(recipe), bagSelection: JSON.stringify("bag-a")
+            })
+        }));
+    });
+
+    it("measures the entire bag and action stack for scroll and quick-edit clearance", async () => {
+        await withBag();
+        await fireEvent(screen.getByTestId("editor-actions"), "layout",
+            {nativeEvent: {layout: {height: 248, width: 320, x: 0, y: 0}}});
+        expect(screen.getByTestId("editor-scroll").props.contentContainerStyle.paddingBottom)
+            .toBeGreaterThanOrEqual(248);
+        await fireEvent.press(screen.getByLabelText("Quick edit brew"));
+        expect(StyleSheet.flatten(screen.getByLabelText("Quick edit").props.style).bottom)
+            .toBe(248);
+    });
+});
 
 it("recolours the editor header and already-open help without losing its draft", async () => {
     mockRecipeJSON = JSON.stringify(Object.assign(fixture(), {name: "Kept draft", accentIndex: PINNED_ACCENT_INDEX}));
@@ -2050,52 +2122,5 @@ describe("custom overflow protection", () => {
         const params = mockPush.mock.calls[0][0].params;
         expect(params.quickEditAdjustments).toBeDefined();
         expect(JSON.parse(params.recipeJSON).overflowProtection).toEqual(config);
-    });
-});
-
-describe("the bag on the about deck", () => {
-    function uuidInHand(): string {
-        return (JSON.parse(mockRecipeJSON) as {uuid: string}).uuid;
-    }
-
-    async function addBagFromSection(): Promise<void> {
-        await openAbout();
-        await fireEvent.press(screen.getByLabelText("I bought a bag"));
-        await waitFor(async () => {
-            if (sharedBagDatabase().openFor(uuidInHand()) === null) {
-                await fireEvent.press(screen.getByTestId("bag-save"));
-            }
-            expect(sharedBagDatabase().openFor(uuidInHand())).not.toBeNull();
-        }, {timeout: SHEET_PRESS_TIMEOUT});
-    }
-
-    it("offers a bag from the recipe menu", async () => {
-        await renderEditor();
-        await fireEvent.press(screen.getByLabelText("More"));
-        expect(screen.getByLabelText("I bought a bag")).toBeTruthy();
-    });
-
-    it("counts a bag down here when this app tracks bags", async () => {
-        mockSettings = {};
-        await renderEditor();
-        await addBagFromSection();
-        const bag = sharedBagDatabase().openFor(uuidInHand())!.bag;
-        expect(bag.sizeGrams).toBe(250);
-        expect(bag.beanName).toBeUndefined();
-        expect(screen.getByTestId("bag-remaining")).toHaveTextContent("250 g left, about 13 brews.");
-    });
-
-    it("hands a new bag to Beanconqueror when Beanconqueror tracks bags", async () => {
-        mockSettings = {bagTracker: "beanconqueror"};
-        const openURL = jest.spyOn(Linking, "openURL").mockResolvedValue(true);
-        await renderEditor({name: "Ethiopia Guji - Drop"});
-        await addBagFromSection();
-
-        const bag = sharedBagDatabase().openFor(uuidInHand())!.bag;
-        expect(bag.beanName).toBe("Ethiopia Guji");
-        expect(openURL).toHaveBeenCalledWith(expect.stringMatching(/^beanconqueror:\/\/ADD_USER_BEAN\?shareUserBean0=/));
-        expect(screen.getByTestId("bag-elsewhere")).toHaveTextContent("Bag tracked in Beanconqueror.");
-        expect(screen.queryByTestId("bag-remaining")).toBeNull();
-        openURL.mockRestore();
     });
 });

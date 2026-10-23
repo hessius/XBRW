@@ -250,6 +250,11 @@ export type SilentCapability = {
  */
 export const SILENT_CAPABILITIES: SilentCapability[] = [
     {
+        id: "beanconqueror",
+        title: "Send to Beanconqueror",
+        detail: "Only when you ask, a link opens Beanconqueror on this device with a brew or an add-bean form. The bean link starts with beanconqueror://ADD_USER_BEAN and carries the confirmed name, bag size, dates, price and any known coffee details. It sends nothing to a server. Saving a bag never opens another app, and opening the form does not prove the bag was added."
+    },
+    {
         id:     "cards",
         title:  "Reading and writing cards",
         detail: "Card contents never leave this phone. Reading, editing and writing a card all work with the network off."

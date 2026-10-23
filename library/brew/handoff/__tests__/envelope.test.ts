@@ -2,6 +2,7 @@ import {buildEnvelope, downsample, type HandoffFlow} from "@/library/brew/handof
 import {DEVICE_NAME, PREPARATION_TYPE} from "@/library/brew/handoff/device";
 import {brew, decodeDeltas, samples} from "@/library/brew/handoff/__tests__/fixtures";
 import appConfig from "@/app.json";
+import {bagRunFixture} from "@/test-utils/bags";
 
 function hasUndefined(value: unknown): boolean {
     if (value === undefined) return true;
@@ -21,6 +22,21 @@ describe("buildEnvelope", () => {
         expect(envelope.brew.note).toContain(`grind ${grindSize}`);
     });
 
+    it("keeps the frozen physical bag identity ahead of a pod name and accepts explicit confirmation", () => {
+        const record = brew({coffee: {name: "Same pod", roaster: "Roaster"},
+            bag: bagRunFixture({beanName: "Second physical bag"})});
+        expect(buildEnvelope(record, []).bean).toMatchObject({
+            name: "Second physical bag", roaster: "Roaster"
+        });
+        expect(buildEnvelope(record, [], [], "Confirmed bag").bean?.name).toBe("Confirmed bag");
+        expect(buildEnvelope(brew({coffee: {name: "Same pod"}}), [], [], "Legacy hint").bean?.name)
+            .toBe("Same pod");
+    });
+
+    it("does not guess a bag's external identity from a same-named pod or recipe", () => {
+        expect(buildEnvelope(brew({bag: bagRunFixture(), coffee: {name: "Same pod"}}), []).bean)
+            .toBeUndefined();
+    });
     it("refuses known tea at the envelope boundary", () => {
         expect(() => buildEnvelope(brew({beverageKind: "tea"}), samples))
             .toThrow("Tea brews cannot be sent to Beanconqueror.");

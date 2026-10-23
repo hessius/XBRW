@@ -1,40 +1,35 @@
 import {useEffect, useState} from "react";
 import {AppState} from "react-native";
 
-/**
- * The time, read on mount, at local midnight and on returning to the foreground.
- *
- * For day-grained displays such as a bag's freshness, where a clock ticking
- * through render would be wasted work and `Date.now()` in render is impure.
- * Calendar midnight, not a 24-hour interval, keeps daylight-saving days correct.
- */
-export function useNow(clock: () => number = Date.now): number {
-    const [now, setNow] = useState(() => clock());
+export function useNow(clock = Date.now, enabled = true): number | null {
+    const [mode, setMode] = useState({enabled, generation: 0});
+    const [reading, setReading] = useState(() => ({
+        generation: 0, now: enabled ? clock() : null
+    }));
+    if (mode.enabled !== enabled) setMode({enabled, generation: mode.generation + 1});
+    const generation = mode.generation;
     useEffect(() => {
-        let timer: ReturnType<typeof setTimeout>;
-        function scheduleMidnight() {
-            const at = clock();
-            const midnight = new Date(at);
-            midnight.setHours(24, 0, 0, 0);
-            timer = setTimeout(() => {
-                setNow(clock());
-                scheduleMidnight();
-            }, midnight.getTime() - at);
-        }
-        scheduleMidnight();
-        const subscription = AppState.addEventListener("change", (next) => {
-            if (next === "active") {
-                clearTimeout(timer);
-                setNow(clock());
-                scheduleMidnight();
-            }
+        if (!enabled) return;
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const refresh = () => {
+            const now = clock();
+            setReading({generation, now});
+            const date = new Date(now);
+            const next = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1).getTime();
+            timer = setTimeout(refresh, Math.max(1, next - now));
+        };
+        timer = setTimeout(refresh, 0);
+        const listener = AppState.addEventListener("change", state => {
+            if (state !== "active") return;
+            if (timer !== undefined) clearTimeout(timer);
+            refresh();
         });
         return () => {
-            clearTimeout(timer);
-            subscription.remove();
+            if (timer !== undefined) clearTimeout(timer);
+            listener.remove();
         };
-    }, [clock]);
-    return now;
+    }, [clock, enabled, generation]);
+    return enabled && reading.generation === generation ? reading.now : null;
 }
 
 export default useNow;

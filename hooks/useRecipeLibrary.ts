@@ -18,7 +18,6 @@ import RecipeDatabase from "@/library/RecipeDatabase";
 import {recipeAtDose} from "@/library/quickEdit";
 import {canonicalShelfId} from "@/library/hiddenShelves";
 import {tagKey} from "@/library/tagKey";
-import type {StoredBagReading} from "@/library/CoffeeBagDatabase";
 
 /**
  * The part of `RecipeDatabase` this hook uses.
@@ -64,18 +63,6 @@ export type RecipeStore = {
      * that does not shout.
      */
     brewEvidence?: () => Record<string, RecipeEvidence>;
-    /**
-     * Each recipe's open bag and the grams its brews have used.
-     *
-     * Optional like `brewEvidence`, and for the same reason: a store that
-     * cannot answer costs the cards their bag badge and nothing else.
-     */
-    coffeeBags?: () => Record<string, StoredBagReading>;
-    /**
-     * One recipe by uuid, for the few the open bags name. Optional: without
-     * it the bag recipes are picked out of `retrieveAllRecipes`.
-     */
-    getRecipe?: (uuid: string) => Recipe | null;
     /**
      * A few members of each shelf, for the art on its tile.
      *
@@ -232,21 +219,15 @@ export type RecipeLibrary = {
     roasterCounts: {roaster: string; count: number}[];
     /** What each recipe's brews add up to, keyed by uuid. Absent means none. */
     evidence: Record<string, RecipeEvidence>;
-    /** Each recipe's open bag, keyed by uuid. Absent means no bag. */
-    bags: Record<string, StoredBagReading>;
-    /**
-     * The recipe each open bag belongs to, keyed by uuid, whatever the rail
-     * asked. Read for the home screen's "Ready to brew" card.
-     */
-    bagRecipes: Record<string, Recipe>;
     /** The art each shelf's tile draws, keyed by shelf id. */
     shelfMarks: Record<string, ShelfMarkMembers>;
     allRecipes: () => Recipe[];
+    /** Invalidates other whole-library reads after mutations or regaining focus. */
+    revision: number;
     refresh: () => void;
     deleteRecipe: (recipe: Recipe) => void;
     duplicateRecipe: (recipe: Recipe) => void;
     toggleFavourite: (recipe: Recipe) => void;
-    /** Writes `recipe` back at `dose`, water scaled; `null` if the store refused. */
     saveAtDose: (recipe: Recipe, dose: number) => Recipe | null;
     /** Make exactly these recipes the members of a shelf. */
     setShelfMembers: (tag: string, uuids: readonly string[]) => ShelfWriteOutcome;
@@ -301,8 +282,6 @@ export function useRecipeLibrary(
     const authorCounts = readAuthorCounts(store, revision);
     const roasterCounts = readRoasterCounts(store, revision);
     const evidence = readEvidence(store, revision);
-    const bags = readBags(store, revision);
-    const bagRecipes = readBagRecipes(store, JSON.stringify(Object.keys(bags).sort()), revision);
     // Keyed by every shelf that could be drawn rather than by the ones the grid
     // actually draws, because suppression depends on which filters are applied
     // and the art does not: the same shelf shows the same members whether the
@@ -609,6 +588,7 @@ export function useRecipeLibrary(
 
     return {
         recipes,
+        revision,
         librarySize,
         countUnreadable,
         deleteUnreadable,
@@ -617,8 +597,6 @@ export function useRecipeLibrary(
         authorCounts,
         roasterCounts,
         evidence,
-        bags,
-        bagRecipes,
         shelfMarks,
         allRecipes,
         refresh: reload,
@@ -710,50 +688,6 @@ function readEvidence(
 ): Record<string, RecipeEvidence> {
     void revision;
     return db.brewEvidence?.() ?? {};
-}
-
-/**
- * Each open bag and what its brews used, on the same revision counter as
- * evidence, so a brew and a return to the library moves the badge with it.
- */
-function readBags(
-    db: RecipeStore, revision: number
-): Record<string, StoredBagReading> {
-    void revision;
-    return db.coffeeBags?.() ?? {};
-}
-
-/**
- * The recipes the open bags name, keyed by uuid.
- *
- * Keyed on the uuids as one JSON string so the compiler can cache the read,
- * the trick `shelfIdsOf` plays. One `getRecipe` per bag where the store has
- * it, since a person has a handful of bags open and the table may hold
- * hundreds of recipes. A store that cannot answer costs the card, nothing else.
- */
-function readBagRecipes(
-    db: RecipeStore, uuids: string, revision: number
-): Record<string, Recipe> {
-    void revision;
-    const wanted: string[] = JSON.parse(uuids);
-    if (wanted.length === 0) return {};
-    const out: Record<string, Recipe> = {};
-    try {
-        if (db.getRecipe !== undefined) {
-            for (const uuid of wanted) {
-                const recipe = db.getRecipe(uuid);
-                if (recipe !== null && recipe !== undefined) out[uuid] = recipe;
-            }
-        } else {
-            const set = new Set(wanted);
-            for (const recipe of db.retrieveAllRecipes?.() ?? []) {
-                if (set.has(recipe.uuid)) out[recipe.uuid] = recipe;
-            }
-        }
-    } catch {
-        return {};
-    }
-    return out;
 }
 
 /**

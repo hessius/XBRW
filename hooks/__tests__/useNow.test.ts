@@ -38,6 +38,38 @@ it.each([new Date(2026, 2, 29, 0, 30), new Date(2026, 9, 25, 0, 30)])(
     }
 );
 
+it("does not open a clock or listener while disabled and refreshes each enabled generation", async () => {
+    const listen = jest.spyOn(AppState, "addEventListener").mockClear();
+    const schedule = jest.spyOn(global, "setTimeout");
+    const cancel = jest.spyOn(global, "clearTimeout");
+    const clock = jest.fn(() => Date.now());
+    const {result, rerender, unmount} = await renderHook(
+        ({enabled}: {enabled: boolean}) => useNow(clock, enabled),
+        {initialProps: {enabled: false}}
+    );
+    expect(result.current).toBeNull();
+    expect(listen).not.toHaveBeenCalled();
+    expect(clock).not.toHaveBeenCalled();
+    expect(schedule).not.toHaveBeenCalled();
+    await rerender({enabled: true});
+    expect(result.current).toBeNull();
+    await act(async () => { jest.advanceTimersByTime(0); });
+    expect(result.current).toBe(BEFORE);
+    const firstTimer = schedule.mock.results.at(-1)?.value;
+    await rerender({enabled: false});
+    expect(result.current).toBeNull();
+    expect(cancel).toHaveBeenCalledWith(firstTimer);
+    const later = BEFORE + 3 * 86_400_000;
+    jest.setSystemTime(later);
+    await rerender({enabled: true});
+    expect(result.current).toBeNull();
+    await act(async () => { jest.advanceTimersByTime(0); });
+    expect(result.current).toBe(later);
+    const lastTimer = schedule.mock.results.at(-1)?.value;
+    await unmount();
+    expect(cancel).toHaveBeenCalledWith(lastTimer);
+});
+
 it("reschedules after foregrounding with a changed clock and clears resources on unmount", async () => {
     const schedule = jest.spyOn(global, "setTimeout");
     const cancel = jest.spyOn(global, "clearTimeout");
@@ -47,6 +79,7 @@ it("reschedules after foregrounding with a changed clock and clears resources on
         changed = listener;
         return {remove};
     });
+
     const {result, unmount} = await renderHook(() => useNow());
     const afternoon = new Date(2026, 9, 22, 15).getTime();
     jest.setSystemTime(afternoon);

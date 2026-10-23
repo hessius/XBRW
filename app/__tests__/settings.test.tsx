@@ -12,18 +12,18 @@ import * as databaseModule from "@/library/appDatabase";
 import {SUPPORT_TITLE} from "@/components/SupportTile";
 import {palette} from "@/constants/colors";
 import Recipe from "@/library/Recipe";
-import {newBag, type CoffeeBag} from "@/library/coffeeBag";
 import {feedKey, serialiseFeedOptOut} from "@/library/roasterFeed";
-import {readCatalogue} from "@/library/roasterCatalogue";
-import {parseSubscriptions, serialiseSubscriptions} from "@/library/roasterSubscription";
-import {syncDue} from "@/library/roasterSync";
+import {serialiseSubscriptions} from "@/library/roasterSubscription";
 import {buildBackup, parseBackup} from "@/library/backup";
+import CoffeeBagDatabase from "@/library/CoffeeBagDatabase";
+import {BagAttributionError} from "@/library/BrewDatabase";
+import {bagFixture} from "@/test-utils/bags";
+import type {BagInventoryBackup} from "@/library/bagBackup";
 import {brew} from "@/library/brew/handoff/__tests__/fixtures";
 import {DEFAULTS, NOT_IN_BACKUP, Settings, SqliteSettingsStorage, type SettingKey, type SettingsStorage} from "@/library/Settings";
 import {
     renderWithProviders, SHEET_PRESS_TIMEOUT, THREE_BUTTON_METRICS
 } from "@/test-utils/render";
-import {FEED_URL, feedBody} from "@/test-utils/roasterFeed";
 
 /**
  * The rendered text of a `toJSON()` tree, in document order.
@@ -102,15 +102,6 @@ const mockBrewStore = {
     restore: jest.fn(() => 0)
 };
 
-const mockBagStore = {
-    all: jest.fn(() => []),
-    restore: jest.fn(() => 0)
-};
-jest.mock("@/library/CoffeeBagDatabase", () => ({
-    ...jest.requireActual("@/library/CoffeeBagDatabase"),
-    sharedBagDatabase: () => mockBagStore
-}));
-
 jest.mock("@/hooks/useBrewHistory", () => ({
     sharedBrewDatabase: () => mockBrewStore
 }));
@@ -173,8 +164,7 @@ function backupOf(
                 settings,
                 skipped: 0,
                 skippedBrews,
-                bags: [] as CoffeeBag[],
-                skippedBags: 0,
+                skippedBags: 0, skippedBagRows: 0, bagWarnings: [],
                 appVersion: "2.6.0",
                 exportedAt: "2026-08-26T21:00:00.000Z"
             }
@@ -360,6 +350,8 @@ describe("SettingsScreen", () => {
 
     beforeEach(() => {
         jest.clearAllMocks();
+        jest.spyOn(databaseModule, "appDatabase").mockReturnValue(
+            createTestDatabase() as ReturnType<typeof databaseModule.appDatabase>);
         mockLibraryRecipes = [];
         mockUnreadableCount = 0;
         mockAllRecipesThrows = false;
@@ -371,7 +363,6 @@ describe("SettingsScreen", () => {
         mockSignOut.mockResolvedValue(undefined);
         mockBrewStore.all.mockReturnValue([]);
         mockBrewStore.restore.mockReturnValue(0);
-        mockBagStore.restore.mockReturnValue(0);
     });
 
     afterEach(() => jest.restoreAllMocks());
@@ -626,6 +617,19 @@ describe("SettingsScreen", () => {
         );
     });
 
+    it("refuses a backup that would silently drop unreadable historical bag attribution", async () => {
+        mockBrewStore.all.mockImplementationOnce(() => { throw new BagAttributionError("brew-a"); });
+        mockExportBackup.mockResolvedValue({ok: true});
+        await renderWithProviders(<SettingsScreen settings={new Settings(memoryStorage())}/>);
+        await fireEvent.press(screen.getByRole("button",
+            {name: "Back up my recipes, Writes a file and hands it to the share sheet."}));
+        expect(mockExportBackup).not.toHaveBeenCalled();
+        expect(mockNotify).toHaveBeenCalledWith(expect.objectContaining({
+            tone: "error",
+            message: "A brew's saved bag could not be read, so the backup was not made."
+        }));
+    });
+
     it("hands the whole library and the live settings to the exporter", async () => {
         // Rewiring this row to onRestore, or passing the wrong arguments, used
         // to leave every test green because none of them pressed it.
@@ -637,8 +641,7 @@ describe("SettingsScreen", () => {
             {name: "Back up my recipes, Writes a file and hands it to the share sheet."}));
 
         expect(mockExportBackup).toHaveBeenCalledWith(
-            mockLibraryRecipes, expect.any(Object), expect.any(String), expect.any(Array),
-            expect.any(Array)
+            mockLibraryRecipes, expect.any(Object), expect.any(String), expect.any(Array)
         );
 
         // Asserted against DEFAULTS rather than a list written out here, because
@@ -652,6 +655,115 @@ describe("SettingsScreen", () => {
         expect(Object.keys(snapshot).sort()).toEqual(
             Object.keys(DEFAULTS).filter(key => !NOT_IN_BACKUP.includes(key as SettingKey)).sort()
         );
+    });
+
+    it("backs up existing bags even with the experiment disabled", async () => {
+        const db = createTestDatabase();
+        jest.spyOn(databaseModule, "appDatabase").mockReturnValue(
+            db as ReturnType<typeof databaseModule.appDatabase>);
+        const bags = new CoffeeBagDatabase();
+        bags.create(bagFixture());
+        bags.correct("bag-a", 100);
+        const settings = new Settings(memoryStorage());
+        expect(settings.get("bagExperimentEnabled")).toBe(false);
+        mockExportBackup.mockResolvedValue({ok: true});
+        await renderWithProviders(<SettingsScreen settings={settings}/>);
+        await fireEvent.press(screen.getByRole("button", {name: /^Back up my recipes,/}));
+        expect(mockExportBackup.mock.calls[0][4]).toEqual(bags.exportInventory());
+        expect(mockExportBackup.mock.calls[0][1]).not.toHaveProperty("bagExperimentEnabled");
+        expect(mockExportBackup.mock.calls[0][1]).not.toHaveProperty("bagTracker");
+    });
+
+    it("discovers legacy-only inventory for backup without requiring an opt-in", async () => {
+        const db = createTestDatabase();
+        jest.spyOn(databaseModule, "appDatabase").mockReturnValue(
+            db as ReturnType<typeof databaseModule.appDatabase>);
+        const old = {id: "legacy", recipeUuid: "missing", sizeGrams: 250,
+            boughtOn: "2026-10-01", addedAt: 10, countedFrom: 100, gramsAtCount: 120};
+        db.execSync(`CREATE TABLE coffee_bags (id TEXT PRIMARY KEY, recipeUuid TEXT,
+            countedFrom INTEGER, finishedAt INTEGER DEFAULT 0, bag TEXT);`);
+        db.runSync("INSERT INTO coffee_bags VALUES (?, ?, ?, 0, ?);",
+            [old.id, old.recipeUuid, old.countedFrom, JSON.stringify(old)]);
+        mockExportBackup.mockResolvedValue({ok: true});
+        await renderWithProviders(<SettingsScreen settings={new Settings(memoryStorage())}/>);
+        await fireEvent.press(screen.getByRole("button", {name: /^Back up my recipes,/}));
+        expect(mockExportBackup.mock.calls[0][4]?.bags[0])
+            .toMatchObject({bag: {id: "legacy"}, baselineGrams: 120, needsCheck: true});
+    });
+
+    it("refuses to make an incomplete backup when existing inventory is unreadable", async () => {
+        const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+        const db = createTestDatabase();
+        jest.spyOn(databaseModule, "appDatabase").mockReturnValue(
+            db as ReturnType<typeof databaseModule.appDatabase>);
+        new CoffeeBagDatabase().create(bagFixture());
+        db.runSync("UPDATE coffee_bags_v2 SET bag = '{}';");
+        await renderWithProviders(<SettingsScreen settings={new Settings(memoryStorage())}/>);
+        await fireEvent.press(screen.getByRole("button", {name: /^Back up my recipes,/}));
+        expect(mockExportBackup).not.toHaveBeenCalled();
+        expect(mockNotify).toHaveBeenCalledWith({
+            tone: "error", message: "Your coffee bags could not be read, so the backup was not made."
+        });
+        expect(warn).toHaveBeenCalled();
+    });
+
+    it.each([false, true])(
+        "restores independent bags with local opt-in unchanged, even when bag writes fail: %s",
+        async fail => {
+            const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+            const db = createTestDatabase();
+            jest.spyOn(databaseModule, "appDatabase").mockReturnValue(
+                db as ReturnType<typeof databaseModule.appDatabase>);
+            new CoffeeBagDatabase();
+            if (fail) db.execSync(`CREATE TRIGGER reject_bags BEFORE INSERT ON coffee_bags_v2
+                BEGIN SELECT RAISE(FAIL, 'disk full'); END;`);
+            const inventory: BagInventoryBackup = {version: 2, bags: [{
+                bag: bagFixture(), baselineGrams: 100, needsCheck: false,
+                linkedRecipeUuids: [], runs: []
+            }], selections: []};
+            const incoming = backupOf([], {bagExperimentEnabled: true, bagTracker: "beanconqueror"});
+            mockPickBackup.mockResolvedValue({
+                ...incoming,
+                result: {...incoming.result, payload: {...incoming.result.payload, bagInventory: inventory}}
+            });
+            mockApplyRestore.mockReturnValue({status: "restored", added: 0});
+            const settings = new Settings(memoryStorage());
+            settings.set("bagTracker", "xbrw");
+            await renderWithProviders(<SettingsScreen settings={settings}/>);
+            await fireEvent.press(screen.getByRole("button", {name: /^Restore from a backup,/}));
+            await fireEvent(screen.getByLabelText(/settings from this backup/i), "checkedChange", true);
+            await waitFor(async () => {
+                await fireEvent.press(screen.getByRole("button", {name: /Restore.*bags/}));
+                expect(mockNotify).toHaveBeenCalledWith(fail
+                    ? {tone: "error", message: "Recipes were restored, but coffee bags could not be restored."}
+                    : {tone: "success", message: "1 coffee bag restored"});
+            }, {timeout: SHEET_PRESS_TIMEOUT});
+            expect(settings.get("bagExperimentEnabled")).toBe(false);
+            expect(settings.get("bagTracker")).toBe("xbrw");
+            expect(new CoffeeBagDatabase().get("bag-a") === null).toBe(fail);
+            expect(warn.mock.calls.length > 0).toBe(fail);
+        }
+    );
+
+    it("reports bag damage even if the only successful work was restoring settings", async () => {
+        const incoming = backupOf([], {temperatureUnit: "F"});
+        mockPickBackup.mockResolvedValue({
+            ...incoming, result: {...incoming.result, payload: {
+                ...incoming.result.payload, skippedBags: 1,
+                bagWarnings: ["This bag inventory version is not supported."]
+            }}
+        });
+        mockApplyRestore.mockReturnValue({status: "restored", added: 0});
+        await renderWithProviders(<SettingsScreen settings={new Settings(memoryStorage())}/>);
+        await fireEvent.press(screen.getByRole("button", {name: /^Restore from a backup,/}));
+        await fireEvent(screen.getByLabelText(/settings from this backup/i), "checkedChange", true);
+        await waitFor(async () => {
+            await fireEvent.press(screen.getByRole("button", {name: "Take the settings"}));
+            expect(mockNotify).toHaveBeenCalledWith({
+                tone: "error",
+                message: "Some coffee bag data could not be restored. Check affected quantities and choices."
+            });
+        }, {timeout: SHEET_PRESS_TIMEOUT});
     });
 
     it("no longer carries the retired rail hint in a backup", async () => {
@@ -884,7 +996,7 @@ describe("SettingsScreen", () => {
 
         expect(mockExportBackup).toHaveBeenCalledWith(expect.anything(),
             expect.objectContaining({showRecipeAvatars: false}),
-            expect.any(String), expect.any(Array), expect.any(Array));
+            expect.any(String), expect.any(Array));
     });
 
     it("reports a backup that could not be shared", async () => {
@@ -958,7 +1070,7 @@ describe("SettingsScreen", () => {
         await fireEvent.press(screen.getByRole("button", {name: /back up my recipes/i}));
         expect(mockExportBackup).toHaveBeenCalledWith(expect.anything(),
             expect.objectContaining({brewHistorySort: "rating", brewHistorySortDirection: "asc"}),
-            expect.any(String), expect.any(Array), expect.any(Array));
+            expect.any(String), expect.any(Array));
     });
 
     it("restores a library sorted by rating", async () => {
@@ -1088,97 +1200,6 @@ describe("SettingsScreen", () => {
         }));
     });
 
-    it("restores and reports missing bags when all recipes are already present", async () => {
-        mockLibraryRecipes = [recipeNamed("A", "u1")];
-        const picked = backupOf(mockLibraryRecipes);
-        picked.result.payload.bags.push(newBag("u1", {sizeGrams: 250}));
-        mockPickBackup.mockResolvedValue(picked);
-        mockApplyRestore.mockReturnValue({status: "restored", added: 0});
-        mockBagStore.restore.mockReturnValue(1);
-        await renderWithProviders(<SettingsScreen settings={new Settings(memoryStorage())}/>);
-
-        await fireEvent.press(screen.getByRole("button",
-            {name: "Restore from a backup, Adds anything your library does not already have."}));
-        await settleSheet();
-        await fireEvent.press(screen.getByRole("button", {name: /add to my library/i}));
-
-        expect(mockBagStore.restore).toHaveBeenCalledWith(picked.result.payload.bags, new Set(["u1"]));
-        expect(mockNotify).toHaveBeenCalledWith(expect.objectContaining({
-            tone: "success", message: "1 bag restored"
-        }));
-    });
-
-    it("reports unreadable bags even when only settings were restored", async () => {
-        mockLibraryRecipes = [recipeNamed("A", "u1")];
-        const picked = backupOf(mockLibraryRecipes);
-        picked.result.payload.skippedBags = 1;
-        mockPickBackup.mockResolvedValue(picked);
-        mockApplyRestore.mockReturnValue({status: "restored", added: 0});
-        await renderWithProviders(<SettingsScreen settings={new Settings(memoryStorage())}/>);
-
-        await fireEvent.press(screen.getByRole("button",
-            {name: "Restore from a backup, Adds anything your library does not already have."}));
-        await settleSheet();
-        await fireEvent(screen.getByLabelText(/settings from this backup/i), "checkedChange", true);
-        await fireEvent.press(screen.getByRole("button", {name: /take the settings/i}));
-
-        expect(mockNotify).toHaveBeenCalledWith(expect.objectContaining({
-            tone: "error", message: "One bag in that backup could not be read."
-        }));
-    });
-
-    it("repopulates a restored catalogue immediately without resuming paused subscriptions", async () => {
-        const settings = new Settings(memoryStorage());
-        const stamp = Date.now();
-        const subscriptions = [
-            {feed: FEED_URL, roaster: "Example Roasters", lastSync: stamp, lastAttempt: stamp,
-                paused: false, pinnedAt: stamp - 1},
-            {feed: "https://paused.example/feed.json", roaster: "Paused Roasters",
-                lastSync: stamp, lastAttempt: stamp, paused: true}
-        ];
-        mockPickBackup.mockResolvedValue(backupOf([], {
-            roasterSubscriptions: serialiseSubscriptions(subscriptions)
-        }));
-        mockApplyRestore.mockReturnValue({status: "restored", added: 0});
-        await renderWithProviders(<SettingsScreen settings={settings}/>);
-
-        await fireEvent.press(screen.getByRole("button",
-            {name: "Restore from a backup, Adds anything your library does not already have."}));
-        await settleSheet();
-        await fireEvent(screen.getByLabelText(/settings from this backup/i), "checkedChange", true);
-        await fireEvent.press(screen.getByRole("button", {name: /take the settings/i}));
-
-        expect(parseSubscriptions(settings.get("roasterSubscriptions"))).toEqual(
-            subscriptions.map((sub) => ({...sub, lastSync: 0, lastAttempt: 0})));
-        expect(readCatalogue(settings, FEED_URL)).toBeNull();
-        const fetchBody = jest.fn(async () => feedBody([{id: "restored"}]));
-        await act(async () => { await syncDue({settings, fetchBody, now: () => stamp}); });
-        expect(fetchBody).toHaveBeenCalledTimes(1);
-        expect(fetchBody).toHaveBeenCalledWith(FEED_URL, undefined);
-        expect(readCatalogue(settings, FEED_URL)?.feed.coffees.map((coffee) => coffee.id))
-            .toEqual(["restored"]);
-        expect(parseSubscriptions(settings.get("roasterSubscriptions"))
-            .find((sub) => sub.feed === "https://paused.example/feed.json")?.paused).toBe(true);
-    });
-
-    it("reports a bag-store failure without hiding the restored recipes", async () => {
-        mockPickBackup.mockResolvedValue(backupOf([recipeNamed("A", "u1")]));
-        mockApplyRestore.mockReturnValue({status: "restored", added: 1});
-        mockBagStore.restore.mockImplementationOnce(() => { throw new Error("Bag table is unavailable"); });
-        await renderWithProviders(<SettingsScreen settings={new Settings(memoryStorage())}/>);
-
-        await fireEvent.press(screen.getByRole("button",
-            {name: "Restore from a backup, Adds anything your library does not already have."}));
-        await settleSheet();
-        await fireEvent.press(screen.getByRole("button", {name: /add to my library/i}));
-
-        expect(mockNotify).toHaveBeenCalledWith(expect.objectContaining({
-            tone: "success", message: "1 recipe restored"
-        }));
-        expect(mockNotify).toHaveBeenCalledWith(expect.objectContaining({
-            tone: "error", message: "Bags could not be restored."
-        }));
-    });
     it.each(["", "not-a-colour"])(
         "reports a backup's invalid brew accent %j instead of silently restoring it", async accent => {
             mockLibraryRecipes = [];
@@ -1656,30 +1677,77 @@ describe("SettingsScreen", () => {
             expect(settings.get("beanconquerorHandoff")).toBe(true);
         });
 
-        it("tracks bags in Beanconqueror by default once brews go there", async () => {
+        it("offers one default-off coffee bag experiment and marks old estimates before enabling", async () => {
             const settings = new Settings(memoryStorage());
             settings.set("labsUnlocked", true);
-
+            const bags = new CoffeeBagDatabase();
+            bags.create(bagFixture());
+            expect(settings.get("bagExperimentEnabled")).toBe(false);
             await renderWithProviders(<SettingsScreen settings={settings}/>);
-            expect(screen.getByRole("radio", {name: "XBRW++", checked: true})).toBeTruthy();
-
-            await fireEvent.press(screen.getByRole("switch",
-                {name: "Send brews to Beanconqueror"}));
-            expect(screen.getByRole("radio", {name: "Beanconqueror", checked: true})).toBeTruthy();
-            // Still following the switch, not yet a choice of its own.
-            expect(settings.get("bagTracker")).toBe("auto");
+            await fireEvent.press(screen.getByRole("switch", {name: "Coffee bags"}));
+            expect(settings.get("bagExperimentEnabled")).toBe(true);
+            expect(bags.balance("bag-a", 18, "xbrw")).toEqual({kind: "needsCheck"});
+            await fireEvent.press(screen.getByRole("button", {name: /^Hide Labs,/}));
+            expect(settings.get("bagExperimentEnabled")).toBe(true);
         });
 
-        it("keeps an explicit bag tracker choice", async () => {
+        it("does not claim the experiment is enabled when the baseline warning cannot be saved", async () => {
+            jest.spyOn(console, "warn").mockImplementation(() => {});
+            jest.spyOn(CoffeeBagDatabase.prototype, "markAllNeedsCheck").mockImplementation(() => {
+                throw new Error("disk full");
+            });
             const settings = new Settings(memoryStorage());
             settings.set("labsUnlocked", true);
-            settings.set("beanconquerorHandoff", true);
-
             await renderWithProviders(<SettingsScreen settings={settings}/>);
-            await fireEvent.press(screen.getByRole("radio", {name: "XBRW++"}));
+            await fireEvent.press(screen.getByRole("switch", {name: "Coffee bags"}));
+            expect(settings.get("bagExperimentEnabled")).toBe(false);
+            expect(mockNotify).toHaveBeenCalledWith(expect.objectContaining({tone: "error"}));
+        });
 
-            expect(settings.get("bagTracker")).toBe("xbrw");
-            expect(screen.getByRole("radio", {name: "XBRW++", checked: true})).toBeTruthy();
+        it("can disable the experiment even if inventory access is broken", async () => {
+            const access = jest.spyOn(CoffeeBagDatabase.prototype, "markAllNeedsCheck")
+                .mockImplementation(() => { throw new Error("disk full"); });
+            const settings = new Settings(memoryStorage());
+            settings.set("labsUnlocked", true);
+            settings.set("bagExperimentEnabled", true);
+            await renderWithProviders(<SettingsScreen settings={settings}/>);
+            await fireEvent.press(screen.getByRole("switch", {name: "Coffee bags"}));
+            expect(settings.get("bagExperimentEnabled")).toBe(false);
+            expect(access).not.toHaveBeenCalled();
+        });
+
+        it.each(["explicit", "auto"] as const)("requires a check when %s tracking returns to this app", async (mode) => {
+            const settings = new Settings(memoryStorage());
+            settings.set("labsUnlocked", true);
+            settings.set("bagExperimentEnabled", true);
+            settings.set("bagTracker", mode === "explicit" ? "beanconqueror" : "auto");
+            settings.set("beanconquerorHandoff", true);
+            const bags = new CoffeeBagDatabase();
+            bags.create(bagFixture());
+            await renderWithProviders(<SettingsScreen settings={settings}/>);
+            await fireEvent.press(mode === "explicit" ? screen.getByText("XBRW++")
+                : screen.getByRole("switch", {name: "Send brews to Beanconqueror"}));
+            expect(bags.balance("bag-a", 18, "xbrw")).toEqual({kind: "needsCheck"});
+            if (mode === "explicit") expect(settings.get("bagTracker")).toBe("xbrw");
+            else expect(settings.get("beanconquerorHandoff")).toBe(false);
+        });
+
+        it.each(["explicit", "auto"] as const)("retains %s ownership if its required check cannot be saved", async (mode) => {
+            jest.spyOn(console, "warn").mockImplementation(() => {});
+            jest.spyOn(CoffeeBagDatabase.prototype, "markAllNeedsCheck").mockImplementation(() => {
+                throw new Error("disk full");
+            });
+            const settings = new Settings(memoryStorage());
+            settings.set("labsUnlocked", true);
+            settings.set("bagExperimentEnabled", true);
+            settings.set("bagTracker", mode === "explicit" ? "beanconqueror" : "auto");
+            settings.set("beanconquerorHandoff", true);
+            await renderWithProviders(<SettingsScreen settings={settings}/>);
+            await fireEvent.press(mode === "explicit" ? screen.getByText("XBRW++")
+                : screen.getByRole("switch", {name: "Send brews to Beanconqueror"}));
+            expect(settings.get("bagTracker")).toBe(mode === "explicit" ? "beanconqueror" : "auto");
+            expect(settings.get("beanconquerorHandoff")).toBe(true);
+            expect(mockNotify).toHaveBeenCalledWith(expect.objectContaining({tone: "error"}));
         });
 
         it("closes Labs from inside it, and leaves the rest of settings alone", async () => {
@@ -1711,6 +1779,7 @@ describe("SettingsScreen", () => {
             mockPickBackup.mockResolvedValue(backupOf(
                 [recipeNamed("A", "u1")],
                 {labsUnlocked: true, beanconquerorHandoff: true,
+                 bagExperimentEnabled: true, bagTracker: "beanconqueror", readyToBrewDismissedOn: "2026-10-23",
                  dotMatrixProfile: true}
             ));
             mockApplyRestore.mockReturnValue({status: "restored", added: 1});
@@ -1726,6 +1795,9 @@ describe("SettingsScreen", () => {
             const restored = new Settings(storage);
             expect(restored.get("labsUnlocked")).toBe(false);
             expect(restored.get("beanconquerorHandoff")).toBe(false);
+            expect(restored.get("bagExperimentEnabled")).toBe(false);
+            expect(restored.get("bagTracker")).toBe("auto");
+            expect(restored.get("readyToBrewDismissedOn")).toBe("");
             // The rest of the block still landed, so this is the Labs keys
             // being refused and not the restore quietly failing.
             expect(restored.get("dotMatrixProfile")).toBe(true);

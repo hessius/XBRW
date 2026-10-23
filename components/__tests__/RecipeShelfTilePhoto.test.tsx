@@ -10,7 +10,6 @@ import {TILE_HEIGHT} from "@/components/ShelfTile";
 import Recipe, {CUP_TYPE} from "@/library/Recipe";
 import Pour, {POUR_PATTERN} from "@/library/Pour";
 import {renderWithProviders} from "@/test-utils/render";
-import {newBag} from "@/library/coffeeBag";
 
 const PHOTO = "https://example.com/bag.jpg";
 
@@ -173,11 +172,10 @@ describe("RecipeShelfTile picture", () => {
         // an open bag with its freshness, a star and the marker.
         const recipe = pictured("Ecuador | Vinka Farm Washed");
         recipe.favourite = true;
-        const bag = {...newBag(recipe.uuid, {sizeGrams: 250}, 1_760_000_000_000), id: "bag-1"};
         await renderWithProviders(
             <RecipeShelfTile recipe={recipe} {...HANDLERS} showPicture
                              evidence={{brews: 6, avgRating: 4.25, lastBrewedAt: 0}}
-                             bag={{bag, usedGrams: 30}} freshness="peak"/>
+                             bagBadge={{label: "PEAK", spoken: "Bag October, estimated peak window"}}/>
         );
         await fireEvent(screen.getByTestId("recipe-tile-profile-room"), "layout", {
             nativeEvent: {layout: {x: 0, y: 0, width: 160, height: 30}}
@@ -186,8 +184,8 @@ describe("RecipeShelfTile picture", () => {
 
         const badges = within(screen.getByTestId("recipe-tile-badges"));
         expect(badges.getByTestId("recipe-tile-evidence")).toBeTruthy();
-        expect(badges.getByTestId("recipe-tile-bag")).toHaveTextContent("220G");
-        expect(badges.getByTestId("recipe-tile-freshness")).toHaveTextContent("PEAK");
+        expect(badges.getByTestId("recipe-tile-evidence")).toHaveTextContent(/PEAK/);
+        expect(screen.getByLabelText(/Bag October, estimated peak window/)).toBeTruthy();
         expect(badges.getByTestId("recipe-tile-favourite", {includeHiddenElements: true}))
             .toBeTruthy();
         expect(badges.getByText("COFFEE")).toBeTruthy();

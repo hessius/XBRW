@@ -1,6 +1,7 @@
 import {newBag, reviveBag} from "@/library/coffeeBag";
 import {parseBrewMindLink} from "@/library/brewmindLink";
 import {podCoffeeFromStored} from "@/library/podCoffee";
+import {bagFixture} from "@/test-utils/bags";
 import {
     PEAK_WINDOW_DAYS,
     ROAST_LEVEL_DEFAULTS,
@@ -9,6 +10,7 @@ import {
     freshnessBadge,
     freshnessLine,
     freshnessOf,
+    freshnessProblem,
     roastAdviceFromFeed,
     roastDays,
     roastLevelKey,
@@ -24,6 +26,19 @@ const at = (y: number, m: number, d: number, h = 9) => new Date(y, m - 1, d, h).
 const BAG = {roastedOn: "2026-10-01", restDays: 11, peakDay: 28, bestUntilDay: 42};
 
 describe("freshnessOf", () => {
+    it("honors known rest without inventing a missing peak", () => {
+        const bag = {roastedOn: "2026-10-01", restDays: 14};
+        const resting = freshnessOf(bag, at(2026, 10, 4));
+        expect(resting?.state).toBe("resting");
+        expect(resting?.peakDay).toBeUndefined();
+        expect(resting?.peakOn).toBeUndefined();
+        expect(freshnessLine(resting!)).toBe("Resting, estimated ready from 15 Oct.");
+        const ready = freshnessOf(bag, at(2026, 10, 15));
+        expect(ready?.state).toBe("ready");
+        expect(freshnessLine(ready!)).toBe("The stated rest period has ended.");
+        expect(freshnessOf({...bag, bestUntilDay: 20}, at(2026, 10, 22))?.state).toBe("past");
+    });
+
     it("says nothing without a roast day or without rest figures", () => {
         expect(freshnessOf({restDays: 11, peakDay: 28}, at(2026, 10, 5))).toBeNull();
         expect(freshnessOf({roastedOn: "2026-10-01"}, at(2026, 10, 5))).toBeNull();
@@ -62,10 +77,14 @@ describe("freshnessOf", () => {
         expect(shortDay(reading!.readyOn)).toBe("12 Oct");
     });
 
-    it("treats a roast day still ahead as resting", () => {
-        expect(freshnessOf(BAG, at(2026, 9, 28))).toEqual(expect.objectContaining({
-            state: "resting", days: -3
-        }));
+    it("offers a correction rather than a readiness prediction for a future roast day", () => {
+        expect(freshnessOf(BAG, at(2026, 9, 28))).toBeNull();
+        expect(freshnessProblem(BAG, at(2026, 9, 28))).toMatch(/future/);
+    });
+
+    it("does not derive freshness from inconsistent guidance", () => {
+        expect(freshnessOf({...BAG, restDays: 30, peakDay: 10}, at(2026, 10, 12))).toBeNull();
+        expect(freshnessOf({...BAG, restDays: 1.5}, at(2026, 10, 12))).toBeNull();
     });
 
     it("never goes past its best without a best-until day", () => {
@@ -77,15 +96,15 @@ describe("freshnessOf", () => {
 describe("freshnessLine and freshnessBadge", () => {
     it("words each state", () => {
         const line = (now: number) => freshnessLine(freshnessOf(BAG, now)!);
-        expect(line(at(2026, 10, 5))).toBe("Resting, ready from 12 Oct.");
-        expect(line(at(2026, 10, 14))).toBe("Ready to brew, peak around 29 Oct.");
-        expect(line(at(2026, 10, 29))).toBe("At its peak.");
-        expect(line(at(2026, 11, 5))).toBe("Ready to brew.");
-        expect(line(at(2026, 11, 20))).toBe("Past its best, still fine to brew.");
+        expect(line(at(2026, 10, 5))).toBe("Resting, estimated ready from 12 Oct.");
+        expect(line(at(2026, 10, 14))).toBe("Estimated peak around 29 Oct.");
+        expect(line(at(2026, 10, 29))).toBe("Within the estimated peak window.");
+        expect(line(at(2026, 11, 5))).toBe("Within the estimated window.");
+        expect(line(at(2026, 11, 20))).toBe("Outside the estimated window.");
     });
 
     it("has a short Doto badge for each state", () => {
-        expect(["resting", "ready", "peak", "past"].map((s) => freshnessBadge(s as never)))
+        expect((["resting", "ready", "peak", "past"] as const).map(freshnessBadge))
             .toEqual(["REST", "READY", "PEAK", "PAST"]);
     });
 });
@@ -112,9 +131,9 @@ describe("roast level defaults", () => {
         expect(roastLevelKey(undefined)).toBeUndefined();
     });
 
-    it("starts from the level's defaults, medium when nothing says", () => {
+    it("uses generic medium figures without inventing a known roast level", () => {
         expect(startingFigures(undefined)).toEqual({
-            figures: ROAST_LEVEL_DEFAULTS.medium, level: "medium", source: "level"
+            figures: ROAST_LEVEL_DEFAULTS.medium, source: "estimate"
         });
         expect(startingFigures({roast: "Dark"}).figures).toEqual(ROAST_LEVEL_DEFAULTS.dark);
     });
@@ -124,7 +143,7 @@ describe("roast level defaults", () => {
             .toEqual({figures: {restDays: 12, peakDay: 30, bestUntilDay: 40}, level: "light", source: "coffee"});
         // Rest alone is not enough to show as the roaster's word.
         expect(startingFigures({roast: "Light", restDays: 12})).toEqual({
-            figures: {restDays: 12, peakDay: 28, bestUntilDay: 42}, level: "light", source: "level"
+            figures: {restDays: 12, peakDay: 28, bestUntilDay: 42}, level: "light", source: "estimate"
         });
         // A stated peak without a best-until moves the window with it.
         expect(startingFigures({roast: "Light", restDays: 12, peakDay: 30}).figures.bestUntilDay).toBe(44);
@@ -142,7 +161,7 @@ describe("roast level defaults", () => {
     it("keeps derived advice in the storage range at the maximum peak", () => {
         const {figures} = startingFigures({restDays: 14, peakDay: 540});
         expect(figures.bestUntilDay).toBe(540);
-        const bag = newBag("r1", {sizeGrams: 250, roastedOn: "2024-01-01", ...figures}, at(2024, 1, 1));
+        const bag = newBag({...bagFixture(), roastedOn: "2024-01-01", ...figures}, at(2024, 1, 1));
         expect(reviveBag(JSON.parse(JSON.stringify(bag)))?.bestUntilDay).toBe(540);
         expect(freshnessOf(bag, at(2026, 1, 1))?.state).toBe("past");
     });
@@ -185,15 +204,13 @@ describe("roast advice validation", () => {
             .toEqual({name: "Vinka", restDays: 11, peakDay: 28});
     });
 
-    it("keeps a bag's figures through save and restore, dropping bad ones", () => {
-        const bag = newBag("r1", {sizeGrams: 250, roastedOn: "2026-10-01",
-                                  restDays: 11, peakDay: 28, bestUntilDay: 42}, at(2026, 10, 2));
+    it("keeps valid bag figures through save and restore and rejects damaged advice", () => {
+        const bag = newBag({...bagFixture(), roastedOn: "2026-10-01",
+                           restDays: 11, peakDay: 28, bestUntilDay: 42}, at(2026, 10, 2));
         expect(bag).toEqual(expect.objectContaining({restDays: 11, peakDay: 28, bestUntilDay: 42}));
         expect(reviveBag(JSON.parse(JSON.stringify(bag)))).toEqual(bag);
         const edited = reviveBag({...bag, restDays: "lots", peakDay: 1000});
-        expect(edited?.restDays).toBeUndefined();
-        expect(edited?.peakDay).toBeUndefined();
-        expect(edited?.bestUntilDay).toBe(42);
+        expect(edited).toBeNull();
     });
 });
 

@@ -1,6 +1,7 @@
 import type {BrewFailure} from "@/library/machine/Machine";
 import type {PodCoffee} from "@/library/podCoffee";
 import type {QuickEditRecordAdjustments} from "@/library/quickEdit";
+import type {BagRunSnapshot} from "@/library/bagRun";
 import Pour from "@/library/Pour";
 import {grindBand} from "@/library/grindBands";
 
@@ -145,6 +146,7 @@ export type BrewRecord = {
     recipeUuid: string;
     recipeName: string;
     accent: string;
+    bag?: BagRunSnapshot;
     /** Snapshotted at brew creation; absent on records written before it was known. */
     beverageKind?: BeverageKind;
     startedAt: number;

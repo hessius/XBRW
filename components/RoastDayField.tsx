@@ -34,7 +34,8 @@ export default function RoastDayField({value, today, onChange}: Props) {
     const range = roastDayRange(today, value);
     const minimumDate = dayDate(range.min) ?? undefined;
     const maximumDate = dayDate(range.max) ?? undefined;
-    const current = (value === "" ? null : dayDate(value)) ?? dayDate(today) ?? new Date();
+    const picked = (value === "" ? null : dayDate(value)) ?? dayDate(today) ?? new Date(0);
+    const current = maximumDate !== undefined && picked > maximumDate ? maximumDate : picked;
 
     function pick(date: Date) {
         onChange(dayOf(date.getTime()));

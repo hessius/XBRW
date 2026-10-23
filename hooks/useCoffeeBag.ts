@@ -1,86 +1,55 @@
-import {useEffect, useState} from "react";
+import {useSyncExternalStore} from "react";
+import {
+    bagRevision, subscribeBagChanges, sharedBagDatabase, type default as CoffeeBagDatabase
+} from "@/library/CoffeeBagDatabase";
+import {bagEligible} from "@/library/bagRun";
+import type {BagBalance, BagTracker, CoffeeBag} from "@/library/coffeeBag";
+import type Recipe from "@/library/Recipe";
 
-import {sharedBagDatabase, type StoredBagReading} from "@/library/CoffeeBagDatabase";
-import type {CoffeeBag} from "@/library/coffeeBag";
-
-/** The part of `CoffeeBagDatabase` the editor needs. Injected by tests. */
-export type BagStore = {
-    openFor: (recipeUuid: string) => StoredBagReading | null;
-    save: (bag: CoffeeBag, now?: number) => void;
-    finish: (id: string, now?: number) => void;
-    remove: (id: string) => void;
+export const noBagSubscription = () => () => {};
+export const disabledBagRevision = () => 0;
+export type BagReadProblem = {status: "off"} | {status: "error"; message: string};
+export type CoffeeBagReading = BagReadProblem | {
+    status: "ready"; store: CoffeeBagDatabase; saved: boolean;
+    linked: CoffeeBag[]; all: CoffeeBag[]; selected: CoffeeBag | null; balance: BagBalance | null;
+    warning?: string;
 };
 
-/**
- * One recipe's open bag, read synchronously and re-read whenever the screen
- * regains focus.
- *
- * Focus matters here in a way it does not for the brew summary: the editor
- * stays mounted under the brew screen it opens, and the brew it comes back
- * from has just taken a dose out of the bag.
- *
- * The reading is stored with the uuid it was taken for and discarded at
- * render when they disagree, the pattern `useBeanProfile` uses, so a swapped
- * recipe never shows the last one's bag.
- *
- * @param onFocus subscribes to the screen's focus, as
- *   `(listener) => navigation.addListener("focus", listener)`, and returns the
- *   unsubscribe. Passed in rather than read from the router so the hook has no
- *   navigation dependency of its own.
- */
-export function useCoffeeBag(
-    recipeUuid: string,
-    onFocus?: (listener: () => void) => () => void,
-    store?: BagStore
-) {
-    const database = (): BagStore => store ?? sharedBagDatabase();
-    // A bag table that cannot be read costs the BAG section its bag and
-    // nothing else: the editor must still open the recipe.
-    const read = (): StoredBagReading | null => {
-        if (recipeUuid === "") return null;
-        try {
-            return database().openFor(recipeUuid);
-        } catch {
-            return null;
+function read(
+    recipe: Recipe | null, enabled: boolean, tracker: BagTracker,
+    open: () => CoffeeBagDatabase, revision: number
+): CoffeeBagReading {
+    void revision;
+    if (!enabled || recipe === null || !bagEligible(recipe)) return {status: "off"};
+    try {
+        const store = open();
+        const saved = store.hasRecipe(recipe.uuid);
+        const all = store.all();
+        const linked = saved ? store.linked(recipe.uuid) : [];
+        const choice = saved ? store.selection(recipe.uuid) : null;
+        const selected = choice?.bagId == null ? null : linked.find(bag => bag.id === choice.bagId);
+        if (selected === undefined || selected?.finishedAt !== undefined) {
+            throw new Error("The saved bag selection is no longer available.");
         }
-    };
-
-    const [held, setHeld] = useState<{uuid: string; value: StoredBagReading | null}>(
-        () => ({uuid: recipeUuid, value: read()})
-    );
-    const current = held.uuid === recipeUuid ? held : {uuid: recipeUuid, value: read()};
-    if (current !== held) setHeld(current);
-
-    function refresh(): void {
-        setHeld({uuid: recipeUuid, value: read()});
+        return {
+            status: "ready", store, saved, all, linked, selected,
+            balance: selected === null ? null : store.balance(selected.id, recipe.dosage, tracker),
+            ...(store.migration.unreadable ? {warning: "Some old bag data needs attention. Keep this device's database."} : {})
+        };
+    } catch (error) {
+        console.warn("Could not read coffee bags.", error);
+        return {status: "error", message: "Your coffee bags could not be read. You can still brew without tracking."};
     }
-
-    useEffect(() => {
-        if (onFocus === undefined) return;
-        return onFocus(() => {
-            setHeld({uuid: recipeUuid, value: read()});
-        });
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [recipeUuid, onFocus]);
-
-    function save(bag: CoffeeBag): void {
-        database().save(bag);
-        refresh();
-    }
-
-    function finish(): void {
-        if (current.value === null) return;
-        database().finish(current.value.bag.id);
-        refresh();
-    }
-
-    function remove(): void {
-        if (current.value === null) return;
-        database().remove(current.value.bag.id);
-        refresh();
-    }
-
-    return {stored: current.value, save, finish, remove, refresh};
 }
 
-export default useCoffeeBag;
+export function useCoffeeBag(
+    recipe: Recipe | null, enabled: boolean, tracker: BagTracker, open = sharedBagDatabase
+): CoffeeBagReading {
+    "use no memo";
+    // The editor mutates Recipe in place, including the dose used by this reading.
+    const revision = useSyncExternalStore(
+        enabled ? subscribeBagChanges : noBagSubscription,
+        enabled ? bagRevision : disabledBagRevision
+    );
+    return read(recipe, enabled, tracker, open, revision);
+}

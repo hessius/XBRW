@@ -27,7 +27,8 @@ describe.each(CHOICES)("$theme / $recipeColours cumulative preview appearance", 
             <AppearanceScope choice={choice}>
                 <ReadyToBrewCard item="recipe" name="Vinka" accent={accents.coffee[0]}
                     emphasised onOpen={noop} onBrew={noop} onReorder={noop} onDismiss={noop}/>
-                <BagSection tracker="xbrw" bag={null} reading={null}
+                <BagSection tracker="xbrw" bag={null} balance={null}
+                    onChoose={noop} onInventory={noop}
                     onOpenSheet={noop} onFinish={noop} onReorder={noop}/>
             </AppearanceScope>
         );
@@ -47,10 +48,11 @@ describe.each(CHOICES)("$theme / $recipeColours cumulative preview appearance", 
         await renderWithProviders(
             <AppearanceScope choice={choice}>
                 <BagSheet open epoch={1} onOpenChange={noop} tracker="xbrw"
-                    bag={null} gramsLeft={null} beanName="Vinka" beanNameFixed={false}
+                    bag={null} gramsLeft={null} beanName="Vinka"
                     suggestedRoastedOn="2026-10-12" onSave={noop} onFinish={noop} onRemove={noop}/>
             </AppearanceScope>
         );
+        await fireEvent.changeText(screen.getByLabelText("Bag name"), "Vinka bag");
         const selected = screen.getByTestId("bag-size-250");
         expect(selected).toHaveStyle({backgroundColor: appearance.selection.fill});
         const label = within(selected).getByText("250G");
@@ -58,7 +60,7 @@ describe.each(CHOICES)("$theme / $recipeColours cumulative preview appearance", 
             .toBeGreaterThanOrEqual(4.5);
         const save = screen.getByTestId("bag-save");
         expect(save).toHaveStyle({backgroundColor: appearance.primary.fill});
-        expect(contrast(StyleSheet.flatten(within(save).getByText("SAVE").props.style).color,
+        expect(contrast(StyleSheet.flatten(within(save).getByText("ADD AND USE BAG").props.style).color,
             appearance.primary.fill)).toBeGreaterThanOrEqual(4.5);
         await fireEvent.press(screen.getByTestId("bag-roasted-field"));
         if (Platform.OS === "ios") {
@@ -68,7 +70,7 @@ describe.each(CHOICES)("$theme / $recipeColours cumulative preview appearance", 
         await fireEvent.changeText(screen.getByTestId("bag-size-field"), "0");
         expect(screen.getByTestId("bag-save")).toBeDisabled();
         expect(screen.getByTestId("bag-save")).toHaveStyle({backgroundColor: appearance.primary.disabledFill});
-        expect(within(screen.getByTestId("bag-save")).getByText("SAVE"))
+        expect(within(screen.getByTestId("bag-save")).getByText("ADD AND USE BAG"))
             .toHaveStyle({color: appearance.primary.disabledInk});
     });
 

@@ -75,6 +75,38 @@ usually a mistake, but they are surfaced here so you can change them deliberatel
 
 ---
 
+## Package F: optional coffee bag experiment
+
+One device-local Labs switch enables bags, freshness and Ready to brew together.
+It starts off and is a beta experiment, not a permanent product commitment.
+Quantity is an estimate of intended doses spent, never a scale reading.
+Freshness describes estimated windows, not guaranteed taste or an expiry date.
+Beanconqueror owns quantities in its mode; there is no inventory synchronisation.
+Saving a bag never opens another app. The separate explicit action opens an
+add-bean form, not a confirmed external creation.
+
+| ID | Source | Context | Current text |
+|----|--------|---------|--------------|
+| `bags.labs` | `app/settings.tsx:798` | Labs toggle. | `Coffee bags` |
+| `bags.labsDescription` | `app/settings.tsx:799` | Default-off experiment disclosure. | `Experimental bag tracking, freshness estimates and brew suggestions. Off by default and may not stay in the app.` |
+| `bags.noBag` | `components/BagPickerSheet.tsx:40` | Explicit untracked selection. | `No bag` |
+| `bags.noBagDetail` | `components/BagPickerSheet.tsx:40` | Choosing no physical bag. | `Brew without tracking` |
+| `bags.check` | `library/coffeeBag.ts:124` | Missing or uncertain quantity, not zero. | `Check remaining coffee` |
+| `bags.external` | `library/coffeeBag.ts:125` | Quantity belongs to the other app. | `Tracked in Beanconqueror` |
+| `bags.remaining` | `library/coffeeBag.ts:126` | Reliable local estimate. | `Approx. ${balance.remainingGrams} g remaining` |
+| `bags.resting` | `library/restPeak.ts:105` | Still within estimated rest. | `Resting, estimated ready from ${shortDay(reading.readyOn)}.` |
+| `bags.beforePeak` | `library/restPeak.ts:107` | Ready, before the estimated peak. | `Estimated peak around ${shortDay(reading.peakOn)}.` |
+| `bags.ready` | `library/restPeak.ts:107` | Ready, after the estimated peak. | `Within the estimated window.` |
+| `bags.readyWithoutPeak` | `library/restPeak.ts` | The stated rest has ended, but no peak is supplied. | `The stated rest period has ended.` |
+| `bags.peak` | `library/restPeak.ts:108` | Around the estimated peak. | `Within the estimated peak window.` |
+| `bags.past` | `library/restPeak.ts:109` | Past the estimated window, not expired. | `Outside the estimated window.` |
+| `bags.externalSave` | `components/BagSheet.tsx:244` | External mode, before saving. | `Quantities are tracked in Beanconqueror. Nothing is sent when you save.` |
+| `bags.externalName` | `components/BagSheet.tsx:379` | Optional confirmed external identity. | `Optional. Match the name of this physical bag in Beanconqueror.` |
+| `bags.externalOpen` | `components/BagSheet.tsx:408` | Separate, explicit action. | `OPEN IN BEANCONQUEROR` |
+| `bags.externalOpened` | `hooks/useBagManager.ts:109` | The form opened; creation is not confirmed. | `Opened Beanconqueror's add-bean screen. Confirm the bag there.` |
+| `bags.externalSaveFailed` | `hooks/useBagManager.ts:114` | The other app opened, but local saving failed. | `Beanconqueror opened, but the bag could not be saved here. Check it before trying again.` |
+| `bags.externalOpenFailed` | `hooks/useBagManager.ts:115` | No confirmed opening; identity remains unsaved. | `Could not open this bag in Beanconqueror. Check the bag details and that Beanconqueror is installed.` |
+
 ## Home / recipe library
 
 ### Package E Import source labels
@@ -164,8 +196,6 @@ tray, and the overflow sheet.
 | `home.overflow.hints.off` | `components/RecipeOverflowSheet.tsx:108` | Doto state when hints are off. | `OFF` |
 | `home.overflow.share.label` | `components/RecipeOverflowSheet.tsx:116` | Row label. | `Share` |
 | `home.overflow.share.hint` | `components/RecipeOverflowSheet.tsx:118` | Sub-note under Share. | `Creates a link that opens this recipe in the xBloom app.` |
-| `home.overflow.bag.label` | `components/RecipeOverflowSheet.tsx` (`onBag` row) | Editor-only row. "I bought a bag" until the recipe has an open bag, then "Edit bag". Doto caption is the same words in caps. | `I bought a bag` / `Edit bag` |
-| `home.overflow.bag.hint` | `components/RecipeOverflowSheet.tsx` (a11y hint) | (a11y) Hint on the bag row. | `Counts down the coffee left as you brew this recipe.` |
 | `home.overflow.duplicate` | `components/RecipeOverflowSheet.tsx:120` | Row label. | `Duplicate` |
 | `home.overflow.history.label` | `components/RecipeOverflowSheet.tsx` (`"Brew history"`) | Row label. | `Brew history` |
 | `home.overflow.history.hint` | `components/RecipeOverflowSheet.tsx:122` | Sub-note under Brew history. | `Shows every recorded brew of this recipe.` |
@@ -369,7 +399,12 @@ come from `hooks/useRecipeEditor.ts`.
 | `editor.toast.restored.xid` | `hooks/useRecipeEditor.ts:259` | Success toast after re-fetching by recipe ID. | `Recipe restored from the XID.` |
 | `editor.toast.restored.share` | `hooks/useRecipeEditor.ts:272` | Success toast after re-fetching from the share link. | `Recipe restored from the share link.` |
 
-### Quick edit dose presets (`components/QuickEditPanel.tsx`, `library/quickEdit.ts`)
+### Evaluation-only source #239 dose presets
+
+This cumulative preview still carries the original SAVE AS proposal below.
+It is not accepted product copy. The approved adaptation is specified in
+`docs/superpowers/specs/2026-10-23-dose-shortcuts-design.md` on its separate
+task branch and removes that save workflow.
 
 The chips sit under the dose stepper in the quick-edit panel, in the editor
 and on the home sheet. `${value}` and `${dose}` are grams; `${volume}` and
@@ -954,7 +989,12 @@ empty library with nothing to explain it.
 | `help.brewedWith.question` | `constants/recipeHelp.ts` | How the help sheet heads the long form. | `Where do the brewed with figures come from?` |
 | `help.brewedWith.detail` | `constants/recipeHelp.ts` | The long form. The only place the floor of three rated brews is stated, and the place that explains why a good looking row can be missing from the filter. | See `constants/recipeHelp.ts` |
 
-## Recipe editor: bag
+## Archived source-proposal bag copy
+
+The following bag, rest/peak and Ready tables record superseded contributor
+wording, not the running preview. The reviewed Package F experiment at the top
+of this document replaces it, including explicit shared bags, estimated
+freshness, optional external identity and no automatic external opening.
 
 `components/BagSection.tsx` on the ABOUT deck, `components/BagSheet.tsx`, and
 the badge on `components/RecipeCard.tsx` / `components/RecipeShelfTile.tsx`
@@ -1476,10 +1516,6 @@ About. Neither has a duplicate shortcut in Settings.
 | `settings.deleteAll.keep` | `components/DeleteAllSheet.tsx:58` | Cancel button label. | `Keep my recipes` |
 | `settings.labs.handoff.label` | `app/settings.tsx` | Labs toggle for the Beanconqueror handoff. | `Send brews to Beanconqueror` |
 | `settings.labs.handoff.description` | `app/settings.tsx` | Why the toggle is off by default, in terms of what goes wrong if it is switched on too early. | `Needs a version of Beanconqueror that can read the link. Older ones will say they do not recognise it.` |
-| `settings.labs.bagTracker.label` | `app/settings.tsx` | Labs choice beside the handoff toggle: which app counts down a bag. Shows the resolved value; until picked it follows the handoff toggle. | `Track bags in` |
-| `settings.labs.bagTracker.description` | `app/settings.tsx` | Why there is a choice at all. | `The app that counts down what is left in a bag. Beanconqueror already does this for the brews it receives, so pick one and the two never disagree.` |
-| `settings.labs.bagTracker.options` | `app/settings.tsx` | The two segments. | `XBRW++` / `Beanconqueror` |
-| `settings.restore.skippedBags` | `app/settings.tsx` | Error toast after a restore when bags in the file could not be read. Singular for one. | `One bag in that backup could not be read.` / `3 bags in that backup could not be read.` |
 
 ### Backup / restore messages (`hooks/useBackup.ts`, `library/backup.ts`)
 

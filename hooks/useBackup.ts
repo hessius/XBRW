@@ -5,8 +5,8 @@ import * as Sharing from "expo-sharing";
 import {buildBackup, parseBackup, type BackupSettings, type ParseResult}
     from "@/library/backup";
 import type {BrewRecord} from "@/library/brew/BrewRecord";
-import type {CoffeeBag} from "@/library/coffeeBag";
 import type Recipe from "@/library/Recipe";
+import type {BagInventoryBackup} from "@/library/bagBackup";
 
 export type ExportOutcome = {ok: true} | {ok: false; reason: string};
 
@@ -20,7 +20,7 @@ export type BackupActions = {
         settings: BackupSettings,
         appVersion?: string,
         brews?: readonly BrewRecord[],
-        bags?: readonly CoffeeBag[]
+        inventory?: BagInventoryBackup
     ) => Promise<ExportOutcome>;
     pickBackup: () => Promise<PickOutcome>;
 };
@@ -71,7 +71,7 @@ export function useBackup(): BackupActions {
         settings: BackupSettings,
         appVersion?: string,
         brews: readonly BrewRecord[] = [],
-        bags: readonly CoffeeBag[] = []
+        inventory?: BagInventoryBackup
     ): Promise<ExportOutcome> {
         // Checked before anything is written, so a device that cannot share does
         // not leave a file behind that the user was never offered.
@@ -94,7 +94,7 @@ export function useBackup(): BackupActions {
         const file = new File(Paths.cache, fileNameForToday());
         try {
             file.create({overwrite: true});
-            file.write(buildBackup(recipes, settings, appVersion, brews, bags));
+            file.write(buildBackup(recipes, settings, appVersion, brews, inventory));
         } catch {
             discard(file);
             return {ok: false, reason: "The backup could not be written to this device."};

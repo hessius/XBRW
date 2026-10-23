@@ -7,9 +7,8 @@ import {XStack, YStack} from "tamagui";
 import Recipe from "@/library/Recipe";
 import DotIcon from "@/components/DotIcon";
 import DotMatrixText from "@/components/DotMatrixText";
-import type {StoredBagReading} from "@/library/CoffeeBagDatabase";
-import type {Freshness} from "@/library/restPeak";
 import RecipeCard from "@/components/RecipeCard";
+import type {BagBadge} from "@/library/readyToBrew";
 import type {RecipeEvidence} from "@/library/libraryQuery";
 import type {SlotMarkerValue} from "@/library/slots/slotModel";
 import type {DotIconName} from "@/constants/dotIcons";
@@ -64,10 +63,7 @@ type Props = {
     showPicture?: boolean;
     /** Forwarded to the card: what this recipe's brews add up to. */
     evidence?: RecipeEvidence;
-    /** Forwarded to the card: the open bag, when this app counts it. */
-    bag?: StoredBagReading;
-    /** Forwarded to the card: how fresh the open bag is today. */
-    freshness?: Freshness;
+    bagBadge?: BagBadge;
     /** Brew this recipe. Present only when there is a machine to brew on. */
     onBrew?: () => void;
     /** Open a one-brew edit surface for this recipe. */
@@ -191,8 +187,7 @@ export default function SwipeableRecipeRow({
                                                dottedProfile = false,
                                                showPicture = false,
                                                evidence,
-                                               bag,
-                                               freshness,
+                                               bagBadge,
                                                onBrew,
                                                onQuickEdit,
                                                onShare,
@@ -459,8 +454,7 @@ export default function SwipeableRecipeRow({
                 renderRightActions={renderRightActions}>
                 <RecipeCard recipe={recipe} onPress={onPress} editing={editing}
                             evidence={evidence}
-                            bag={bag}
-                            freshness={freshness}
+                            bagBadge={bagBadge}
                             showCoffeeMarker={showCoffeeMarker}
                             dottedProfile={dottedProfile}
                             showPicture={showPicture}

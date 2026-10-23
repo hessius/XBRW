@@ -67,6 +67,7 @@ type Props = {
     externalEpoch: number;
     /** The Recipe ID field reports focus so the hook can defer the XID lookup. */
     onXidFocusChange: (focused: boolean) => void;
+    bagManagement?: React.ReactNode;
 };
 
 /**
@@ -90,7 +91,7 @@ type Props = {
 export default function AboutDeck({
     recipe, accent, showAvatar, brews, beanProfile, onRate, onShowBeanProfile, bag, knownTags,
     onTags, showHint, dispatch, onDraft, onInputErrorChange, xidLookupFailed, externalEpoch,
-    onXidFocusChange
+    onXidFocusChange, bagManagement
 }: Props) {
     return (
         <YStack gap="$2" marginTop="$3">
@@ -103,6 +104,8 @@ export default function AboutDeck({
                          onCommit={(value) => dispatch(RECIPE_LABELS.NOTE, value)}/>
 
             <TagSection tags={recipe.tags} known={knownTags} onChange={onTags}/>
+
+            {bagManagement}
 
             <PodSection recipe={recipe} showHint={showHint}
                         showAvatar={showAvatar}

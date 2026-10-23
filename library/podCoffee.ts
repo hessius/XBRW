@@ -1,5 +1,5 @@
-import {reviveRoastAdvice, type RoastAdvice} from "@/library/roastAdvice";
 import {readLabels} from "@/library/coffeeLabels";
+import {reviveRoastAdvice, type RoastAdvice} from "@/library/roastAdvice";
 
 /**
  * What we know about a coffee, and hand onwards.
@@ -40,7 +40,7 @@ import {readLabels} from "@/library/coffeeLabels";
  * `resolvedOrigin` reads it, so removing it would drop a field from every pod
  * brew already recorded.
  */
-export type PodCoffee = {
+export type PodCoffee = RoastAdvice & {
     name: string;
     roaster?: string;
     /** ISO 8601 date. */
@@ -64,17 +64,9 @@ export type PodCoffee = {
     /** Link to the coffee. https only. */
     url?: string;
     imageUrl?: string;
-    /**
-     * Short tasting notes ("Papaya", "Raspberry"), from an import link's
-     * `bean.flavours` or a roaster feed's `flavours`. Not a Beanconqueror
-     * field: it is kept for ABOUT, which shows these as the flavour and the
-     * longer `aromatics` under them, and `handoffBean` never sends it.
-     */
+    /** Short tasting notes, distinct from the longer aromatics narrative. */
     flavours?: string[];
-    // Plus `restDays`, `peakDay` and `bestUntilDay` (`RoastAdvice`): this
-    // app's own, from a link or the roaster catalogue, never from a pod, and
-    // never handed to Beanconqueror (`handoffBean` maps fields explicitly).
-} & RoastAdvice;
+};
 
 /** A trimmed string, or undefined when there was nothing worth carrying. */
 function text(value: unknown): string | undefined {
@@ -420,12 +412,7 @@ export function podCoffeeFromStored(value: unknown): PodCoffee | null {
     if (elevation !== undefined) coffee.elevation = elevation;
     if (cuppingPoints !== undefined) coffee.cupping_points = cuppingPoints;
     if (decaffeinated !== undefined) coffee.decaffeinated = decaffeinated;
-    // Rest and peak advice: a BrewMind link's `bean.rest_days` and friends,
-    // or the roaster catalogue's `roast` block. Each figure on its own.
-    Object.assign(coffee, reviveRoastAdvice(record));
-    // A stored array or a link's comma separated string, through the one
-    // reader both doors use, so it is trimmed and capped the same way.
     const flavours = readLabels(record.flavours);
     if (flavours.length > 0) coffee.flavours = flavours;
-    return coffee;
+    return {...coffee, ...reviveRoastAdvice(record)};
 }

@@ -31,15 +31,15 @@ import {useSetting} from "@/hooks/useSetting";
 import {useLiveBrew} from "@/hooks/useLiveBrew";
 import {useScrollEndPadding} from "@/hooks/useBottomInset";
 import {type BackupPayload} from "@/library/backup";
+import {appDatabase} from "@/library/appDatabase";
+import CoffeeBagDatabase, {bagTablesExist} from "@/library/CoffeeBagDatabase";
+import {BagAttributionError} from "@/library/BrewDatabase";
+import {legacyBagTableExists} from "@/library/bagMigration";
+import {isBagTrackerSetting, resolveBagTracker} from "@/library/coffeeBag";
+import type {BagInventoryBackup} from "@/library/bagBackup";
 import {isThemeId, isRecipeColourMode, type ThemeId, type RecipeColourMode} from "@/library/appearance";
 import type {BrewRecord} from "@/library/brew/BrewRecord";
 import {RATING_PROMPT_WINDOW_MS} from "@/library/brew/ratingPrompt";
-import {sharedBagDatabase} from "@/library/CoffeeBagDatabase";
-import {
-    isBagTrackerSetting,
-    resolveBagTracker,
-    type CoffeeBag
-} from "@/library/coffeeBag";
 import type {BackupExcluded, Settings, SettingKey} from "@/library/Settings";
 import {isMachineModel} from "@/library/machine/machineModel";
 import {isSortAxis, isSortDirection} from "@/library/librarySort";
@@ -77,24 +77,14 @@ const VERSION = Application.nativeApplicationVersion ?? "unknown";
  *
  * A history that will not read is not worth failing the export over -- the
  * recipes are the thing a backup exists to protect -- so the file is written
- * without it rather than not written at all.
+ * without it rather than not written at all. Unreadable bag attribution is
+ * different: dropping it would lose which physical bag an accepted brew used.
  */
 function brewHistory(): BrewRecord[] {
     try {
         return sharedBrewDatabase().all();
-    } catch {
-        return [];
-    }
-}
-
-/**
- * Every bag, for the backup. Same reasoning as `brewHistory`: a bag table that
- * will not read is not worth losing the recipes' backup over.
- */
-function bagHistory(): CoffeeBag[] {
-    try {
-        return sharedBagDatabase().all();
-    } catch {
+    } catch (error) {
+        if (error instanceof BagAttributionError) throw error;
         return [];
     }
 }
@@ -106,11 +96,11 @@ function bagHistory(): CoffeeBag[] {
  * places: a user who sees only "12 recipes restored" has no way to tell whether
  * their history came back with them.
  */
-function restoredMessage(recipes: number, brews: number, bags: number): string {
+function restoredMessage(recipes: number, brews: number, bags = 0): string {
     const parts: string[] = [];
     if (recipes > 0) parts.push(recipes === 1 ? "1 recipe" : `${recipes} recipes`);
     if (brews > 0) parts.push(brews === 1 ? "1 brew" : `${brews} brews`);
-    if (bags > 0) parts.push(bags === 1 ? "1 bag" : `${bags} bags`);
+    if (bags > 0) parts.push(bags === 1 ? "1 coffee bag" : `${bags} coffee bags`);
     if (parts.length === 0) return "0 recipes restored";
     return `${parts.join(" and ")} restored`;
 }
@@ -139,7 +129,50 @@ export default function SettingsScreen({settings}: Props) {
     const [labsUnlocked, setLabsUnlocked] = useSetting("labsUnlocked", settings);
     const [beanconquerorHandoff, setBeanconquerorHandoff] =
         useSetting("beanconquerorHandoff", settings);
+    const [bagExperimentEnabled, setBagExperimentEnabled] = useSetting("bagExperimentEnabled", settings);
     const [bagTracker, setBagTracker] = useSetting("bagTracker", settings);
+
+    function changeBagExperiment(enabled: boolean) {
+        try {
+            if (enabled) new CoffeeBagDatabase().markAllNeedsCheck();
+            setBagExperimentEnabled(enabled);
+        } catch (error) {
+            console.warn("Could not change the coffee bag experiment.", error);
+            notify({tone: "error", message: "Could not enable coffee bags. Your setting has not changed."});
+        }
+    }
+
+    function changeTracker(next: string) {
+        if (!isBagTrackerSetting(next)) {
+            notify({tone: "error", message: "Choose a coffee bag tracker."});
+            return;
+        }
+        try {
+            if (bagExperimentEnabled
+                && resolveBagTracker(next, beanconquerorHandoff) === "xbrw"
+                && resolveBagTracker(bagTracker, beanconquerorHandoff) !== "xbrw") {
+                new CoffeeBagDatabase().markAllNeedsCheck();
+            }
+            setBagTracker(next);
+        } catch (error) {
+            console.warn("Could not change the coffee bag tracker.", error);
+            notify({tone: "error", message: "Could not change the bag tracker. Your setting has not changed."});
+        }
+    }
+
+    function changeHandoff(enabled: boolean) {
+        try {
+            if (bagExperimentEnabled
+                && resolveBagTracker(bagTracker, enabled) === "xbrw"
+                && resolveBagTracker(bagTracker, beanconquerorHandoff) !== "xbrw") {
+                new CoffeeBagDatabase().markAllNeedsCheck();
+            }
+            setBeanconquerorHandoff(enabled);
+        } catch (error) {
+            console.warn("Could not change the Beanconqueror handoff.", error);
+            notify({tone: "error", message: "Could not change the handoff. Check your coffee bags first."});
+        }
+    }
     const cloud = useCloudSession();
 
     async function signOutOfCloud() {
@@ -305,9 +338,30 @@ export default function SettingsScreen({settings}: Props) {
             });
             return;
         }
-        const outcome = await exportBackup(
-            everything, settingsSnapshot(), VERSION, brewHistory(), bagHistory()
-        );
+        let inventory: BagInventoryBackup | undefined;
+        try {
+            if (bagTablesExist(appDatabase()) || legacyBagTableExists(appDatabase())) {
+                inventory = new CoffeeBagDatabase().exportInventory();
+            }
+        } catch (error) {
+            console.warn("Could not export coffee bags", error);
+            notify({tone: "error",
+                message: "Your coffee bags could not be read, so the backup was not made."});
+            return;
+        }
+        const snapshot = settingsSnapshot();
+        let history: BrewRecord[];
+        try {
+            history = brewHistory();
+        } catch (error) {
+            console.warn("Could not export historical bag attribution", error);
+            notify({tone: "error",
+                message: "A brew's saved bag could not be read, so the backup was not made."});
+            return;
+        }
+        const outcome = inventory === undefined
+            ? await exportBackup(everything, snapshot, VERSION, history)
+            : await exportBackup(everything, snapshot, VERSION, history, inventory);
         if (!outcome.ok) notify({tone: "error", message: outcome.reason});
     }
 
@@ -488,26 +542,31 @@ export default function SettingsScreen({settings}: Props) {
             brews = 0;
         }
 
-        // After the brews, which are what a bag's grams left are counted
-        // from, and only for recipes now in the library.
         let bags = 0;
-        let bagRestoreFailed = false;
-        try {
-            const known = new Set(library.allRecipes().map((recipe) => recipe.uuid));
-            bags = sharedBagDatabase().restore(payload.bags, known);
-        } catch {
-            bagRestoreFailed = true;
+        let skippedBagRows = payload.skippedBagRows;
+        if (payload.bagInventory !== undefined) {
+            try {
+                const restored = new CoffeeBagDatabase().restoreInventory(payload.bagInventory);
+                bags = restored.added;
+                skippedBagRows += restored.skippedRows;
+            } catch (error) {
+                console.warn("Could not restore coffee bags after restoring recipes", error);
+                notify({tone: "error",
+                    message: "Recipes were restored, but coffee bags could not be restored."});
+                return;
+            }
         }
 
         // A restore that took only the settings did happen, and reporting it as
         // "0 recipes restored" reads as a failure the app is being coy about.
-        const settingsOnly = outcome.added === 0 && brews === 0 && bags === 0 && choice.includeSettings;
-        notify({
-            tone: "success",
-            message: settingsOnly ? "Settings restored" : restoredMessage(outcome.added, brews, bags)
-        });
-        if (bagRestoreFailed) {
-            notify({tone: "error", message: "Bags could not be restored."});
+        if (outcome.added === 0 && brews === 0 && bags === 0 && choice.includeSettings) {
+            notify({tone: "success", message: "Settings restored"});
+        } else {
+            notify({tone: "success", message: restoredMessage(outcome.added, brews, bags)});
+        }
+        if (payload.skippedBags > 0 || skippedBagRows > 0 || payload.bagWarnings.length > 0) {
+            notify({tone: "error",
+                message: "Some coffee bag data could not be restored. Check affected quantities and choices."});
         }
 
         // Said out loud, and after the good news rather than instead of it. A
@@ -519,14 +578,6 @@ export default function SettingsScreen({settings}: Props) {
                 message: payload.skippedBrews === 1
                     ? "One brew in that backup could not be read."
                     : `${payload.skippedBrews} brews in that backup could not be read.`
-            });
-        }
-        if (payload.skippedBags > 0) {
-            notify({
-                tone: "error",
-                message: payload.skippedBags === 1
-                    ? "One bag in that backup could not be read."
-                    : `${payload.skippedBags} bags in that backup could not be read.`
             });
         }
     }
@@ -743,29 +794,24 @@ export default function SettingsScreen({settings}: Props) {
                     <SettingsToggleRow
                         label="Send brews to Beanconqueror"
                         description="Needs a version of Beanconqueror that can read the link. Older ones will say they do not recognise it."
-                        value={beanconquerorHandoff} onChange={setBeanconquerorHandoff}/>
-                    {/* Beside the handoff because it is the same question seen
-                        from the bag's side: Beanconqueror subtracts every brew
-                        it is handed, so only one app may count a bag. Shows the
-                        resolved choice; picking one stores it explicitly, and
-                        until then it follows the handoff switch above. */}
-                    <SettingsChoiceRow
-                        label="Track bags in"
-                        description="The app that counts down what is left in a bag. Beanconqueror already does this for the brews it receives, so pick one and the two never disagree."
-                        value={resolveBagTracker(bagTracker, beanconquerorHandoff)}
-                        options={[
+                        value={beanconquerorHandoff} onChange={changeHandoff}/>
+                    <SettingsToggleRow label="Coffee bags"
+                        description="Experimental bag tracking, freshness estimates and brew suggestions. Off by default and may not stay in the app."
+                        value={bagExperimentEnabled} onChange={changeBagExperiment}/>
+                    {bagExperimentEnabled && <SettingsChoiceRow label="Coffee bag tracker"
+                        description="Auto follows the Beanconqueror handoff preference. There is no live synchronisation."
+                        value={bagTracker} onChange={changeTracker} stacked options={[
+                            {value: "auto", label: "AUTO"},
                             {value: "xbrw", label: "XBRW++"},
-                            {value: "beanconqueror", label: "Beanconqueror"}
-                        ]}
-                        onChange={(next) => {
-                            if (isBagTrackerSetting(next)) setBagTracker(next);
-                        }}/>
+                            {value: "beanconqueror", label: "BEANCONQUEROR"}
+                        ]}/>}
                     <SettingsActionRow label="Hide Labs"
                                        detail="Anything you switched on here stays on."
                                        onPress={() => setLabsUnlocked(false)}/>
                 </SettingsSection>
                 <CardReadDiagnostic settings={settings}/>
                 </>}
+
                 <SettingsSection>
                     <SettingsActionRow label="About XBRW++"
                                        detail={`Version ${VERSION}`}

@@ -26,7 +26,6 @@ import {useLiveBrew} from "@/hooks/useLiveBrew";
 import BeanNameSheet from "@/components/BeanNameSheet";
 import BrewNoteSheet from "@/components/BrewNoteSheet";
 import {beanNameFromRecipe} from "@/library/brew/handoff/beanName";
-import {openBagBeanName} from "@/library/CoffeeBagDatabase";
 import {sharedBrewDatabase, useBrewHistory, useBrewJudgement, type JudgementStore}
     from "@/hooks/useBrewHistory";
 import {useSetting} from "@/hooks/useSetting";
@@ -631,14 +630,10 @@ export default function BrewRecord({recipeLookup}: Props) {
             </ScrollView>
             </YStack>
 
-            {/* As on the brew screen: an open bag sent to Beanconqueror names
-                the bean these brews belong to. */}
             <BeanNameSheet open={handoff.namingBean} onOpenChange={handoff.setNamingBean}
-                           suggestion={(handoff.namingBean
-                               ? openBagBeanName(record.recipeUuid) : undefined)
-                               ?? beanNameFromRecipe(record.recipeName) ?? ""}
-                           onConfirm={(name) => void handoff.sendNow(
-                               name !== "" ? name : openBagBeanName(record.recipeUuid) ?? name)} />
+                           requireName={record.bag !== undefined}
+                           suggestion={record.bag?.bagName ?? beanNameFromRecipe(record.recipeName) ?? ""}
+                           onConfirm={(name) => void handoff.sendNow(name)} />
             <BrewNoteSheet
                 open={handoff.ratingBeforeSend}
                 onOpenChange={handoff.setRatingBeforeSend}
