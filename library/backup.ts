@@ -18,6 +18,7 @@ import {XBLOOM_SHARE_HOST} from "./shareLink";
 import {isValidColour} from "@/constants/colors";
 import {reviveBagRunSnapshot} from "@/library/bagRun";
 import {parseBagInventory, type BagInventoryBackup} from "@/library/bagBackup";
+import {parseLegacyBagInventory} from "@/library/bagMigration";
 
 /**
  * The backup file, and the only door it comes back in through.
@@ -168,7 +169,10 @@ export function parseBackup(text: string): ParseResult {
         else recipes.push(recipe);
     }
 
-    const bags = parseBagInventory(envelope.bagInventory);
+    const bags = envelope.bagInventory !== undefined
+        ? parseBagInventory(envelope.bagInventory)
+        : parseLegacyBagInventory(envelope.bags, recipes, brews,
+            Array.isArray(envelope.brews) && skippedBrews === 0);
     if (recipes.length === 0 && !bags.inventory?.bags.length) {
         // "Empty" and "full of things this app could not read" are opposite
         // messages. The first says nothing was lost; the second says keep this

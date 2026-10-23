@@ -23,8 +23,8 @@ Branch: `feat/2.2.0-bag-labs-20261023`.
 Pinned base: `8f2638dfa2e75928ff447fbbd0ee03ba14986886`.
 
 The approved spec was pushed at `a372fd51f1519b7a6051ba7d4041cd5a15ac9c1c`.
-Implementation is authorised for inline execution. Tasks 1-5 now have local
-iOS/Android qualification; Tasks 6-11 and all native/manual gates remain pending.
+Implementation is authorised for inline execution. Tasks 1-6 now have local
+iOS/Android qualification; Tasks 7-11 and all native/manual gates remain pending.
 The default-off gate and device-local tracker keys were introduced with Task 4
 so the live-owner integration is type-safe before the settings UI arrives.
 
@@ -1286,7 +1286,7 @@ git commit -m "feat(bags): preserve inventory and historical identity in backups
 
 **Modify:** `library/CoffeeBagDatabase.ts`, `library/bagBackup.ts`.
 
-- [ ] **Step 1: Seed the exact legacy schema in a real test DB.**
+- [x] **Step 1: Seed the exact legacy schema in a real test DB.**
 
 ```sql
 CREATE TABLE coffee_bags (
@@ -1306,7 +1306,7 @@ Assert migration preserves the legacy displayed estimate, not the new counting
 definition; preserves two same-named IDs; creates explicit links; does not
 invent a bag snapshot on old brews; and is idempotent.
 
-- [ ] **Step 2: Run red, then implement the legacy adapter.**
+- [x] **Step 2: Run red, then implement the legacy adapter.**
 
 ```bash
 npx jest --runTestsByPath library/__tests__/bagMigration.test.ts --runInBand
@@ -1342,7 +1342,12 @@ row increments an explicit diagnostic count; preserve it and show that some
 old bag data needs attention. Reopening the store must not repeat warnings
 every render.
 
-- [ ] **Step 3: Handle legacy backup `bags` arrays separately.**
+Keep a per-ID migration receipt so deleting a migrated bag does not resurrect
+it from that recovery table at the next launch. Unreadable native legacy
+rows block inventory export explicitly rather than producing an incomplete
+backup. Backups discover legacy-only inventory even while Labs is disabled.
+
+- [x] **Step 3: Handle legacy backup `bags` arrays separately.**
 
 When outer backup JSON contains legacy `bags` but no v2 bagInventory, use the
 same legacy validator. Compute each baseline only from the legacy backup's
@@ -1351,7 +1356,7 @@ invalid brew evidence makes the imported balance needsCheck. Existing local
 v2 state still wins. A valid empty v2 collection must not accidentally trigger
 the legacy adapter.
 
-- [ ] **Step 4: Run green and commit.**
+- [x] **Step 4: Run green and commit.**
 
 ```bash
 npx jest --runTestsByPath library/__tests__/bagMigration.test.ts library/__tests__/bagBackup.test.ts library/__tests__/CoffeeBagDatabase.test.ts --runInBand

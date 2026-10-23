@@ -9,6 +9,7 @@ import {
     type BagAccountingStore, type BagRunProgress, type BagRunSnapshot
 } from "@/library/bagRun";
 import {parseBagInventory, type BagBundle, type BagInventoryBackup} from "@/library/bagBackup";
+import {migrateLegacyBags} from "@/library/bagMigration";
 
 export type BagSelection = {
     recipeUuid: string;
@@ -35,6 +36,7 @@ const listeners = new Set<() => void>();
 let revision = 0;
 type FailedRun = {snapshot: BagRunSnapshot; progress: BagRunProgress};
 const failedByDatabase = new WeakMap<SQLiteDatabase, Map<string, FailedRun>>();
+const migrations = new WeakMap<SQLiteDatabase, {migrated: number; unreadable: number}>();
 
 function failedRuns(db: SQLiteDatabase): Map<string, FailedRun> {
     let failed = failedByDatabase.get(db);
@@ -158,10 +160,14 @@ export default class CoffeeBagDatabase implements BagFactsStore, BagAccountingSt
     private readonly db: SQLiteDatabase;
     private transactionDepth = 0;
     private afterCommit: (() => void)[] = [];
+    public readonly migration: {migrated: number; unreadable: number};
 
     constructor() {
         this.db = appDatabase();
         ensureBagTables(this.db);
+        const migration = migrations.get(this.db) ?? migrateLegacyBags(this.db);
+        migrations.set(this.db, migration);
+        this.migration = migration;
     }
 
     public uses(db: SQLiteDatabase): boolean { return this.db === db; }
@@ -460,6 +466,9 @@ export default class CoffeeBagDatabase implements BagFactsStore, BagAccountingSt
     }
 
     public exportInventory(): BagInventoryBackup {
+        if (this.migration.unreadable > 0) {
+            throw new Error("Some old bag data could not be read. Keep this device's database.");
+        }
         if (failedRuns(this.db).size > 0) this.atomically(() => this.flushFailed());
         const bags = new Map<string, BagBundle>();
         for (const row of this.db.getAllSync<BagRow & {baselineGrams: number; needsCheck: number}>(

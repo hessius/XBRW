@@ -33,6 +33,7 @@ import {useScrollEndPadding} from "@/hooks/useBottomInset";
 import {type BackupPayload} from "@/library/backup";
 import {appDatabase} from "@/library/appDatabase";
 import CoffeeBagDatabase, {bagTablesExist} from "@/library/CoffeeBagDatabase";
+import {legacyBagTableExists} from "@/library/bagMigration";
 import type {BagInventoryBackup} from "@/library/bagBackup";
 import {isThemeId, isRecipeColourMode, type ThemeId, type RecipeColourMode} from "@/library/appearance";
 import type {BrewRecord} from "@/library/brew/BrewRecord";
@@ -291,7 +292,9 @@ export default function SettingsScreen({settings}: Props) {
         }
         let inventory: BagInventoryBackup | undefined;
         try {
-            if (bagTablesExist(appDatabase())) inventory = new CoffeeBagDatabase().exportInventory();
+            if (bagTablesExist(appDatabase()) || legacyBagTableExists(appDatabase())) {
+                inventory = new CoffeeBagDatabase().exportInventory();
+            }
         } catch (error) {
             console.warn("Could not export coffee bags", error);
             notify({tone: "error",

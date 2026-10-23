@@ -630,6 +630,23 @@ describe("SettingsScreen", () => {
         expect(mockExportBackup.mock.calls[0][1]).not.toHaveProperty("bagTracker");
     });
 
+    it("discovers legacy-only inventory for backup without requiring an opt-in", async () => {
+        const db = createTestDatabase();
+        jest.spyOn(databaseModule, "appDatabase").mockReturnValue(
+            db as ReturnType<typeof databaseModule.appDatabase>);
+        const old = {id: "legacy", recipeUuid: "missing", sizeGrams: 250,
+            boughtOn: "2026-10-01", addedAt: 10, countedFrom: 100, gramsAtCount: 120};
+        db.execSync(`CREATE TABLE coffee_bags (id TEXT PRIMARY KEY, recipeUuid TEXT,
+            countedFrom INTEGER, finishedAt INTEGER DEFAULT 0, bag TEXT);`);
+        db.runSync("INSERT INTO coffee_bags VALUES (?, ?, ?, 0, ?);",
+            [old.id, old.recipeUuid, old.countedFrom, JSON.stringify(old)]);
+        mockExportBackup.mockResolvedValue({ok: true});
+        await renderWithProviders(<SettingsScreen settings={new Settings(memoryStorage())}/>);
+        await fireEvent.press(screen.getByRole("button", {name: /^Back up my recipes,/}));
+        expect(mockExportBackup.mock.calls[0][4]?.bags[0])
+            .toMatchObject({bag: {id: "legacy"}, baselineGrams: 120, needsCheck: true});
+    });
+
     it("refuses to make an incomplete backup when existing inventory is unreadable", async () => {
         const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
         const db = createTestDatabase();
