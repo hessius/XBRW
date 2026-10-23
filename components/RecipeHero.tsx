@@ -155,29 +155,47 @@ function textEm(text: string): number {
  * `textBreakStrategy="simple"` so Android wraps the same greedy way.
  */
 export function wrapLines(text: string, width: number, fontSize: number): number[] {
+    return breakLines(text, width, fontSize).map(line => line.width);
+}
+
+/**
+ * `wrapLines`, with how many words have ended by the end of each line. A word
+ * split across lines ends on the last of them.
+ */
+function breakLines(
+    text: string, width: number, fontSize: number
+): {width: number; words: number}[] {
     const space = glyphEm(" ") * fontSize;
-    const lines: number[] = [];
+    const lines: {width: number; words: number}[] = [];
     let used = -1;
+    let ended = 0;
     for (const word of text.split(" ").filter(Boolean)) {
         let wordWidth = textEm(word) * fontSize;
         if (used >= 0 && used + space + wordWidth <= width) {
             used += space + wordWidth;
+            ended++;
             continue;
         }
         if (used >= 0) {
-            lines.push(used);
+            lines.push({width: used, words: ended});
         }
         while (wordWidth > width) {
-            lines.push(width);
+            lines.push({width, words: ended});
             wordWidth -= width;
         }
         used = wordWidth;
+        ended++;
     }
-    lines.push(Math.max(used, 0));
+    lines.push({width: Math.max(used, 0), words: ended});
     return lines;
 }
 
 /** How many lines `text` takes; see `wrapLines`. */
+/** Whether every word of `text` fits `width` whole, so wrapping never splits one. */
+export function wordsFit(text: string, width: number, fontSize: number): boolean {
+    return text.split(" ").filter(Boolean).every((word) => textEm(word) * fontSize <= width);
+}
+
 export function estimateLines(text: string, width: number, fontSize: number): number {
     return wrapLines(text, width, fontSize).length;
 }
@@ -224,36 +242,48 @@ export type HeroNameLayout = {
  * need the size before the first layout.
  */
 export function heroNameLayout(
-    name: string, windowWidth: number, fontScale = 1, {pours}: {pours?: Pour[]} = {}
+    name: string, windowWidth: number, fontScale = 1,
+    {pours}: {pours?: Pour[]} = {}
 ): HeroNameLayout {
+    const scale = Math.min(Math.max(fontScale, 1), DOTO_MAX_FONT_SCALE);
+    const content = windowWidth - 2 * SLAB_PADDING_X;
     if (name.length <= HERO_NAME_LONG) {
         return {
             fontSize: 26, lineHeight: 31, lines: 2, maxWidth: "72%",
             reserve: 0, profileHeight: PROFILE_HEIGHT, tight: false
         };
     }
-    const scale = Math.min(Math.max(fontScale, 1), DOTO_MAX_FONT_SCALE);
-    const full = Math.floor(windowWidth - 2 * SLAB_PADDING_X - PENCIL_WIDTH);
-    const beside = Math.floor(full - PROFILE_VISIBLE_WIDTH - PROFILE_GAP);
+    const beside = Math.floor(content - PENCIL_WIDTH - PROFILE_VISIBLE_WIDTH - PROFILE_GAP);
+    const full = Math.floor(content - PENCIL_WIDTH);
+
+    // The band layout: one column, the pencil beside it.
+    const plain = (step: typeof HERO_NAME_STEPS[number], last: boolean): HeroNameLayout | null => {
+        const wrapped = wrapLines(name, full - FIT_SLACK, step.fontSize * scale);
+        if (wrapped.length > HERO_NAME_MAX_LINES && !last) {
+            return null;
+        }
+        const drawn = wrapped.slice(0, HERO_NAME_MAX_LINES);
+        const box = Math.min(full, Math.max(...drawn) + FIT_SLACK);
+        return {
+            ...step, lines: HERO_NAME_MAX_LINES, maxWidth: full,
+            reserve: bandReserve(drawn, step.lineHeight * scale, box, windowWidth, pours),
+            profileHeight: PROFILE_BAND_HEIGHT, tight: true
+        };
+    };
 
     const fitted = (step: typeof HERO_NAME_STEPS[number], last: boolean): HeroNameLayout | null => {
         const size = step.fontSize * scale;
-        if (beside > FIT_SLACK && estimateLines(name, beside - FIT_SLACK, size) <= HERO_NAME_MAX_LINES) {
+        // Beside the watermark only when no word has to be split to get
+        // there. A column that cannot hold "hydrohoney" whole is one Android
+        // breaks mid-word, which is the device report this rule answers.
+        if (beside > FIT_SLACK && estimateLines(name, beside - FIT_SLACK, size) <= HERO_NAME_MAX_LINES
+            && wordsFit(name, beside - FIT_SLACK, size)) {
             return {
                 ...step, lines: HERO_NAME_MAX_LINES, maxWidth: beside, reserve: 0,
                 profileHeight: PROFILE_HEIGHT, tight: false
             };
         }
-        const wrapped = wrapLines(name, full - FIT_SLACK, size);
-        if (wrapped.length > HERO_NAME_MAX_LINES && !last) {
-            return null;
-        }
-        const drawn = wrapped.slice(0, HERO_NAME_MAX_LINES);
-        return {
-            ...step, lines: HERO_NAME_MAX_LINES, maxWidth: full,
-            reserve: bandReserve(drawn, step.lineHeight * scale, full, windowWidth, pours),
-            profileHeight: PROFILE_BAND_HEIGHT, tight: true
-        };
+        return plain(step, last);
     };
 
     for (let i = 0; i < HERO_NAME_STEPS.length; i++) {
@@ -269,15 +299,15 @@ export function heroNameLayout(
  * The band kept under a long name so the watermark clears it.
  *
  * `drawn` is the estimated width of each line, top to bottom, all starting at
- * the name's left edge, `column` the most the name's box may take. For each
- * line, and the pencil beside the first, this asks how high the watermark
- * stands at the point where it ends (plus `PROFILE_GAP` across and
+ * the name's left edge, and `box` the width of the first line's box, which the
+ * pencil follows. For each line, and the pencil, this asks how high the
+ * watermark stands at the point where it ends (plus `PROFILE_GAP` across and
  * `PROFILE_AIR` above) and how far above the slab's bottom edge it already is
  * without a band. The band is the largest shortfall. The watermark only climbs,
  * so its height where a line ends is the highest it gets under that line.
  */
 function bandReserve(
-    drawn: number[], lineHeight: number, column: number, windowWidth: number, pours?: Pour[]
+    drawn: number[], lineHeight: number, box: number, windowWidth: number, pours?: Pour[]
 ): number {
     // How high the watermark's line stands above the slab's bottom edge, under
     // a point `x` points along from the name's left edge.
@@ -297,7 +327,6 @@ function bandReserve(
         const above = SLAB_PADDING_BOTTOM + (count - 1 - i) * lineHeight;
         reserve = Math.max(reserve, stand(width + FIT_SLACK) + PROFILE_AIR - above);
     });
-    const box = Math.min(column, Math.max(...drawn) + FIT_SLACK);
     const pencilAbove = SLAB_PADDING_BOTTOM + count * lineHeight - PENCIL_FOOT;
     reserve = Math.max(reserve, stand(box + PENCIL_WIDTH) + PROFILE_AIR - pencilAbove);
     return Math.max(0, Math.ceil(reserve));
@@ -508,29 +537,35 @@ export default function RecipeHero({
                 <Pressable accessibilityRole="button" accessibilityLabel={name}
                            accessibilityHint="Opens a sheet to rename this recipe"
                            testID="hero-rename"
-                           style={{flexDirection: "row", alignItems: "flex-start", gap: 8}}
                            onPress={onRename} hitSlop={8}>
-                    {/* Never across the watermark: `heroNameLayout` puts a
-                        long name beside it or above it. `simple` breaks lines
-                        the greedy way `estimateLines` counts them, which the
-                        balanced default on Android does not. */}
-                    <Text testID="hero-name" fontSize={nameLayout.fontSize}
-                          fontWeight="700" lineHeight={nameLayout.lineHeight}
-                          marginTop={nameLayout.tight ? "$1.5" : "$2"}
-                          maxFontSizeMultiplier={DOTO_MAX_FONT_SCALE}
-                          textBreakStrategy="simple"
-                          color={named ? onAccent.text : onAccent.label}
-                          numberOfLines={nameLayout.lines} maxWidth={nameLayout.maxWidth}>
-                        {name}
-                    </Text>
-                    <YStack marginTop="$3">
-                        <DotIcon name="edit" size={15} color={onAccent.label}/>
-                    </YStack>
+                    <View testID="hero-name-row"
+                          style={{
+                              flexDirection: "row", alignItems: "flex-start", gap: 8
+                          }}>
+                        {/* Never across the watermark: `heroNameLayout` puts a
+                            long name beside it or above it. `simple` breaks
+                            lines the greedy way `estimateLines` counts them,
+                            which the balanced default on Android does not. */}
+                        <Text testID="hero-name" fontSize={nameLayout.fontSize}
+                              fontWeight="700" lineHeight={nameLayout.lineHeight}
+                              marginTop={nameLayout.tight ? "$1.5" : "$2"}
+                              maxFontSizeMultiplier={DOTO_MAX_FONT_SCALE}
+                              textBreakStrategy="simple"
+                              color={named ? onAccent.text : onAccent.label}
+                              numberOfLines={nameLayout.lines}
+                              maxWidth={nameLayout.maxWidth}>
+                            {name}
+                        </Text>
+                        <YStack marginTop="$3">
+                            <DotIcon name="edit" size={15} color={onAccent.label}/>
+                        </YStack>
+                    </View>
                 </Pressable>
                 {nameLayout.reserve > 0 && (
                     <View testID="hero-profile-reserve" pointerEvents="none"
                           style={{height: nameLayout.reserve}}/>
                 )}
+
             </Collapsible>
         </YStack>
     );

@@ -87,14 +87,28 @@ describe("queryBrewHistory", () => {
             brew("off", {grindSize: 81, grinderUsed: true, startedAt: 9}),
             brew("disabled", {grindSize: 50, grinderUsed: false, startedAt: 8}),
             brew("unknown", {grindSize: 50, startedAt: 7}),
-            brew("tooFine", {grindSize: 39, grinderUsed: true, startedAt: 6}),
+            brew("fractional", {grindSize: 39.5, grinderUsed: true, startedAt: 6}),
             brew("tooCoarse", {grindSize: 82, grinderUsed: true, startedAt: 5}),
             brew("ground", {grindSize: 60, grinderUsed: true})
         ];
         for (const direction of ["asc", "desc"] as const) {
             expect(ids(rows, {sort: "grind", direction}))
-                .toEqual(["ground", "off", "disabled", "unknown", "tooFine", "tooCoarse"]);
+                .toEqual(["ground", "off", "disabled", "unknown", "fractional", "tooCoarse"]);
         }
+    });
+
+    it("orders BLE grinds below the card floor as observations in both directions", () => {
+        const rows = [
+            brew("missing", {startedAt: 9}),
+            brew("coarse", {grindSize: 60, grinderUsed: true}),
+            brew("fine39", {grindSize: 39, grinderUsed: true}),
+            brew("fine1", {grindSize: 1, grinderUsed: true}),
+            brew("fine30", {grindSize: 30, grinderUsed: true})
+        ];
+        expect(ids(rows, {sort: "grind", direction: "asc"}))
+            .toEqual(["fine1", "fine30", "fine39", "coarse", "missing"]);
+        expect(ids(rows, {sort: "grind", direction: "desc"}))
+            .toEqual(["coarse", "fine39", "fine30", "fine1", "missing"]);
     });
 
     it("uses newest then id as the tie break on every axis in both directions", () => {

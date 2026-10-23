@@ -4,7 +4,6 @@ import {TextInput} from "react-native";
 import {Text, XStack, YStack} from "tamagui";
 
 import XbrwSheet from "@/components/XbrwSheet";
-
 import DotMatrixText, {dotMatrixTextProps} from "@/components/DotMatrixText";
 
 /**
@@ -19,8 +18,8 @@ const MAX_LENGTH = 40;
 /**
  * Asks what coffee a brew was, on the way to Beanconqueror.
  *
- * Only for a brew the machine could not tell us about. A pod carries its own
- * coffee and never reaches this sheet.
+ * Legacy pod brews carry their own coffee. An attributed physical bag without
+ * an external name still needs confirmation, even when its pod is known.
  *
  * The field starts empty and the sheet says what will be tried if it stays
  * that way: a name taken from the recipe, because a recipe is usually named
@@ -36,18 +35,19 @@ const MAX_LENGTH = 40;
  * never a gate.
  */
 export default function BeanNameSheet({
-    open, onOpenChange, suggestion, onConfirm
+    open, onOpenChange, suggestion, onConfirm, requireName = false
 }: {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     /** What will be tried if the user skips. Empty when nothing could be derived. */
     suggestion: string;
+    /** A physical bag must not be matched to another bag by a recipe-name guess. */
+    requireName?: boolean;
     /** Called with the trimmed name, or an empty string when there is none. */
     onConfirm: (name: string) => void;
 }) {
     const appearance = useAppearance();
-    const {palette} = appearance;
-    const onAccent = appearance.onFill(palette.text);
+    const {palette, primary} = appearance;
     // Stored with the brew it was typed against and discarded at render when
     // the two no longer agree, so opening the sheet on a second brew does not
     // greet the user with the first brew's answer. The house answer to state
@@ -66,7 +66,7 @@ export default function BeanNameSheet({
     const doto = dotMatrixTextProps({fontSize: 16, letterSpacing: 1.5});
 
     function confirm(value: string) {
-        onConfirm(value);
+        if (!requireName || value !== "") onConfirm(value);
         onOpenChange(false);
     }
 
@@ -75,7 +75,9 @@ export default function BeanNameSheet({
                    title="What was the coffee?" heightPercent={34}>
             <YStack gap="$3" paddingHorizontal="$4" paddingBottom="$4">
                 <Text fontSize={13} color={palette.dim}>
-                    {suggestion === ""
+                    {requireName
+                        ? `Enter this physical bag's exact name in Beanconqueror. Its local name is "${suggestion}". Not now leaves the brew here.`
+                        : suggestion === ""
                         ? "Beanconqueror will look for a bean by this name. Skip to let it pick one."
                         : `Beanconqueror will look for a bean by this name. Skip and it will try "${suggestion}".`}
                 </Text>
@@ -105,16 +107,16 @@ export default function BeanNameSheet({
                 <XStack
                     accessibilityRole="button"
                     accessibilityLabel={trimmed.length === 0
-                        ? "Send without naming the coffee"
+                        ? requireName ? "Cancel sending this brew" : "Send without naming the coffee"
                         : "Send with this coffee name"}
                     testID="bean-name-send"
                     onPress={() => confirm(trimmed)}
                     height={48} alignItems="center" justifyContent="center"
                     borderRadius="$4"
-                    backgroundColor={palette.text}>
+                    backgroundColor={primary.fill}>
                     <DotMatrixText fontSize={13} weight="bold" letterSpacing={1.5}
-                                   color={onAccent.text}>
-                        {trimmed.length === 0 ? "SKIP" : "SEND"}
+                                   color={primary.ink}>
+                        {trimmed.length === 0 ? requireName ? "NOT NOW" : "SKIP" : "SEND"}
                     </DotMatrixText>
                 </XStack>
             </YStack>

@@ -631,7 +631,8 @@ export default function BrewRecord({recipeLookup}: Props) {
             </YStack>
 
             <BeanNameSheet open={handoff.namingBean} onOpenChange={handoff.setNamingBean}
-                           suggestion={beanNameFromRecipe(record.recipeName) ?? ""}
+                           requireName={record.bag !== undefined}
+                           suggestion={record.bag?.bagName ?? beanNameFromRecipe(record.recipeName) ?? ""}
                            onConfirm={(name) => void handoff.sendNow(name)} />
             <BrewNoteSheet
                 open={handoff.ratingBeforeSend}

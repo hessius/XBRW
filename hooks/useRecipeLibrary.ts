@@ -15,6 +15,7 @@ import type {FilterResolver, LibraryQuery,
               RecipeEvidence} from "@/library/libraryQuery";
 import Recipe from "@/library/Recipe";
 import RecipeDatabase from "@/library/RecipeDatabase";
+import {recipeAtDose} from "@/library/quickEdit";
 import {canonicalShelfId} from "@/library/hiddenShelves";
 import {tagKey} from "@/library/tagKey";
 
@@ -221,10 +222,13 @@ export type RecipeLibrary = {
     /** The art each shelf's tile draws, keyed by shelf id. */
     shelfMarks: Record<string, ShelfMarkMembers>;
     allRecipes: () => Recipe[];
+    /** Invalidates other whole-library reads after mutations or regaining focus. */
+    revision: number;
     refresh: () => void;
     deleteRecipe: (recipe: Recipe) => void;
     duplicateRecipe: (recipe: Recipe) => void;
     toggleFavourite: (recipe: Recipe) => void;
+    saveAtDose: (recipe: Recipe, dose: number) => Recipe | null;
     /** Make exactly these recipes the members of a shelf. */
     setShelfMembers: (tag: string, uuids: readonly string[]) => ShelfWriteOutcome;
     /** Rename a shelf and set its membership, in one pass over the library. */
@@ -356,6 +360,26 @@ export function useRecipeLibrary(
             // Deliberately empty: reload() below restores the true value.
         }
         reload();
+    }
+
+    /**
+     * Write a recipe back at a different dose: "Save as this dose".
+     *
+     * A copy is scaled and written, so the object the caller holds is never
+     * left half-changed by a failed write. Returns the recipe as saved, or
+     * `null` when the store refused it; the reload runs either way so the list
+     * shows what the store really holds.
+     */
+    function saveAtDose(recipe: Recipe, dose: number): Recipe | null {
+        const scaled = recipeAtDose(recipe, dose);
+        let saved: Recipe | null = scaled;
+        try {
+            store.updateRecipe(scaled.uuid, scaled);
+        } catch {
+            saved = null;
+        }
+        reload();
+        return saved;
     }
 
     /**
@@ -564,6 +588,7 @@ export function useRecipeLibrary(
 
     return {
         recipes,
+        revision,
         librarySize,
         countUnreadable,
         deleteUnreadable,
@@ -578,6 +603,7 @@ export function useRecipeLibrary(
         deleteRecipe,
         duplicateRecipe,
         toggleFavourite,
+        saveAtDose,
         deleteAll,
         setShelfMembers,
         renameShelf,

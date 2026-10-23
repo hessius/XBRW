@@ -6,6 +6,7 @@ import {
     TEMPERATURE,
     type Range,
 } from "@/library/cardLimits";
+import {BYPASS_VOLUME, clampBypassVolume} from "@/library/bypassLimits";
 import Recipe, {GRINDER_OFF_VALUE} from "@/library/Recipe";
 import {toDisplay, unitSuffix, type TemperatureUnit} from "@/library/units";
 
@@ -55,6 +56,7 @@ export function applyQuickEdit(recipe: Recipe, adjustments: QuickEditAdjustments
     }
 
     if (adjustments.dose !== undefined) {
+        scaleBypassForDose(edited, adjustments.dose);
         edited.dosage = adjustments.dose;
     }
     if (adjustments.ratio !== undefined && !edited.isTea()) {
@@ -65,6 +67,98 @@ export function applyQuickEdit(recipe: Recipe, adjustments: QuickEditAdjustments
     }
 
     return edited;
+}
+
+/**
+ * The doses offered as one-tap chips beside the dose stepper.
+ *
+ * Roasters publish one coffee at 15 g and again at 18 g as two recipes, so a
+ * library fills with pairs that differ only in size. These are the common
+ * sizes, plus the recipe's own dose so there is always a way back. A preset
+ * outside the dose range is dropped rather than drawn dead. Tea gets none: its
+ * stages are fixed at 90 ml, so a different dose does not scale any water.
+ */
+export const DOSE_PRESETS: readonly number[] = [15, 18, 20];
+
+export function dosePresets(recipe: Recipe): number[] {
+    if (recipe.isTea()) return [];
+    const {dose} = quickEditBounds(recipe);
+    const offered = DOSE_PRESETS.filter((value) => value >= dose.min && value <= dose.max);
+    return [...new Set([...offered, recipe.dosage])].sort((a, b) => a - b);
+}
+
+export type ScaledBypass = {
+    /** Whole millilitres, inside `BYPASS_VOLUME`. */
+    volume: number;
+    /** The proportional volume fell outside `BYPASS_VOLUME` and was held at its edge. */
+    clipped: boolean;
+};
+
+/**
+ * Bypass water at a new dose, in proportion to the old one.
+ *
+ * Bypass is dilution, so a bigger dose needs more of it for the cup to taste
+ * the same. It is held inside the range the editor allows rather than refused:
+ * the stages are what the machine checks against the dose and ratio, and the
+ * bypass never reaches a card. `clipped` lets the panel say it happened.
+ */
+export function scaledBypassVolume(volume: number, fromDose: number, toDose: number): ScaledBypass {
+    if (!Number.isFinite(fromDose) || fromDose <= 0 || !Number.isFinite(toDose)) {
+        return {volume, clipped: false};
+    }
+    const proportional = Math.round(volume * toDose / fromDose);
+    const held = clampBypassVolume(proportional);
+    return {volume: held, clipped: held !== proportional};
+}
+
+/** Scales a live bypass to `dose` in place. Reads the dose before it changes. */
+function scaleBypassForDose(recipe: Recipe, dose: number): void {
+    if (!recipe.bypassEnabled || recipe.isTea() || dose === recipe.dosage) return;
+    recipe.bypassVolume = scaledBypassVolume(recipe.bypassVolume, recipe.dosage, dose).volume;
+}
+
+/**
+ * Change a recipe's dose in place, with the water following it.
+ *
+ * The same arithmetic a quick-edit dose uses, for "Save as this dose": the
+ * ratio stays, every stage rescales in proportion and is rounded to whole
+ * millilitres that add up to dose times ratio, the bypass scales too, and
+ * temperatures, pauses and patterns are left exactly as they were.
+ */
+export function rescaleDose(recipe: Recipe, dose: number): void {
+    scaleBypassForDose(recipe, dose);
+    recipe.dosage = dose;
+    recipe.autoFixPourVolumes();
+}
+
+/** A copy of `recipe` at `dose`, for writing back to the library. */
+export function recipeAtDose(recipe: Recipe, dose: number): Recipe {
+    const scaled = cloneRecipe(recipe);
+    rescaleDose(scaled, dose);
+    return scaled;
+}
+
+/**
+ * Whether the quick-edit dose can become the saved one.
+ *
+ * Only the dose is saved, so only the dose is judged: a ratio or grind moved
+ * for this brew stays a one-brew change and has no say over the recipe.
+ */
+export function canSaveDose(
+    recipe: Recipe,
+    adjustments: QuickEditAdjustments
+): adjustments is QuickEditAdjustments & {dose: number} {
+    return adjustments.dose !== undefined
+        && adjustments.dose !== recipe.dosage
+        && !recipe.isTea()
+        && quickEditProblems(recipe, {dose: adjustments.dose}).length === 0;
+}
+
+/** The adjustments left once the dose has been saved into the recipe. */
+export function withoutDose(adjustments: QuickEditAdjustments): QuickEditAdjustments {
+    const rest = {...adjustments};
+    delete rest.dose;
+    return rest;
 }
 
 export function quickEditRecordAdjustments(
@@ -175,7 +269,33 @@ export function describeAdjustment(
     const subject = changesDose && changesRatio
         ? "new dose and ratio"
         : changesDose ? "new dose" : "new ratio";
-    return `Stage volumes rescale to ${target} ml to match the ${subject}.`;
+    const stages = `Stage volumes rescale to ${target} ml to match the ${subject}.`;
+    const bypass = describeBypassScale(recipe, adjustments, target);
+    return bypass === null ? stages : `${stages} ${bypass}`;
+}
+
+/**
+ * What a new dose does to the bypass, and so to the cup.
+ *
+ * Said only when the dose moved and the recipe has a bypass. Without one the
+ * stage total is already the whole cup, so a second figure would repeat it.
+ */
+function describeBypassScale(
+    recipe: Recipe,
+    adjustments: QuickEditAdjustments,
+    stageTotal: number
+): string | null {
+    const dose = adjustments.dose;
+    if (dose === undefined || dose === recipe.dosage || !recipe.bypassEnabled || recipe.isTea()) {
+        return null;
+    }
+    const {volume, clipped} = scaledBypassVolume(recipe.bypassVolume, recipe.dosage, dose);
+    const cup = stageTotal + volume;
+    if (clipped) {
+        const edge = volume >= BYPASS_VOLUME.max ? "the most" : "the least";
+        return `Bypass water stops at ${volume} ml, ${edge} it can be, so the cup gets ${cup} ml.`;
+    }
+    return `Bypass water rescales to ${volume} ml, so the cup gets ${cup} ml.`;
 }
 
 type TemperatureBaseline = {pours: {temperature: number}[]};

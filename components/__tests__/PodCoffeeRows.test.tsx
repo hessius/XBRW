@@ -43,6 +43,17 @@ beforeEach(() => {
 });
 
 describe("PodCoffeeRows", () => {
+    it("shows the flavours as FLAVOUR with the roaster's notes under them", async () => {
+        const coffee: PodCoffee = {...FULL, aromatics: "Papaya, Raspberry, Citrus (2024 Harvest)",
+                                   flavours: ["Papaya", "Raspberry", "Citrus"]};
+        await renderWithProviders(<PodCoffeeRows recipe={recipeWith({coffee})}/>);
+        expect(screen.getByText("Papaya, Raspberry, Citrus", includeHidden)).toBeTruthy();
+        expect(screen.getByTestId("coffee-aromatics-detail", includeHidden))
+            .toHaveTextContent("Papaya, Raspberry, Citrus (2024 Harvest)");
+        expect(screen.getByLabelText(
+            "Flavour, Papaya, Raspberry, Citrus. Papaya, Raspberry, Citrus (2024 Harvest)")).toBeTruthy();
+    });
+
     it("shows every field of a full block, each read as label and value", async () => {
         await renderWithProviders(<PodCoffeeRows recipe={recipeWith({coffee: FULL})}/>);
 

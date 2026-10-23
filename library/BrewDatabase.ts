@@ -1,5 +1,6 @@
 import * as SQLite from "expo-sqlite";
 import {appDatabase} from "@/library/appDatabase";
+import {reviveBagRunSnapshot, type BagRunSnapshot} from "@/library/bagRun";
 import {decodeSamples, decodeText, encodeSamples, encodeText} from "@/library/brew/traceCodec";
 
 import {
@@ -36,6 +37,13 @@ import type {Stall} from "./brew/stalls";
 import type {PodCoffee} from "./podCoffee";
 import {podCoffeeFromStored} from "./podCoffee";
 import {tagKey} from "./tagKey";
+
+export class BagAttributionError extends Error {
+    constructor(brewId: string, options?: ErrorOptions) {
+        super(`Could not read bag attribution for brew ${brewId}.`, options);
+        this.name = "BagAttributionError";
+    }
+}
 
 /** A record as it comes back out, with whether its stream survived retention. */
 export type StoredBrew = BrewRecord & {hasStream: boolean};
@@ -98,6 +106,7 @@ type BrewRow = {
     recipeUuid: string;
     recipeName: string;
     accent: string;
+    bag: string;
     beverageKind: string;
     startedAt: number;
     /** 0 on a brew that never poured, and on rows written before the column. */
@@ -191,6 +200,7 @@ export function ensureBrewTables(db: SQLite.SQLiteDatabase): void {
                 recipeUuid TEXT NOT NULL,
                 recipeName TEXT NOT NULL,
                 accent TEXT NOT NULL,
+                bag TEXT NOT NULL DEFAULT '',
                 beverageKind TEXT NOT NULL DEFAULT '',
                 startedAt INTEGER NOT NULL,
                 pouringAt INTEGER NOT NULL DEFAULT 0,
@@ -265,6 +275,9 @@ export function ensureBrewTables(db: SQLite.SQLiteDatabase): void {
     // unlike `cupAtDrawdown` there is nothing for `hydrate` to translate back
     // into absence beyond omitting the key.
     const columns = db.getAllSync<{name: string}>("PRAGMA table_info(brews);");
+    if (!columns.some((column) => column.name === "bag")) {
+        db.execSync("ALTER TABLE brews ADD COLUMN bag TEXT NOT NULL DEFAULT '';");
+    }
     if (!columns.some((column) => column.name === "beverageKind")) {
         db.execSync("ALTER TABLE brews ADD COLUMN beverageKind TEXT NOT NULL DEFAULT '';");
     }
@@ -557,9 +570,9 @@ class BrewDatabase {
                                 dose, ratio,
                                 grindSize, grinderRpm, grinderUsed,
                                 dialBefore, dialAfter, coffee, recipeUrl,
-                                origin, roast, process, fermentation, sentAt, hasStream, beverageKind)
+                                origin, roast, process, fermentation, sentAt, hasStream, beverageKind, bag)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                     ?, ?,                      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+                     ?, ?,                      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
             [
                 record.id, record.recipeUuid, record.recipeName, record.accent,
                 record.startedAt, record.pouringAt ?? 0, record.drawdownAt ?? 0,
@@ -603,7 +616,8 @@ class BrewDatabase {
                 isFermentation(record.fermentation) ? record.fermentation : "",
                 record.sentAt ?? 0,
                 hasStream ? 1 : 0,
-                record.beverageKind ?? ""
+                record.beverageKind ?? "",
+                record.bag === undefined ? "" : JSON.stringify(record.bag)
             ]
         );
     }
@@ -1290,6 +1304,15 @@ class BrewDatabase {
 }
 
 function hydrate(row: BrewRow): StoredBrew {
+    let bag: BagRunSnapshot | undefined;
+    if (row.bag !== "") {
+        let value: unknown;
+        try { value = JSON.parse(row.bag); }
+        catch (cause) { throw new BagAttributionError(row.id, {cause}); }
+        const parsed = reviveBagRunSnapshot(value);
+        if (parsed === null) throw new BagAttributionError(row.id);
+        bag = parsed;
+    }
     let pauseIntervals: unknown;
     try {
         pauseIntervals = JSON.parse(row.pauseIntervals);
@@ -1311,6 +1334,7 @@ function hydrate(row: BrewRow): StoredBrew {
         recipeUuid: row.recipeUuid,
         recipeName: row.recipeName,
         accent: row.accent,
+        ...(bag === undefined ? {} : {bag}),
         ...(isBeverageKind(row.beverageKind) ? {beverageKind: row.beverageKind} : {}),
         startedAt: row.startedAt,
         pouringAt: row.pouringAt ?? 0,

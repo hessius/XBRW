@@ -7,10 +7,35 @@ import {
 } from "@/library/roasterRecipes";
 import {FIT_NAME_MAX} from "@/library/fitName";
 import {feed, memoryLibrary, memorySettings} from "@/test-utils/roasterFeed";
+import {ROAST_LEVEL_DEFAULTS, startingFigures} from "@/library/restPeak";
 
 const coffees = feed([{id: "a"}, {id: "b", sizes: ["15g", "20g"]}]).coffees;
 
 describe("fetchCoffeeRecipe", () => {
+    it("preserves a level-only catalogue roast as the freshness fallback", async () => {
+        const coffee = {...coffees[0], coffee: {name: "Dark coffee"}, roast: {level: "Dark"}};
+        const {recipe} = await fetchCoffeeRecipe(coffee, undefined, memoryLibrary().deps);
+        const hydrated = new Recipe(undefined, JSON.stringify(recipe));
+        expect(hydrated.coffee?.roast).toBe("Dark");
+        expect(startingFigures(hydrated.coffee).figures).toEqual(ROAST_LEVEL_DEFAULTS.dark);
+    });
+
+    it("keeps explicit coffee roast words ahead of the feed fallback", async () => {
+        const coffee = {...coffees[0], coffee: {name: "Light coffee", roast: "Light"},
+            roast: {level: "Dark"}};
+        const {recipe} = await fetchCoffeeRecipe(coffee, undefined, memoryLibrary().deps);
+        expect(recipe.coffee?.roast).toBe("Light");
+    });
+
+    it("preserves validated camel-case feed advice beside flavours", async () => {
+        const coffee = {...coffees[0], roast: {
+            restDays: 11, peakDay: 28, bestUntilDay: 42
+        }, flavours: ["Peach"]};
+        const {recipe} = await fetchCoffeeRecipe(coffee, undefined, memoryLibrary().deps);
+        expect(recipe.coffee).toMatchObject({
+            restDays: 11, peakDay: 28, bestUntilDay: 42, flavours: ["Peach"]
+        });
+    });
     it("keeps contextual roaster metadata in backup JSON without a subscription", async () => {
         const library = memoryLibrary();
         const coffee = {...coffees[0], coffee: {...coffees[0].coffee, roaster: ""}};

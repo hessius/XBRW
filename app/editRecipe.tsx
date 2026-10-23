@@ -1,4 +1,7 @@
 import {useAppearance} from "@/hooks/useAppearance";
+import {useBagManager} from "@/hooks/useBagManager";
+import {BagAbout, BagChoice, BagManagementSheets} from "@/components/BagManagement";
+import {resolveBagTracker} from "@/library/coffeeBag";
 import {useLocalSearchParams, useNavigation} from "expo-router";
 import router from "@/hooks/steadyRouter";
 import {openEasyModeRecipe} from "@/hooks/useEasyModeSlots";
@@ -59,6 +62,8 @@ import type Pour from "@/library/Pour";
 import {
     applyQuickEdit,
     quickEditProblems,
+    rescaleDose,
+    withoutDose,
     type QuickEditAdjustments
 } from "@/library/quickEdit";
 import type {OverflowProtection} from "@/library/brew/overflowConfig";
@@ -631,6 +636,7 @@ type ActionBarProps = {
     onSave: () => void;
     /** Reports how much of the screen the bar covers, once laid out. */
     onHeight: (height: number) => void;
+    bagChoice?: React.ReactNode;
 };
 
 /**
@@ -710,7 +716,7 @@ function readKnownTags(database: RecipeDatabase): string[] {
 
 function ActionBar({
     accent, canBrewAtAll, canBrew, quickEditOpen, onBrew, onQuickEdit, canWrite, canSave,
-    onWrite, onSave, onHeight
+    onWrite, onSave, onHeight, bagChoice
 }: ActionBarProps) {
     const appearance = useAppearance();
     const {palette} = appearance;
@@ -727,12 +733,14 @@ function ActionBar({
         // the sides'. The bar is
         // pinned over the deck, so every point above the buttons is a point
         // taken off the control being edited underneath it.
-        <XStack testID="editor-actions"
+        <YStack testID="editor-actions"
                 position="absolute" bottom={0} left={0} right={0} gap="$2"
                 paddingHorizontal="$4" paddingTop="$2"
                 paddingBottom={pinnedBarPadding(bottomInset, ACTION_BAR_SINK)}
                 backgroundColor={palette.base}
                 onLayout={(event) => onHeight(event.nativeEvent.layout.height)}>
+            {bagChoice}
+            <XStack gap="$2">
             {/* The accent goes to the one act that runs the recipe. With no
                 machine there is nothing to run it on, so WRITE inherits it:
                 putting a recipe on a card is then the primary act. */}
@@ -749,7 +757,8 @@ function ActionBar({
                        onPress={onWrite}/>
             <BarButton label="SAVE" accessibilityLabel="Save"
                        enabled={canSave} flex={1} onPress={onSave}/>
-        </XStack>
+            </XStack>
+        </YStack>
     );
 }
 
@@ -761,13 +770,15 @@ type QuickEditLayerProps = {
     temperatureUnit: TemperatureUnit;
     actionBarHeight: number;
     onChange: (adjustments: QuickEditAdjustments) => void;
+    onSaveDose: (dose: number) => void;
     onClose: () => void;
 };
 
 const QUICK_EDIT_HORIZONTAL_PADDING = 16;
 
 function QuickEditLayer({
-    open, recipe, adjustments, accent, temperatureUnit, actionBarHeight, onChange, onClose
+    open, recipe, adjustments, accent, temperatureUnit, actionBarHeight, onChange,
+    onSaveDose, onClose
 }: QuickEditLayerProps) {
     const appearance = useAppearance();
     const {palette} = appearance;
@@ -824,7 +835,8 @@ function QuickEditLayer({
                                 adjustments={adjustments}
                                 accent={accent}
                                 temperatureUnit={temperatureUnit}
-                                onChange={onChange}/>
+                                onChange={onChange}
+                                onSaveDose={onSaveDose}/>
             </Animated.View>
         </View>
     );
@@ -864,6 +876,9 @@ export default function EditRecipe(
 
     const [showHint, setShowHint] = useSetting("showHints");
     const [showRecipeAvatars] = useSetting("showRecipeAvatars");
+    const [bagExperimentEnabled] = useSetting("bagExperimentEnabled");
+    const [bagTracker] = useSetting("bagTracker");
+    const [beanconquerorHandoff] = useSetting("beanconquerorHandoff");
     const [rememberedMachine] = useSetting("machineDeviceId");
     const [rawTemperatureUnit] = useSetting("temperatureUnit");
     const [lastCardRead] = useSetting("lastCardRead");
@@ -1056,6 +1071,9 @@ export default function EditRecipe(
         historyStore
     );
 
+    const bagManager = useBagManager(recipe ?? null, bagExperimentEnabled,
+        resolveBagTracker(bagTracker, beanconquerorHandoff));
+
     if (!recipe) return null;
 
     // While the panel is open the bar's BREW is the panel's BREW: it brews
@@ -1206,6 +1224,36 @@ export default function EditRecipe(
         brewWith(edited, adjustments);
     }
 
+    /**
+     * "Save as this dose" from the quick-edit panel.
+     *
+     * The dose goes into the recipe on the bench, with the stages and bypass
+     * rescaled, and the panel keeps whatever else was adjusted for this brew.
+     * It writes straight away only when nothing else is waiting for SAVE:
+     * saving the bench would otherwise also save edits the user never chose
+     * to keep. In that case, and for a recipe not yet in the library, the
+     * change joins the others and SAVE owns it, which the toast says.
+     */
+    async function onSaveQuickEditDose(dose: number) {
+        const currentRecipe = recipe;
+        if (!currentRecipe) return;
+        await flushDrafts();
+        const writesNow = !hasPendingEdits() && recipeInLibrary();
+        rescaleDose(currentRecipe, dose);
+        bumpKey();
+        setQuickEditAdjustments((current) => withoutDose(current));
+        if (!writesNow) {
+            notify({tone: "info", message: `Dose set to ${dose} g. Press SAVE to keep it.`});
+            return;
+        }
+        try {
+            persistRecipe();
+            notify({tone: "success", message: `Saved at ${dose} g.`});
+        } catch {
+            notify({tone: "error", message: "Could not save the recipe."});
+        }
+    }
+
     function brewWith(brewing: Recipe, adjustments?: QuickEditAdjustments) {
         // A brew record points back at its recipe by uuid, and the record
         // screen draws its stage ladder from that row. So a recipe with no row
@@ -1222,7 +1270,7 @@ export default function EditRecipe(
             };
         router.push({
             pathname: "/brew",
-            params
+            params: {...params, ...bagManager.paramsFor(brewing)}
         });
     }
 
@@ -1299,7 +1347,7 @@ export default function EditRecipe(
     // `accessibilityViewIsModal` does on iOS.
     const screenCovered = showNfcOverlay || overflowOpen || revertOpen || helpOpen
         || bypassWriteOpen || renameOpen || beanProfileOpen || leavePrompt !== null
-        || ratingNoteOpen || machinePicker.open;
+        || ratingNoteOpen || machinePicker.open || bagManager.covered;
     // The quick edit panel covers the deck but not the action bar, which holds
     // the BREW it adjusts. So it hides the deck rather than the screen.
     const deckCovered = screenCovered || quickEditOpen;
@@ -1442,6 +1490,7 @@ export default function EditRecipe(
                               setOverflowProtection={setOverflowProtection}/>
                 ) : deck === "about" ? (
                     <AboutDeck recipe={recipe} accent={accent}
+                               bagManagement={<BagAbout manager={bagManager} recipe={recipe}/>}
                                showAvatar={showRecipeAvatars} brews={brewSummary}
                                beanProfile={beanProfile}
                                onRate={(rating) => {
@@ -1482,6 +1531,7 @@ export default function EditRecipe(
             </YStack>
 
             <ActionBar accent={accent} canWrite={canWrite} canSave={canSave}
+                       bagChoice={<BagChoice manager={bagManager}/>}
                        canBrewAtAll={rememberedMachine !== ""}
                        canBrew={canBrewNow}
                        quickEditOpen={quickEditOpen}
@@ -1503,13 +1553,16 @@ export default function EditRecipe(
 
             </YStack>
 
-            <QuickEditLayer open={quickEditOpen}
+            <BagManagementSheets manager={bagManager} recipe={recipe}/>
+
+            <QuickEditLayer open={quickEditOpen && !bagManager.covered}
                             recipe={recipe}
                             adjustments={quickEditAdjustments}
                             accent={accent}
                             temperatureUnit={temperatureUnit}
                             actionBarHeight={actionBarHeight}
                             onChange={setQuickEditAdjustments}
+                            onSaveDose={(dose) => void onSaveQuickEditDose(dose)}
                             onClose={closeQuickEdit}/>
 
             <RecipeOverflowSheet open={overflowOpen} canRefreshName={recipe.xid.trim().length > 0}

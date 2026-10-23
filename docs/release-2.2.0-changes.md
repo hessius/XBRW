@@ -6,12 +6,88 @@ draft #252 also contain proposals that have not been accepted; they must not be
 merged wholesale. Issue #249 records source heads, decisions and integration.
 The shipped 2.1.0 ledger remains unchanged.
 
-## Package G: appearance and recipe palettes — local implementation only
+## Package F: Optional coffee bag beta experiment
+
+Adapted from #238, #241 and #242. Off by default in Labs. Physical bags can
+be shared by recipes, and a recipe can remember one of several bags or No bag.
+Remaining coffee and freshness windows are estimates, not measurements or
+guarantees. Ready to brew suggests one explicit recipe and bag.
+
+This adaptation uses independent many-to-many bag records and a durable
+accepted-run accounting ledger instead of inferring identity or consumption
+from a recipe name or the remaining history. Actual intended dose and bag
+identity freeze at acceptance. Confirmed preflight refusal spends nothing;
+observed pouring spends the dose even if the run is cancelled or fails.
+Unknown consumption requires a quantity check. History deletion never refunds.
+
+Disabling preserves data and stops new attribution. A brew already accepted
+keeps its bag. Beanconqueror mode does not claim synchronised local inventory.
+Backups preserve inventory without enabling it on another device. Historical
+handoff uses the bag captured for that brew, not today's selection. The
+explicit add-bean action opens a form and never claims it created a bean.
+
+The implementation is on `feat/2.2.0-bag-labs-20261023`, based on
+`8f2638dfa2e75928ff447fbbd0ee03ba14986886`. It is not accepted development
+or release-qualified. The implementation plan records software evidence.
+Focused PR #266 has received its single Copilot review. The four findings are
+addressed: visible and spoken roast dates distinguish bag choices; attributed
+handoffs never acquire a later recipe's coffee; a known rest period works
+without peak advice; and catalogue roast level supplies the freshness fallback.
+Each source proposal already used its one automated Copilot review round.
+Integration still requires exact-head CI and cumulative-preview reconciliation.
+
+Local software qualification passed: typecheck; lint with zero errors and
+32 warnings; both Jest projects with 20,550 passed tests, 26 skipped tests,
+918 passed suites, two skipped suites and both snapshots passing; Expo Doctor
+21/21. The appearance matrix covers all eight combinations. Real-SQLite
+checks cover the accepted live owner and the inventory/backup lifecycle.
+Canonical recipe/card and legacy handoff compatibility, and existing image
+captures remain covered. Animation/act warnings are recorded, not hidden.
+Those full-suite figures precede review fixes. Review-fix qualification passed
+316 affected tests across both platforms, typecheck and lint with the same
+32 warnings and no errors. The new regressions failed before the fixes.
+This is software evidence, not physical-device qualification.
+
+Manual native, accessibility, interruption and Beanconqueror qualification
+remain pending until separately recorded. Exercise enable/disable/re-enable;
+small-screen large text and keyboard; VoiceOver/TalkBack sheet coverage;
+same-coffee bags and shared recipes; uncertain/empty estimates and corrections;
+interruption after beans are spent; termination/reopen; and actual add-bean
+and historic-brew handoff. Confirm that saving never opens another app.
+
+Fresh native clients are required for datetimepicker 9.1.0 and the already
+accepted native appearance dependencies. No build is authorised here; Metro
+cannot qualify the native change. Existing BLE/NFC physical-device gates
+remain in force, though no card write is needed to qualify the bag model.
+Final inclusion requires an explicit retain, revise or remove decision after
+beta feedback. #239 dose presets remain separate and unimplemented.
+
+### Package F cumulative-preview reconciliation
+
+The evaluation preview replaces the original per-recipe bag proposals with the
+reviewed shared-inventory experiment. Its default-off gate, accepted-run ledger,
+frozen history identity and explicit external-app actions are retained. Preview
+appearance, photo, import and BLE adaptations remain; history-only restore and
+the preview's themed disabled-action roles are preserved with regressions.
+
+The raw #239 dose/SAVE AS evaluation remains in this preview for now. It is not
+the approved lightweight adaptation and must not be promoted with Package F.
+That separate implementation removes SAVE AS and keeps the one-brew boundary.
+
+Reconciled preview software gates passed: typecheck; lint with zero errors and
+33 warnings; both Jest projects with 20,844 passed tests, 26 skipped tests,
+924 passed suites, two skipped suites and both snapshots; Expo Doctor 21/21.
+The focused branch also preserves history-only restore at `c92976b8`, after
+`9141e7f4` fixed all four review findings. These are software results only;
+the native and physical-device gates above remain open.
+
+## Package G: accepted appearance and recipe palettes
 
 The approved combined #257/#243 adaptation is implemented on
 `feat/2.2.0-appearance-20261022`, based on
-`98f3ae5255dfc691bc44d7c5ed356e47830f3df9`. It is not yet accepted or integrated
-into `develop`, and is not release-qualified. The existing #243 source review
+`98f3ae5255dfc691bc44d7c5ed356e47830f3df9`. PR #264 is merged into `develop`
+as `8f2638dfa2e75928ff447fbbd0ee03ba14986886`; it is not release-qualified.
+The existing #243 source review
 round is already spent; do not request another for that source.
 
 Settings offers Original, Light, Blue and Magenta themes independently of
@@ -35,10 +111,25 @@ and gesture navigation both need checking; the SDK 57 Android 15 emulator
 style bug means emulator-only evidence is insufficient. The intended iOS
 device is the iPhone 17 Pro named `iPhone14`, never the iPhone 13 mini.
 
-The implementation plan records exact local gate results and the outstanding
-manual matrix. Focused PR creation, exact-head PR CI, its at-most-one automated
-review round, source closure, merges and cumulative preview reconciliation
-need separate approval. #243/#257 and evaluation draft #252 remain untouched.
+The implementation plan records software results and the outstanding manual
+matrix. The focused PR's authorized review and integration are complete.
+Source #243 is superseded by #264 and is being closed with the Package F
+housekeeping. Evaluation draft #252 remains separate from release promotion.
+
+### Cumulative Metro evaluation reconciliation
+
+The authorized evaluation-only merge brings reviewed #264 head
+`874ded6c8ec393a14c2aa01068aaebc1542748bb` into
+`chore/2.2.0-preview-20261019`, preserving accepted A–E adaptations and pending
+Package F. Bags, freshness, Ready to brew, dose presets and catalogue size
+choices now follow reactive appearance too. Generic selection stays neutral;
+primary actions retain a separate themed disabled pair. Catalogue stage plans
+remain fully readable, and paused subscriptions without a cache still say
+“Updates paused”, not “Loading coffees”.
+
+This reconciliation changes neither `develop` nor `main`, accepts no additional
+proposal, and does not restart Metro or qualify a native client. Controller
+review/restart and the native/hardware gates above remain separate.
 
 ## Package E: roasters in Import and saved shelves
 
@@ -46,7 +137,10 @@ The focused adaptation uses these reviewed source heads:
 #237 `27535f8b72fd30febe51d07f7bd2cbd20bf63980`,
 #240 `25672dfab641116521be313aa650ab788f869994` and
 #245 `d306e9c22aa54bf803ec0fb07fc1cea5d3055395`.
-This branch is a merge candidate, not accepted development or a release.
+Package E was accepted through #263 and merged into develop as
+`98f3ae5255dfc691bc44d7c5ed356e47830f3df9`. The source PRs are closed as
+superseded, not merged wholesale. This cumulative preview includes the accepted
+ancestry and adaptation, while retaining F and G solely for evaluation.
 
 Home, search and empty-library states remain saved-only. Independent roaster
 catalogues are reached through Import. Customers choose up to three **Show in

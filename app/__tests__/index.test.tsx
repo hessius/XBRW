@@ -1478,6 +1478,113 @@ describe("HomeScreen, opening one editor at a time", () => {
             .props.importantForAccessibility).toBe("no-hide-descendants");
     });
 
+    it("suggests the whole-inventory recipe and bag even when only another recipe is visible", async () => {
+        mockRemembered = "machine-device-id";
+        const {default: RealRecipes} = jest.requireActual("@/library/RecipeDatabase");
+        const {default: Bags} = jest.requireActual("@/library/CoffeeBagDatabase");
+        const {bagFixture} = jest.requireActual("@/test-utils/bags");
+        const hidden = writable("Hidden from this filter");
+        new RealRecipes().insertRecipes([hidden]);
+        const bags = new Bags();
+        bags.create(bagFixture({roastedOn: undefined}));
+        bags.select(hidden.uuid, "bag-a", 1);
+        const settings = new Settings(memoryStorage());
+        settings.set("bagExperimentEnabled", true);
+        await renderWithProviders(<HomeScreen db={store([writable("Visible")])} settings={settings}/>);
+        await screen.findByText("Visible");
+        expect(screen.getByTestId("ready-to-brew-name")).toHaveTextContent("Hidden from this filter");
+        expect(screen.getByTestId("ready-to-brew-bag")).toHaveTextContent(/Colombia, roasted 12 Oct/);
+        await fireEvent.press(screen.getByTestId("ready-to-brew-brew"));
+        const pushed = mockPush.mock.calls.at(-1)![0];
+        expect(JSON.parse(pushed.params.recipeJSON).uuid).toBe(hidden.uuid);
+        expect(pushed.params.bagSelection).toBe(JSON.stringify("bag-a"));
+    });
+
+    it("gates bag badges, honours explicit No bag and dismisses Ready only for the current local day", async () => {
+        jest.useFakeTimers({now: new Date(2026, 9, 23, 23, 59, 50)});
+        const {default: RealRecipes} = jest.requireActual("@/library/RecipeDatabase");
+        const {default: Bags} = jest.requireActual("@/library/CoffeeBagDatabase");
+        const {bagFixture} = jest.requireActual("@/test-utils/bags");
+        const recipe = writable("Selected bag");
+        new RealRecipes().insertRecipes([recipe]);
+        const bags = new Bags();
+        bags.create(bagFixture({restDays: 7, peakDay: 11, bestUntilDay: 25}));
+        bags.select(recipe.uuid, "bag-a", 1);
+        const settings = new Settings(memoryStorage());
+        await renderWithProviders(<HomeScreen db={store([recipe])} settings={settings}/>);
+        await screen.findByText("Selected bag");
+        expect(screen.queryByTestId("ready-to-brew")).toBeNull();
+        expect(screen.queryByText("PEAK")).toBeNull();
+        await act(async () => { settings.set("bagExperimentEnabled", true); });
+        await act(async () => { jest.advanceTimersByTime(0); });
+        expect(screen.getByTestId("ready-to-brew")).toBeTruthy();
+        expect(screen.getByText("PEAK")).toBeTruthy();
+        await fireEvent.press(screen.getByLabelText("Hide until tomorrow"));
+        expect(settings.get("readyToBrewDismissedOn")).toBe("2026-10-23");
+        expect(screen.queryByTestId("ready-to-brew")).toBeNull();
+        await act(async () => { jest.advanceTimersByTime(10_000); });
+        expect(screen.getByTestId("ready-to-brew")).toBeTruthy();
+        await fireEvent.press(screen.getByLabelText("Edit recipes"));
+        expect(screen.queryByTestId("ready-to-brew")).toBeNull();
+        await fireEvent.press(screen.getByLabelText("Done editing"));
+        expect(screen.getByTestId("ready-to-brew")).toBeTruthy();
+        await act(async () => { bags.select(recipe.uuid, null, 2); });
+        expect(screen.queryByTestId("ready-to-brew")).toBeNull();
+        expect(screen.queryByText("PEAK")).toBeNull();
+    });
+
+    it("uses the editor's bag chooser in TUNE and hides the sheet underneath it", async () => {
+        const {default: RealRecipes} = jest.requireActual("@/library/RecipeDatabase");
+        const {default: Bags} = jest.requireActual("@/library/CoffeeBagDatabase");
+        const {bagFixture} = jest.requireActual("@/test-utils/bags");
+        const recipe = writable("Ethiopia");
+        new RealRecipes().insertRecipes([recipe]);
+        const bags = new Bags();
+        bags.create(bagFixture());
+        bags.select(recipe.uuid, "bag-a", 1);
+        const settings = new Settings(memoryStorage());
+        settings.set("bagExperimentEnabled", true);
+        await renderWithProviders(<HomeScreen db={store([recipe])} settings={settings}/>);
+        await screen.findAllByText("Ethiopia");
+        await fireEvent.press(screen.getByLabelText("Quick edit Ethiopia", {includeHiddenElements: true}));
+        await settleSheet();
+        await waitFor(async () => {
+            await fireEvent.press(screen.getByTestId("selected-bag-row"));
+            expect(screen.getByRole("radio", {name: /No bag/})).toBeTruthy();
+        }, {timeout: SHEET_PRESS_TIMEOUT});
+        expect(screen.queryByTestId("quick-edit-panel")).toBeNull();
+        expect(screen.getByTestId("quick-edit-panel", {includeHiddenElements: true})).toBeTruthy();
+        expect(screen.getByTestId("home-content", {includeHiddenElements: true})
+            .props.importantForAccessibility).toBe("no-hide-descendants");
+    });
+
+    it("passes the selected physical bag with a home quick-edited brew", async () => {
+        mockRemembered = "machine-device-id";
+        const {default: RealRecipes} = jest.requireActual("@/library/RecipeDatabase");
+        const {default: Bags} = jest.requireActual("@/library/CoffeeBagDatabase");
+        const {bagFixture} = jest.requireActual("@/test-utils/bags");
+        const recipe = writable("Ethiopia");
+        new RealRecipes().insertRecipes([recipe]);
+        const bags = new Bags();
+        bags.create(bagFixture());
+        bags.select(recipe.uuid, "bag-a", 1);
+        const settings = new Settings(memoryStorage());
+        settings.set("bagExperimentEnabled", true);
+        await renderWithProviders(<HomeScreen db={store([recipe])} settings={settings}/>);
+        await screen.findAllByText("Ethiopia");
+        await fireEvent.press(screen.getByLabelText("Quick edit Ethiopia", {includeHiddenElements: true}));
+        await settleSheet();
+        await fireEvent.press(screen.getByLabelText("Increase Quick edit dose"));
+        await waitFor(async () => {
+            await fireEvent.press(screen.getByTestId("home-quick-edit-brew"));
+            expect(mockPush).toHaveBeenCalledTimes(1);
+        }, {timeout: SHEET_PRESS_TIMEOUT});
+        expect(mockPush).toHaveBeenLastCalledWith(expect.objectContaining({
+            params: expect.objectContaining({bagSelection: JSON.stringify("bag-a"),
+                quickEditAdjustments: JSON.stringify({dose: 16})})
+        }));
+    });
+
     it("brews a quick edited clone from the action tray without saving it", async () => {
         mockRemembered = "machine-device-id";
         const original = writable("Ethiopia");
@@ -1506,6 +1613,44 @@ describe("HomeScreen, opening one editor at a time", () => {
         expect(pushed.dosage).toBe(16);
         expect(original.dosage).toBe(15);
         expect(db.updateRecipe).not.toHaveBeenCalled();
+    });
+
+    it("saves a preset dose from the quick edit sheet, then brews the saved recipe", async () => {
+        mockRemembered = "machine-device-id";
+        const original = writable("Ethiopia");
+        // Two stages, so 18 g keeps every stage under the 240 ml limit.
+        original.pours = [
+            new Pour(1, 100, 93, 30, 0, POUR_PATTERN.CIRCULAR, 0),
+            new Pour(2, 125, 93, 30, 0, POUR_PATTERN.CIRCULAR, 0)
+        ];
+        const db = store([original]);
+        await renderWithProviders(<HomeScreen db={db} settings={new Settings(memoryStorage())}/>);
+        await screen.findByText("Ethiopia");
+
+        await fireEvent.press(screen.getByLabelText("Quick edit Ethiopia", {
+            includeHiddenElements: true
+        }));
+        await settleSheet();
+        await waitFor(
+            async () => {
+                await fireEvent.press(screen.getByLabelText("Brew at 18 grams"));
+                await fireEvent.press(screen.getByLabelText("Save the recipe at 18 grams"));
+                expect(db.updateRecipe).toHaveBeenCalledTimes(1);
+            },
+            {timeout: SHEET_PRESS_TIMEOUT}
+        );
+
+        const [uuid, saved] = (db.updateRecipe as jest.Mock).mock.calls[0];
+        expect(uuid).toBe(original.uuid);
+        expect(saved.dosage).toBe(18);
+        expect(saved.getPourTotalVolume()).toBe(saved.getTotalVolume());
+        // The row the list held is not edited in place: the store's copy is.
+        expect(original.dosage).toBe(15);
+        expect(screen.getByLabelText("Brew at 18 grams, the recipe's dose")).toBeTruthy();
+
+        await fireEvent.press(screen.getByTestId("home-quick-edit-brew"));
+        const pushed = JSON.parse(mockPush.mock.calls[0][0].params.recipeJSON);
+        expect(pushed.dosage).toBe(18);
     });
 
     it("adds the brew tile to the action tray once a machine is paired", async () => {

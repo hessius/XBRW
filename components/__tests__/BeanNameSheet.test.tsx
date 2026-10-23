@@ -1,12 +1,24 @@
 import React from "react";
-import {fireEvent, screen} from "@testing-library/react-native";
+import {fireEvent, screen, waitFor} from "@testing-library/react-native";
 
 import BeanNameSheet from "@/components/BeanNameSheet";
-import {renderWithProviders} from "@/test-utils/render";
+import {renderWithProviders, SHEET_PRESS_TIMEOUT} from "@/test-utils/render";
 
 function noop() {}
 
 describe("BeanNameSheet", () => {
+    it("cancels rather than guessing when a physical bag has no confirmed external name", async () => {
+        const onConfirm = jest.fn();
+        const onOpenChange = jest.fn();
+        await renderWithProviders(<BeanNameSheet open requireName suggestion="Physical bag"
+            onOpenChange={onOpenChange} onConfirm={onConfirm}/>);
+        await waitFor(async () => {
+            await fireEvent.press(screen.getByLabelText("Cancel sending this brew"));
+            expect(onOpenChange).toHaveBeenCalledWith(false);
+        }, {timeout: SHEET_PRESS_TIMEOUT});
+        expect(onConfirm).not.toHaveBeenCalled();
+    });
+
     it("says what it will fall back to when the field is left empty", async () => {
         await renderWithProviders(
             <BeanNameSheet open onOpenChange={noop} suggestion="Ethiopia Guji"

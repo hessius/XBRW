@@ -75,6 +75,38 @@ usually a mistake, but they are surfaced here so you can change them deliberatel
 
 ---
 
+## Package F: optional coffee bag experiment
+
+One device-local Labs switch enables bags, freshness and Ready to brew together.
+It starts off and is a beta experiment, not a permanent product commitment.
+Quantity is an estimate of intended doses spent, never a scale reading.
+Freshness describes estimated windows, not guaranteed taste or an expiry date.
+Beanconqueror owns quantities in its mode; there is no inventory synchronisation.
+Saving a bag never opens another app. The separate explicit action opens an
+add-bean form, not a confirmed external creation.
+
+| ID | Source | Context | Current text |
+|----|--------|---------|--------------|
+| `bags.labs` | `app/settings.tsx:798` | Labs toggle. | `Coffee bags` |
+| `bags.labsDescription` | `app/settings.tsx:799` | Default-off experiment disclosure. | `Experimental bag tracking, freshness estimates and brew suggestions. Off by default and may not stay in the app.` |
+| `bags.noBag` | `components/BagPickerSheet.tsx:40` | Explicit untracked selection. | `No bag` |
+| `bags.noBagDetail` | `components/BagPickerSheet.tsx:40` | Choosing no physical bag. | `Brew without tracking` |
+| `bags.check` | `library/coffeeBag.ts:124` | Missing or uncertain quantity, not zero. | `Check remaining coffee` |
+| `bags.external` | `library/coffeeBag.ts:125` | Quantity belongs to the other app. | `Tracked in Beanconqueror` |
+| `bags.remaining` | `library/coffeeBag.ts:126` | Reliable local estimate. | `Approx. ${balance.remainingGrams} g remaining` |
+| `bags.resting` | `library/restPeak.ts:105` | Still within estimated rest. | `Resting, estimated ready from ${shortDay(reading.readyOn)}.` |
+| `bags.beforePeak` | `library/restPeak.ts:107` | Ready, before the estimated peak. | `Estimated peak around ${shortDay(reading.peakOn)}.` |
+| `bags.ready` | `library/restPeak.ts:107` | Ready, after the estimated peak. | `Within the estimated window.` |
+| `bags.readyWithoutPeak` | `library/restPeak.ts` | The stated rest has ended, but no peak is supplied. | `The stated rest period has ended.` |
+| `bags.peak` | `library/restPeak.ts:108` | Around the estimated peak. | `Within the estimated peak window.` |
+| `bags.past` | `library/restPeak.ts:109` | Past the estimated window, not expired. | `Outside the estimated window.` |
+| `bags.externalSave` | `components/BagSheet.tsx:244` | External mode, before saving. | `Quantities are tracked in Beanconqueror. Nothing is sent when you save.` |
+| `bags.externalName` | `components/BagSheet.tsx:379` | Optional confirmed external identity. | `Optional. Match the name of this physical bag in Beanconqueror.` |
+| `bags.externalOpen` | `components/BagSheet.tsx:408` | Separate, explicit action. | `OPEN IN BEANCONQUEROR` |
+| `bags.externalOpened` | `hooks/useBagManager.ts:109` | The form opened; creation is not confirmed. | `Opened Beanconqueror's add-bean screen. Confirm the bag there.` |
+| `bags.externalSaveFailed` | `hooks/useBagManager.ts:114` | The other app opened, but local saving failed. | `Beanconqueror opened, but the bag could not be saved here. Check it before trying again.` |
+| `bags.externalOpenFailed` | `hooks/useBagManager.ts:115` | No confirmed opening; identity remains unsaved. | `Could not open this bag in Beanconqueror. Check the bag details and that Beanconqueror is installed.` |
+
 ## Home / recipe library
 
 ### Package E Import source labels
@@ -243,7 +275,7 @@ listed here.
 | `editor.pod.coffee.roasted.a11y` | `library/coffeeDetails.ts:138` | (a11y) Spoken name for the same row, read as `${spoken}, ${value}`. | `Roasted on` |
 | `editor.pod.coffee.caffeine.label` | `library/coffeeDetails.ts:142` | Doto caption on an XPOD detail row. Shown only when the block says decaf. | `CAFFEINE` |
 | `editor.pod.coffee.caffeine.a11y` | `library/coffeeDetails.ts:142` | (a11y) Spoken name for the same row, read as `${spoken}, ${value}`. | `Caffeine` |
-| `editor.pod.coffee.flavour.label` | `library/coffeeDetails.ts:147` | Doto caption on an XPOD detail row. Flavour notes (`aromatics`). | `FLAVOUR` |
+| `editor.pod.coffee.flavour.label` | `library/coffeeDetails.ts` (`flavourRow`) | Doto caption on an XPOD detail row. With the coffee's `flavours` (from a link or the roaster catalogue) the value is them as a comma list and the longer notes (`aromatics`) sit under it in secondary text; otherwise the value is the notes. Spoken "Flavour, ${flavours}. ${notes}". | `FLAVOUR` · `Papaya, Raspberry, Citrus` |
 | `editor.pod.coffee.flavour.a11y` | `library/coffeeDetails.ts:147` | (a11y) Spoken name for the same row, read as `${spoken}, ${value}`. | `Flavour` |
 | `editor.pod.coffee.score.label` | `library/coffeeDetails.ts:148` | Doto caption on an XPOD detail row. Cupping score (`cupping_points`). | `SCORE` |
 | `editor.pod.coffee.score.a11y` | `library/coffeeDetails.ts:148` | (a11y) Spoken name for the same row, read as `${spoken}, ${value}`. | `Cupping score` |
@@ -367,6 +399,29 @@ come from `hooks/useRecipeEditor.ts`.
 | `editor.toast.restored.xid` | `hooks/useRecipeEditor.ts:259` | Success toast after re-fetching by recipe ID. | `Recipe restored from the XID.` |
 | `editor.toast.restored.share` | `hooks/useRecipeEditor.ts:272` | Success toast after re-fetching from the share link. | `Recipe restored from the share link.` |
 
+### Evaluation-only source #239 dose presets
+
+This cumulative preview still carries the original SAVE AS proposal below.
+It is not accepted product copy. The approved adaptation is specified in
+`docs/superpowers/specs/2026-10-23-dose-shortcuts-design.md` on its separate
+task branch and removes that save workflow.
+
+The chips sit under the dose stepper in the quick-edit panel, in the editor
+and on the home sheet. `${value}` and `${dose}` are grams; `${volume}` and
+`${cup}` are millilitres.
+
+| ID | Source | Context — when the user sees this | Current text |
+|----|--------|-----------------------------------|--------------|
+| `quickEdit.dosePreset.label` | `components/QuickEditPanel.tsx:157` | Doto label on a dose chip. | `${value} G` |
+| `quickEdit.dosePreset.a11y` | `components/QuickEditPanel.tsx:159` (a11y) | (a11y) A dose chip other than the recipe's own. | `Brew at ${value} grams` |
+| `quickEdit.dosePreset.own.a11y` | `components/QuickEditPanel.tsx:158` (a11y) | (a11y) The chip for the recipe's saved dose. | `Brew at ${value} grams, the recipe's dose` |
+| `quickEdit.saveDose.label` | `components/QuickEditPanel.tsx:300` | Button under the explainer once the dose has moved and still brews. | `SAVE AS ${saveDose} G` |
+| `quickEdit.saveDose.a11y` | `components/QuickEditPanel.tsx:297` (a11y) | (a11y) The same button. | `Save the recipe at ${saveDose} grams` |
+| `quickEdit.explainer.bypass` | `library/quickEdit.ts:298` | Added to the stage-volume explainer when the dose moves and the recipe has bypass water. | `Bypass water rescales to ${volume} ml, so the cup gets ${cup} ml.` |
+| `quickEdit.explainer.bypassClipped` | `library/quickEdit.ts:296` | The same, when the scaled bypass hits its limit. `${edge}` is `the most` or `the least`. | `Bypass water stops at ${volume} ml, ${edge} it can be, so the cup gets ${cup} ml.` |
+| `quickEdit.toast.savedDose` | `app/editRecipe.tsx:1215`, `app/index.tsx:1243` | Success toast after SAVE AS writes the recipe. | `Saved at ${dose} g.` |
+| `quickEdit.toast.doseForSave` | `app/editRecipe.tsx:1210` | Info toast in the editor when other edits are pending, or the recipe is not in the library yet, so SAVE has to keep the new dose. | `Dose set to ${dose} g. Press SAVE to keep it.` |
+
 ### Help sheet / field help (`components/HelpSheet.tsx`, `constants/recipeHelp.ts`)
 
 The help sheet is titled `Help`. Its body and every field label/hint come from
@@ -465,6 +520,113 @@ The import sheet (`components/ImportSheet.tsx`), its result panel
 Note: `components/ImportResult.tsx:87` renders `preview.subtitle`, which is
 dynamic text fetched from xBloom (`hooks/useRecipeImport.ts:348`,
 `xb.getSubtitle()`) — not an app-authored string, so not edited here.
+
+---
+
+## Roaster catalogue
+
+The offer after an import link that names a roaster feed
+(`components/RoasterOfferSheet.tsx`, `hooks/useRoasterOffer.ts`), the catalogue
+screens (`app/roasters.tsx`, `app/roaster.tsx`, `app/roasterCoffee.tsx`,
+`components/RoasterCoffeeRow.tsx`, `components/ShelfChoiceSheet.tsx`), the
+re-import question (`components/NewerVersionPrompt.tsx`), and the subscriptions
+list and each roaster's subscription (`app/subscriptions.tsx`,
+`app/subscription.tsx`, `components/UnsubscribeSheet.tsx`,
+`hooks/useRoasterSubscriptions.ts`, `library/subscriptionStatus.ts`), and the
+home screen's ways in (`components/RoasterStrip.tsx`,
+`components/RoasterSearchRow.tsx`, `components/EmptyLibrary.tsx`,
+`components/ImportSheet.tsx`). The feed format is `docs/roaster-feed.md`.
+
+| ID | Source | Context — when the user sees this | Current text |
+|----|--------|-----------------------------------|--------------|
+| `roaster.offer.title` | `components/RoasterOfferSheet.tsx` | Sheet title. `${roaster}` is the feed's roaster name. Wraps beside CLOSE when long. | `Subscribe to ${roaster}?` |
+| `roaster.offer.body` | `components/RoasterOfferSheet.tsx` (`ROASTER_OFFER_BODY`) | Sheet body. No coffee count (it changes as coffees sell out) and no app name (`XBRW++` broke across a line between the plus signs; if it is ever needed in body text, join it with U+2060 word joiners). | `Browse all their coffees and recipes. New coffees appear as they're released.` |
+| `roaster.offer.dontAsk` | `components/RoasterOfferSheet.tsx` | Checkbox label (also its a11y name). | `Don't ask again for this roaster` |
+| `roaster.offer.subscribe` | `components/RoasterOfferSheet.tsx` | Doto primary button. a11y: `Subscribe to ${roaster}`. | `SUBSCRIBE` |
+| `roaster.offer.notNow` | `components/RoasterOfferSheet.tsx` | Doto secondary button. a11y: `Not now`. | `NOT NOW` |
+| `roaster.toast.subscribed` | `hooks/useRoasterOffer.ts` | After subscribing. | `Subscribed. ${n} coffees from ${roaster} are in the catalogue.` |
+| `roaster.hub.entry` | `app/hub.tsx` (`RoastersEntry`) | Row above the catalogue rail, only with a subscription. Caption `${n} roasters`. | `ROASTERS` |
+| `roaster.list.title` | `app/roasters.tsx` | Screen header. | `ROASTERS` |
+| `roaster.list.empty` | `app/roasters.tsx` | Empty state, Doto title then body. | `NO ROASTERS YET` / `Roasters appear here when you subscribe from a roaster's import link.` |
+| `roaster.list.row` | `app/roasters.tsx` | Detail under a roaster. | `${n} coffees · ${m} sold out · Updated 2 h ago` |
+| `roaster.list.manage` | `app/roasters.tsx` | Doto link to the Roaster feeds list. a11y: `Manage feeds`. | `MANAGE FEEDS` |
+| `roaster.coffees.manage` | `app/roaster.tsx` (`ManageSubscription`) | Doto link at the end of a roaster's coffee list, only while subscribed. Opens that roaster's feed screen directly. a11y: `Manage feed`. | `MANAGE FEED` |
+| `roaster.coffees.missing` | `app/roaster.tsx` | Roaster not in the catalogue. | `NOT IN THE CATALOGUE` / `This roaster's coffees are not in the catalogue. Subscribe from one of its import links.` |
+| `roaster.coffees.search` | `app/roaster.tsx` (`CoffeeRail`) | The rail's search square and field, the library's own (`components/RailSearch.tsx`). Matches name, country, farm, farmer, variety, process and tasting notes. | `SEARCH` |
+| `roaster.coffees.filters` | `app/roaster.tsx` (`FACET_COPY`) | Doto rail chips, drawn only when the feed has two or more values. IN STOCK is on by default and hides sold-out coffees. a11y: `In stock only`, `Roast filter`, `Country filter`, `Process filter`, `Decaf only`. | `IN STOCK` / `ROAST` / `COUNTRY` / `PROCESS` / `DECAF` |
+| `roaster.coffees.sheet` | `app/roaster.tsx` (`HubFilterSheet`) | Facet sheet title is `Roast`, `Country` or `Process`; rows read `${value}` and `${n} coffees`. | `Options are counted from this roaster's coffees.` |
+| `roaster.coffees.count` | `library/roasterFilters.ts` (`countLabel`) | Subtitle line under the roaster's name (`ScreenHeader` `subtitle`), never beside it, so a long name cannot clip it. "of" only while a search or filter narrows the list; singular at one. The "Updated" meta sits at the end of the same line. | `${shown} of ${total} coffees` / `${shown} coffees` / `1 coffee` |
+| `roaster.coffees.noMatches` | `app/roaster.tsx` | Nothing matches; Doto title, body, then a button. | `NO MATCHES` / `No coffees match.` / `Clear filters` |
+| `roaster.row.soldOut` | `components/RoasterCoffeeRow.tsx` | Doto line on a sold-out coffee; also spoken. | `SOLD OUT` |
+| `roaster.coffee.roast` | `app/roasterCoffee.tsx` | Doto roast level. | `${level} ROAST` |
+| `roaster.coffee.notes` | `library/roasterCatalogue.ts` (`noteChips`) | Tasting notes. Doto chips only for 2 to 8 parts of at most 20 characters split on commas or a spaced pipe, with no full stop or brackets; otherwise the roaster's own sentence in Inter. List rows show the same notes on one line. | (feed text) |
+| `roaster.coffee.tags` | `app/roasterCoffee.tsx` | The feed's `bean.tags`, quiet, under the flavour chips. | `${tag} · ${tag}` |
+| `from.roaster` | `components/FromSection.tsx` | FROM, for a recipe a link or catalogue named a roaster for (`roasterOf`). The xBloom account that shared it is not named. | `From ${roaster}` |
+| `pod.roaster.label` | `components/PodSection.tsx` | XPOD, small caption over xBloom's own recipe title on a recipe from a roaster (`roasterOf`). The title is drawn smaller and dimmer, and USE THIS NAME is not offered. | `xBloom profile name` |
+| `roaster.coffee.advice` | `library/roasterCatalogue.ts` (`roastAdvice`) | Roast timing; parts appear as stated. | `Rest ${n} days, peak day ${n}, best by day ${n}` |
+| `roaster.coffee.bags` | `app/roasterCoffee.tsx` | Bag sizes, when the feed lists no `variants`. | `Bags: 320 g · 160 g` |
+| `roaster.coffee.buy` | `components/CatalogueParts.tsx` (`BuySection`) | Doto heading over one row per bag; rows read `${size} · ${price}` (`library/roasterBuy.ts`, `formatPrice`: narrow currency symbol, `$28 AUD` when the runtime cannot format it). | `BUY` |
+| `roaster.coffee.buy.button` | `components/CatalogueParts.tsx` (`BuySection`) | Doto button on a bag with a buy link. a11y: `Buy ${row}. Opens in your browser.` | `BUY` |
+| `roaster.coffee.buy.soldOut` | `components/CatalogueParts.tsx` (`BuySection`) | Disabled Doto chip on a sold-out bag. a11y: `${row}, sold out`. | `SOLD OUT` |
+| `roaster.coffee.facts` | `library/roasterCatalogue.ts` (`beanFacts`) | Doto captions beside the bean facts, ABOUT's words and formats: `1,750 m`, `90 points`. | `ORIGIN` / `COUNTRY` / `REGION` / `FARM` / `FARMER` / `ELEVATION` / `PROCESS` / `FERMENT` / `VARIETAL` / `SCORE` |
+| `roaster.coffee.page` | `components/CatalogueParts.tsx` (`PageLinkRow`) | Bordered row with a chevron, as ABOUT's recipe page link. a11y: `View the roaster's page. Opens in your browser.` | `View the roaster's page` |
+| `roaster.coffee.loading` | `app/roasterCoffee.tsx` | While the recipe is fetched. | `Loading the recipe from xBloom.` |
+| `roaster.coffee.failed` | `app/roasterCoffee.tsx` | Fetch failed; beside TRY AGAIN. | `Couldn't load the recipe from xBloom.` |
+| `roaster.coffee.brew` | `app/roasterCoffee.tsx` | Doto primary action. | `BREW NOW` |
+| `roaster.coffee.shelf` | `app/roasterCoffee.tsx` | Doto action, the only other action beside BREW NOW: saves the recipe to the library, then puts it on the shelf picked. There is no separate ADD TO LIBRARY. | `ADD TO SHELF` |
+| `roaster.toast.shelved` | `app/roasterCoffee.tsx` | After choosing a shelf. | `Added to ${shelf}.` |
+| `roaster.shelfChoice.title` | `components/ShelfChoiceSheet.tsx` | Sheet title; rows are the user's shelves, then `NEW SHELF`. | `Add to shelf` |
+| `import.newer.title` | `components/NewerVersionPrompt.tsx` | Re-import of an edited recipe whose author changed it. | `The roaster has a newer version` |
+| `import.newer.body` | `components/NewerVersionPrompt.tsx` | Under the title. | `You have changed ${name}. Your name, notes and brews stay either way.` |
+| `import.newer.latest` | `components/NewerVersionPrompt.tsx` | Doto primary button. | `USE THE ROASTER'S LATEST` |
+| `import.newer.keep` | `components/NewerVersionPrompt.tsx` | Doto secondary button. | `KEEP MINE` |
+| `import.toast.updated` | `constants/copy.ts` (`UPDATED_TO_LATEST`) | Re-import refreshed an untouched copy, or the user took the latest. | `Already in your library. Updated to the latest version.` |
+| `roaster.settings.row` | `app/settings.tsx` | Library section row, shown only with a subscription or a "don't ask again" to undo. Opens the Roaster feeds list. Detail is `None. Roasters you said no to are listed here.`, `1 roaster.` or `${n} roasters.` | `Roaster feeds` |
+| `roaster.screen.title` | `app/subscriptions.tsx` | Screen header of the list, matching the Settings row. Subscribe and Unsubscribe stay the verbs elsewhere. | `Roaster feeds` |
+| `roaster.screen.empty` | `app/subscriptions.tsx` | Empty state, the roasters list's own words. | `Roasters appear here when you subscribe from a roaster's import link.` |
+| `roaster.screen.roasters` | `app/subscriptions.tsx` | Section over one row per subscription. Each row is the roaster's name with a chevron and opens its subscription. | `Your roasters` |
+| `roaster.screen.row` | `library/subscriptionStatus.ts` (`rowLine`) | Detail under a roaster's name on the list, one line. `Updating…` while a refresh runs. With no cached feed: `Loading coffees`, or `Couldn't update` after a failed attempt. | `${n} coffees · Updated 2 h ago` / `${n} coffees · Paused` / `${n} coffees · Couldn't update` / `${n} coffees · Not updated yet` |
+| `roaster.screen.refreshAll` | `app/subscriptions.tsx` | Row under the roasters, only while at least one is not paused. Detail `Checks every roaster for new and sold-out coffees.`, or `Checks every roaster that isn't paused.` while some are paused. | `Refresh all` |
+| `roaster.refreshAll.result` | `hooks/useRoasterSubscriptions.ts` (`refreshAllMessage`) | One toast after Refresh all. A single roaster reads as `roaster.refresh.result` and its errors. | `${n} roasters updated.` / `Couldn't update ${roaster}, ${roaster}.` / `Couldn't update your roasters. Check your connection.` |
+| `roaster.screen.optOuts` | `app/subscriptions.tsx` | Section over "Don't ask again" answers; each row's detail is `Ask again`. | `Asked not to` |
+| `roaster.subscription.title` | `app/subscription.tsx` | Screen header: the roaster's name, up to two lines. | `${roaster}` |
+| `roaster.subscription.missing` | `app/subscription.tsx` | The roaster is no longer subscribed. Header `Roaster feed`, Doto title, then body. | `NOT SUBSCRIBED` / `Roasters appear here when you subscribe from a roaster's import link.` |
+| `roaster.screen.count` | `library/subscriptionStatus.ts` (`countLine`) | First status line on a roaster's subscription. | `${n} coffees · ${m} sold out` |
+| `roaster.screen.updated` | `library/roasterCatalogue.ts` (`updatedAgo`) | Second status line: freshness. Units: just now, min, h, d. `Updating…` while a refresh runs. | `Updated ${n} h ago.` |
+| `roaster.screen.never` | `library/subscriptionStatus.ts` (`statusLine`) | Before the first update. | `Not updated yet.` |
+| `roaster.screen.paused` | `library/subscriptionStatus.ts` (`statusLine`) | While paused. | `Updates paused.` |
+| `roaster.screen.error.network` | `library/subscriptionStatus.ts` (`statusLine`) | Last update did not arrive. | `Couldn't update: no connection to the roaster.` |
+| `roaster.screen.error.unreadable` | `library/subscriptionStatus.ts` (`statusLine`) | Last update was not a feed. | `Couldn't update: the roaster's list could not be read.` |
+| `roaster.screen.browse` | `app/subscription.tsx` | Row. | `Browse coffees` |
+| `roaster.screen.site` | `app/subscription.tsx` | Row, only when the feed names the roaster's site; detail is the site without `https://`. | `Open ${roaster}'s site` |
+| `roaster.screen.refresh` | `app/subscription.tsx` | Row, with detail `Checks ${roaster} for new and sold-out coffees.` | `Refresh now` |
+| `roaster.screen.pause` | `app/subscription.tsx` | Row, with detail `The catalogue stays as it is until you resume.` | `Pause updates` |
+| `roaster.screen.resume` | `app/subscription.tsx` | Row while paused. | `Resume updates` |
+| `roaster.screen.unsubscribe` | `app/subscription.tsx` | Danger row, with detail `Recipes in your library stay.` After confirming, the Roaster feeds list shows. | `Unsubscribe` |
+| `roaster.unsubscribe.title` | `components/UnsubscribeSheet.tsx` | Confirm sheet title. | `Unsubscribe from ${roaster}?` |
+| `roaster.unsubscribe.body` | `components/UnsubscribeSheet.tsx` | Confirm sheet body. | `${roaster}'s coffees leave the catalogue. Recipes in your library stay.` |
+| `roaster.unsubscribe.confirm` | `components/UnsubscribeSheet.tsx` | Doto danger button. | `UNSUBSCRIBE` |
+| `roaster.unsubscribe.cancel` | `components/UnsubscribeSheet.tsx` | Doto secondary button. | `KEEP IT` |
+| `roaster.refresh.result` | `hooks/useRoasterSubscriptions.ts` (`refreshMessage`) | After Refresh. | `${roaster}: ${n} coffees.` |
+| `roaster.refresh.network` | `hooks/useRoasterSubscriptions.ts` | Refresh could not reach the feed. | `Couldn't reach ${roaster}. Check your connection.` |
+| `roaster.refresh.unreadable` | `hooks/useRoasterSubscriptions.ts` | Refresh got something that was not a feed. | `${roaster}'s list of coffees couldn't be read.` |
+| `roaster.unsubscribed` | `hooks/useRoasterSubscriptions.ts` | After unsubscribing. | `Unsubscribed from ${roaster}.` |
+| `roaster.alerts.dot` | `components/CatalogueParts.tsx` (`AlertDot`) | Small count on the ROASTERS entry and on each roaster's row: NEW coffees not yet shown in the list plus coffees back in stock. Hidden at zero; decorative to a reader, whose label gains `${n} new, ${m} back in stock` (`library/roasterAlerts.ts`, `alertSummary`). | `${n}` (`99+` above 99) |
+| `roaster.alerts.new` | `components/CatalogueParts.tsx` (`CoffeeBadgeTag`) | Doto tag above a coffee's name in the list and on its page, for one visit to the list after a sync brought it, or until opened. Spoken as `new`. | `NEW` |
+| `roaster.alerts.back` | `components/CatalogueParts.tsx` (`CoffeeBadgeTag`) | Doto tag on a watched coffee a sync found on sale, until opened or the watch is switched off. Spoken as `back in stock`. | `BACK IN STOCK` |
+| `roaster.alerts.watch` | `components/CatalogueParts.tsx` (`WatchToggle`) | Switch on a sold-out coffee's page, with a detail line. a11y: `Tell me when it's back`. | `Tell me when it's back` / `Shown here and in the list when the roaster has it again.` |
+| `roaster.alerts.watchBag` | `components/CatalogueParts.tsx` (`BagWatch`) | Beside SOLD OUT on a sold-out bag of a coffee that is on sale. a11y: `${row}, sold out. Tell me when it's back` (switch). | `TELL ME` / `WATCHING` |
+| `roaster.alerts.toast` | `library/roasterAlerts.ts` (`backInStockMessage`) | One toast per sync, per roaster, for watched coffees that came back. | `${coffee} is back at ${roaster}.` / `${n} coffees you asked about are back at ${roaster}.` |
+| `roaster.recipe.name` | `library/fitName.ts` (`fitName`) | A catalogue recipe's name, `${coffee} - ${size}`, fitted under the 100-character name ceiling: trailing bracketed groups go first, then whole words, with `…` before the size. | `${coffee}… - ${size}` |
+| `roaster.home.strip` | `components/RoasterStrip.tsx` | Home, under the three tiles, only with a subscription and `roaster.home.toggle` on. Doto heading, then (`library/roasterHome.ts`, `homeStrip`, following hessius's suggestion) every roaster when there are 1 to 3, pinned first, then those with something NEW or back, then by name; with 4 or more, only the pinned ones (3 at most, in pin order) and then `roaster.home.all`. Each row: roaster name with the pin mark when pinned, a detail line (`roaster.home.detail`), then Doto `PAUSED` (muted), `${b} BACK` (success) and `${k} NEW` (info) when they apply. a11y: `${roaster}, ${detail}, pinned, updates paused, ${k} new, ${b} back in stock`. | `YOUR ROASTERS` |
+| `roaster.home.detail` | `library/roasterHome.ts` (`stripDetail`) | The line under a strip row's name. No cached feed: loading or the last attempt failed (the row then opens the roaster's feed screen). Nothing on sale, or no coffees. Otherwise the count; a failing feed with a cache adds its age. | `Loading coffees` / `Couldn't update` / `No coffees on sale right now` / `${n} coffees` / `${n} coffees · Updated 3 d ago` |
+| `roaster.home.all` | `components/RoasterStrip.tsx` | One compact row after the pinned roasters when there are 4 or more, opening the roasters list. Doto `${k} NEW` and `${b} BACK` add up every roaster. a11y: `All roasters, ${n}, ${k} new, ${b} back in stock`. | `Roasters · ${n}` |
+| `roaster.home.pinMark` | `components/RoasterStrip.tsx` (`PinMark`), `app/subscriptions.tsx` | The favourite star, small and muted, after a pinned roaster's name on the strip and on the Roaster feeds list. Decorative; spoken as `pinned` on the strip and `pinned to the home screen` on the list. | (glyph) |
+| `roaster.home.toggle` | `app/subscriptions.tsx` | Switch at the top of Roaster feeds, only with a subscription. Off hides the strip and the empty library's button, never the search. | `Show roasters on the home screen` / `Under the tiles, and a button on an empty library. Search finds their coffees either way.` |
+| `roaster.home.pin` | `app/subscription.tsx` | Switch on a roaster's feed screen. Description from `pinDescription` (`library/roasterHome.ts`). | `Pin to the home screen` / `With 3 roasters or fewer, all of them show. Pinned ones come first.` / `With more than 3 roasters, only pinned ones show, up to 3.` / `Roasters are hidden from the home screen. Turn them on in Roaster feeds.` |
+| `roaster.home.search` | `app/index.tsx` | Section heading after the library's own results while searching, only when a subscribed roaster's cached coffees on sale match (paused roasters included, sold-out and not-yet-loaded ones left out). Rows show the coffee, the roaster and the roast level (`components/RoasterSearchRow.tsx`). a11y: `${coffee}, from ${roaster}, ${level} roast` (plus `sold out`). | `FROM YOUR ROASTERS` |
+| `roaster.home.empty` | `components/EmptyLibrary.tsx` | Primary button under NO RECIPES YET, only with a subscription whose cached feed lists at least one coffee, and `roaster.home.toggle` on. One roaster by name, several together (`library/roasterHome.ts`, `browseLabel`). | `BROWSE ${ROASTER}` / `BROWSE YOUR ROASTERS` |
+| `roaster.import.row` | `components/ImportSheet.tsx` | Import sheet row above BROWSE THE CATALOGUE, only with a subscription and while idle. Hidden, not a hint, without one: most roasters publish no feed yet, so a hint would promise something most people cannot do, and a row in that list without a chevron reads as broken. Doto label and caption; opens the roasters list. | `YOUR ROASTERS` / `Coffees from the roasters you subscribe to.` |
 
 ---
 
@@ -826,6 +988,92 @@ empty library with nothing to explain it.
 | `help.brewedWith.hint` | `constants/recipeHelp.ts` | Short note. | `What your brews of this recipe carried, and how they went.` |
 | `help.brewedWith.question` | `constants/recipeHelp.ts` | How the help sheet heads the long form. | `Where do the brewed with figures come from?` |
 | `help.brewedWith.detail` | `constants/recipeHelp.ts` | The long form. The only place the floor of three rated brews is stated, and the place that explains why a good looking row can be missing from the filter. | See `constants/recipeHelp.ts` |
+
+## Archived source-proposal bag copy
+
+The following bag, rest/peak and Ready tables record superseded contributor
+wording, not the running preview. The reviewed Package F experiment at the top
+of this document replaces it, including explicit shared bags, estimated
+freshness, optional external identity and no automatic external opening.
+
+`components/BagSection.tsx` on the ABOUT deck, `components/BagSheet.tsx`, and
+the badge on `components/RecipeCard.tsx` / `components/RecipeShelfTile.tsx`
+(words from `library/coffeeBag.ts`). Grams left are drawn only while XBRW++ is
+the bag tracker; with Beanconqueror tracking, the section says so and draws no
+estimate.
+
+| ID | Source | Context — when the user sees this | Current text |
+|----|--------|-----------------------------------|--------------|
+| `bag.title` | `components/BagSection.tsx` | Doto section title, under HOW IT HAS GONE. | `BAG` |
+| `bag.none.xbrw` | `components/BagSection.tsx` | No open bag, XBRW++ tracking. | `Add the bag you bought to count down what is left as you brew.` |
+| `bag.none.bq` | `components/BagSection.tsx` | No open bag, Beanconqueror tracking. | `Add the bag you bought and it goes to Beanconqueror, which counts it down as you send brews.` |
+| `bag.add` | `components/BagSection.tsx` | Doto button; spoken "I bought a bag". | `I BOUGHT A BAG` |
+| `bag.remaining` | `library/coffeeBag.ts` (`remainingLine`) | Grams left and whole brews of the recipe's dose. Singular at one; at nought says so. | `212 g left, about 11 brews.` / `30 g left, about 1 brew.` / `10 g left, not enough for another brew.` |
+| `bag.facts` | `components/BagSection.tsx` | Dim line under the reading. Roast part only when a roast day is stored. | `250 g bag. Roasted 2026-10-12.` |
+| `bag.low` | `components/BagSection.tsx` | Fewer than two doses left (but at least one). | `Running low.` |
+| `bag.empty` | `components/BagSection.tsx` | Less than one dose left. | `Not enough left for another brew. Finished with this bag?` |
+| `bag.elsewhere` | `components/BagSection.tsx` | Beanconqueror tracking, in place of the reading. | `Bag tracked in Beanconqueror.` |
+| `bag.reorder` | `components/BagSection.tsx` | Doto button, only with an https coffee or recipe link; XBRW++ mode only once low, Beanconqueror mode always. Spoken "Reorder this coffee", hint "Opens the roaster's page in your browser." | `REORDER` |
+| `bag.finish` | `components/BagSection.tsx` | Doto button when the bag is empty. Spoken "Mark this bag finished", hint "Stops counting this bag. Your brews stay in history." | `MARK FINISHED` |
+| `bag.edit` | `components/BagSection.tsx` | Doto button; spoken "Edit bag". | `EDIT BAG` |
+| `bag.badge` | `library/coffeeBag.ts` (`bagBadge`) | Doto badge in the card/tile corner. | `212G` / `LOW` |
+| `bag.badge.a11y` | `library/coffeeBag.ts` (`spokenBag`) | (a11y) Part of the card's label. | `212 grams of coffee left` / `bag running low, 30 grams left` |
+| `bag.sheet.title` | `components/BagSheet.tsx` | Sheet title, adding / editing. | `I bought a bag` / `Your bag` |
+| `bag.sheet.intro.xbrw` | `components/BagSheet.tsx` | Top line, XBRW++ tracking. | `Each brew of this recipe takes its dose from the bag.` |
+| `bag.sheet.intro.bq` | `components/BagSheet.tsx` | Top line, Beanconqueror tracking. | `The bag goes to Beanconqueror, which takes each brew you send it from the bag.` |
+| `bag.sheet.size` | `components/BagSheet.tsx` | Doto field label, preset chips `160G` `250G` `320G` `480G` `1000G` `OTHER`. Error under it. | `BAG SIZE` · `Enter a size in whole grams.` |
+| `bag.sheet.roasted` | `components/BagSheet.tsx` | Doto field label and the note under the date row. A new bag starts on today (or the pod's roast day); an edited bag shows its own day or none. | `ROASTED ON` · `Optional. The date on the bag.` |
+| `bag.sheet.roasted.value` | `components/RoastDayField.tsx` (words from `library/coffeeBag.ts` `roastDayLabel`) | The date row; tapping it opens the system calendar (Android dialog, iOS inline calendar). `Not set` when cleared. | `Today, 18 Oct` / `Yesterday, 17 Oct` / `Thu 16 Oct 2026` / `Not set` |
+| `bag.sheet.roasted.a11y` | `components/RoastDayField.tsx` | (a11y) Label and hint on the date row; months and weekdays spelled out. | `Roasted on, Thursday 16 October 2026` / `Roasted on, not set` · hint `Opens a calendar to pick the day.` |
+| `bag.sheet.roasted.clear` | `components/RoastDayField.tsx` | Doto button beside the row, only with a day set. Spoken "Clear the roast date". | `CLEAR` |
+| `bag.sheet.left` | `components/BagSheet.tsx` | Editing, XBRW++ only: manual correction. | `GRAMS LEFT` · `Correct this if you used some another way. Brews count down from here.` · `Enter what is left in whole grams.` |
+| `bag.sheet.beanName` | `components/BagSheet.tsx` | Beanconqueror only. Prefilled with the name the brew handoff sends; read-only for a pod. | `BEAN NAME` · `Brews you send from this recipe go to the bean with this name.` · `Give the bean a name.` |
+| `bag.sheet.price` | `components/BagSheet.tsx` | Beanconqueror only, optional. | `PRICE` · `Enter a price like 24.50.` |
+| `bag.sheet.save` | `components/BagSheet.tsx` | Primary button. SEND TO BEANCONQUEROR only for a new bag in Beanconqueror mode. | `SAVE` / `SEND TO BEANCONQUEROR` |
+| `bag.sheet.finish` / `bag.sheet.remove` | `components/BagSheet.tsx` | Editing an open bag. | `FINISHED` / `REMOVE` |
+| `bag.toast.bqFailed` | `app/editRecipe.tsx` (`saveBag`) | Error toast when the bag saved but Beanconqueror would not open. | `The bag is saved here, but Beanconqueror could not be opened. Make sure it is installed.` |
+
+### Rest and peak
+
+Words from `library/restPeak.ts`, drawn by `components/BagSection.tsx`,
+`components/BagSheet.tsx` and the card/tile badge corner. Shown in both tracker
+modes, because freshness comes from the roast day and not from a count. In-app
+only: there are no notifications (no notification dependency in the app).
+
+| ID | Source | Context — when the user sees this | Current text |
+|----|--------|-----------------------------------|--------------|
+| `bag.freshness.resting` | `library/restPeak.ts` (`freshnessLine`) | BAG section, before the rest ends. Day and short month, not the phone's locale. | `Resting, ready from 23 Oct.` |
+| `bag.freshness.ready` | `library/restPeak.ts` (`freshnessLine`) | Ready; the first form while the peak is still ahead. | `Ready to brew, peak around 29 Oct.` / `Ready to brew.` |
+| `bag.freshness.peak` | `library/restPeak.ts` (`freshnessLine`) | Within 3 days of the peak day. | `At its peak.` |
+| `bag.freshness.past` | `library/restPeak.ts` (`freshnessLine`) | After the best-until day. | `Past its best, still fine to brew.` |
+| `bag.freshness.badge` | `library/restPeak.ts` (`freshnessBadge`) | Doto badge beside the bag badge on cards and tiles. | `REST` / `READY` / `PEAK` / `PAST` |
+| `bag.freshness.a11y` | `library/restPeak.ts` (`spokenFreshness`) | (a11y) Part of the card's label. | `coffee resting` / `coffee ready to brew` / `coffee at its peak` / `coffee past its best` |
+| `bag.sheet.restPeak` | `components/BagSheet.tsx` | Doto label, shown while a roast day is set (a new bag starts on today). | `REST AND PEAK` |
+| `bag.sheet.restPeak.roaster` | `components/BagSheet.tsx` | In place of the fields when the coffee states a rest and a peak (BrewMind link or roaster catalogue). | `From the roaster: rest 14 days, peak on day 35.` |
+| `bag.sheet.restPeak.levels` | `components/BagSheet.tsx` | Roast chips that fill the two fields. Spoken "Nordic ultra-light", "Light", and so on. | `NORDIC` `LIGHT` `MEDIUM` `DARK` `DECAF` |
+| `bag.sheet.restPeak.fields` | `components/BagSheet.tsx` | Doto labels on the two number fields. | `REST DAYS` · `PEAK DAY` |
+| `bag.sheet.restPeak.note` | `components/BagSheet.tsx` | Note under the fields. | `Days after the roast date. Pick a roast to fill them in, or type your own.` |
+| `bag.sheet.restPeak.errors` | `library/restPeak.ts` (`figuresProblem`) | Replaces the note when the fields do not make sense. | `Enter whole days, 0 to 540.` / `The peak day is on or after the rest ends.` |
+
+### Ready to brew
+
+The card at the top of the home library, `components/ReadyToBrewCard.tsx`, with
+its words from `library/readyToBrew.ts`. Drawn only while a recipe has an open
+bag, and not on a day it was closed. The grams line and the running-low line
+are this app's bag mode only.
+
+| ID | Source | Context — when the user sees this | Current text |
+|----|--------|-----------------------------------|--------------|
+| `home.ready.title` | `components/ReadyToBrewCard.tsx` | Doto label at the top of the card. | `READY TO BREW` |
+| `home.ready.freshness` | `library/readyToBrew.ts` (`readyFreshnessLine`) | Under the coffee's name. Shorter than the BAG section's line, no full stop. Day and short month, not the phone's locale. | `At its peak` / `Ready, peak around 29 Oct` / `Ready` / `Past its best` / `Resting, ready from 23 Oct` |
+| `home.ready.bag` | `library/coffeeBag.ts` (`remainingLine`) via `readyBagLine` | Under the freshness line, this app's bag mode only. | `212 g left, about 11 brews` |
+| `home.ready.brew` | `components/ReadyToBrewCard.tsx` | Doto button beside the name, only with a machine remembered. Filled in the recipe's colour unless the bag is resting or nearly empty. | `BREW` |
+| `home.ready.brew.a11y` | `components/ReadyToBrewCard.tsx` | (a11y) The BREW button. | `Brew ${name}` |
+| `home.ready.open.a11y` | `components/ReadyToBrewCard.tsx` | (a11y) The name and photo area, which opens the recipe. Label is the parts on screen joined by commas; hint below. | `Ready to brew, ${name}, ${freshness}, ${bag line}` · hint `Opens the recipe.` |
+| `home.ready.low` | `library/readyToBrew.ts` (`runningLowLine`) | Under the card when an open bag has under two doses left. `${name}` is the pod's coffee name, or the recipe name. | `${name} is running low` |
+| `home.ready.reorder` | `components/ReadyToBrewCard.tsx` | After the running-low line, only when the coffee or recipe has an https link. | `Reorder` · hint `Opens the roaster's page in your browser.` |
+| `home.ready.more` | `library/readyToBrew.ts` (`moreReadyLine`) | When more than one coffee is at its peak or ready. Steps the card to the next one. | `+${count} more ready` · hint `Shows the next coffee that is ready.` |
+| `home.ready.dismiss.a11y` | `components/ReadyToBrewCard.tsx` | (a11y) The small close button. | `Hide until tomorrow` |
 
 ## Brew history
 
@@ -1200,6 +1448,12 @@ About. Neither has a duplicate shortcut in Settings.
 | `settings.coffeeMarker.desc` | `app/settings.tsx:248` | Toggle description. | `The TEA marker is always shown. COFFEE is redundant in a mostly-coffee library.` |
 | `settings.dotMatrix.label` | `app/settings.tsx:252` | Toggle label. | `Dot matrix pour profile` |
 | `settings.dotMatrix.desc` | `app/settings.tsx:253` | Toggle description. | `Fill the graph behind each recipe with a screen of dots instead of a flat tint.` |
+| `settings.cardPhotos.label` | `app/settings.tsx` | Toggle, default OFF. List/compact/selection cards and Ready to brew; coffee/pod photos only, omitted when crowded. | `Recipe card photos` |
+| `settings.cardPhotos.desc` | `app/settings.tsx` | Toggle description. | `Show coffee or pod photos on recipe cards and Ready to brew.` |
+| `settings.shelfPhotos.label` | `app/settings.tsx` | Toggle, default ON unless an absent choice inherits legacy OFF once. Mixed personal/tag covers; XBLOOM RECIPES, STARRED, XBLOOM PODS, MOST BREWED and RECENTLY ADDED only with four photographed actual members, including recipes sharing the same photo. Other automatic/author shelves retain glyphs. | `Shelf photo previews` |
+| `settings.shelfPhotos.desc` | `app/settings.tsx` | Toggle description. | `Show coffee photos in your own, tag and eligible automatic shelves.` |
+| `settings.aboutPictures.label` | `app/settings.tsx` | Existing `showRecipeAvatars`, now ABOUT-only. The header photo/viewing action and its copy were removed by the 2026-10-20 replacement design for #225/#235. | `Pictures in ABOUT` |
+| `settings.aboutPictures.desc` | `app/settings.tsx` | Toggle description. | `Show coffee, pod and author pictures in recipe details.` |
 | `settings.brewOnRows.label` | `app/settings.tsx:257` | Toggle label. | `Show BREW on recipe rows` |
 | `settings.brewOnRows.desc` | `app/settings.tsx:258` | Toggle description. | `Add a BREW shortcut to every recipe card. Turn it off if you brew rarely and prefer a quieter list.` |
 | `settings.brewShape.label` | `app/settings.tsx:264` | Choice label. | `BREW shortcut shape` |

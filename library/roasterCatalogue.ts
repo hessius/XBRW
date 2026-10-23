@@ -1,6 +1,7 @@
 import {
     feedKey, parseRoasterFeed, type FeedCoffee, type FeedRecipe, type RoasterFeed
 } from "@/library/roasterFeed";
+import {coffeeDetails, formatCuppingPoints, formatElevation} from "@/library/coffeeDetails";
 import type {Settings} from "@/library/Settings";
 
 /**
@@ -20,7 +21,10 @@ import type {Settings} from "@/library/Settings";
 type Entry = {body: string; fetchedAt: number};
 
 function readAll(settings: Settings): Record<string, Entry> {
-    const stored = settings.get("roasterCatalogue");
+    return readEntries(settings.get("roasterCatalogue"));
+}
+
+function readEntries(stored: string): Record<string, Entry> {
     if (stored.trim() === "") return {};
     try {
         const parsed: unknown = JSON.parse(stored);
@@ -43,9 +47,17 @@ export type CachedCatalogue = {feed: RoasterFeed; fetchedAt: number};
 
 /** The cached feed for a subscription, or null when there is none or it no longer reads. */
 export function readCatalogue(settings: Settings, feedUrl: string): CachedCatalogue | null {
+    return readCatalogueFrom(settings.get("roasterCatalogue"), feedUrl);
+}
+
+/**
+ * The same, from the setting's stored value: for a screen that already holds
+ * it through `useSetting` and redraws when it changes.
+ */
+export function readCatalogueFrom(stored: string, feedUrl: string): CachedCatalogue | null {
     const key = feedKey(feedUrl);
     if (key === null) return null;
-    const entry = readAll(settings)[key];
+    const entry = readEntries(stored)[key];
     if (entry === undefined) return null;
     const feed = parseRoasterFeed(entry.body);
     return feed === null ? null : {feed, fetchedAt: entry.fetchedAt};
@@ -67,9 +79,7 @@ export function dropCatalogue(settings: Settings, feedUrl: string): void {
     settings.set("roasterCatalogue", JSON.stringify(all));
 }
 
-/**
- * Separate namespaces keep opaque feed ids from being read as positions.
- */
+/** Separate namespaces keep opaque feed ids from being read as positions. */
 export function coffeeRef(feed: RoasterFeed, coffee: FeedCoffee): string {
     return coffee.id === undefined
         ? `index:${feed.coffees.indexOf(coffee)}`
@@ -150,51 +160,30 @@ export function updatedAgo(at: number, now: number): string {
 /** One label and value under a coffee, as ABOUT's XPOD block draws them. */
 export type BeanFact = {label: string; value: string};
 
-/**
- * Whole metres with thousands grouped: `1,750 m`.
- *
- * The same rule as the XPOD block on ABOUT, grouped by hand so the result does
- * not depend on the Intl data Hermes was built with.
- */
-export function formatElevation(metres: number): string {
-    const whole = String(Math.round(metres));
-    return `${whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",")} m`;
-}
-
-/** A cupping score as ABOUT writes it: `90 points`, `86.25 points`. */
+/** ABOUT's formatters, re-exported so this module's callers and tests keep their names. */
+export {formatElevation};
 export function formatScore(points: number): string {
-    return `${String(Number(points.toFixed(2)))} points`;
+    return `${formatCuppingPoints(points)} points`;
 }
 
+/** Fields the coffee screen draws elsewhere: the roaster is the screen's own, flavours are chips. */
+const DRAWN_ELSEWHERE = new Set(["roaster", "aromatics", "roast"]);
+
 /**
- * The bean facts a bag would print, in ABOUT's order and with ABOUT's words.
+ * The bean facts a bag would print, read from ABOUT's own rows.
  *
- * The same coffee can be opened here and, once added, on the recipe's ABOUT
- * deck, so the two must not disagree about what a field is called or how a
- * number is written. FARMER rather than producer, because elsewhere in this
- * app the producer is whoever made the recipe; VARIETAL because that is the
- * catalogue's word. The roaster and the flavours are left out: the screen is
- * the roaster's, and the flavours are drawn as chips above.
+ * `coffeeDetails` is what the XPOD block on ABOUT draws, so the same coffee
+ * cannot be called one thing here and another there once it is added: FARMER
+ * rather than producer, VARIETAL, `1,750 m`, `90 points`. The roaster, the
+ * flavours and the roast level are left out because this screen draws them
+ * itself.
  */
 export function beanFacts(coffee: FeedCoffee): BeanFact[] {
-    const bean = coffee.coffee;
-    const facts: [string, string | undefined][] = [
-        ["ORIGIN", bean.country === undefined ? bean.origin : undefined],
-        ["COUNTRY", bean.country],
-        ["REGION", bean.region],
-        ["FARM", bean.farm],
-        ["FARMER", bean.farmer],
-        ["ELEVATION", typeof bean.elevation === "number" && bean.elevation > 0
-            ? formatElevation(bean.elevation) : undefined],
-        ["PROCESS", bean.processing],
-        ["FERMENT", bean.fermentation],
-        ["VARIETAL", bean.variety],
-        ["SCORE", typeof bean.cupping_points === "number" && bean.cupping_points > 0
-            ? formatScore(bean.cupping_points) : undefined]
-    ];
-    return facts
-        .map(([label, value]) => ({label, value: value?.trim() ?? ""}))
-        .filter((fact) => fact.value !== "");
+    const details = coffeeDetails(coffee.coffee, {podName: coffee.name});
+    if (details === null) return [];
+    return details.groups.flat()
+        .filter((row) => !DRAWN_ELSEWHERE.has(row.field))
+        .map((row) => ({label: row.label, value: row.value}));
 }
 
 /** A name longer than this is drawn a step smaller in the detail header. */

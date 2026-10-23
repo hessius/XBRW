@@ -1592,3 +1592,37 @@ describe("the machine a pod is looked up for", () => {
         ));
     });
 });
+
+describe("a roaster colour on an import link", () => {
+    // Sky is the coffee accent nearest a mid blue; see `roasterColour.test.ts`.
+    const SKY = 0;
+
+    it("becomes the accent of a recipe that is new to the library", async () => {
+        const {onOpenRecipe, stored} = setup();
+        const {result} = await renderHook(() => useRecipeImport({stored, onOpenRecipe}));
+
+        await act(async () => {
+            result.current.resolveNow({kind: "xid", xid: "ETH120"}, "shared", {colour: "#1D5F96"});
+        });
+
+        await waitFor(() => expect(onOpenRecipe).toHaveBeenCalledTimes(1));
+        expect((onOpenRecipe.mock.calls[0][0] as Recipe).accentIndex).toBe(SKY);
+    });
+
+    it("leaves a held recipe's accent alone on re-import", async () => {
+        // The stored recipe wins de-duplication, so its accent is the one the
+        // user has been looking at, and a link must not move it.
+        const existing = importedRecipe();
+        existing.accentIndex = 3;
+        const {onOpenRecipe, stored} = setup([existing]);
+        const {result} = await renderHook(() => useRecipeImport({stored, onOpenRecipe}));
+
+        await act(async () => {
+            result.current.resolveNow({kind: "xid", xid: "ETH120"}, "shared", {colour: "#1D5F96"});
+        });
+
+        await waitFor(() => expect(onOpenRecipe).toHaveBeenCalledTimes(1));
+        expect(onOpenRecipe.mock.calls[0][0]).toBe(existing);
+        expect(existing.accentIndex).toBe(3);
+    });
+});

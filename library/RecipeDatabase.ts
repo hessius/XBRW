@@ -12,6 +12,7 @@ import {buildLibraryQuery, type FilterResolver, type LibraryQuery,
 import {columnDefinitions, indexStatements, INDEX_COLUMNS, type IndexValue,
         projectRecipe, schemaHash} from './recipeIndex';
 import {COVER_MEMBERS, hasMixedPhotoCover, hasStockPhotoCover} from './shelfCover';
+import {bagTablesExist, publishBagChanges} from './CoffeeBagDatabase';
 
 /**
  * Turn one stored row into a `Recipe`, or `null` if its blob cannot be read.
@@ -78,6 +79,13 @@ class RecipeDatabase {
         } finally {
             this.inTransaction = false;
         }
+        publishBagChanges();
+    }
+
+    private pruneBagLinks(): void {
+        if (!bagTablesExist(this.db)) return;
+        this.db.runSync("DELETE FROM coffee_bag_links WHERE recipeUuid NOT IN (SELECT uuid FROM recipes);");
+        this.db.runSync("DELETE FROM coffee_bag_selections WHERE recipeUuid NOT IN (SELECT uuid FROM recipes);");
     }
 
     /**
@@ -424,6 +432,7 @@ class RecipeDatabase {
         this.atomically(() => {
             this.db.runSync("DELETE FROM recipes WHERE uuid = ?;", [uuid]);
             this.db.runSync("DELETE FROM recipe_tags WHERE uuid = ?;", [uuid]);
+            this.pruneBagLinks();
         });
     }
 
@@ -438,6 +447,7 @@ class RecipeDatabase {
         this.atomically(() => {
             this.db.runSync("DELETE FROM recipes");
             this.db.runSync("DELETE FROM recipe_tags");
+            this.pruneBagLinks();
         });
     }
 
@@ -467,8 +477,10 @@ class RecipeDatabase {
      */
     public replaceAllRecipes(recipes: Recipe[]): void {
         this.atomically(() => {
-            this.deleteAllRecipes();
+            this.db.runSync("DELETE FROM recipes");
+            this.db.runSync("DELETE FROM recipe_tags");
             for (const recipe of recipes) this.insertRecipe(recipe);
+            this.pruneBagLinks();
         });
     }
 
@@ -607,6 +619,7 @@ class RecipeDatabase {
                 this.db.runSync("DELETE FROM recipes WHERE uuid = ?;", [uuid]);
                 this.db.runSync("DELETE FROM recipe_tags WHERE uuid = ?;", [uuid]);
             }
+            this.pruneBagLinks();
         });
         return doomed.length;
     }

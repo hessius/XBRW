@@ -17,7 +17,7 @@ export const BATCH_HANDOFF_OPEN_FAILED =
 export const BATCH_HANDOFF_TOO_LARGE =
     "That selection is too large to send to Beanconqueror at once.";
 export const BATCH_HANDOFF_EMPTY =
-    "No selected brews can be sent. Tea, unfinished and deleted brews are excluded.";
+    "No selected brews can be sent. Tea, unfinished and deleted brews, and bags without a confirmed Beanconqueror name, are excluded.";
 
 type BatchSource = {record: StoredBrew; samples: BrewSample[]};
 type SendableEnvelope = {id: string; envelope: HandoffEnvelope};
@@ -60,6 +60,7 @@ export function useBrewBatchHandoff(
     function build(id: string): HandoffEnvelope | null {
         const opened = load(id);
         if (opened === null || !canHandOff(opened.record)) return null;
+        if (opened.record.bag !== undefined && !opened.record.bag.beanName?.trim()) return null;
         const recipe = recipes().getRecipe(opened.record.recipeUuid);
         const backfill = recipe === null
             ? {record: opened.record, filled: []}

@@ -330,7 +330,41 @@ document's `single-source` marking on those two comes from.
 | 9008 | 0x2330 | Scale Out | — | Object removed from scale | `spec` |
 | 9009 | 0x2331 | Grinder Paused | — | | `spec` |
 | 9010 | 0x2332 | Brewer Paused | — | | `spec` |
-| 40505 | 0x9E39 | Gear Report | — | Gear position report during grind | `spec` |
+| 40505 | 0x9E39 | Gear Report | position | Changing positions also arrive before grinding starts; see startup timing below. | `field capture 2026-10-16, V12.0D.500` |
+
+#### Grinder positioning before brew start
+
+A tester reported a physically completed eight-stage BLE brew while XBRW++
+showed "The machine would not take the recipe" and no samples. Their diagnostic
+log shows this sequence (times on the copied log's clock):
+
+| Time | Observation |
+| --- | --- |
+| 14:39:36.093 | App sends commit 8002. |
+| 14:39:36.375 | Machine acknowledges 8002. |
+| 14:39:36.427 | Event 40502. |
+| 14:39:36.577 to 14:39:44.384 | Event 40505 positions change from 109 to 71. |
+| 14:39:36.825 | State 0x1E, awaiting confirmation. |
+| 14:39:45.172 | State 0x22, starting. |
+| 14:40:06.952 | Grinder-stop event 40507. |
+| 14:40:17.527 to 14:42:43.617 | All eight pour starts, indices 0 through 7. |
+| 14:43:13.497 / 14:43:52.602 | Brewer stop 40511 / enjoy 40512. |
+
+The starting state arrives more than eight seconds after the commit. The old
+eight-second timer therefore marked the app's run rejected while positioning
+was still progressing. That terminal phase disabled later event handling and
+ended recording even though the machine continued.
+
+While a committed run is still `sending`, a changed, present 40505 position
+now renews the same eight-second silence budget. It does not claim grinding
+has started. Repeated identical positions, missing values and unrelated
+telemetry do not renew it. Silence still fails, and failures/cancellation
+remain terminal. No brew payload, pacing or retry command changes.
+
+This is a startup-tracking correction replayed from field evidence, not a new
+physical qualification. The uploaded grind byte was 40; the current share
+response specifies 30, so this capture does not establish that BLE brewing at
+30 works. The NFC card's minimum of 40 remains unchanged.
 
 ---
 
@@ -652,6 +686,59 @@ The machine pushes the following data unprompted on FFE2:
 | Scale events | Event-driven | 9002 (In Scale), 9008 (Scale Out) | Object placed/removed |
 | Grinder events | Event-driven | 9003, 40507, 40505 | Grinder begin, stop, gear report |
 | Mode ACK | On command | 11511 notification | Status C2 confirms mode change |
+
+### Three-steep tea capture (2026-10-16)
+
+Sanitized, user-confirmed physical capture; firmware `V12.0D.500`. The
+machine model and app build/source were not established. The user confirmed a
+complete three-steep brew. The cup was replaced during the run, making cup
+weight and cup-derived rates invalid; the separate water stream remained
+valid. The capture used the ordinary tea upload/execute path; its captured
+4513 payload is retained as numeric bytes in the test fixture, not as a
+recipe, account, device identifier or raw personal log.
+
+Times below are UTC on 2026-10-16. Water values are cumulative millilitres
+from the independent water lane. State meanings are limited to what this
+sequence observed; they do not establish a model-wide or firmware-wide
+contract.
+
+| Captured notification/state | UTC time | Observation supported |
+| --- | --- | --- |
+| `40510`, value `0` | 20:24:03.067 | First cycle start |
+| `9012` | 20:24:29.407 | Fill boundary reported |
+| state `0x45` | 20:24:29.909 | Followed fill boundary; steep timer reference |
+| state `0x23` | 20:25:14.536 | Followed 44.627 s observed steep |
+| `40510`, value `1` | 20:25:47.508 | Next cycle start; prior combined ending window 32.972 s |
+| `9012`, then state `0x45` | 20:26:13.690 / 20:26:14.194 | Second fill boundary |
+| state `0x23` | 20:27:13.520 | Followed 59.326 s observed steep |
+| `40510`, value `2` | 20:27:45.026 | Final cycle start; prior combined ending window 31.506 s |
+| `9012`, then state `0x45` | 20:28:11.386 / 20:28:11.895 | Third fill boundary |
+| state `0x23` | 20:29:41.523 | Followed 89.628 s observed steep |
+| `40511` | 20:30:08.948 | Final combined ending window closed 27.425 s after `0x23` |
+| `40512` | 20:30:10.924 | Brew-end event followed `40511` |
+
+The 4513 payload bytes were
+`[24,90,92,2,0,211,0,120,35,90,92,0,0,0,32,0,35,90,80,0,0,226,32,0,35,254,255]`;
+command `4512` executed it. The stream contained 1,699 samples and ended at
+367.122 s / 390.6 ml. The observed cumulative fill-boundary plateaus were
+90, 222.625 and 349.825 ml; cycle-end readings were 132.9125, 260.4 and
+390.6 ml, implying measured fills of 90, 89.7125 and 89.425 ml. The `0x23`
+steep-end markers followed by the next-stage/final-stop
+markers delimit measured post-steep release-window water of 42.9125, 37.775
+and 40.775 ml. These are observations from this run, not a fixed 40 ml release
+command or fill target. The combined release/drain window does not resolve the
+physical division between release water and drain time.
+
+This complete replay establishes the three observed cycle markers for this
+capture. It does **not** establish why the earlier partial recording stopped:
+its cause remains unresolved. The replay does not change tea encoding,
+terminal-event handling, or the physical qualification gate.
+
+The established pause/resume sequence also matters to interpreting state
+`0x23`: a resume is acknowledged by event `40516` and returns to that state.
+The tea observer therefore treats the `0x23` following a resume acknowledgement
+as resumed brewing, not as the end of a steep. The new pause/resume observation
+path still needs physical-device qualification.
 
 **Key implication for XBRW++:** Live brew progress is fully available. The water and coffee weight streams at 10×/s are sufficient to show a real-time pour graph. The 40510 pour-index notification marks each pour boundary. The state machine (0x57 frames) provides structured lifecycle events. All of this is available without polling — the machine pushes it continuously.
 

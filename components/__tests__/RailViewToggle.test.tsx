@@ -3,7 +3,8 @@ import {fireEvent, screen} from "@testing-library/react-native";
 
 import {CHIP_HEIGHT} from "@/components/RailChip";
 import RailViewToggle from "@/components/RailViewToggle";
-import {palette} from "@/constants/colors";
+import {palette, resolveAppearance} from "@/constants/colors";
+import {DEFAULT_APPEARANCE} from "@/library/appearance";
 import {renderWithProviders} from "@/test-utils/render";
 
 const OPTIONS = [
@@ -53,7 +54,7 @@ describe("RailViewToggle", () => {
         await renderWithProviders(toggle({value: "shelves"}));
 
         expect(screen.getByTestId("rail-view-shelves"))
-            .toHaveStyle({backgroundColor: palette.text});
+            .toHaveStyle({backgroundColor: resolveAppearance(DEFAULT_APPEARANCE).selection.fill});
         expect(screen.getByTestId("rail-view-list"))
             .toHaveStyle({backgroundColor: palette.none});
     });

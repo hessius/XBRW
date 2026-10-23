@@ -233,6 +233,79 @@ async function renderEditor(overrides: Partial<Recipe> = {}) {
     return view;
 }
 
+describe("experimental bag controls", () => {
+    afterEach(() => {
+        jest.requireMock("@/library/RecipeDatabase").default.prototype.getRecipe.mockReset();
+        jest.restoreAllMocks();
+    });
+
+    async function withBag() {
+        const {default: RealRecipes} = jest.requireActual("@/library/RecipeDatabase");
+        const {default: Bags} = jest.requireActual("@/library/CoffeeBagDatabase");
+        const {bagFixture} = jest.requireActual("@/test-utils/bags");
+        const recipe = fixture();
+        new RealRecipes().insertRecipes([recipe]);
+        const bags = new Bags();
+        bags.create(bagFixture());
+        bags.select(recipe.uuid, "bag-a", 1);
+        jest.requireMock("@/library/RecipeDatabase").default.prototype.getRecipe.mockReturnValue(recipe);
+        mockSettings = {bagExperimentEnabled: true, machineDeviceId: "machine"};
+        await renderEditor(recipe);
+        return {recipe, bags};
+    }
+
+    it("does not open a bag store while the experiment is off", async () => {
+        const module = jest.requireActual("@/library/CoffeeBagDatabase");
+        const open = jest.spyOn(module, "sharedBagDatabase");
+        await renderEditor();
+        expect(open).not.toHaveBeenCalled();
+        expect(screen.queryByTestId("selected-bag-row")).toBeNull();
+    });
+
+    it("keeps the same selected bag above the single brew action across all decks", async () => {
+        await withBag();
+        for (const label of ["About this recipe", "Stages, 3", "Brew settings"]) {
+            await fireEvent.press(screen.getByLabelText(label));
+            expect(screen.getByTestId("selected-bag-row")).toBeTruthy();
+            expect(screen.getAllByLabelText("Brew")).toHaveLength(1);
+        }
+    });
+
+    it("isolates the bag chooser from the editor and quick-edit layer", async () => {
+        await withBag();
+        await fireEvent.press(screen.getByLabelText("Quick edit brew"));
+        await fireEvent.press(screen.getByTestId("selected-bag-row"));
+        await waitFor(() => expect(screen.getByText("No bag")).toBeTruthy());
+        expect(screen.getByTestId("editor-content", {includeHiddenElements: true})
+            .props.importantForAccessibility).toBe("no-hide-descendants");
+        expect(screen.queryByLabelText("Increase Quick edit dose")).toBeNull();
+        expect(screen.queryByLabelText("Brew")).toBeNull();
+    });
+
+    it("passes the selected physical bag to the existing brew navigation", async () => {
+        const {recipe} = await withBag();
+        await fireEvent.press(screen.getByLabelText("Brew"));
+        await waitFor(() => expect(mockPush).toHaveBeenCalled());
+        expect(mockPush).toHaveBeenLastCalledWith(expect.objectContaining({
+            pathname: "/brew",
+            params: expect.objectContaining({
+                recipeJSON: JSON.stringify(recipe), bagSelection: JSON.stringify("bag-a")
+            })
+        }));
+    });
+
+    it("measures the entire bag and action stack for scroll and quick-edit clearance", async () => {
+        await withBag();
+        await fireEvent(screen.getByTestId("editor-actions"), "layout",
+            {nativeEvent: {layout: {height: 248, width: 320, x: 0, y: 0}}});
+        expect(screen.getByTestId("editor-scroll").props.contentContainerStyle.paddingBottom)
+            .toBeGreaterThanOrEqual(248);
+        await fireEvent.press(screen.getByLabelText("Quick edit brew"));
+        expect(StyleSheet.flatten(screen.getByLabelText("Quick edit").props.style).bottom)
+            .toBe(248);
+    });
+});
+
 it("recolours the editor header and already-open help without losing its draft", async () => {
     mockRecipeJSON = JSON.stringify(Object.assign(fixture(), {name: "Kept draft", accentIndex: PINNED_ACCENT_INDEX}));
     const view = await renderWithProviders(
@@ -355,6 +428,7 @@ it.each([false, true])("keeps the editor header photo-free with ABOUT preference
     expect(screen.queryByTestId("hero-photo", {includeHiddenElements: true})).toBeNull();
     expect(screen.queryByTestId("photo-viewer")).toBeNull();
     expect(screen.queryByRole("imagebutton", {name: "Coffee photo"})).toBeNull();
+    expect(StyleSheet.flatten(screen.getByTestId("hero-name-row").props.style).marginRight).toBeUndefined();
 });
 
 /**
@@ -822,6 +896,77 @@ describe("the editor", () => {
         expect(action.props.accessibilityState.disabled).toBe(true);
         await fireEvent.press(action);
         expect(mockPush).not.toHaveBeenCalled();
+    });
+
+    describe("dose presets", () => {
+        function savedUpdates(): Recipe[] {
+            const RecipeDatabase = jest.requireMock("@/library/RecipeDatabase").default;
+            return RecipeDatabase.mock.instances.flatMap(
+                (instance: {updateRecipe: {mock: {calls: [string, Recipe][]}}}) =>
+                    instance.updateRecipe.mock.calls.map((call) => call[1])
+            );
+        }
+
+        afterEach(() => {
+            const RecipeDatabase = jest.requireMock("@/library/RecipeDatabase").default;
+            RecipeDatabase.prototype.getRecipe.mockReset();
+        });
+
+        it("brews the scaled recipe and leaves the saved one alone", async () => {
+            const RecipeDatabase = jest.requireMock("@/library/RecipeDatabase").default;
+            RecipeDatabase.prototype.getRecipe.mockReturnValue(fixture());
+            RecipeDatabase.mockClear();
+            await openTheQuickEditPanel();
+
+            await fireEvent.press(screen.getByLabelText("Brew at 15 grams"));
+            await fireEvent.press(screen.getByLabelText("Brew"));
+
+            const params = mockPush.mock.calls[0][0].params;
+            const brewed = JSON.parse(params.recipeJSON);
+            expect(JSON.parse(params.quickEditAdjustments)).toEqual({dose: 15});
+            expect(brewed.dosage).toBe(15);
+            expect(brewed.ratio).toBe(16);
+            expect(new Recipe(undefined, params.recipeJSON).getPourTotalVolume()).toBe(240);
+            expect(savedUpdates()).toEqual([]);
+        });
+
+        it("saves the dose straight away when nothing else is waiting for SAVE", async () => {
+            const RecipeDatabase = jest.requireMock("@/library/RecipeDatabase").default;
+            RecipeDatabase.prototype.getRecipe.mockReturnValue(fixture());
+            RecipeDatabase.mockClear();
+            await openTheQuickEditPanel();
+
+            await fireEvent.press(screen.getByLabelText("Brew at 15 grams"));
+            await fireEvent.press(screen.getByLabelText("Save the recipe at 15 grams"));
+
+            await waitFor(() => expect(savedUpdates()).toHaveLength(1));
+            const saved = savedUpdates()[0];
+            expect(saved.dosage).toBe(15);
+            expect(saved.getPourTotalVolume()).toBe(240);
+            expect(mockNotify).toHaveBeenCalledWith({tone: "success", message: "Saved at 15 g."});
+            // The panel stays open on the saved recipe, now at its new dose.
+            expect(screen.getByTestId("quick-edit-panel")).toBeTruthy();
+            expect(screen.getByLabelText("Brew at 15 grams, the recipe's dose")).toBeTruthy();
+            expect(screen.queryByTestId("quick-edit-save-dose")).toBeNull();
+            expect(mockGoBack).not.toHaveBeenCalled();
+        });
+
+        it("leaves the dose for SAVE when the recipe is not in the library yet", async () => {
+            const RecipeDatabase = jest.requireMock("@/library/RecipeDatabase").default;
+            RecipeDatabase.prototype.getRecipe.mockReturnValue(null);
+            RecipeDatabase.mockClear();
+            await openTheQuickEditPanel();
+
+            await fireEvent.press(screen.getByLabelText("Brew at 20 grams"));
+            await fireEvent.press(screen.getByLabelText("Save the recipe at 20 grams"));
+
+            await waitFor(() => expect(mockNotify).toHaveBeenCalledWith({
+                tone:    "info",
+                message: "Dose set to 20 g. Press SAVE to keep it."
+            }));
+            expect(savedUpdates()).toEqual([]);
+            expect(screen.getByLabelText("Brew at 20 grams, the recipe's dose")).toBeTruthy();
+        });
     });
 
     it("stops writing a recipe the machine would reject, but still saves it", async () => {

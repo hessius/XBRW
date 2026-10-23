@@ -58,9 +58,11 @@ describe("the React Compiler and the models this app mutates in place", () => {
         expect(slots).toEqual([]);
     });
 
-    it("does not cache mutable recipe derivations or children in components/PodSection.tsx", () => {
-        expect(slotsKeyedOnMutatedModels(compile("components/PodSection.tsx"))).toEqual([]);
-    });
+    it.each(["components/QuickEditPanel.tsx", "components/PodSection.tsx"])(
+        "does not cache mutable recipe derivations or children in %s", (file) => {
+            expect(slotsKeyedOnMutatedModels(compile(file))).toEqual([]);
+        }
+    );
 
     it("would have caught the stale editor, so it is not a tautology", () => {
         // The same file without its directive, to prove the check has teeth.

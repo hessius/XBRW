@@ -5,7 +5,6 @@ import {XStack} from "tamagui";
 
 import DotMatrixText from "@/components/DotMatrixText";
 
-
 export type Deck = "brew" | "stages" | "about";
 
 type Props = {

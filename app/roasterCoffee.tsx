@@ -86,11 +86,13 @@ function Action({label, spoken, testID, primary = false, disabled = false, onPre
                    accessibilityState={{disabled}} testID={testID}
                    onPress={disabled ? undefined : onPress}>
             <XStack height={48} alignItems="center" justifyContent="center" borderRadius="$4"
-                    opacity={disabled ? 0.35 : 1}
-                    backgroundColor={primary ? action.fill : palette.none}
+                    opacity={disabled && !primary ? 0.35 : 1}
+                    backgroundColor={!primary ? palette.none
+                        : disabled ? action.disabledFill : action.fill}
                     borderWidth={primary ? 0 : 1} borderColor={palette.line}>
                 <DotMatrixText fontSize={12} weight="bold" letterSpacing={1.6}
-                               color={primary ? action.ink : palette.text}>
+                               color={!primary ? palette.text
+                                   : disabled ? action.disabledInk : action.ink}>
                     {label}
                 </DotMatrixText>
             </XStack>
@@ -116,8 +118,7 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
     shelves?: () => string[];
 } = {}) {
     const appearance = useAppearance();
-    const {palette} = appearance;
-    const onAccent = appearance.onFill(palette.text);
+    const {palette, selection} = appearance;
     const {ratingNoteOpen} = useLiveBrew();
     const params = useLocalSearchParams<{feed: string; coffee: string}>();
     const feed = feedUrl ?? params.feed ?? "";
@@ -407,10 +408,10 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
                                                        onPress={() => setSize(entry.size)}>
                                                 <XStack height={36} paddingHorizontal="$3"
                                                         alignItems="center" borderRadius="$4"
-                                                        backgroundColor={on ? palette.text : palette.raised}>
+                                                        backgroundColor={on ? selection.fill : palette.raised}>
                                                     <DotMatrixText fontSize={12} weight="bold"
                                                                    letterSpacing={1.4}
-                                                                   color={on ? onAccent.text : palette.dim}>
+                                                                   color={on ? selection.ink : palette.dim}>
                                                         {entry.size.toUpperCase()}
                                                     </DotMatrixText>
                                                 </XStack>
@@ -453,7 +454,7 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
                                                          activeIndex={null} barHeight={LADDER_BAR_HEIGHT}
                                                          rungGap={LADDER_RUNG_GAP} scrolls={false}
                                                          fill={false} stageWater={[]} stalls={[]}
-                                                         pauseElapsed={0}/>
+                                                         pauseElapsed={0} plan/>
                                     )}
                                 </YStack>
                             )}

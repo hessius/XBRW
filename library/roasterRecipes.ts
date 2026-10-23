@@ -8,7 +8,9 @@ import {tagFilterId} from "@/library/libraryFilters";
 import Recipe from "@/library/Recipe";
 import {chooseRecipe} from "@/library/roasterCatalogue";
 import type {FeedCoffee} from "@/library/roasterFeed";
+import {reviveRoastAdvice} from "@/library/roastAdvice";
 import type {Settings} from "@/library/Settings";
+import {withRoastAdvice} from "@/library/restPeak";
 
 /**
  * Putting a roaster catalogue coffee into the library.
@@ -72,12 +74,15 @@ export async function fetchCoffeeRecipe(
     // them on its coffee, where ABOUT reads them.
     const roaster = coffee.coffee.roaster?.trim()
         || recipe.coffee?.roaster?.trim() || feedRoaster?.trim();
-    const bean = {...coffee.coffee, ...(roaster ? {roaster} : {})};
+    const roast = coffee.coffee.roast?.trim() || coffee.roast?.level?.trim();
+    const bean = {...coffee.coffee, ...reviveRoastAdvice(coffee.roast ?? {}),
+        ...(roast ? {roast} : {}), ...(roaster ? {roaster} : {})};
     const withFlavours = coffee.flavours.length > 0
         ? {...bean, flavours: coffee.flavours}
         : bean;
     decorateImport(recipe, {
-        coffee: withFlavours, source: "import", tags: coffee.tags, colour: coffee.colour
+        coffee: withRoastAdvice(withFlavours, coffee.roast ?? {}),
+        source: "import", tags: coffee.tags, colour: coffee.colour
     });
     recipe.name = recipeName(coffee, chosen.size);
     return {recipe, size: chosen.size};

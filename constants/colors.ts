@@ -286,6 +286,40 @@ export const switchColours = {
 export type SwitchGround = keyof typeof switchColours;
 
 /**
+ * The primary action, and the "selected with no recipe accent" fill.
+ *
+ * Every big filled button that is not running a recipe (SAVE NAME, CREATE
+ * SHELF, WRITE TO MACHINE, TRY AGAIN) and every selected segment, view toggle
+ * and rail chip that has no recipe accent to borrow takes its fill from here.
+ * Until this existed each of them said `palette.text` on its own, so the white
+ * could only be changed one call site at a time.
+ *
+ * `fill` is `brand`, the magenta of the `++`. That bends the rule on `brand`,
+ * which says the colour marks the app being itself and never a state; a
+ * selected segment in magenta is a state. It is a proposal, and it is one line
+ * to take back: set `fill` to `palette.text` and every site returns to white.
+ * The ink does not move either way, because `onAccent.text` reads on both:
+ * 5.18:1 on `brand`, 18.1:1 on white. `brand` rather than `brandFill`: the
+ * deeper fill wants white ink, which would have to change with it on a revert,
+ * and it is only 3.9:1 against `base` where `brand` is 5.56:1.
+ *
+ * Where a recipe accent is on screen it still wins. The editor's segments and
+ * deck switch pass the accent, and BREW is the accent's job, not this one.
+ *
+ * Disabled is grey, not a faded magenta. A faded magenta over a dark sheet
+ * still reads as the colour of the thing to press. `control` with `muted` ink
+ * is the quiet grey of a control that cannot be used yet; it is exempt from
+ * the contrast floor and is deliberately well under it.
+ */
+export const primary = {
+    fill:         palette.brand,
+    /** Labels and glyphs on `fill`. */
+    ink:          onAccent.text,
+    disabledFill: palette.control,
+    disabledInk:  palette.muted
+} as const;
+
+/**
  * Recipe accents, split by beverage. Colour is a redundant signal — a Doto
  * `TEA` / `COFFEE` marker carries the same information — because colour alone is
  * not an accessible signal.
@@ -474,7 +508,7 @@ export type Appearance = Readonly<{
     choice: AppearanceChoice;
     scheme: "light" | "dark";
     palette: Palette;
-    primary: ControlPair;
+    primary: ControlPair & Readonly<{disabledFill: string; disabledInk: string}>;
     selection: ControlPair;
     onBrand: {readonly text: string; readonly marker: string};
     chromeSwitch: SwitchPair;
@@ -655,7 +689,11 @@ export function resolveAppearance(supplied: AppearanceChoice): Appearance {
     const p = {...chrome[choice.theme]};
     const grounds = [p.base, p.surface, p.raised];
     const [primaryFill, primaryInk] = primaryColours[choice.theme];
-    const primary = controlPair(primaryFill, primaryInk);
+    const primary = {
+        ...controlPair(primaryFill, primaryInk),
+        disabledFill: p.control,
+        disabledInk: p.muted
+    };
     const selection = choice.theme === "light"
         ? controlPair("#202020", WHITE) : controlPair(WHITE, onAccent.text);
 

@@ -93,6 +93,9 @@ their names and meanings, so nothing already emitted changes shape.
 | `decaffeinated` | `bean.decaffeinated` | boolean, from `1`/`0` | BrewMind |
 | `url` | `bean.url` | string, https only | BrewMind |
 | `imageUrl` | `bean.image` | string, https only | pod + BrewMind |
+| `restDays` | `bean.rest_days` | whole days 0 to 540 (added with rest and peak, 2026-10-18) | BrewMind, roaster catalogue |
+| `peakDay` | `bean.peak_day` | whole days 0 to 540 | BrewMind, roaster catalogue |
+| `bestUntilDay` | `bean.best_until_day` | whole days 0 to 540 | BrewMind, roaster catalogue |
 
 Two entries need explaining because the names do not line up.
 
@@ -107,6 +110,24 @@ simply leaves the new ones empty", read in the other direction.
 in the shipped envelope and in
 `docs/superpowers/specs/2026-09-20-beanconqueror-brew-export-design.md`, so
 renaming it would break the half of the contract that already works.
+
+### Amendment: `bean.colour` (2026-10-19)
+
+A link may carry `bean.colour=#RRGGBB` (`bean.color` is accepted too, and
+`bean.colour` wins when both are sent): the roaster's own colour for the
+coffee, such as the colour it uses for an origin on its bags and its site.
+It is optional and read strictly. Anything other than `#` and six hex digits
+(shorthand, alpha, a name, no `#`) is dropped and the recipe imports as before.
+
+It is **not** in the bean block. The bean block is the Beanconqueror contract
+and is stored whole, and the colour is used once, on import, to choose the
+recipe's card accent. `library/roasterColour.ts` snaps it to the nearest
+palette accent **by hue**, never keeping the hex: accents are stored as palette
+indices, every accent is a pale fill proven to carry the card's dark ink, and a
+roaster's label colour is mid to dark, so `matchAccent`'s distance test would
+refuse every one. A grey, or a hue more than 30 degrees from every accent in the
+recipe's half of the palette, gives no answer and the recipe takes an accent as
+any new recipe does. A recipe already in the library keeps its accent.
 
 ### `recipe.url`, the producer's own page
 
@@ -250,6 +271,15 @@ would buy nothing.
 
 `share` goes through `parseImportInput`, unchanged, so the recipe half needs no
 new code and the deep link cannot drift from the paste field.
+
+### Amendment: `feed` (2026-10-18)
+
+A link may also carry `feed=<https URL>`, the address of a roaster feed: one
+JSON file listing every coffee that roaster has a recipe for. It is optional,
+https only and capped at 2,000 characters like every other URL here; a bad
+value is dropped and the recipe imports as before. Nothing is fetched until the
+link's own recipe has imported. The format, the catalogue subscription it offers and how
+often an app may poll it are in `docs/roaster-feed.md`.
 
 ### Where it attaches
 

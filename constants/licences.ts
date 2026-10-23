@@ -273,6 +273,7 @@ export const LICENCES: readonly Licence[] = [
     {name: "@radix-ui/react-use-effect-event", version: "0.0.5", licence: "MIT", copyright: "Copyright (c) 2022 WorkOS", text: "mit-695394"},
     {name: "@radix-ui/react-use-is-hydrated", version: "0.1.3", licence: "MIT", copyright: "Copyright (c) 2022 WorkOS", text: "mit-695394"},
     {name: "@radix-ui/react-use-layout-effect", version: "1.1.4", licence: "MIT", copyright: "Copyright (c) 2022 WorkOS", text: "mit-695394"},
+    {name: "@react-native-community/datetimepicker", version: "9.1.0", licence: "MIT", copyright: "Copyright (c) 2019 React Native Community", text: "mit-695394"},
     {name: "@react-native-masked-view/masked-view", version: "0.3.2", licence: "MIT", copyright: "Copyright (c) 2015-present, Facebook, Inc.", text: "mit-695394"},
     {name: "@react-native/assets-registry", version: "0.86.3", licence: "MIT"},
     {name: "@react-native/babel-plugin-codegen", version: "0.86.3", licence: "MIT"},

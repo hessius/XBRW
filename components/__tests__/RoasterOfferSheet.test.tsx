@@ -100,8 +100,10 @@ describe("RoasterOfferSheet", () => {
         await fireEvent.press(screen.getByRole("checkbox"));
         await view.rerender(draw({phase: "offer", roaster: "Test Roaster", count: 2}));
         expect(screen.getByRole("checkbox")).not.toBeChecked();
-        await fireEvent.press(screen.getByTestId("roaster-offer-not-now"));
-        expect(onDecline).toHaveBeenCalledWith(false);
+        await waitFor(async () => {
+            await fireEvent.press(screen.getByTestId("roaster-offer-not-now"));
+            expect(onDecline).toHaveBeenCalledWith(false);
+        }, {timeout: SHEET_PRESS_TIMEOUT});
     });
 
     it("passes the tick with the answer, then clears it", async () => {

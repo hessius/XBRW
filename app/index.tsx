@@ -1,4 +1,12 @@
 import {useAppearance} from "@/hooks/useAppearance";
+import {useBagManager, type BagManager} from "@/hooks/useBagManager";
+import {BagChoice, BagManagementSheets} from "@/components/BagManagement";
+import {balanceLine, resolveBagTracker, roastDayLabel} from "@/library/coffeeBag";
+import {bagRunParam} from "@/library/bagRun";
+import {httpsUrl} from "@/library/podCoffee";
+import {freshnessLine} from "@/library/restPeak";
+import {useBagSuggestions} from "@/hooks/useBagSuggestions";
+import ReadyToBrewCard from "@/components/ReadyToBrewCard";
 import React, {useEffect, useRef, useState} from "react";
 import {BackHandler, Platform, Share} from "react-native";
 // gesture-handler's FlatList, not React Native's: it keeps the list scroll
@@ -94,6 +102,7 @@ import {canWriteToCard} from "@/library/cardLimits";
 import {
     applyQuickEdit,
     quickEditProblems,
+    withoutDose,
     type QuickEditAdjustments
 } from "@/library/quickEdit";
 import {asTemperatureUnit, type TemperatureUnit} from "@/library/units";
@@ -184,8 +193,7 @@ function EmptyQuery({
     onClear: () => void;
 }) {
     const appearance = useAppearance();
-    const {palette} = appearance;
-    const onAccent = appearance.onFill(palette.text);
+    const {palette, primary} = appearance;
     const term = search.trim();
     const filterCopy = filters.length > 0 ? filters.join(", ") : "";
 
@@ -213,8 +221,8 @@ function EmptyQuery({
                 )}
             </YStack>
             <Button accessibilityLabel="Clear search and filters"
-                    backgroundColor={palette.text}
-                    color={onAccent.text}
+                    backgroundColor={primary.fill}
+                    color={primary.ink}
                     borderRadius="$4"
                     onPress={onClear}>
                 CLEAR SEARCH AND FILTERS
@@ -253,13 +261,17 @@ function HomeQuickEditSheet({
     onOpenChange,
     onChange,
     onBrew,
-    temperatureUnit
+    onSaveDose,
+    temperatureUnit,
+    bagManager
 }: {
     state: HomeQuickEditState | null;
     onOpenChange: (open: boolean) => void;
     onChange: (adjustments: QuickEditAdjustments) => void;
     onBrew: () => void;
+    onSaveDose: (dose: number) => void;
     temperatureUnit: TemperatureUnit;
+    bagManager: BagManager;
 }) {
     const appearance = useAppearance();
     const {palette} = appearance;
@@ -270,14 +282,17 @@ function HomeQuickEditSheet({
 
     return (
         <XbrwSheet open={recipe !== null} onOpenChange={onOpenChange}
-                   title="QUICK EDIT" heightPercent={72}>
+                   title="QUICK EDIT" heightPercent={84} covered={bagManager.covered}>
             {recipe !== null && (
+                <YStack flex={1} gap="$2">
+                <BagChoice manager={bagManager}/>
                 <QuickEditPanel
                     recipe={recipe}
                     adjustments={adjustments}
                     accent={accent}
                     temperatureUnit={temperatureUnit}
                     onChange={onChange}
+                    onSaveDose={onSaveDose}
                     renderBrewAction={(brewability) => (
                         <Button
                             testID="home-quick-edit-brew"
@@ -293,6 +308,7 @@ function HomeQuickEditSheet({
                             BREW THIS
                         </Button>
                     )}/>
+                </YStack>
             )}
         </XbrwSheet>
     );
@@ -331,6 +347,13 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
     const [showCoffeeMarker] = useSetting("showCoffeeMarker", settings);
     const [dottedProfile] = useSetting("dotMatrixProfile", settings);
     const [showRecipeCardPhotos] = useSetting("showRecipeCardPhotos", settings);
+    const [bagExperimentEnabled] = useSetting("bagExperimentEnabled", settings);
+    const [bagTracker] = useSetting("bagTracker", settings);
+    const [beanconquerorHandoff] = useSetting("beanconquerorHandoff", settings);
+    const [readyDismissedOn, setReadyDismissedOn] = useSetting("readyToBrewDismissedOn", settings);
+    const bagSuggestions = useBagSuggestions(bagExperimentEnabled,
+        resolveBagTracker(bagTracker, beanconquerorHandoff), library.revision);
+    const ready = bagSuggestions.entry;
     const [showShelfPhotoPreviews] = useSetting("showShelfPhotoPreviews", settings);
     const [invertAutoShelves] = useSetting("invertAutoShelves", settings);
     const [hiddenShelves, setHiddenShelves] = useSetting("hiddenShelves", settings);
@@ -380,6 +403,8 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
     // every tile and every row, rather than one sheet per recipe.
     const [overflowRecipe, setOverflowRecipe] = useState<Recipe | null>(null);
     const [quickEdit, setQuickEdit] = useState<HomeQuickEditState | null>(null);
+    const bagManager = useBagManager(quickEdit?.recipe ?? null, bagExperimentEnabled,
+        resolveBagTracker(bagTracker, beanconquerorHandoff));
 
     // Advance the displayed age while the popover is open.
     //
@@ -1275,7 +1300,18 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
         }
     }
 
-    function openBrew(recipe: Recipe, adjustments?: QuickEditAdjustments): boolean {
+    function saveQuickEditDose(dose: number): void {
+        if (quickEdit === null) return;
+        const saved = library.saveAtDose(quickEdit.recipe, dose);
+        if (saved === null) {
+            notify({tone: "error", message: "Could not save the recipe."});
+            return;
+        }
+        setQuickEdit({recipe: saved, adjustments: withoutDose(quickEdit.adjustments)});
+        notify({tone: "success", message: `Saved at ${dose} g.`});
+    }
+
+    function openBrew(recipe: Recipe, adjustments?: QuickEditAdjustments, bagId?: string): boolean {
         // There is one machine, and `LiveBrewProvider.start` refuses a second
         // run while the first is still going. Without this the tap would push
         // a brew screen that quietly showed the *other* recipe brewing, which
@@ -1301,7 +1337,8 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
             };
         router.push({
             pathname: "/brew",
-            params
+            params: {...params, ...(bagExperimentEnabled && bagId !== undefined
+                ? {bagSelection: bagRunParam(bagId)} : bagManager.paramsFor(recipe))}
         });
         return true;
     }
@@ -1345,7 +1382,8 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
         || namingShelf || renamingShelf !== null || shelfActions !== null
         || deletingShelf !== null || beanFilterOpen
         || removingShelf !== null || overflowRecipe !== null || quickEdit !== null
-        || ratingNoteOpen || machinePicker.open || roasterOffer.state.phase === "offer";
+        || ratingNoteOpen || machinePicker.open || roasterOffer.state.phase === "offer"
+        || bagManager.covered;
 
     // The sheet's own row, reachable without the long press that opens it. A
     // reader cannot make that gesture, so every verb the sheet offers is also an
@@ -1537,6 +1575,40 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                         }/>
                 )}
 
+                {bagSuggestions.reading.status === "error" && (
+                    <Text accessibilityRole="alert" color={palette.warn} paddingHorizontal="$4">
+                        {bagSuggestions.reading.message}
+                    </Text>
+                )}
+                {!picker.active && !inShelfRoom && !editing && ready !== null
+                    && bagSuggestions.today !== null && readyDismissedOn !== bagSuggestions.today && (
+                    <ReadyToBrewCard item={ready} name={ready.recipe.displayName()}
+                        accent={resolveAccent(ready.recipe)}
+                        imageUri={showRecipeCardPhotos ? ready.recipe.imageURL : undefined}
+                        freshnessLine={bagSuggestions.problem
+                            ?? (ready.freshness ? freshnessLine(ready.freshness) : undefined)}
+                        bagLine={[ready.bag.name,
+                            ready.bag.roastedOn
+                                ? `Roasted ${roastDayLabel(ready.bag.roastedOn, bagSuggestions.today)}`
+                                : "Roast date not set",
+                            balanceLine(ready.balance)].join(", ")}
+                        emphasised={ready.balance.kind === "estimate"
+                            && ready.balance.remainingGrams >= ready.recipe.dosage}
+                        onOpen={entry => openRecipe(entry.recipe)}
+                        onBrew={remembered !== ""
+                            ? entry => openBrew(entry.recipe, undefined, entry.bag.id) : undefined}
+                        low={ready.balance.kind === "estimate" && ready.balance.low
+                            ? {line: `${ready.bag.name} is running low`,
+                                reorderUrl: httpsUrl(ready.recipe.coffee?.url)
+                                    ?? httpsUrl(ready.recipe.recipeUrl) ?? undefined} : undefined}
+                        onReorder={bagManager.reorder}
+                        moreLine={bagSuggestions.count > 1 ? `+${bagSuggestions.count - 1} more bags` : undefined}
+                        onMore={bagSuggestions.next}
+                        onDismiss={() => {
+                            if (bagSuggestions.today !== null) setReadyDismissedOn(bagSuggestions.today);
+                        }}/>
+                )}
+
                 {wholeLibraryEmpty ? (
                     <EmptyLibrary/>
                 ) : inShelfRoom && !picker.active ? (
@@ -1554,6 +1626,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                         onScroll={onScroll}
                         actionsFor={roomActionsFor}
                         evidence={library.evidence}
+                        bagBadges={bagSuggestions.badges}
                         showCoffeeMarker={showCoffeeMarker}
                         dottedProfile={dottedProfile}
                         showPicture={showRecipeCardPhotos}
@@ -1634,6 +1707,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                                 dottedProfile={dottedProfile}
                                 showPicture={showRecipeCardPhotos}
                                 evidence={library.evidence[item.recipe.uuid]}
+                                bagBadge={bagSuggestions.badges[item.recipe.uuid]}
                                 slotMarker={slotMarkers(slotRecord, item.recipe)}
                                 onEasyMode={remembered !== ""
                                     ? () => openEasyModeRecipe(item.recipe, remembered) : undefined}
@@ -1848,13 +1922,17 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                 }}/>
 
             <HomeQuickEditSheet
+                bagManager={bagManager}
                 state={quickEdit}
                 onOpenChange={(next) => {
                     if (!next) setQuickEdit(null);
                 }}
                 onChange={onQuickEditChange}
                 onBrew={brewQuickEdit}
+                onSaveDose={saveQuickEditDose}
                 temperatureUnit={temperatureUnit}/>
+
+            <BagManagementSheets manager={bagManager} recipe={quickEdit?.recipe ?? null}/>
 
             <MachinePickerSheet open={machinePicker.open}
                                 onOpenChange={machinePicker.setOpen}

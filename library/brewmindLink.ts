@@ -44,6 +44,9 @@ export const SHORT_TEXT = 120;
 /** A URL's cap, shared by the coffee's link, its image, and `recipe.url`. */
 export const MAX_URL = 2000;
 const CAPS: Readonly<Record<string, number>> = {
+    restDays: 4,
+    peakDay: 4,
+    bestUntilDay: 4,
     name: SHORT_TEXT,
     roaster: SHORT_TEXT,
     roastingDate: SHORT_TEXT,
@@ -85,6 +88,9 @@ const CAPS: Readonly<Record<string, number>> = {
  * exactly like the current one.
  */
 const PARAM_ALIASES: Readonly<Record<string, string>> = {
+    rest_days: "restDays",
+    peak_day: "peakDay",
+    best_until_day: "bestUntilDay",
     image: "imageUrl",
     ...LEGACY_NAMES
 };

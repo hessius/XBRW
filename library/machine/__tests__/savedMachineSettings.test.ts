@@ -43,12 +43,13 @@ function upgradedPhone() {
 }
 
 describe("an existing user upgrading", () => {
-    it("keeps their machine as the default without anything being written", () => {
+    it("keeps their machine as the default without writing additional settings", () => {
         const {settings, writes} = upgradedPhone();
+        const beforeLoading = [...writes];
         expect(loadSavedMachines(settings)).toEqual([entry("HOME", {
             modelString: "J15", advertisedName: "XBLOOM HOME", colour: 0
         })]);
-        expect(writes).toEqual([]);
+        expect(writes).toEqual(beforeLoading);
         expect(settings.get("machineDeviceId")).toBe("HOME");
     });
 

@@ -210,7 +210,7 @@ export const OUTBOUND_CALLS: OutboundCall[] = [
     {
         id:      "images",
         title:   "Load a photo",
-        trigger: "You open the hub, a roaster's catalogue, an import preview, or a saved recipe that carries a pod photo or the avatar of whoever shared it. Recipe card photos, Shelf photo previews and Pictures in ABOUT control their respective placements.",
+        trigger: "You open the hub, a roaster's catalogue, an import preview, or a saved recipe that carries a pod photo or the avatar of whoever shared it. Recipe card photos includes Ready to brew. Recipe card photos, Shelf photo previews and Pictures in ABOUT control their respective placements.",
         host:    "whichever host xBloom or the roaster named",
         hostPinned: false,
         owner:   "xBloom, the roaster, or whoever they point at",
@@ -228,7 +228,6 @@ export const OUTBOUND_CALLS: OutboundCall[] = [
             "components/FromSection.tsx",
             "components/HubRow.tsx",
             "components/ImportResult.tsx",
-            "app/hubRecipe.tsx",
             "components/CatalogueParts.tsx",
             "components/RoasterCoffeeRow.tsx"
         ]
@@ -250,6 +249,11 @@ export type SilentCapability = {
  * place and with the same directness.
  */
 export const SILENT_CAPABILITIES: SilentCapability[] = [
+    {
+        id: "beanconqueror",
+        title: "Send to Beanconqueror",
+        detail: "Only when you ask, a link opens Beanconqueror on this device with a brew or an add-bean form. The bean link starts with beanconqueror://ADD_USER_BEAN and carries the confirmed name, bag size, dates, price and any known coffee details. It sends nothing to a server. Saving a bag never opens another app, and opening the form does not prove the bag was added."
+    },
     {
         id:     "cards",
         title:  "Reading and writing cards",

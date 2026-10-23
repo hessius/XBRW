@@ -61,6 +61,8 @@ type Props = {
     accentDone?: boolean;
     /** Why the brew is paused, when it is and this is the active rung. */
     pauseKind?: PauseKind;
+    /** A recipe to read, not a brew to come: see `BrewStageLadder`'s `plan`. */
+    plan?: boolean;
     testID?: string;
 };
 
@@ -252,7 +254,7 @@ function widestReadout(pour: Pour, pauseKind?: PauseKind): string {
  */
 export default function BrewStageRung({
     pour, index, state, accent, laneSeconds, barHeight, delivered, pauseElapsed,
-    stalls, selected = false, onPress, accentDone = false, pauseKind, testID
+    stalls, selected = false, onPress, accentDone = false, pauseKind, plan = false, testID
 }: Props) {
     const appearance = useAppearance();
     const {palette} = appearance;
@@ -301,19 +303,20 @@ export default function BrewStageRung({
             marginHorizontal="$-2"
             borderRadius="$3"
             backgroundColor={selected ? palette.raised : palette.none}
+            style={{opacity: 1}}
         >
             <DotMatrixText fontSize={12} weight="bold" letterSpacing={1.4}
-                           color={state === "active" ? displayAccent : palette.dim}>
+                           color={state === "active" || plan ? displayAccent : palette.dim}>
                 {String(index + 1).padStart(2, "0")}
             </DotMatrixText>
 
             <PourGlyph
                 kind={glyphForPattern(pour.pourPattern)}
-                accent={state === "active" ? displayAccent : palette.dim}
+                accent={state === "active" || plan ? displayAccent : palette.dim}
                 size={14}
             />
 
-            <DotMatrixText fontSize={12} weight="bold" color={palette.dim}>
+            <DotMatrixText fontSize={12} weight="bold" color={plan ? palette.text : palette.dim}>
                 {`${Math.max(pour.temperature, 0)}°`}
             </DotMatrixText>
 
@@ -397,7 +400,8 @@ export default function BrewStageRung({
                     position: "absolute", top: 0, bottom: 0, right: 0,
                     justifyContent: "center"
                 }}>
-                    <DotMatrixText fontSize={12} weight="bold" color={palette.dim}>
+                    <DotMatrixText fontSize={12} weight="bold"
+                                   color={plan ? palette.text : palette.dim}>
                         {marker ? RUNG_PAUSE_MARKER[marker]
                             : state === "pending"
                             ? `${Math.max(pour.volume, 0)} ml`

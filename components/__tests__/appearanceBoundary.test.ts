@@ -3,7 +3,7 @@ import path from "node:path";
 import ts from "typescript";
 
 const root = path.resolve(__dirname, "../..");
-const banned = new Set(["palette", "onAccent", "switchColours", "onBrand"]);
+const banned = new Set(["palette", "onAccent", "switchColours", "onBrand", "primary"]);
 
 function sources(directory: string): string[] {
     return readdirSync(directory, {withFileTypes: true}).flatMap(entry => {

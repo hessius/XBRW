@@ -301,3 +301,59 @@ describe("fillImportBlanks", () => {
         expect(held.imageURL).toBeUndefined();
     });
 });
+
+describe("decorateImport with a roaster colour", () => {
+    it("sets the accent nearest the roaster's colour on a recipe without one", () => {
+        // Sky, the coffee accent nearest a mid blue.
+        expect(decorateImport(recipe(), {colour: "#1D5F96"}).accentIndex).toBe(0);
+    });
+
+    it("never moves an accent the recipe already holds", () => {
+        const held = recipe();
+        held.accentIndex = 5;
+
+        expect(decorateImport(held, {colour: "#1D5F96"}).accentIndex).toBe(5);
+    });
+
+    it("leaves the accent unset when the colour has no fair answer", () => {
+        expect(decorateImport(recipe(), {colour: "#333333"}).accentIndex).toBeUndefined();
+        expect(decorateImport(recipe(), {colour: "navy"}).accentIndex).toBeUndefined();
+    });
+
+    it("never stores the colour itself", () => {
+        const decorated = decorateImport(recipe(), {
+            colour: "#1D5F96",
+            coffee: {name: "Finca La Esperanza"}
+        });
+
+        expect(JSON.stringify(decorated)).not.toContain("1D5F96");
+    });
+});
+
+describe("decorateImport with a roaster colour", () => {
+    it("sets the accent nearest the roaster's colour on a recipe without one", () => {
+        // Sky, the coffee accent nearest a mid blue.
+        expect(decorateImport(recipe(), {colour: "#1D5F96"}).accentIndex).toBe(0);
+    });
+
+    it("never moves an accent the recipe already holds", () => {
+        const held = recipe();
+        held.accentIndex = 5;
+
+        expect(decorateImport(held, {colour: "#1D5F96"}).accentIndex).toBe(5);
+    });
+
+    it("leaves the accent unset when the colour has no fair answer", () => {
+        expect(decorateImport(recipe(), {colour: "#333333"}).accentIndex).toBeUndefined();
+        expect(decorateImport(recipe(), {colour: "navy"}).accentIndex).toBeUndefined();
+    });
+
+    it("never stores the colour itself", () => {
+        const decorated = decorateImport(recipe(), {
+            colour: "#1D5F96",
+            coffee: {name: "Finca La Esperanza"}
+        });
+
+        expect(JSON.stringify(decorated)).not.toContain("1D5F96");
+    });
+});

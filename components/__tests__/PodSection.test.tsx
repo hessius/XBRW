@@ -32,21 +32,17 @@ function linked(over: Partial<Recipe> = {}): Recipe {
 }
 
 describe("PodSection", () => {
-    it("shows the pod name after a lookup mutates the same recipe", async () => {
-        // The lookup writes the pod name onto the recipe the section already
-        // holds, so a memoised child keyed on that reference would keep
-        // drawing the unlinked state.
-        const recipe = linked({xbloomName: ""});
+    it("drops the duplicate coffee name after a lookup mutates the same recipe", async () => {
+        const recipe = linked({xbloomName: "", coffee: {name: "Ethiopia Guji"}});
         const properties = props({recipe});
         const {rerender} = await renderWithProviders(<PodSection {...properties}/>);
-        expect(screen.getByTestId("pod-none")).toBeTruthy();
-        expect(screen.queryByTestId("pod-linked")).toBeNull();
+        expect(screen.getByTestId("coffee-name")).toHaveTextContent("Ethiopia Guji");
 
         recipe.xbloomName = "Ethiopia Guji";
         await rerender(<PodSection {...properties}/>);
 
-        expect(screen.queryByTestId("pod-none")).toBeNull();
-        expect(screen.getByTestId("pod-linked")).toBeTruthy();
+        expect(screen.getByTestId("pod-name")).toHaveTextContent("Ethiopia Guji");
+        expect(screen.queryByTestId("coffee-name")).toBeNull();
         expect(screen.getAllByText("Ethiopia Guji")).toHaveLength(1);
     });
 
@@ -118,6 +114,32 @@ describe("PodSection", () => {
 
         expect(screen.getByTestId("pod-use-name")).toBeTruthy();
         expect(screen.queryByTestId("pod-following")).toBeNull();
+    });
+
+    it("labels a roaster's xBloom profile name and offers no button for it", async () => {
+        // The link named the coffee; xBloom's name is the roaster's own label
+        // for the profile, so swapping to it is not something to offer.
+        const recipe = linked({
+            name: "Ecuador | Vinka Farm", xbloomName: "ecu vinka sidra ana washed 18g",
+            sharedBy: "rhys", source: "import"
+        });
+        recipe.coffee = {name: "Ecuador | Vinka Farm", roaster: "Central Coast Coffee"};
+        await renderWithProviders(<PodSection {...props({recipe})}/>);
+
+        expect(screen.getByTestId("pod-profile-label")).toHaveTextContent("xBloom profile name");
+        expect(screen.getByTestId("pod-name")).toHaveTextContent("ecu vinka sidra ana washed 18g");
+        expect(screen.getByTestId("pod-name")).toHaveStyle({color: palette.dim});
+        expect(screen.queryByTestId("pod-use-name")).toBeNull();
+    });
+
+    it("keeps the button for a link recipe whose coffee names no roaster", async () => {
+        // Same source, no roaster: upstream's way back to xBloom's name stays.
+        const recipe = linked({name: "Sunday", source: "import"});
+        recipe.coffee = {name: "Peru"};
+        await renderWithProviders(<PodSection {...props({recipe})}/>);
+
+        expect(screen.getByTestId("pod-use-name")).toBeTruthy();
+        expect(screen.queryByTestId("pod-profile-label")).toBeNull();
     });
 
     it("follows the pod by clearing the name, never by copying it", async () => {

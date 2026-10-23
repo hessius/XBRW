@@ -6,6 +6,12 @@ import {SHARE_API_URL} from "@/constants/share";
 
 const ROOT = path.join(__dirname, "..", "..");
 
+it("discloses the explicit add-bean transport and does not describe opening it as creation", () => {
+    const capability = SILENT_CAPABILITIES.find(row => row.id === "beanconqueror");
+    expect(capability?.detail).toContain("beanconqueror://ADD_USER_BEAN");
+    expect(capability?.detail).toContain("opening the form does not prove the bag was added");
+});
+
 /**
  * What the walk does not enter.
  *
@@ -141,7 +147,6 @@ function callSites(): Map<string, number> {
 const EXPECTED_CALLS: Record<string, number> = {
     "api/_lib/store.ts":           2,
     "api/_lib/xbloom.ts":          1,
-    "app/hubRecipe.tsx":           1,
     // The WebView's `source={{uri}}`. One site, but unlike every other line
     // here it opens a page rather than making a request, so the count bounds
     // where the browser starts and says nothing about where it then goes. The

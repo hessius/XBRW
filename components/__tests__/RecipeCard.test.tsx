@@ -15,6 +15,17 @@ import {DOTO_MAX_FONT_SCALE} from "@/components/DotMatrixText";
 import {renderWithProviders} from "@/test-utils/render";
 import {measureCardPicture, pictureLayout} from "@/test-utils/pictureLayout";
 
+it("puts the selected bag badge in existing metadata and its spoken description in the card label", async () => {
+    const recipe = new Recipe();
+    recipe.name = "Selected";
+    const view = await renderWithProviders(<RecipeCard recipe={recipe} onPress={jest.fn()}
+        bagBadge={{label: "PEAK", spoken: "Bag October, estimated peak window"}}/>);
+    expect(within(screen.getByTestId("recipe-card-metadata")).getByText("PEAK")).toBeTruthy();
+    expect(screen.getByRole("button", {name: /Bag October, estimated peak window/})).toBeTruthy();
+    await view.rerender(<RecipeCard recipe={recipe} onPress={jest.fn()}/>);
+    expect(screen.queryByText("PEAK")).toBeNull();
+});
+
 it("recolours canonical Sky without changing the recipe identity or payload", async () => {
     const recipe = new Recipe();
     recipe.name = "Appearance fixture";

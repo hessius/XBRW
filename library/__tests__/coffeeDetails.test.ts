@@ -62,6 +62,28 @@ describe("formatRoastingDate", () => {
 });
 
 describe("coffeeDetails", () => {
+    it("leads FLAVOUR with the short flavours and puts the notes under them", () => {
+        const notes = "Papaya, Raspberry, Citrus (2024 Harvest)";
+        const flavour = coffeeDetails({name: "Vinka", aromatics: notes,
+                                       flavours: ["Papaya", "Raspberry", "Citrus"]}, nothingShown)!
+            .groups.flat().find((row) => row.field === "aromatics");
+        expect(flavour).toMatchObject({value: "Papaya, Raspberry, Citrus", detail: notes});
+    });
+
+    it("keeps FLAVOUR as the notes without flavours, and does not repeat the same list", () => {
+        const plain = coffeeDetails({name: "Vinka", aromatics: "Jasmine, peach"}, nothingShown)!
+            .groups.flat().find((row) => row.field === "aromatics");
+        expect(plain).toEqual({field: "aromatics", label: "FLAVOUR", spokenLabel: "Flavour",
+                               value: "Jasmine, peach"});
+        const same = coffeeDetails({name: "Vinka", aromatics: "jasmine,  Peach",
+                                    flavours: ["Jasmine", "Peach"]}, nothingShown)!
+            .groups.flat().find((row) => row.field === "aromatics");
+        expect(same?.detail).toBeUndefined();
+        const onlyFlavours = coffeeDetails({name: "Vinka", flavours: ["Jasmine"]}, nothingShown)!
+            .groups.flat().find((row) => row.field === "aromatics");
+        expect(onlyFlavours?.value).toBe("Jasmine");
+    });
+
     it("is null without a coffee", () => {
         expect(coffeeDetails(undefined, nothingShown)).toBeNull();
     });

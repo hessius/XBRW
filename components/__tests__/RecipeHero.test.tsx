@@ -4,8 +4,8 @@ import {Dimensions, StyleSheet} from "react-native";
 import {fireEvent, screen} from "@testing-library/react-native";
 
 import RecipeHero, {
-    estimateLines, HERO_NAME_LONG, HERO_NAME_MAX_LINES, HERO_PROFILE_RESERVE,
-    heroFoldAway, heroNameLayout, PROFILE_BAND_HEIGHT, wrapLines
+    estimateLines, HERO_NAME_LONG, HERO_NAME_MAX_LINES,
+    HERO_PROFILE_RESERVE, heroFoldAway, heroNameLayout, PROFILE_BAND_HEIGHT, wrapLines
 } from "@/components/RecipeHero";
 import {COLLAPSE_SHRINK} from "@/hooks/useCollapsibleHeader";
 import {onAccent, resolveAppearance} from "@/constants/colors";
@@ -77,15 +77,13 @@ describe("RecipeHero", () => {
     });
 
     it.each([257, 258, 259, 260])("finishes long-name layout at the %i pt column boundary", width => {
-        for (const photo of [false, true]) {
             // Bound the original synchronous loop so a regression cannot hang Jest.
-            const layout = runInNewContext("layout(name, width, 1, {photo})", {
-                layout: heroNameLayout, name: LONG_NAME, width, photo
+            const layout = runInNewContext("layout(name, width, 1)", {
+                layout: heroNameLayout, name: LONG_NAME, width
             }, {timeout: 100});
             expect(layout.tight).toBe(true);
             expect(layout.maxWidth).toBeGreaterThan(0);
             expect(layout.reserve).toBeGreaterThanOrEqual(0);
-        }
     });
 
     it("makes the name a rename button, with a pencil beside it", async () => {
@@ -508,4 +506,17 @@ describe("RecipeHero", () => {
 
         expect(style.paddingTop).toBeGreaterThanOrEqual(TEST_INSETS.top);
     });
+});
+
+
+it("keeps the header photo-free in both collapse states and retains rename", async () => {
+    const onRename = jest.fn();
+    const view = await renderWithProviders(<RecipeHero {...BASE} onRename={onRename}/>);
+    expect(screen.queryByTestId("hero-photo", {includeHiddenElements: true})).toBeNull();
+    expect(screen.queryByRole("imagebutton")).toBeNull();
+    expect(StyleSheet.flatten(screen.getByTestId("hero-name-row").props.style).marginRight).toBeUndefined();
+    await fireEvent.press(screen.getByTestId("hero-rename"));
+    expect(onRename).toHaveBeenCalledTimes(1);
+    await view.rerender(<RecipeHero {...BASE} collapsed onRename={onRename}/>);
+    expect(screen.queryByTestId("hero-photo", {includeHiddenElements: true})).toBeNull();
 });

@@ -2,6 +2,7 @@ import React from "react";
 import {fireEvent, screen} from "@testing-library/react-native";
 
 import HubSaveBar from "@/components/HubSaveBar";
+import {primary} from "@/constants/colors";
 import {renderWithProviders} from "@/test-utils/render";
 
 function bar({
@@ -53,7 +54,8 @@ describe("HubSaveBar", () => {
         const save = screen.getByTestId("hub-save-confirm");
         expect(save.props.accessibilityState)
             .toEqual({disabled: true});
-        expect(save).toHaveStyle({opacity: 0.35});
+        // Grey, not a faded brand fill: disabled must not read as the thing to press.
+        expect(save).toHaveStyle({backgroundColor: primary.disabledFill});
     });
 
     it("does not fire save when nothing is selected", async () => {

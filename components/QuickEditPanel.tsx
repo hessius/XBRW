@@ -3,11 +3,14 @@ import {useWindowDimensions} from "react-native";
 import {Button, Text, XStack, YStack} from "tamagui";
 
 import DotMatrixText from "@/components/DotMatrixText";
+import RailChip from "@/components/RailChip";
 import Stepper from "@/components/Stepper";
 import {useAppearance} from "@/hooks/useAppearance";
 import {
+    canSaveDose,
     describeAdjustment,
     describeGrind,
+    dosePresets,
     describeKnobBaseline,
     describeTemperatureBaseline,
     effectiveGrind,
@@ -37,6 +40,12 @@ export type QuickEditPanelProps = {
     temperatureUnit: TemperatureUnit;
     onChange: (adjustments: QuickEditAdjustments) => void;
     renderBrewAction?: (brewability: QuickEditPanelBrewability) => React.ReactNode;
+    /**
+     * Makes the adjusted dose the recipe's own. Absent, the panel offers no
+     * save: quick edit stays a one-brew change wherever a host has not said
+     * how a save is written.
+     */
+    onSaveDose?: (dose: number) => void;
 };
 
 type AdjustmentKey = keyof QuickEditAdjustments;
@@ -124,9 +133,44 @@ function baselineDetail(
     );
 }
 
+/**
+ * One-tap doses under the stepper.
+ *
+ * The chips and the stepper are the same knob: a chip sets the dose the
+ * stepper shows, and whichever chip matches the current dose is lit. The
+ * recipe's own dose is always among them, which is the way back.
+ */
+function DosePresets({presets, dose, savedDose, accent, onPick}: {
+    presets: number[];
+    dose: number;
+    savedDose: number;
+    accent: string;
+    onPick: (dose: number) => void;
+}) {
+    if (presets.length < 2) return null;
+    return (
+        <XStack testID="quick-edit-dose-presets" flexWrap="wrap" gap="$2" paddingBottom="$2">
+            {presets.map((value) => (
+                <RailChip key={value}
+                          testID={`quick-edit-dose-preset-${value}`}
+                          active={value === dose}
+                          accent={accent}
+                          label={`${value} G`}
+                          accessibilityLabel={value === savedDose
+                              ? `Brew at ${value} grams, the recipe's dose`
+                              : `Brew at ${value} grams`}
+                          onPress={() => onPick(value)}/>
+            ))}
+        </XStack>
+    );
+}
+
 export default function QuickEditPanel({
-    recipe, adjustments, accent, temperatureUnit, onChange, renderBrewAction
+    recipe, adjustments, accent, temperatureUnit, onChange, renderBrewAction, onSaveDose
 }: QuickEditPanelProps) {
+    "use no memo";
+
+    // SAVE AS mutates this recipe in place; its reference cannot key derived values.
     const appearance = useAppearance();
     const {palette} = appearance;
     const {fontScale} = useWindowDimensions();
@@ -142,6 +186,10 @@ export default function QuickEditPanel({
     const temperatureBaseline = describeTemperatureBaseline(recipe, fontScale, temperatureUnit);
     const offsetValues = displayOffsetValues(bounds.tempOffset, temperatureUnit);
     const explainer = describeAdjustment(recipe, adjustments);
+    const presets = dosePresets(recipe);
+    const saveDose = onSaveDose !== undefined && canSaveDose(recipe, adjustments)
+        ? adjustments.dose
+        : undefined;
     const problems = quickEditProblems(recipe, adjustments, temperatureUnit);
     const brewability: QuickEditPanelBrewability = {
         brewable: problems.length === 0,
@@ -183,6 +231,12 @@ export default function QuickEditPanel({
                                  adjustments, "dose", value, savedDose
                              ))}/>
                 </QuickEditRow>
+
+                <DosePresets presets={presets} dose={dose} savedDose={savedDose}
+                             accent={accent}
+                             onPick={(value) => onChange(updateAdjustment(
+                                 adjustments, "dose", value, savedDose
+                             ))}/>
 
                 {bounds.ratio !== null && (
                     <QuickEditRow label="RATIO" fontScale={fontScale}
@@ -242,6 +296,16 @@ export default function QuickEditPanel({
                       color={palette.dim}>
                     {explainer}
                 </Text>
+            )}
+
+            {saveDose !== undefined && (
+                <Button testID="quick-edit-save-dose" size="$3" chromeless
+                        alignSelf="flex-start" accessibilityRole="button"
+                        accessibilityLabel={`Save the recipe at ${saveDose} grams`}
+                        color={appearance.recipe(accent).ink}
+                        onPress={() => onSaveDose?.(saveDose)}>
+                    {`SAVE AS ${saveDose} G`}
+                </Button>
             )}
 
             {problems.length > 0 && (

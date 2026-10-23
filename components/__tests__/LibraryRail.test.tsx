@@ -3,7 +3,8 @@ import {fireEvent, screen, within} from "@testing-library/react-native";
 
 import LibraryRail, {type RailFilter} from "@/components/LibraryRail";
 import {CHIP_HEIGHT} from "@/components/RailChip";
-import {palette} from "@/constants/colors";
+import {resolveAppearance} from "@/constants/colors";
+import {DEFAULT_APPEARANCE} from "@/library/appearance";
 import {chipLabel} from "@/library/librarySort";
 import {renderWithProviders} from "@/test-utils/render";
 
@@ -142,7 +143,7 @@ describe("LibraryRail", () => {
         await renderWithProviders(<LibraryRail {...railProps()}/>);
         const active = screen.getByTestId("rail-filter-singlePour").props.style as Record<string, unknown>;
         const inactive = screen.getByTestId("rail-filter-tea").props.style as Record<string, unknown>;
-        expect(active.backgroundColor).toBe(palette.text);
+        expect(active.backgroundColor).toBe(resolveAppearance(DEFAULT_APPEARANCE).selection.fill);
         expect(inactive.backgroundColor).toBe("transparent");
     });
 
@@ -152,7 +153,7 @@ describe("LibraryRail", () => {
         );
         expect(screen.getByText(chipLabel("added"))).toBeTruthy();
         const style = screen.getByTestId("rail-sort").props.style as Record<string, unknown>;
-        expect(style.backgroundColor).toBe(palette.text);
+        expect(style.backgroundColor).toBe(resolveAppearance(DEFAULT_APPEARANCE).selection.fill);
     });
 
     it("keeps the sort chip a bare glyph at the default sort", async () => {
@@ -272,7 +273,7 @@ describe("LibraryRail", () => {
             const toggle = screen.getByTestId("rail-filter-toggle");
             expect(screen.getByText("2")).toBeTruthy();
             expect((toggle.props.style as Record<string, unknown>).backgroundColor)
-                .toBe(palette.text);
+                .toBe(resolveAppearance(DEFAULT_APPEARANCE).selection.fill);
         });
 
         it("shows a zero count and no fill when nothing is applied", async () => {

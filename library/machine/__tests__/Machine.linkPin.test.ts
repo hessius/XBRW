@@ -46,3 +46,35 @@ it("still brews when nothing changed during the pre-flight", async () => {
 
     expect(transport.sent.filter((code) => !connectOnly.has(code)).length).toBeGreaterThan(0);
 });
+
+it.each([
+    {method: "brew", action: "cancel"},
+    {method: "brew", action: "replace"},
+    {method: "switchToProAndRetry", action: "cancel"},
+    {method: "switchToProAndRetry", action: "replace"}
+] as const)("keeps $method owned across target verification and $action", async ({method, action}) => {
+    const transport = new FakeTransport();
+    const machine = new Machine(transport, {frameGapMs: 0});
+    await machine.connect("WORK");
+    let release: () => void = () => { throw new Error("Verification has not started"); };
+    const held = new Promise<void>(resolve => { release = resolve; });
+    let entered: () => void = () => { throw new Error("Verification was not observed"); };
+    const checking = new Promise<void>(resolve => { entered = resolve; });
+    const brewing = machine[method](coffee(), async () => {
+        entered();
+        await held;
+    }).catch((error: unknown) => error);
+    await checking;
+
+    if (action === "cancel") await machine.cancelBrew();
+    else await machine.connect("HOME");
+    const phase = machine.phase;
+    transport.written = [];
+    release();
+    const outcome = await brewing;
+
+    expect(transport.sent).toEqual([]);
+    expect(machine.phase).toEqual(phase);
+    if (action === "cancel") expect(outcome).toBeUndefined();
+    else expect(outcome).toBeInstanceOf(Error);
+});
