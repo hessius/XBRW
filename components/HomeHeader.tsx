@@ -7,7 +7,8 @@ import DotIcon from "@/components/DotIcon";
 import HomeTitle from "@/components/HomeTitle";
 import MachineDot from "@/components/MachineDot";
 import {TITLE_FONT_SIZE, TITLE_FONT_SIZE_COMPACT} from "@/components/ScreenTitle";
-import {palette, type MachineColour} from "@/constants/colors";
+import type {MachineColour} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 import type {DotIconName} from "@/constants/dotIcons";
 import {DURATION, EASING, useReducedMotion} from "@/constants/motion";
 import type {LinkStatus} from "@/hooks/useMachine";
@@ -42,6 +43,7 @@ type ActionProps = {
 };
 
 function Action({icon, label, onPress, active = false, disabled = false}: ActionProps) {
+    const {palette} = useAppearance();
     return (
         <XStack
             testID="home-header-action"
@@ -72,7 +74,7 @@ type Props = {
     /** Called when the user taps the machine dot. */
     onMachinePress?: () => void;
     /**
-     * The machine in use, with two or more saved: the dot draws in its colour
+     * The machine in use, with two or more saved: the dot draws in its display colour
      * while connected and says its name. Absent with one or none.
      */
     machine?: {name: string; colour: MachineColour};

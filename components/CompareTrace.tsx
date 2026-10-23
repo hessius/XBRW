@@ -9,6 +9,8 @@ import {type Box, livePoints, type Point, splitAtPauses, toPath} from "@/library
 import {gapBands, type PourVerdict} from "@/library/brew/compare";
 import {intervalRects, type PauseInterval} from "@/library/brew/pauseIntervals";
 import {channelStyle} from "@/library/brew/traceStyle";
+import {useAppearance} from "@/hooks/useAppearance";
+import {mix} from "@/constants/colors";
 
 /**
  * Two brews on one axis.
@@ -41,7 +43,8 @@ const NO_INTERVALS: readonly PauseInterval[] = [];
  * default `planOpacity` of 1: two brews plus a plan is three lines, and the
  * plan must recede.
  */
-const PLAN_OPACITY = 0.25;
+/** Dashes and width distinguish the plan; translucency would lose it in pause tints. */
+const PLAN_OPACITY = 1;
 
 /** Minimum SVG plot height in pixels, matching `BrewTrace`'s collapsed floor. */
 const PLOT_FLOOR = 10;
@@ -118,6 +121,16 @@ export default function CompareTrace({
     subject, reference, accent, verdict, width, height, maxT, maxV,
     subjectPlan, referencePlan, subjectPauses = NO_INTERVALS, referencePauses = NO_INTERVALS
 }: Props) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
+    let planGrounds = [palette.base];
+    const pauseColours = [
+        ...(subjectPauses.length > 0 ? [appearance.recipe(accent).ink] : []),
+        ...(referencePauses.length > 0 ? [palette.muted] : [])
+    ];
+    for (const fill of pauseColours) {
+        planGrounds = [...planGrounds, ...planGrounds.map(ground => mix(ground, fill, PAUSE_OPACITY))];
+    }
     const svgHeight = compareTracePlotHeight(height);
     const box: Box = {width, height: svgHeight, maxT, maxV};
 
@@ -136,18 +149,20 @@ export default function CompareTrace({
         && (subjectWaterRuns.length > 1 || referenceWaterRuns.length > 1);
     const oneWater = verdict === "same" && !matchedWithGaps;
 
-    const cupSubject = channelStyle("cup", {accent});
-    const cupReference = channelStyle("cup", {accent, role: "reference"});
-    const waterSubject = channelStyle("water", {accent});
-    const waterReference = channelStyle("water", {accent, role: "reference"});
-    const sharedPlan = channelStyle("plan", {accent});
+    const cupSubject = channelStyle("cup", {accent, appearance});
+    const cupReference = channelStyle("cup", {accent, appearance, role: "reference"});
+    const waterSubject = channelStyle("water", {accent, appearance});
+    const waterReference = channelStyle("water", {accent, appearance, role: "reference"});
+    const planColour = appearance.chartInk(palette.muted, planGrounds, 3.05);
+    const sharedPlan = channelStyle("plan", {accent, appearance, planColour});
     // When two stored plans differ in shape, colour keeps the subject/reference
     // grammar: this brew stays coloured and that brew stays grey.
     const subjectPlanStyle = channelStyle("plan", {
-        accent,
-        planColour: (referencePlan ?? "") === "" ? undefined : accent
+        accent, appearance,
+        planColour: (referencePlan ?? "") === "" ? planColour
+            : appearance.chartInk(waterSubject.stroke, planGrounds, 3.05)
     });
-    const referencePlanStyle = channelStyle("plan", {accent});
+    const referencePlanStyle = channelStyle("plan", {accent, appearance, planColour});
 
     const band = gapBands(subjectCup, referenceCup, subjectPauses, referencePauses)
         .map((points) => closedPath(points, box)).filter((d) => d !== "").join(" ");
@@ -157,6 +172,16 @@ export default function CompareTrace({
         waterSubject:   runPath(subjectWaterRuns, box),
         waterReference: runPath(referenceWaterRuns, box)
     };
+    const channelGrounds = [
+        {channel: "cup-subject", path: paths.cupSubject, style: cupSubject},
+        {channel: "cup-reference", path: paths.cupReference, style: cupReference},
+        {channel: "water-subject", path: oneWater ? paths.waterSubject || paths.waterReference : paths.waterSubject,
+            style: waterSubject},
+        {channel: "water-reference", path: oneWater ? "" : paths.waterReference, style: waterReference}
+    ].filter(({path}) => path !== "").map(({channel, path, style}) => (
+        <Path key={channel} testID={`trace-${channel}-ground`} d={path} fill="none"
+              {...{...style, stroke: palette.base, strokeWidth: style.strokeWidth + 2}}/>
+    ));
     const pauseBands = [
         ...intervalRects(subject.length >= 2 ? subjectPauses : [], width, maxT)
             .map((rect, index) => ({
@@ -225,6 +250,7 @@ export default function CompareTrace({
                         fillOpacity={GAP_OPACITY}
                     />
                 )}
+                {channelGrounds}
                 {paths.waterReference !== "" && (!oneWater || paths.waterSubject === "") && (
                     <Path
                         testID="trace-water-reference"

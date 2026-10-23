@@ -166,6 +166,20 @@ Other domain invariants:
   Note that Tamagui's theme proxy has no parent-theme fallback, so a custom key added to `light`
   would not resolve inside a sub-theme such as `light_Button` — hence the plain module.
   Add a semantically named entry (`danger`, `surface`, `muted`) rather than a literal one (`red`).
+  Static exports (`palette`, `onAccent`, `onBrand`, `switchColours`, accent and machine
+  palettes) are canonical, not an active theme. Preserve canonical identities in stored
+  recipes, history, shelves, machine choices and non-image exports. The default is
+  Original theme / Original recipe colours, with unchanged canonical recipe values.
+  In presentation code, resolve colours inside the component with `useAppearance()`;
+  pure drawing helpers take an explicit `Appearance`, including `traceStyle` reference
+  colour factories. Do not freeze presentation colours in module constants/default
+  props, import static presentation exports, or consult global active appearance.
+  `SplashOverlay` is the sole fixed branded launch exception, guarded by the TypeScript
+  AST boundary tests. Generic selections use neutral `selection` roles; actual primary
+  actions use `primary` roles, not a blanket branded selection fill.
+  `AppearanceScope` is pure and safe for tests/frozen PNG subtrees. Persistence belongs
+  to `AppearanceProvider`; native effects belong to the production root/native hook,
+  never a nested image scope.
 - **Tamagui** is the component/styling system (`tamagui.config.ts`, providers in `app/_layout.tsx`). Use `XStack`/`YStack`/`Button`/`Dialog` and `$`-prefixed tokens rather than raw RN `StyleSheet`. `@expo/vector-icons` is used for icons (v15 uses kebab-case AntDesign names, e.g. `plus-circle`, not `pluscircle`).
 - Dialogs follow the `Dialog` + `Adapt platform="touch"` + `Sheet` pattern, wrapped once in `XbrwSheet.tsx` so every sheet inherits it rather than re-deriving it (see `ImportSheet.tsx` for a consumer).
 - **Mutate the `Recipe` object in place and bump a `key` counter** (`setKey(prev => prev + 1)`) to re-render, instead of cloning into state. This was a deliberate performance change — don't "fix" it by making `Recipe` immutable or re-serializing on every keystroke.

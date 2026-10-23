@@ -1,3 +1,4 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import * as Clipboard from "expo-clipboard";
 import router from "@/hooks/steadyRouter";
 import React, {useEffect, useRef, useState} from "react";
@@ -11,7 +12,7 @@ import ImportResult from "@/components/ImportResult";
 import NewerVersionPrompt from "@/components/NewerVersionPrompt";
 import PasteOverlay from "@/components/PasteOverlay";
 import XbrwSheet from "@/components/XbrwSheet";
-import {palette} from "@/constants/colors";
+
 import type {RecipeImport} from "@/hooks/useRecipeImport";
 import {sharedSettings, useSetting} from "@/hooks/useSetting";
 import {readCatalogue} from "@/library/roasterCatalogue";
@@ -36,6 +37,8 @@ const CATALOGUE_CAPTION = "Recipes from xBloom and the community";
  * obvious system control beside its own language.
  */
 function PasteFace() {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     return (
         <XStack
             alignItems="center"
@@ -64,6 +67,8 @@ type Props = {
 function RoasterSourceRow({label, caption, onPress}: {
     label: string; caption?: string; onPress: () => void;
 }) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     return (
         <Pressable accessibilityRole="button"
                    accessibilityLabel={caption ? `${label}, ${caption}` : label}
@@ -90,6 +95,8 @@ function RoasterSourceRow({label, caption, onPress}: {
  * `useRecipeImport`.
  */
 export default function ImportSheet({open, onOpenChange, importer, settings}: Props) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const store = settings ?? sharedSettings();
     const [stored] = useSetting("roasterSubscriptions", store);
     // A refreshed feed updates its count without starting a request here.

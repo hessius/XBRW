@@ -1,7 +1,7 @@
 import React from "react";
 import {Text, XStack, YStack} from "tamagui";
 
-import {palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 import {RECIPE_HELP, type HelpTopic} from "@/constants/recipeHelp";
 
 type Props = {
@@ -41,6 +41,7 @@ type Props = {
  * nobody explained.
  */
 export default function FieldRow({topic, note, showHint, error, children}: Props) {
+    const {palette} = useAppearance();
     const entry = RECIPE_HELP[topic];
 
     return (

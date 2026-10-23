@@ -1,9 +1,10 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React from "react";
 import {Pressable} from "react-native";
 import {Text, XStack, YStack} from "tamagui";
 
 import DotMatrixText from "@/components/DotMatrixText";
-import {onAccent, palette} from "@/constants/colors";
+
 
 /**
  * The question asked when a recipe is imported again, the user has edited
@@ -20,6 +21,9 @@ export default function NewerVersionPrompt({name, onLatest, onKeep}: {
     onLatest: () => void;
     onKeep: () => void;
 }) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
+    const onAccent = appearance.onFill(palette.text);
     return (
         <YStack testID="newer-version" gap="$3" accessibilityLiveRegion="polite">
             <Text fontSize={15} fontWeight="700" color={palette.text}>

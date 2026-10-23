@@ -1,9 +1,9 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React from "react";
 import {Pressable} from "react-native";
 import {XStack, YStack} from "tamagui";
 
 import DotMatrixText from "@/components/DotMatrixText";
-import {palette, primary} from "@/constants/colors";
 
 const BAR_PADDING = 12;
 const BUTTON_HEIGHT = 44;
@@ -20,6 +20,9 @@ type Props = {
 export default function HubSaveBar({
     count, saving, progress, onCancel, onSave, paddingBottom = 0
 }: Props) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
+    const {primary} = appearance;
     const disabled = saving || count === 0;
     const label = saving ? `${progress.done} OF ${progress.total}` : `SAVE ${count}`;
     const spoken = saving

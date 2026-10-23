@@ -1,3 +1,4 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React from "react";
 import {Pressable} from "react-native";
 import {useSafeAreaInsets} from "react-native-safe-area-context";
@@ -6,7 +7,7 @@ import {Text, XStack, YStack} from "tamagui";
 import DotIcon from "@/components/DotIcon";
 import DotMatrixText from "@/components/DotMatrixText";
 import ScreenTitle from "@/components/ScreenTitle";
-import {onAccent, palette} from "@/constants/colors";
+
 
 /** Matches the well the recipe screen puts its own back glyph in. */
 const KEY_SIZE = 32;
@@ -58,6 +59,8 @@ type Props = {
  * land on and no announcement saying where it landed.
  */
 export default function ScreenHeader({title, count, meta, titleLines, titleSize, subtitle, action, onBack}: Props) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const insets = useSafeAreaInsets();
     const hasAction = action !== undefined && action !== null;
     const metaText = meta === undefined ? null : (
@@ -71,7 +74,7 @@ export default function ScreenHeader({title, count, meta, titleLines, titleSize,
     const back = (
         <Pressable accessibilityRole="button" accessibilityLabel="Back"
                    onPress={onBack} hitSlop={12}>
-            <YStack testID="screen-header-back" backgroundColor={onAccent.key}
+            <YStack testID="screen-header-back" backgroundColor={palette.control}
                     borderRadius="$3" width={KEY_SIZE} height={KEY_SIZE}
                     alignItems="center" justifyContent="center">
                 <DotIcon name="back" size={16} color={palette.text}/>

@@ -1,8 +1,9 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React from "react";
 import {Text, XStack, YStack} from "tamagui";
 
 import SegmentedControl, {type SegmentOption} from "@/components/SegmentedControl";
-import {palette} from "@/constants/colors";
+
 
 type Props = {
     label: string;
@@ -40,6 +41,8 @@ const WIDE_OPTIONS_CHARS = 20;
 export default function SettingsChoiceRow({
     label, description, value, options, onChange, stacked
 }: Props) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const width = options.reduce((n, option) => n + option.label.length, 0);
     if (stacked ?? width > WIDE_OPTIONS_CHARS) {
         return (

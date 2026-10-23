@@ -5,6 +5,7 @@ import type {LibraryView} from './libraryView';
 import type {MachineModel} from './machine/machineModel';
 import type {HistorySort, HistorySortDirection} from './brew/historyQuery';
 import type {BagTrackerSetting} from './coffeeBag';
+import type {ThemeId, RecipeColourMode} from './appearance';
 
 /**
  * Every setting, with its default.
@@ -15,6 +16,8 @@ import type {BagTrackerSetting} from './coffeeBag';
  */
 
 export const DEFAULTS = {
+    appearanceTheme: "original" as ThemeId,
+    recipeColourMode: "original" as RecipeColourMode,
     /**
      * The `TEA` marker is always shown; `COFFEE` is redundant in a mostly-coffee
      * library, so it can be turned off.

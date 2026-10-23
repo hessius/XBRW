@@ -4,7 +4,7 @@ import DateTimePicker, {DateTimePickerAndroid} from "@react-native-community/dat
 import {Text, XStack, YStack} from "tamagui";
 
 import DotMatrixText from "@/components/DotMatrixText";
-import {palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 import {dayDate, dayOf, roastDayLabel, roastDayRange} from "@/library/coffeeBag";
 
 type Props = {
@@ -29,6 +29,7 @@ type Props = {
  * move it across midnight.
  */
 export default function RoastDayField({value, today, onChange}: Props) {
+    const {palette, scheme} = useAppearance();
     const [calendarOpen, setCalendarOpen] = useState(false);
     const range = roastDayRange(today, value);
     const minimumDate = dayDate(range.min) ?? undefined;
@@ -87,7 +88,7 @@ export default function RoastDayField({value, today, onChange}: Props) {
             </XStack>
             {Platform.OS === "ios" && calendarOpen && (
                 <DateTimePicker testID="bag-roasted-calendar" value={current} mode="date"
-                                display="inline" themeVariant="dark" accentColor={palette.text}
+                                display="inline" themeVariant={scheme} accentColor={palette.text}
                                 minimumDate={minimumDate} maximumDate={maximumDate}
                                 onValueChange={(_event, date) => pick(date)}/>
             )}

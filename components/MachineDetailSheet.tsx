@@ -7,7 +7,8 @@ import SettingsActionRow from "@/components/SettingsActionRow";
 import {MODEL_NAMES} from "@/components/MachinePickerSheet";
 import XbrwSheet from "@/components/XbrwSheet";
 import {notify} from "@/components/XbrwToast";
-import {machineColours, palette} from "@/constants/colors";
+import {machineColours} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 import {useMachine} from "@/hooks/useMachine";
 import {useSavedMachines} from "@/hooks/useSavedMachines";
 import {MACHINE_MODELS, isMachineModel, modelFromSerial} from "@/library/machine/machineModel";
@@ -29,6 +30,8 @@ const MODEL_OPTIONS = MACHINE_MODELS.map((value) => ({value, label: MODEL_NAMES[
  * carries a white ring, which says "this one" without any colour at all.
  */
 function ColourChoice({value, onChange}: {value: number; onChange: (index: number) => void}) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     return (
         <XStack accessibilityRole="radiogroup" accessibilityLabel="Colour" gap="$2"
                 alignItems="center">
@@ -49,7 +52,7 @@ function ColourChoice({value, onChange}: {value: number; onChange: (index: numbe
                             alignItems: "center", justifyContent: "center"
                         }}>
                             <View style={{width: 22, height: 22, borderRadius: 11,
-                                          backgroundColor: colour.ink}}/>
+                                          backgroundColor: appearance.machineColour(colour).ink}}/>
                         </View>
                     </Pressable>
                 );
@@ -82,6 +85,7 @@ type Props = {
  * the chip on the editor does not flicker through "H", "Ho", "Hom".
  */
 export default function MachineDetailSheet({machineId, onClose, onForget, settings}: Props) {
+    const {palette} = useAppearance();
     const {machines, rename, setModel, setColour, makeDefault, move} = useSavedMachines(settings);
     const {remembered, status, changeBlocker, choose}
         = useMachine(undefined, {settings});

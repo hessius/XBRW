@@ -1,6 +1,53 @@
 import {COMMANDS, commandByCode, frameFor} from "@/library/machine/commands";
 
-import {float32, type1, type1Bytes} from "./protocolFixtures";
+import {float32, status, type1, type1Bytes} from "./protocolFixtures";
+import {createElement, type ComponentProps} from "react";
+import {AppearanceScope, useAppearance} from "@/hooks/useAppearance";
+import {renderWithProviders} from "@/test-utils/render";
+import {THEME_IDS, type AppearanceChoice} from "@/library/appearance";
+import {resolveAccent} from "@/library/accent";
+import Recipe from "@/library/Recipe";
+import {buildCard, XPOD_CARD} from "@/library/__tests__/cardFixtures";
+import Machine from "@/library/machine/Machine";
+import {FakeTransport} from "./FakeTransport";
+
+it("captures identical actual BLE frames for one recipe before and after all eight scope changes", async () => {
+    const recipe = new Recipe(buildCard(XPOD_CARD));
+    const canonical = JSON.stringify(recipe);
+    const accent = resolveAccent(recipe);
+    const observed: string[] = [];
+    function Consumer() {
+        const appearance = useAppearance();
+        observed.push(appearance.recipe(accent).fill);
+        return null;
+    }
+    const tree = (choice: AppearanceChoice) =>
+        // createElement supplies the scope's required children in its third argument.
+        createElement(AppearanceScope, {choice} as ComponentProps<typeof AppearanceScope>, createElement(Consumer));
+    const view = await renderWithProviders(tree({theme: "original", recipeColours: "original"}));
+    async function capture() {
+        const transport = new FakeTransport();
+        const machine = new Machine(transport, {frameGapMs: 0});
+        await machine.connect("AA:BB");
+        transport.emit(status(0x01));
+        transport.written = [];
+        await machine.brew(recipe);
+        expect(transport.sent).toEqual([8102, 8104, 8001, 8002]);
+        const bytes = transport.written.map(frame => Array.from(frame));
+        await machine.disconnect();
+        return bytes;
+    }
+    const before = await capture();
+    for (const theme of THEME_IDS) {
+        for (const recipeColours of ["original", "themed"] as const) {
+            await view.rerender(tree({theme, recipeColours}));
+            expect(await capture()).toEqual(before);
+            expect(JSON.stringify(recipe)).toBe(canonical);
+            expect(resolveAccent(recipe)).toBe(accent);
+        }
+    }
+    expect(new Set(observed).size).toBeGreaterThan(1);
+});
 
 function hex(frame: ArrayLike<number>): string {
     return Array.from(frame, (byte) => byte.toString(16).padStart(2, "0").toUpperCase()).join("");

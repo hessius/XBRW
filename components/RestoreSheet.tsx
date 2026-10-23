@@ -1,9 +1,10 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React, {useState} from "react";
 import {Button, Text, XStack, YStack} from "tamagui";
 
 import SettingsToggleRow from "@/components/SettingsToggleRow";
 import XbrwSheet from "@/components/XbrwSheet";
-import {palette} from "@/constants/colors";
+
 import {mergeRecipes, type BackupPayload} from "@/library/backup";
 import type Recipe from "@/library/Recipe";
 
@@ -44,6 +45,8 @@ function plural(count: number, one: string, many: string): string {
  * destroy.
  */
 export default function RestoreSheet({open, payload, existing, onCancel, onRestore}: Props) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const [includeSettings, setIncludeSettings] = useState(false);
     const [confirmingReplace, setConfirmingReplace] = useState(false);
 
@@ -105,6 +108,7 @@ export default function RestoreSheet({open, payload, existing, onCancel, onResto
                             <Button flex={1} accessibilityRole="button"
                                     accessibilityLabel="Yes, replace my library"
                                     backgroundColor={palette.danger}
+                                    color={appearance.onFill(palette.danger).text}
                                     onPress={leaveWith(() => onRestore({replace: true, includeSettings}))}>
                                 Yes, replace
                             </Button>

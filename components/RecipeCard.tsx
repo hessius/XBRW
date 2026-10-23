@@ -18,7 +18,7 @@ import type {RecipeEvidence} from "@/library/libraryQuery";
 import type {SlotMarkerValue} from "@/library/slots/slotModel";
 import {accentGroupFor, resolveAccent} from "@/library/accent";
 import {canWriteToCard} from "@/library/cardLimits";
-import {onAccent, palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 import type {DotIconName} from "@/constants/dotIcons";
 
 const CARD_HEIGHT = 116;
@@ -48,6 +48,7 @@ const ACTION_ICON_SIZE = 18;
 const ACTION_PADDING = (TOUCH_TARGET - ACTION_ICON_SIZE) / 2;
 
 type StatProps = {
+    displayFill: string;
     label: string;
     value: number;
     suffix?: string;
@@ -64,7 +65,8 @@ type StatProps = {
     text?: string;
 };
 
-function Stat({label, value, suffix, text}: StatProps) {
+function Stat({label, value, suffix, text, displayFill}: StatProps) {
+    const onAccent = useAppearance().onFill(displayFill);
     return (
         <YStack gap="$0.5">
             <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.2}
@@ -90,6 +92,7 @@ function Stat({label, value, suffix, text}: StatProps) {
 }
 
 type ActionProps = {
+    displayFill: string;
     label: string;
     icon: DotIconName;
     tone: string;
@@ -105,7 +108,8 @@ type ActionProps = {
  * point, indistinguishable from the card's own decoration — there was nothing
  * to suggest it could be pressed.
  */
-function Action({label, icon, tone, testID, onPress}: ActionProps) {
+function Action({label, icon, tone, testID, onPress, displayFill}: ActionProps) {
+    const onAccent = useAppearance().onFill(displayFill);
     return (
         <YStack accessible accessibilityRole="button" accessibilityLabel={label}
                 alignItems="center" justifyContent="center"
@@ -230,7 +234,9 @@ export default function RecipeCard({
     slotMarker,
     onEasyMode
 }: Props) {
-    const accent = resolveAccent(recipe);
+    const appearance = useAppearance();
+    const colour = appearance.recipe(resolveAccent(recipe));
+    const {fill: accent, onAccent} = colour;
     const isTea = accentGroupFor(recipe) === "tea";
     const marker = isTea ? "TEA" : "COFFEE";
     const showMarker = isTea || showCoffeeMarker;
@@ -418,6 +424,8 @@ export default function RecipeCard({
                           bottom:   -(PROFILE_BLEED + PROFILE_OVERHANG)
                       }}>
                     <PourProfile testID="recipe-card-profile" pours={recipe.pours}
+                                 stroke={onAccent.profileStroke} fill={onAccent.profileFill}
+                                 dot={onAccent.profileDot}
                                  width={200} height={PROFILE_HEIGHT} dotted={dottedProfile}/>
                 </View>
 
@@ -463,7 +471,7 @@ export default function RecipeCard({
                             Hidden from accessibility on purpose: the word is
                             already in the card's own label above, and announcing
                             it twice is worse than not at all. */}
-                        <SlotMarker marker={slotMarker}/>
+                        <SlotMarker marker={slotMarker} color={onAccent.marker}/>
                         {bagReading !== undefined && (
                             <DotMatrixText testID="recipe-card-bag" fontSize={11}
                                            weight="bold" letterSpacing={1.4}
@@ -494,11 +502,11 @@ export default function RecipeCard({
                 <XStack key={`bottom-${geometryKey}`} testID="recipe-card-bottom-row" onLayout={measure("bottom")}
                         justifyContent="space-between" alignItems="flex-end" gap={BOTTOM_GAP}>
                     <XStack testID="recipe-card-figures" onLayout={measure("figures")} gap="$5" alignItems="flex-end">
-                        <Stat label="DOSE" value={recipe.dosage} suffix="g"/>
-                        <Stat label="RATIO" value={recipe.ratio}
+                        <Stat displayFill={accent} label="DOSE" value={recipe.dosage} suffix="g"/>
+                        <Stat displayFill={accent} label="RATIO" value={recipe.ratio}
                               text={isSet(recipe.ratio) && !Number.isInteger(recipe.ratio)
                                   ? String(recipe.ratio) : undefined}/>
-                        {!isTea && <Stat label="GRIND" value={recipe.grindSize}
+                        {!isTea && <Stat displayFill={accent} label="GRIND" value={recipe.grindSize}
                                          text={recipe.grinder ? undefined : "OFF"}/>}
                     </XStack>
 
@@ -532,14 +540,14 @@ export default function RecipeCard({
                     {editing && (
                         <XStack testID="recipe-card-actions" gap="$1" onLayout={measure("end")}>
                             {onDuplicate !== undefined && (
-                                <Action label="Duplicate recipe" icon="duplicate"
-                                        tone={palette.success}
+                                <Action displayFill={accent} label="Duplicate recipe" icon="duplicate"
+                                        tone={colour.keyInk.success}
                                         testID="recipe-card-duplicate"
                                         onPress={onDuplicate}/>
                             )}
                             {onDelete !== undefined && (
-                                <Action label="Delete recipe" icon="delete"
-                                        tone={palette.danger}
+                                <Action displayFill={accent} label="Delete recipe" icon="delete"
+                                        tone={colour.keyInk.danger}
                                         testID="recipe-card-delete" onPress={onDelete}/>
                             )}
                         </XStack>

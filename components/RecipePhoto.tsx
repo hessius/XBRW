@@ -1,7 +1,7 @@
 import React, {useState} from "react";
 import {Image, View} from "react-native";
 
-import {palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 
 type Props = {
     /** An https URL, already gated on the surface's preference by the caller. */
@@ -45,8 +45,10 @@ type Props = {
  * matters in a scrolling list.
  */
 export default function RecipePhoto({
-    uri, size, radius, backing = palette.raised, visible = true, testID, onError
+    uri, size, radius, backing: suppliedBacking, visible = true, testID, onError
 }: Props) {
+    const {palette} = useAppearance();
+    const backing = suppliedBacking ?? palette.raised;
     const [failed, setFailed] = useState<string | null>(null);
 
     if (uri.length === 0 || failed === uri) {

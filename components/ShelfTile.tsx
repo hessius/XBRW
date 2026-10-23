@@ -6,7 +6,7 @@ import DotIcon from "@/components/DotIcon";
 import DotMatrixText from "@/components/DotMatrixText";
 import ShelfMark from "@/components/ShelfMark";
 import ShelfPhotoMark from "@/components/ShelfPhotoMark";
-import {onAccent, palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 import {shelfGlyph} from "@/constants/shelfGlyphs";
 import type {ShelfMarkMembers} from "@/hooks/useRecipeLibrary";
 import type {Shelf} from "@/library/shelves";
@@ -89,6 +89,8 @@ export default function ShelfTile({
     /** Spoken after the label. Screen readers only. */
     accessibilityHint?: string;
 }) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const manual = shelf.kind === "manual";
     const namedByUser = shelf.kind !== "auto";
     const recipes = shelf.count === 1 ? "1 recipe" : `${shelf.count} recipes`;
@@ -98,7 +100,9 @@ export default function ShelfTile({
     // The accent the mark would have filled its square with. Inverting moves it
     // out here, so the two have to read it from the same place or the tile and
     // its square would disagree about which colour this shelf is.
-    const field = members?.accents?.[0] ?? palette.surface;
+    const canonical = members?.accents?.[0];
+    const field = canonical === undefined ? palette.surface : appearance.recipe(canonical).fill;
+    const onAccent = appearance.onFill(field);
     const roaster = shelf.kind === "auto" && hasMixedPhotoCover(shelf.id);
     const leading = roaster ? shelf.label.normalize("NFC").match(/[\p{L}\p{N}]/u)?.[0] : undefined;
     const upper = leading?.toUpperCase();
@@ -158,7 +162,7 @@ export default function ShelfTile({
                                    testID={`shelf-edit-${shelf.id}`}
                                    hitSlop={12}
                                    onPress={onActions}>
-                            <DotIcon name="more" size={14} color={palette.dim}/>
+                            <DotIcon name="more" size={14} color={inverted ? onAccent.marker : palette.dim}/>
                         </Pressable>
                     )}
                 </XStack>
@@ -172,7 +176,7 @@ export default function ShelfTile({
                       * not type.
                       */}
                     {namedByUser ? (
-                        <Text fontSize={14} fontWeight="600" color={palette.text}
+                        <Text fontSize={14} fontWeight="600" color={inverted ? onAccent.text : palette.text}
                               numberOfLines={1}>
                             {shelf.label}
                         </Text>

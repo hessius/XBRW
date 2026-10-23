@@ -6,13 +6,45 @@ import RecipeCard, {CARD_PHOTO_SIZE} from "@/components/RecipeCard";
 import {buildProfilePath, PROFILE_BLEED} from "@/components/PourProfile";
 import Recipe, {CUP_TYPE} from "@/library/Recipe";
 import Pour, {POUR_PATTERN} from "@/library/Pour";
-import {accents, onAccent, palette} from "@/constants/colors";
+import {accents, onAccent, palette, resolveAppearance} from "@/constants/colors";
+import {AppearanceScope} from "@/hooks/useAppearance";
+import type {AppearanceChoice} from "@/library/appearance";
 import {DOT_ICONS, litCells} from "@/constants/dotIcons";
 import {AA_LARGE, contrast} from "@/test-utils/contrast";
 import {DOTO_MAX_FONT_SCALE} from "@/components/DotMatrixText";
 import {renderWithProviders} from "@/test-utils/render";
 import {newBag} from "@/library/coffeeBag";
 import {measureCardPicture, pictureLayout} from "@/test-utils/pictureLayout";
+
+it("recolours canonical Sky without changing the recipe identity or payload", async () => {
+    const recipe = new Recipe();
+    recipe.name = "Appearance fixture";
+    recipe.accentIndex = 0;
+    const savedIndex = recipe.accentIndex;
+    const savedJSON = JSON.stringify(recipe);
+    const choices: AppearanceChoice[] = [
+        {theme: "light", recipeColours: "themed"},
+        {theme: "magenta", recipeColours: "themed"},
+        {theme: "original", recipeColours: "original"},
+        {theme: "light", recipeColours: "themed"}
+    ];
+    const card = (choice: AppearanceChoice) => (
+        <AppearanceScope choice={choice}>
+            <RecipeCard recipe={recipe} onPress={jest.fn()}/>
+        </AppearanceScope>
+    );
+    const view = await renderWithProviders(card(choices[0]));
+    const surface = screen.getByTestId("recipe-card-surface");
+    for (const choice of choices) {
+        await view.rerender(card(choice));
+        expect(screen.getByTestId("recipe-card-surface")).toBe(surface);
+        expect(screen.getByTestId("recipe-card-surface")).toHaveStyle({
+            backgroundColor: resolveAppearance(choice).recipe("#9FC3F0").fill
+        });
+        expect(recipe.accentIndex).toBe(savedIndex);
+        expect(JSON.stringify(recipe)).toBe(savedJSON);
+    }
+});
 
 it("admits a 20pt bottom-right metadata photo without moving or resizing the graph", async () => {
     const recipe = new Recipe();

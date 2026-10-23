@@ -566,6 +566,7 @@ export const LICENCES: readonly Licence[] = [
     {name: "expo-modules-autolinking", version: "57.0.16", licence: "MIT", copyright: "Copyright (c) 2015-present 650 Industries, Inc. (aka Expo)", text: "mit-1673fc"},
     {name: "expo-modules-core", version: "57.0.24", licence: "MIT", copyright: "Copyright (c) 2015-present 650 Industries, Inc. (aka Expo)", text: "mit-1673fc"},
     {name: "expo-modules-jsi", version: "57.1.3", licence: "MIT", copyright: "Copyright (c) 2015-present 650 Industries, Inc. (aka Expo)", text: "mit-1673fc"},
+    {name: "expo-navigation-bar", version: "57.0.3", licence: "MIT", copyright: "Copyright (c) 2015-present 650 Industries, Inc. (aka Expo)", text: "mit-1673fc"},
     {name: "expo-router", version: "57.0.29", licence: "MIT"},
     {name: "expo-secure-store", version: "57.0.4", licence: "MIT", copyright: "Copyright (c) 2015-present 650 Industries, Inc. (aka Expo)", text: "mit-1673fc"},
     {name: "expo-server", version: "57.0.3", licence: "MIT", copyright: "Copyright (c) 2015-present 650 Industries, Inc. (aka Expo)", text: "mit-1673fc"},

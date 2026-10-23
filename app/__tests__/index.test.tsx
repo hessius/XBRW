@@ -15,7 +15,8 @@ import {parseHidden, serialiseHidden} from "@/library/hiddenShelves";
 import type {LibraryQuery} from "@/library/libraryQuery";
 import {Settings, type SettingsStorage} from "@/library/Settings";
 import {CARD_READ_FAILED} from "@/constants/copy";
-import {machineColours} from "@/constants/colors";
+import {machineColours, resolveAppearance} from "@/constants/colors";
+import {AppearanceScope} from "@/hooks/useAppearance";
 import {TYPING_DEBOUNCE_MS} from "@/constants/motion";
 import {sharedSlotDatabase} from "@/hooks/useEasyModeSlots";
 import {snapshotRecipe} from "@/library/slots/slotModel";
@@ -25,6 +26,7 @@ import {rememberPrint} from "@/library/importRefresh";
 import {sharedSettings} from "@/hooks/useSetting";
 
 const mockPush = jest.fn();
+const FIELD_LABEL = "Share link or pod code";
 
 // Bumped by a test to make the home screen's `useFocusEffect` callback re-run,
 // standing in for the screen regaining focus (the user returning from the
@@ -425,6 +427,33 @@ async function renderHome(
 }
 
 describe("HomeScreen", () => {
+    it("recolours the library and already-open import sheet without resetting its input", async () => {
+        const db = store([named("Kept recipe")]);
+        const settings = new Settings(memoryStorage());
+        const view = await renderWithProviders(
+            <AppearanceScope choice={{theme: "original", recipeColours: "original"}}>
+                <HomeScreen db={db} settings={settings}/>
+            </AppearanceScope>
+        );
+        await fireEvent.press(await screen.findByLabelText("Import a recipe"));
+        await fireEvent.changeText(screen.getByLabelText(FIELD_LABEL), "AB");
+        await view.rerender(
+            <AppearanceScope choice={{theme: "light", recipeColours: "themed"}}>
+                <HomeScreen db={db} settings={settings}/>
+            </AppearanceScope>
+        );
+        const {palette} = resolveAppearance({theme: "light", recipeColours: "themed"});
+        expect(screen.getByTestId("home-content", {includeHiddenElements: true}))
+            .toHaveStyle({backgroundColor: palette.base});
+        expect(screen.getByTestId("home-content", {includeHiddenElements: true}).props.accessibilityElementsHidden).toBe(true);
+        expect(screen.getByLabelText(FIELD_LABEL)).toHaveDisplayValue("AB");
+        expect(screen.getByLabelText(FIELD_LABEL)).toHaveStyle({color: palette.text});
+        await waitFor(async () => {
+            await fireEvent.press(screen.getByLabelText("Close"));
+            expect(screen.getByTestId("home-content").props.accessibilityElementsHidden).toBe(false);
+        }, {timeout: SHEET_PRESS_TIMEOUT});
+        expect(screen.getByText("Kept recipe")).toBeTruthy();
+    });
     it.each([false, true])("keeps followed roasters out of home and search with saved recipes: %s", async saved => {
         const settings = new Settings(memoryStorage({
             roasterSubscriptions: JSON.stringify([{

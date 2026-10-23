@@ -1,3 +1,4 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React from "react";
 import {Keyboard} from "react-native";
 import {XStack, YStack} from "tamagui";
@@ -6,7 +7,6 @@ import BrewJudgement from "@/components/BrewJudgement";
 import DotMatrixText from "@/components/DotMatrixText";
 import XbrwSheet from "@/components/XbrwSheet";
 import {RATING_SHEET_DONE, RATING_SHEET_TITLE} from "@/constants/brewCopy";
-import {palette, primary} from "@/constants/colors";
 import type {BeverageKind} from "@/library/brew/BrewRecord";
 
 /**
@@ -46,6 +46,8 @@ export default function BrewNoteSheet({
      */
     footer?: React.ReactNode;
 }) {
+    const appearance = useAppearance();
+    const {palette, primary} = appearance;
     function close(): void {
         Keyboard.dismiss();
         if (onDone !== undefined) {

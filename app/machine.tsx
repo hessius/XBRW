@@ -1,3 +1,4 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import router from "@/hooks/steadyRouter";
 import React, {useEffect, useRef, useState} from "react";
 import {ScrollView, TextInput} from "react-native";
@@ -12,7 +13,7 @@ import SettingsSection from "@/components/SettingsSection";
 import SettingsToggleRow from "@/components/SettingsToggleRow";
 import XbrwSheet from "@/components/XbrwSheet";
 import {notify} from "@/components/XbrwToast";
-import {palette} from "@/constants/colors";
+
 import {useMachine} from "@/hooks/useMachine";
 import {useSetting} from "@/hooks/useSetting";
 import {useScrollEndPadding} from "@/hooks/useBottomInset";
@@ -38,13 +39,6 @@ const CONSOLE_WARNING =
     "was reverse-engineered from other people's captures of one firmware revision, " +
     "and some of it the sources disagree about. Read what each command says before " +
     "you send it.";
-
-/** Tier colours, semantically. Danger for the commands nobody has resolved. */
-const TIER_COLOUR: Record<Tier, string> = {
-    inert:      palette.success,
-    moves:      palette.warn,
-    unresolved: palette.danger
-};
 
 const TIER_LABEL: Record<Tier, string> = {
     inert:      "INERT",
@@ -239,6 +233,11 @@ type Pending = {
  * state each time.
  */
 function CommandRow({command, onSend}: CommandRowProps) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
+    const TIER_COLOUR: Record<Tier, string> = {
+        inert: palette.success, moves: palette.warn, unresolved: palette.danger
+    };
     const [values, setValues] = useState<string[]>(() => command.args.map(() => ""));
 
     function setArg(index: number, text: string) {
@@ -294,6 +293,11 @@ function CommandRow({command, onSend}: CommandRowProps) {
  * so the session can be pasted into a bug report.
  */
 export default function MachineConsole() {
+    const appearance = useAppearance();
+    const {palette} = appearance;
+    const TIER_COLOUR: Record<Tier, string> = {
+        inert: palette.success, moves: palette.warn, unresolved: palette.danger
+    };
     // The end of the scroll clears whatever is under the screen: the
     // navigation bar on Android, the home indicator on iOS.
     const scrollEnd = useScrollEndPadding(48);

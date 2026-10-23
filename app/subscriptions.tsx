@@ -1,3 +1,4 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import router from "@/hooks/steadyRouter";
 import React from "react";
 import {useCatalogueNow} from "@/hooks/useCatalogueNow";
@@ -7,7 +8,7 @@ import {ScrollView, Text, YStack} from "tamagui";
 import ScreenHeader from "@/components/ScreenHeader";
 import SettingsActionRow from "@/components/SettingsActionRow";
 import SettingsSection from "@/components/SettingsSection";
-import {palette} from "@/constants/colors";
+
 import {sharedSettings} from "@/hooks/useSetting";
 import {useLiveBrew} from "@/hooks/useLiveBrew";
 import {useRoasterSubscriptions} from "@/hooks/useRoasterSubscriptions";
@@ -32,6 +33,8 @@ export default function SubscriptionsScreen({settings, fetchBody, now: clock}: {
     fetchBody?: (url: string, signal?: AbortSignal) => Promise<{feed: RoasterFeed; body: string}>;
     now?: () => number;
 } = {}) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const {ratingNoteOpen} = useLiveBrew();
     const store = settings ?? sharedSettings();
     const subs = useRoasterSubscriptions({settings: store, fetchBody, now: clock});

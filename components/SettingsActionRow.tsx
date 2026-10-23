@@ -3,7 +3,7 @@ import {Pressable} from "react-native";
 import {Text, XStack, YStack} from "tamagui";
 
 import DotIcon from "@/components/DotIcon";
-import {palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 
 type Props = {
     label: string;
@@ -29,6 +29,7 @@ type Props = {
  * own style prop.
  */
 export default function SettingsActionRow({label, detail, tone = "default", mark, disabled = false, onPress}: Props) {
+    const {palette} = useAppearance();
     const ink = tone === "danger" ? palette.danger : palette.text;
     const spoken = [label, mark?.spoken, detail].filter((part) => part !== undefined).join(", ");
 
@@ -37,8 +38,7 @@ export default function SettingsActionRow({label, detail, tone = "default", mark
         // hints can be switched off, and a version number nobody hears is not
         // shown at all.
         //
-        // The dim on press is CtaTile's (`opacity: 0.7, scale: 0.98`), so every
-        // primary tap in the app answers the finger the same way. It rides the
+        // Scale answers the press without fading informative text. It rides the
         // Pressable's own pressed state rather than a Tamagui `pressStyle`
         // because this row is a plain React Native Pressable — the thing that
         // owns the button role and the composed label — and RN's press system
@@ -49,7 +49,7 @@ export default function SettingsActionRow({label, detail, tone = "default", mark
                    disabled={disabled}
                    onPress={onPress}
                    style={({pressed}) => ({
-                       opacity:   disabled ? 0.5 : pressed ? 0.7 : 1,
+                       opacity:   disabled ? 0.5 : 1,
                        transform: [{scale: pressed ? 0.98 : 1}]
                    })}>
             {/* No borderBottom here any more: the card in `SettingsSection`
@@ -80,7 +80,7 @@ export default function SettingsActionRow({label, detail, tone = "default", mark
                 {/* Decorative: the row is already a labelled button, so the
                     glyph must not become a second accessibility element. */}
                 <XStack style={{transform: [{rotate: "180deg"}]}}>
-                    <DotIcon name="back" size={14} color={palette.muted}/>
+                    <DotIcon name="back" size={14} color={palette.dim}/>
                 </XStack>
             </XStack>
         </Pressable>

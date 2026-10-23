@@ -3,7 +3,7 @@ import type {SharedValue} from "react-native-reanimated";
 import {XStack} from "tamagui";
 
 import DotMatrixText from "@/components/DotMatrixText";
-import {palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 
 type Props = {
     fontSize?: number;
@@ -36,10 +36,12 @@ type Props = {
 export default function Wordmark({
     fontSize = 15,
     animatedFontSize,
-    color = palette.text,
+    color: suppliedColor,
     plusColor,
     decorative = false
 }: Props) {
+    const {palette} = useAppearance();
+    const color = suppliedColor ?? palette.text;
     return (
         <XStack
             // React Native does not promote a View to an accessibility element

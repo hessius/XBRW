@@ -3,7 +3,7 @@ import {StyleSheet} from "react-native";
 import {fireEvent, screen} from "@testing-library/react-native";
 
 import XbrwSwitch from "@/components/XbrwSwitch";
-import {switchColours} from "@/constants/colors";
+import {accents, switchColours} from "@/constants/colors";
 import {renderWithProviders} from "@/test-utils/render";
 
 function trackOf(label: string) {
@@ -56,7 +56,7 @@ describe("XbrwSwitch", () => {
 
     it("takes the accent colours on an accent card", async () => {
         await renderWithProviders(
-            <XbrwSwitch accessibilityLabel="Slot" checked ground="accent"
+            <XbrwSwitch accessibilityLabel="Slot" checked ground="accent" displayFill={accents.coffee[0]}
                         onCheckedChange={() => {}}/>
         );
 

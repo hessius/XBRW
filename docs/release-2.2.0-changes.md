@@ -6,6 +6,55 @@ draft #252 also contain proposals that have not been accepted; they must not be
 merged wholesale. Issue #249 records source heads, decisions and integration.
 The shipped 2.1.0 ledger remains unchanged.
 
+## Package G: appearance and recipe palettes — local implementation only
+
+The approved combined #257/#243 adaptation is implemented on
+`feat/2.2.0-appearance-20261022`, based on
+`98f3ae5255dfc691bc44d7c5ed356e47830f3df9`. It is not yet accepted or integrated
+into `develop`, and is not release-qualified. The existing #243 source review
+round is already spent; do not request another for that source.
+
+Settings offers Original, Light, Blue and Magenta themes independently of
+Original/Themed recipe colours. Original/Original remains the default.
+Canonical recipe, history, shelf and machine identities stay unchanged;
+presentation resolves accessible foregrounds and composited chart roles.
+Generic selections are neutral, actual primary actions use their own role,
+and branded launch art stays fixed. Live and historical PNG captures freeze
+one appearance without changing JSON/handoff data or remounting a live brew.
+Legacy React Native colour formats use the pure official
+`@react-native/normalize-colors` 0.83.2 parser.
+
+Automatic native appearance and `expo-navigation-bar` 57.0.3 replace the fixed
+Android navigation plugin. Version 2.2.0 and fingerprint runtime policy remain
+unchanged, but the native fingerprint changes: fresh iOS/Android development
+clients are required; Metro reload cannot qualify this configuration.
+Client builds, all-eight-combination native visuals and both actual PNG
+targets, real-device brew/NFC/Android writes and external handoff gates remain
+pending and unauthorized in this local qualification phase. Android button
+and gesture navigation both need checking; the SDK 57 Android 15 emulator
+style bug means emulator-only evidence is insufficient. The intended iOS
+device is the iPhone 17 Pro named `iPhone14`, never the iPhone 13 mini.
+
+The implementation plan records exact local gate results and the outstanding
+manual matrix. Focused PR creation, exact-head PR CI, its at-most-one automated
+review round, source closure, merges and cumulative preview reconciliation
+need separate approval. #243/#257 and evaluation draft #252 remain untouched.
+
+### Cumulative Metro evaluation reconciliation
+
+The authorized evaluation-only merge brings reviewed #264 head
+`874ded6c8ec393a14c2aa01068aaebc1542748bb` into
+`chore/2.2.0-preview-20261019`, preserving accepted A–E adaptations and pending
+Package F. Bags, freshness, Ready to brew, dose presets and catalogue size
+choices now follow reactive appearance too. Generic selection stays neutral;
+primary actions retain a separate themed disabled pair. Catalogue stage plans
+remain fully readable, and paused subscriptions without a cache still say
+“Updates paused”, not “Loading coffees”.
+
+This reconciliation changes neither `develop` nor `main`, accepts no additional
+proposal, and does not restart Metro or qualify a native client. Controller
+review/restart and the native/hardware gates above remain separate.
+
 ## Package E: roasters in Import and saved shelves
 
 The focused adaptation uses these reviewed source heads:

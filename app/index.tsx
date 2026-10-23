@@ -1,3 +1,4 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React, {useEffect, useRef, useState} from "react";
 import {BackHandler, Platform, Share} from "react-native";
 // gesture-handler's FlatList, not React Native's: it keeps the list scroll
@@ -30,7 +31,7 @@ import {notify} from "@/components/XbrwToast";
 import type {MachineVitals} from "@/components/MachinePanel";
 import {OVER} from "@/constants/brewCopy";
 import {ALREADY_IN_LIBRARY, CARD_READ_FAILED, HOLD_CARD} from "@/constants/copy";
-import {onAccent, palette, primary, type AccentGroup} from "@/constants/colors";
+import {type AccentGroup} from "@/constants/colors";
 import {useBottomInset} from "@/hooks/useBottomInset";
 import {useCollapsibleHeader} from "@/hooks/useCollapsibleHeader";
 import {useShelfPicker} from "@/hooks/useShelfPicker";
@@ -180,6 +181,8 @@ type HomeQuickEditState = {
 // is a section or a filter -- so a test that asks for the text alone cannot
 // say which one it found.
 function SectionHeading({id, label}: {id: string; label: string}) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     return (
         <YStack paddingHorizontal="$3" paddingTop="$4" paddingBottom="$1">
             <DotMatrixText testID={`section-heading-${id}`}
@@ -200,6 +203,8 @@ function EmptyQuery({
     filters: readonly string[];
     onClear: () => void;
 }) {
+    const appearance = useAppearance();
+    const {palette, primary} = appearance;
     const term = search.trim();
     const filterCopy = filters.length > 0 ? filters.join(", ") : "";
 
@@ -246,6 +251,8 @@ function EmptyQuery({
  * reviewed, so the line points back at the gesture that fills it.
  */
 function EmptySelection() {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     return (
         <YStack flex={1} alignItems="center" justifyContent="center"
                 gap="$2" paddingHorizontal="$6" paddingVertical="$8">
@@ -275,9 +282,12 @@ function HomeQuickEditSheet({
     onSaveDose: (dose: number) => void;
     temperatureUnit: TemperatureUnit;
 }) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const recipe = state?.recipe ?? null;
     const adjustments = state?.adjustments ?? {};
     const accent = recipe ? resolveAccent(recipe) : palette.text;
+    const colour = appearance.recipe(accent);
 
     return (
         <XbrwSheet open={recipe !== null} onOpenChange={onOpenChange}
@@ -298,8 +308,8 @@ function HomeQuickEditSheet({
                             accessibilityState={{disabled: !brewability.brewable}}
                             disabled={!brewability.brewable}
                             opacity={brewability.brewable ? 1 : 0.45}
-                            backgroundColor={brewability.brewable ? accent : palette.raised}
-                            color={brewability.brewable ? onAccent.text : palette.dim}
+                            backgroundColor={brewability.brewable ? colour.fill : palette.raised}
+                            color={brewability.brewable ? colour.onAccent.text : palette.dim}
                             borderRadius="$5"
                             onPress={onBrew}>
                             BREW THIS
@@ -311,6 +321,8 @@ function HomeQuickEditSheet({
 }
 
 export default function HomeScreen({db, beanStore, settings}: Props) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const bottomInset = useBottomInset();
     const router = useSteadyRouter();
     const navigation = useNavigation();

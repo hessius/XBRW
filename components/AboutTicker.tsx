@@ -1,3 +1,4 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React, {useEffect, useState} from "react";
 import {View, type LayoutChangeEvent} from "react-native";
 import Animated, {
@@ -5,7 +6,7 @@ import Animated, {
 } from "react-native-reanimated";
 
 import DotMatrixText, {drawnFontSize} from "@/components/DotMatrixText";
-import {palette} from "@/constants/colors";
+
 import {ATTRACT, EASING, useReducedMotion} from "@/constants/motion";
 
 const FONT_SIZE = 11;
@@ -118,6 +119,8 @@ export default function AboutTicker({
     delayMs = ATTRACT.tickerDelay,
     random = Math.random
 }: Props) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const reduced = useReducedMotion();
     const [started, setStarted] = useState(false);
     const [index, setIndex] = useState(0);

@@ -1,10 +1,11 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React from "react";
 import {Pressable} from "react-native";
 import {Text, XStack, YStack} from "tamagui";
 
 import DotMatrixText from "@/components/DotMatrixText";
 import XbrwSheet from "@/components/XbrwSheet";
-import {onAccent, palette} from "@/constants/colors";
+
 
 /**
  * Asks before a shelf is removed.
@@ -39,6 +40,9 @@ export default function RemoveShelfSheet({
     onOpenChange: (open: boolean) => void;
     onRemove: () => void;
 }) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
+    const onAccent = appearance.onFill(palette.danger);
     return (
         <XbrwSheet open={open} onOpenChange={onOpenChange}
                    title="Remove this shelf?" heightPercent={34}>

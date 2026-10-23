@@ -1,6 +1,7 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React, {useState} from "react";
 import {Button, Text, YStack} from "tamagui";
-import {palette} from "@/constants/colors";
+
 import {type SlotRecord} from "@/library/slots/slotModel";
 import {
     slotLabAvailable, SLOT_RECOVERY_PROBE_ID, TEA_SLOT_STEEPS_ID
@@ -16,6 +17,8 @@ export default function SlotLabControls({record, blocked, onWriteLab, onRecovery
     record: SlotRecord;
     blocked: boolean;
 } & SlotLabActions) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const [confirm, setConfirm] = useState<"partial" | "command" | "clear" | null>(null);
     const recovery = record.experiment?.candidateId === SLOT_RECOVERY_PROBE_ID
         && record.experiment.phase === "active";

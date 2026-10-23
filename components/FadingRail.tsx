@@ -1,8 +1,9 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React, {useState, type ReactNode} from "react";
 import {ScrollView, View, type NativeScrollEvent, type NativeSyntheticEvent} from "react-native";
 import Svg, {Defs, LinearGradient, Rect, Stop} from "react-native-svg";
 
-import {palette} from "@/constants/colors";
+
 
 /** How wide the fade over a clipped edge is. About half a chip's padding plus a letter. */
 export const RAIL_FADE_WIDTH = 28;
@@ -19,6 +20,8 @@ type Props = {
 };
 
 function Fade({side}: {side: "start" | "end"}) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const id = `rail-fade-${side}`;
     return (
         <View testID={id} pointerEvents="none"

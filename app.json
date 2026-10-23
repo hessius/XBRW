@@ -10,11 +10,11 @@
       "xbrecipewriter",
       "xbrw"
     ],
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "automatic",
     "backgroundColor": "#000000",
     "ios": {
       "supportsTablet": false,
-      "userInterfaceStyle": "dark",
+      "userInterfaceStyle": "automatic",
       "bundleIdentifier": "com.hessius.xbrwplusplus",
       "config": {
         "usesNonExemptEncryption": false
@@ -28,7 +28,7 @@
       }
     },
     "android": {
-      "userInterfaceStyle": "dark",
+      "userInterfaceStyle": "automatic",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#000000"
@@ -85,7 +85,14 @@
       "expo-font",
       "expo-sqlite",
       "./plugins/withOptionalRadios",
-      "./plugins/withDarkNavigationBar",
+      [
+        "expo-navigation-bar",
+        {
+          "enforceContrast": false,
+          "hidden": false,
+          "style": "light"
+        }
+      ],
       "./plugins/withUserScriptSandboxDisabled",
       "./plugins/withExplicitModulesDisabled",
       "./plugins/withInhibitPodWarnings",

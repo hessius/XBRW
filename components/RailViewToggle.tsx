@@ -3,7 +3,7 @@ import {XStack} from "tamagui";
 
 import DotIcon from "@/components/DotIcon";
 import {CHIP_HEIGHT} from "@/components/RailChip";
-import {palette, primary} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 import type {DotIconName} from "@/constants/dotIcons";
 
 /** The glyph size inside a segment, matching the chips beside it. */
@@ -37,7 +37,7 @@ type Props<T extends string> = {
  * restyled two screens that did not ask to be. Matching here cannot.
  *
  * Every value it draws with comes from `RailChip`: the same `CHIP_HEIGHT`, the
- * same `$4` radius and 1 pt border, the same `primary` fill and ink. The
+ * same `$4` radius and 1 pt border, the same neutral selection pair. The
  * pair is one bordered shape rather than two, because two chips side by side
  * would read as two independent buttons, which is exactly the reading the design
  * rejected when it chose a pair over a toggling icon.
@@ -48,6 +48,7 @@ type Props<T extends string> = {
 export default function RailViewToggle<T extends string>({
     value, options, accessibilityLabel, onChange
 }: Props<T>) {
+    const {selection, palette} = useAppearance();
     return (
         <XStack testID="rail-view-toggle"
                 accessibilityRole="tablist" accessibilityLabel={accessibilityLabel}
@@ -68,10 +69,13 @@ export default function RailViewToggle<T extends string>({
                             onPress={() => onChange(option.value)}
                             width={SEGMENT_WIDTH} height="100%"
                             alignItems="center" justifyContent="center"
-                            backgroundColor={selected ? primary.fill : palette.none}
-                            pressStyle={{opacity: 0.7}}>
+                            backgroundColor={selected ? selection.fill : palette.none}
+                            pressStyle={{
+                                backgroundColor: selected ? selection.pressedFill : palette.surface,
+                                opacity: 1
+                            }}>
                         <DotIcon name={option.icon} size={ICON_SIZE}
-                                 color={selected ? primary.ink : palette.dim}/>
+                                 color={selected ? selection.ink : palette.dim}/>
                     </XStack>
                 );
             })}

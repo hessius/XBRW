@@ -4,7 +4,7 @@ import {Text, XStack, YStack} from "tamagui";
 
 import DotMatrixText from "@/components/DotMatrixText";
 import PourProfile, {PROFILE_STROKE_WIDTH} from "@/components/PourProfile";
-import {palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 import {ALREADY_IN_LIBRARY, alreadyInLibraryAs, alreadyInLibraryAsSpoken,
         grindTooFine} from "@/constants/copy";
 import type {ImportPreview} from "@/hooks/useRecipeImport";
@@ -33,6 +33,7 @@ type Props = {
  * read first, and a panel showing only "Found" would make that pause worthless.
  */
 export default function ImportResult({preview, onOpen}: Props) {
+    const {palette} = useAppearance();
     const {recipe, isExisting, name, subtitle, imageURL} = preview;
     const [podLoaded, setPodLoaded] = useState(false);
     const [podFailed, setPodFailed] = useState(false);
@@ -193,6 +194,7 @@ export default function ImportResult({preview, onOpen}: Props) {
 
 /** One reading: a Doto value over a small label. Module scope, not inline. */
 function Figure({label, value}: {label: string; value: string}) {
+    const {palette} = useAppearance();
     return (
         <YStack gap="$1">
             <DotMatrixText fontSize={18} weight="bold" color={palette.text}>

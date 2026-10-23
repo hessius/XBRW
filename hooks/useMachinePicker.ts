@@ -12,6 +12,7 @@ import {
 import {useSavedMachines} from "@/hooks/useSavedMachines";
 import {sharedSettings} from "@/hooks/useSetting";
 import type {MachineColour} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 import {machineColourOf, machineLabel, type SavedMachine} from "@/library/machine/savedMachines";
 import type Machine from "@/library/machine/Machine";
 import type {Settings} from "@/library/Settings";
@@ -26,7 +27,7 @@ export type MachinePicker = {
     label: string;
     /** The active machine's model as it is said on screen, or "" with none. */
     model: string;
-    /** The active machine's colour. Green with none, which is what one machine draws. */
+    /** Display colour, already resolved for chrome. Uses the green identity with none. */
     colour: MachineColour;
     open: boolean;
     setOpen: (open: boolean) => void;
@@ -56,6 +57,7 @@ export type MachinePicker = {
  * new one runs, so the sheet does not open empty.
  */
 export function useMachinePicker(settings?: Settings): MachinePicker {
+    const appearance = useAppearance();
     const {machines, activeId} = useSavedMachines(settings);
     const [open, setOpen] = useState(false);
     const [pickerMachine, setPickerMachine] = useState<Machine | null>(null);
@@ -133,7 +135,7 @@ export function useMachinePicker(settings?: Settings): MachinePicker {
         available: machines.length >= 2,
         label: activeIndex < 0 ? "" : machineLabel(machines[activeIndex], activeIndex),
         model: activeIndex < 0 ? "" : MODEL_NAMES[machines[activeIndex].model],
-        colour: machineColourOf(activeIndex < 0 ? {} : machines[activeIndex]),
+        colour: appearance.machineColour(machineColourOf(activeIndex < 0 ? {} : machines[activeIndex])),
         open, setOpen, show,
         rescan: () => { if (blocker === null) look(); },
         machines, activeId, connected, survey, blocker, choose

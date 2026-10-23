@@ -1,3 +1,4 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React, {useRef, useState} from "react";
 import {ActivityIndicator, Pressable} from "react-native";
 import {Text, XStack, YStack} from "tamagui";
@@ -5,7 +6,7 @@ import {Text, XStack, YStack} from "tamagui";
 import DotMatrixText from "@/components/DotMatrixText";
 import XbrwSheet from "@/components/XbrwSheet";
 import {notify} from "@/components/XbrwToast";
-import {palette} from "@/constants/colors";
+
 
 export type RevertSourceId = "card" | "saved" | "xid" | "share";
 
@@ -75,6 +76,8 @@ type Props = {
  * has to be read — an earlier version put it at 1.56:1 against the sheet.
  */
 export default function RevertSheet({open, sources, onOpenChange, onReverted}: Props) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const [running, setRunning] = useState<RevertSourceId | null>(null);
     // State alone does not close the door: two taps inside one frame both read
     // the pre-commit `running`, and both fetch. The same stale-closure bug was

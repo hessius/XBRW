@@ -1,9 +1,9 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React from "react";
 import {Pressable} from "react-native";
 import {XStack} from "tamagui";
 
 import DotMatrixText from "@/components/DotMatrixText";
-import {palette, primary} from "@/constants/colors";
 
 export type Deck = "brew" | "stages" | "about";
 
@@ -30,6 +30,12 @@ type Props = {
  * values, so those are radios.
  */
 export default function DeckSwitch({deck, stageCount, accent, onChange}: Props) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
+    const selected = accent === undefined ? appearance.selection : {
+        fill: appearance.recipe(accent).fill,
+        ink: appearance.recipe(accent).onAccent.text
+    };
     // One segment of however many there are. Named for what it is rather than
     // for how many there used to be: it was `half` when there were two, and the
     // name was the only thing standing between the switch and a third deck.
@@ -52,10 +58,10 @@ export default function DeckSwitch({deck, stageCount, accent, onChange}: Props) 
                            alignItems:      "center",
                            paddingVertical: 9,
                            borderRadius:    9,
-                           backgroundColor: active ? (accent ?? primary.fill) : undefined
+                           backgroundColor: active ? selected.fill : undefined
                        }}>
                 <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.8}
-                               color={active ? palette.base : palette.dim}>
+                               color={active ? selected.ink : palette.dim}>
                     {label}
                 </DotMatrixText>
             </Pressable>

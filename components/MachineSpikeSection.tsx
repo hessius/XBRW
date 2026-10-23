@@ -1,8 +1,9 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React from "react";
 import {Button, Text, XStack, YStack} from "tamagui";
 
 import SettingsSection from "@/components/SettingsSection";
-import {palette} from "@/constants/colors";
+
 import {SPIKE_FRAMES, type SpikeFrame} from "@/library/machine/spikeFrames";
 
 type Props = {
@@ -30,6 +31,8 @@ export default function MachineSpikeSection({onSend}: Props) {
 }
 
 function SpikeRow({spike, onSend}: {spike: SpikeFrame; onSend: Props["onSend"]}) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     return (
         <YStack gap="$2" paddingVertical="$3" paddingHorizontal="$4">
             <XStack alignItems="center" justifyContent="space-between" gap="$3">

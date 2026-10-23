@@ -3,6 +3,7 @@ import {useEffect, useState} from "react";
 import {ATTRACT, useReducedMotion} from "@/constants/motion";
 import {useSetting} from "@/hooks/useSetting";
 import {EDGE_EPSILON, flickerMsFor, grindEdgeElapsed, msToNextGrindEdge} from "@/library/brew/grindFlicker";
+import {PLAN_MIN_OPACITY} from "@/library/brew/traceStyle";
 
 export type TraceAnimation = {
     /** Multiplier on the plan's stroke opacity. */
@@ -46,7 +47,8 @@ export function traceAnimationFor(
         // A raised cosine: 0 at the trough, 1 at the peak, and no corner at
         // either end the way a triangle wave has.
         const breath = (1 - Math.cos((elapsedMs / BREATH_MS) * 2 * Math.PI)) / 2;
-        return {opacity: 0.45 + 0.55 * breath, warmth: breath * 0.6, headAt: 1, dashed: true};
+        return {opacity: PLAN_MIN_OPACITY + (1 - PLAN_MIN_OPACITY) * breath,
+                warmth: breath * 0.6, headAt: 1, dashed: true};
     }
     if (phase === "sending") {
         return {opacity: 1, warmth: 0.4, headAt: (elapsedMs % TRAVEL_MS) / TRAVEL_MS,

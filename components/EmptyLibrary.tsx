@@ -1,10 +1,11 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React from "react";
 import {View} from "react-native";
 import {Text, YStack} from "tamagui";
 
 import DotBloom from "@/components/DotBloom";
 import DotMatrixText from "@/components/DotMatrixText";
-import {palette} from "@/constants/colors";
+
 
 const MARK_SIZE = 96;
 const MARK_DOT_SIZE = 5;
@@ -17,6 +18,8 @@ const MARK_DOT_SIZE = 5;
  * can do — which is also why there is no button in here.
  */
 export default function EmptyLibrary() {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     return (
         <YStack flex={1} alignItems="center" justifyContent="center"
                 gap="$4" paddingHorizontal="$6" paddingVertical="$8">

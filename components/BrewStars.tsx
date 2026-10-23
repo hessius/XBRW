@@ -1,9 +1,10 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React from "react";
 import {Pressable} from "react-native";
 import {XStack} from "tamagui";
 
 import DotIcon from "@/components/DotIcon";
-import {palette} from "@/constants/colors";
+
 import {MAX_RATING} from "@/library/brew/BrewRecord";
 
 /** How a rating reads aloud, for the label and for the interactive hint. */
@@ -53,6 +54,8 @@ type Props = {
 export default function BrewStars(
     {rating, onRate, announce = true, clearable = true, size = 18, testID}: Props
 ) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const shown = onRate === undefined ? rating : MAX_RATING;
     if (shown <= 0) return null;
 

@@ -3,6 +3,7 @@ import Svg, {Path} from "react-native-svg";
 
 import {FLOW_SPARKLINE_MIN_SPAN} from "@/library/brew/flowRate";
 import {channelStyle} from "@/library/brew/traceStyle";
+import {useAppearance} from "@/hooks/useAppearance";
 
 export const FLOW_SPARKLINE_WIDTH = 96;
 export const FLOW_SPARKLINE_HEIGHT = 20;
@@ -11,6 +12,7 @@ export const FLOW_SPARKLINE_MIN_POINTS = 2;
 export default function FlowSparkline({
     values, accent
 }: {values: number[]; accent: string}) {
+    const appearance = useAppearance();
     if (values.length < FLOW_SPARKLINE_MIN_POINTS) return null;
 
     const max = Math.max(...values);
@@ -20,7 +22,7 @@ export default function FlowSparkline({
     const half = Math.max(span / 2, FLOW_SPARKLINE_MIN_SPAN / 2);
     const lower = mid - half;
     const range = half * 2;
-    const style = channelStyle("cup", {accent});
+    const style = channelStyle("cup", {accent, appearance});
     const inset = style.strokeWidth / 2;
     const drawWidth = FLOW_SPARKLINE_WIDTH - inset * 2;
     const drawHeight = FLOW_SPARKLINE_HEIGHT - inset * 2;

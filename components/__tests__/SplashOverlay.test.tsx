@@ -4,7 +4,7 @@ import {act, screen} from "@testing-library/react-native";
 import SplashOverlay, {MARK_SIZE} from "@/components/SplashOverlay";
 import {DURATION} from "@/constants/motion";
 import {palette} from "@/constants/colors";
-import {renderWithProviders} from "@/test-utils/render";
+import {Providers, renderWithProviders} from "@/test-utils/render";
 
 jest.useFakeTimers();
 
@@ -45,6 +45,16 @@ function flatStyle(testID: string): Record<string, unknown> {
 }
 
 describe("SplashOverlay", () => {
+    it("keeps the branded white wordmark and black backdrop even in Light", async () => {
+        await renderWithProviders(
+            <Providers appearance={{theme: "light", recipeColours: "themed"}}>
+                <SplashOverlay visible onFinished={jest.fn()}/>
+            </Providers>
+        );
+        expect(flatStyle("splash-overlay").backgroundColor).toBe(palette.base);
+        expect(screen.getByText("XBRW", HIDDEN)).toHaveStyle({color: palette.text});
+        expect(screen.getByText("++", HIDDEN)).toHaveStyle({color: palette.text});
+    });
     it("renders nothing when not visible", async () => {
         await renderWithProviders(
             <SplashOverlay visible={false} onFinished={jest.fn()}/>

@@ -4,7 +4,7 @@ import {XStack} from "tamagui";
 
 import DotIcon from "@/components/DotIcon";
 import DotMatrixText from "@/components/DotMatrixText";
-import {onAccent, palette, primary} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 import type {DotIconName} from "@/constants/dotIcons";
 import {DURATION, EASING, useReducedMotion} from "@/constants/motion";
 
@@ -89,9 +89,9 @@ type Props = {
      */
     caretOpen?: boolean;
     /**
-     * The active fill. Defaults to `primary.fill`, the house "selected with no
-     * recipe accent" fill that `SegmentedControl` also uses. `primary` says why
-     * that fill is currently the brand magenta, and how to take it back.
+     * Canonical recipe accent. Absent, uses the neutral selection pair, the house
+     * "selected with no recipe accent" fill that `SegmentedControl` also uses, so the rail reads as
+     * on without borrowing the brand colour, which never means a state.
      */
     accent?: string;
     testID?: string;
@@ -147,12 +147,18 @@ function RailCaret({open, color}: {open: boolean; color: string}) {
  */
 export default function RailChip({
     active, onPress, accessibilityLabel, icon, label, expanded, caretOpen,
-    accent = primary.fill, testID, dimmed = false, unavailable = false
+    accent, testID, dimmed = false, unavailable = false
 }: Props) {
+    const appearance = useAppearance();
+    const {selection, palette} = appearance;
+    const recipe = accent === undefined ? undefined : appearance.recipe(accent);
+    const fill = recipe?.fill ?? selection.fill;
+    const selected = active && !unavailable;
     const iconOnly = label === undefined;
     // Ink only agrees with the fill; it does not carry the state itself.
-    const ink = active ? onAccent.text : unavailable ? palette.warn : palette.text;
-    const borderColor = unavailable ? palette.warn : active ? accent : palette.line;
+    const ink = unavailable ? palette.warn : selected
+        ? recipe?.onAccent.text ?? selection.ink : palette.text;
+    const borderColor = unavailable ? palette.warn : selected ? fill : palette.line;
 
     return (
         <XStack
@@ -179,9 +185,13 @@ export default function RailChip({
             gap="$1.5"
             borderRadius="$4"
             borderWidth={1}
-            backgroundColor={active && !unavailable ? accent : palette.none}
+            backgroundColor={selected ? fill : palette.none}
             borderColor={borderColor}
-            pressStyle={dimmed ? undefined : {opacity: 0.7}}>
+            pressStyle={dimmed ? undefined : {
+                backgroundColor: selected ? recipe?.fill ?? selection.pressedFill : palette.surface,
+                opacity: 1,
+                ...(selected && recipe ? {scale: 0.98} : {})
+            }}>
             {icon !== undefined && (
                 <DotIcon name={icon} size={ICON_SIZE} color={ink}/>
             )}

@@ -1,3 +1,4 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import {useLocalSearchParams} from "expo-router";
 import React, {useEffect, useRef, useState} from "react";
 import {Linking, Pressable, ScrollView} from "react-native";
@@ -15,7 +16,6 @@ import NewerVersionPrompt from "@/components/NewerVersionPrompt";
 import ScreenHeader from "@/components/ScreenHeader";
 import ShelfChoiceSheet from "@/components/ShelfChoiceSheet";
 import {notify} from "@/components/XbrwToast";
-import {palette, primary as primaryButton} from "@/constants/colors";
 import {SCREEN_PADDING} from "@/constants/layout";
 import router from "@/hooks/steadyRouter";
 import {useLiveBrew} from "@/hooks/useLiveBrew";
@@ -64,9 +64,11 @@ const FACT_LABEL_MIN_WIDTH = 92;
 const SCROLL_END = 24;
 
 function Figure({label, value, accent}: {label: string; value: string; accent: string}) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     return (
         <YStack flex={1} minWidth={72} gap="$1">
-            <DotMatrixText fontSize={20} weight="bold" color={accent}>{value}</DotMatrixText>
+            <DotMatrixText fontSize={20} weight="bold" color={appearance.recipe(accent).ink}>{value}</DotMatrixText>
             <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.2} color={palette.muted}>
                 {label}
             </DotMatrixText>
@@ -82,6 +84,9 @@ function Action({label, spoken, testID, primary = false, disabled = false, onPre
     disabled?: boolean;
     onPress: () => void;
 }) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
+    const action = appearance.primary;
     return (
         <Pressable accessibilityRole="button" accessibilityLabel={spoken}
                    accessibilityState={{disabled}} testID={testID}
@@ -89,11 +94,11 @@ function Action({label, spoken, testID, primary = false, disabled = false, onPre
             <XStack height={48} alignItems="center" justifyContent="center" borderRadius="$4"
                     opacity={disabled && !primary ? 0.35 : 1}
                     backgroundColor={!primary ? palette.none
-                        : disabled ? primaryButton.disabledFill : primaryButton.fill}
+                        : disabled ? action.disabledFill : action.fill}
                     borderWidth={primary ? 0 : 1} borderColor={palette.line}>
                 <DotMatrixText fontSize={12} weight="bold" letterSpacing={1.6}
                                color={!primary ? palette.text
-                                   : disabled ? primaryButton.disabledInk : primaryButton.ink}>
+                                   : disabled ? action.disabledInk : action.ink}>
                     {label}
                 </DotMatrixText>
             </XStack>
@@ -119,6 +124,8 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
     shelves?: () => string[];
     bagStore?: Pick<BagStore, "save">;
 } = {}) {
+    const appearance = useAppearance();
+    const {palette, selection} = appearance;
     const {ratingNoteOpen} = useLiveBrew();
     const params = useLocalSearchParams<{feed: string; coffee: string}>();
     const feed = feedUrl ?? params.feed ?? "";
@@ -443,10 +450,10 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
                                                        onPress={() => setSize(entry.size)}>
                                                 <XStack height={36} paddingHorizontal="$3"
                                                         alignItems="center" borderRadius="$4"
-                                                        backgroundColor={on ? primaryButton.fill : palette.raised}>
+                                                        backgroundColor={on ? selection.fill : palette.raised}>
                                                     <DotMatrixText fontSize={12} weight="bold"
                                                                    letterSpacing={1.4}
-                                                                   color={on ? primaryButton.ink : palette.dim}>
+                                                                   color={on ? selection.ink : palette.dim}>
                                                         {entry.size.toUpperCase()}
                                                     </DotMatrixText>
                                                 </XStack>

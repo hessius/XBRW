@@ -1,3 +1,4 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React, {useEffect, useRef} from "react";
 import {Pressable, TextInput} from "react-native";
 import {XStack} from "tamagui";
@@ -5,7 +6,7 @@ import {XStack} from "tamagui";
 import DotIcon from "@/components/DotIcon";
 import {dotMatrixTextProps} from "@/components/DotMatrixText";
 import {CHIP_HEIGHT} from "@/components/RailChip";
-import {palette} from "@/constants/colors";
+
 
 /** The glyph size inside the control, matching the chips beside it. */
 const ICON_SIZE = 18;
@@ -30,6 +31,8 @@ export function RailSearchChip({state, onPress}: {
     state: string;
     onPress: () => void;
 }) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     return (
         <XStack testID="rail-search"
                 accessible accessibilityRole="button"
@@ -74,6 +77,8 @@ export function RailSearchField({state, text, active, onChangeText, onBlur, onCl
     onBlur: () => void;
     onClear: () => void;
 }) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const inputRef = useRef<TextInput | null>(null);
     // The header is dot matrix throughout, and a field that dropped to the
     // system face in the middle of it read as a borrowed control. Asked for

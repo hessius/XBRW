@@ -3,7 +3,7 @@ import {Text, XStack, YStack} from "tamagui";
 
 import DeckSection from "@/components/DeckSection";
 import DotMatrixText from "@/components/DotMatrixText";
-import {palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 import {
     remainingLine,
     type BagReading,
@@ -39,6 +39,7 @@ function BagButton({label, spoken, hint, testID, onPress}: {
     testID: string;
     onPress: () => void;
 }) {
+    const {palette} = useAppearance();
     return (
         <XStack accessible accessibilityRole="button" accessibilityLabel={spoken}
                 accessibilityHint={hint} testID={testID} onPress={onPress}
@@ -76,6 +77,7 @@ function roastLine(bag: CoffeeBag): string | null {
 export default function BagSection({
     tracker, bag, reading, freshness, reorderUrl, onOpenSheet, onFinish, onReorder
 }: BagSectionProps) {
+    const {palette} = useAppearance();
     if (bag === null) {
         return (
             <DeckSection title="BAG" testID="about-bag">

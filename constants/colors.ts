@@ -1,15 +1,29 @@
 /**
  * Single source of truth for every colour in the app.
  *
- * The app is dark-only, so there are no light/dark variants here. Colour lives
- * in a plain module rather than in Tamagui theme tokens because roughly half the
- * call sites are plain React Native, expo-router or SVG props that cannot accept
+ * Static exports are canonical identities: keep them in persisted recipes,
+ * history, shelves, machine choices and non-image exports. Original theme with
+ * Original recipe colours is the default; its stored recipe values do not change.
+ * Presentation consumers use `useAppearance`; pure drawing helpers receive an
+ * explicit Appearance from `resolveAppearance`, never global active state.
+ * Generic selections use neutral selection roles; genuine primary actions use
+ * primary roles. SplashOverlay alone retains fixed branded launch colours.
+ *
+ * AppearanceScope is pure; production persistence and native side effects belong
+ * to their providers/hooks, not this resolver or offscreen image scopes.
+ * Colour lives in a plain module rather than in Tamagui
+ * theme tokens because roughly half the call sites are plain React Native,
+ * expo-router or SVG props that cannot accept
  * a `$token`, and Tamagui's theme proxy has no parent-theme fallback — a custom
  * key added to a theme would not resolve inside a sub-theme such as `dark_Button`.
  *
  * Add semantically named entries (`danger`, `surface`, `muted`), never literal
  * ones (`red`).
  */
+
+import normalizeColor from "@react-native/normalize-colors";
+
+import type {AppearanceChoice, ThemeId} from "@/library/appearance";
 
 /** The two halves of the accent palette. */
 export type AccentGroup = "coffee" | "tea";
@@ -364,8 +378,8 @@ export type MachineColour = {
  * is carried by the link glyph's shape, never by the colour alone.
  *
  * Every ink clears 8.5:1 on `base`, `surface` and `raised`, and so does every
- * muted twin; the colour tests hold both. The app is dark only, so there is
- * no light theme to check against.
+ * muted twin; the colour tests hold both. These are the canonical Original
+ * Dark values; the appearance resolver fits their ink for other chrome.
  *
  * Order matters: a new machine takes the first colour no other machine has,
  * and the order puts the hues furthest from green first.
@@ -471,4 +485,286 @@ export function cupLineFor(accent: string): string {
         hue = ((drift >= 0 ? WARN_HUE + AMBER_GUARD : WARN_HUE - AMBER_GUARD) + 360) % 360;
     }
     return toHex(hue, s, Math.max(CUP_LIGHTNESS_FLOOR, l));
+}
+
+export type Palette = {readonly [K in keyof typeof palette]: string};
+export type AccentForeground = {readonly [K in keyof typeof onAccent]: string};
+export type ControlPair = Readonly<{
+    fill: string; ink: string; pressedFill: string; pressedInk: string;
+}>;
+export type DisplayRecipeColour = Readonly<{
+    canonical: string;
+    fill: string;
+    ink: string;
+    cupInk: string;
+    onAccent: AccentForeground;
+    keyInk: Readonly<{normal: string; success: string; danger: string}>;
+}>;
+export type SwitchPair = Readonly<{
+    on: Readonly<{track: string; ring: string; thumb: string}>;
+    off: Readonly<{track: string; ring: string; thumb: string}>;
+}>;
+export type Appearance = Readonly<{
+    choice: AppearanceChoice;
+    scheme: "light" | "dark";
+    palette: Palette;
+    primary: ControlPair & Readonly<{disabledFill: string; disabledInk: string}>;
+    selection: ControlPair;
+    onBrand: {readonly text: string; readonly marker: string};
+    chromeSwitch: SwitchPair;
+    recipe: (canonical: string) => DisplayRecipeColour;
+    /** Chart marks on their actual (possibly composited) grounds; never remaps identity. */
+    chartInk: (displayColour: string, grounds: readonly string[], floor?: number, opacity?: number) => string;
+    onFill: (fill: string) => AccentForeground;
+    switchOn: (fill: string) => SwitchPair;
+    machineColour: (canonical: MachineColour) => MachineColour;
+}>;
+
+const chrome: Readonly<Record<ThemeId, Palette>> = {
+    original: palette,
+    light: {
+        ...palette,
+        base: "#F5F4F0", surface: "#FFFFFF", raised: "#ECEBE6", control: "#DCDAD5",
+        line: "#C5C3BD", text: "#171717", dim: "#595959", placeholder: "#595959",
+        muted: "#78736B", brand: "#AD0057", brandFill: "#D10069",
+        success: "#1F6A3B", warn: "#785B00", danger: "#AF2118", info: "#254E83",
+        dangerFaint: "#956C66", successMuted: "#42664C", warnMuted: "#71623F"
+    },
+    blue: {
+        ...palette,
+        base: "#0015B8", surface: "#061FA8", raised: "#0D28B8", control: "#1936C2",
+        line: "#3455CC", text: "#FFFFFF", dim: "#CED7FF", placeholder: "#CED7FF",
+        muted: "#7F98E4", brand: "#FFB5D8", success: "#9AF1B3", warn: "#FFE58F",
+        danger: "#FFB0A5", info: "#C6DFFF", dangerFaint: "#D3A3AA",
+        successMuted: "#B4DCC2", warnMuted: "#E1D7B5"
+    },
+    magenta: {
+        ...palette,
+        base: "#260B1D", surface: "#331127", raised: "#401831", control: "#50213F",
+        line: "#6A3153", text: "#FFFFFF", dim: "#D7BECE", placeholder: "#D7BECE",
+        muted: "#9A748A", brand: "#FF76BA", success: "#9AF1B3", warn: "#FFE58F",
+        danger: "#FFB0A5", info: "#E7C0D5", dangerFaint: "#BD969F",
+        successMuted: "#B4DCC2", warnMuted: "#E1D7B5"
+    }
+};
+
+const themedAccents: Readonly<Record<Exclude<ThemeId, "original">, Readonly<Record<AccentGroup, readonly string[]>>>> = {
+    light: {
+        coffee: ["#254E83", "#8B463A", "#8B3656", "#426039", "#255F58", "#654581", "#286076", "#83465E"],
+        tea: ["#46613D", "#725429", "#685D25", "#84433F"]
+    },
+    blue: {
+        coffee: ["#A9C1FF", "#7296E8", "#8CA9ED", "#BACDFB", "#86BBD9", "#B7B1F0", "#C6DFFF", "#8E9BD9"],
+        tea: ["#CED7F5", "#AABCD9", "#D6E4EE", "#9EADD3"]
+    },
+    magenta: {
+        coffee: ["#F4A0CA", "#CC7AA7", "#EAB0D0", "#BA95B6", "#D9A0C2", "#D1A5D8", "#E7C0D5", "#DC8EBA"],
+        tea: ["#DFCBD8", "#BBA2B2", "#F1DAE8", "#CBADB9"]
+    }
+};
+
+const primaryColours: Readonly<Record<ThemeId, readonly [string, string]>> = {
+    original: ["#FF007F", "#0C0C0C"],
+    light: ["#D10069", "#FFFFFF"],
+    blue: ["#E0ECFF", "#091536"],
+    magenta: ["#FF76BA", "#250B1B"]
+};
+const BLACK = "#000000";
+const WHITE = "#FFFFFF";
+type RGB = readonly [number, number, number];
+
+export function isValidColour(value: unknown): value is string {
+    return typeof value === "string" && normalizeColor(value) !== null;
+}
+
+/** RN colour syntax and alpha affect calculations, never persisted identity. */
+function effectiveHex(colour: string, backdrop: string): string {
+    const normalized = normalizeColor(colour);
+    if (normalized === null) throw new Error(`Invalid colour: ${colour}`);
+    if (/^#[0-9a-f]{3}$/i.test(colour)) {
+        return `#${colour.slice(1).split("").map(channel => channel + channel).join("")}`;
+    }
+    // Keep existing casing/output contracts for opaque hex inputs.
+    if (/^#[0-9a-f]{6}$/i.test(colour)) return colour;
+    const alpha = (normalized & 0xff) / 255;
+    const background = rgb(backdrop);
+    const foreground = [normalized >>> 24, (normalized >>> 16) & 0xff, (normalized >>> 8) & 0xff];
+    return "#" + foreground.map((channel, i) =>
+        Math.round(channel * alpha + background[i] * (1 - alpha))
+            .toString(16).padStart(2, "0")).join("");
+}
+
+/** Internal calculations use opaque six-digit colours. */
+function rgb(colour: string): RGB {
+    return [
+        parseInt(colour.slice(1, 3), 16),
+        parseInt(colour.slice(3, 5), 16),
+        parseInt(colour.slice(5, 7), 16)
+    ];
+}
+
+function luminance(channels: RGB): number {
+    const linear = channels.map(value => {
+        const c = value / 255;
+        return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    });
+    return linear[0] * 0.2126 + linear[1] * 0.7152 + linear[2] * 0.0722;
+}
+
+function ratio(foreground: RGB, background: RGB): number {
+    const a = luminance(foreground);
+    const b = luminance(background);
+    return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+}
+
+function contrastRatio(foreground: string, background: string): number {
+    return ratio(rgb(foreground), rgb(background));
+}
+
+function neutralFor(background: string): string {
+    return contrastRatio(BLACK, background) >= contrastRatio(WHITE, background) ? BLACK : WHITE;
+}
+
+/** First passing one-percent mix, bounded even for an impossible composition. */
+function fit(candidate: string, grounds: readonly string[], floor: number, opacity = 1): string {
+    const endpoint = neutralFor(grounds[0]);
+    for (let step = 0; step <= 100; step++) {
+        const ink = step === 0 ? candidate : mix(candidate, endpoint, step / 100);
+        if (grounds.every(ground =>
+            ratio(composite(ink, ground, opacity), rgb(ground)) >= floor)) return ink;
+    }
+    throw new Error("No readable colour for these backgrounds");
+}
+
+function composite(ink: string, fill: string, alpha: number): RGB {
+    const foreground = rgb(ink);
+    const background = rgb(fill);
+    const channel = (i: number) => foreground[i] * alpha + background[i] * (1 - alpha);
+    return [channel(0), channel(1), channel(2)];
+}
+
+function translucent(ink: string, fill: string, start: number, floor: number): string {
+    for (let percent = Math.round(start * 100); percent <= 100; percent++) {
+        if (ratio(composite(ink, fill, percent / 100), rgb(fill)) >= floor) {
+            return `rgba(${rgb(ink).join(",")},${(percent / 100).toFixed(2)})`;
+        }
+    }
+    throw new Error("No readable translucent colour for this fill");
+}
+
+function hasFill(group: Readonly<Record<AccentGroup, readonly string[]>>, fill: string): boolean {
+    return [...group.coffee, ...group.tea].some(value => value.toLowerCase() === fill.toLowerCase());
+}
+
+/** Takes an actual displayed fill, never a persisted identity to remap. */
+function foregroundFor(fill: string, backdrop: string): AccentForeground {
+    const computedFill = effectiveHex(fill, backdrop);
+    if (hasFill(accents, fill)) return {...onAccent};
+    const lightCard = hasFill(themedAccents.light, fill);
+    const pastelCard = hasFill(themedAccents.blue, fill) || hasFill(themedAccents.magenta, fill);
+    const whiteInk = lightCard || (!pastelCard && neutralFor(computedFill) === WHITE);
+    const ink = whiteInk ? WHITE : BLACK;
+    return {
+        text: lightCard ? WHITE : pastelCard ? onAccent.text : ink,
+        label: translucent(ink, computedFill, whiteInk ? 0.90 : pastelCard ? 0.80 : 0.65, 4.5),
+        marker: translucent(ink, computedFill, whiteInk ? 0.90 : pastelCard ? 0.80 : 0.70, 4.5),
+        profileStroke: translucent(ink, computedFill, whiteInk ? 0.80 : pastelCard ? 0.70 : 0.50, 3),
+        profileFill: `rgba(${rgb(ink).join(",")},0.15)`,
+        profileDot: `rgba(${rgb(ink).join(",")},0.36)`,
+        key: translucent(ink, computedFill, 0.78, 3)
+    };
+}
+
+function controlPair(fill: string, ink: string): ControlPair {
+    return {fill, ink, pressedFill: mix(fill, ink, 0.06), pressedInk: ink};
+}
+
+/**
+ * Pure presentation snapshot. Recipes must enter as canonical identities;
+ * badges and controls instead use onFill/switchOn with their actual fills.
+ * No setting, stored recipe or canonical export is changed by resolving.
+ */
+export function resolveAppearance(supplied: AppearanceChoice): Appearance {
+    const choice = {...supplied};
+    const p = {...chrome[choice.theme]};
+    const grounds = [p.base, p.surface, p.raised];
+    const [primaryFill, primaryInk] = primaryColours[choice.theme];
+    const primary = {
+        ...controlPair(primaryFill, primaryInk),
+        disabledFill: p.control,
+        disabledInk: p.muted
+    };
+    const selection = choice.theme === "light"
+        ? controlPair("#202020", WHITE) : controlPair(WHITE, onAccent.text);
+
+    function recipe(canonical: string): DisplayRecipeColour {
+        let fill = canonical;
+        if (choice.recipeColours === "themed" && choice.theme !== "original") {
+            for (const group of ["coffee", "tea"] as const) {
+                const index = accents[group].findIndex(value => value.toLowerCase() === canonical.toLowerCase());
+                if (index !== -1) {
+                    fill = themedAccents[choice.theme][group][index];
+                    break;
+                }
+            }
+        }
+        const computedFill = effectiveHex(fill, p.base);
+        const foreground = foregroundFor(fill, p.base);
+        const stock = hasFill(accents, fill);
+        const keyParts = foreground.key.match(/^rgba\((\d+),(\d+),(\d+),([\d.]+)\)$/)!;
+        const key = composite(
+            `#${keyParts.slice(1, 4).map(c => Number(c).toString(16).padStart(2, "0")).join("")}`,
+            computedFill, Number(keyParts[4])
+        );
+        // The glyph is on the rounded, composited well, not on chrome or fill.
+        const keyGround = `#${key.map(c => Math.round(c).toString(16).padStart(2, "0")).join("")}`;
+        const tones = stock ? palette : p;
+        return {
+            canonical, fill,
+            ink: fit(computedFill, grounds, 4.5),
+            cupInk: fit(cupLineFor(computedFill), [p.base], 3),
+            onAccent: foreground,
+            keyInk: {
+                normal: fit(tones.text, [keyGround], 3),
+                success: fit(tones.success, [keyGround], 3),
+                danger: fit(tones.danger, [keyGround], 3)
+            }
+        };
+    }
+
+    function switchOn(fill: string): SwitchPair {
+        const foreground = foregroundFor(fill, p.base);
+        if (hasFill(accents, fill)) {
+            return {on: {...switchColours.accent.on}, off: {...switchColours.accent.off}};
+        }
+        const track = foreground.text;
+        return {
+            on: {track, ring: track, thumb: neutralFor(track)},
+            off: {track: palette.none, ring: track, thumb: track}
+        };
+    }
+
+    const chromeSwitch: SwitchPair = choice.theme === "original"
+        ? {on: {...switchColours.dark.on}, off: {...switchColours.dark.off}}
+        : {
+            on: {track: primary.fill, ring: primary.fill, thumb: primary.ink},
+            off: {
+                track: p.control,
+                ring: fit(p.dim, grounds, 3),
+                thumb: fit(p.dim, [p.control], 3)
+            }
+        };
+    return {
+        choice, scheme: choice.theme === "light" ? "light" : "dark",
+        palette: p, primary, selection, onBrand: {...onBrand}, chromeSwitch,
+        recipe,
+        chartInk: (displayColour, grounds, floor = 3, opacity = 1) =>
+            fit(effectiveHex(displayColour, grounds[0]), grounds, floor, opacity),
+        onFill: fill => foregroundFor(fill, p.base), switchOn,
+        machineColour: canonical => ({
+            ...canonical,
+            ink: fit(canonical.ink, grounds, 4.5),
+            muted: fit(canonical.muted, grounds, 4.5)
+        })
+    };
 }

@@ -1,6 +1,24 @@
 import Recipe, {CUP_TYPE, DEFAULT_GRIND_SIZE, GRIND_SIZE_OFFSET, GRINDER_OFF} from '../Recipe';
 import {AGITATION, POUR_PATTERN} from '../Pour';
 import {buildCard, crc8MaximDow, HASH_LENGTH, makeHash, TEA_CARD, XPOD_CARD} from './cardFixtures';
+import {resolveAppearance} from "@/constants/colors";
+import {THEME_IDS} from "@/library/appearance";
+import {resolveAccent} from "@/library/accent";
+
+it("writes exactly the same independent-fixture card bytes after resolving all eight appearances", () => {
+    const card = buildCard(XPOD_CARD);
+    const recipe = new Recipe(card);
+    const prefix = card.slice(0, HASH_LENGTH);
+    const before = recipe.getData(prefix, true);
+    const canonical = JSON.stringify(recipe);
+    for (const theme of THEME_IDS) {
+        for (const recipeColours of ["original", "themed"] as const) {
+            resolveAppearance({theme, recipeColours}).recipe(resolveAccent(recipe));
+            expect(recipe.getData(prefix, true)).toEqual(before);
+            expect(JSON.stringify(recipe)).toBe(canonical);
+        }
+    }
+});
 
 /**
  * Characterisation tests for the byte layout written to genuine xBloom cards.

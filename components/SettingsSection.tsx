@@ -1,8 +1,9 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React from "react";
 import {YStack} from "tamagui";
 
 import DotMatrixText from "@/components/DotMatrixText";
-import {palette} from "@/constants/colors";
+
 
 type Props = {
     /** Omitted by the identity section, which needs no label above the app's name. */
@@ -17,6 +18,8 @@ type Props = {
  * and it still needs the same heading as every other section.
  */
 export function SettingsSectionTitle({title}: {title: string}) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     return (
         <DotMatrixText testID="settings-section-title" fontSize={11}
                        weight="bold" letterSpacing={1.6} color={palette.dim}>
@@ -47,6 +50,8 @@ export function SettingsSectionTitle({title}: {title: string}) {
  * the same corner.
  */
 export default function SettingsSection({title, children}: Props) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     // The divider lives here rather than on each row so that the first row has
     // nothing above it and the last nothing below it — the rounded corners stay
     // clean. `toArray` drops the `false`/`null` a conditional row leaves behind,

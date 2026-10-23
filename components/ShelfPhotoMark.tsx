@@ -4,6 +4,7 @@ import {MARK_SIZE} from "@/components/ShelfMark";
 import RecipePhoto from "@/components/RecipePhoto";
 import {COVER_MEMBERS, coverCells, type ShelfCoverMember} from "@/library/shelfCover";
 import type {ShelfMarkMembers} from "@/hooks/useRecipeLibrary";
+import {useAppearance} from "@/hooks/useAppearance";
 
 export function withShelfPhotos(
     marks: Readonly<Record<string, ShelfMarkMembers>>, show: boolean
@@ -19,6 +20,7 @@ export default function ShelfPhotoMark({members, count, fallback, automatic = fa
     automatic?: boolean;
     mixed?: boolean;
 }) {
+    const appearance = useAppearance();
     const [failedURLs, setFailedURLs] = useState<readonly string[]>([]);
     const cells = coverCells(members, mixed ? Math.max(2, count) : count, automatic || mixed);
     if (!cells.some(cell => cell.imageURL)) return <>{fallback}</>;
@@ -33,12 +35,13 @@ export default function ShelfPhotoMark({members, count, fallback, automatic = fa
               style={{width: MARK_SIZE, height: MARK_SIZE, flexDirection: "row", flexWrap: "wrap", gap: 2}}>
             {cells.map((cell, index) => {
                 const uri = cell.imageURL;
+                const fill = appearance.recipe(cell.accent).fill;
                 return (
                 <View key={`${index}-${cell.uuid}`} testID="shelf-cover-cell"
-                      style={{width: size, height: size, backgroundColor: cell.accent,
+                      style={{width: size, height: size, backgroundColor: fill,
                           borderRadius: single ? size / 2 : 4, overflow: "hidden"}}>
                     {uri && !(mixed && failedURLs.includes(uri)) && <RecipePhoto uri={uri} size={size} radius={size / 2}
-                        backing={cell.accent} testID="shelf-photo"
+                        backing={fill} testID="shelf-photo"
                         onError={automatic || mixed ? () => setFailedURLs(failed =>
                             failed.includes(uri) ? failed : [...failed, uri]) : undefined}/>}
                 </View>

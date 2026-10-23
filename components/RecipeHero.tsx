@@ -9,7 +9,7 @@ import DotMatrixText, {DOTO_MAX_FONT_SCALE} from "@/components/DotMatrixText";
 import PourProfile, {
     PROFILE_BLEED, PROFILE_STROKE_WIDTH, profileHeightAt
 } from "@/components/PourProfile";
-import {onAccent} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 import type Pour from "@/library/Pour";
 
 /** How far the watermark runs past the slab before it is clipped. */
@@ -351,18 +351,19 @@ export function heroFoldAway(name: string): number {
 }
 
 /** A control in the header's chrome row, drawn in a well cut out of the accent. */
-function HeaderButton({label, icon, accent, onPress}: {
+function HeaderButton({label, icon, ink, well, onPress}: {
     label: string;
     icon: "back" | "overflow";
-    accent: string;
+    ink: string;
+    well: string;
     onPress: () => void;
 }) {
     return (
         <Pressable accessibilityRole="button" accessibilityLabel={label}
                    onPress={onPress} hitSlop={12}>
-            <YStack backgroundColor={onAccent.key} borderRadius="$3"
+            <YStack backgroundColor={well} borderRadius="$3"
                     width={32} height={32} alignItems="center" justifyContent="center">
-                <DotIcon name={icon} size={16} color={accent}/>
+                <DotIcon name={icon} size={16} color={ink}/>
             </YStack>
         </Pressable>
     );
@@ -374,6 +375,7 @@ type Props = {
     /** False when `name` is a placeholder, which is then drawn muted. */
     named: boolean;
     xid: string;
+    /** Canonical recipe identity, not an already-resolved display fill. */
     accent: string;
     beverage: "COFFEE" | "TEA";
     pours: Pour[];
@@ -413,10 +415,12 @@ type Props = {
  * the same recipe is called.
  */
 export default function RecipeHero({
-    name, named, xid, accent, beverage, pours, collapsed,
+    name, named, xid, accent: canonicalAccent, beverage, pours, collapsed,
     onBack, onMore, onHelp, onRename
 }: Props) {
     "use no memo";
+    const colour = useAppearance().recipe(canonicalAccent);
+    const {fill: accent, onAccent, keyInk} = colour;
 
     // The accent slab runs up behind the status bar rather than starting below
     // it, so the screen has one surface at the top instead of a black strip
@@ -449,7 +453,8 @@ export default function RecipeHero({
                       }}>
                     <PourProfile pours={pours} width={PROFILE_WIDTH}
                                  height={nameLayout.profileHeight}
-                                 stroke={onAccent.profileStroke} fill={onAccent.profileFill}/>
+                                 stroke={onAccent.profileStroke} fill={onAccent.profileFill}
+                                 dot={onAccent.profileDot}/>
                 </View>
             )}
 
@@ -457,7 +462,7 @@ export default function RecipeHero({
                 above it. Two surfaces stacked at the top of the screen read as
                 two unrelated things; one reads as the recipe. */}
             <XStack alignItems="center" gap="$2" minHeight={36}>
-                <HeaderButton label="Back" icon="back" accent={accent} onPress={onBack}/>
+                <HeaderButton label="Back" icon="back" well={onAccent.key} ink={keyInk.normal} onPress={onBack}/>
 
                 {/* The name moves up here once the slab is folded away, so the
                     screen never loses its title. Still the rename button when
@@ -493,13 +498,13 @@ export default function RecipeHero({
                     <YStack backgroundColor={onAccent.key} borderRadius="$3"
                             paddingHorizontal="$2" height={32} justifyContent="center">
                         <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.6}
-                                       color={accent}>
+                                       color={keyInk.normal}>
                             HELP
                         </DotMatrixText>
                     </YStack>
                 </Pressable>
 
-                <HeaderButton label="More" icon="overflow" accent={accent} onPress={onMore}/>
+                <HeaderButton label="More" icon="overflow" well={onAccent.key} ink={keyInk.normal} onPress={onMore}/>
             </XStack>
 
             <Collapsible open={!collapsed}>
@@ -515,7 +520,7 @@ export default function RecipeHero({
                         <XStack testID="hero-xid" backgroundColor={onAccent.key}
                                 borderRadius="$2" paddingHorizontal="$1.5" paddingVertical={1}>
                             <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.6}
-                                           color={accent}>
+                                           color={keyInk.normal}>
                                 {xid}
                             </DotMatrixText>
                         </XStack>

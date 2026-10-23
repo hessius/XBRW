@@ -1,3 +1,4 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React, {useEffect, useRef, useState} from "react";
 import {AccessibilityInfo, findNodeHandle, ScrollView} from "react-native";
 import {useLocalSearchParams, useNavigation} from "expo-router";
@@ -13,7 +14,6 @@ import EasyModeSlots, {slotWriteAvailability} from "@/components/EasyModeSlots";
 import {slotOverlayVisible} from "@/components/EasyModeWriteOverlay";
 import XbrwSheet from "@/components/XbrwSheet";
 import ScreenHeader from "@/components/ScreenHeader";
-import {palette, primary} from "@/constants/colors";
 import DotMatrixText from "@/components/DotMatrixText";
 import {isActiveBrewPhase} from "@/library/machine/Machine";
 import {unavailableSlotPort} from "@/library/slots/slotWriter";
@@ -21,6 +21,9 @@ import {unwrittenSlotCount} from "@/library/slots/slotModel";
 import {STABLE_HOST} from "@/constants/views";
 
 export default function EasyModeScreen() {
+    const appearance = useAppearance();
+    const {palette} = appearance;
+    const {primary} = appearance;
     const {recipeJSON} = useLocalSearchParams<{recipeJSON?: string | string[]}>();
     const navigation = useNavigation();
     const focused = useIsFocused();

@@ -8,7 +8,8 @@ import BrewTrace from "@/components/BrewTrace";
 import DotIcon from "@/components/DotIcon";
 import DotMatrixText from "@/components/DotMatrixText";
 import {MINI_FAILURE_WHY, OVER, OVERFLOW_PAUSED_HEADLINE} from "@/constants/brewCopy";
-import {palette} from "@/constants/colors";
+import type {Palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 import {DURATION} from "@/constants/motion";
 import type {BeverageKind, BrewSample} from "@/library/brew/BrewRecord";
 import type {BypassView} from "@/library/brew/bypassState";
@@ -49,7 +50,7 @@ const TRACE_HEIGHT = 34;
 const BAR_PADDING = 10;
 
 /** The two lines of words, and the colour the live line takes. */
-function say(props: Props): {title: string; detail: string; line: string} {
+function say(props: Props, palette: Palette): {title: string; detail: string; line: string} {
     const {phase, recipeName, dose, elapsed, holding, heldSeconds, samples} = props;
     const upper = recipeName.toUpperCase();
 
@@ -157,7 +158,8 @@ function say(props: Props): {title: string; detail: string; line: string} {
  */
 export default function BrewMiniBar(props: Props) {
     const {pours, samples, beverageKind, pauseIntervals, bypass, phase, holding, onOpen, onDismiss} = props;
-    const {title, detail, line} = say(props);
+    const {palette} = useAppearance();
+    const {title, detail, line} = say(props, palette);
     const over = OVER.has(phase.name);
     const insets = useSafeAreaInsets();
     // This bar pads itself by the inset, so the screen above it has none left

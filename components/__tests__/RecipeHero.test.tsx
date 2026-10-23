@@ -8,7 +8,8 @@ import RecipeHero, {
     HERO_PROFILE_RESERVE, heroFoldAway, heroNameLayout, PROFILE_BAND_HEIGHT, wrapLines
 } from "@/components/RecipeHero";
 import {COLLAPSE_SHRINK} from "@/hooks/useCollapsibleHeader";
-import {onAccent} from "@/constants/colors";
+import {onAccent, resolveAppearance} from "@/constants/colors";
+import {DEFAULT_APPEARANCE} from "@/library/appearance";
 import Pour from "@/library/Pour";
 import {renderWithProviders, TEST_INSETS} from "@/test-utils/render";
 
@@ -200,11 +201,11 @@ describe("RecipeHero", () => {
         // well is what the EXPLAIN toggle wore when it was on.
         await renderWithProviders(<RecipeHero {...BASE}/>);
 
-        // Accent-on-key, the same inversion the back and overflow buttons use:
-        // the label takes the slab's colour because the well behind it is
-        // filled.
+        // The label shares the back and overflow buttons' actual key-ground ink.
         expect(StyleSheet.flatten(screen.getByText("HELP").props.style))
-            .toEqual(expect.objectContaining({color: BASE.accent}));
+            .toEqual(expect.objectContaining({
+                color: resolveAppearance(DEFAULT_APPEARANCE).recipe(BASE.accent).keyInk.normal
+            }));
     });
 
     it("carries the name in its chrome row once collapsed", async () => {

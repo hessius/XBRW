@@ -3,7 +3,7 @@ import Svg, {Line} from "react-native-svg";
 import {XStack} from "tamagui";
 
 import DotMatrixText, {drawnFontSize} from "@/components/DotMatrixText";
-import {palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 
 /** Point size of a legend label. */
 export const LEGEND_SIZE = 9;
@@ -37,6 +37,7 @@ export function rowHeight(fontSize: number): number {
 export default function TraceLegendItem({colour, label, dashed = false, dotted = false}: {
     colour: string; label: string; dashed?: boolean; dotted?: boolean;
 }) {
+    const {palette} = useAppearance();
     return (
         <XStack alignItems="center" gap="$1.5">
             <Svg width={14} height={6}>

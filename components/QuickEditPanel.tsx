@@ -5,7 +5,7 @@ import {Button, Text, XStack, YStack} from "tamagui";
 import DotMatrixText from "@/components/DotMatrixText";
 import RailChip from "@/components/RailChip";
 import Stepper from "@/components/Stepper";
-import {palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 import {
     canSaveDose,
     describeAdjustment,
@@ -87,6 +87,7 @@ function updateAdjustment(
 const BASELINE_LINE_HEIGHT = 16;
 
 function QuickEditRow({label, children, detail, fontScale}: QuickEditRowProps) {
+    const {palette} = useAppearance();
     return (
         <XStack alignItems="center" justifyContent="space-between" gap="$3"
                 paddingVertical="$2.5">
@@ -117,7 +118,8 @@ function baselineDetail(
     recipe: Recipe,
     knob: QuickEditKnob,
     adjusted: boolean,
-    fontScale: number
+    fontScale: number,
+    secondaryInk: string
 ): React.ReactNode {
     if (!adjusted) {
         return undefined;
@@ -125,7 +127,7 @@ function baselineDetail(
 
     return (
         <Text testID={`quick-edit-${knob}-baseline`} fontSize={12} lineHeight={16}
-              color={palette.dim}>
+              color={secondaryInk}>
             {describeKnobBaseline(recipe, knob, fontScale)}
         </Text>
     );
@@ -169,6 +171,8 @@ export default function QuickEditPanel({
     "use no memo";
 
     // SAVE AS mutates this recipe in place; its reference cannot key derived values.
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const {fontScale} = useWindowDimensions();
     const bounds = quickEditBounds(recipe);
     const savedDose = recipe.dosage;
@@ -199,7 +203,7 @@ export default function QuickEditPanel({
             <XStack alignItems="center" justifyContent="space-between" gap="$3">
                 <YStack flex={1} gap={2}>
                     <DotMatrixText fontSize={16} weight="bold" letterSpacing={1.8}
-                                   color={accent}>
+                                   color={appearance.recipe(accent).ink}>
                         QUICK EDIT
                     </DotMatrixText>
                     <Text fontSize={12} lineHeight={16} color={palette.dim}>
@@ -208,7 +212,7 @@ export default function QuickEditPanel({
                 </YStack>
                 <Button size="$3" chromeless accessibilityRole="button"
                         accessibilityLabel="Reset quick edits"
-                        color={accent}
+                        color={appearance.recipe(accent).ink}
                         onPress={() => onChange({})}>
                     RESET
                 </Button>
@@ -218,7 +222,7 @@ export default function QuickEditPanel({
                     borderColor={palette.line} paddingVertical="$1">
                 <QuickEditRow label="DOSE" fontScale={fontScale}
                               detail={baselineDetail(
-                                  recipe, "dose", adjustments.dose !== undefined, fontScale
+                                  recipe, "dose", adjustments.dose !== undefined, fontScale, palette.dim
                               )}>
                     <Stepper label="Quick edit dose" value={dose}
                              min={bounds.dose.min} max={bounds.dose.max} step={1}
@@ -237,7 +241,7 @@ export default function QuickEditPanel({
                 {bounds.ratio !== null && (
                     <QuickEditRow label="RATIO" fontScale={fontScale}
                                   detail={baselineDetail(
-                                      recipe, "ratio", adjustments.ratio !== undefined, fontScale
+                                      recipe, "ratio", adjustments.ratio !== undefined, fontScale, palette.dim
                                   )}>
                         <Stepper label="Quick edit ratio" value={ratio}
                                  min={bounds.ratio.min} max={bounds.ratio.max} step={1}
@@ -251,7 +255,7 @@ export default function QuickEditPanel({
                 {grindBounds !== null && (
                     <QuickEditRow label="GRIND" fontScale={fontScale}
                                   detail={baselineDetail(
-                                      recipe, "grind", adjustments.grind !== undefined, fontScale
+                                      recipe, "grind", adjustments.grind !== undefined, fontScale, palette.dim
                                   )}>
                         <Stepper label="Quick edit grind" value={grind}
                                  min={grindBounds.min} max={grindBounds.off} step={1}
@@ -298,7 +302,7 @@ export default function QuickEditPanel({
                 <Button testID="quick-edit-save-dose" size="$3" chromeless
                         alignSelf="flex-start" accessibilityRole="button"
                         accessibilityLabel={`Save the recipe at ${saveDose} grams`}
-                        color={accent}
+                        color={appearance.recipe(accent).ink}
                         onPress={() => onSaveDose?.(saveDose)}>
                     {`SAVE AS ${saveDose} G`}
                 </Button>

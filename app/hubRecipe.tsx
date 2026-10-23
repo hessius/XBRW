@@ -1,3 +1,4 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import {useLocalSearchParams} from "expo-router";
 import React, {useEffect, useState} from "react";
 import {Pressable, ScrollView} from "react-native";
@@ -8,7 +9,6 @@ import {Chip, DetailPhoto} from "@/components/CatalogueParts";
 import DotMatrixText from "@/components/DotMatrixText";
 import ScreenHeader from "@/components/ScreenHeader";
 import {notify} from "@/components/XbrwToast";
-import {palette, primary} from "@/constants/colors";
 import {SCREEN_PADDING} from "@/constants/layout";
 import router from "@/hooks/steadyRouter";
 import {useBottomInset} from "@/hooks/useBottomInset";
@@ -100,6 +100,8 @@ function ErrorState({
     error: Error;
     onRetry: () => void;
 }) {
+    const appearance = useAppearance();
+    const {palette, primary} = appearance;
     const said = saying(error);
     return (
         <YStack flex={1} alignItems="center" justifyContent="center"
@@ -131,6 +133,8 @@ function ErrorState({
 }
 
 function LoadingState() {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     return (
         <YStack flex={1} alignItems="center" justifyContent="center"
                 gap="$2" paddingHorizontal="$6" paddingVertical="$8">
@@ -154,9 +158,11 @@ function Figure({
     value: string;
     accent: string;
 }) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     return (
         <YStack flex={1} minWidth={88} gap="$1">
-            <DotMatrixText fontSize={22} weight="bold" color={accent}>
+            <DotMatrixText fontSize={22} weight="bold" color={appearance.recipe(accent).ink}>
                 {value}
             </DotMatrixText>
             <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.2}
@@ -176,6 +182,9 @@ function RecipeDetail({
     saving: boolean;
     onSave: () => void;
 }) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
+    const {primary} = appearance;
     const row = rowFromDetail(detail);
     const accent = hubAccent(row.id);
     const stages = hubPours(detail.pourList);
@@ -254,6 +263,8 @@ function RecipeDetail({
 }
 
 export default function HubRecipeScreen() {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const {id} = useLocalSearchParams<{id: string}>();
     const recipeId = hubIdIn(id);
     const bottomInset = useBottomInset();

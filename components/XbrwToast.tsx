@@ -4,7 +4,7 @@ import {Text, XStack, YStack} from "tamagui";
 
 import DotIcon from "@/components/DotIcon";
 import DotMatrixText from "@/components/DotMatrixText";
-import {palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 import {
     libTypeToTone,
     resolveNotice,
@@ -22,13 +22,6 @@ const GLYPH_SIZE = 22;
  * say in a test; the library always passes a width in the app.
  */
 const FALLBACK_WIDTH = 360;
-
-/** Per-tone accent, used for the glyph and its label. */
-const TONE_COLOUR: Record<NoticeTone, string> = {
-    success: palette.success,
-    error:   palette.danger,
-    info:    palette.info
-};
 
 type Props = {
     /** The toast library's own type tag. Translated back into a tone here. */
@@ -58,9 +51,15 @@ type Props = {
  * in Inter.
  */
 export function XbrwToast({type, message, width = FALLBACK_WIDTH}: Props) {
+    const {palette} = useAppearance();
+    const toneColour: Record<NoticeTone, string> = {
+        success: palette.success,
+        error: palette.danger,
+        info: palette.info
+    };
     const tone = libTypeToTone(type);
     const notice = resolveNotice({tone, message});
-    const colour = TONE_COLOUR[tone];
+    const colour = toneColour[tone];
 
     return (
         <XStack

@@ -80,12 +80,10 @@ describe("BrewStageRung", () => {
         );
     });
 
-    it("is dimmed before the stage happens", async () => {
+    it("keeps future-stage information opaque rather than treating it as disabled", async () => {
         const {getByTestId} = await draw({testID: "rung"});
 
-        expect(getByTestId("rung").props.style).toEqual(
-            expect.objectContaining({opacity: 0.45})
-        );
+        expect(getByTestId("rung").props.style.opacity ?? 1).toBe(1);
     });
 
     it("draws a plan at full strength, numbered in the accent like the editor's tiles", async () => {

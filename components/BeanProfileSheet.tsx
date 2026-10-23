@@ -9,7 +9,7 @@ import {
 } from "@/components/BeanProfileDeck";
 import DotMatrixText from "@/components/DotMatrixText";
 import XbrwSheet from "@/components/XbrwSheet";
-import {palette} from "@/constants/colors";
+import {useAppearance} from "@/hooks/useAppearance";
 import {
     PROFILE_FIELD_LABEL,
     rankProfileRows,
@@ -21,12 +21,16 @@ type Props = {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     profile: BeanProfile;
+    /** Canonical recipe accent; resolved here to page ink, never a display fill. */
     accent?: string;
 };
 
 export function BeanProfileSheet({
-    open, onOpenChange, profile, accent = palette.info
+    open, onOpenChange, profile, accent: suppliedAccent
 }: Props) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
+    const accent = suppliedAccent === undefined ? palette.info : appearance.recipe(suppliedAccent).ink;
     const rows = rankProfileRows(profile.rows);
     const hasUntagged = profile.untagged.brews > 0;
 

@@ -1,3 +1,4 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import {useLocalSearchParams} from "expo-router";
 import React, {useEffect, useRef, useState} from "react";
 import {useCatalogueNow} from "@/hooks/useCatalogueNow";
@@ -14,7 +15,7 @@ import RailChip from "@/components/RailChip";
 import {RailSearchChip, RailSearchField} from "@/components/RailSearch";
 import RoasterCoffeeRow from "@/components/RoasterCoffeeRow";
 import ScreenHeader from "@/components/ScreenHeader";
-import {palette} from "@/constants/colors";
+
 import {UNCLIPPED_LIST} from "@/constants/lists";
 import router from "@/hooks/steadyRouter";
 import {useLiveBrew} from "@/hooks/useLiveBrew";
@@ -62,6 +63,8 @@ function CoffeeRail({search, query, offered, openFacet, onFacetOpen, onChange}: 
     onFacetOpen: (facet: CoffeeFacet) => void;
     onChange: (query: CoffeeQuery) => void;
 }) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const state = searchState(search.text);
     return (
         <YStack borderBottomWidth={1} borderColor={palette.line} backgroundColor={palette.base}>
@@ -114,6 +117,8 @@ function CoffeeRail({search, query, offered, openFacet, onFacetOpen, onChange}: 
  * MANAGE FEEDS, because it is not why anyone opened the list.
  */
 function ManageSubscription({feed}: {feed: string}) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     return (
         <Pressable accessibilityRole="button" accessibilityLabel="Manage feed"
                    testID="roaster-manage"
@@ -146,6 +151,8 @@ export default function RoasterScreen({settings, feedUrl, now}: {
     feedUrl?: string;
     now?: () => number;
 } = {}) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
     const {ratingNoteOpen} = useLiveBrew();
     const params = useLocalSearchParams<{feed: string}>();
     const feed = feedUrl ?? params.feed ?? "";

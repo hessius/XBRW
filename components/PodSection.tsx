@@ -1,3 +1,4 @@
+import {useAppearance} from "@/hooks/useAppearance";
 import React, {useState} from "react";
 import {Image} from "react-native";
 import {Text, XStack, YStack} from "tamagui";
@@ -8,7 +9,7 @@ import DotMatrixText from "@/components/DotMatrixText";
 import PodCoffeeRows from "@/components/PodCoffeeRows";
 import {roasterOf} from "@/components/FromSection";
 import TextFieldRow from "@/components/TextFieldRow";
-import {palette} from "@/constants/colors";
+
 import Recipe, {isValidXID} from "@/library/Recipe";
 
 /** The pod mark's diameter, matching the one on the import panel. */
@@ -67,6 +68,8 @@ export default function PodSection({
     onFollowPod: () => void;
 }) {
     "use no memo";
+    const appearance = useAppearance();
+    const {palette} = appearance;
 
     // A late pod lookup mutates the recipe; cached children must follow that update.
     const [podFailed, setPodFailed] = useState(false);
