@@ -16,6 +16,7 @@ import XbrwSheet from "@/components/XbrwSheet";
 import ScreenHeader from "@/components/ScreenHeader";
 
 import DotMatrixText from "@/components/DotMatrixText";
+import FillLabel from "@/components/FillLabel";
 import {isActiveBrewPhase} from "@/library/machine/Machine";
 import {unavailableSlotPort} from "@/library/slots/slotWriter";
 import {unwrittenSlotCount} from "@/library/slots/slotModel";
@@ -165,7 +166,7 @@ export default function EasyModeScreen() {
                         backgroundColor={primary.fill} color={primary.ink}
                         disabledStyle={{backgroundColor: palette.text, opacity: 0.45}}
                         disabled={availability !== null} onPress={write}>
-                        <DotMatrixText fontSize={12} weight="bold" color={primary.ink}>WRITE TO MACHINE</DotMatrixText>
+                        <FillLabel fontSize={12} color={primary.ink}>WRITE TO MACHINE</FillLabel>
                     </Button>
                     <Button height="auto" minHeight="$4" paddingVertical="$3"
                         backgroundColor={palette.raised} color={palette.text} borderWidth={1} borderColor={palette.line}

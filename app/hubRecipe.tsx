@@ -6,6 +6,7 @@ import {Text, XStack, YStack} from "tamagui";
 
 import BrewStageLadder from "@/components/BrewStageLadder";
 import DotMatrixText from "@/components/DotMatrixText";
+import FillLabel from "@/components/FillLabel";
 import ScreenHeader from "@/components/ScreenHeader";
 import {notify} from "@/components/XbrwToast";
 
@@ -296,10 +297,9 @@ function RecipeDetail({
                     <XStack height={48} alignItems="center" justifyContent="center"
                             borderRadius="$4" backgroundColor={primary.fill}
                             opacity={saving ? 0.35 : 1}>
-                        <DotMatrixText fontSize={12} weight="bold" letterSpacing={1.6}
-                                       color={primary.ink}>
+                        <FillLabel fontSize={12} letterSpacing={1.6} color={primary.ink}>
                             {saving ? "SAVING" : "SAVE"}
-                        </DotMatrixText>
+                        </FillLabel>
                     </XStack>
                 </Pressable>
             </YStack>

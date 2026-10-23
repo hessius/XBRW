@@ -3,6 +3,7 @@ import {ScrollView, TextInput} from "react-native";
 import {Text, XStack, YStack} from "tamagui";
 
 import DotMatrixText from "@/components/DotMatrixText";
+import FillLabel from "@/components/FillLabel";
 import RoastDayField from "@/components/RoastDayField";
 import XbrwSheet from "@/components/XbrwSheet";
 import {useAppearance} from "@/hooks/useAppearance";
@@ -131,11 +132,11 @@ function ActionButton({label, spoken, testID, tone, filled, disabled, onPress}: 
                 backgroundColor={filled === true
                     ? disabled ? palette.control : primary.fill : palette.raised}
                 borderWidth={filled === true ? 0 : 1} borderColor={palette.line}>
-            <DotMatrixText fontSize={13} weight="bold" letterSpacing={1.5}
-                           color={filled === true
-                               ? disabled ? palette.dim : primary.ink : tone}>
+            <FillLabel filled={filled === true} fontSize={13} letterSpacing={1.5}
+                       color={filled === true
+                           ? disabled ? palette.dim : primary.ink : tone}>
                 {label}
-            </DotMatrixText>
+            </FillLabel>
         </XStack>
     );
 }
