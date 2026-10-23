@@ -8,6 +8,7 @@ import {tagFilterId} from "@/library/libraryFilters";
 import Recipe from "@/library/Recipe";
 import {chooseRecipe} from "@/library/roasterCatalogue";
 import type {FeedCoffee} from "@/library/roasterFeed";
+import {reviveRoastAdvice} from "@/library/roastAdvice";
 import type {Settings} from "@/library/Settings";
 
 /**
@@ -72,7 +73,7 @@ export async function fetchCoffeeRecipe(
     // them on its coffee, where ABOUT reads them.
     const roaster = coffee.coffee.roaster?.trim()
         || recipe.coffee?.roaster?.trim() || feedRoaster?.trim();
-    const bean = {...coffee.coffee, ...(roaster ? {roaster} : {})};
+    const bean = {...coffee.coffee, ...reviveRoastAdvice(coffee.roast ?? {}), ...(roaster ? {roaster} : {})};
     const withFlavours = coffee.flavours.length > 0
         ? {...bean, flavours: coffee.flavours}
         : bean;

@@ -11,6 +11,15 @@ import {feed, memoryLibrary, memorySettings} from "@/test-utils/roasterFeed";
 const coffees = feed([{id: "a"}, {id: "b", sizes: ["15g", "20g"]}]).coffees;
 
 describe("fetchCoffeeRecipe", () => {
+    it("preserves validated camel-case feed advice beside flavours", async () => {
+        const coffee = {...coffees[0], roast: {
+            restDays: 11, peakDay: 28, bestUntilDay: 42
+        }, flavours: ["Peach"]};
+        const {recipe} = await fetchCoffeeRecipe(coffee, undefined, memoryLibrary().deps);
+        expect(recipe.coffee).toMatchObject({
+            restDays: 11, peakDay: 28, bestUntilDay: 42, flavours: ["Peach"]
+        });
+    });
     it("keeps contextual roaster metadata in backup JSON without a subscription", async () => {
         const library = memoryLibrary();
         const coffee = {...coffees[0], coffee: {...coffees[0].coffee, roaster: ""}};

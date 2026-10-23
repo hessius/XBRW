@@ -1,4 +1,5 @@
 import {readLabels} from "@/library/coffeeLabels";
+import {reviveRoastAdvice, type RoastAdvice} from "@/library/roastAdvice";
 
 /**
  * What we know about a coffee, and hand onwards.
@@ -39,7 +40,7 @@ import {readLabels} from "@/library/coffeeLabels";
  * `resolvedOrigin` reads it, so removing it would drop a field from every pod
  * brew already recorded.
  */
-export type PodCoffee = {
+export type PodCoffee = RoastAdvice & {
     name: string;
     roaster?: string;
     /** ISO 8601 date. */
@@ -413,5 +414,5 @@ export function podCoffeeFromStored(value: unknown): PodCoffee | null {
     if (decaffeinated !== undefined) coffee.decaffeinated = decaffeinated;
     const flavours = readLabels(record.flavours);
     if (flavours.length > 0) coffee.flavours = flavours;
-    return coffee;
+    return {...coffee, ...reviveRoastAdvice(record)};
 }

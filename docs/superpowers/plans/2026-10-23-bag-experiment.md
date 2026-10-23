@@ -23,8 +23,8 @@ Branch: `feat/2.2.0-bag-labs-20261023`.
 Pinned base: `8f2638dfa2e75928ff447fbbd0ee03ba14986886`.
 
 The approved spec was pushed at `a372fd51f1519b7a6051ba7d4041cd5a15ac9c1c`.
-Implementation is authorised for inline execution. Tasks 1-6 now have local
-iOS/Android qualification; Tasks 7-11 and all native/manual gates remain pending.
+Implementation is authorised for inline execution. Tasks 1-7 now have local
+iOS/Android qualification; Tasks 8-11 and all native/manual gates remain pending.
 The default-off gate and device-local tracker keys were introduced with Task 4
 so the live-owner integration is type-safe before the settings UI arrives.
 
@@ -1373,7 +1373,7 @@ git commit -m "feat(bags): migrate preview inventory without rewriting its histo
 **Modify:** `library/podCoffee.ts`, `library/brewmindLink.ts`,
 `library/roasterRecipes.ts:73-80` and their tests.
 
-- [ ] **Step 1: Reuse only the pinned pure/calendar files.**
+- [x] **Step 1: Reuse only the pinned pure/calendar files.**
 
 For files not already introduced by Task 1, extract this bounded source patch:
 
@@ -1387,7 +1387,7 @@ whole-day bounds 0..540, then enforce
 also check rest/best ordering when peak is absent. Supplied invalid ordering
 produces a field/problem result rather than a confident freshness state.
 
-- [ ] **Step 2: Add red source/estimate and disabled-clock tests.**
+- [x] **Step 2: Add red source/estimate and disabled-clock tests.**
 
 ```ts
 it("does not turn an unknown roast into known medium information", () => {
@@ -1409,7 +1409,7 @@ then enabled updates at the next local midnight and foreground. Use awaited
 `renderHook`. Keep the source's DST tests and verify re-enable refreshes stale
 time through a tagged reading rather than setState at effect entry.
 
-- [ ] **Step 3: Adapt the public advice contract and clock.**
+- [x] **Step 3: Adapt the public advice contract and clock.**
 
 `startingFigures` returns `{figures, level?: RoastLevelKey, source}`.
 Known explicit coffee advice uses source coffee; known roast-level defaults
@@ -1489,7 +1489,7 @@ Outside the estimated window rather than assertions of taste or expiry.
 Missing roast date produces no status. Saved invalid/future roast dates
 produce a visible correction problem, not an invented ready date.
 
-- [ ] **Step 4: Run green and commit.**
+- [x] **Step 4: Run green and commit.**
 
 ```bash
 npx jest --runTestsByPath library/__tests__/restPeak.test.ts hooks/__tests__/useNow.test.ts library/__tests__/podCoffee.test.ts library/__tests__/brewmindLink.test.ts library/__tests__/roasterRecipes.test.ts --runInBand
