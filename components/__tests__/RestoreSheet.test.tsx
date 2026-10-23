@@ -1,9 +1,10 @@
 import React from "react";
-import {screen, fireEvent} from "@testing-library/react-native";
+import {screen, fireEvent, waitFor} from "@testing-library/react-native";
 
 import RestoreSheet from "@/components/RestoreSheet";
 import Recipe from "@/library/Recipe";
-import {renderWithProviders} from "@/test-utils/render";
+import {renderWithProviders, SHEET_PRESS_TIMEOUT} from "@/test-utils/render";
+import {bagBrewFixture, bagFixture} from "@/test-utils/bags";
 
 function recipeNamed(name: string, uuid: string): Recipe {
     const recipe = new Recipe();
@@ -18,11 +19,48 @@ const PAYLOAD = {
     settings: {temperatureUnit: "F"},
     skipped: 0,
     skippedBrews: 0,
+    skippedBags: 0, skippedBagRows: 0, bagWarnings: [],
     appVersion: "2.6.0",
     exportedAt: "2026-08-26T21:00:00.000Z"
 };
 
+it("allows history-only restore without taking settings or adding recipes", async () => {
+    await renderWithProviders(<RestoreSheet open payload={{
+        ...PAYLOAD, recipes: [], brews: [bagBrewFixture()]
+    }} existing={[]} onCancel={() => {}} onRestore={() => {}}/>);
+    expect(screen.getByRole("button", {name: /add.*librar/i})).not.toBeDisabled();
+});
+
 describe("RestoreSheet", () => {
+    it("allows independent bags to be restored when no recipes are new", async () => {
+        const onRestore = jest.fn();
+        await renderWithProviders(
+            <RestoreSheet open payload={{
+                ...PAYLOAD,
+                bagInventory: {version: 2, bags: [{
+                    bag: bagFixture(), baselineGrams: 100, needsCheck: false,
+                    linkedRecipeUuids: [], runs: []
+                }], selections: []}
+            }} existing={PAYLOAD.recipes} onCancel={() => {}} onRestore={onRestore}/>
+        );
+        expect(screen.getByText(/1 coffee bag/i)).toBeTruthy();
+        await waitFor(async () => {
+            await fireEvent.press(screen.getByRole("button", {name: "Restore coffee bags"}));
+            expect(onRestore).toHaveBeenCalledWith({replace: false, includeSettings: false});
+        }, {timeout: SHEET_PRESS_TIMEOUT});
+    });
+
+    it("reports damaged bag entries separately from unreadable recipes", async () => {
+        await renderWithProviders(
+            <RestoreSheet open payload={{
+                ...PAYLOAD, skippedBags: 1, skippedBagRows: 2,
+                bagWarnings: ["Check affected quantities."]
+            }} existing={[]} onCancel={() => {}} onRestore={() => {}}/>
+        );
+        expect(screen.getByText(/1 bag and 2 bag entries.*could not be read/i)).toBeTruthy();
+        expect(screen.getByText("Check affected quantities.")).toBeTruthy();
+    });
+
     it("says how much would be added and how much is already there", async () => {
         await renderWithProviders(
             <RestoreSheet open payload={PAYLOAD} existing={[recipeNamed("A", "u1")]}

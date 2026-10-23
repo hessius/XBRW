@@ -233,6 +233,79 @@ async function renderEditor(overrides: Partial<Recipe> = {}) {
     return view;
 }
 
+describe("experimental bag controls", () => {
+    afterEach(() => {
+        jest.requireMock("@/library/RecipeDatabase").default.prototype.getRecipe.mockReset();
+        jest.restoreAllMocks();
+    });
+
+    async function withBag() {
+        const {default: RealRecipes} = jest.requireActual("@/library/RecipeDatabase");
+        const {default: Bags} = jest.requireActual("@/library/CoffeeBagDatabase");
+        const {bagFixture} = jest.requireActual("@/test-utils/bags");
+        const recipe = fixture();
+        new RealRecipes().insertRecipes([recipe]);
+        const bags = new Bags();
+        bags.create(bagFixture());
+        bags.select(recipe.uuid, "bag-a", 1);
+        jest.requireMock("@/library/RecipeDatabase").default.prototype.getRecipe.mockReturnValue(recipe);
+        mockSettings = {bagExperimentEnabled: true, machineDeviceId: "machine"};
+        await renderEditor(recipe);
+        return {recipe, bags};
+    }
+
+    it("does not open a bag store while the experiment is off", async () => {
+        const module = jest.requireActual("@/library/CoffeeBagDatabase");
+        const open = jest.spyOn(module, "sharedBagDatabase");
+        await renderEditor();
+        expect(open).not.toHaveBeenCalled();
+        expect(screen.queryByTestId("selected-bag-row")).toBeNull();
+    });
+
+    it("keeps the same selected bag above the single brew action across all decks", async () => {
+        await withBag();
+        for (const label of ["About this recipe", "Stages, 3", "Brew settings"]) {
+            await fireEvent.press(screen.getByLabelText(label));
+            expect(screen.getByTestId("selected-bag-row")).toBeTruthy();
+            expect(screen.getAllByLabelText("Brew")).toHaveLength(1);
+        }
+    });
+
+    it("isolates the bag chooser from the editor and quick-edit layer", async () => {
+        await withBag();
+        await fireEvent.press(screen.getByLabelText("Quick edit brew"));
+        await fireEvent.press(screen.getByTestId("selected-bag-row"));
+        await waitFor(() => expect(screen.getByText("No bag")).toBeTruthy());
+        expect(screen.getByTestId("editor-content", {includeHiddenElements: true})
+            .props.importantForAccessibility).toBe("no-hide-descendants");
+        expect(screen.queryByLabelText("Increase Quick edit dose")).toBeNull();
+        expect(screen.queryByLabelText("Brew")).toBeNull();
+    });
+
+    it("passes the selected physical bag to the existing brew navigation", async () => {
+        const {recipe} = await withBag();
+        await fireEvent.press(screen.getByLabelText("Brew"));
+        await waitFor(() => expect(mockPush).toHaveBeenCalled());
+        expect(mockPush).toHaveBeenLastCalledWith(expect.objectContaining({
+            pathname: "/brew",
+            params: expect.objectContaining({
+                recipeJSON: JSON.stringify(recipe), bagSelection: JSON.stringify("bag-a")
+            })
+        }));
+    });
+
+    it("measures the entire bag and action stack for scroll and quick-edit clearance", async () => {
+        await withBag();
+        await fireEvent(screen.getByTestId("editor-actions"), "layout",
+            {nativeEvent: {layout: {height: 248, width: 320, x: 0, y: 0}}});
+        expect(screen.getByTestId("editor-scroll").props.contentContainerStyle.paddingBottom)
+            .toBeGreaterThanOrEqual(248);
+        await fireEvent.press(screen.getByLabelText("Quick edit brew"));
+        expect(StyleSheet.flatten(screen.getByLabelText("Quick edit").props.style).bottom)
+            .toBe(248);
+    });
+});
+
 it("recolours the editor header and already-open help without losing its draft", async () => {
     mockRecipeJSON = JSON.stringify(Object.assign(fixture(), {name: "Kept draft", accentIndex: PINNED_ACCENT_INDEX}));
     const view = await renderWithProviders(

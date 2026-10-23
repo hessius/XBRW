@@ -12,6 +12,7 @@ import Recipe from "@/library/Recipe";
 import {accentGroupFor, resolveAccent} from "@/library/accent";
 import {canWriteToCard} from "@/library/cardLimits";
 import type {RecipeEvidence} from "@/library/libraryQuery";
+import type {BagBadge} from "@/library/readyToBrew";
 import type {SlotMarkerValue} from "@/library/slots/slotModel";
 import {evidenceLine, isSet, spokenEvidence} from "@/library/recipeEvidence";
 import {useAppearance} from "@/hooks/useAppearance";
@@ -156,6 +157,7 @@ type Props = {
      * to one answer about it.
      */
     evidence?: RecipeEvidence;
+    bagBadge?: BagBadge;
     /**
      * The recipe's own actions, mirrored from the overflow sheet the long press
      * opens. Each is optional for the same reason its row in the sheet is: brew
@@ -215,7 +217,7 @@ type Props = {
  */
 export default function RecipeShelfTile({
     recipe, onPress, onLongPress, showCoffeeMarker = true, dottedProfile = false,
-    evidence, onBrew, onShare, onWrite, onDuplicate, onDelete, onToggleFavourite,
+    evidence, bagBadge, onBrew, onShare, onWrite, onDuplicate, onDelete, onToggleFavourite,
     onHistory, editing = false, slotMarker, onEasyMode, showPicture = false
 }: Props) {
     const colour = useAppearance().recipe(resolveAccent(recipe));
@@ -231,7 +233,7 @@ export default function RecipeShelfTile({
     // on its own: everything it shows has to be in this label or it reaches a
     // screen reader as the accent colour alone.
     const figures = figuresLine(recipe, isTea);
-    const shownEvidence = evidenceLine(evidence);
+    const shownEvidence = [evidenceLine(evidence), bagBadge?.label].filter(Boolean).join(" · ") || null;
     const {width, fontScale} = useWindowDimensions();
     const metadata = {
         evidence: shownEvidence,
@@ -262,7 +264,8 @@ export default function RecipeShelfTile({
         !isTea && recipe.grinder && isSet(recipe.grindSize)
             ? `grind ${recipe.grindSize}`
             : undefined,
-        ...spokenEvidence(evidence)
+        ...spokenEvidence(evidence),
+        bagBadge?.spoken
     ].filter((part) => part !== undefined).join(", ");
 
     // The long press is unreachable by a screen reader, so the acts it opens are

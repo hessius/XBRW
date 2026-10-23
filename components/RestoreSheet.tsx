@@ -73,15 +73,21 @@ export default function RestoreSheet({open, payload, existing, onCancel, onResto
     const incoming = payload?.recipes ?? [];
     const {toAdd, alreadyPresent} = mergeRecipes(existing, incoming);
     const skipped = payload?.skipped ?? 0;
+    const bagCount = payload?.bagInventory?.bags.length ?? 0;
+    const unreadableBags = [
+        payload?.skippedBags ? plural(payload.skippedBags, "bag", "bags") : "",
+        payload?.skippedBagRows ? plural(payload.skippedBagRows, "bag entry", "bag entries") : ""
+    ].filter(Boolean).join(" and ");
     // Settings are restorable work in their own right. Judging this on new
     // recipes alone meant that a backup whose recipes you already had left the
     // only non-destructive button disabled, so the sole way to take its
     // settings was to replace the entire library -- destroying recipes in order
     // to accept a preference.
-    const canAdd = toAdd.length > 0 || includeSettings;
-    const addLabel = toAdd.length === 0 && includeSettings
-        ? "Take the settings"
-        : "Add to my library";
+    const hasBrews = (payload?.brews.length ?? 0) > 0;
+    const canAdd = toAdd.length > 0 || includeSettings || bagCount > 0 || hasBrews;
+    const addLabel = toAdd.length > 0 || hasBrews ? "Add to my library"
+        : bagCount > 0 ? (includeSettings ? "Restore bags and settings" : "Restore coffee bags")
+        : includeSettings ? "Take the settings" : "Add to my library";
     // The honest figure for the replace confirmation: a replace inserts the
     // deduped recipes, not the raw file count, so a backup with a repeated UUID
     // must not promise more than it will actually put back.
@@ -132,6 +138,20 @@ export default function RestoreSheet({open, payload, existing, onCancel, onResto
                                 be read and will be skipped.
                             </Text>
                         )}
+                        {bagCount > 0 && (
+                            <Text fontSize={13} color={palette.dim}>
+                                {plural(bagCount, "coffee bag", "coffee bags")} in this backup.
+                                {" "}Existing bags and choices will be kept.
+                            </Text>
+                        )}
+                        {unreadableBags !== "" && (
+                            <Text fontSize={13} color={palette.danger}>
+                                {unreadableBags} could not be read and will be skipped.
+                            </Text>
+                        )}
+                        {payload?.bagWarnings.map((warning) => (
+                            <Text key={warning} fontSize={13} color={palette.danger}>{warning}</Text>
+                        ))}
 
                         <SettingsToggleRow
                             label="Take the settings from this backup"

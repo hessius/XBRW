@@ -16,6 +16,7 @@ import type {BrewSample} from "@/library/brew/BrewRecord";
 import type {StoredBrew} from "@/library/BrewDatabase";
 import Recipe from "@/library/Recipe";
 import RecipeDatabase from "@/library/RecipeDatabase";
+import {bagRunFixture} from "@/test-utils/bags";
 
 jest.mock("@/components/XbrwToast", () => ({notify: jest.fn()}));
 jest.mock("@/library/RecipeDatabase", () => jest.fn());
@@ -57,6 +58,18 @@ function decode(url: string): HandoffBatch {
 }
 
 describe("useBrewBatchHandoff", () => {
+    it("uses frozen bag identities and excludes unnamed bags without a questionnaire", async () => {
+        const markSent = jest.fn();
+        const {result} = await renderHook(() => useBrewBatchHandoff(source({
+            named: {record: brew({id: "named", bag: bagRunFixture({beanName: "Saved bag"})}), samples},
+            unnamed: {record: brew({id: "unnamed", bag: bagRunFixture(), coffee: {name: "Not its identity"}}), samples}
+        }), {markSent}));
+        await act(async () => { await result.current.send(["named", "unnamed"]); });
+        expect(decode(openURL.mock.calls[0][0]).brews.map(row => row.bean?.name)).toEqual(["Saved bag"]);
+        expect(markSent).toHaveBeenCalledTimes(1);
+        expect(markSent).toHaveBeenCalledWith("named", expect.any(Number));
+    });
+
     it("sends and marks only eligible coffee in a mixed selection", async () => {
         const markSent = jest.fn();
         const {result} = await renderHook(() => useBrewBatchHandoff(source({

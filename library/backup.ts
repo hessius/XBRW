@@ -16,6 +16,9 @@ import {DOSE, TEMPERATURE} from "./cardLimits";
 import Recipe, {GRINDER_OFF_VALUE, MAX_DESCRIPTION} from "./Recipe";
 import {XBLOOM_SHARE_HOST} from "./shareLink";
 import {isValidColour} from "@/constants/colors";
+import {reviveBagRunSnapshot} from "@/library/bagRun";
+import {parseBagInventory, type BagInventoryBackup} from "@/library/bagBackup";
+import {parseLegacyBagInventory} from "@/library/bagMigration";
 
 /**
  * The backup file, and the only door it comes back in through.
@@ -52,6 +55,10 @@ export type BackupPayload = {
      * attached to.
      */
     brews: BrewRecord[];
+    bagInventory?: BagInventoryBackup;
+    skippedBags: number;
+    skippedBagRows: number;
+    bagWarnings: string[];
     settings: BackupSettings;
     /** Entries that were present but unreadable. Reported, not hidden. */
     skipped: number;
@@ -76,7 +83,8 @@ export function buildBackup(
     recipes: readonly Recipe[],
     settings: BackupSettings,
     appVersion = "unknown",
-    brews: readonly (BrewRecord & {hasStream?: boolean})[] = []
+    brews: readonly (BrewRecord & {hasStream?: boolean})[] = [],
+    inventory?: BagInventoryBackup
 ): string {
     return JSON.stringify({
         format: BACKUP_FORMAT,
@@ -95,7 +103,8 @@ export function buildBackup(
         // carry the flag, so it is named here and dropped rather than left to
         // a spread that would copy it straight through.
         brews: brews.map(({hasStream: _ignored, ...record}) => record),
-        settings
+        settings,
+        ...(inventory === undefined ? {} : {bagInventory: inventory})
     }, null, 2);
 }
 
@@ -160,7 +169,11 @@ export function parseBackup(text: string): ParseResult {
         else recipes.push(recipe);
     }
 
-    if (recipes.length === 0) {
+    const bags = envelope.bagInventory !== undefined
+        ? parseBagInventory(envelope.bagInventory)
+        : parseLegacyBagInventory(envelope.bags, recipes, brews,
+            Array.isArray(envelope.brews) && skippedBrews === 0);
+    if (recipes.length === 0 && !bags.inventory?.bags.length) {
         // "Empty" and "full of things this app could not read" are opposite
         // messages. The first says nothing was lost; the second says keep this
         // file, because the restore did not happen. Reporting the second as the
@@ -189,6 +202,10 @@ export function parseBackup(text: string): ParseResult {
             recipes,
             brews,
             skippedBrews,
+            ...(bags.inventory === null ? {} : {bagInventory: bags.inventory}),
+            skippedBags: bags.skippedBags,
+            skippedBagRows: bags.skippedBagRows,
+            bagWarnings: bags.warnings,
             settings: isPlainObject(envelope.settings) ? envelope.settings : {},
             skipped,
             appVersion: typeof envelope.appVersion === "string" ? envelope.appVersion : "unknown",
@@ -701,6 +718,8 @@ function beanFieldsFrom(record: BrewRecord): Partial<Pick<BrewRecord, BeanField>
 /** A record from a backup file, or null. Never throws. */
 export function reviveBrew(entry: unknown): BrewRecord | null {
     if (!isPlainObject(entry)) return null;
+    const bag = entry.bag === undefined ? undefined : reviveBagRunSnapshot(entry.bag);
+    if (bag === null) return null;
 
     for (const [field, ok] of Object.entries(BREW_FIELDS)) {
         if (!ok(entry[field])) return null;
@@ -739,6 +758,7 @@ export function reviveBrew(entry: unknown): BrewRecord | null {
         recipeUuid: record.recipeUuid,
         recipeName: record.recipeName,
         accent: record.accent,
+        ...(bag === undefined ? {} : {bag}),
         ...(isBeverageKind(record.beverageKind) ? {beverageKind: record.beverageKind} : {}),
         startedAt: record.startedAt,
         pouringAt: record.pouringAt,

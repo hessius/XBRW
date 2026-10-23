@@ -31,6 +31,22 @@ function open(onOpenChange = jest.fn()) {
 }
 
 describe("XbrwSheet", () => {
+    it("hides a covered sheet from accessibility without discarding its contents", async () => {
+        const view = await renderWithProviders(
+            <XbrwSheet open covered onOpenChange={jest.fn()} title="UNDERNEATH">
+                <Text>kept underneath</Text>
+            </XbrwSheet>
+        );
+        expect(screen.queryByText("kept underneath")).toBeNull();
+        expect(screen.getByText("kept underneath", {includeHiddenElements: true})).toBeTruthy();
+        await view.rerender(
+            <XbrwSheet open onOpenChange={jest.fn()} title="UNDERNEATH">
+                <Text>kept underneath</Text>
+            </XbrwSheet>
+        );
+        expect(screen.getByText("kept underneath")).toBeTruthy();
+    });
+
     it("shows its title and its children", async () => {
         await open();
 
