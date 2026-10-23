@@ -40,7 +40,7 @@
 **Files:** Modify `library/bypassLimits.ts`, `library/quickEdit.ts`; test
 `library/__tests__/bypassLimits.test.ts`, `library/__tests__/quickEdit.test.ts`.
 
-- [ ] Add failing unit cases for 18 g/30 ml to 20 g/33 ml, limits, invalid baselines, ratio-only, disabled bypass, tea, temperature preservation and unchanged source serialization. Concrete core expectations:
+- [x] Add failing unit cases for 18 g/30 ml to 20 g/33 ml, limits, invalid baselines, ratio-only, disabled bypass, tea, temperature preservation and unchanged source serialization. Concrete core expectations:
 
 ```ts
 expect(scaleBypassForDose(30, 18, 20)).toEqual({
@@ -55,9 +55,9 @@ expect(scaleBypassForDose(1, 20, 1)).toEqual({
 expect(scaleBypassForDose(30, 0, 20).ok).toBe(false);
 ```
 
-- [ ] Run `npm test -- --runTestsByPath library/__tests__/bypassLimits.test.ts library/__tests__/quickEdit.test.ts --runInBand`. Verify failures assert missing behavior, not unrelated setup. If Jest is missing, install this worktree's locked dependencies with `npm ci`, then repeat.
+- [x] Run `npm test -- --runTestsByPath library/__tests__/bypassLimits.test.ts library/__tests__/quickEdit.test.ts --runInBand`. Verify failures assert missing behavior, not unrelated setup. If Jest is missing, install this worktree's locked dependencies with `npm ci`, then repeat.
 
-- [ ] Add the pure result and arithmetic to `bypassLimits.ts`:
+- [x] Add the pure result and arithmetic to `bypassLimits.ts`:
 
 ```ts
 export type BypassDoseScale =
@@ -73,8 +73,7 @@ export function scaleBypassForDose(
         || volume < BYPASS_VOLUME.min || volume > BYPASS_VOLUME.max) {
         return {ok: false, problem: "Check the starting dose and bypass amount before resizing."};
     }
-    const rounded = Math.round(raw);
-    const bounded = clampBypassVolume(rounded);
+    const bounded = clampBypassVolume(raw);
     return {ok: true, volume: bounded, limited: raw < BYPASS_VOLUME.min
         || raw > BYPASS_VOLUME.max};
 }
@@ -86,15 +85,15 @@ export function describeBypassDoseScale(result: BypassDoseScale): string | null 
 }
 ```
 
-- [ ] Add `dosePresets(recipe)` returning sorted unique valid `[15,18,20,recipe.dosage]`, or `[]` for tea. Add an internal Quick Edit calculation using the **source** dose/volume only when coffee, enabled bypass, and a changed dose adjustment. Apply a successful result to the cloned recipe; retain supplied water and append its explicit correction problem otherwise. Extend `describeAdjustment` with actual bypass and total cup water, describing a clamped result as limited rather than proportional. Ratio-only retains bypass.
+- [x] Add `dosePresets(recipe)` returning sorted unique valid `[15,18,20,recipe.dosage]`, or `[]` for tea. Add an internal Quick Edit calculation using the **source** dose/volume only when coffee, enabled bypass, and a changed dose adjustment. Apply a successful result to the cloned recipe; retain supplied water and append its explicit correction problem otherwise. Extend `describeAdjustment` with actual bypass and total cup water, describing a clamped result as limited rather than proportional. Ratio-only retains bypass.
 
 ```ts
 const result = quickEditBypass(recipe, adjustments);
 if (result?.ok) edited.bypassVolume = result.volume;
 ```
 
-- [ ] Repeat the targeted command until green. Assert repeated previews do not mutate the source, and restoring the original dose restores original bypass even after clipping. Include existing card/serialization coverage without changing its expectations.
-- [ ] Commit with message `feat: scale quick-edit bypass with dose` and the required Copilot trailer.
+- [x] Repeat the targeted command until green. Assert repeated previews do not mutate the source, and restoring the original dose restores original bypass even after clipping. Include existing card/serialization coverage without changing its expectations.
+- [x] Commit with message `feat: scale quick-edit bypass with dose` and the required Copilot trailer (`b895bb12`).
 
 ### Task 2: Normal editor anchor and notice
 
@@ -102,7 +101,7 @@ if (result?.ok) edited.bypassVolume = result.volume;
 `app/editRecipe.tsx`; test `hooks/__tests__/useRecipeEditor.bypass.test.ts`,
 existing save/autosave tests and `components/__tests__/BypassRung.test.tsx`.
 
-- [ ] Add hook regressions using awaited `renderHook`/`act`. With 18 g/30 ml, successive dose calls through `editInputComplete` must yield 32 ml at 19 g and 33 ml at 20 g, not 34 ml. Preserve stage volumes and bypass temperature. A 500 ml baseline clips at 20 g and returns to 500 ml at 18 g.
+- [x] Add hook regressions using awaited `renderHook`/`act`. With 18 g/30 ml, successive dose calls through `editInputComplete` must yield 32 ml at 19 g and 33 ml at 20 g, not 34 ml. Preserve stage volumes and bypass temperature. A 500 ml baseline clips at 20 g and returns to 500 ml at 18 g.
 
 ```ts
 await act(async () => {
@@ -114,8 +113,8 @@ await act(async () => {
 expect(result.current.recipe?.bypassVolume).toBe(33);
 ```
 
-- [ ] Run `npm test -- --runTestsByPath hooks/__tests__/useRecipeEditor.bypass.test.ts components/__tests__/BypassRung.test.tsx --runInBand` and observe the new failures.
-- [ ] Store anchor in a ref and notice in recipe-keyed state:
+- [x] Run `npm test -- --runTestsByPath hooks/__tests__/useRecipeEditor.bypass.test.ts components/__tests__/BypassRung.test.tsx --runInBand` and observe the new failures.
+- [x] Store anchor in a ref and notice in recipe-keyed state:
 
 ```ts
 const bypassDoseAnchor = useRef<{
@@ -128,8 +127,8 @@ const [bypassDoseReading, setBypassDoseReading] = useState<{
 
 In the dose field's existing mutation callback, lazily capture the previous dose/volume for this Recipe, call `scaleBypassForDose`, apply successful water and publish the result before assigning the new dose. Do not scale tea, off bypass or unchanged dose. Do not read or mutate refs during render.
 
-- [ ] Clear anchor/notice in the **volume** edit and bypass-toggle event handlers. Temperature edits and saves must not rebase it. Cup-type edits reset it. Different Recipe identity after revert lazily establishes another baseline and suppresses the old notice. Invalid scaling retains water and renders a correction problem; a valid explicit volume edit clears it. Keep existing SAVE and card-write policies.
-- [ ] Return a derived `bypassDoseNotice` from the hook. Add optional `doseNotice?: string | null` to BypassRung and pass it through StagesDeck. Render outside its Collapsible so a closed rung cannot hide clipping:
+- [x] Clear anchor/notice in the **volume** edit and bypass-toggle event handlers. Temperature edits and saves must not rebase it. Cup-type edits reset it. Different Recipe identity after revert lazily establishes another baseline and suppresses the old notice. Invalid scaling retains water and renders a correction problem; a valid explicit volume edit clears it. Keep existing SAVE and card-write policies.
+- [x] Return a derived `bypassDoseNotice` from the hook. Add optional `doseNotice?: string | null` to BypassRung and pass it through StagesDeck. Render outside its Collapsible so a closed rung cannot hide clipping:
 
 ```tsx
 {doseNotice && (
@@ -142,8 +141,8 @@ In the dose field's existing mutation callback, lazily capture the previous dose
 
 Use the existing warning role; add no color literal.
 
-- [ ] Add cases for manual volume rebasing, temperature-only non-rebasing, toggle rebasing, replacement/revert, ratio-only, tea/off and autosave between taps. Run these plus existing hook persistence tests, then typecheck and targeted lint.
-- [ ] Commit `feat: keep editor bypass proportional during dose edits`.
+- [x] Add cases for manual volume rebasing, temperature-only non-rebasing, toggle rebasing, replacement/revert, ratio-only, tea/off and autosave between taps. Run these plus existing hook persistence tests, then typecheck and targeted lint.
+- [x] Checkpoint editor anchoring together with its controls and regressions in `9c95a022`.
 
 ### Task 3: Compact chips and reachable hosts
 
@@ -151,9 +150,9 @@ Use the existing warning role; add no color literal.
 `app/editRecipe.tsx`; test `components/__tests__/QuickEditPanel.test.tsx`,
 `hooks/__tests__/compilerOptOut.test.ts` and existing home/editor route suites.
 
-- [ ] Add red component tests for sorted/deduplicated recipe-dose chips, selected gram accessibility state, same adjustment/reset semantics as stepper and no tea chips. Rerender after mutating Recipe in place to prove its own-dose chip updates. Add compiler check for QuickEditPanel using existing `slotsKeyedOnMutatedModels`.
-- [ ] Run component/compiler tests and verify failures.
-- [ ] Reuse RailChip in a wrapping XStack directly under the dose row. Preserve its 44 pt touch target:
+- [x] Add red component tests for sorted/deduplicated recipe-dose chips, selected gram accessibility state, same adjustment/reset semantics as stepper and no tea chips. Rerender after mutating Recipe in place to prove its own-dose chip updates. Add compiler check for QuickEditPanel using existing `slotsKeyedOnMutatedModels`.
+- [x] Run component/compiler tests and verify failures.
+- [x] Reuse RailChip in a wrapping XStack directly under the dose row. Preserve its 44 pt touch target:
 
 ```tsx
 <XStack testID="quick-edit-dose-presets" gap="$2" flexWrap="wrap">
@@ -170,7 +169,7 @@ Use the existing warning role; add no color literal.
 
 Only render that stack for coffee. Add `"use no memo"` to QuickEditPanel because its source Recipe mutates in place; do not memoize derived presets.
 
-- [ ] Wrap HomeQuickEditSheet's panel in ScrollView with bounded flex and `keyboardShouldPersistTaps="handled"`; keep `heightPercent={72}`. Bound the editor's absolute panel to its existing available-height wrapper with `maxHeight: "100%"` and wrap its content in a shrinking ScrollView. Preserve the action-bar-height exclusion and non-modal accessibility.
+- [x] Wrap HomeQuickEditSheet's panel in ScrollView with bounded flex and `keyboardShouldPersistTaps="handled"`; keep `heightPercent={72}`. Bound the editor's absolute panel to its existing available-height wrapper with `maxHeight: "100%"` and wrap its content in a shrinking ScrollView. Preserve the action-bar-height exclusion and non-modal accessibility.
 
 ```tsx
 <ScrollView testID="home-quick-edit-scroll" style={{flex: 1}}
@@ -195,19 +194,64 @@ Only render that stack for coffee. Add `"use no memo"` to QuickEditPanel because
 
 Keep the existing sole BREW action and no save action.
 
-- [ ] Test both hosts: chip/stepper changes feed the same brewed JSON including bypass; closing discards changes; normal SAVE still owns permanent edits; no library write is introduced. At short dimensions and font scale 2, assert scroll containers, last controls, and exactly one BREW. This is structural evidence, not native layout proof. Cover eight accepted appearance combinations.
-- [ ] Run combined affected suites, typecheck and targeted lint. Commit `feat: add compact dose shortcuts to quick edit`.
+- [x] Test both hosts: chip/stepper changes feed the same brewed JSON including bypass; closing discards changes; normal SAVE still owns permanent edits; no library write is introduced. At short dimensions and font scale 2, assert scroll containers, last controls, and exactly one BREW. This is structural evidence, not native layout proof. Cover eight accepted appearance combinations.
+- [x] Run combined affected suites, typecheck and targeted lint. Commit `feat: add compact dose shortcuts and stable editor bypass scaling` (`9c95a022`).
 
 ### Task 4: Qualify and document
 
 **Files:** Modify `docs/copy.md`, `docs/release-2.2.0-changes.md`, this plan.
 
-- [ ] Document one-brew shortcuts, dose-driven bypass scaling, ratio-only behavior and visible 1-500 ml limiting. Record no new setting, native dependency or save workflow.
-- [ ] Verify no Recipe hydration/import/backup/card layout changes and no new serialized anchor/explainer. Run the existing Recipe/card, quick-edit record and brew integration suites alongside affected tests.
-- [ ] Run serial final gates in this worktree: `npm run typecheck`, `npm run lint`, `npm test -- --runInBand`, `npx expo-doctor`. All must succeed; distinguish existing warnings from failures.
-- [ ] Record actual counts and remaining native small-screen/large-text, VoiceOver/TalkBack and real-machine bypass gates. No native build is authorized.
-- [ ] Commit `test: qualify dose shortcuts and bypass scaling`; push the owned task branch.
-- [ ] Fetch origin `--no-prune`, run `npm run worktrees:check`, and record exact clean/dirty, base/head and push state. Retain the owned unmerged worktree with its branch as recovery pointer. Do not merge or close #239 without separate authorization.
+- [x] Document one-brew shortcuts, dose-driven bypass scaling, ratio-only behavior and visible 1-500 ml limiting. Record no new setting, native dependency or save workflow.
+- [x] Verify no Recipe hydration/import/backup/card layout changes and no new serialized anchor/explainer. Run the existing Recipe/card, quick-edit record and brew integration suites alongside affected tests.
+- [x] Run serial final gates in this worktree: `npm run typecheck`, `npm run lint`, `npm test -- --runInBand`, `npx expo-doctor`. All must succeed; distinguish existing warnings from failures.
+- [x] Record actual counts and remaining native small-screen/large-text, VoiceOver/TalkBack and real-machine bypass gates. No native build is authorized.
+- [x] Commit and push the implementation checkpoints through `c732330f`; record final documentation with `test: qualify dose shortcuts and bypass scaling`.
+- [x] Fetch origin `--no-prune`, run `npm run worktrees:check`, and record exact clean/dirty, base/head and push state. Retain the owned unmerged worktree with its branch as recovery pointer. Do not merge or close #239 without separate authorization.
+
+## Recorded software qualification
+
+Application checkpoint `c732330f7e0717dba243fdb048cf8ac6945ef623` includes
+accepted F by merge, not rebase. The remaining changes are documentation only.
+Its merge base with current develop is
+`e0d29d7cc2e635abef02a64cca386c21f1d1e661`; the original pinned task base above
+is unchanged.
+
+| Evidence | Result |
+| --- | --- |
+| Initial missing-behavior regressions | 62 expected failures; arithmetic then passed 150 tests across both platforms |
+| Controls, hosts and compiler selection | 128 passed; native layout is not inferred from renderer structure |
+| Autosave, replacement and eight appearance combinations | 130 passed; real SQLite preserves metadata-only saves |
+| Post-F full host/hook/component selection | 756 passed, four skipped, 14 suites |
+| `npm run typecheck` | Passed |
+| `npm run lint` | Zero errors, 32 existing warnings |
+| `npm test -- --runInBand` | 20,660 passed, 26 skipped; 918 suites passed, two skipped; both snapshots passed; both platforms; 884.158 seconds |
+| `npx expo-doctor` | 21/21 passed |
+
+Canonical card, persistence, accepted live owner, bag-run and compiler suites
+passed without changing their existing format expectations. No diff from
+accepted develop changes Recipe, Pour, NFC, backup serialization, BrewDatabase,
+bag accounting or dependency manifests. The F merge required restoring its
+locked date-picker dependency through `npm ci`; this adaptation adds none.
+Animation/act warnings remain visible rather than being suppressed.
+
+Logs are in this coordination session's `files/`: `dose-core-red.log`,
+`dose-arithmetic-green.log`, `dose-controls-hosts-green.log`,
+`dose-autosave-appearance-final.log`, `dose-f-integration-targeted.log`,
+`dose-final-typecheck.log`, `dose-final-lint.log`, `dose-final-tests.log`,
+`dose-final-doctor.log` and `dose-final-worktrees.log`. Exact final head, push
+state and retained-worktree ownership are recorded in
+`dose-implementation-handoff.json` alongside these logs.
+
+## Manual gates, not claimed by software qualification
+
+- [ ] Native short-screen/320 pt and large-text reachability, including the selected bag and keyboard.
+- [ ] VoiceOver/TalkBack selection, traversal, sheet coverage and access to the sole BREW.
+- [ ] Physical-machine dose and bypass delivery after both stepper and shortcut changes.
+
+No new native client, BLE/NFC hardware session, focused PR, source closure or
+preview dose integration was performed. Retain this task branch for separately
+authorised review/integration. The raw #239/SAVE AS proposal in #252 remains
+evaluation-only and must not be mistaken for this adaptation.
 
 ## Inline self-review
 

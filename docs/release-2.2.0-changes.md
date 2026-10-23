@@ -6,6 +6,43 @@ draft #252 also contain proposals that have not been accepted; they must not be
 merged wholesale. Issue #249 records source heads, decisions and integration.
 The shipped 2.1.0 ledger remains unchanged.
 
+## Package F follow-up: dose shortcuts and proportional bypass
+
+The approved lightweight #239 adaptation is implemented on
+`feat/2.2.0-dose-shortcuts-20261023`, originally based on pinned develop
+`8f2638dfa2e75928ff447fbbd0ee03ba14986886`, with accepted F merged from
+`e0d29d7cc2e635abef02a64cca386c21f1d1e661`. It is not yet integrated into
+develop or the cumulative preview. No new PR or source closure is authorised.
+
+Coffee Quick Edit offers compact 15 g, 18 g, 20 g and saved-dose shortcuts,
+deduplicated and restricted to valid whole doses. They use the same one-brew
+adjustment as the stepper, never save a recipe, and are absent for tea.
+Both home and editor panels scroll within their existing available height;
+the home sheet stays at 72% and each host retains its sole BREW action.
+
+Changing a coffee dose also scales enabled bypass water from its original
+dose/volume pair, rounds once and limits the result to 1-500 ml. A limit is
+reported explicitly; invalid starting values retain the supplied water and
+show a correction problem. Quick Edit blocks brewing that invalid adjustment
+and explains actual bypass and total cup water. Ratio-only changes, tea and
+disabled bypass do not trigger scaling; bypass temperature stays unchanged.
+
+Normal editor dose changes use the same arithmetic without changing its
+existing stage-volume policy. The anchor survives saves and metadata autosave
+so repeated taps do not accumulate rounding error. Explicit bypass-volume
+edits, bypass toggles, cup-type changes and recipe replacement establish a new
+baseline. A temperature-only edit does not. The notice remains visible even
+with the bypass rung or hints closed. Normal SAVE still permits incomplete
+recipes under its existing policy; card and brew validation are unchanged.
+
+No new setting, dependency, SAVE AS workflow, serialized adjustment field,
+Recipe hydration/import/backup migration or NFC layout is introduced. Existing
+bag selection and accepted-run accounting remain separate from dose shortcuts.
+Software qualification is recorded in the implementation plan. Native 320 pt
+and large-text reachability, keyboard behavior, VoiceOver/TalkBack traversal
+and an actual machine's adjusted bypass remain manual gates. No native build
+or hardware qualification is claimed.
+
 ## Package F: Optional coffee bag beta experiment
 
 Adapted from #238, #241 and #242. Off by default in Labs. Physical bags can
@@ -26,15 +63,22 @@ Backups preserve inventory without enabling it on another device. Historical
 handoff uses the bag captured for that brew, not today's selection. The
 explicit add-bean action opens a form and never claims it created a bean.
 
-The implementation is on `feat/2.2.0-bag-labs-20261023`, based on
-`8f2638dfa2e75928ff447fbbd0ee03ba14986886`. It is not accepted development
-or release-qualified. The implementation plan records software evidence.
-Focused PR #266 has received its single Copilot review. The four findings are
+Focused PR #266 is merged into develop at
+`e0d29d7cc2e635abef02a64cca386c21f1d1e661`; sources #238, #241 and #242 are
+closed as superseded after their exact heads were checked for new commits.
+The cumulative preview includes reviewed F at
+`dee62ae5a35eacaa0ac20a9a1e9a748cd34c85c2`. Integration is not release
+qualification. The implementation plan records software evidence.
+Focused PR #266 received its single Copilot review. The four findings are
 addressed: visible and spoken roast dates distinguish bag choices; attributed
 handoffs never acquire a later recipe's coffee; a known rest period works
 without peak advice; and catalogue roast level supplies the freshness fallback.
 Each source proposal already used its one automated Copilot review round.
-Integration still requires exact-head CI and cumulative-preview reconciliation.
+Its final head `c92976b81d5f95473398473c56fda7c79b745d13` passed every gate in
+[CI40029366415](https://github.com/hessius/XBRW/actions/runs/40029366415)
+before merge; post-merge develop
+[CI40031895608](https://github.com/hessius/XBRW/actions/runs/40031895608)
+is also green. History-only backups retain their independent restore action.
 
 Local software qualification passed: typecheck; lint with zero errors and
 32 warnings; both Jest projects with 20,550 passed tests, 26 skipped tests,
@@ -60,14 +104,15 @@ accepted native appearance dependencies. No build is authorised here; Metro
 cannot qualify the native change. Existing BLE/NFC physical-device gates
 remain in force, though no card write is needed to qualify the bag model.
 Final inclusion requires an explicit retain, revise or remove decision after
-beta feedback. #239 dose presets remain separate and unimplemented.
+beta feedback. The #239 adaptation above remains separate from accepted F.
 
-## Package G: appearance and recipe palettes — local implementation only
+## Package G: appearance and recipe palettes
 
 The approved combined #257/#243 adaptation is implemented on
 `feat/2.2.0-appearance-20261022`, based on
-`98f3ae5255dfc691bc44d7c5ed356e47830f3df9`. It is not yet accepted or integrated
-into `develop`, and is not release-qualified. The existing #243 source review
+`98f3ae5255dfc691bc44d7c5ed356e47830f3df9`. Focused PR #264 is merged into
+develop at `8f2638dfa2e75928ff447fbbd0ee03ba14986886`, but is not
+release-qualified. The existing #243 source review
 round is already spent; do not request another for that source.
 
 Settings offers Original, Light, Blue and Magenta themes independently of
@@ -91,10 +136,10 @@ and gesture navigation both need checking; the SDK 57 Android 15 emulator
 style bug means emulator-only evidence is insufficient. The intended iOS
 device is the iPhone 17 Pro named `iPhone14`, never the iPhone 13 mini.
 
-The implementation plan records exact local gate results and the outstanding
-manual matrix. Focused PR creation, exact-head PR CI, its at-most-one automated
-review round, source closure, merges and cumulative preview reconciliation
-need separate approval. #243/#257 and evaluation draft #252 remain untouched.
+The implementation plan records local gate results and the outstanding
+manual matrix. Source #243 is closed as superseded after checking its exact
+head for new commits. The cumulative preview includes the accepted adaptation;
+draft #252 remains evaluation-only, not a wholesale promotion to develop.
 
 ## Package E: roasters in Import and saved shelves
 
