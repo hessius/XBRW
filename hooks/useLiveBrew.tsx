@@ -1,8 +1,13 @@
 import React, {createContext, useContext, useRef, useState} from "react";
 
 import {OVER} from "@/constants/brewCopy";
-import {useBrewRun} from "@/hooks/useBrewRun";
-import type {BrewStore} from "@/hooks/useBrewRun";
+import {useBrewRun, type BrewStore, type BagRunStore} from "@/hooks/useBrewRun";
+import {sharedSettings} from "@/hooks/useSetting";
+import {notify} from "@/components/XbrwToast";
+import {sharedBagDatabase, type BagFactsStore} from "@/library/CoffeeBagDatabase";
+import {captureBagRun, type BagRunRequest, type BagRunSnapshot} from "@/library/bagRun";
+import {resolveBagTracker} from "@/library/coffeeBag";
+import {newBrewId} from "@/library/brew/BrewRecord";
 import type {BrewRecord, BrewSample, TeaCycleObservation} from "@/library/brew/BrewRecord";
 import type {OverflowSnapshot} from "@/library/brew/OverflowController";
 import type {PauseInterval} from "@/library/brew/pauseIntervals";
@@ -50,6 +55,7 @@ export type LiveBrewSnapshot = {
      */
     startedAt: number;
     quickEdit?: QuickEditRecordAdjustments;
+    bag?: BagRunSnapshot;
 };
 
 type LiveBrew = {
@@ -64,7 +70,7 @@ type LiveBrew = {
      * mounted this becomes a no-op so re-mounting the brew screen cannot start
      * a second brew.
      */
-    start: (recipe: Recipe, quickEdit?: QuickEditRecordAdjustments) => void;
+    start: (recipe: Recipe, quickEdit?: QuickEditRecordAdjustments, bag?: BagRunRequest) => void;
     /**
      * Start this recipe again, switching the machine to PRO mode first.
      *
@@ -73,7 +79,7 @@ type LiveBrew = {
      * would collect no samples and write no history row: the run must be a new
      * run, and only `start`/`startInPro` make one.
      */
-    startInPro: (recipe: Recipe, quickEdit?: QuickEditRecordAdjustments) => void;
+    startInPro: (recipe: Recipe, quickEdit?: QuickEditRecordAdjustments, bag?: BagRunRequest) => void;
     /** Dismiss a finished or stopped bar. Has no effect while actively brewing. */
     dismiss: () => void;
     /**
@@ -132,6 +138,8 @@ const defaultValue: LiveBrew = {
 };
 
 const Context = createContext<LiveBrew>(defaultValue);
+type LiveBagStore = BagRunStore & Pick<BagFactsStore, "get" | "linked" | "selection">
+    & Partial<Pick<BagFactsStore, "select">>;
 
 /**
  * The single owner of a running brew, above every screen.
@@ -145,24 +153,55 @@ const Context = createContext<LiveBrew>(defaultValue);
  *
  * Injecting `store` lets tests avoid touching SQLite.
  */
-export function LiveBrewProvider({children, store}: {
+export function LiveBrewProvider({children, store, bagStore}: {
     children: React.ReactNode;
     store?: BrewStore;
+    bagStore?: LiveBagStore;
 }) {
     // `runId` is bumped for every run so a second brew starts from nothing
     // rather than inheriting the last one's samples and spent recorder.
     const [current, setCurrent] = useState<
         {recipe: Recipe | null; runId: number; pro: boolean;
-         quickEdit?: QuickEditRecordAdjustments; startedAt: number}
+         quickEdit?: QuickEditRecordAdjustments; startedAt: number;
+         bag?: BagRunSnapshot; bagRequest?: BagRunRequest}
     >({recipe: null, runId: 0, pro: false, startedAt: 0});
     const [ratingNoteOpen, setRatingNoteOpen] = useState(false);
 
     function begin(
         recipe: Recipe,
         pro: boolean = false,
-        quickEdit?: QuickEditRecordAdjustments
+        quickEdit?: QuickEditRecordAdjustments,
+        requestedBag: BagRunRequest = {kind: "saved"}
     ): void {
-        setCurrent((was) => ({recipe, runId: was.runId + 1, pro, quickEdit, startedAt: Date.now()}));
+        const startedAt = Date.now();
+        let bag: BagRunSnapshot | undefined;
+        let bagRequest: BagRunRequest = {kind: "explicit", bagId: null};
+        try {
+            const settings = sharedSettings();
+            const enabled = settings.get("bagExperimentEnabled") === true;
+            const captured = captureBagRun(recipe, requestedBag, {
+                enabled, acceptedAt: startedAt, runId: enabled ? newBrewId() : "",
+                tracker: enabled ? resolveBagTracker(
+                    settings.get("bagTracker"), settings.get("beanconquerorHandoff") === true
+                ) : "xbrw",
+                store: () => bagStore ?? sharedBagDatabase()
+            });
+            if (captured.kind === "tracked") {
+                bag = captured.snapshot;
+                bagRequest = {kind: "explicit", bagId: bag.bagId};
+            } else if (captured.kind === "unavailable") {
+                bagRequest = {kind: "invalid", reason: captured.message};
+                notify({tone: "error", message: captured.message});
+            }
+        } catch (error) {
+            console.warn("Could not prepare bag tracking", error);
+            const message = "Could not track this brew. Check remaining coffee afterwards.";
+            bagRequest = {kind: "invalid", reason: message};
+            notify({tone: "error", message});
+        }
+        setCurrent((was) => ({
+            recipe, runId: was.runId + 1, pro, quickEdit, startedAt, bag, bagRequest
+        }));
     }
 
     // One element, always, wrapping `children`. `children` here is the whole
@@ -177,6 +216,9 @@ export function LiveBrewProvider({children, store}: {
             runId={current.runId}
             pro={current.pro}
             quickEdit={current.quickEdit}
+            bag={current.bag}
+            bagRequest={current.bagRequest}
+            bagStore={bagStore}
             startedAt={current.startedAt}
             store={store}
             onStart={begin}
@@ -196,22 +238,27 @@ export function LiveBrewProvider({children, store}: {
  * shape of the tree never depends on whether a brew is running.
  */
 function RunOwner({
-    recipe, runId, pro, quickEdit, startedAt, store, onStart, onDismiss, ratingNoteOpen,
+    recipe, runId, pro, quickEdit, bag, bagRequest, bagStore, startedAt, store, onStart, onDismiss, ratingNoteOpen,
     setRatingNoteOpen, children
 }: {
     recipe: Recipe | null;
     runId: number;
     pro: boolean;
     quickEdit?: QuickEditRecordAdjustments;
+    bag?: BagRunSnapshot;
+    bagRequest?: BagRunRequest;
+    bagStore?: LiveBagStore;
     startedAt: number;
     store?: BrewStore;
-    onStart: (recipe: Recipe, pro?: boolean, quickEdit?: QuickEditRecordAdjustments) => void;
+    onStart: (
+        recipe: Recipe, pro?: boolean, quickEdit?: QuickEditRecordAdjustments, bag?: BagRunRequest
+    ) => void;
     onDismiss: () => void;
     ratingNoteOpen: boolean;
     setRatingNoteOpen: (open: boolean) => void;
     children: React.ReactNode;
 }) {
-    const result = useBrewRun(recipe, store, runId, quickEdit);
+    const result = useBrewRun(recipe, store, runId, quickEdit, bag, bagStore);
     const {phase, error, samples, elapsed, stageElapsed, activeIndex, holding,
            heldSeconds, stalls, stageWater, pauseElapsed, brew, startBrew,
            pauseBrew, resumeBrew,
@@ -253,7 +300,7 @@ function RunOwner({
     const snapshot: LiveBrewSnapshot | null = recipe === null ? null : {
         recipe, samples, elapsed, stageElapsed, activeIndex, phase,
         holding, heldSeconds, stalls, stageWater, pauseElapsed, bypass, record, startedAt, quickEdit,
-        overflow, overflowNow, pauseIntervals, teaCycles, teaNow,
+        overflow, overflowNow, pauseIntervals, teaCycles, teaNow, bag,
     };
     const quickEditFor = (
         next: Recipe,
@@ -275,14 +322,16 @@ function RunOwner({
             // Opening a finished brew to look at it must not come through
             // here — `app/brew.tsx` skips `start` in view mode — or tapping
             // the bar to see the brew you just made would make it again.
-            start: (next: Recipe, nextQuickEdit?: QuickEditRecordAdjustments) => {
+            start: (next: Recipe, nextQuickEdit?: QuickEditRecordAdjustments, nextBag?: BagRunRequest) => {
                 if (recipe === null || OVER.has(phase.name)) {
-                    onStart(next, false, quickEditFor(next, nextQuickEdit));
+                    onStart(next, false, quickEditFor(next, nextQuickEdit),
+                        nextBag ?? (next === recipe ? bagRequest : undefined));
                 }
             },
-            startInPro: (next: Recipe, nextQuickEdit?: QuickEditRecordAdjustments) => {
+            startInPro: (next: Recipe, nextQuickEdit?: QuickEditRecordAdjustments, nextBag?: BagRunRequest) => {
                 if (recipe === null || OVER.has(phase.name)) {
-                    onStart(next, true, quickEditFor(next, nextQuickEdit));
+                    onStart(next, true, quickEditFor(next, nextQuickEdit),
+                        nextBag ?? (next === recipe ? bagRequest : undefined));
                 }
             },
             dismiss: onDismiss,

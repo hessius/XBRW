@@ -2,6 +2,9 @@ import {
     BAG_BEAN_NAME_MAX, BAG_GRAMS, BAG_NAME_MAX, isBagId, isBagRecord,
     type BagBalance, type BagTracker
 } from "@/library/coffeeBag";
+import type {BagFactsStore} from "@/library/CoffeeBagDatabase";
+import type {BrewPhase} from "@/library/machine/Machine";
+import type Recipe from "@/library/Recipe";
 
 export type BagRunSnapshot = Readonly<{
     runId: string;
@@ -100,4 +103,86 @@ export function reviveBagRunProgress(value: unknown): BagRunProgress | null {
     if (consumption === "pending" && closed) return null;
     if (consumption === "unused" && (possible || !closed)) return null;
     return {consumption, possible, closed};
+}
+
+export type BagRunRequest =
+    | {kind: "saved"}
+    | {kind: "explicit"; bagId: string | null}
+    | {kind: "invalid"; reason: string};
+
+export function parseBagRunRequest(raw: string | undefined): BagRunRequest {
+    if (raw === undefined) return {kind: "saved"};
+    if (raw.length > 650) return {kind: "invalid", reason: "Invalid bag selection."};
+    let value: unknown;
+    try { value = JSON.parse(raw); }
+    catch { return {kind: "invalid", reason: "Invalid bag selection."}; }
+    if (value === null || isBagId(value)) return {kind: "explicit", bagId: value};
+    return {kind: "invalid", reason: "Invalid bag selection."};
+}
+
+export function bagRunParam(bagId: string | null): string { return JSON.stringify(bagId); }
+
+export type BagCapture =
+    | {kind: "untracked"}
+    | {kind: "tracked"; snapshot: BagRunSnapshot}
+    | {kind: "unavailable"; message: string};
+
+export function bagEligible(recipe: Recipe): boolean {
+    return !recipe.isTea() && Number.isFinite(recipe.dosage)
+        && recipe.dosage > 0 && recipe.pours.length > 0;
+}
+
+export function captureBagRun(
+    recipe: Recipe, request: BagRunRequest,
+    options: {
+        enabled: boolean;
+        tracker: BagTracker;
+        acceptedAt: number;
+        runId: string;
+        store: () => Pick<BagFactsStore, "get" | "linked" | "selection">
+            & Partial<Pick<BagFactsStore, "select">>;
+    }
+): BagCapture {
+    if (!options.enabled || !bagEligible(recipe)) return {kind: "untracked"};
+    if (request.kind === "invalid") return {kind: "unavailable", message: request.reason};
+    if (request.kind === "explicit" && request.bagId === null) return {kind: "untracked"};
+    try {
+        const store = options.store();
+        const bagId = request.kind === "explicit"
+            ? request.bagId : store.selection(recipe.uuid)?.bagId;
+        if (bagId == null) return {kind: "untracked"};
+        const bag = store.get(bagId);
+        if (bag === null || bag.finishedAt !== undefined
+            || !store.linked(recipe.uuid).some(linked => linked.id === bagId)) {
+            if (request.kind === "saved") store.select?.(recipe.uuid, null, options.acceptedAt);
+            return {kind: "unavailable",
+                message: "That bag is no longer available for this recipe. This brew is untracked."};
+        }
+        const snapshot = reviveBagRunSnapshot({
+            runId: options.runId, bagId, bagName: bag.name, recipeUuid: recipe.uuid,
+            dose: recipe.dosage, tracker: options.tracker, acceptedAt: options.acceptedAt,
+            beanName: bag.beanName
+        });
+        return snapshot === null
+            ? {kind: "unavailable", message: "Could not track this brew. Check remaining coffee afterwards."}
+            : {kind: "tracked", snapshot};
+    } catch (error) {
+        console.warn("Could not capture the bag selection", error);
+        return {kind: "unavailable",
+            message: "Could not read the bag selection. This brew is untracked."};
+    }
+}
+
+export function bagEventForPhase(phase: BrewPhase): BagRunEvent | null {
+    if (phase.name === "paused") return bagEventForPhase(phase.was);
+    switch (phase.name) {
+        case "sending": return "sending";
+        case "grinding": return "grinding";
+        case "pouring": return "pouring";
+        case "failed": return phase.reason === "blocked" ? "refused" : "ended";
+        case "done":
+        case "cancelled":
+        case "lostContact": return "ended";
+        default: return null;
+    }
 }

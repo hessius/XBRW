@@ -32,6 +32,17 @@ export interface BagFactsStore {
 
 const listeners = new Set<() => void>();
 let revision = 0;
+type FailedRun = {snapshot: BagRunSnapshot; progress: BagRunProgress};
+const failedByDatabase = new WeakMap<SQLiteDatabase, Map<string, FailedRun>>();
+
+function failedRuns(db: SQLiteDatabase): Map<string, FailedRun> {
+    let failed = failedByDatabase.get(db);
+    if (failed === undefined) {
+        failed = new Map();
+        failedByDatabase.set(db, failed);
+    }
+    return failed;
+}
 
 export function subscribeBagChanges(listener: () => void): () => void {
     listeners.add(listener);
@@ -131,9 +142,21 @@ function checkedBag(bag: CoffeeBag): CoffeeBag {
     return value;
 }
 
+function isRunAdvance(previous: BagRunProgress, next: BagRunProgress): boolean {
+    if (previous.consumption === next.consumption && previous.possible === next.possible
+        && previous.closed === next.closed) return true;
+    if (previous.closed && previous.consumption === "unused"
+        && next.consumption === "pending" && !next.possible && !next.closed) return true;
+    return !previous.closed
+        && !(previous.consumption === "used" && next.consumption !== "used")
+        && !(previous.consumption !== "pending" && next.consumption === "pending")
+        && !(previous.possible && !next.possible && next.consumption !== "unused");
+}
+
 export default class CoffeeBagDatabase implements BagFactsStore, BagAccountingStore {
     private readonly db: SQLiteDatabase;
     private transactionDepth = 0;
+    private afterCommit: (() => void)[] = [];
 
     constructor() {
         this.db = appDatabase();
@@ -144,11 +167,20 @@ export default class CoffeeBagDatabase implements BagFactsStore, BagAccountingSt
 
     private atomically(work: () => void): void {
         if (this.transactionDepth > 0) { work(); return; }
-        this.db.withTransactionSync(() => {
-            this.transactionDepth++;
-            try { work(); }
-            finally { this.transactionDepth--; }
-        });
+        const afterCommit: (() => void)[] = [];
+        this.afterCommit = afterCommit;
+        try {
+            this.db.withTransactionSync(() => {
+                this.transactionDepth++;
+                try { work(); }
+                finally { this.transactionDepth--; }
+            });
+        } catch (error) {
+            this.afterCommit = [];
+            throw error;
+        }
+        this.afterCommit = [];
+        for (const complete of afterCommit) complete();
         publishBagChanges();
     }
 
@@ -322,17 +354,21 @@ export default class CoffeeBagDatabase implements BagFactsStore, BagAccountingSt
             );
             if (row === null) throw new Error("The bag attribution is no longer available.");
             const previous = readRun(row).progress;
+            const failed = failedRuns(this.db).get(runId);
+            if (!isRunAdvance(previous, progress)
+                || (failed !== undefined && !isRunAdvance(failed.progress, progress))) {
+                throw new Error("The saved bag progress cannot be rewound.");
+            }
+            if (failed !== undefined) {
+                this.afterCommit.push(() => {
+                    if (failedRuns(this.db).get(runId) === failed) failedRuns(this.db).delete(runId);
+                });
+            }
             if (previous.consumption === progress.consumption
                 && previous.possible === progress.possible
                 && previous.closed === progress.closed) return;
             const rearming = previous.closed && previous.consumption === "unused"
                 && progress.consumption === "pending" && !progress.possible && !progress.closed;
-            if ((!rearming && previous.closed)
-                || (previous.consumption === "used" && progress.consumption !== "used")
-                || (!rearming && previous.consumption !== "pending"
-                    && progress.consumption === "pending")) {
-                throw new Error("The saved bag progress cannot be rewound.");
-            }
             this.db.runSync(`
                 UPDATE coffee_bag_runs SET consumption = ?, possible = ?, closed = ?,
                     coveredByBaseline = CASE WHEN ? THEN 0 ELSE coveredByBaseline END,
@@ -346,6 +382,9 @@ export default class CoffeeBagDatabase implements BagFactsStore, BagAccountingSt
     public balance(bagId: string, dose: number, tracker: BagTracker): BagBalance {
         if (this.get(bagId) === null) throw new Error("That bag is no longer available.");
         if (tracker === "beanconqueror") return {kind: "external"};
+        if ([...failedRuns(this.db).values()].some(run => run.snapshot.bagId === bagId)) {
+            return {kind: "needsCheck"};
+        }
         const runs = this.db.getAllSync<RunRow>(
             "SELECT * FROM coffee_bag_runs WHERE bagId = ?;", [bagId]
         );
@@ -384,6 +423,11 @@ export default class CoffeeBagDatabase implements BagFactsStore, BagAccountingSt
         if (!isGramsLeft(grams)) throw new Error("Enter remaining coffee from 0 to 5000 g.");
         if (this.get(bagId) === null) throw new Error("That bag is no longer available.");
         this.atomically(() => {
+            for (const {snapshot, progress} of failedRuns(this.db).values()) {
+                if (snapshot.bagId !== bagId) continue;
+                this.beginRun(snapshot);
+                this.updateRun(snapshot.runId, progress);
+            }
             for (const row of this.db.getAllSync<RunRow>(
                 "SELECT * FROM coffee_bag_runs WHERE bagId = ?;", [bagId]
             )) readRun(row);
@@ -401,6 +445,22 @@ export default class CoffeeBagDatabase implements BagFactsStore, BagAccountingSt
             this.db.runSync(
                 "UPDATE coffee_bags_v2 SET baselineGrams = ?, needsCheck = 0 WHERE id = ?;",
                 [grams, bagId]
+            );
+        });
+    }
+
+    public invalidateBagEstimate(snapshot: BagRunSnapshot, progress: BagRunProgress): void {
+        const attribution = reviveBagRunSnapshot(snapshot);
+        const observed = reviveBagRunProgress(progress);
+        if (attribution === null || observed === null) {
+            throw new Error("The unsaved bag progress is invalid.");
+        }
+        if (attribution.tracker !== "xbrw") return;
+        failedRuns(this.db).set(attribution.runId, {snapshot: attribution, progress: observed});
+        publishBagChanges();
+        this.atomically(() => {
+            this.db.runSync(
+                "UPDATE coffee_bags_v2 SET needsCheck = 1 WHERE id = ?;", [attribution.bagId]
             );
         });
     }

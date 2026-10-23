@@ -23,7 +23,10 @@ Branch: `feat/2.2.0-bag-labs-20261023`.
 Pinned base: `8f2638dfa2e75928ff447fbbd0ee03ba14986886`.
 
 The approved spec was pushed at `a372fd51f1519b7a6051ba7d4041cd5a15ac9c1c`.
-Only documentation has changed at the time this plan is written.
+Implementation is authorised for inline execution. Tasks 1-4 now have local
+iOS/Android qualification; Tasks 5-11 and all native/manual gates remain pending.
+The default-off gate and device-local tracker keys were introduced with Task 4
+so the live-owner integration is type-safe before the settings UI arrives.
 
 **#239 is not part of this plan.** Do not port its dose chips, save-as-dose,
 bypass-rescaling changes, sheet-height change or compiler opt-out. Existing
@@ -97,7 +100,7 @@ co-author trailer.
 **Reference:** pinned #238 `library/coffeeBag.ts`; current
 `library/podCoffee.ts`; `test-utils/sqlite.ts`.
 
-- [ ] **Step 1: Write failing ownership and validation cases.**
+- [x] **Step 1: Write failing ownership and validation cases.**
 
 ```ts
 import {newBag, reviveBag} from "@/library/coffeeBag";
@@ -123,7 +126,7 @@ it.each([NaN, Infinity, -1, 0, 5001, 250.5])(
 );
 ```
 
-- [ ] **Step 2: Run the red test.**
+- [x] **Step 2: Run the red test.**
 
 ```bash
 npx jest --runTestsByPath library/__tests__/coffeeBag.test.ts --runInBand
@@ -131,7 +134,7 @@ npx jest --runTestsByPath library/__tests__/coffeeBag.test.ts --runInBand
 
 Expected: both projects fail because the new module/export does not exist.
 
-- [ ] **Step 3: Add these model contracts and constructors.**
+- [x] **Step 3: Add these model contracts and constructors.**
 
 ```ts
 export type BagTracker = "xbrw" | "beanconqueror";
@@ -282,7 +285,7 @@ Import `reviveRoastAdvice`/`roastAdviceProblem` into coffeeBag. Keeping
 individual supplied numbers available lets the form display inconsistent
 advice as a problem rather than silently replacing it with a default.
 
-- [ ] **Step 4: Add the shared fixture, then finish green cases.**
+- [x] **Step 4: Add the shared fixture, then finish green cases.**
 
 ```ts
 // test-utils/bags.ts
@@ -320,7 +323,7 @@ in Task 7. This task must create that file with the shared
 `AdviceSource = "coffee" | "estimate" | "user"` type. Task 7 imports/re-exports
 that type rather than defining a different same-named union.
 
-- [ ] **Step 5: Run green and commit.**
+- [x] **Step 5: Run green and commit.**
 
 ```bash
 npx jest --runTestsByPath library/__tests__/coffeeBag.test.ts --runInBand
@@ -336,7 +339,7 @@ git commit -m "feat(bags): model independent physical coffee bags" \
 
 **Modify:** `library/RecipeDatabase.ts:423-473`.
 
-- [ ] **Step 1: Write these real-SQLite relationship tests.**
+- [x] **Step 1: Write these real-SQLite relationship tests.**
 
 Each DB suite uses this setup, not a query-pattern mock:
 
@@ -384,13 +387,13 @@ it("remembers No bag and removes only a deleted recipe's links", () => {
 });
 ```
 
-- [ ] **Step 2: Run red.**
+- [x] **Step 2: Run red.**
 
 ```bash
 npx jest --runTestsByPath library/__tests__/CoffeeBagDatabase.test.ts --runInBand
 ```
 
-- [ ] **Step 3: Create the schema without touching legacy `coffee_bags`.**
+- [x] **Step 3: Create the schema without touching legacy `coffee_bags`.**
 
 Use `appDatabase()`; keep its filename and singleton. `ensureBagTables(db)`
 executes the following DDL:
@@ -513,7 +516,7 @@ Add a plain revision subscription in this module: `subscribeBagChanges`,
 transactions, never before a commit or after rollback. Hooks in Task 8 use
 `useSyncExternalStore`, not one SQL read per recipe row.
 
-- [ ] **Step 4: Unlink recipe deletions without breaking replace.**
+- [x] **Step 4: Unlink recipe deletions without breaking replace.**
 
 Inside the existing RecipeDatabase transactions, delete corresponding link
 and selection rows only if the v2 tables exist. Do not instantiate a bag store
@@ -536,7 +539,7 @@ Add tests that replacement retains the selected bag and explicit No bag for
 retained UUIDs, prunes removed UUIDs, and rolls back everything when a recipe
 insert fails. Publish the bag revision after the outer transaction succeeds.
 
-- [ ] **Step 5: Run green and commit.**
+- [x] **Step 5: Run green and commit.**
 
 ```bash
 npx jest --runTestsByPath library/__tests__/CoffeeBagDatabase.test.ts hooks/__tests__/useRecipeLibrary.realDb.test.ts --runInBand
@@ -552,7 +555,7 @@ git commit -m "feat(bags): persist shared links and explicit bag choices" \
 **Modify:** `library/CoffeeBagDatabase.ts`,
 `library/__tests__/CoffeeBagDatabase.test.ts`.
 
-- [ ] **Step 1: Define the run contract and write red accounting tests.**
+- [x] **Step 1: Define the run contract and write red accounting tests.**
 
 ```ts
 export type BagRunSnapshot = {
@@ -634,13 +637,13 @@ it("does not guess on which side of a correction grinding used beans", () => {
 Ensure the suite creates `brews` through the existing BrewDatabase before the
 history-deletion assertion, rather than relying on a missing-table failure.
 
-- [ ] **Step 2: Run red.**
+- [x] **Step 2: Run red.**
 
 ```bash
 npx jest --runTestsByPath library/__tests__/bagRun.test.ts library/__tests__/CoffeeBagDatabase.test.ts --runInBand
 ```
 
-- [ ] **Step 3: Implement the pure transition function.**
+- [x] **Step 3: Implement the pure transition function.**
 
 ```ts
 export function nextBagProgress(
@@ -684,7 +687,7 @@ or uncertain runs, preflight-only rearming, and used-before-recovery. A
 preflight refusal is evidence that nothing was sent; a failure without that
 evidence is not equivalent.
 
-- [ ] **Step 4: Add the SQL methods and corruption checks.**
+- [x] **Step 4: Add the SQL methods and corruption checks.**
 
 `beginRun` validates the complete snapshot, requires the bag, and inserts once
 by run ID. An existing run must have the same immutable snapshot; a conflicting
@@ -802,7 +805,7 @@ Expose `sharedBagDatabase()` lazily, reusing the source's `uses(appDatabase())`
 handle check so Jest's `forgetAppDatabase()` still creates isolated stores.
 Do not open SQLite at module import.
 
-- [ ] **Step 5: Run the accounting matrix and commit.**
+- [x] **Step 5: Run the accounting matrix and commit.**
 
 Add tests for two different recipe doses drawing from one bag; duplicate run
 IDs; malformed stored JSON; negative over-consumption; external mode; refused
@@ -828,7 +831,7 @@ git commit -m "feat(bags): account for attributed brews independently of history
 `hooks/__tests__/useLiveBrew.test.tsx`,
 `hooks/__tests__/useBrewRun.test.ts`.
 
-- [ ] **Step 1: Add request parsing and its red cases.**
+- [x] **Step 1: Add request parsing and its red cases.**
 
 ```ts
 export type BagRunRequest =
@@ -855,7 +858,7 @@ Test absent, null, valid Unicode IDs, strings needing escaping, oversized,
 malformed JSON, booleans, arrays and objects. Invalid input produces a visible
 tracking warning and an unchanged untracked brew, not a different bag.
 
-- [ ] **Step 2: Write the tracker red test, then implement its complete bridge.**
+- [x] **Step 2: Write the tracker red test, then implement its complete bridge.**
 
 ```ts
 // library/brew/BagRunTracker.ts
@@ -950,7 +953,7 @@ new request's bag. Add this regression: old recipe pours before the new
 request is refused, then confirmed refusal, expect no used entry. Do not
 change the core ownership/packet logic to implement bag accounting.
 
-- [ ] **Step 3: Freeze a request in the accepted owner, not a route effect.**
+- [x] **Step 3: Freeze a request in the accepted owner, not a route effect.**
 
 Extend `LiveBrew.start` and `startInPro` with an optional third
 `BagRunRequest`. Preserve existing calls. The provider's `begin` resolves
@@ -1004,7 +1007,7 @@ A disabled grinder alone is not evidence of water-only brewing: somebody can
 have loaded preground coffee. Test tea, zero-dose and stageless recipes
 without modifying their machine inputs.
 
-- [ ] **Step 4: Wire existing callbacks without another subscription.**
+- [x] **Step 4: Wire existing callbacks without another subscription.**
 
 Add the tracker to the existing `owner.current` object in `useBrewRun`.
 `replaceRecorder` retains it and emits `retryBeforeSend` only for the existing
@@ -1045,7 +1048,7 @@ the parsed request into `start`/`startInPro`. Keep view mode from starting or
 attributing anything. Retries retain that run's intended bag, not a newly
 selected bag in a different screen.
 
-- [ ] **Step 5: Extend the existing harness and run green.**
+- [x] **Step 5: Extend the existing harness and run green.**
 
 In `useLiveBrew.test.tsx`, reuse its existing `harness`, `h.setPhase`,
 `h.water`, `h.written`, `renderWithProviders` and `act` helpers. Inject a narrow

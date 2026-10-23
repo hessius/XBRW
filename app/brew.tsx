@@ -27,6 +27,7 @@ import DotMatrixText from "@/components/DotMatrixText";
 import LinkText from "@/components/LinkText";
 import MachineDot from "@/components/MachineDot";
 import {notify} from "@/components/XbrwToast";
+import {parseBagRunRequest} from "@/library/bagRun";
 import {BLOCKED_HEADLINE, BLOCKED_WATER_HEADLINE, blockedWaterCopy,
         ENDED_ON_MACHINE_NOTE, FAILURE_COPY,
         FIRST_BREW_REMINDER, LONGEST_ACTIVE_HEADLINE, NO_RETRY, PAUSABLE,
@@ -211,8 +212,10 @@ function Action({label, color, onPress}: {label: string; color: string; onPress:
 export default function Brew({historyStore}: {historyStore?: ExportStore} = {}) {
     const appearance = useAppearance();
     const {palette} = appearance;
-    const {recipeJSON, view, quickEditAdjustments} =
-        useLocalSearchParams<{recipeJSON: string; view: string; quickEditAdjustments?: string}>();
+    const {recipeJSON, view, quickEditAdjustments, bagSelection} =
+        useLocalSearchParams<{
+            recipeJSON: string; view: string; quickEditAdjustments?: string; bagSelection?: string
+        }>();
     // Opened to look at a run that already exists, from the mini bar, rather
     // than to start one. Without this, coming back to watch the brew you just
     // made would make it again: `start` replaces a finished run, and this
@@ -227,6 +230,9 @@ export default function Brew({historyStore}: {historyStore?: ExportStore} = {}) 
     const [quickEditRecord] = useState(() =>
         quickEditRecordFromRoute(localRecipe, quickEditAdjustments)
     );
+    const [bagRequest] = useState(() =>
+        bagSelection === undefined ? undefined : parseBagRunRequest(bagSelection)
+    );
     const [selectedTeaStage, setSelectedTeaStage] = useState<number | null>(null);
 
     const {run, start, startInPro, startBrew, pauseBrew, resumeBrew, cancelBrew,
@@ -237,7 +243,10 @@ export default function Brew({historyStore}: {historyStore?: ExportStore} = {}) 
     // re-mounting this screen while a brew is in flight never commands a second
     // brew (Finding 2).
     useEffect(() => {
-        if (!viewing) start(localRecipe, quickEditRecord);
+        if (!viewing) {
+            if (bagRequest === undefined) start(localRecipe, quickEditRecord);
+            else start(localRecipe, quickEditRecord, bagRequest);
+        }
         // localRecipe and viewing are stable for the life of this screen.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);

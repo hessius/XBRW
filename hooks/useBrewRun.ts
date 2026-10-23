@@ -1,6 +1,7 @@
 import {useEffect, useRef, useState} from "react";
 
 import {OVER} from "@/constants/brewCopy";
+import {notify} from "@/components/XbrwToast";
 import {useBrew} from "@/hooks/useBrew";
 import {sharedSettings} from "@/hooks/useSetting";
 import {useOverflowProtection} from "@/hooks/useOverflowProtection";
@@ -8,6 +9,11 @@ import {bypassRungState, type BypassView} from "@/library/brew/bypassState";
 import BrewDatabase from "@/library/BrewDatabase";
 import type {BrewRecord, BrewSample, TeaCycleObservation} from "@/library/brew/BrewRecord";
 import BrewRecorder from "@/library/brew/BrewRecorder";
+import {BagRunTracker} from "@/library/brew/BagRunTracker";
+import {sharedBagDatabase} from "@/library/CoffeeBagDatabase";
+import {
+    bagEventForPhase, type BagAccountingStore, type BagRunProgress, type BagRunSnapshot
+} from "@/library/bagRun";
 import type {PauseInterval} from "@/library/brew/pauseIntervals";
 import {overflowFor} from "@/library/brew/overflowConfig";
 import {readDialAfterBrew} from "@/library/brew/dialAfterBrew";
@@ -29,6 +35,10 @@ export type BrewStore = {
      * a machine that never answered.
      */
     recordDialAfter?: (id: string, dial: number) => void;
+};
+
+export type BagRunStore = Pick<BagAccountingStore, "beginRun" | "updateRun"> & {
+    invalidateBagEstimate?: (snapshot: BagRunSnapshot, progress: BagRunProgress) => void;
 };
 
 /** Four times a second: smooth for a four-minute line, cheap for layout. */
@@ -77,7 +87,9 @@ export function useBrewRun(
     recipe: Recipe | null,
     store?: BrewStore,
     runId: number = 0,
-    quickEdit?: QuickEditRecordAdjustments
+    quickEdit?: QuickEditRecordAdjustments,
+    bag?: BagRunSnapshot,
+    bagStore?: BagRunStore
 ) {
     const brewer = useBrew();
     const {machine} = brewer;
@@ -136,12 +148,15 @@ export function useBrewRun(
     const owner = useRef<{
         recorder: BrewRecorder; machine: unknown; runId: number;
         recipe: Recipe; quickEdit: QuickEditRecordAdjustments | undefined;
+        bag?: BagRunSnapshot; bagTracker?: BagRunTracker;
     } | null>(null);
     // A brew's recipe is fixed at start. Hold the latest value in a ref so
     // the start effect (keyed on machine) sees the right recipe without being
     // re-triggered by a new Recipe object on every render.
     const recipeRef = useRef(recipe);
     const quickEditRef = useRef(quickEdit);
+    const bagRef = useRef(bag);
+    const bagWarnings = useRef(new Set<string>());
 
     // Opened once and lazily: constructing a BrewDatabase at module scope would
     // open SQLite in every test that imports this file, whether or not it
@@ -154,12 +169,33 @@ export function useBrewRun(
     useEffect(() => {
         recipeRef.current = recipe;
         quickEditRef.current = quickEdit;
-    }, [recipe, quickEdit]);
+        bagRef.current = bag;
+    }, [recipe, quickEdit, bag]);
 
     function openRecorder(
         from: typeof machine, id: number, started: Recipe,
-        edits: QuickEditRecordAdjustments | undefined
+        edits: QuickEditRecordAdjustments | undefined,
+        attribution: BagRunSnapshot | undefined,
+        retainedTracker?: BagRunTracker
     ): BrewRecorder {
+        let bagTracker = retainedTracker;
+        if (bagTracker === undefined && attribution !== undefined) {
+            const accounting: BagRunStore = bagStore ?? {
+                beginRun: snapshot => sharedBagDatabase().beginRun(snapshot),
+                updateRun: (runId, progress) => sharedBagDatabase().updateRun(runId, progress),
+                invalidateBagEstimate: (snapshot, progress) =>
+                    sharedBagDatabase().invalidateBagEstimate(snapshot, progress)
+            };
+            bagTracker = new BagRunTracker(attribution, accounting, (error, snapshot, progress) => {
+                console.warn("Could not save bag progress", error);
+                try { accounting.invalidateBagEstimate?.(snapshot, progress); }
+                catch (secondary) { console.warn("Could not save the bag quantity warning", secondary); }
+                if (bagWarnings.current.has(snapshot.runId)) return;
+                bagWarnings.current.add(snapshot.runId);
+                notify({tone: "error",
+                    message: "Could not track this brew reliably. Check remaining coffee afterwards."});
+            });
+        }
         const active = new BrewRecorder({
             machine: from,
             recipe: started,
@@ -196,7 +232,10 @@ export function useBrewRun(
             }
         });
         recorder.current = active;
-        owner.current = {recorder: active, machine: from, runId: id, recipe: started, quickEdit: edits};
+        owner.current = {
+            recorder: active, machine: from, runId: id, recipe: started, quickEdit: edits,
+            bag: attribution, bagTracker
+        };
         active.start();
         return active;
     }
@@ -208,13 +247,14 @@ export function useBrewRun(
         const held = owner.current;
         if (held === null || held.machine !== from || held.runId !== id) return;
         held.recorder.stop();
-        openRecorder(from, id, held.recipe, held.quickEdit);
+        held.bagTracker?.event("retryBeforeSend");
+        openRecorder(from, id, held.recipe, held.quickEdit, held.bag, held.bagTracker);
     }
 
     useEffect(() => {
         const started = recipeRef.current;
         if (started === null) return;
-        const active = openRecorder(machine, runId, started, quickEditRef.current);
+        const active = openRecorder(machine, runId, started, quickEditRef.current, bagRef.current);
         return () => {
             active.stop();
             // The retry may have replaced it; the replacement is ours too.
@@ -235,7 +275,14 @@ export function useBrewRun(
     // real Machine keeps listeners in a Set so both are called independently.
     useEffect(() => {
         if (refused !== null) return;
-        return machine.onPhase((p) => { setHeard({from: machine, runId, phase: p}); });
+        return machine.onPhase((p) => {
+            const held = owner.current;
+            const event = bagEventForPhase(p);
+            if (event !== null && held?.machine === machine && held.runId === runId) {
+                held.bagTracker?.event(event);
+            }
+            setHeard({from: machine, runId, phase: p});
+        });
     }, [machine, runId, refused]);
 
     const pouring = phase.name === "pouring";
@@ -374,6 +421,7 @@ export function useBrewRun(
     function refuseAttempt(error: BrewRefusal): void {
         const held = owner.current;
         if (held === null || held.machine !== machine || held.runId !== runId) return;
+        held.bagTracker?.event("refused");
         // Nothing was sent: retire app ownership without a machine failure or history row.
         held.recorder.stop();
         recorder.current = null;

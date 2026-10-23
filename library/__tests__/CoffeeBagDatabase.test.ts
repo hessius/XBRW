@@ -175,6 +175,61 @@ describe("physical bag relationships in SQLite", () => {
             mockDb.runSync("UPDATE coffee_bag_runs SET snapshot = ?;", ["{}"]);
             expect(() => bags.balance("bag-a", 18, "xbrw")).toThrow(/read/i);
         });
+
+        it("flushes an observed unsaved pour before correcting, without a late second charge", () => {
+            const {bags} = stores();
+            bags.beginRun(run());
+            mockDb.execSync(`CREATE TRIGGER reject_progress BEFORE UPDATE ON coffee_bag_runs
+                BEGIN SELECT RAISE(FAIL, 'disk full'); END;`);
+            expect(() => bags.updateRun("run-a", used)).toThrow("disk full");
+            bags.invalidateBagEstimate(run(), used);
+            expect(bags.balance("bag-a", 18, "xbrw")).toEqual({kind: "needsCheck"});
+            mockDb.execSync("DROP TRIGGER reject_progress;");
+            bags.correct("bag-a", 100);
+            bags.updateRun("run-a", {...used, closed: true});
+            expect(bags.balance("bag-a", 18, "xbrw"))
+                .toMatchObject({kind: "estimate", remainingGrams: 100});
+        });
+
+        it("retains failed observations if even the marker and correction cannot be saved", () => {
+            const {bags} = stores();
+            bags.beginRun(run());
+            mockDb.execSync(`CREATE TRIGGER reject_quantity BEFORE UPDATE ON coffee_bags_v2
+                BEGIN SELECT RAISE(FAIL, 'unavailable'); END;`);
+            expect(() => bags.invalidateBagEstimate(run(), used)).toThrow("unavailable");
+            expect(new CoffeeBagDatabase().balance("bag-a", 18, "xbrw"))
+                .toEqual({kind: "needsCheck"});
+            expect(() => bags.correct("bag-a", 100)).toThrow("unavailable");
+            expect(bags.balance("bag-a", 18, "xbrw")).toEqual({kind: "needsCheck"});
+            expect(mockDb.getFirstSync(
+                "SELECT consumption FROM coffee_bag_runs WHERE runId = 'run-a';"
+            )).toEqual({consumption: "pending"});
+            mockDb.execSync("DROP TRIGGER reject_quantity;");
+            bags.correct("bag-a", 100);
+            bags.updateRun("run-a", {...used, closed: true});
+            expect(bags.balance("bag-a", 18, "xbrw"))
+                .toMatchObject({kind: "estimate", remainingGrams: 100});
+        });
+
+        it("a successful later write cannot clear a persistent gap from another cause", () => {
+            const {bags} = stores();
+            bags.beginRun(run());
+            bags.markAllNeedsCheck();
+            bags.invalidateBagEstimate(run(), used);
+            bags.updateRun("run-a", {...used, closed: true});
+            expect(bags.balance("bag-a", 18, "xbrw")).toEqual({kind: "needsCheck"});
+        });
+
+        it("cannot discard a cached observed pour with an older successful callback", () => {
+            const {bags} = stores();
+            bags.beginRun(run());
+            bags.invalidateBagEstimate(run(), used);
+            expect(() => bags.updateRun("run-a", uncertain)).toThrow(/rewound/i);
+            bags.correct("bag-a", 100);
+            bags.updateRun("run-a", {...used, closed: true});
+            expect(bags.balance("bag-a", 18, "xbrw"))
+                .toMatchObject({kind: "estimate", remainingGrams: 100});
+        });
     });
 
     it("remembers explicit No bag after reopening", () => {

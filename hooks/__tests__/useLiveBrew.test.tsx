@@ -16,10 +16,16 @@ import {createTestDatabase} from "@/test-utils/sqlite";
 import {renderWithProviders} from "@/test-utils/render";
 import {THEME_IDS} from "@/library/appearance";
 import {resolveAccent} from "@/library/accent";
+import {bagFixture} from "@/test-utils/bags";
+import {INITIAL_BAG_PROGRESS} from "@/library/bagRun";
 
+let mockBagEnabled = false;
 jest.mock("@/hooks/useSetting", () => ({
     ...jest.requireActual("@/hooks/useSetting"),
-    sharedSettings: () => ({get: () => 10})
+    sharedSettings: () => ({
+        get: (key: string) => key === "bagExperimentEnabled" ? mockBagEnabled
+            : key === "bagTracker" ? "xbrw" : 10
+    })
 }));
 
 const appStateDescriptor = Object.getOwnPropertyDescriptor(AppState, "currentState")!;
@@ -98,6 +104,153 @@ function harness() {
 }
 
 describe("LiveBrewProvider", () => {
+    function bagStore() {
+        const bag = bagFixture();
+        return {
+            get: jest.fn(() => bag),
+            linked: jest.fn(() => [bag]),
+            selection: jest.fn(() => ({recipeUuid: "a", bagId: bag.id, selectedAt: 1})),
+            beginRun: jest.fn(() => ({...INITIAL_BAG_PROGRESS})),
+            updateRun: jest.fn()
+        };
+    }
+
+    it("freezes bag A when a second start requests recipe B", async () => {
+        const h = harness();
+        const bags = bagStore();
+        const first = recipe();
+        first.uuid = "a";
+        first.dosage = 21;
+        const second = recipe();
+        second.uuid = "b";
+        mockBagEnabled = true;
+        let live!: ReturnType<typeof useLiveBrew>;
+        function Read() { live = useLiveBrew(); return null; }
+        await renderWithProviders(
+            <LiveBrewProvider store={h.store} bagStore={bags}><Read/></LiveBrewProvider>
+        );
+        await act(async () => live.start(first));
+        const listeners = h.listenerCounts();
+        await h.setPhase({name: "sending"});
+        await h.setPhase({name: "pouring", pour: 1, pours: 2});
+        await act(async () => live.start(second, undefined, {kind: "explicit", bagId: "bag-b"}));
+        expect(live.run?.recipe.uuid).toBe("a");
+        expect(live.run?.bag).toMatchObject({bagId: "bag-a", recipeUuid: "a", dose: 21});
+        expect(bags.beginRun).toHaveBeenCalledTimes(1);
+        expect(bags.beginRun).toHaveBeenCalledWith(expect.objectContaining({
+            recipeUuid: "a", bagId: "bag-a", dose: 21
+        }));
+        expect(global.__brewer.brew).toHaveBeenCalledTimes(1);
+        expect(h.listenerCounts()).toEqual(listeners);
+        bags.get().name = "Renamed during run";
+        mockBagEnabled = false;
+        await h.setPhase({name: "cancelled"});
+        expect(live.run?.bag?.bagName).toBe(bagFixture().name);
+        expect(bags.updateRun).toHaveBeenLastCalledWith(expect.any(String), {
+            consumption: "used", possible: true, closed: true
+        });
+    });
+
+    it("creates no phantom allocation for a superseded same-tick start", async () => {
+        const h = harness();
+        const bags = bagStore();
+        mockBagEnabled = true;
+        let live!: ReturnType<typeof useLiveBrew>;
+        function Read() { live = useLiveBrew(); return null; }
+        await renderWithProviders(
+            <LiveBrewProvider store={h.store} bagStore={bags}><Read/></LiveBrewProvider>
+        );
+        const first = recipe();
+        first.uuid = "a";
+        const second = recipe();
+        second.uuid = "b";
+        await act(async () => { live.start(first); live.start(second); });
+        expect(bags.beginRun).toHaveBeenCalledTimes(1);
+        expect(bags.beginRun).toHaveBeenCalledWith(expect.objectContaining({recipeUuid: "b"}));
+        expect(global.__brewer.brew).toHaveBeenCalledTimes(1);
+    });
+
+    it("uses no bag store when the experiment is off", async () => {
+        const h = harness();
+        const bags = bagStore();
+        let live!: ReturnType<typeof useLiveBrew>;
+        function Read() { live = useLiveBrew(); return null; }
+        await renderWithProviders(
+            <LiveBrewProvider store={h.store} bagStore={bags}><Read/></LiveBrewProvider>
+        );
+        await act(async () => live.start(recipe()));
+        await h.setPhase({name: "sending"});
+        await h.setPhase({name: "pouring", pour: 1, pours: 2});
+        expect(bags.selection).not.toHaveBeenCalled();
+        expect(bags.beginRun).not.toHaveBeenCalled();
+        expect(bags.updateRun).not.toHaveBeenCalled();
+    });
+
+    it("does not charge a new bag for old machine pouring before a confirmed refusal", async () => {
+        const h = harness();
+        const bags = bagStore();
+        mockBagEnabled = true;
+        let live!: ReturnType<typeof useLiveBrew>;
+        function Read() { live = useLiveBrew(); return null; }
+        await renderWithProviders(
+            <LiveBrewProvider store={h.store} bagStore={bags}><Read/></LiveBrewProvider>
+        );
+        await act(async () => live.start(recipe()));
+        await h.setPhase({name: "pouring", pour: 1, pours: 2});
+        await h.setPhase({name: "failed", reason: "blocked", block: "busy"});
+        expect(bags.updateRun).toHaveBeenCalledTimes(1);
+        expect(bags.updateRun).toHaveBeenLastCalledWith(expect.any(String), {
+            consumption: "unused", possible: false, closed: true
+        });
+    });
+
+    it("retains the allocation through an automatic preflight retry", async () => {
+        const h = harness();
+        const bags = bagStore();
+        mockBagEnabled = true;
+        let retry: (() => void) | undefined;
+        global.__brewer.brew = jest.fn(async (_recipe, beforeRetry) => { retry = beforeRetry; });
+        let live!: ReturnType<typeof useLiveBrew>;
+        function Read() { live = useLiveBrew(); return null; }
+        await renderWithProviders(
+            <LiveBrewProvider store={h.store} bagStore={bags}><Read/></LiveBrewProvider>
+        );
+        await act(async () => live.start(recipe()));
+        const allocation = live.run?.bag?.runId;
+        await h.setPhase({name: "failed", reason: "blocked", block: "notEnoughWater"});
+        await act(async () => { retry?.(); });
+        expect(bags.beginRun).toHaveBeenCalledTimes(1);
+        expect(bags.updateRun).toHaveBeenLastCalledWith(allocation, INITIAL_BAG_PROGRESS);
+        await h.setPhase({name: "sending"});
+        await h.setPhase({name: "pouring", pour: 1, pours: 2});
+        await h.setPhase({name: "done"});
+        expect(bags.updateRun).toHaveBeenLastCalledWith(allocation, {
+            consumption: "used", possible: true, closed: true
+        });
+    });
+
+    it("retains intended bag A on an explicit retry after the saved choice changes", async () => {
+        const h = harness();
+        const bags = bagStore();
+        const other = bagFixture({id: "bag-b", name: "Next bag"});
+        bags.linked.mockReturnValue([bags.get(), other]);
+        mockBagEnabled = true;
+        let live!: ReturnType<typeof useLiveBrew>;
+        function Read() { live = useLiveBrew(); return null; }
+        await renderWithProviders(
+            <LiveBrewProvider store={h.store} bagStore={bags}><Read/></LiveBrewProvider>
+        );
+        const first = recipe();
+        await act(async () => live.start(first));
+        const allocation = live.run?.bag?.runId;
+        await h.setPhase({name: "failed", reason: "blocked", block: "notEnoughWater"});
+        bags.selection.mockReturnValue({recipeUuid: first.uuid, bagId: "bag-b", selectedAt: 2});
+        await act(async () => live.startInPro(first));
+        expect(live.run?.bag).toMatchObject({bagId: "bag-a"});
+        expect(live.run?.bag?.runId).not.toBe(allocation);
+        expect(bags.beginRun).toHaveBeenCalledTimes(2);
+    });
+
     it("keeps one run and continuous samples across eight persisted choices, navigation and a failed SQL write", async () => {
         const h = harness();
         const db = createTestDatabase();
@@ -188,6 +341,7 @@ describe("LiveBrewProvider", () => {
     });
 
     beforeEach(() => {
+        mockBagEnabled = false;
         jest.useFakeTimers();
         Object.defineProperty(AppState, "currentState", {configurable: true, value: "active"});
     });

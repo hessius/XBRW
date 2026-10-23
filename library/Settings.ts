@@ -5,6 +5,7 @@ import type {LibraryView} from './libraryView';
 import type {MachineModel} from './machine/machineModel';
 import type {HistorySort, HistorySortDirection} from './brew/historyQuery';
 import type {ThemeId, RecipeColourMode} from './appearance';
+import type {BagTrackerSetting} from './coffeeBag';
 
 /**
  * Every setting, with its default.
@@ -289,6 +290,9 @@ export const DEFAULTS = {
      * feature deserves, and it survives a relaunch like any other preference.
      */
     beanconquerorHandoff: false,
+    /** Device-local opt-in; inventory survives when this is off. */
+    bagExperimentEnabled: false,
+    bagTracker: "auto" as BagTrackerSetting,
     /**
      * Whether the LABS section is visible in settings.
      *
@@ -417,11 +421,13 @@ export type SettingKey = keyof typeof DEFAULTS;
  */
 export type BackupExcluded =
     "machineDeviceId" | "savedMachines" | "lastCardRead" | "labsUnlocked" | "beanconquerorHandoff" |
+    "bagExperimentEnabled" | "bagTracker" |
     "machineModelString" | "machineName" | "ratingPromptDismissed" |
     "drawerHintLastShownAt" | "drawerHintShownCount" | "drawerHintManualOpens" |
     "drawerHintSignature" | "drawerHintLastSeenAt" | "roasterCatalogue" | "roasterAlerts";
 export const NOT_IN_BACKUP: readonly SettingKey[] = [
     "machineDeviceId", "savedMachines", "lastCardRead", "labsUnlocked", "beanconquerorHandoff",
+    "bagExperimentEnabled", "bagTracker",
     "machineModelString", "machineName", "ratingPromptDismissed",
     "drawerHintLastShownAt", "drawerHintShownCount", "drawerHintManualOpens",
     "drawerHintSignature", "drawerHintLastSeenAt", "roasterCatalogue", "roasterAlerts"
