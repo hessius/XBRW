@@ -7,7 +7,8 @@ import {DOTO_MAX_FONT_SCALE} from "@/library/dotoMetrics";
 /**
  * The share of a Doto label's box that is ink, measured from the bundled
  * fonts with "OPEN RECIPE" at phone density: about 0.20 for Doto-Bold and
- * 0.23 for Doto-ExtraBold. Inter Bold is about 0.47.
+ * 0.23 for Doto-ExtraBold. A solid bold face (Arial Bold, measured the same way)
+ * is about 0.47.
  */
 export const DOTO_INK_COVERAGE = 0.2;
 
