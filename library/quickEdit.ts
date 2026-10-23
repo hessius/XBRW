@@ -7,6 +7,7 @@ import {
     type Range,
 } from "@/library/cardLimits";
 import Recipe, {GRINDER_OFF_VALUE} from "@/library/Recipe";
+import {describeBypassDoseScale, scaleBypassForDose} from "@/library/bypassLimits";
 import {toDisplay, unitSuffix, type TemperatureUnit} from "@/library/units";
 
 export type QuickEditAdjustments = {
@@ -40,8 +41,24 @@ function clamp(value: number, range: Range): number {
     return Math.min(range.max, Math.max(range.min, value));
 }
 
+export function dosePresets(recipe: Recipe): number[] {
+    if (recipe.isTea()) return [];
+    return [...new Set([15, 18, 20, recipe.dosage])]
+        .filter(dose => Number.isInteger(dose) && dose >= DOSE.min && dose <= DOSE.max)
+        .sort((a, b) => a - b);
+}
+
+function quickEditBypass(recipe: Recipe, adjustments: QuickEditAdjustments) {
+    return recipe.isTea() || !recipe.bypassEnabled || adjustments.dose === undefined
+        || adjustments.dose === recipe.dosage
+        ? null
+        : scaleBypassForDose(recipe.bypassVolume, recipe.dosage, adjustments.dose);
+}
+
 export function applyQuickEdit(recipe: Recipe, adjustments: QuickEditAdjustments): Recipe {
     const edited = cloneRecipe(recipe);
+    const bypass = quickEditBypass(recipe, adjustments);
+    if (bypass?.ok) edited.bypassVolume = bypass.volume;
 
     if (adjustments.grind !== undefined && !edited.isTea()) {
         edited.grindSize = adjustments.grind;
@@ -156,7 +173,10 @@ export function quickEditProblems(
     adjustments: QuickEditAdjustments,
     temperatureUnit?: TemperatureUnit
 ): string[] {
-    return brewProblems(applyQuickEdit(recipe, adjustments), temperatureUnit);
+    const problems = brewProblems(applyQuickEdit(recipe, adjustments), temperatureUnit);
+    const bypass = quickEditBypass(recipe, adjustments);
+    if (bypass !== null && !bypass.ok) problems.push(bypass.problem);
+    return problems;
 }
 
 export function describeAdjustment(
@@ -175,7 +195,15 @@ export function describeAdjustment(
     const subject = changesDose && changesRatio
         ? "new dose and ratio"
         : changesDose ? "new dose" : "new ratio";
-    return `Stage volumes rescale to ${target} ml to match the ${subject}.`;
+    const stageLine = `Stage volumes rescale to ${target} ml to match the ${subject}.`;
+    const bypass = quickEditBypass(recipe, adjustments);
+    if (bypass === null) return stageLine;
+    if (!bypass.ok) return `${stageLine} ${bypass.problem}`;
+    const cup = edited.getPourTotalVolume() + bypass.volume;
+    const waterLine = bypass.limited
+        ? `${describeBypassDoseScale(bypass)} The cup gets ${cup} ml.`
+        : `Bypass water rescales to ${bypass.volume} ml, so the cup gets ${cup} ml.`;
+    return `${stageLine} ${waterLine}`;
 }
 
 type TemperatureBaseline = {pours: {temperature: number}[]};
