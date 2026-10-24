@@ -14,9 +14,10 @@
 
 The maintainer approved
 `docs/superpowers/specs/2026-10-24-preview-reconciliation-design.md`
-before this plan was written. This checkpoint is planning only. Do not begin
-implementation, create a PR, request review, merge, close #252, touch Metro,
-build a native artifact or delete worktrees without the applicable authority.
+before this plan was written, then explicitly approved inline implementation.
+Tasks 1-8 are implemented in serial checkpoints; Task 9 records qualification.
+PR creation/review, merge, #252 closure, Metro changes, native builds and
+worktree deletion still require separate applicable authority.
 
 Use inline execution unless the maintainer requests delegation. This is one
 bounded reconciliation with serial, independently testable commits; it does not
@@ -209,13 +210,13 @@ git commit -m "fix(editor): keep long title words whole beside the profile" -m "
 it.each(["import", "brewmind"] as const)("prefers the named roaster for %s", source => {
     const recipe = recipeWith({source, sharedBy: "A sharer",
         sharedByAvatar: "https://example.com/avatar.png",
-        coffee: {roaster: " Roastery ", imageUrl: "https://example.com/coffee.png"}});
+        coffee: {name: "", roaster: " Roastery ", imageUrl: "https://example.com/coffee.png"}});
     expect(roasterOf(recipe)).toBe("Roastery");
 });
 it("keeps an ordinary personal share inside the broad display rule", async () => {
     const recipe = recipeWith({source: "import", sharedBy: "A sharer",
         sharedByAvatar: "https://example.com/avatar.png",
-        coffee: {roaster: "Roastery", imageUrl: "https://example.com/coffee.png"}});
+        coffee: {name: "", roaster: "Roastery", imageUrl: "https://example.com/coffee.png"}});
     const before = JSON.stringify(recipe);
     await renderWithProviders(<FromSection {...props({recipe, showAvatar: true})}/>);
     expect(screen.getByText("From Roastery")).toBeTruthy();
@@ -236,7 +237,7 @@ it("keeps an ordinary personal share inside the broad display rule", async () =>
 ```tsx
 it("labels a roaster profile without offering to replace the chosen title", async () => {
     await renderWithProviders(<PodSection {...props({recipe: linked({
-        source: "import", name: "Chosen coffee name", coffee: {roaster: "Roastery"}
+        source: "import", name: "Chosen coffee name", coffee: {name: "", roaster: "Roastery"}
     })})}/>);
     expect(screen.getByText("xBloom profile name")).toBeTruthy();
     expect(screen.queryByTestId("pod-use-name")).toBeNull();
@@ -773,6 +774,143 @@ npx expo-doctor
   Merge only with explicit approval. After integration, update #249 and close
   #252 only with permission and complete content accounting, never by merging
   or resetting historical preview wholesale.
+
+## Original preview path accounting
+
+This accounts for all 120 paths differing between pinned develop
+`f48738fd9479ac0c9308eb9433678db02ca32c45` and historical preview
+`dee62ae5a35eacaa0ac20a9a1e9a748cd34c85c2`. Accepted means the selected
+behaviour/artwork was ported, not that the entire preview file was copied.
+Supporting means retained/adapted evidence or coverage. Omitted means preserve
+accepted develop instead of the preview delta. New focused regression files
+outside this original inventory are additional coverage, not unaccounted source.
+
+| Original path | Disposition | Content decision |
+| --- | --- | --- |
+| `.github/copilot-instructions.md` | Supporting | Verified shipped-release chronology; workflow gates preserved. |
+| `AGENTS.md` | Supporting | Verified release chronology and current development line. |
+| `README.md` | Supporting | Roaster capability and publisher guide. |
+| `app.json` | Omitted | No bare date-picker plugin or native configuration change. |
+| `app/__tests__/editRecipe.test.tsx` | Supporting | Adapted roaster/primary expectations; preserve accepted dose coverage. |
+| `app/__tests__/index.beanFilters.test.tsx` | Omitted | Preserve accepted bag/dose fixtures rather than old preview shape. |
+| `app/__tests__/index.test.tsx` | Supporting | Enabled clear-search role; retain accepted home contracts. |
+| `app/__tests__/settings.test.tsx` | Supporting | Roaster-feed reachability, subscription/opt-out and photo copy. |
+| `app/easyMode.tsx` | Omitted | Already themed when enabled; retain disabled appearance. |
+| `app/editRecipe.tsx` | Omitted | Keep accepted #267 dose and editor layout. |
+| `app/hub.tsx` | Accepted | Enabled primary retry/status roles only. |
+| `app/hubRecipe.tsx` | Accepted | Shared photo/chip, primary retry, static plan. |
+| `app/index.tsx` | Accepted | Enabled clear-search role only; keep accepted dose and bag logic. |
+| `app/roasterCoffee.tsx` | Accepted | Neutral size selection and static plan. |
+| `app/settings.tsx` | Accepted | Accurate Recipe card photos copy. |
+| `assets/branding/link-buttons/NOTICE.txt` | Accepted | Artwork permission and font notices. |
+| `assets/branding/link-buttons/open-in-xbrw-bold-logo.png` | Accepted | Original artwork. |
+| `assets/branding/link-buttons/open-in-xbrw-bold-logo.svg` | Accepted | Original outlined artwork. |
+| `assets/branding/link-buttons/open-in-xbrw-bold-logo@2x.png` | Accepted | Original artwork. |
+| `assets/branding/link-buttons/open-in-xbrw-bold-logo@3x.png` | Accepted | Original artwork. |
+| `assets/branding/link-buttons/open-in-xbrw-bold-text.png` | Accepted | Original artwork. |
+| `assets/branding/link-buttons/open-in-xbrw-bold-text.svg` | Accepted | Original outlined artwork. |
+| `assets/branding/link-buttons/open-in-xbrw-bold-text@2x.png` | Accepted | Original artwork. |
+| `assets/branding/link-buttons/open-in-xbrw-bold-text@3x.png` | Accepted | Original artwork. |
+| `assets/branding/link-buttons/open-in-xbrw-muted-logo.png` | Accepted | Original artwork. |
+| `assets/branding/link-buttons/open-in-xbrw-muted-logo.svg` | Accepted | Original outlined artwork. |
+| `assets/branding/link-buttons/open-in-xbrw-muted-logo@2x.png` | Accepted | Original artwork. |
+| `assets/branding/link-buttons/open-in-xbrw-muted-logo@3x.png` | Accepted | Original artwork. |
+| `assets/branding/link-buttons/open-in-xbrw-muted-text.png` | Accepted | Original artwork. |
+| `assets/branding/link-buttons/open-in-xbrw-muted-text.svg` | Accepted | Original outlined artwork. |
+| `assets/branding/link-buttons/open-in-xbrw-muted-text@2x.png` | Accepted | Original artwork. |
+| `assets/branding/link-buttons/open-in-xbrw-muted-text@3x.png` | Accepted | Original artwork. |
+| `components/AboutDeck.tsx` | Omitted | No unused bag prototype controls or obsolete photo placement. |
+| `components/BagSheet.tsx` | Omitted | Existing enabled role kept; disabled redesign excluded. |
+| `components/BeanNameSheet.tsx` | Accepted | Enabled primary role. |
+| `components/BrewNoteSheet.tsx` | Accepted | Enabled primary role. |
+| `components/BrewStageLadder.tsx` | Accepted | Default-false catalogue plan flag. |
+| `components/BrewStageRung.tsx` | Accepted | Catalogue-only colours without geometry/value changes. |
+| `components/BypassRung.tsx` | Omitted | Preserve accepted dose-bound notice and bypass controls. |
+| `components/DeckSwitch.tsx` | Omitted | Whitespace only. |
+| `components/EasyModeSlots.tsx` | Accepted | Enabled primary roles; old disabled style/ink retained. |
+| `components/FromSection.tsx` | Accepted | Broad roaster display heuristic; no metadata mutation. |
+| `components/HubSaveBar.tsx` | Omitted | Already themed; retain disabled style. |
+| `components/LeaveEditorSheet.tsx` | Accepted | Enabled primary role. |
+| `components/NameShelfSheet.tsx` | Omitted | Already themed; retain disabled style. |
+| `components/PodCoffeeRows.tsx` | Accepted | Distinct secondary flavour notes and accessible label. |
+| `components/PodSection.tsx` | Accepted | Quiet labelled profile; no roaster USE THIS NAME action. |
+| `components/QuickEditPanel.tsx` | Omitted | Preserve accepted one-brew shortcuts, scrolling and no SAVE AS. |
+| `components/RecipeHero.tsx` | Accepted | Whole-word fit guard only; keep current layout. |
+| `components/RecipeOverflowSheet.tsx` | Omitted | No unused legacy bag props. |
+| `components/SettingsActionRow.tsx` | Omitted | No unused mark API. |
+| `components/XbrwSheet.tsx` | Omitted | Comment-only explanation of already accepted wrapping. |
+| `components/__tests__/AboutDeck.test.tsx` | Supporting | Separate circular coffee/author images and setting gate. |
+| `components/__tests__/BrewStageRung.test.tsx` | Supporting | Rendered static plan and unchanged live defaults. |
+| `components/__tests__/BypassRung.test.tsx` | Omitted | Preserve accepted bounds-notice assertions. |
+| `components/__tests__/EasyModeSlots.test.tsx` | Supporting | Enabled theme roles and existing disabled states. |
+| `components/__tests__/FromSection.test.tsx` | Supporting | Broad roaster eligibility, fallback and metadata preservation. |
+| `components/__tests__/HubSaveBar.test.tsx` | Omitted | Preview expects rejected disabled roles. |
+| `components/__tests__/LibraryRail.test.tsx` | Omitted | Keep accepted theme-role assertions. |
+| `components/__tests__/PodCoffeeRows.test.tsx` | Supporting | List/detail order, duplicate suppression and a11y. |
+| `components/__tests__/PodSection.test.tsx` | Supporting | Quiet profile label and ordinary personal-share behaviour. |
+| `components/__tests__/QuickEditPanel.test.tsx` | Omitted | Retain accepted #267 coverage, not original SAVE AS assertions. |
+| `components/__tests__/RailChip.test.tsx` | Omitted | Keep accepted selection roles; no global constant. |
+| `components/__tests__/RailViewToggle.test.tsx` | Omitted | Keep accepted selection roles; no global constant. |
+| `components/__tests__/RecipeHero.test.tsx` | Supporting | Long-word fit regressions across narrow widths. |
+| `components/__tests__/RecipeShelfTilePhoto.test.tsx` | Supporting | Photo tile retains rating, bag badge and accessible facts. |
+| `components/__tests__/RoasterOfferSheet.test.tsx` | Supporting | Existing retry-on-sheet-entrance helper for decline action. |
+| `components/__tests__/ScreenHeader.test.tsx` | Supporting | Existing subtitle/meta placement regression. |
+| `components/__tests__/appearanceBoundary.test.ts` | Omitted | Keep current role boundary; no global primary constant. |
+| `components/__tests__/bagAppearance.test.tsx` | Supporting | Existing theme matrix plus retained open-calendar/day regression. |
+| `components/__tests__/colors.test.ts` | Omitted | Rejected disabled-role proposal; keep existing colour contracts. |
+| `components/__tests__/previewAppearanceIntegration.test.tsx` | Supporting | Keep current bag/theme coverage; move useful calendar regression to bagAppearance, omit obsolete BagSection/SAVE AS/disabled API. |
+| `constants/__tests__/licences.test.ts` | Supporting | All declared dependencies and self-contained artwork inventory. |
+| `constants/colors.ts` | Omitted | Existing theme roles suffice; no global or disabled-primary additions. |
+| `constants/copy.ts` | Omitted | Unused UPDATED_TO_LATEST constant. |
+| `constants/network.ts` | Supporting | Shared catalogue photo call site and Ready to brew trigger. |
+| `docs/copy.md` | Supporting | Current roaster/profile/flavour/status meaning; keep accepted dose copy. |
+| `docs/development-workflow.md` | Supporting | Verified #248/#250 release chronology, unchanged gates. |
+| `docs/machine-integration/ble-protocol.md` | Supporting | Previously recorded positioning/tea fixture evidence with limitations. |
+| `docs/release-2.1.0-changes.md` | Supporting | Verified immutable source/artifact and promotion chronology. |
+| `docs/release-2.2.0-changes.md` | Supporting | Current accepted scope and #266/#267 closeout; no stale preview acceptance. |
+| `docs/release-2.2.0-testing.md` | Supporting | Open manual gates, distinct from software results. |
+| `docs/superpowers/plans/2026-10-17-link-buttons.md` | Supporting | Retained and labelled historical. |
+| `docs/superpowers/plans/2026-10-20-recipe-picture-placement.md` | Omitted | Historical experiments remain at pinned preview; not a new execution plan. |
+| `docs/superpowers/plans/2026-10-23-dose-shortcuts.md` | Omitted | Preserve newer accepted #267 implementation record. |
+| `docs/superpowers/specs/2026-09-16-library-shelves-design.md` | Supporting | Document accepted stock-photo exception against current shelfCover. |
+| `docs/superpowers/specs/2026-09-28-brewmind-integration-design.md` | Supporting | Existing colour, feed and rest-field contract amendments. |
+| `docs/superpowers/specs/2026-10-17-link-buttons-design.md` | Supporting | Retained and labelled historical. |
+| `docs/superpowers/specs/2026-10-20-recipe-picture-placement-design.md` | Supporting | Relevant shelf/photo history accounted for in current docs; experiments remain at pinned preview. |
+| `docs/superpowers/specs/2026-10-23-dose-shortcuts-design.md` | Omitted | Preserve accepted lightweight adaptation, not old preview state. |
+| `docs/url-scheme.md` | Supporting | Fixed-revision button downloads and accessible website/native examples. |
+| `hooks/__tests__/compilerOptOut.test.ts` | Omitted | Preserve accepted compiler and dose contract. |
+| `hooks/__tests__/useRecipeEditor.autosave.test.ts` | Omitted | Keep newer regression coverage removed by preview. |
+| `hooks/__tests__/useRecipeEditor.bypass.test.ts` | Omitted | Keep stable-anchor, notice and rounding coverage. |
+| `hooks/__tests__/useRecipeImport.reimport.test.ts` | Supporting | New characterisation passes unchanged on current importer. |
+| `hooks/__tests__/useRecipeImport.test.ts` | Supporting | New/held recipe colour integration regression. |
+| `hooks/useRecipeEditor.ts` | Omitted | Preserve accepted stable proportional-bypass anchor and autosave. |
+| `hooks/useRecipeLibrary.ts` | Omitted | No old preview saveAtDose workflow. |
+| `library/__tests__/brewmindLink.test.ts` | Supporting | Strict valid/invalid colour, alias and no synthetic coffee. |
+| `library/__tests__/bypassLimits.test.ts` | Omitted | Keep accepted dose arithmetic and unchanged card boundary. |
+| `library/__tests__/coffeeDetails.test.ts` | Supporting | Flavour shape, deduplication/fallback and catalogue facts. |
+| `library/__tests__/importDecoration.test.ts` | Supporting | One nonduplicate roaster-colour set. |
+| `library/__tests__/networkInventory.test.ts` | Supporting | Accurate shared-image call inventory. |
+| `library/__tests__/quickEdit.test.ts` | Omitted | Preserve accepted dose/bypass tests instead of SAVE AS shape. |
+| `library/__tests__/subscriptionStatus.test.ts` | Supporting | Paused/no-cache with and without prior error. |
+| `library/brew/BrewRecord.ts` | Accepted | Whole BLE grind 1-80, grinderUsed still required. |
+| `library/brew/__tests__/BrewRecord.test.ts` | Supporting | Valid fine/ordinary and invalid/off/fractional history. |
+| `library/brew/__tests__/brewNote.test.ts` | Supporting | Valid fine-grind history interpretation. |
+| `library/brew/__tests__/dialAfterBrew.test.ts` | Supporting | Fine BLE fallback without inventing a confirmed reading. |
+| `library/brew/__tests__/historyQuery.test.ts` | Supporting | Fine 39 now participates in valid grind sort. |
+| `library/brew/dialAfterBrew.ts` | Supporting | Terminology follows BLE history band, not NFC card band. |
+| `library/brew/handoff/__tests__/envelope.test.ts` | Supporting | Fine 1/30/39 include grinder metadata in handoff. |
+| `library/bypassLimits.ts` | Omitted | Preserve accepted stable arithmetic. |
+| `library/coffeeDetails.ts` | Accepted | Short flavours and distinct longer notes. |
+| `library/machine/__tests__/Machine.linkPin.test.ts` | Supporting | Cancel/target replacement cannot send after held verification. |
+| `library/machine/__tests__/savedMachineSettings.test.ts` | Omitted | Existing test already passes; no weaker write expectation needed. |
+| `library/quickEdit.ts` | Omitted | Accepted one-brew dose/bypass behaviour unchanged. |
+| `library/roasterCatalogue.ts` | Accepted | Shared coffee facts/formatters; no unused public cache reader. |
+| `library/roasterRecipes.ts` | Omitted | Roast advice already enters through validated path. |
+| `library/subscriptionStatus.ts` | Accepted | Paused/no-cache copy before active loading/failure copy. |
+
+The two omitted historical picture documents remain recoverable at the pinned
+preview commit. Their obsolete header-photo/implementation experiments are not
+current requirements; the current accepted placements and settings are retained.
 
 ## Plan self-review and execution handoff
 

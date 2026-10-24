@@ -168,11 +168,14 @@ describe("RecipeShelfTile picture", () => {
     });
 
     it("keeps every badge, the name, the figures and the profile with it", async () => {
+        // The fullest tile preview/all can draw: a picture, a rated recipe,
+        // an open bag with its freshness, a star and the marker.
         const recipe = pictured("Ecuador | Vinka Farm Washed");
         recipe.favourite = true;
         await renderWithProviders(
             <RecipeShelfTile recipe={recipe} {...HANDLERS} showPicture
-                             evidence={{brews: 6, avgRating: 4.25, lastBrewedAt: 0}}/>
+                             evidence={{brews: 6, avgRating: 4.25, lastBrewedAt: 0}}
+                             bagBadge={{label: "PEAK", spoken: "Bag October, estimated peak window"}}/>
         );
         await fireEvent(screen.getByTestId("recipe-tile-profile-room"), "layout", {
             nativeEvent: {layout: {x: 0, y: 0, width: 160, height: 30}}
@@ -181,6 +184,8 @@ describe("RecipeShelfTile picture", () => {
 
         const badges = within(screen.getByTestId("recipe-tile-badges"));
         expect(badges.getByTestId("recipe-tile-evidence")).toBeTruthy();
+        expect(badges.getByTestId("recipe-tile-evidence")).toHaveTextContent(/PEAK/);
+        expect(screen.getByLabelText(/Bag October, estimated peak window/)).toBeTruthy();
         expect(badges.getByTestId("recipe-tile-favourite", {includeHiddenElements: true}))
             .toBeTruthy();
         expect(badges.getByText("COFFEE")).toBeTruthy();

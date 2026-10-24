@@ -1,10 +1,12 @@
 import React from "react";
-import {screen, within} from "@testing-library/react-native";
+import {Platform} from "react-native";
+import {fireEvent, screen, within} from "@testing-library/react-native";
 
 import BagPickerSheet from "@/components/BagPickerSheet";
 import BagSection from "@/components/BagSection";
 import BagSheet from "@/components/BagSheet";
 import ReadyToBrewCard from "@/components/ReadyToBrewCard";
+import RoastDayField from "@/components/RoastDayField";
 import {SelectedBagRow} from "@/components/SelectedBagRow";
 import {accents, resolveAppearance} from "@/constants/colors";
 import {AppearanceScope} from "@/hooks/useAppearance";
@@ -16,6 +18,25 @@ const noop = () => {};
 const bag = bagFixture({name: "October bag"});
 const choices: AppearanceChoice[] = THEME_IDS.flatMap(theme =>
     (["original", "themed"] as const).map(recipeColours => ({theme, recipeColours})));
+
+it("retains the open calendar and selected day when appearance changes", async () => {
+    const tree = (choice: AppearanceChoice) => (
+        <AppearanceScope choice={choice}>
+            <RoastDayField value="2026-10-12" today="2026-10-23" onChange={noop}/>
+        </AppearanceScope>
+    );
+    const view = await renderWithProviders(tree({theme: "original", recipeColours: "original"}));
+    await fireEvent.press(screen.getByTestId("bag-roasted-field"));
+    await view.rerender(tree({theme: "light", recipeColours: "themed"}));
+    expect(screen.getByTestId("bag-roasted-field")).toHaveStyle({
+        backgroundColor: resolveAppearance({theme: "light", recipeColours: "themed"}).palette.raised
+    });
+    if (Platform.OS === "ios") {
+        const calendar = screen.getByTestId("bag-roasted-calendar");
+        expect(calendar.props.themeVariant).toBe("light");
+        expect(calendar.props.value).toEqual(new Date(2026, 9, 12));
+    }
+});
 
 it.each(choices)("keeps bag controls and recipe actions legible in $theme/$recipeColours", async choice => {
     const appearance = resolveAppearance(choice);

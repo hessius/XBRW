@@ -12,6 +12,8 @@ import * as databaseModule from "@/library/appDatabase";
 import {SUPPORT_TITLE} from "@/components/SupportTile";
 import {palette} from "@/constants/colors";
 import Recipe from "@/library/Recipe";
+import {feedKey, serialiseFeedOptOut} from "@/library/roasterFeed";
+import {serialiseSubscriptions} from "@/library/roasterSubscription";
 import {buildBackup, parseBackup} from "@/library/backup";
 import CoffeeBagDatabase from "@/library/CoffeeBagDatabase";
 import {BagAttributionError} from "@/library/BrewDatabase";
@@ -468,6 +470,7 @@ describe("SettingsScreen", () => {
             .props.accessibilityState.checked).toBe(true);
         expect(screen.getByLabelText("Recipe card photos").props.accessibilityState.checked).toBe(false);
         expect(screen.getByLabelText("Shelf photo previews").props.accessibilityState.checked).toBe(true);
+        expect(screen.getByText("Show coffee photos in your own shelves, tag shelves and eligible auto shelves.")).toBeTruthy();
     });
 
     it("changes each picture surface independently", async () => {
@@ -546,6 +549,33 @@ describe("SettingsScreen", () => {
     it("says what the unit changes and what it does not", async () => {
         await renderWithProviders(<SettingsScreen settings={new Settings(memoryStorage())}/>);
         expect(screen.getByText(/card always stores/i)).toBeTruthy();
+    });
+
+    it("keeps roaster feeds reachable before the first subscription", async () => {
+        await renderWithProviders(<SettingsScreen settings={new Settings(memoryStorage())}/>);
+        await fireEvent.press(screen.getByRole("button", {
+            name: "Roaster feeds, Manage subscriptions and declined offers."
+        }));
+        expect(mockPush).toHaveBeenCalledWith("/subscriptions");
+    });
+
+    it("shows roaster subscriptions once there is a subscription", async () => {
+        const settings = new Settings(memoryStorage());
+        settings.set("roasterSubscriptions", serialiseSubscriptions([{
+            feed: "https://roaster.example/feed.json", roaster: "Example Roasters",
+            lastSync: 0, lastAttempt: 0, paused: false
+        }]));
+        await renderWithProviders(<SettingsScreen settings={settings}/>);
+        expect(screen.getByText("Roaster feeds")).toBeTruthy();
+        expect(screen.getByText("Manage subscriptions and declined offers.")).toBeTruthy();
+    });
+
+    it("shows roaster subscriptions when only a don't-ask-again is left to undo", async () => {
+        const settings = new Settings(memoryStorage());
+        settings.set("roasterFeedOptOut", serialiseFeedOptOut([feedKey("https://roaster.example/feed.json") ?? ""]));
+        await renderWithProviders(<SettingsScreen settings={settings}/>);
+        expect(screen.getByText("Roaster feeds")).toBeTruthy();
+        expect(screen.getByText("Manage subscriptions and declined offers.")).toBeTruthy();
     });
 
     it("offers backup and restore", async () => {

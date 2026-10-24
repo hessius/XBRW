@@ -1,5 +1,6 @@
 import React from "react";
 import {fireEvent, screen, within} from "@testing-library/react-native";
+import {StyleSheet} from "react-native";
 
 import AboutDeck from "@/components/AboutDeck";
 import {palette} from "@/constants/colors";
@@ -48,6 +49,24 @@ function props(over: Partial<React.ComponentProps<typeof AboutDeck>> = {}) {
 }
 
 describe("AboutDeck", () => {
+    it("retains distinct circular coffee and author images in ABOUT only", async () => {
+        const recipe = recipeWith({
+            xid: "AB12CD", xbloomName: "Coffee", imageURL: "https://coffee.example/bag.jpg",
+            sharedBy: "Author", sharedByAvatar: "https://people.example/author.jpg"
+        });
+        const view = await renderWithProviders(<AboutDeck {...props({recipe, showAvatar: true})}/>);
+        const coffee = screen.getByTestId("pod-image");
+        const author = screen.getByTestId("from-avatar");
+        expect(coffee.props.source.uri).toBe(recipe.imageURL);
+        expect(author.props.source.uri).toBe(recipe.sharedByAvatar);
+        for (const image of [coffee, author]) {
+            const style = StyleSheet.flatten(image.props.style);
+            expect(style.borderRadius).toBe(style.width / 2);
+        }
+        await view.rerender(<AboutDeck {...props({recipe, showAvatar: false})}/>);
+        expect(screen.queryByTestId("pod-image")).toBeNull();
+        expect(screen.queryByTestId("from-avatar")).toBeNull();
+    });
     it("holds the ID, which is a lookup key rather than a brew parameter", async () => {
         await renderWithProviders(<AboutDeck {...props()}/>);
 
