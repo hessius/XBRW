@@ -177,6 +177,12 @@ export function wrapLines(text: string, width: number, fontSize: number): number
     return lines;
 }
 
+/** Whether the narrow title column can wrap without splitting a word. */
+export function wordsFit(text: string, width: number, fontSize: number): boolean {
+    return text.split(" ").filter(Boolean)
+        .every(word => textEm(word) * fontSize <= width);
+}
+
 /** How many lines `text` takes; see `wrapLines`. */
 export function estimateLines(text: string, width: number, fontSize: number): number {
     return wrapLines(text, width, fontSize).length;
@@ -238,7 +244,8 @@ export function heroNameLayout(
 
     const fitted = (step: typeof HERO_NAME_STEPS[number], last: boolean): HeroNameLayout | null => {
         const size = step.fontSize * scale;
-        if (beside > FIT_SLACK && estimateLines(name, beside - FIT_SLACK, size) <= HERO_NAME_MAX_LINES) {
+        if (beside > FIT_SLACK && estimateLines(name, beside - FIT_SLACK, size) <= HERO_NAME_MAX_LINES
+            && wordsFit(name, beside - FIT_SLACK, size)) {
             return {
                 ...step, lines: HERO_NAME_MAX_LINES, maxWidth: beside, reserve: 0,
                 profileHeight: PROFILE_HEIGHT, tight: false

@@ -5,7 +5,7 @@ import {fireEvent, screen} from "@testing-library/react-native";
 
 import RecipeHero, {
     estimateLines, HERO_NAME_LONG, HERO_NAME_MAX_LINES, HERO_PROFILE_RESERVE,
-    heroFoldAway, heroNameLayout, PROFILE_BAND_HEIGHT, wrapLines
+    heroFoldAway, heroNameLayout, PROFILE_BAND_HEIGHT, wrapLines, wordsFit
 } from "@/components/RecipeHero";
 import {COLLAPSE_SHRINK} from "@/hooks/useCollapsibleHeader";
 import {onAccent, resolveAppearance} from "@/constants/colors";
@@ -72,6 +72,19 @@ function touchables(node: Node): number {
 }
 
 describe("RecipeHero", () => {
+    it("requires whole words when fitting beside the profile", () => {
+        expect(wordsFit("hydrohoney", 1, 22)).toBe(false);
+        expect(wordsFit("hydrohoney", 1000, 22)).toBe(true);
+        expect(wordsFit("two words", 1000, 22)).toBe(true);
+    });
+
+    it.each([320, 360, 412])("uses the band for an overwide title word at %p", width => {
+        const layout = heroNameLayout("Colombia hydrohoneyhydrohoney", width);
+        expect(layout.tight).toBe(true);
+        expect(layout.profileHeight).toBe(PROFILE_BAND_HEIGHT);
+        expect(layout.reserve).toBeGreaterThanOrEqual(0);
+    });
+
     beforeEach(() => {
         setWindow(COVER);
     });
