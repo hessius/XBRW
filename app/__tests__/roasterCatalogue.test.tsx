@@ -1,6 +1,6 @@
 import React from "react";
 import {Linking, StyleSheet} from "react-native";
-import {act, fireEvent, screen, waitFor} from "@testing-library/react-native";
+import {act, fireEvent, screen, waitFor, within} from "@testing-library/react-native";
 import {router} from "expo-router";
 
 import RoasterScreen from "@/app/roaster";
@@ -14,6 +14,9 @@ import {forgetQueriesForTests} from "@/library/roasterFilters";
 import {subscribe} from "@/library/roasterSync";
 import {renderWithProviders, SHEET_PRESS_TIMEOUT, TEST_INSETS} from "@/test-utils/render";
 import {FEED_URL, feedBody, feedJson, memoryLibrary, memorySettings} from "@/test-utils/roasterFeed";
+import {THEME_IDS} from "@/library/appearance";
+import {AppearanceScope} from "@/hooks/useAppearance";
+import {resolveAppearance} from "@/constants/colors";
 
 jest.mock("expo-router", () => ({
     router: {push: jest.fn(), back: jest.fn()},
@@ -340,6 +343,20 @@ describe("tasting notes on a coffee", () => {
 });
 
 describe("one coffee", () => {
+    it.each(THEME_IDS)("uses neutral size selection in %s", async theme => {
+        const choice = {theme, recipeColours: "themed" as const};
+        const appearance = resolveAppearance(choice);
+        await renderWithProviders(
+            <AppearanceScope choice={choice}>
+                <RoasterCoffeeScreen settings={subscribed()} feedUrl={FEED_URL} coffeeId="b"
+                    library={memoryLibrary().deps}/>
+            </AppearanceScope>
+        );
+        const selected = screen.getByTestId("roaster-coffee-size-18g-surface");
+        expect(selected).toHaveStyle({backgroundColor: appearance.selection.fill});
+        expect(within(selected).getByText("18G")).toHaveStyle({color: appearance.selection.ink});
+    });
+
     it("does not save a catalogue action whose feed context was cancelled", async () => {
         const settings = subscribedTo([{id: "b"}], {b: {roaster: ""}});
         const other = "https://other.example/feed.json";

@@ -404,7 +404,8 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
                                                        accessibilityLabel={entry.size}
                                                        testID={`roaster-coffee-size-${entry.size}`}
                                                        onPress={() => setSize(entry.size)}>
-                                                <XStack height={36} paddingHorizontal="$3"
+                                                <XStack testID={`roaster-coffee-size-${entry.size}-surface`}
+                                                        height={36} paddingHorizontal="$3"
                                                         alignItems="center" borderRadius="$4"
                                                         backgroundColor={on ? selection.fill : palette.raised}>
                                                     <DotMatrixText fontSize={12} weight="bold"
@@ -452,7 +453,7 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
                                                          activeIndex={null} barHeight={LADDER_BAR_HEIGHT}
                                                          rungGap={LADDER_RUNG_GAP} scrolls={false}
                                                          fill={false} stageWater={[]} stalls={[]}
-                                                         pauseElapsed={0}/>
+                                                         pauseElapsed={0} plan/>
                                     )}
                                 </YStack>
                             )}

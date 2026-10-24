@@ -4,7 +4,8 @@ import {processColor, StyleSheet} from "react-native";
 import BrewStageRung, {
     agitationWavePath, AGITATION_HALF_PERIOD, AGITATION_WIDTH, SEGMENT_GAP
 } from "@/components/BrewStageRung";
-import {palette} from "@/constants/colors";
+import {palette, resolveAppearance} from "@/constants/colors";
+import {DEFAULT_APPEARANCE} from "@/library/appearance";
 import Pour, {AGITATION, POUR_PATTERN} from "@/library/Pour";
 import {renderWithProviders} from "@/test-utils/render";
 
@@ -50,6 +51,23 @@ function segmentFlexes(
 }
 
 describe("BrewStageRung", () => {
+    it("lights catalogue labels without changing live pending styling or segment geometry", async () => {
+        const view = await draw({plan: true});
+        const ink = resolveAppearance(DEFAULT_APPEARANCE).recipe(ACCENT).ink;
+        expect(view.getByText("01")).toHaveStyle({color: ink});
+        expect(view.getByText("93°")).toHaveStyle({color: palette.text});
+        expect(view.getByText("70 ml")).toHaveStyle({color: palette.text});
+        expect(view.getByTestId("stage-pattern-ring").props.stroke)
+            .toEqual({type: 0, payload: processColor(ink)});
+        const planFlexes = segmentFlexes(view.getByTestId, 2);
+        await view.unmount();
+        const live = await draw();
+        expect(live.getByText("01")).toHaveStyle({color: palette.dim});
+        expect(live.getByText("93°")).toHaveStyle({color: palette.dim});
+        expect(live.getByText("70 ml")).toHaveStyle({color: palette.dim});
+        expect(segmentFlexes(live.getByTestId, 2)).toEqual(planFlexes);
+    });
+
     it("numbers the stage from one, padded", async () => {
         const {getByText} = await draw({index: 8});
 
