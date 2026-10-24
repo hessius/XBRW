@@ -5,7 +5,8 @@ import {Text, XStack, YStack} from "tamagui";
 
 import XbrwSheet from "@/components/XbrwSheet";
 
-import DotMatrixText, {dotMatrixTextProps} from "@/components/DotMatrixText";
+import {dotMatrixTextProps} from "@/components/DotMatrixText";
+import FillLabel from "@/components/FillLabel";
 
 /**
  * Longer than this is a tasting note, not a name.
@@ -116,10 +117,10 @@ export default function BeanNameSheet({
                     height={48} alignItems="center" justifyContent="center"
                     borderRadius="$4"
                     backgroundColor={palette.text}>
-                    <DotMatrixText fontSize={13} weight="bold" letterSpacing={1.5}
-                                   color={onAccent.text}>
+                    <FillLabel fontSize={13} letterSpacing={1.5}
+                               color={onAccent.text}>
                         {trimmed.length === 0 ? requireName ? "NOT NOW" : "SKIP" : "SEND"}
-                    </DotMatrixText>
+                    </FillLabel>
                 </XStack>
             </YStack>
         </XbrwSheet>

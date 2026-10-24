@@ -3,10 +3,12 @@ import {StyleSheet} from "react-native";
 import {screen, within} from "@testing-library/react-native";
 
 import {BuySection} from "@/components/CatalogueParts";
+import DeckSwitch from "@/components/DeckSwitch";
 import {DOTO_FAMILIES} from "@/components/DotMatrixText";
 import FillLabel, {DOTO_INK_COVERAGE} from "@/components/FillLabel";
 import HubSaveBar from "@/components/HubSaveBar";
-import {resolveAppearance} from "@/constants/colors";
+import SplitBrewButton from "@/components/SplitBrewButton";
+import {accents, resolveAppearance} from "@/constants/colors";
 import {AppearanceScope} from "@/hooks/useAppearance";
 import {THEME_IDS, type AppearanceChoice} from "@/library/appearance";
 import {contrast} from "@/test-utils/contrast";
@@ -75,5 +77,61 @@ describe.each(THEME_IDS)("%s theme filled labels", theme => {
         const label = screen.getByText("ADD TO SHELF");
         expect(style(label).color).toBe(palette.text);
         expect(DOTO.has(String(style(label).fontFamily))).toBe(true);
+    });
+});
+
+/**
+ * The editor's BREW and the selected deck tab are filled with the recipe's own
+ * colour, and most of those are light or bright (the stock light blue, say)
+ * with dark ink. So they take the body face too, in every theme and with both
+ * recipe-colour choices, and every accent's ink must still read as a solid
+ * stroke on its fill.
+ */
+const RECIPE_CHOICES: AppearanceChoice[] = THEME_IDS.flatMap(theme =>
+    (["original", "themed"] as const).map(recipeColours => ({theme, recipeColours})));
+const ACCENTS = [...accents.coffee, ...accents.tea];
+
+describe.each(RECIPE_CHOICES)("recipe-filled labels, $theme theme with $recipeColours recipe colours", choice => {
+    const appearance = resolveAppearance(choice);
+    const {palette} = appearance;
+
+    it.each(ACCENTS)("draws BREW and its split on %s in the fill's ink, in the body face", async accent => {
+        const {fill, onAccent} = appearance.recipe(accent);
+        await renderChoice(choice, <SplitBrewButton enabled accent={accent} flex={2} quickEditOpen={false}
+                                                    onBrew={() => {}} onToggleQuickEdit={() => {}}/>);
+        for (const text of ["BREW", "▲"]) {
+            const label = screen.getByText(text);
+            expect(style(label).color).toBe(onAccent.text);
+            expect(DOTO.has(String(style(label).fontFamily))).toBe(false);
+        }
+        expect(contrast(onAccent.text, fill)).toBeGreaterThanOrEqual(4.5);
+        // Accessibility names are the control's, not the face's.
+        expect(screen.getByRole("button", {name: "Brew"})).toBeTruthy();
+        expect(screen.getByRole("button", {name: "Quick edit brew"})).toBeTruthy();
+    });
+
+    it("keeps a refused BREW in Doto, unfilled and muted", async () => {
+        await renderChoice(choice, <SplitBrewButton enabled={false} accent={ACCENTS[0]} flex={2}
+                                                    quickEditOpen={false}
+                                                    onBrew={() => {}} onToggleQuickEdit={() => {}}/>);
+        const label = screen.getByText("BREW");
+        expect(style(label).color).toBe(palette.muted);
+        expect(DOTO.has(String(style(label).fontFamily))).toBe(true);
+    });
+
+    it.each(ACCENTS)("draws the selected deck tab on %s in the body face, the others in Doto", async accent => {
+        const {fill, onAccent} = appearance.recipe(accent);
+        await renderChoice(choice, <DeckSwitch deck="stages" stageCount={3} accent={accent}
+                                               onChange={() => {}}/>);
+        const selected = screen.getByText("STAGES · 3");
+        expect(style(selected).color).toBe(onAccent.text);
+        expect(DOTO.has(String(style(selected).fontFamily))).toBe(false);
+        expect(contrast(onAccent.text, fill)).toBeGreaterThanOrEqual(4.5);
+        for (const text of ["BREW", "ABOUT"]) {
+            const label = screen.getByText(text);
+            expect(style(label).color).toBe(palette.dim);
+            expect(DOTO.has(String(style(label).fontFamily))).toBe(true);
+        }
+        expect(screen.getByRole("tab", {name: "Stages, 3"})).toBeTruthy();
     });
 });

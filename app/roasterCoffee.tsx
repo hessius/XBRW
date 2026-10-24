@@ -409,11 +409,11 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
                                                 <XStack height={36} paddingHorizontal="$3"
                                                         alignItems="center" borderRadius="$4"
                                                         backgroundColor={on ? palette.text : palette.raised}>
-                                                    <DotMatrixText fontSize={12} weight="bold"
-                                                                   letterSpacing={1.4}
-                                                                   color={on ? onAccent.text : palette.dim}>
+                                                    <FillLabel filled={on} fontSize={12}
+                                                               letterSpacing={1.4}
+                                                               color={on ? onAccent.text : palette.dim}>
                                                         {entry.size.toUpperCase()}
-                                                    </DotMatrixText>
+                                                    </FillLabel>
                                                 </XStack>
                                             </Pressable>
                                         );

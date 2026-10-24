@@ -110,10 +110,10 @@ function Chip({label, spoken, selected, testID, onPress}: {
                 paddingHorizontal="$3" borderRadius="$4"
                 backgroundColor={selected ? selection.fill : palette.raised}
                 borderWidth={1} borderColor={selected ? selection.fill : palette.line}>
-            <DotMatrixText fontSize={12} weight="bold" letterSpacing={1.2}
-                           color={selected ? selection.ink : palette.text}>
+            <FillLabel filled={selected} fontSize={12} letterSpacing={1.2}
+                       color={selected ? selection.ink : palette.text}>
                 {label}
-            </DotMatrixText>
+            </FillLabel>
         </XStack>
     );
 }
@@ -134,7 +134,7 @@ function ActionButton({label, spoken, testID, tone, filled, disabled, onPress}: 
                 borderWidth={filled === true ? 0 : 1} borderColor={palette.line}>
             <FillLabel filled={filled === true} fontSize={13} letterSpacing={1.5}
                        color={filled === true
-                           ? disabled ? palette.dim : primary.ink : tone}>
+                       ? disabled ? palette.dim : primary.ink : tone}>
                 {label}
             </FillLabel>
         </XStack>

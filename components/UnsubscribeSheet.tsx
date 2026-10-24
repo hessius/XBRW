@@ -4,6 +4,7 @@ import {Pressable, ScrollView} from "react-native";
 import {Text, XStack, YStack} from "tamagui";
 
 import DotMatrixText from "@/components/DotMatrixText";
+import FillLabel from "@/components/FillLabel";
 import XbrwSheet from "@/components/XbrwSheet";
 
 
@@ -38,10 +39,10 @@ export default function UnsubscribeSheet({open, roaster, onOpenChange, onConfirm
                                onPress={onConfirm}>
                         <XStack minHeight={48} paddingVertical="$3" alignItems="center" justifyContent="center"
                                 borderRadius="$4" backgroundColor={palette.danger}>
-                            <DotMatrixText fontSize={13} weight="bold" letterSpacing={1.5}
-                                           color={onAccent.text}>
+                            <FillLabel fontSize={13} letterSpacing={1.5}
+                                       color={onAccent.text}>
                                 UNSUBSCRIBE
-                            </DotMatrixText>
+                            </FillLabel>
                         </XStack>
                     </Pressable>
 

@@ -27,7 +27,9 @@ export const DOTO_INK_COVERAGE = 0.2;
  * The ink colours were right; the face was the problem.
  *
  * So a filled control's label uses the body face in bold capitals with the
- * fill's own ink. `filled={false}` keeps the Doto label of an outlined
+ * fill's own ink. That includes a recipe-colour fill (the editor's BREW, the
+ * selected deck tab, a selected rail chip), since most recipe colours are light
+ * or bright with dark ink. `filled={false}` keeps the Doto label of an outlined
  * control, so a call site can switch on one flag.
  */
 export default function FillLabel({

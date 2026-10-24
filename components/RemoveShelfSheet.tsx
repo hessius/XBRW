@@ -4,6 +4,7 @@ import {Pressable} from "react-native";
 import {Text, XStack, YStack} from "tamagui";
 
 import DotMatrixText from "@/components/DotMatrixText";
+import FillLabel from "@/components/FillLabel";
 import XbrwSheet from "@/components/XbrwSheet";
 
 
@@ -61,10 +62,10 @@ export default function RemoveShelfSheet({
                            onPress={onRemove}>
                     <XStack height={48} alignItems="center" justifyContent="center"
                             borderRadius="$4" backgroundColor={palette.danger}>
-                        <DotMatrixText fontSize={13} weight="bold" letterSpacing={1.5}
-                                       color={onAccent.text}>
+                        <FillLabel fontSize={13} letterSpacing={1.5}
+                                   color={onAccent.text}>
                             REMOVE SHELF
-                        </DotMatrixText>
+                        </FillLabel>
                     </XStack>
                 </Pressable>
 

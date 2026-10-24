@@ -125,10 +125,10 @@ function ErrorState({
                     <XStack height={44} paddingHorizontal="$4" borderRadius="$4"
                             alignItems="center" justifyContent="center"
                             backgroundColor={palette.text}>
-                        <DotMatrixText fontSize={12} weight="bold" letterSpacing={1.5}
-                                       color={onAccent.text}>
+                        <FillLabel fontSize={12} letterSpacing={1.5}
+                                   color={onAccent.text}>
                             TRY AGAIN
-                        </DotMatrixText>
+                        </FillLabel>
                     </XStack>
                 </Pressable>
             )}

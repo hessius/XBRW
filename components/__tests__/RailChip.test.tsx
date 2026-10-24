@@ -1,4 +1,5 @@
 import React from "react";
+import {StyleSheet} from "react-native";
 import {fireEvent, screen} from "@testing-library/react-native";
 
 import RailChip, {CHIP_HEIGHT} from "@/components/RailChip";
@@ -90,8 +91,12 @@ describe("RailChip", () => {
         const {rerender} = await renderWithProviders(
             <RailChip active label="TEA" accessibilityLabel="Tea" onPress={jest.fn()}/>
         );
-        const activeInk = screen.getByText("TEA").props.style as {color?: string}[];
-        expect(activeInk.some((s) => s?.color === onAccent.text)).toBe(true);
+        // Selected, the label is on a fill, so it is in the body face (FillLabel)
+        // and its style is a single object rather than Doto's array.
+        const activeInk = StyleSheet.flatten(screen.getByText("TEA").props.style) as
+            {color?: string; fontFamily?: string};
+        expect(activeInk.color).toBe(onAccent.text);
+        expect(activeInk.fontFamily?.startsWith("Doto-") ?? false).toBe(false);
 
         await rerender(
             <RailChip active={false} label="TEA" accessibilityLabel="Tea" onPress={jest.fn()}/>
