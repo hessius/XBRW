@@ -2,7 +2,9 @@
 
 ## Status and purpose
 
-Design for user review. No reconciliation implementation is included yet.
+Approved by the maintainer after review of the written specification.
+Implementation planning is authorised; no reconciliation implementation is
+included yet.
 
 Account for the remaining useful work in cumulative preview PR #252 without
 merging its obsolete proposals into accepted development. The maintainer
@@ -195,8 +197,8 @@ repository lint, both Jest projects and Expo Doctor. No new tooling is needed.
 Native narrow-screen/large-text/accessibility and actual device appearance
 remain manual checks; software transports cannot qualify NFC/BLE hardware.
 
-The next step is maintainer approval of this written spec, then an
-implementation plan. Any subsequent PR/review/integration needs appropriate
+The next step is the implementation plan. Any subsequent
+PR/review/integration needs appropriate
 explicit authority, with at most one automated Copilot review round per PR.
 Only after accepted work is integrated and exclusions recorded may #252 be
 closed with permission, as accounted for rather than merged wholesale.
