@@ -6,6 +6,7 @@ import {Text, XStack, YStack} from "tamagui";
 import DeckSection from "@/components/DeckSection";
 import DotIcon from "@/components/DotIcon";
 import DotMatrixText from "@/components/DotMatrixText";
+import {roasterOf} from "@/components/FromSection";
 import PodCoffeeRows from "@/components/PodCoffeeRows";
 import TextFieldRow from "@/components/TextFieldRow";
 
@@ -68,6 +69,7 @@ export default function PodSection({
 
     const linked = recipe.xbloomName.trim().length > 0;
     const renamed = recipe.name.trim().length > 0;
+    const fromRoaster = roasterOf(recipe) !== undefined;
     // Gated on the same setting as the sharer's mark. The setting exists to
     // answer one question -- does a picture help at all -- and it could not
     // answer it while half the pictures it names drew regardless of it. Its own
@@ -135,7 +137,14 @@ export default function PodSection({
                                }}/>
                     )}
                     <YStack flex={1} gap="$1">
-                        <Text fontSize={16} color={palette.text} numberOfLines={2}>
+                        {fromRoaster && (
+                            <Text testID="pod-profile-label" fontSize={12} color={palette.dim}>
+                                xBloom profile name
+                            </Text>
+                        )}
+                        <Text testID="pod-name" numberOfLines={2}
+                              fontSize={fromRoaster ? 14 : 16}
+                              color={fromRoaster ? palette.dim : palette.text}>
                             {recipe.xbloomName}
                         </Text>
                         {!renamed && (
@@ -149,7 +158,7 @@ export default function PodSection({
                         )}
                     </YStack>
 
-                    {renamed && (
+                    {renamed && !fromRoaster && (
                         <XStack
                             accessible
                             accessibilityRole="button"

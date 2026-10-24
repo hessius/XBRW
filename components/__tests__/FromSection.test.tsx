@@ -1,7 +1,7 @@
 import React from "react";
 import {fireEvent, screen} from "@testing-library/react-native";
 
-import FromSection from "@/components/FromSection";
+import FromSection, {roasterOf} from "@/components/FromSection";
 import {openLink} from "@/components/openLink";
 import {palette} from "@/constants/colors";
 import Recipe from "@/library/Recipe";
@@ -23,6 +23,59 @@ function props(over: Partial<React.ComponentProps<typeof FromSection>> = {}) {
 }
 
 describe("FromSection", () => {
+    it.each(["import", "brewmind"] as const)("prefers the named roaster for %s", async source => {
+        const recipe = recipeWith({source, sharedBy: "A sharer",
+            sharedByAvatar: "https://example.com/avatar.png",
+            coffee: {roaster: " Roastery ", imageUrl: "https://example.com/coffee.png"}});
+        const before = JSON.stringify(recipe);
+        expect(roasterOf(recipe)).toBe("Roastery");
+        await renderWithProviders(<FromSection {...props({recipe, showAvatar: true})}/>);
+        expect(screen.getByText("From Roastery")).toBeTruthy();
+        expect(screen.queryByText("Arrived from A sharer")).toBeNull();
+        expect(screen.getByTestId("from-avatar").props.source)
+            .toEqual({uri: "https://example.com/coffee.png"});
+        expect(JSON.stringify(recipe)).toBe(before);
+    });
+
+    it("shows a roaster without a sharer, pod or page, but honours the picture setting", async () => {
+        await renderWithProviders(<FromSection {...props({recipe: recipeWith({
+            source: "import", coffee: {roaster: "Roastery", imageUrl: "https://example.com/coffee.png"}
+        })})}/>);
+        expect(screen.getByText("From Roastery")).toBeTruthy();
+        expect(screen.getByTestId("from-mark")).toBeTruthy();
+        expect(screen.queryByTestId("from-avatar")).toBeNull();
+    });
+
+    it("does not substitute a personal avatar for a missing roaster photo", async () => {
+        await renderWithProviders(<FromSection {...props({showAvatar: true, recipe: recipeWith({
+            source: "import", sharedBy: "A sharer", sharedByAvatar: "https://example.com/avatar.png",
+            coffee: {roaster: "Roastery"}
+        })})}/>);
+        expect(screen.getByTestId("from-mark")).toBeTruthy();
+        expect(screen.queryByTestId("from-avatar")).toBeNull();
+    });
+
+    it("keeps the accent mark when the roaster picture fails", async () => {
+        await renderWithProviders(<FromSection {...props({showAvatar: true, recipe: recipeWith({
+            source: "import", coffee: {roaster: "Roastery", imageUrl: "https://example.com/coffee.png"}
+        })})}/>);
+        await fireEvent(screen.getByTestId("from-avatar"), "error");
+        expect(screen.getByTestId("from-mark")).toBeTruthy();
+        expect(screen.getByText("From Roastery")).toBeTruthy();
+    });
+
+    it("keeps sharer attribution when the roaster is blank or the source is local", async () => {
+        const recipe = recipeWith({sharedBy: "A sharer", coffee: {roaster: "Roastery"}});
+        expect(roasterOf(recipe)).toBeUndefined();
+        const view = await renderWithProviders(<FromSection {...props({recipe})}/>);
+        expect(screen.getByText("Arrived from A sharer")).toBeTruthy();
+        recipe.source = "import";
+        recipe.coffee = {roaster: "  "};
+        expect(roasterOf(recipe)).toBeUndefined();
+        await view.rerender(<FromSection {...props({recipe})}/>);
+        expect(screen.getByText("Arrived from A sharer")).toBeTruthy();
+    });
+
     it("names who a recipe arrived from, as a claim rather than an identity", async () => {
         // "arrived from", never "by": the name is whatever the person sharing
         // it had typed into xBloom, and nothing here can check it.
