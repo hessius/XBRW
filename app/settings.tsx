@@ -684,7 +684,7 @@ export default function SettingsScreen({settings}: Props) {
                         onChange={setInvertAutoShelves}/>
                     <SettingsToggleRow
                         label="Recipe card photos"
-                        description="Show coffee or pod photos on recipe cards."
+                        description="Show coffee or pod photos on recipe cards and Ready to brew."
                         value={showRecipeCardPhotos}
                         onChange={setShowRecipeCardPhotos}/>
                     <SettingsToggleRow

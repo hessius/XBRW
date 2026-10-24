@@ -3,6 +3,21 @@
 This is the source for the full release-testing checklist, not a claim that
 device testing is complete. Update it whenever release scope or behaviour changes.
 
+## Shipped release and source reconciliation (2026-10-19)
+
+Version 2.1.0 shipped from `a121929e0d770d39db07168b482e2e3cd7c1102a`,
+tagged `v2.1.0`. The
+[published release record](https://github.com/hessius/XBRW/releases/tag/v2.1.0)
+records the exact Android version-code-4 APK and its checksum, and states that
+the maintainer closed regression sign-offs after user-group testing.
+It republishes the tested beta 4 package as stable, not a new native build.
+
+PR #248 reconciled that source into develop before PR #250 promoted it to main.
+Reconciliation preserves existing history and does not move the release tag,
+rebuild artifacts, or independently establish hardware acceptance.
+The open-gate statements below remain historical checkpoint evidence.
+New contributor work belongs to the 2.2.0 plan in issue #249, not this ledger.
+
 ## Consolidated beta candidate (2026-10-16)
 
 `chore/beta-consolidation-20261016` combines trace retention from #221,

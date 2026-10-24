@@ -9,9 +9,9 @@ contract. `docs/development-workflow.md` has the branch, release and recovery
 runbook. These rules apply to delegated agents and documentation tasks too.
 
 Start isolated task worktrees from a freshly fetched, pinned `origin/develop`
-commit. Develop also carries the 2.1.0 beta candidate; beta fixes use the same
-task/PR workflow, not a separate permanent version branch. Its application code
-has not been promoted to main by the workflow migration.
+commit. Version 2.1.0 is shipped at `v2.1.0`; its source was reconciled into
+develop before promotion to main. The next planned version is 2.2.0, using the
+same task/PR workflow rather than a separate permanent version branch.
 Never choose the base from the current checkout, write tasks directly on shared
 integration/main branches, or switch another session's checkout. Check status,
 upstream and worktree ownership first; stop on conflicting or unexpected work.
@@ -21,8 +21,7 @@ handoff record exact branch/worktree/base/head, dirty state, push state,
 pending work and hardware gaps. Report failed or unauthorized pushes as local
 only. Integrate serially with merge commits; never squash develop into main
 or rewrite shared integration/release history. Main is the approved release
-line, but already carries unreleased changes from the old workflow: do not
-rewind it to a guessed baseline.
+line; preserve its history rather than rewinding it to a guessed baseline.
 
 PR creation, PR merging, release promotion, production builds/submissions,
 deployments, force pushes and destructive local/remote cleanup require explicit

@@ -13,6 +13,33 @@ const link = (params: Record<string, string>) => {
 const valid = (extra: Record<string, string> = {}) =>
     link({v: "1", source: "brewmind", share: SHARE, ...extra});
 
+describe("bean.colour", () => {
+    it("reads a strict colour beside the coffee, not in it", () => {
+        const parsed = parseBrewMindLink(valid({"bean.name": "X", "bean.colour": "#1d5f96"}));
+        expect(parsed?.colour).toBe("#1D5F96");
+        expect(parsed?.coffee).toEqual({name: "X"});
+    });
+
+    it("accepts bean.color but prefers bean.colour when both are supplied", () => {
+        expect(parseBrewMindLink(valid({"bean.color": "#8A2F35"}))?.colour).toBe("#8A2F35");
+        expect(parseBrewMindLink(valid({"bean.colour": "#1D5F96", "bean.color": "#8A2F35"}))?.colour)
+            .toBe("#1D5F96");
+    });
+
+    it.each(["1D5F96", "#15A", "#1D5F96FF", "navy", ""])(
+        "drops invalid colour %p without losing the recipe", value => {
+            const parsed = parseBrewMindLink(valid({"bean.name": "X", "bean.colour": value}));
+            expect(parsed).not.toBeNull();
+            expect(parsed?.colour).toBeUndefined();
+            expect(parsed?.coffee).toEqual({name: "X"});
+        }
+    );
+
+    it("does not make a coffee out of a colour alone", () => {
+        expect(parseBrewMindLink(valid({"bean.colour": "#1D5F96"}))?.coffee).toBeUndefined();
+    });
+});
+
 describe("parseBrewMindLink", () => {
     it.each(["bean.colour", "bean.color"])("reads a validated %s without needing a bean name", key => {
         expect(parseBrewMindLink(valid({[key]: "#1d5f96"}))?.colour).toBe("#1D5F96");

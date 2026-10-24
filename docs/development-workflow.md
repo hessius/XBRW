@@ -9,22 +9,24 @@ This runbook explains the branch lifecycle and recovery procedures.
 | Branch | Role |
 | --- | --- |
 | `main` | Approved release line. No ordinary task development. |
-| `develop` | Permanent integrated development line, including the 2.1.0 beta candidate. |
+| `develop` | Permanent integrated development line; next planned release is 2.2.0. |
 | `feat/`, `fix/`, `chore/`, `docs/`, `recover/` task branches | One bounded task, isolated worktree, explicit base. |
 | `release/<version>` | Optional, explicitly approved short-lived freeze candidate; fixes only. |
 
 On 2026-10-11, develop was seeded from the authoritative former
 `integration/2.1.0` candidate at
-`3a02987030dd378daea5ae0bd1135dce63e4ee66`. Its application code was not
-promoted to main. The candidate now lives in develop so beta corrections exercise
-the ordinary task/PR process; do not recreate the old integration branch.
-Main receives the workflow/CI documentation separately.
-Do not rewind main: it already carries unreleased work from the previous workflow.
-Physical/native/external release gates in the
-[2.1.0 ledger on develop](https://github.com/hessius/XBRecipeWriterPlus/blob/develop/docs/release-2.1.0-changes.md)
-remain required before application release promotion. That ledger is intentionally
-not copied into main before the release. Repository migration is not evidence
-that those gates have passed.
+`3a02987030dd378daea5ae0bd1135dce63e4ee66`. That migration did not promote
+application code to main; beta corrections continued through the ordinary
+task/PR process. Do not recreate the old integration branch or rewind main.
+
+Version 2.1.0 shipped on 2026-10-19 from
+`a121929e0d770d39db07168b482e2e3cd7c1102a`, tagged `v2.1.0`.
+PR #248 reconciled that source into develop; PR #250 promoted it to main.
+The [release record](https://github.com/hessius/XBRW/releases/tag/v2.1.0)
+identifies the shipped Android artifact and maintainer sign-off.
+Historical open-gate notes in the [2.1.0 ledger](release-2.1.0-changes.md)
+describe their recorded checkpoints, not new verification by reconciliation.
+Future physical/native/external release gates remain mandatory.
 
 Keep the GitHub default branch `main`. Users requesting a PR must name its base;
 GitHub's default PR target is not the ordinary development target.

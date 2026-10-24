@@ -480,6 +480,14 @@ setting key and the losing candidate are gone, and what is left is the rule:
 - **Nothing is fetched and nothing is stored** in the mark, so it cannot go
   stale against the shelf it sits on.
 
+**Later picture exception (2026-10-20):** the accepted picture work permits
+XBLOOM RECIPES, STARRED, XBLOOM PODS, MOST BREWED and RECENTLY ADDED to use a
+four-member coffee/pod photo cover when previews are enabled and four usable
+members exist. Duplicate photo URLs on different recipes count as separate
+members. `library/shelfCover.ts` is the current selection contract. Other auto
+shelves retain their glyphs; roaster and manual shelves have their own cover
+rules. The unconditional auto-glyph statements here are historical.
+
 The art carries meaning, which was always the point: a glyph says the app found
 this shelf, a mosaic says you built it.
 

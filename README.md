@@ -17,6 +17,9 @@ found, tuned or were sent can be put on a card and brewed.
   are on — and keeps every brew, which you can export as a picture or as
   JSON.
 * Backs the whole library up to a file and restores it again.
+* Follows coffee roasters who publish their recipes: browse their range, see
+  what is new or back in stock, and buy a bag from their shop. Roasters can
+  start with [docs/roaster-guide.md](docs/roaster-guide.md).
 
 ### Brew history
 

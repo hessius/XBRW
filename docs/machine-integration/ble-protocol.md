@@ -1223,6 +1223,32 @@ segment body; a 244-byte link budget is consequently tighter than the body's
 
 ---
 
+### Previously captured lifecycle evidence, reconciled 2026-10-24
+
+These observations already underpin the current implementation and regression
+fixtures. Recording them here is not a new hardware qualification or a transport
+change.
+
+The grinder-positioning field log records start at `14:39:36.093`, gear 109 at
+`14:39:36.577`, gear 71 at `14:39:44.384`, and STARTING at `14:39:45.172`.
+The progressing `40505` readings precede actual grinding; they are not evidence
+that water has begun. `library/machine/__tests__/Machine.test.ts` replays this
+progress under both automatic and manual-start paths, retains the timeout when
+progress stops, and records the subsequent eight pours exactly once. That replay
+does not independently establish the original field log's machine identity.
+
+The dated tea fixture in
+`library/machine/__tests__/fixtures/teaCapture.ts` records a 2026-10-16 capture on
+firmware `V12.0D.500`. Machine model and app build are not recorded. The user
+confirmed completion, but the cup channel is explicitly invalid.
+`library/brew/__tests__/teaLifecycle.test.ts` replays its exact `4513` upload and
+`4512` start, three fill/steep/release cycles, and terminal `40511`/`40512`.
+The last sample is 367.122 seconds after the first water observation and reports
+390.6 ml cumulative water, including release water. This is not a cup-volume
+measurement or evidence that a three-steep tea contains 390.6 ml of planned fill.
+The fixture keeps those quantities separate and cannot qualify another firmware
+or an unobserved machine model.
+
 ## F. Capabilities Beyond Basic Brew
 
 These exist in the protocol but a simple "brew a recipe" feature wouldn't need them:
