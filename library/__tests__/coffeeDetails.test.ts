@@ -62,6 +62,29 @@ describe("formatRoastingDate", () => {
 });
 
 describe("coffeeDetails", () => {
+    it("leads with flavours and retains distinct notes", () => {
+        const detail = coffeeDetails({
+            flavours: ["Papaya", "Citrus"], aromatics: "Sweet papaya with a citrus finish"
+        }, nothingShown);
+        expect(detail?.groups.flat().find(row => row.field === "aromatics"))
+            .toEqual({field: "aromatics", label: "FLAVOUR", spokenLabel: "Flavour",
+                value: "Papaya, Citrus", detail: "Sweet papaya with a citrus finish"});
+    });
+
+    it.each(["Papaya, Citrus", " PAPAYA,   citrus "])(
+        "does not repeat equivalent flavour notes %p", aromatics => {
+            const details = coffeeDetails({flavours: ["Papaya", "Citrus"], aromatics}, nothingShown);
+            expect(details?.groups.flat().find(row => row.field === "aromatics"))
+                .toEqual({field: "aromatics", label: "FLAVOUR", spokenLabel: "Flavour",
+                    value: "Papaya, Citrus"});
+        }
+    );
+
+    it("shows flavours alone when notes are absent", () => {
+        expect(coffeeDetails({flavours: ["Papaya"]}, nothingShown)?.groups.flat())
+            .toEqual([{field: "aromatics", label: "FLAVOUR", spokenLabel: "Flavour", value: "Papaya"}]);
+    });
+
     it("is null without a coffee", () => {
         expect(coffeeDetails(undefined, nothingShown)).toBeNull();
     });
