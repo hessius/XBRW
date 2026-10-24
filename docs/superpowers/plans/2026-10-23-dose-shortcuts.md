@@ -248,12 +248,33 @@ state and retained-worktree ownership are recorded in
 - [ ] VoiceOver/TalkBack selection, traversal, sheet coverage and access to the sole BREW.
 - [ ] Physical-machine dose and bypass delivery after both stepper and shortcut changes.
 
-No new native client, BLE/NFC hardware session, focused PR, source closure or
-preview dose integration was performed. Retain this task branch for separately
-authorised review/integration. The raw #239/SAVE AS proposal in #252 remains
-evaluation-only and must not be mistaken for this adaptation.
+At the software-qualification checkpoint no new native client, BLE/NFC hardware
+session, focused PR, source closure or preview dose integration was performed.
+On 2026-10-24 the user separately authorised focused PR #267, its single
+automated review, CI and closeout with superseded #239. Issue #249 records the
+result. Native qualification, release promotion and exact-path cleanup remain
+separate gates.
+
+The raw #239/SAVE AS proposal in #252 remains evaluation-only and must not be
+mistaken for this adaptation. Other photo/editor, provenance, appearance,
+branding and native-configuration differences also remain; closing the dose
+package does not make the preview identical to develop.
 
 ## Inline self-review
+
+### Focused PR #267 review follow-up
+
+The single balanced Copilot review `5637053008` found that normal dose edits
+happen on BREW while the bypass notice was only on the mutually exclusive
+STAGES deck. Four editor-screen cases failed across both platforms before the
+fix, covering both a clipped 500 ml baseline and an invalid 501 ml baseline.
+
+BREW now renders the same notice beside its dose control, independently of
+hints, while the closed STAGES rung still retains it. Returning a valid
+baseline to its saved dose clears the limit notice. The affected editor,
+bypass rung, editor-hook and compiler suites passed all 314 tests across both
+platforms; typecheck passed and lint retained zero errors/32 existing warnings.
+Exact-head PR CI is the integration gate. No second automated review requested.
 
 The four tasks cover the approved spec: shortcuts without save workflow,
 shared scaling including normal edits, rounding/limits and invalid input,

@@ -126,6 +126,7 @@ type BrewDeckProps = {
     accent: string;
     balanceTarget: number;
     showHint: boolean;
+    bypassDoseNotice: string | null;
     dispatch: Dispatch;
     /** Raises a too-fine imported grind to the card minimum. */
     coarsenGrindToMinimum: () => void;
@@ -156,7 +157,7 @@ type BrewDeckProps = {
  * body is a new type on every render and would remount its whole subtree.
  */
 function BrewDeck({
-    recipe, accent, balanceTarget, showHint, dispatch, coarsenGrindToMinimum,
+    recipe, accent, balanceTarget, showHint, bypassDoseNotice, dispatch, coarsenGrindToMinimum,
     setOverflowProtection
 }: BrewDeckProps) {
     "use no memo";
@@ -215,6 +216,13 @@ function BrewDeck({
                          min={1} max={isTea ? 10 : 31} step={1} unit="g" accent={accent}
                          onChange={(value) => dispatch(RECIPE_LABELS.DOSE, String(value))}/>
             </FieldRow>
+
+            {bypassDoseNotice && (
+                <Text testID="brew-bypass-dose-notice" fontSize={12} lineHeight={17}
+                      marginHorizontal="$4" color={palette.warn}>
+                    {bypassDoseNotice}
+                </Text>
+            )}
 
             <FieldRow topic="ratio"
                       showHint={showHint}>
@@ -1456,7 +1464,8 @@ export default function EditRecipe(
                     back to the top of the screen on every nudge.) */}
                 {deck === "brew" ? (
                     <BrewDeck recipe={recipe} accent={accent} balanceTarget={balance.target}
-                              showHint={showHint} dispatch={dispatch}
+                              showHint={showHint} bypassDoseNotice={bypassDoseNotice}
+                              dispatch={dispatch}
                               coarsenGrindToMinimum={coarsenGrindToMinimum}
                               setOverflowProtection={setOverflowProtection}/>
                 ) : deck === "about" ? (

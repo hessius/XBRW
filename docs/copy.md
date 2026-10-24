@@ -354,7 +354,8 @@ come from `hooks/useRecipeEditor.ts`.
 Coffee dose edits scale enabled bypass water from a stable starting dose and
 volume. Ratio-only changes do not; tea and disabled bypass are excluded.
 Normal editor stage volumes retain their existing policy. The limit/correction
-notice stays visible when the rung or hints are closed.
+notice appears beside the dose control on BREW and on the bypass rung on
+STAGES. It stays visible when the rung or hints are closed.
 
 | ID | Source | Context — when the user sees this | Current text |
 |----|--------|-----------------------------------|--------------|

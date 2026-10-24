@@ -233,6 +233,24 @@ async function renderEditor(overrides: Partial<Recipe> = {}) {
     return view;
 }
 
+it.each([
+    [500, "Bypass limited to 500 ml."],
+    [501, "Check the starting dose and bypass amount before resizing."]
+] as const)("shows the bypass dose notice on the active BREW deck for %s ml", async (volume, notice) => {
+    mockSettings = {showHints: false};
+    await renderEditor({bypassEnabled: true, bypassVolume: volume});
+    await fireEvent.press(screen.getByLabelText("Increase Dose"));
+
+    expect(within(screen.getByTestId("brew-deck")).getByText(notice)).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText("Stages, 3"));
+    expect(screen.getByTestId("bypass-dose-notice")).toHaveTextContent(notice);
+    if (volume === 500) {
+        await fireEvent.press(screen.getByLabelText("Brew settings"));
+        await fireEvent.press(screen.getByLabelText("Decrease Dose"));
+        expect(within(screen.getByTestId("brew-deck")).queryByText(notice)).toBeNull();
+    }
+});
+
 describe("experimental bag controls", () => {
     afterEach(() => {
         jest.requireMock("@/library/RecipeDatabase").default.prototype.getRecipe.mockReset();

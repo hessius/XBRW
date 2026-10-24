@@ -11,8 +11,16 @@ The shipped 2.1.0 ledger remains unchanged.
 The approved lightweight #239 adaptation is implemented on
 `feat/2.2.0-dose-shortcuts-20261023`, originally based on pinned develop
 `8f2638dfa2e75928ff447fbbd0ee03ba14986886`, with accepted F merged from
-`e0d29d7cc2e635abef02a64cca386c21f1d1e661`. It is not yet integrated into
-develop or the cumulative preview. No new PR or source closure is authorised.
+`e0d29d7cc2e635abef02a64cca386c21f1d1e661`. Focused PR #267 tracks its
+review, CI and integration into develop; #249 records the closeout state.
+Source #239 is superseded by this adaptation once #267 is merged, after
+rechecking the original source head for newer commits.
+
+The cumulative preview #252 is not equivalent to the accepted tree after this
+adaptation: it retains the older SAVE AS implementation, photo/editor and
+provenance changes, extra appearance roles, link-button assets and native
+configuration differences. Keep it separate until those differences are
+explicitly reconciled; this PR is not a wholesale preview promotion.
 
 Coffee Quick Edit offers compact 15 g, 18 g, 20 g and saved-dose shortcuts,
 deduplicated and restricted to valid whole doses. They use the same one-brew
@@ -31,8 +39,9 @@ Normal editor dose changes use the same arithmetic without changing its
 existing stage-volume policy. The anchor survives saves and metadata autosave
 so repeated taps do not accumulate rounding error. Explicit bypass-volume
 edits, bypass toggles, cup-type changes and recipe replacement establish a new
-baseline. A temperature-only edit does not. The notice remains visible even
-with the bypass rung or hints closed. Normal SAVE still permits incomplete
+baseline. A temperature-only edit does not. The notice appears beside the
+dose control on BREW and on the STAGES bypass rung, including when that rung
+or hints are closed. Normal SAVE still permits incomplete
 recipes under its existing policy; card and brew validation are unchanged.
 
 No new setting, dependency, SAVE AS workflow, serialized adjustment field,
