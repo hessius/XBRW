@@ -103,8 +103,7 @@ function ErrorState({
     onRetry: () => void;
 }) {
     const appearance = useAppearance();
-    const {palette} = appearance;
-    const onAccent = appearance.onFill(palette.text);
+    const {palette, primary} = appearance;
     const said = saying(error);
     return (
         <YStack flex={1} alignItems="center" justifyContent="center"
@@ -123,9 +122,9 @@ function ErrorState({
                            onPress={onRetry}>
                     <XStack height={44} paddingHorizontal="$4" borderRadius="$4"
                             alignItems="center" justifyContent="center"
-                            backgroundColor={palette.text}>
+                            backgroundColor={primary.fill}>
                         <DotMatrixText fontSize={12} weight="bold" letterSpacing={1.5}
-                                       color={onAccent.text}>
+                                       color={primary.ink}>
                             TRY AGAIN
                         </DotMatrixText>
                     </XStack>

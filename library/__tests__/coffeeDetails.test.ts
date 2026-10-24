@@ -64,7 +64,7 @@ describe("formatRoastingDate", () => {
 describe("coffeeDetails", () => {
     it("leads with flavours and retains distinct notes", () => {
         const detail = coffeeDetails({
-            flavours: ["Papaya", "Citrus"], aromatics: "Sweet papaya with a citrus finish"
+            name: "", flavours: ["Papaya", "Citrus"], aromatics: "Sweet papaya with a citrus finish"
         }, nothingShown);
         expect(detail?.groups.flat().find(row => row.field === "aromatics"))
             .toEqual({field: "aromatics", label: "FLAVOUR", spokenLabel: "Flavour",
@@ -73,7 +73,7 @@ describe("coffeeDetails", () => {
 
     it.each(["Papaya, Citrus", " PAPAYA,   citrus "])(
         "does not repeat equivalent flavour notes %p", aromatics => {
-            const details = coffeeDetails({flavours: ["Papaya", "Citrus"], aromatics}, nothingShown);
+            const details = coffeeDetails({name: "", flavours: ["Papaya", "Citrus"], aromatics}, nothingShown);
             expect(details?.groups.flat().find(row => row.field === "aromatics"))
                 .toEqual({field: "aromatics", label: "FLAVOUR", spokenLabel: "Flavour",
                     value: "Papaya, Citrus"});
@@ -81,7 +81,7 @@ describe("coffeeDetails", () => {
     );
 
     it("shows flavours alone when notes are absent", () => {
-        expect(coffeeDetails({flavours: ["Papaya"]}, nothingShown)?.groups.flat())
+        expect(coffeeDetails({name: "", flavours: ["Papaya"]}, nothingShown)?.groups.flat())
             .toEqual([{field: "aromatics", label: "FLAVOUR", spokenLabel: "Flavour", value: "Papaya"}]);
     });
 

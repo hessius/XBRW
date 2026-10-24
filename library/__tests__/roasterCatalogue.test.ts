@@ -81,7 +81,7 @@ describe("bean facts, in ABOUT's words", () => {
     it("includes shared optional facts without repeating catalogue headings", () => {
         const base = feed([{id: "a"}]).coffees[0];
         const facts = beanFacts({...base, coffee: {
-            beanMix: "Single origin", roastingDate: "2026-09-03",
+            name: "", beanMix: "Single origin", roastingDate: "2026-09-03",
             decaffeinated: true, roaster: "Roastery", roast: "Light", aromatics: "Citrus"
         }});
         expect(facts).toEqual([

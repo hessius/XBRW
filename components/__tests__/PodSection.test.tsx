@@ -35,7 +35,7 @@ describe("PodSection", () => {
     it.each(["import", "brewmind"] as const)(
         "labels an imported roaster profile without replacing the title for %s", async source => {
             const recipe = linked({
-                source, name: "Chosen coffee name", coffee: {roaster: "Roastery"}
+                source, name: "Chosen coffee name", coffee: {name: "", roaster: "Roastery"}
             });
             const before = JSON.stringify(recipe);
             await renderWithProviders(<PodSection {...props({recipe})}/>);
@@ -49,7 +49,7 @@ describe("PodSection", () => {
 
     it("keeps the ordinary name action when coffee metadata is not an imported roaster", async () => {
         await renderWithProviders(<PodSection {...props({recipe: linked({
-            name: "My name", coffee: {roaster: "Roastery"}
+            name: "My name", coffee: {name: "", roaster: "Roastery"}
         })})}/>);
         expect(screen.queryByTestId("pod-profile-label")).toBeNull();
         expect(screen.getByTestId("pod-use-name")).toBeTruthy();

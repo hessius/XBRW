@@ -26,7 +26,7 @@ describe("FromSection", () => {
     it.each(["import", "brewmind"] as const)("prefers the named roaster for %s", async source => {
         const recipe = recipeWith({source, sharedBy: "A sharer",
             sharedByAvatar: "https://example.com/avatar.png",
-            coffee: {roaster: " Roastery ", imageUrl: "https://example.com/coffee.png"}});
+            coffee: {name: "", roaster: " Roastery ", imageUrl: "https://example.com/coffee.png"}});
         const before = JSON.stringify(recipe);
         expect(roasterOf(recipe)).toBe("Roastery");
         await renderWithProviders(<FromSection {...props({recipe, showAvatar: true})}/>);
@@ -39,7 +39,7 @@ describe("FromSection", () => {
 
     it("shows a roaster without a sharer, pod or page, but honours the picture setting", async () => {
         await renderWithProviders(<FromSection {...props({recipe: recipeWith({
-            source: "import", coffee: {roaster: "Roastery", imageUrl: "https://example.com/coffee.png"}
+            source: "import", coffee: {name: "", roaster: "Roastery", imageUrl: "https://example.com/coffee.png"}
         })})}/>);
         expect(screen.getByText("From Roastery")).toBeTruthy();
         expect(screen.getByTestId("from-mark")).toBeTruthy();
@@ -49,7 +49,7 @@ describe("FromSection", () => {
     it("does not substitute a personal avatar for a missing roaster photo", async () => {
         await renderWithProviders(<FromSection {...props({showAvatar: true, recipe: recipeWith({
             source: "import", sharedBy: "A sharer", sharedByAvatar: "https://example.com/avatar.png",
-            coffee: {roaster: "Roastery"}
+            coffee: {name: "", roaster: "Roastery"}
         })})}/>);
         expect(screen.getByTestId("from-mark")).toBeTruthy();
         expect(screen.queryByTestId("from-avatar")).toBeNull();
@@ -57,7 +57,7 @@ describe("FromSection", () => {
 
     it("keeps the accent mark when the roaster picture fails", async () => {
         await renderWithProviders(<FromSection {...props({showAvatar: true, recipe: recipeWith({
-            source: "import", coffee: {roaster: "Roastery", imageUrl: "https://example.com/coffee.png"}
+            source: "import", coffee: {name: "", roaster: "Roastery", imageUrl: "https://example.com/coffee.png"}
         })})}/>);
         await fireEvent(screen.getByTestId("from-avatar"), "error");
         expect(screen.getByTestId("from-mark")).toBeTruthy();
@@ -65,12 +65,12 @@ describe("FromSection", () => {
     });
 
     it("keeps sharer attribution when the roaster is blank or the source is local", async () => {
-        const recipe = recipeWith({sharedBy: "A sharer", coffee: {roaster: "Roastery"}});
+        const recipe = recipeWith({sharedBy: "A sharer", coffee: {name: "", roaster: "Roastery"}});
         expect(roasterOf(recipe)).toBeUndefined();
         const view = await renderWithProviders(<FromSection {...props({recipe})}/>);
         expect(screen.getByText("Arrived from A sharer")).toBeTruthy();
         recipe.source = "import";
-        recipe.coffee = {roaster: "  "};
+        recipe.coffee = {name: "", roaster: "  "};
         expect(roasterOf(recipe)).toBeUndefined();
         await view.rerender(<FromSection {...props({recipe})}/>);
         expect(screen.getByText("Arrived from A sharer")).toBeTruthy();

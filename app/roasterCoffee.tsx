@@ -116,8 +116,7 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
     shelves?: () => string[];
 } = {}) {
     const appearance = useAppearance();
-    const {palette} = appearance;
-    const onAccent = appearance.onFill(palette.text);
+    const {palette, selection} = appearance;
     const {ratingNoteOpen} = useLiveBrew();
     const params = useLocalSearchParams<{feed: string; coffee: string}>();
     const feed = feedUrl ?? params.feed ?? "";
@@ -407,10 +406,10 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
                                                        onPress={() => setSize(entry.size)}>
                                                 <XStack height={36} paddingHorizontal="$3"
                                                         alignItems="center" borderRadius="$4"
-                                                        backgroundColor={on ? palette.text : palette.raised}>
+                                                        backgroundColor={on ? selection.fill : palette.raised}>
                                                     <DotMatrixText fontSize={12} weight="bold"
                                                                    letterSpacing={1.4}
-                                                                   color={on ? onAccent.text : palette.dim}>
+                                                                   color={on ? selection.ink : palette.dim}>
                                                         {entry.size.toUpperCase()}
                                                     </DotMatrixText>
                                                 </XStack>

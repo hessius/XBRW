@@ -268,8 +268,7 @@ function HubStatus({
     onAction?: () => void;
 }) {
     const appearance = useAppearance();
-    const {palette} = appearance;
-    const onAccent = appearance.onFill(palette.text);
+    const {palette, primary} = appearance;
     return (
         <YStack flex={1} alignItems="center" justifyContent="center"
                 gap="$4" paddingHorizontal="$6" paddingVertical="$8">
@@ -285,8 +284,8 @@ function HubStatus({
             {action !== undefined && onAction !== undefined && (
                 <Button accessibilityRole="button"
                         accessibilityLabel={action}
-                        backgroundColor={palette.text}
-                        color={onAccent.text}
+                        backgroundColor={primary.fill}
+                        color={primary.ink}
                         borderRadius="$4"
                         onPress={onAction}>
                     {action}
@@ -310,8 +309,7 @@ function HubFooter({
     onRetry: () => void;
 }) {
     const appearance = useAppearance();
-    const {palette} = appearance;
-    const onAccent = appearance.onFill(palette.text);
+    const {palette, primary} = appearance;
     if (arriving) {
         const progress = totalPage > 0 && page > 0 ? `Page ${page} of ${totalPage}.` : "";
         return (
@@ -338,8 +336,8 @@ function HubFooter({
                 <Button accessibilityRole="button"
                         accessibilityLabel="Try again"
                         size="$3"
-                        backgroundColor={palette.text}
-                        color={onAccent.text}
+                        backgroundColor={primary.fill}
+                        color={primary.ink}
                         onPress={onRetry}>
                     Try again
                 </Button>
