@@ -39,7 +39,10 @@ export function countLine(feed: RoasterFeed | null): string {
  * coffees are on their way, or that the last attempt to fetch them failed.
  */
 export function rowLine(sub: RoasterSubscription, feed: RoasterFeed | null, now: number): string {
-    if (feed === null) return sub.lastError === undefined ? "Loading coffees" : "Couldn't update";
+    if (feed === null) {
+        if (sub.paused) return "Updates paused";
+        return sub.lastError === undefined ? "Loading coffees" : "Couldn't update";
+    }
     const total = feed.coffees.length;
     const coffees = total === 1 ? "1 coffee" : `${total} coffees`;
     if (sub.paused) return `${coffees} · Paused`;

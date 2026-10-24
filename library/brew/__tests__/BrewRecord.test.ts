@@ -1,5 +1,6 @@
 import Pour from "@/library/Pour";
 import {GRINDER_OFF_VALUE} from "@/library/Recipe";
+import {brew} from "@/library/brew/handoff/__tests__/fixtures";
 import {finalOutcome, planFromPours, poursFromPlan, stageWaterFromSamples,
         stallsFromSamples, summarise, grinderRan, type BrewSample, type BypassRecord,
         type BrewRecord, type PlanStage} from "@/library/brew/BrewRecord";
@@ -250,6 +251,17 @@ describe("BypassRecord", () => {
 });
 
 describe("grinderRan", () => {
+    it.each([1, 15, 30, 39, 40, 80])("recognises whole BLE grind %p", grindSize => {
+        expect(grinderRan(brew({grinderUsed: true, grindSize}))).toBe(true);
+        expect(grinderRan(brew({grinderUsed: false, grindSize}))).toBe(false);
+    });
+
+    it.each([-1, 0, 81, 200, NaN, Infinity, 1.5, 40.5])(
+        "does not claim grinding at %p", grindSize => {
+            expect(grinderRan(brew({grinderUsed: true, grindSize}))).toBe(false);
+        }
+    );
+
     it("is false when the recipe said the grinder was off", () => {
         expect(grinderRan({grinderUsed: false, grindSize: 62} as BrewRecord)).toBe(false);
     });

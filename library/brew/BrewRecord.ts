@@ -456,7 +456,8 @@ export function drawdownSeconds(record: BrewRecord): number | null {
  */
 export function grinderRan(record: BrewRecord): boolean {
     if (record.grinderUsed !== true) return false;
-    return typeof record.grindSize === "number" && grindBand(record.grindSize)?.onCard === true;
+    return typeof record.grindSize === "number"     && Number.isInteger(record.grindSize)
+    && grindBand(record.grindSize) !== undefined;
 }
 
 /**

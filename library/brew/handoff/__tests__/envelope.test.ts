@@ -14,6 +14,12 @@ function hasUndefined(value: unknown): boolean {
 }
 
 describe("buildEnvelope", () => {
+    it.each([1, 30, 39])("exports fine BLE grind %p", grindSize => {
+        const envelope = buildEnvelope(brew({grinderUsed: true, grindSize}), []);
+        expect(envelope.brew.grindSize).toBe(String(grindSize));
+        expect(envelope.brew.grinderName).toBe(DEVICE_NAME);
+    });
+
     it("keeps the frozen physical bag identity ahead of a pod name and accepts explicit confirmation", () => {
         const record = brew({coffee: {name: "Same pod", roaster: "Roaster"},
             bag: bagRunFixture({beanName: "Second physical bag"})});
