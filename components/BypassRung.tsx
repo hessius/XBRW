@@ -26,6 +26,7 @@ type Props = {
     /** Draw the long explanation inside the fold. The card note ignores this. */
     showHint: boolean;
     temperatureUnit: TemperatureUnit;
+    doseNotice?: string | null;
     onToggle: () => void;
     onEnabledChange: (on: boolean) => void;
     onChange: (field: BypassField, value: number) => void;
@@ -51,7 +52,7 @@ type Props = {
  * one inside the fold stays live while invisible.
  */
 export default function BypassRung({
-    recipe, open, isTea = false, showHint, temperatureUnit,
+    recipe, open, isTea = false, showHint, temperatureUnit, doseNotice,
     onToggle, onEnabledChange, onChange
 }: Props) {
     "use no memo";
@@ -132,6 +133,13 @@ export default function BypassRung({
                     leaves it out.
                 </Text>
             </XStack>
+
+            {doseNotice && (
+                <Text testID="bypass-dose-notice" fontSize={12} lineHeight={17}
+                      color={palette.warn}>
+                    {doseNotice}
+                </Text>
+            )}
 
             <Collapsible open={open}>
                 <YStack gap="$2" paddingTop="$3">

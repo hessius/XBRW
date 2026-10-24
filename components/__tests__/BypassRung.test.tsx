@@ -29,6 +29,14 @@ function props(recipe: Recipe, overrides = {}) {
 }
 
 describe("BypassRung", () => {
+    it("keeps a dose limit visible when the rung and hints are closed", async () => {
+        await renderWithProviders(<BypassRung {...props(withBypass())}
+            doseNotice="Bypass limited to 500 ml."/>);
+        expect(screen.getByTestId("bypass-dose-notice"))
+            .toHaveTextContent("Bypass limited to 500 ml.");
+        expect(screen.queryByTestId("bypass-explainer")).toBeNull();
+    });
+
     it("offers a ghost rung when bypass is off", async () => {
         await renderWithProviders(<BypassRung {...props(new Recipe())}/>);
 

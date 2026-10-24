@@ -3,7 +3,8 @@ import {useCallback, useEffect, useRef, useState} from "react";
 import {notify} from "@/components/XbrwToast";
 import {
     BYPASS_DEFAULT_TEMPERATURE, BYPASS_DEFAULT_VOLUME, clampBypassVolume,
-    clampBypassTemp, isUsableBypassTemp
+    clampBypassTemp, isUsableBypassTemp, describeBypassDoseScale, scaleBypassForDose,
+    type BypassDoseScale
 } from "@/library/bypassLimits";
 import {sharedSettings} from "@/hooks/useSetting";
 import {brewProblems, cardWriteProblems, outOfRangeProblems} from "@/library/cardLimits";
@@ -103,6 +104,10 @@ export function useRecipeEditor({recipeJSON, temperatureUnit, onSaved}: Params) 
     const [inputError, setInputError] = useState(false);
     const [key, setKey] = useState(0);
     const [volumeError, setVolumeError] = useState<string | null>(null);
+    const bypassDoseAnchor = useRef<{recipe: Recipe; dose: number; volume: number} | null>(null);
+    const [bypassDoseReading, setBypassDoseReading] = useState<{
+        recipe: Recipe; result: BypassDoseScale
+    } | null>(null);
 
     /**
      * The XID lookup was tried and did not work.
@@ -647,7 +652,17 @@ export function useRecipeEditor({recipeJSON, temperatureUnit, onSaved}: Params) 
             [RECIPE_LABELS.DOSE]:       {
                 requiresNumber: true,
                 update:         (r: Recipe, val: string) => {
-                    r.dosage = Number(val)
+                    const dose = Number(val);
+                    if (!r.isTea() && r.bypassEnabled && dose !== r.dosage) {
+                        const anchor = bypassDoseAnchor.current?.recipe === r
+                            ? bypassDoseAnchor.current
+                            : {recipe: r, dose: r.dosage, volume: r.bypassVolume};
+                        bypassDoseAnchor.current = anchor;
+                        const result = scaleBypassForDose(anchor.volume, anchor.dose, dose);
+                        if (result.ok) r.bypassVolume = result.volume;
+                        setBypassDoseReading({recipe: r, result});
+                    }
+                    r.dosage = dose;
                 }
             },
             [RECIPE_LABELS.XID]:        {
@@ -670,6 +685,8 @@ export function useRecipeEditor({recipeJSON, temperatureUnit, onSaved}: Params) 
                 requiresNumber: false,
                 update:         (r: Recipe, val: string) => {
                     r.cupType = Number(val);
+                    bypassDoseAnchor.current = null;
+                    setBypassDoseReading(null);
                 }
             }
         };
@@ -739,6 +756,8 @@ export function useRecipeEditor({recipeJSON, temperatureUnit, onSaved}: Params) 
     function setBypassEnabled(on: boolean) {
         if (!recipe) return;
         applyBypassEnabled(recipe, on);
+        bypassDoseAnchor.current = null;
+        setBypassDoseReading(null);
         setKey((prev) => prev + 1);
     }
 
@@ -746,6 +765,10 @@ export function useRecipeEditor({recipeJSON, temperatureUnit, onSaved}: Params) 
     function editBypass(field: BypassField, value: number) {
         if (!recipe) return;
         applyBypassField(recipe, field, value);
+        if (field === "volume") {
+            bypassDoseAnchor.current = null;
+            setBypassDoseReading(null);
+        }
         setKey((prev) => prev + 1);
     }
 
@@ -790,6 +813,8 @@ export function useRecipeEditor({recipeJSON, temperatureUnit, onSaved}: Params) 
         editStage,
         setBypassEnabled,
         editBypass,
+        bypassDoseNotice: bypassDoseReading?.recipe === recipe
+            ? describeBypassDoseScale(bypassDoseReading.result) : null,
         setOverflowProtection,
         persistRecipe,
         hasPendingEdits,

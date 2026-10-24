@@ -1,10 +1,41 @@
 import {
     BYPASS_VOLUME, BYPASS_DEFAULT_VOLUME, BYPASS_DEFAULT_TEMPERATURE, clampBypassVolume,
-    BYPASS_TEMPERATURE, clampBypassTemp, isUsableBypassTemp
+    BYPASS_TEMPERATURE, clampBypassTemp, isUsableBypassTemp,
+    scaleBypassForDose, describeBypassDoseScale
 } from "@/library/bypassLimits";
 import {TEMPERATURE} from "@/library/cardLimits";
 
 describe("bypass limits", () => {
+    it.each([
+        [30, 18, 20, 33, false],
+        [30, 18, 19, 32, false],
+        [500, 18, 20, 500, true],
+        [1, 20, 1, 1, true],
+        [500, 18, 18, 500, false],
+        [1, 18, 18, 1, false]
+    ])("scales %s ml from %s g to %s g with one rounding", (volume, from, to, scaled, limited) => {
+        expect(scaleBypassForDose(volume, from, to))
+            .toEqual({ok: true, volume: scaled, limited});
+    });
+
+    it.each([
+        [30, 0, 20], [30, -1, 20], [30, 18, 0], [30, 18, -1],
+        [0, 18, 20], [501, 18, 20], [NaN, 18, 20],
+        [30, Infinity, 20], [30, 18, NaN], [500, Number.MIN_VALUE, 20]
+    ])("rejects an unusable starting amount or dose: %s, %s, %s", (volume, from, to) => {
+        expect(scaleBypassForDose(volume, from, to)).toEqual({
+            ok: false, problem: "Check the starting dose and bypass amount before resizing."
+        });
+    });
+
+    it("only explains a limit or a correction", () => {
+        expect(describeBypassDoseScale(scaleBypassForDose(30, 18, 20))).toBeNull();
+        expect(describeBypassDoseScale(scaleBypassForDose(500, 18, 20)))
+            .toBe("Bypass limited to 500 ml.");
+        expect(describeBypassDoseScale(scaleBypassForDose(0, 18, 20)))
+            .toBe("Check the starting dose and bypass amount before resizing.");
+    });
+
     it("allows 1 to 500 ml", () => {
         expect(BYPASS_VOLUME).toEqual({min: 1, max: 500});
     });

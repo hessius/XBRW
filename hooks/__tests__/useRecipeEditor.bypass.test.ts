@@ -1,9 +1,13 @@
 import {act, renderHook} from "@testing-library/react-native";
 
-import {useRecipeEditor} from "@/hooks/useRecipeEditor";
-import Recipe from "@/library/Recipe";
+import {RECIPE_LABELS, useRecipeEditor} from "@/hooks/useRecipeEditor";
+import Recipe, {CUP_TYPE} from "@/library/Recipe";
+import {XBloomRecipe} from "@/library/XBloomRecipe";
 
 jest.mock("@/library/RecipeDatabase");
+jest.mock("expo-sqlite", () => ({
+    openDatabaseSync: () => jest.requireActual("@/test-utils/sqlite").createTestDatabase()
+}));
 
 async function editorFor(recipe: Recipe) {
     return renderHook(() => useRecipeEditor({
@@ -41,6 +45,111 @@ function recipeEndingAt(temperature: number): Recipe {
 }
 
 describe("useRecipeEditor bypass", () => {
+    function proportionalRecipe(volume = 30) {
+        const recipe = recipeEndingAt(88);
+        recipe.bypassEnabled = true;
+        recipe.bypassVolume = volume;
+        recipe.bypassTemp = 88;
+        return recipe;
+    }
+
+    it("keeps a stable source through successive dose edits and saving", async () => {
+        const {result} = await editorFor(proportionalRecipe());
+        const stages = result.current.recipe?.pours.map(pour => pour.volume);
+        await act(async () => { await result.current.editInputComplete(RECIPE_LABELS.DOSE, "19"); });
+        expect(result.current.recipe?.bypassVolume).toBe(32);
+        await act(async () => { result.current.persistRecipe(); });
+        await act(async () => { await result.current.editInputComplete(RECIPE_LABELS.DOSE, "20"); });
+        expect(result.current.recipe?.bypassVolume).toBe(33);
+        expect(result.current.recipe?.bypassTemp).toBe(88);
+        expect(result.current.recipe?.pours.map(pour => pour.volume)).toEqual(stages);
+        expect(result.current.balance.balanced).toBe(false);
+        expect(result.current.bypassDoseNotice).toBeNull();
+    });
+
+    it("recovers the original amount after clipping without serializing its anchor", async () => {
+        const {result} = await editorFor(proportionalRecipe(500));
+        const keys = Object.keys(result.current.recipe!);
+        await act(async () => { await result.current.editInputComplete(RECIPE_LABELS.DOSE, "20"); });
+        expect(result.current.recipe?.bypassVolume).toBe(500);
+        expect(result.current.bypassDoseNotice).toBe("Bypass limited to 500 ml.");
+        await act(async () => { await result.current.editInputComplete(RECIPE_LABELS.DOSE, "15"); });
+        expect(result.current.recipe?.bypassVolume).toBe(417);
+        await act(async () => { await result.current.editInputComplete(RECIPE_LABELS.DOSE, "18"); });
+        expect(result.current.recipe?.bypassVolume).toBe(500);
+        expect(result.current.bypassDoseNotice).toBeNull();
+        expect(Object.keys(result.current.recipe!)).toEqual(keys);
+    });
+
+    it("rebases explicit water edits but not temperature edits", async () => {
+        const {result} = await editorFor(proportionalRecipe());
+        await act(async () => { await result.current.editInputComplete(RECIPE_LABELS.DOSE, "19"); });
+        await act(async () => { result.current.editBypass("temperature", 75); });
+        await act(async () => { await result.current.editInputComplete(RECIPE_LABELS.DOSE, "20"); });
+        expect(result.current.recipe?.bypassVolume).toBe(33);
+        await act(async () => { result.current.editBypass("volume", 40); });
+        await act(async () => { await result.current.editInputComplete(RECIPE_LABELS.DOSE, "18"); });
+        expect(result.current.recipe?.bypassVolume).toBe(36);
+        expect(result.current.recipe?.bypassTemp).toBe(75);
+    });
+
+    it("starts a fresh source after a bypass toggle", async () => {
+        const {result} = await editorFor(proportionalRecipe());
+        await act(async () => { await result.current.editInputComplete(RECIPE_LABELS.DOSE, "20"); });
+        await act(async () => { result.current.setBypassEnabled(false); });
+        await act(async () => { await result.current.editInputComplete(RECIPE_LABELS.DOSE, "15"); });
+        expect(result.current.recipe?.bypassVolume).toBe(33);
+        await act(async () => { result.current.setBypassEnabled(true); });
+        await act(async () => { await result.current.editInputComplete(RECIPE_LABELS.DOSE, "18"); });
+        expect(result.current.recipe?.bypassVolume).toBe(40);
+    });
+
+    it("does not rescale bypass for ratio-only edits or tea", async () => {
+        const {result} = await editorFor(proportionalRecipe());
+        await act(async () => { await result.current.editInputComplete(RECIPE_LABELS.RATIO, "18"); });
+        expect(result.current.recipe?.bypassVolume).toBe(30);
+        await act(async () => {
+            await result.current.editInputComplete(RECIPE_LABELS.CUP, String(CUP_TYPE.TEA));
+        });
+        await act(async () => { await result.current.editInputComplete(RECIPE_LABELS.DOSE, "7"); });
+        expect(result.current.recipe?.bypassVolume).toBe(30);
+    });
+
+    it("retains invalid starting water and clears its correction after an explicit edit", async () => {
+        const {result} = await editorFor(proportionalRecipe(501));
+        await act(async () => { await result.current.editInputComplete(RECIPE_LABELS.DOSE, "20"); });
+        expect(result.current.recipe?.bypassVolume).toBe(501);
+        expect(result.current.bypassDoseNotice)
+            .toBe("Check the starting dose and bypass amount before resizing.");
+        await act(async () => { result.current.editBypass("volume", 40); });
+        expect(result.current.bypassDoseNotice).toBeNull();
+        await act(async () => { await result.current.editInputComplete(RECIPE_LABELS.DOSE, "18"); });
+        expect(result.current.recipe?.bypassVolume).toBe(36);
+    });
+
+    it("discards the previous notice and anchor when revert replaces the recipe", async () => {
+        const recipe = proportionalRecipe(500);
+        recipe.shareId = "fixture";
+        const replacement = proportionalRecipe(24);
+        replacement.dosage = 15;
+        const fetch = jest.spyOn(XBloomRecipe.prototype, "fetchRecipeDetail").mockResolvedValue(undefined);
+        const get = jest.spyOn(XBloomRecipe.prototype, "getRecipe").mockReturnValue(replacement);
+        try {
+            const {result} = await editorFor(recipe);
+            await act(async () => { await result.current.editInputComplete(RECIPE_LABELS.DOSE, "20"); });
+            expect(result.current.bypassDoseNotice).toBe("Bypass limited to 500 ml.");
+            await act(async () => {
+                await result.current.revertSources.find(source => source.id === "share")!.action();
+            });
+            expect(result.current.bypassDoseNotice).toBeNull();
+            await act(async () => { await result.current.editInputComplete(RECIPE_LABELS.DOSE, "20"); });
+            expect(result.current.recipe?.bypassVolume).toBe(32);
+        } finally {
+            fetch.mockRestore();
+            get.mockRestore();
+        }
+    });
+
     it("seeds a bypass at the temperature the brew finished on", async () => {
         // Bypass water is poured into the cup at the end, so the temperature
         // that makes sense to start from is the one the brew just ended at --

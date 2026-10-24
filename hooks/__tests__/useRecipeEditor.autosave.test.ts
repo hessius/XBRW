@@ -106,6 +106,25 @@ describe("useRecipeEditor autosave", () => {
         expect(stored().dosage).toBe(18);
     });
 
+    it("keeps bypass scaling anchored across metadata autosave without saving draft water", async () => {
+        const recipe = saved();
+        recipe.bypassEnabled = true;
+        recipe.bypassVolume = 30;
+        new RecipeDatabase().updateRecipe(recipe.uuid, recipe);
+        const {result} = await open(stored());
+        await act(async () => {
+            await result.current.editInputComplete(RECIPE_LABELS.DOSE, "19");
+            await result.current.editInputComplete(RECIPE_LABELS.NOTE, "Sweet");
+            result.current.saveMetadata();
+        });
+        expect(stored()).toMatchObject({dosage: 18, bypassVolume: 30, description: "Sweet"});
+        await act(async () => {
+            await result.current.editInputComplete(RECIPE_LABELS.DOSE, "20");
+        });
+        expect(result.current.recipe?.bypassVolume).toBe(33);
+        expect(stored()).toMatchObject({dosage: 18, bypassVolume: 30});
+    });
+
     it("adds nothing to the library for a recipe that is not in it", async () => {
         // `updateRecipe` inserts when there is no row, so an unguarded autosave
         // would put a card read or a half-finished import into the library

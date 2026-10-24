@@ -1,5 +1,5 @@
 import React from "react";
-import {AccessibilityInfo, BackHandler, Platform} from "react-native";
+import {AccessibilityInfo, BackHandler, Dimensions, Platform} from "react-native";
 import {act, screen, fireEvent, waitFor, within} from "@testing-library/react-native";
 import * as Clipboard from "expo-clipboard";
 
@@ -1585,9 +1585,18 @@ describe("HomeScreen, opening one editor at a time", () => {
         }));
     });
 
-    it("brews a quick edited clone from the action tray without saving it", async () => {
+    it.each([
+        ["Increase Quick edit dose", 16, 32],
+        ["Quick edit dose 20 grams", 20, 40]
+    ] as const)("brews via %s with proportional bypass and no library save", async (action, dose, water) => {
         mockRemembered = "machine-device-id";
         const original = writable("Ethiopia");
+        original.ratio = 12;
+        original.autoFixPourVolumes();
+        original.bypassEnabled = true;
+        original.bypassVolume = 30;
+        original.bypassTemp = 81;
+        const before = JSON.stringify(original);
         const db = store([original]);
         await renderWithProviders(<HomeScreen db={db} settings={new Settings(memoryStorage())}/>);
         await screen.findByText("Ethiopia");
@@ -1596,7 +1605,7 @@ describe("HomeScreen, opening one editor at a time", () => {
             includeHiddenElements: true
         }));
         await settleSheet();
-        await fireEvent.press(screen.getByLabelText("Increase Quick edit dose"));
+        await fireEvent.press(screen.getByLabelText(action));
         await waitFor(
             async () => {
                 await fireEvent.press(screen.getByTestId("home-quick-edit-brew"));
@@ -1608,11 +1617,35 @@ describe("HomeScreen, opening one editor at a time", () => {
         const call = mockPush.mock.calls[0][0];
         const pushed = JSON.parse(call.params.recipeJSON);
         expect(call).toEqual(expect.objectContaining({pathname: "/brew"}));
-        expect(JSON.parse(call.params.quickEditAdjustments)).toEqual({dose: 16});
+        expect(JSON.parse(call.params.quickEditAdjustments)).toEqual({dose});
         expect(pushed.uuid).toBe(original.uuid);
-        expect(pushed.dosage).toBe(16);
-        expect(original.dosage).toBe(15);
+        expect(pushed).toMatchObject({dosage: dose, bypassVolume: water, bypassTemp: 81});
+        expect(JSON.stringify(original)).toBe(before);
         expect(db.updateRecipe).not.toHaveBeenCalled();
+    });
+
+    it("scrolls home quick edits at short height and large text without a save action", async () => {
+        const window = Dimensions.get("window");
+        const display = Dimensions.get("screen");
+        await act(async () => {
+            const small = {...window, width: 320, height: 568, fontScale: 2};
+            Dimensions.set({window: small, screen: small});
+        });
+        try {
+            mockRemembered = "machine-device-id";
+            await renderHome({recipes: [writable("Ethiopia")]});
+            await fireEvent.press(screen.getByLabelText("Quick edit Ethiopia", {
+                includeHiddenElements: true
+            }));
+            await settleSheet();
+            expect(screen.getByTestId("home-quick-edit-scroll").props.keyboardShouldPersistTaps)
+                .toBe("handled");
+            expect(screen.getByLabelText("Increase Temperature offset")).toBeTruthy();
+            expect(screen.getAllByLabelText("Brew with quick edits")).toHaveLength(1);
+            expect(screen.queryByText(/SAVE AS/)).toBeNull();
+        } finally {
+            await act(async () => { Dimensions.set({window, screen: display}); });
+        }
     });
 
     it("adds the brew tile to the action tray once a machine is paired", async () => {

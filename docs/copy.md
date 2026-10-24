@@ -351,6 +351,12 @@ come from `hooks/useRecipeEditor.ts`.
 
 ### Bypass water
 
+Coffee dose edits scale enabled bypass water from a stable starting dose and
+volume. Ratio-only changes do not; tea and disabled bypass are excluded.
+Normal editor stage volumes retain their existing policy. The limit/correction
+notice appears beside the dose control on BREW and on the bypass rung on
+STAGES. It stays visible when the rung or hints are closed.
+
 | ID | Source | Context — when the user sees this | Current text |
 |----|--------|-----------------------------------|--------------|
 | `editor.bypass.ghost.a11y` | `components/BypassRung.tsx:69` (a11y) | (a11y) The dashed rung that turns bypass water on. | `Add bypass water` |
@@ -368,6 +374,22 @@ come from `hooks/useRecipeEditor.ts`.
 | `help.bypass.detail` | `constants/recipeHelp.ts:171` | Help sheet body, and the in-rung explanation with hints on. | `Bypass water is dispensed straight into the cup at the end of the brew, without passing through the coffee. It dilutes a concentrated brew without weakening the extraction, which is how a strong small brew is turned into a full cup. It does not count towards the stage volumes, and a card has no room to store it, so a recipe written to a card loses it.` |
 | `help.bypassVolume.title` | `constants/recipeHelp.ts:179` | Caption above the bypass volume stepper. | `Volume` |
 | `help.bypassTemperature.title` | `constants/recipeHelp.ts:182` | Caption above the bypass temperature stepper. | `Temperature` |
+| `editor.bypass.dose.limit` | `library/bypassLimits.ts`, `components/BypassRung.tsx` | Dose scaling reaches the 1-500 ml bypass range. | `Bypass limited to ${volume} ml.` |
+| `editor.bypass.dose.problem` | `library/bypassLimits.ts` | The starting dose or bypass amount cannot be scaled. Quick Edit also blocks brewing that adjustment. | `Check the starting dose and bypass amount before resizing.` |
+
+### Quick Edit dose shortcuts
+
+Coffee offers sorted, deduplicated 15 g, 18 g, 20 g and valid saved-dose chips
+beneath the existing dose row. The selected chip exposes its selected state;
+it changes the same temporary adjustment as the stepper. Tea has no chips.
+Neither host adds a save action, and closing discards the adjustment.
+
+| ID | Source | Context — when the user sees this | Current text |
+|----|--------|-----------------------------------|--------------|
+| `quickEdit.dose.preset` | `components/QuickEditPanel.tsx` | Compact dose chip. | `${preset} g` |
+| `quickEdit.dose.preset.a11y` | `components/QuickEditPanel.tsx` | Spoken chip label, with selected state supplied separately. | `Quick edit dose ${preset} grams` |
+| `quickEdit.dose.bypass` | `library/quickEdit.ts` | Added after the existing stage-volume explanation when dose rescales active bypass. | `Bypass water rescales to ${volume} ml, so the cup gets ${cup} ml.` |
+| `quickEdit.dose.bypass.limit` | `library/quickEdit.ts` | A bounded amount is not described as exactly proportional. | `Bypass limited to ${volume} ml. The cup gets ${cup} ml.` |
 
 ### Editor action bar
 

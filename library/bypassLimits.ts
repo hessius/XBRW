@@ -35,6 +35,32 @@ export function clampBypassVolume(value: number): number {
     return Math.min(Math.max(Math.round(value), BYPASS_VOLUME.min), BYPASS_VOLUME.max);
 }
 
+export type BypassDoseScale =
+    | {ok: true; volume: number; limited: boolean}
+    | {ok: false; problem: string};
+
+export function scaleBypassForDose(
+    volume: number, fromDose: number, toDose: number
+): BypassDoseScale {
+    const raw = volume * toDose / fromDose;
+    if (![volume, fromDose, toDose, raw].every(Number.isFinite)
+        || fromDose <= 0 || toDose <= 0
+        || volume < BYPASS_VOLUME.min || volume > BYPASS_VOLUME.max) {
+        return {ok: false, problem: "Check the starting dose and bypass amount before resizing."};
+    }
+    return {
+        ok: true,
+        volume: clampBypassVolume(raw),
+        limited: raw < BYPASS_VOLUME.min || raw > BYPASS_VOLUME.max
+    };
+}
+
+export function describeBypassDoseScale(result: BypassDoseScale): string | null {
+    return result.ok
+        ? result.limited ? `Bypass limited to ${result.volume} ml.` : null
+        : result.problem;
+}
+
 /**
  * Whether a stored bypass temperature is one the kettle could have been asked for.
  *
