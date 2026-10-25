@@ -15,7 +15,7 @@
 The maintainer approved
 `docs/superpowers/specs/2026-10-24-preview-reconciliation-design.md`
 before this plan was written, then explicitly approved inline implementation.
-Tasks 1-8 are implemented in serial checkpoints; Task 9 records qualification.
+Tasks 1-9 are implemented and software-qualified in serial checkpoints.
 PR creation/review, merge, #252 closure, Metro changes, native builds and
 worktree deletion still require separate applicable authority.
 
@@ -71,7 +71,7 @@ Do not restructure the app or extract a general presentation framework.
 - Modify: `library/subscriptionStatus.ts`.
 - Create: `library/__tests__/subscriptionStatus.test.ts`.
 
-- [ ] Add valid/invalid grinder cases to the existing `grinderRan` describe.
+- [x] Add valid/invalid grinder cases to the existing `grinderRan` describe.
   Import the existing full `brew` fixture from
   `@/library/brew/handoff/__tests__/fixtures`, rather than creating new partial
   records with casts:
@@ -88,7 +88,7 @@ it.each([-1, 0, 81, 200, NaN, Infinity, 1.5, 40.5])(
 );
 ```
 
-- [ ] Add this handoff regression in the existing envelope suite; `buildEnvelope`,
+- [x] Add this handoff regression in the existing envelope suite; `buildEnvelope`,
   `brew` and `DEVICE_NAME` are already imported:
 
 ```ts
@@ -99,7 +99,7 @@ it.each([1, 30, 39])("exports fine BLE grind %p", grindSize => {
 });
 ```
 
-- [ ] Bring in the new, isolated paused-copy test suite from the pinned source:
+- [x] Bring in the new, isolated paused-copy test suite from the pinned source:
 
 ```bash
 git restore --source=dee62ae5a35eacaa0ac20a9a1e9a748cd34c85c2 -- library/__tests__/subscriptionStatus.test.ts
@@ -109,7 +109,7 @@ npx jest --runTestsByPath library/brew/__tests__/BrewRecord.test.ts library/brew
 Expected red: whole fine grinds are excluded and paused/no-cache says loading
 or failure. Invalid fractional grinds must remain excluded.
 
-- [ ] Preserve the existing `grinderUsed !== true` early return and replace
+- [x] Preserve the existing `grinderUsed !== true` early return and replace
   only the following grind predicate:
 
 ```ts
@@ -121,7 +121,7 @@ return typeof record.grindSize === "number"
   In `dialAfterBrew.ts`, correct the narrowing comment to "a valid BLE band".
   Do not change grind bounds, card encoding or the handoff schema.
 
-- [ ] Replace only the no-cache branch in `rowLine`:
+- [x] Replace only the no-cache branch in `rowLine`:
 
 ```ts
 if (feed === null) {
@@ -130,7 +130,7 @@ if (feed === null) {
 }
 ```
 
-- [ ] Run the combined affected-domain suites:
+- [x] Run the combined affected-domain suites:
 
 ```bash
 npx jest --runTestsByPath library/brew/__tests__/BrewRecord.test.ts library/brew/__tests__/brewNote.test.ts library/brew/__tests__/dialAfterBrew.test.ts library/brew/__tests__/historyQuery.test.ts library/brew/handoff/__tests__/envelope.test.ts library/__tests__/subscriptionStatus.test.ts
@@ -140,7 +140,7 @@ Expected: both projects pass; existing off/unrecorded behaviour is unchanged.
 Preserve or selectively add preview's consumer regressions for fine grind,
 but do not duplicate cases already proved by these suites.
 
-- [ ] Commit the Task 1 files:
+- [x] Commit the Task 1 files:
 
 ```bash
 git add library/brew/BrewRecord.ts library/brew/dialAfterBrew.ts library/brew/__tests__ library/brew/handoff/__tests__/envelope.test.ts library/subscriptionStatus.ts library/__tests__/subscriptionStatus.test.ts
@@ -153,7 +153,7 @@ git commit -m "fix: recognise fine BLE grinds and paused subscriptions" -m "Co-a
 - Modify: `components/RecipeHero.tsx`.
 - Test: `components/__tests__/RecipeHero.test.tsx`.
 
-- [ ] Extend the existing imports with `wordsFit` and add these focused cases:
+- [x] Extend the existing imports with `wordsFit` and add these focused cases:
 
 ```ts
 it("requires whole words when fitting beside the profile", () => {
@@ -170,9 +170,9 @@ it.each([320, 360, 412])("uses the band for an overwide title word at %p", width
 });
 ```
 
-- [ ] Run `npx jest --runTestsByPath components/__tests__/RecipeHero.test.tsx`.
+- [x] Run `npx jest --runTestsByPath components/__tests__/RecipeHero.test.tsx`.
   Expected red: helper missing and/or current narrow-column selection.
-- [ ] Add the pure helper adjacent to `wrapLines`/`estimateLines`:
+- [x] Add the pure helper adjacent to `wrapLines`/`estimateLines`:
 
 ```ts
 export function wordsFit(text: string, width: number, fontSize: number): boolean {
@@ -186,10 +186,10 @@ export function wordsFit(text: string, width: number, fontSize: number): boolean
   calculations unless the focused geometry tests demonstrate a coupled defect.
   Do not copy preview's unused `breakLines` word bookkeeping or `hero-name-row`.
 
-- [ ] Re-run RecipeHero and `app/__tests__/editRecipe.test.tsx` together.
+- [x] Re-run RecipeHero and `app/__tests__/editRecipe.test.tsx` together.
   Expected: normal titles, long-name termination, rename access, collapse,
   existing photo placement and narrow/large-scale layout cases still pass.
-- [ ] Commit:
+- [x] Commit:
 
 ```bash
 git add components/RecipeHero.tsx components/__tests__/RecipeHero.test.tsx
@@ -204,7 +204,7 @@ git commit -m "fix(editor): keep long title words whole beside the profile" -m "
   `components/__tests__/PodSection.test.tsx`,
   `components/__tests__/AboutDeck.test.tsx`.
 
-- [ ] Add FromSection regression cases using existing `recipeWith`/`props`:
+- [x] Add FromSection regression cases using existing `recipeWith`/`props`:
 
 ```tsx
 it.each(["import", "brewmind"] as const)("prefers the named roaster for %s", source => {
@@ -232,7 +232,7 @@ it("keeps an ordinary personal share inside the broad display rule", async () =>
   load failure, roaster-only/no-XID display and existing recipe-page links.
   Existing ordinary-sharer and xBloom cases must stay.
 
-- [ ] In PodSection tests, add:
+- [x] In PodSection tests, add:
 
 ```tsx
 it("labels a roaster profile without offering to replace the chosen title", async () => {
@@ -248,8 +248,8 @@ it("labels a roaster profile without offering to replace the chosen title", asyn
   Retain tests that ordinary renamed recipes can USE THIS NAME and that
   following the pod clears the name rather than copying it.
 
-- [ ] Run the three Task 3 suites and establish the intended red cases.
-- [ ] Export this helper from FromSection and import it in PodSection:
+- [x] Run the three Task 3 suites and establish the intended red cases.
+- [x] Export this helper from FromSection and import it in PodSection:
 
 ```ts
 export function roasterOf(recipe: Recipe): string | undefined {
@@ -263,7 +263,7 @@ export function roasterOf(recipe: Recipe): string | undefined {
   provenance. Do not copy preview comments asserting that every match really
   arrived from that roaster.
 
-- [ ] In FromSection, compute and use these values:
+- [x] In FromSection, compute and use these values:
 
 ```ts
 const roaster = roasterOf(recipe);
@@ -276,7 +276,7 @@ const avatar = roaster !== undefined
   `From ${roaster}` when defined, otherwise preserve the existing wording.
   Keep the image setting/failure fallback and page link intact.
 
-- [ ] In PodSection add `const fromRoaster = roasterOf(recipe) !== undefined`.
+- [x] In PodSection add `const fromRoaster = roasterOf(recipe) !== undefined`.
   Insert the label and change only the linked-name presentation and button gate:
 
 ```tsx
@@ -296,9 +296,9 @@ const avatar = roaster !== undefined
   Preserve the existing USING THIS NAME state for unnamed recipes, XID input,
   lookup notes, image settings and header-rename flow.
 
-- [ ] Run all three Task 3 suites. Expected: eligible imports change display;
+- [x] Run all three Task 3 suites. Expected: eligible imports change display;
   local/blank-roaster recipes and serialized metadata do not change.
-- [ ] Commit the two components and their three test files with message
+- [x] Commit the two components and their three test files with message
   `feat(editor): prefer roaster identity for named coffee imports` and the
   required co-author trailer.
 
@@ -311,7 +311,7 @@ const avatar = roaster !== undefined
   `components/__tests__/PodCoffeeRows.test.tsx`,
   `library/__tests__/roasterCatalogue.test.ts`.
 
-- [ ] Add this pure regression and variants for no flavours, identical
+- [x] Add this pure regression and variants for no flavours, identical
   case/spacing-folded notes, flavours-only and an empty coffee:
 
 ```ts
@@ -329,7 +329,7 @@ it("leads with flavours and retains distinct notes", () => {
   recipe fixture: main text, secondary text and the composed label
   `Flavour, Papaya, Citrus. Sweet papaya with a citrus finish`.
 
-- [ ] Add the catalogue fact case using the existing `feed` fixture:
+- [x] Add the catalogue fact case using the existing `feed` fixture:
 
 ```ts
 it("includes shared optional facts without repeating catalogue headings", () => {
@@ -346,8 +346,8 @@ it("includes shared optional facts without repeating catalogue headings", () => 
 });
 ```
 
-- [ ] Run all three Task 4 suites; expect missing detail and optional facts.
-- [ ] Add `detail?: string` to `CoffeeDetailRow` and implement:
+- [x] Run all three Task 4 suites; expect missing detail and optional facts.
+- [x] Add `detail?: string` to `CoffeeDetailRow` and implement:
 
 ```ts
 function flavourRow(coffee: PodCoffee): CoffeeDetailRow[] {
@@ -365,7 +365,7 @@ function flavourRow(coffee: PodCoffee): CoffeeDetailRow[] {
   The hydrated PodCoffee flavour list is already the input contract; do not add
   a second import normaliser here.
 
-- [ ] Replace DetailRow's single value Text with a flexible YStack containing
+- [x] Replace DetailRow's single value Text with a flexible YStack containing
   its original 13/19 text and optional 12/17 dim detail:
 
 ```tsx
@@ -382,7 +382,7 @@ function flavourRow(coffee: PodCoffee): CoffeeDetailRow[] {
   ? \`${row.spokenLabel}, ${row.value}\`
   : \`${row.spokenLabel}, ${row.value}. ${row.detail}\``.
 
-- [ ] Import shared `coffeeDetails`, `formatCuppingPoints` and `formatElevation`
+- [x] Import shared `coffeeDetails`, `formatCuppingPoints` and `formatElevation`
   into roasterCatalogue. Replace only its duplicate fact/formatter code:
 
 ```ts
@@ -401,10 +401,10 @@ export function beanFacts(coffee: FeedCoffee): BeanFact[] {
 ```
 
   Keep cache functions unchanged; do not add `readCatalogueFrom`.
-- [ ] Run Task 4 suites plus `app/__tests__/roasterCatalogue.test.tsx`.
+- [x] Run Task 4 suites plus `app/__tests__/roasterCatalogue.test.tsx`.
   Expected: existing origin suppression/formatting and omitted empty/false
   caffeine fields remain correct.
-- [ ] Commit with message `feat(coffee): share flavour detail and catalogue facts`
+- [x] Commit with message `feat(coffee): share flavour detail and catalogue facts`
   and the required co-author trailer.
 
 ## Task 5: Finish enabled primary actions without restyling disabled controls
@@ -419,11 +419,11 @@ export function beanFacts(coffee: FeedCoffee): BeanFact[] {
   `app/__tests__/hub.test.tsx`, `app/__tests__/hubRecipe.test.tsx`,
   `app/__tests__/index.test.tsx`, `app/__tests__/roasterCatalogue.test.tsx`.
 
-- [ ] Before edits, capture the existing disabled assertions/styles for
+- [x] Before edits, capture the existing disabled assertions/styles for
   EasyModeSlots write, retry, both confirmation variants and original-set
   restore. Extend those existing fixtures to all `THEME_IDS`; do not invent
   machine fixtures or bypass serial/busy guards.
-- [ ] Add a new focused primary-action suite with an actual sheet consumer:
+- [x] Add a new focused primary-action suite with an actual sheet consumer:
 
 ```tsx
 import React from "react";
@@ -489,15 +489,15 @@ it.each(THEME_IDS)("keeps coffee-name actions primary in %s", async theme => {
   Keep cancellation, required-name NOT NOW and send behaviour covered by the
   existing route tests.
 
-- [ ] Run the focused new suite and affected route suites to show missing
+- [x] Run the focused new suite and affected route suites to show missing
   primary roles on non-default themes.
-- [ ] For enabled-only consumers, destructure `{palette, primary}` and replace
+- [x] For enabled-only consumers, destructure `{palette, primary}` and replace
   the old action `palette.text`/`onFill(palette.text).text` pair with
   `primary.fill`/`primary.ink`. Apply this to:
   BeanName SEND/SKIP/NOT NOW, BrewNote DONE, LeaveEditor save,
   HubStatus, HubFooter retry, hub-detail TRY AGAIN and home clear-search.
   Remove a now-unused `onAccent` variable only when no other branch needs it.
-- [ ] In EasyModeSlots, retain `appearance.onFill(palette.text)` as the old
+- [x] In EasyModeSlots, retain `appearance.onFill(palette.text)` as the old
   disabled ink source. For write/retry and their inner Doto labels use:
 
 ```tsx
@@ -518,17 +518,17 @@ const restoreBlocked = active || overlay || !connected || !serialMatches || busy
 
   Do not copy preview's new disabled roles or change any recovery callback,
   confirmation gate, experiment state or port availability.
-- [ ] In roasterCoffee, destructure `selection`; replace selected size fill/ink
+- [x] In roasterCoffee, destructure `selection`; replace selected size fill/ink
   with `selection.fill`/`selection.ink`. Preserve its primary Action component's
   disabled opacity and colours. Do not alter bag, shelf or hub SAVE disabled
   styling.
-- [ ] Run the new suite and affected suites together, then existing
+- [x] Run the new suite and affected suites together, then existing
   `components/__tests__/appearanceBoundary.test.ts`,
   `components/__tests__/colors.test.ts` and
   `components/__tests__/bagAppearance.test.tsx`.
   Expected: theme-aware enabled actions, neutral selected size, unchanged
   disabled rendering and interactions.
-- [ ] Commit with message `fix(appearance): finish primary actions without disabled restyling`
+- [x] Commit with message `fix(appearance): finish primary actions without disabled restyling`
   and the required co-author trailer.
 
 ## Task 6: Make catalogue stage plans readable and reuse catalogue parts
@@ -541,7 +541,7 @@ const restoreBlocked = active || overlay || !connected || !serialMatches || busy
   `app/__tests__/roasterCatalogue.test.tsx`,
   `library/__tests__/networkInventory.test.ts`.
 
-- [ ] Extend the rung suite's existing `draw` helper cases:
+- [x] Extend the rung suite's existing `draw` helper cases:
 
 ```tsx
 it("uses text ink for a catalogue plan but leaves live pending ink dim", async () => {
@@ -558,8 +558,8 @@ it("uses text ink for a catalogue plan but leaves live pending ink dim", async (
   Also assert the plan number uses resolved recipe ink, SVG glyph stroke
   uses the same accent through `processColor`, and existing segment flexes,
   pause markers and active/done/stalled tests are unchanged.
-- [ ] Run the rung test and establish the missing plan-mode red case.
-- [ ] Add `plan?: boolean` to both Props types; default it to false in both
+- [x] Run the rung test and establish the missing plan-mode red case.
+- [x] Add `plan?: boolean` to both Props types; default it to false in both
   component parameter lists and pass `plan={plan}` from ladder to each rung.
   Make only these colour substitutions:
 
@@ -571,19 +571,19 @@ color={plan ? palette.text : palette.dim}
 
   First applies to stage number, second to PourGlyph, third to both
   temperature and volume/readout. Do not add container opacity.
-- [ ] Pass `plan` only at hubRecipe and roasterCoffee's static ladder call sites.
+- [x] Pass `plan` only at hubRecipe and roasterCoffee's static ladder call sites.
   Keep live run and history callers on the default.
-- [ ] Import `{Chip, DetailPhoto}` from `@/components/CatalogueParts` in
+- [x] Import `{Chip, DetailPhoto}` from `@/components/CatalogueParts` in
   hubRecipe. Remove only its local duplicate components, their photo constants
   and now-unused Image import. Keep `whole` absent, preserving banner mode.
   Remove `app/hubRecipe.tsx` from outbound image `sources` because the actual
   Image call now resides in existing CatalogueParts.
-- [ ] Run Task 6 suites. Existing route tests must still prove absent-photo
+- [x] Run Task 6 suites. Existing route tests must still prove absent-photo
   placeholders and image-error fallback; add the same two assertions through
   shared CatalogueParts if existing route mocks obscure the actual Image.
   Expected: identical banner geometry, same catalogue data, unchanged live
   rung values and no assertion based solely on mocked ladder props.
-- [ ] Commit with message `feat(catalogue): clarify stage plans and share detail parts`
+- [x] Commit with message `feat(catalogue): clarify stage plans and share detail parts`
   and the required co-author trailer.
 
 ## Task 7: Preserve the external link-button kit
@@ -594,7 +594,7 @@ color={plan ? palette.text : palette.dim}
 - Historical references: `docs/superpowers/specs/2026-10-17-link-buttons-design.md`,
   `docs/superpowers/plans/2026-10-17-link-buttons.md`.
 
-- [ ] Restore only the new asset directory from the pinned preview:
+- [x] Restore only the new asset directory from the pinned preview:
 
 ```bash
 git restore --source=dee62ae5a35eacaa0ac20a9a1e9a748cd34c85c2 -- assets/branding/link-buttons
@@ -603,12 +603,12 @@ git ls-files assets/branding/link-buttons
 
   Expected: seventeen files, four designs (bold/muted, logo/text), each with
   SVG and PNG 1x/2x/3x, plus NOTICE. No font binaries.
-- [ ] Port the Ready-to-use buttons section from pinned preview's
+- [x] Port the Ready-to-use buttons section from pinned preview's
   `docs/url-scheme.md` with its usage examples, fixed asset revision URLs and
   notices. Preserve develop's existing protocol text. Verify every fixed URL
   targets an existing committed asset; never point an image at a blob page.
   Preserve normal accessible link semantics and lack of install fallback.
-- [ ] Add this asset inventory test to the licences suite with imports
+- [x] Add this asset inventory test to the licences suite with imports
   `readdirSync`/`readFileSync` from `node:fs` and `join` from `node:path`:
 
 ```ts
@@ -635,14 +635,14 @@ it("ships self-contained external buttons and their notices", () => {
   `{dependencies}` from `@/package.json` and iterate `Object.keys(dependencies)`
   instead of the existing four-package sample. Do not hand-edit generated
   `constants/licences.ts` or weaken coverage for a missing declared package.
-- [ ] Run `npx jest --runTestsByPath constants/__tests__/licences.test.ts app/__tests__/native-intent.test.ts`.
+- [x] Run `npx jest --runTestsByPath constants/__tests__/licences.test.ts app/__tests__/native-intent.test.ts`.
   Inspect PNG dimensions with `sips -g pixelWidth -g pixelHeight` for each
   named variant/density: logo 215x48, text 175x48 at 1x, exact 2x/3x multiples.
   Open the actual four SVG designs on light and dark grounds; preserve the
   approved source artwork rather than redesigning it.
-- [ ] Preserve the two link-button historical design/plan files from the pinned
+- [x] Preserve the two link-button historical design/plan files from the pinned
   source only as historical evidence; do not execute their old plan.
-- [ ] Commit with message `docs: publish external recipe-link button kit`
+- [x] Commit with message `docs: publish external recipe-link button kit`
   and the required co-author trailer.
 
 ## Task 8: Retain useful import regressions and reconcile current documentation
@@ -658,7 +658,7 @@ it("ships self-contained external buttons and their notices", () => {
   `docs/development-workflow.md`, `docs/release-2.1.0-changes.md`,
   `docs/machine-integration/ble-protocol.md` and related historical designs.
 
-- [ ] Restore the new re-import suite from pinned preview, then run it unchanged:
+- [x] Restore the new re-import suite from pinned preview, then run it unchanged:
 
 ```bash
 git restore --source=dee62ae5a35eacaa0ac20a9a1e9a748cd34c85c2 -- hooks/__tests__/useRecipeImport.reimport.test.ts
@@ -669,7 +669,7 @@ npx jest --runTestsByPath hooks/__tests__/useRecipeImport.reimport.test.ts hooks
   It covers unchanged/edited copies, refresh decisions, blank-field enrichment
   and failed saves. If a test conflicts with accepted contracts, reconcile that
   test explicitly; do not silently change production to match old preview.
-- [ ] Compare preview's added roaster-colour describes with current tests.
+- [x] Compare preview's added roaster-colour describes with current tests.
   Preserve only missing cases, including valid colour application and invalid
   colour omission without losing the recipe. Never append duplicate describes
   merely to reproduce preview's file shape.
@@ -679,7 +679,7 @@ git diff f48738fd9479ac0c9308eb9433678db02ca32c45 dee62ae5a35eacaa0ac20a9a1e9a74
 npx jest --runTestsByPath library/__tests__/importDecoration.test.ts library/__tests__/brewmindLink.test.ts
 ```
 
-- [ ] Update the setting description to:
+- [x] Update the setting description to:
 
 ```tsx
 description="Show coffee or pod photos on recipe cards and Ready to brew."
@@ -688,15 +688,15 @@ description="Show coffee or pod photos on recipe cards and Ready to brew."
   Update the outbound-image trigger sentence to say Recipe card photos
   includes Ready to brew, without changing its placements or privacy controls.
   Add README's roaster capability paragraph and existing roaster-guide link.
-- [ ] Add current reconciliation sections to the 2.2.0 change/testing records:
+- [x] Add current reconciliation sections to the 2.2.0 change/testing records:
   list accepted items, explicit exclusions, exact task head and actual software
   results after Task 9. Preserve #266/#267 merge facts and the newer dose
   spec/plan. Explain that #252 remains historical and does not need parity.
   Native large-text/VoiceOver/TalkBack, real device theme/coffee-image rendering
   and physical NFC/BLE remain open unless independently qualified.
-- [ ] Reconcile the copy inventory with roaster/profile/flavour/paused wording.
+- [x] Reconcile the copy inventory with roaster/profile/flavour/paused wording.
   Do not add an unused updated-to-latest constant or restore SAVE AS copy.
-- [ ] Verify historical release and protocol additions against the existing
+- [x] Verify historical release and protocol additions against the existing
   coordinating evidence before carrying them:
 
 ```bash
@@ -712,18 +712,18 @@ gh release view v2.1.0 --json tagName,targetCommitish,publishedAt,body
   If a historical claim cannot be verified, retain its source in the
   reconciliation evidence record as unverified rather than asserting it in
   authoritative docs.
-- [ ] Preserve relevant picture-placement/shelf/BrewMind history only where it
+- [x] Preserve relevant picture-placement/shelf/BrewMind history only where it
   explains accepted work; clearly label obsolete experiments. Do not copy the
   774-line historical picture implementation plan as a new instruction to
   restore photo-in-header layouts.
-- [ ] Run:
+- [x] Run:
 
 ```bash
 npx jest --runTestsByPath hooks/__tests__/useRecipeImport.reimport.test.ts hooks/__tests__/useRecipeImport.test.ts library/__tests__/importDecoration.test.ts library/__tests__/brewmindLink.test.ts library/__tests__/networkInventory.test.ts app/__tests__/settings.test.tsx
 git diff --check
 ```
 
-- [ ] Commit with message `test: retain import regressions and reconcile preview records`
+- [x] Commit with message `test: retain import regressions and reconcile preview records`
   and the required co-author trailer.
 
 ## Task 9: Qualify the combined result and prepare content-based closeout
@@ -733,11 +733,11 @@ git diff --check
 - Do not modify app.json, dependency manifests, card limits, Quick Edit,
   bypass arithmetic, bag databases or machine transport as incidental work.
 
-- [ ] Inspect `git diff --stat f48738fd9479ac0c9308eb9433678db02ca32c45`
+- [x] Inspect `git diff --stat f48738fd9479ac0c9308eb9433678db02ca32c45`
   and review every production hunk against the sixteen-row spec ledger.
   Record an accepted/omitted/supporting classification for all original preview
   paths; whitespace and duplicate tests do not require separate product decisions.
-- [ ] Prove protected surfaces stayed unchanged:
+- [x] Prove protected surfaces stayed unchanged:
 
 ```bash
 git diff --exit-code f48738fd9479ac0c9308eb9433678db02ca32c45 -- app.json package.json package-lock.json library/bypassLimits.ts library/quickEdit.ts hooks/useRecipeEditor.ts hooks/useRecipeLibrary.ts library/roasterRecipes.ts components/AboutDeck.tsx components/RecipeOverflowSheet.tsx components/QuickEditPanel.tsx components/BypassRung.tsx constants/colors.ts
@@ -745,7 +745,7 @@ git diff --exit-code f48738fd9479ac0c9308eb9433678db02ca32c45 -- app.json packag
 
   Expected: no delta. App route primary-role edits are permitted but must not
   reintroduce SAVE AS, remove scrolling/notices or alter bag relationships.
-- [ ] Run the existing integrated gates serially:
+- [x] Run the existing integrated gates serially:
 
 ```bash
 npm run typecheck
@@ -758,22 +758,68 @@ npx expo-doctor
   Doctor passes all checks. Record exact counts, warnings, skips and head.
   Restore/install dependencies only after a missing-dependency failure.
   Do not hide failures, run competing heavy pools or weaken expectations.
-- [ ] Review the final diff directly for meaningful errors, especially disabled
+- [x] Review the final diff directly for meaningful errors, especially disabled
   ink in Light/Blue, broad roaster eligibility, stale documentation and
   catalogue default/live separation. Fix regressions and rerun their smallest
   covering suites before escalating again.
-- [ ] Commit actual qualification evidence and push the authorised task branch.
+- [x] Commit actual qualification evidence and push the authorised task branch.
   Do not invent CI results: a task branch push does not replace PR CI.
-- [ ] At handoff fetch `origin --no-prune`, run `npm run worktrees:check`, and
+- [x] At handoff fetch `origin --no-prune`, run `npm run worktrees:check`, and
   record exact base/head, branch/path, clean/dirty and remote state. Retain this
   owned task worktree for pending review, with its pushed branch as recovery
   pointer. Existing retained worktrees still require exact cleanup authority.
-- [ ] Stop for lifecycle permission. If later authorised, open one focused PR
+- [x] Stop for lifecycle permission. If later authorised, open one focused PR
   against develop, count automatic ruleset review before requesting a single
   Copilot review, resolve findings and wait for exact-head required CI.
   Merge only with explicit approval. After integration, update #249 and close
   #252 only with permission and complete content accounting, never by merging
   or resetting historical preview wholesale.
+
+## Qualification results (2026-10-24)
+
+The application and test tree was qualified at
+`3debb92e38d64afb4bef8706aa532c45d721bdc8`, based on develop
+`f48738fd9479ac0c9308eb9433678db02ca32c45`. Subsequent closeout edits
+record results only; they do not change that application/test tree.
+
+| Gate | Actual result |
+| --- | --- |
+| `npm run typecheck` | Passed. |
+| `npm run lint` | Passed with 0 errors and 33 warnings; no rule suppression added. |
+| `npm test -- --watch=false` | Both projects: 924 suites passed, 2 skipped; 20,866 tests passed, 26 skipped; both snapshots passed. |
+| `npx expo-doctor` | 21/21 checks passed. |
+| Protected-surface diff against pinned develop | Empty: manifests/config, accepted dose/bypass/bag paths and colour definitions remain unchanged. |
+| Original preview inventory | Exactly 120 unique paths: 36 accepted, 46 supporting, 38 omitted. |
+| External kit | All 16 fixed-revision download URLs returned HTTP 200; original SVGs inspected on light/dark grounds and PNG sizes verified. |
+| Direct final review | No further introduced correctness issue found; disabled styles, metadata preservation and default/live stage separation retained. |
+
+The first two full attempts failed only the subsequently approved sharing-test
+retry race; those failures are not represented as passes. The unchanged test
+passed in the 18-suite/784-test focused batch before its approved correction.
+After the correction, the share/export batch passed 6 suites/324 tests, and the
+complete integrated gate sequence above passed. No test skip/todo flags were
+added or removed. Existing React animation/act warnings remain visible.
+
+Serial implementation checkpoints are `4ee37582` (domain), `e4fb6aae` (title),
+`a09950bc` (roaster), `590063b7` (coffee), `6dd8008a` (primary actions),
+`c6616f5e` (catalogue), `de1b7e1f` (kit), `702a1fa1` (supporting evidence),
+`5d527b6b` (supplementary regressions/inventory) and `3debb92e` (approved
+test-only retry correction). All are on the owned task branch.
+
+Logs and the SVG comparison screenshot are retained in the coordination
+session's files under `reconcile-qualified-*`,
+`reconcile-share-race-fix-green.log`, `reconcile-support-extra-tests.log` and
+`reconciliation-button-artwork-light-dark.png`.
+PR CI and a new automated review have not run because no reconciliation PR
+has been authorised or created. This is local software qualification, not
+release/device sign-off. The native/manual checklist remains open.
+
+The owned worktree is retained for the pending lifecycle decision and has its
+pushed task branch as recovery pointer. Historical preview/Metro are unchanged.
+The older merged appearance, bag and dose worktrees still need ignored-content
+preservation, idle-owner verification and exact cleanup approval; the dose
+worktree also supplies this task's lockfile-matched dependency symlink.
+No cleanup or release operation is implied by completing this plan.
 
 ## Original preview path accounting
 
@@ -932,7 +978,7 @@ Coverage map: spec decisions 8/11 -> Task 1; 2 -> Task 2; 3/4 -> Task 3;
 15 -> Task 8. Decisions 1/9/12 are preservation/exclusion checks in Task 9.
 Task 9 covers integrated qualification and permission boundaries.
 
-No implementation has been performed by writing this plan. The maintainer
-chooses execution separately; inline execution can use executing-plans with
-serial checkpoints. Subagents, PR creation, automated review and merge are
-not implied by plan approval.
+The maintainer approved inline execution after the planning checkpoint.
+Implementation and software qualification are now recorded above. No subagent
+was launched. PR creation/review, integration and destructive cleanup remain
+separate lifecycle choices, not implied by the implementation approval.

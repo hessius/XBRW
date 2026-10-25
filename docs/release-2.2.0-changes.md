@@ -36,6 +36,15 @@ historical evaluation evidence. Content accounting, not identical trees, is
 the closeout criterion. This task does not authorise its merge or closure,
 a release/native build, or physical hardware acceptance.
 
+Software qualification at `3debb92e38d64afb4bef8706aa532c45d721bdc8`
+passed typecheck, lint (0 errors, 33 warnings), both Jest projects
+(924 passed suites, 20,866 passed tests, both snapshots; 2 skipped suites and
+26 skipped tests), and Expo Doctor 21/21. A separately approved test-only
+sharing retry correction resolved the two preceding full-run failures without
+changing app code or weakening its exact-once assertion. All 120 original
+preview paths are accounted for in the implementation record. PR CI, native
+rendering/accessibility and physical-machine qualification are separate gates.
+
 ## Package F follow-up: dose shortcuts and proportional bypass
 
 The approved lightweight #239 adaptation is implemented on
