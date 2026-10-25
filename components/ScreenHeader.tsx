@@ -99,8 +99,13 @@ export default function ScreenHeader({title, count, meta, titleLines, titleSize,
                     </XStack>
                 ) : <>
                     {back}
-                    <ScreenTitle title={title} count={count} heading lines={titleLines}
-                                 fontSize={titleSize}/>
+                    {/* Without flexShrink the title takes the whole row's width
+                        beside the back key, so a long name wraps too late and
+                        its end runs off the right edge. */}
+                    <YStack testID="screen-header-title" flexShrink={1}>
+                        <ScreenTitle title={title} count={count} heading lines={titleLines}
+                                     fontSize={titleSize}/>
+                    </YStack>
                 </>}
                 {hasAction && (
                     <YStack testID="screen-header-action" marginLeft="auto"
