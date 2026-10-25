@@ -93,6 +93,9 @@ their names and meanings, so nothing already emitted changes shape.
 | `decaffeinated` | `bean.decaffeinated` | boolean, from `1`/`0` | BrewMind |
 | `url` | `bean.url` | string, https only | BrewMind |
 | `imageUrl` | `bean.image` | string, https only | pod + BrewMind |
+| `restDays` | `bean.rest_days` | whole days 0 to 540 | BrewMind, roaster catalogue |
+| `peakDay` | `bean.peak_day` | whole days 0 to 540 | BrewMind, roaster catalogue |
+| `bestUntilDay` | `bean.best_until_day` | whole days 0 to 540 | BrewMind, roaster catalogue |
 
 Two entries need explaining because the names do not line up.
 
@@ -107,6 +110,19 @@ simply leaves the new ones empty", read in the other direction.
 in the shipped envelope and in
 `docs/superpowers/specs/2026-09-20-beanconqueror-brew-export-design.md`, so
 renaming it would break the half of the contract that already works.
+
+### Later amendments: roaster colour and feed
+
+`bean.colour` accepts a strict `#RRGGBB` value; `bean.color` is an alias and
+`bean.colour` takes precedence. Invalid colours are omitted without rejecting
+the recipe. Colour is separate from the stored coffee/Beanconqueror block.
+`library/roasterColour.ts` maps its hue to a suitable existing palette accent,
+with no answer for greys or hues more than 30 degrees from an eligible accent.
+The raw hex is not persisted, and an existing recipe keeps its accent.
+
+`feed` is an optional HTTPS roaster-feed URL, capped at 2,000 characters.
+Invalid values are dropped without losing the recipe. The feed format and
+subscription boundary are documented in [the feed contract](../../roaster-feed.md).
 
 ### `recipe.url`, the producer's own page
 

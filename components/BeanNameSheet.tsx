@@ -48,8 +48,7 @@ export default function BeanNameSheet({
     onConfirm: (name: string) => void;
 }) {
     const appearance = useAppearance();
-    const {palette} = appearance;
-    const onAccent = appearance.onFill(palette.text);
+    const {palette, primary} = appearance;
     // Stored with the brew it was typed against and discarded at render when
     // the two no longer agree, so opening the sheet on a second brew does not
     // greet the user with the first brew's answer. The house answer to state
@@ -115,9 +114,9 @@ export default function BeanNameSheet({
                     onPress={() => confirm(trimmed)}
                     height={48} alignItems="center" justifyContent="center"
                     borderRadius="$4"
-                    backgroundColor={palette.text}>
+                    backgroundColor={primary.fill}>
                     <DotMatrixText fontSize={13} weight="bold" letterSpacing={1.5}
-                                   color={onAccent.text}>
+                                   color={primary.ink}>
                         {trimmed.length === 0 ? requireName ? "NOT NOW" : "SKIP" : "SEND"}
                     </DotMatrixText>
                 </XStack>

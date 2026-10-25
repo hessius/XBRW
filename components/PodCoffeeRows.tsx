@@ -45,17 +45,26 @@ function DetailRow({row}: {row: CoffeeDetailRow}) {
     return (
         <XStack testID={`coffee-${row.field}`}
                 accessible
-                accessibilityLabel={`${row.spokenLabel}, ${row.value}`}
+                accessibilityLabel={row.detail === undefined
+                    ? `${row.spokenLabel}, ${row.value}`
+                    : `${row.spokenLabel}, ${row.value}. ${row.detail}`}
                 alignItems="flex-start" gap="$2">
             <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.3}
                            color={palette.dim}
                            style={{minWidth: LABEL_MIN_WIDTH, paddingTop: 2}}>
                 {row.label}
             </DotMatrixText>
-            <Text flex={1} minWidth={0} fontSize={13} lineHeight={19}
-                  color={palette.text}>
-                {row.value}
-            </Text>
+            <YStack flex={1} minWidth={0} gap={2}>
+                <Text fontSize={13} lineHeight={19} color={palette.text}>
+                    {row.value}
+                </Text>
+                {row.detail !== undefined && (
+                    <Text testID={`coffee-${row.field}-detail`} fontSize={12} lineHeight={17}
+                          color={palette.dim}>
+                        {row.detail}
+                    </Text>
+                )}
+            </YStack>
         </XStack>
     );
 }

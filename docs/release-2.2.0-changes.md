@@ -4,7 +4,46 @@ Accepted development changes for 2.2.0 are integrated into `develop` in packages
 Integration is not release qualification. The cumulative evaluation branch and
 draft #252 also contain proposals that have not been accepted; they must not be
 merged wholesale. Issue #249 records source heads, decisions and integration.
-The shipped 2.1.0 ledger remains unchanged.
+The shipped 2.1.0 ledger retains its historical gates and now records the
+verified release/source-reconciliation chronology.
+
+## Selective preview reconciliation, implementation pending integration
+
+PR #277 tracks the approved sixteen-item review of #252, implemented on
+`chore/2.2.0-preview-reconciliation-20261024`, pinned to develop
+`f48738fd9479ac0c9308eb9433678db02ca32c45`.
+The [approved design](superpowers/specs/2026-10-24-preview-reconciliation-design.md)
+and [implementation record](superpowers/plans/2026-10-24-preview-reconciliation.md)
+define its boundaries and qualification evidence.
+
+Accepted changes improve whole-word editor title fitting, present imported
+coffee roasters without overwriting sharer metadata, distinguish flavour lists
+from longer notes, and reuse coffee facts and catalogue photo/chip components.
+Enabled generic primary actions use theme roles while existing disabled
+appearances remain unchanged. Catalogue stage plans use clearer colouring
+without changing live brew ladders; recipe-size chips use neutral selection
+colours. Fine BLE grinds now count correctly in history and handoff, and paused
+subscriptions without cached coffee say Updates paused. The external link-button
+kit, missing import/colour regressions and accurate documentation are retained.
+
+Excluded are preview's SAVE AS dose workflow, bare date-picker plugin,
+unconsumed bag controls, duplicate roast-advice application, unused APIs,
+global disabled-primary roles and obsolete picture/editor experiments.
+Accepted #266/#267 bag and dose behaviour remains authoritative.
+
+Preview #252 at `dee62ae5a35eacaa0ac20a9a1e9a748cd34c85c2` remains
+historical evaluation evidence. Content accounting, not identical trees, is
+the closeout criterion. This task does not authorise its merge or closure,
+a release/native build, or physical hardware acceptance.
+
+Software qualification at `3debb92e38d64afb4bef8706aa532c45d721bdc8`
+passed typecheck, lint (0 errors, 33 warnings), both Jest projects
+(924 passed suites, 20,866 passed tests, both snapshots; 2 skipped suites and
+26 skipped tests), and Expo Doctor 21/21. A separately approved test-only
+sharing retry correction resolved the two preceding full-run failures without
+changing app code or weakening its exact-once assertion. All 120 original
+preview paths are accounted for in the implementation record. PR CI, native
+rendering/accessibility and physical-machine qualification are separate gates.
 
 ## Package F follow-up: dose shortcuts and proportional bypass
 
@@ -12,9 +51,9 @@ The approved lightweight #239 adaptation is implemented on
 `feat/2.2.0-dose-shortcuts-20261023`, originally based on pinned develop
 `8f2638dfa2e75928ff447fbbd0ee03ba14986886`, with accepted F merged from
 `e0d29d7cc2e635abef02a64cca386c21f1d1e661`. Focused PR #267 tracks its
-review, CI and integration into develop; #249 records the closeout state.
-Source #239 is superseded by this adaptation once #267 is merged, after
-rechecking the original source head for newer commits.
+review, CI and integration into develop. It merged at
+`f48738fd9479ac0c9308eb9433678db02ca32c45`; #239 is closed as superseded.
+#249 records the closeout state.
 
 The cumulative preview #252 is not equivalent to the accepted tree after this
 adaptation: it retains the older SAVE AS implementation, photo/editor and

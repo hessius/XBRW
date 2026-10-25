@@ -48,8 +48,7 @@ export default function BrewNoteSheet({
     footer?: React.ReactNode;
 }) {
     const appearance = useAppearance();
-    const {palette} = appearance;
-    const onAccent = appearance.onFill(palette.text);
+    const {palette, primary} = appearance;
     function close(): void {
         Keyboard.dismiss();
         if (onDone !== undefined) {
@@ -85,9 +84,9 @@ export default function BrewNoteSheet({
                     onPress={close}
                     height={48} alignItems="center" justifyContent="center"
                     borderRadius="$4"
-                    backgroundColor={palette.text}>
+                    backgroundColor={primary.fill}>
                     <DotMatrixText fontSize={13} weight="bold" letterSpacing={1.5}
-                                   color={onAccent.text}>
+                                   color={primary.ink}>
                         {RATING_SHEET_DONE}
                     </DotMatrixText>
                 </XStack>

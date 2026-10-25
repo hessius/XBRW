@@ -68,6 +68,8 @@ type Props = {
     bypass?: BypassView;
     /** Why the live brew is paused. Absent while it is running. */
     pauseKind?: PauseKind;
+    /** A static catalogue plan, rather than pending stages of a live brew. */
+    plan?: boolean;
 };
 
 /**
@@ -79,7 +81,8 @@ type Props = {
  */
 export default function BrewStageLadder({
     pours, accent, activeIndex, barHeight, rungGap, scrolls, fill, stageWater, stalls,
-    pauseElapsed, selectedIndex = null, onSelectStage, bypass, accentDone = false, pauseKind
+    pauseElapsed, selectedIndex = null, onSelectStage, bypass, accentDone = false, pauseKind,
+    plan = false
 }: Props) {
     const scroller = useRef<ScrollView>(null);
     // Maps rung index → measured layout relative to the ScrollView content.
@@ -179,6 +182,7 @@ export default function BrewStageLadder({
                     onPress={onSelectStage ? () => onSelectStage(index) : undefined}
                     accentDone={accentDone}
                     pauseKind={index === activeIndex ? pauseKind : undefined}
+                    plan={plan}
                 />
             </View>
         );

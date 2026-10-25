@@ -87,14 +87,14 @@ describe("queryBrewHistory", () => {
             brew("off", {grindSize: 81, grinderUsed: true, startedAt: 9}),
             brew("disabled", {grindSize: 50, grinderUsed: false, startedAt: 8}),
             brew("unknown", {grindSize: 50, startedAt: 7}),
-            brew("tooFine", {grindSize: 39, grinderUsed: true, startedAt: 6}),
+            brew("fine", {grindSize: 39, grinderUsed: true, startedAt: 6}),
             brew("tooCoarse", {grindSize: 82, grinderUsed: true, startedAt: 5}),
             brew("ground", {grindSize: 60, grinderUsed: true})
         ];
-        for (const direction of ["asc", "desc"] as const) {
-            expect(ids(rows, {sort: "grind", direction}))
-                .toEqual(["ground", "off", "disabled", "unknown", "tooFine", "tooCoarse"]);
-        }
+        expect(ids(rows, {sort: "grind", direction: "asc"}))
+            .toEqual(["fine", "ground", "off", "disabled", "unknown", "tooCoarse"]);
+        expect(ids(rows, {sort: "grind", direction: "desc"}))
+            .toEqual(["ground", "fine", "off", "disabled", "unknown", "tooCoarse"]);
     });
 
     it("uses newest then id as the tie break on every axis in both directions", () => {

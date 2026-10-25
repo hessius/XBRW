@@ -28,6 +28,30 @@ const props = () => ({
     onAssign: jest.fn(), onWrite: jest.fn(), onRecover: jest.fn(), onCancel: jest.fn()
 });
 
+it.each(THEME_IDS)("keeps disabled write styling while theming enabled write in %s", async theme => {
+    const choice = {theme, recipeColours: "themed" as const};
+    const appearance = resolveAppearance(choice);
+    const options = props();
+    options.record.drafts = [
+        snapshotRecipe(recipes[0]), snapshotRecipe(recipes[0]), snapshotRecipe(recipes[0])
+    ];
+    const tree = (available: boolean) => (
+        <Providers appearance={choice}><EasyModeSlots {...options} available={available}/></Providers>
+    );
+    const view = await renderWithProviders(tree(false));
+    const disabled = screen.getByRole("button", {name: "Write all three slots"});
+    expect(disabled).toBeDisabled();
+    expect(disabled).toHaveStyle({backgroundColor: appearance.palette.text, opacity: 0.45});
+    expect(within(disabled).getByText("WRITE TO MACHINE"))
+        .toHaveStyle({color: appearance.onFill(appearance.palette.text).text});
+    await view.rerender(tree(true));
+    const enabled = screen.getByRole("button", {name: "Write all three slots"});
+    expect(enabled).toBeEnabled();
+    expect(enabled).toHaveStyle({backgroundColor: appearance.primary.fill});
+    expect(within(enabled).getByText("WRITE TO MACHINE"))
+        .toHaveStyle({color: appearance.primary.ink});
+});
+
 it.each(THEME_IDS.flatMap(theme => (["original", "themed"] as const).map(recipeColours =>
     ({theme, recipeColours}))))("draws chooser silhouettes on their actual card ground: %j", async choice => {
     const recipe = coffee("Sky");
@@ -301,8 +325,8 @@ it("uses accent slabs with a measured full-width profile band and wrapping share
     expect(profile.props.height).toBe(45 + 2 * PROFILE_BLEED);
     expect(screen.getByRole("button", {name: "About Easy Mode"})).toHaveStyle({backgroundColor: palette.none});
     expect(screen.getByRole("button", {name: "Write all three slots"})).toHaveStyle({
-        backgroundColor: palette.text,
-        color: resolveAppearance(DEFAULT_APPEARANCE).onFill(palette.text).text
+        backgroundColor: resolveAppearance(DEFAULT_APPEARANCE).primary.fill,
+        color: resolveAppearance(DEFAULT_APPEARANCE).primary.ink
     });
 });
 
@@ -312,7 +336,8 @@ it("gives interruption its own scrollable recovery stage instead of stacking it 
     const recovery = within(screen.getByTestId("easy-mode-recovery"));
     expect(recovery.getByText("Writing stopped at B.")).toBeOnTheScreen();
     expect(recovery.getByText("A: received")).toBeOnTheScreen();
-    expect(recovery.getByRole("button", {name: "Retry slot write"})).toHaveStyle({backgroundColor: palette.text});
+    expect(recovery.getByRole("button", {name: "Retry slot write"}))
+        .toHaveStyle({backgroundColor: resolveAppearance(DEFAULT_APPEARANCE).primary.fill});
     expect(recovery.getByRole("button", {name: "Cancel slot write"})).toHaveStyle({backgroundColor: palette.raised});
     expect(recovery.getByText(/Your recipes are kept.*saving animation usually clears/)).toBeOnTheScreen();
 });

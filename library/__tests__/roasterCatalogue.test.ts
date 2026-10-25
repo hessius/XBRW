@@ -78,6 +78,19 @@ describe("what a coffee says", () => {
 });
 
 describe("bean facts, in ABOUT's words", () => {
+    it("includes shared optional facts without repeating catalogue headings", () => {
+        const base = feed([{id: "a"}]).coffees[0];
+        const facts = beanFacts({...base, coffee: {
+            name: "", beanMix: "Single origin", roastingDate: "2026-09-03",
+            decaffeinated: true, roaster: "Roastery", roast: "Light", aromatics: "Citrus"
+        }});
+        expect(facts).toEqual([
+            {label: "TYPE", value: "Single origin"},
+            {label: "ROASTED", value: "2026-09-03"},
+            {label: "CAFFEINE", value: "Decaf"}
+        ]);
+    });
+
     it("labels and writes the fields as the XPOD block does", () => {
         const [base] = feed([{id: "a"}]).coffees;
         const coffee = {...base, coffee: {

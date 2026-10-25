@@ -2,6 +2,7 @@ import {
     feedKey, parseRoasterFeed, type FeedCoffee, type FeedRecipe, type RoasterFeed
 } from "@/library/roasterFeed";
 import type {Settings} from "@/library/Settings";
+import {coffeeDetails, formatCuppingPoints, formatElevation} from "@/library/coffeeDetails";
 
 /**
  * The cached catalogue: the last feed body each subscription read.
@@ -156,15 +157,14 @@ export type BeanFact = {label: string; value: string};
  * The same rule as the XPOD block on ABOUT, grouped by hand so the result does
  * not depend on the Intl data Hermes was built with.
  */
-export function formatElevation(metres: number): string {
-    const whole = String(Math.round(metres));
-    return `${whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",")} m`;
-}
+export {formatElevation};
 
 /** A cupping score as ABOUT writes it: `90 points`, `86.25 points`. */
 export function formatScore(points: number): string {
-    return `${String(Number(points.toFixed(2)))} points`;
+    return `${formatCuppingPoints(points)} points`;
 }
+
+const DRAWN_ELSEWHERE = new Set(["roaster", "aromatics", "roast"]);
 
 /**
  * The bean facts a bag would print, in ABOUT's order and with ABOUT's words.
@@ -177,24 +177,11 @@ export function formatScore(points: number): string {
  * the roaster's, and the flavours are drawn as chips above.
  */
 export function beanFacts(coffee: FeedCoffee): BeanFact[] {
-    const bean = coffee.coffee;
-    const facts: [string, string | undefined][] = [
-        ["ORIGIN", bean.country === undefined ? bean.origin : undefined],
-        ["COUNTRY", bean.country],
-        ["REGION", bean.region],
-        ["FARM", bean.farm],
-        ["FARMER", bean.farmer],
-        ["ELEVATION", typeof bean.elevation === "number" && bean.elevation > 0
-            ? formatElevation(bean.elevation) : undefined],
-        ["PROCESS", bean.processing],
-        ["FERMENT", bean.fermentation],
-        ["VARIETAL", bean.variety],
-        ["SCORE", typeof bean.cupping_points === "number" && bean.cupping_points > 0
-            ? formatScore(bean.cupping_points) : undefined]
-    ];
-    return facts
-        .map(([label, value]) => ({label, value: value?.trim() ?? ""}))
-        .filter((fact) => fact.value !== "");
+    const details = coffeeDetails(coffee.coffee, {podName: coffee.name});
+    if (details === null) return [];
+    return details.groups.flat()
+        .filter(row => !DRAWN_ELSEWHERE.has(row.field))
+        .map(row => ({label: row.label, value: row.value}));
 }
 
 /** A name longer than this is drawn a step smaller in the detail header. */

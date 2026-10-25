@@ -26,6 +26,13 @@ function pageLabel(recipe: Recipe): string {
         : "View the recipe page";
 }
 
+/** A display heuristic for imported coffee, not verified recipe provenance. */
+export function roasterOf(recipe: Recipe): string | undefined {
+    if (recipe.source !== "import" && recipe.source !== "brewmind") return undefined;
+    const roaster = recipe.coffee?.roaster?.trim() ?? "";
+    return roaster === "" ? undefined : roaster;
+}
+
 /**
  * Where a recipe arrived from, when it arrived from somewhere.
  *
@@ -33,7 +40,9 @@ function pageLabel(recipe: Recipe): string {
  * that it was made by one: `sharedBy` is whatever the person sharing it had
  * typed into xBloom, and the app has no way to know whether it is true.
  *
- * Three cases, and only two of them draw. A share link names its sharer. A
+ * Imported coffee naming a roaster presents that roaster instead of the
+ * sharer; the original sharer metadata stays on the recipe. Otherwise a share
+ * link names its sharer. A
  * recipe with a pod ID and no sharer came from xBloom with nobody attached, so
  * it says so. A recipe the user built here came from nowhere, and the section
  * is absent rather than present and empty: it used to answer "nobody shared
@@ -57,11 +66,16 @@ export default function FromSection({recipe, accent, showAvatar}: {
 
     const sharedBy = recipe.sharedBy?.trim() ?? "";
     const fromXbloom = recipe.xid.trim().length > 0;
-    const avatar = recipe.sharedByAvatar ?? "";
+    const roaster = roasterOf(recipe);
+    const avatar = roaster !== undefined
+        ? recipe.coffee?.imageUrl ?? ""
+        : recipe.sharedByAvatar ?? "";
     const drawAvatar = showAvatar && avatar.length > 0 && !failed;
     const recipeUrl = recipe.recipeUrl ?? "";
 
-    if (sharedBy.length === 0 && !fromXbloom && recipeUrl.length === 0) return null;
+    if (sharedBy.length === 0 && !fromXbloom && recipeUrl.length === 0 && roaster === undefined) {
+        return null;
+    }
 
     return (
         <DeckSection title="FROM" testID="about-from">
@@ -81,12 +95,18 @@ export default function FromSection({recipe, accent, showAvatar}: {
                           backgroundColor={appearance.recipe(accent).fill}/>
                 )}
 
-                <Text flex={1} fontSize={sharedBy.length > 0 ? 16 : 13}
-                      color={sharedBy.length > 0 ? palette.text : palette.dim}>
-                    {sharedBy.length > 0
-                        ? `Arrived from ${sharedBy}`
-                        : "An xBloom recipe. Nobody is named as the sharer."}
-                </Text>
+                {roaster !== undefined ? (
+                    <Text testID="from-roaster" flex={1} fontSize={16} color={palette.text}>
+                        {`From ${roaster}`}
+                    </Text>
+                ) : (
+                    <Text flex={1} fontSize={sharedBy.length > 0 ? 16 : 13}
+                          color={sharedBy.length > 0 ? palette.text : palette.dim}>
+                        {sharedBy.length > 0
+                            ? `Arrived from ${sharedBy}`
+                            : "An xBloom recipe. Nobody is named as the sharer."}
+                    </Text>
+                )}
             </XStack>
 
             {recipeUrl.length > 0 ? (

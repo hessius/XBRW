@@ -192,8 +192,7 @@ function EmptyQuery({
     onClear: () => void;
 }) {
     const appearance = useAppearance();
-    const {palette} = appearance;
-    const onAccent = appearance.onFill(palette.text);
+    const {palette, primary} = appearance;
     const term = search.trim();
     const filterCopy = filters.length > 0 ? filters.join(", ") : "";
 
@@ -221,8 +220,8 @@ function EmptyQuery({
                 )}
             </YStack>
             <Button accessibilityLabel="Clear search and filters"
-                    backgroundColor={palette.text}
-                    color={onAccent.text}
+                    backgroundColor={primary.fill}
+                    color={primary.ink}
                     borderRadius="$4"
                     onPress={onClear}>
                 CLEAR SEARCH AND FILTERS

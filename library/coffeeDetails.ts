@@ -21,6 +21,7 @@ export type CoffeeDetailRow = {
     /** What a screen reader says in place of the caption. */
     spokenLabel: string;
     value: string;
+    detail?: string;
 };
 
 export type CoffeeDetails = {
@@ -98,12 +99,19 @@ function row(
     return shown === undefined ? [] : [{field, label, spokenLabel, value: shown}];
 }
 
+function flavourRow(coffee: PodCoffee): CoffeeDetailRow[] {
+    const flavours = coffee.flavours ?? [];
+    if (flavours.length === 0) return row("aromatics", "FLAVOUR", "Flavour", coffee.aromatics);
+    const value = flavours.join(", ");
+    const notes = said(coffee.aromatics);
+    const detail = notes !== undefined && folded(notes) !== folded(value) ? notes : undefined;
+    return [{field: "aromatics", label: "FLAVOUR", spokenLabel: "Flavour", value,
+        ...(detail !== undefined ? {detail} : {})}];
+}
+
 /**
- * The rows for a coffee, in groups, with empty fields and empty groups gone.
- *
- * `origin` is the pod's own one-line origin. The finer country, region and
- * farm replace it (BrewMind integration design, 2026-09-28), so it is drawn
- * only when there is no country to say the same thing better.
+ * Empty fields/groups are omitted. Finer country metadata replaces the pod's
+ * one-line origin when supplied, so the same place is not drawn twice.
  */
 function groupsFor(coffee: PodCoffee): CoffeeDetailRow[][] {
     const country = said(coffee.country);
@@ -144,7 +152,7 @@ function groupsFor(coffee: PodCoffee): CoffeeDetailRow[][] {
     ];
 
     const cup = [
-        ...row("aromatics", "FLAVOUR", "Flavour", coffee.aromatics),
+        ...flavourRow(coffee),
         ...row("cupping_points", "SCORE", "Cupping score",
                typeof coffee.cupping_points === "number" && coffee.cupping_points > 0
                    ? `${formatCuppingPoints(coffee.cupping_points)} points`

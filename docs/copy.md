@@ -274,8 +274,8 @@ listed here.
 | `editor.pod.coffee.roasted.a11y` | `library/coffeeDetails.ts:138` | (a11y) Spoken name for the same row, read as `${spoken}, ${value}`. | `Roasted on` |
 | `editor.pod.coffee.caffeine.label` | `library/coffeeDetails.ts:142` | Doto caption on an XPOD detail row. Shown only when the block says decaf. | `CAFFEINE` |
 | `editor.pod.coffee.caffeine.a11y` | `library/coffeeDetails.ts:142` | (a11y) Spoken name for the same row, read as `${spoken}, ${value}`. | `Caffeine` |
-| `editor.pod.coffee.flavour.label` | `library/coffeeDetails.ts:147` | Doto caption on an XPOD detail row. Flavour notes (`aromatics`). | `FLAVOUR` |
-| `editor.pod.coffee.flavour.a11y` | `library/coffeeDetails.ts:147` | (a11y) Spoken name for the same row, read as `${spoken}, ${value}`. | `Flavour` |
+| `editor.pod.coffee.flavour.label` | `library/coffeeDetails.ts` (`flavourRow`) | Short flavours lead; distinct longer aromatics sit below. With no list, aromatics remain the main value. The accessible label includes both without repeating equivalent notes. | `FLAVOUR` |
+| `editor.pod.coffee.flavour.a11y` | `library/coffeeDetails.ts` | (a11y) Spoken name for the same row, including distinct longer notes when supplied. | `Flavour` |
 | `editor.pod.coffee.score.label` | `library/coffeeDetails.ts:148` | Doto caption on an XPOD detail row. Cupping score (`cupping_points`). | `SCORE` |
 | `editor.pod.coffee.score.a11y` | `library/coffeeDetails.ts:148` | (a11y) Spoken name for the same row, read as `${spoken}, ${value}`. | `Cupping score` |
 | `editor.pod.coffee.row.a11y` | `components/PodCoffeeRows.tsx:45` | (a11y) Each detail row is one element. `${row.spokenLabel}` is the spoken name above; `${row.value}` is what the row shows. | `${row.spokenLabel}, ${row.value}` |
@@ -348,6 +348,19 @@ come from `hooks/useRecipeEditor.ts`.
 | `brew.teaCycle.fill` | `components/TeaStageLadder.tsx` and `TeaStageDetail.tsx` | Tea-only programmed fill target and optional measured fill. A measured amount appears only when observed. | `FILL` / `Target` / `Measured fill` |
 | `brew.teaCycle.steep` | `components/TeaStageLadder.tsx` and `TeaStageDetail.tsx` | Tea-only planned steep and observed elapsed time; reaching the plan does not itself declare completion. | `STEEP` / `planned` / `elapsed` |
 | `brew.teaCycle.ending` | `components/TeaStageLadder.tsx` and `TeaStageDetail.tsx` | Observed release water after a steep and combined release/drain boundary. The separate drain duration stays unknown. | `RELEASE + DRAIN` / `Release water` / `Drain duration` |
+
+### Roaster/profile presentation and subscription status
+
+For imported or BrewMind recipes with a nonblank coffee roaster, FROM says
+`From ${roaster}` and uses the coffee picture when pictures are enabled.
+This is a display heuristic, not verified authorship; the stored sharer remains
+unchanged. The xBloom profile name remains a quieter labelled reference.
+USE THIS NAME is absent for this case rather than changing the recipe name.
+Other recipes retain their existing personal-share presentation.
+
+For a paused subscription without a cached catalogue, the status is
+`Updates paused`, even if an earlier request failed. Active loading/failure
+messages and existing cached-coffee counts keep their current meanings.
 
 ### Bypass water
 

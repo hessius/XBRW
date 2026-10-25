@@ -250,7 +250,10 @@ describe("brew record", () => {
             const {mockCapture} = viewShotModule as unknown as {mockCapture: jest.Mock};
             const captures = mockCapture.mock.calls.length;
             await waitFor(async () => {
-                await fireEvent.press(screen.getByLabelText("Share the card"));
+                // Capture can finish between retries; observe it before pressing again.
+                if (mockCapture.mock.calls.length === captures) {
+                    await fireEvent.press(screen.getByLabelText("Share the card"));
+                }
                 expect(mockCapture.mock.calls.length).toBe(captures + 1);
             }, {timeout: SHEET_PRESS_TIMEOUT});
             expect(JSON.stringify(mockOpened)).toBe(before);

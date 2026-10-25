@@ -32,6 +32,29 @@ function linked(over: Partial<Recipe> = {}): Recipe {
 }
 
 describe("PodSection", () => {
+    it.each(["import", "brewmind"] as const)(
+        "labels an imported roaster profile without replacing the title for %s", async source => {
+            const recipe = linked({
+                source, name: "Chosen coffee name", coffee: {name: "", roaster: "Roastery"}
+            });
+            const before = JSON.stringify(recipe);
+            await renderWithProviders(<PodSection {...props({recipe})}/>);
+            expect(screen.getByText("xBloom profile name")).toBeTruthy();
+            expect(screen.getByTestId("pod-name")).toHaveStyle({fontSize: 14, color: palette.dim});
+            expect(screen.queryByTestId("pod-use-name")).toBeNull();
+            expect(screen.getByLabelText("Recipe ID")).toBeTruthy();
+            expect(JSON.stringify(recipe)).toBe(before);
+        }
+    );
+
+    it("keeps the ordinary name action when coffee metadata is not an imported roaster", async () => {
+        await renderWithProviders(<PodSection {...props({recipe: linked({
+            name: "My name", coffee: {name: "", roaster: "Roastery"}
+        })})}/>);
+        expect(screen.queryByTestId("pod-profile-label")).toBeNull();
+        expect(screen.getByTestId("pod-use-name")).toBeTruthy();
+    });
+
     it("shows the pod name after a lookup mutates the same recipe", async () => {
         // The lookup writes the pod name onto the recipe the section already
         // holds, so a memoised child keyed on that reference would keep

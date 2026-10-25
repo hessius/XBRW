@@ -43,6 +43,25 @@ beforeEach(() => {
 });
 
 describe("PodCoffeeRows", () => {
+    it("draws and announces distinct tasting notes below the flavour list", async () => {
+        await renderWithProviders(<PodCoffeeRows recipe={recipeWith({coffee: {
+            name: "", flavours: ["Papaya", "Citrus"], aromatics: "Sweet papaya with a citrus finish"
+        }})}/>);
+        expect(screen.getByText("Papaya, Citrus")).toBeTruthy();
+        expect(screen.getByTestId("coffee-aromatics-detail"))
+            .toHaveTextContent("Sweet papaya with a citrus finish");
+        expect(screen.getByLabelText("Flavour, Papaya, Citrus. Sweet papaya with a citrus finish"))
+            .toBeTruthy();
+    });
+
+    it("does not draw a second flavour line for equivalent notes", async () => {
+        await renderWithProviders(<PodCoffeeRows recipe={recipeWith({coffee: {
+            name: "", flavours: ["Papaya", "Citrus"], aromatics: " PAPAYA,   citrus "
+        }})}/>);
+        expect(screen.queryByTestId("coffee-aromatics-detail")).toBeNull();
+        expect(screen.getByLabelText("Flavour, Papaya, Citrus")).toBeTruthy();
+    });
+
     it("shows every field of a full block, each read as label and value", async () => {
         await renderWithProviders(<PodCoffeeRows recipe={recipeWith({coffee: FULL})}/>);
 

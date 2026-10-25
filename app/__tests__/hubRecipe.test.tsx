@@ -5,6 +5,7 @@ import HubRecipeScreen from "@/app/hubRecipe";
 import {renderWithProviders} from "@/test-utils/render";
 import {HubApiError, type HubDetailRow} from "@/library/hub/hubApi";
 import type {HubRecipe} from "@/library/hub/hubRow";
+import {palette} from "@/constants/colors";
 
 const mockBack = jest.fn();
 const mockFetchHubDetail = jest.fn();
@@ -157,6 +158,23 @@ describe("one catalogue recipe", () => {
         expect(screen.getByTestId("rung-0")).toHaveTextContent(/40 ml/);
         expect(screen.getByTestId("rung-1")).toHaveTextContent(/02/);
         expect(screen.getByTestId("rung-1")).toHaveTextContent(/248 ml/);
+        expect(screen.getByText("92°")).toHaveStyle({color: palette.text});
+    });
+
+    it("retains the banner dimensions and blank fallback through the shared photo", async () => {
+        await renderHubRecipe();
+        const photo = await screen.findByTestId("hub-recipe-photo");
+        expect(photo).toHaveStyle({height: 260, width: "100%"});
+        await fireEvent(photo, "error");
+        expect(screen.getByTestId("hub-recipe-photo-blank"))
+            .toHaveStyle({height: 260, width: "100%"});
+    });
+
+    it("draws a quiet banner placeholder when no photo is supplied", async () => {
+        mockFetchHubDetail.mockResolvedValue(detail({imageUrl: null}));
+        await renderHubRecipe();
+        expect(await screen.findByTestId("hub-recipe-photo-blank"))
+            .toHaveStyle({height: 260, width: "100%"});
     });
 
     it("draws the stages with nothing running", async () => {

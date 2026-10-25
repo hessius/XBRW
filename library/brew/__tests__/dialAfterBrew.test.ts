@@ -165,13 +165,13 @@ describe("dialNote", () => {
         }))).toBeNull();
     });
 
-    it("still says nothing when the recipe grind is below the on-card band", () => {
+    it.each([1, 30, 39])("reports a valid fine BLE recipe grind %p", grindSize => {
         expect(dialNote(record({
-            grinderUsed: true, grindSize: 39, dialAfter: undefined
-        }))).toBeNull();
+            grinderUsed: true, grindSize, dialAfter: undefined
+        }))).toEqual({kind: "recipe", recipe: grindSize});
     });
 
-    it("still says nothing when the recipe grind is above the on-card band", () => {
+    it("still says nothing when the recipe grind is above the BLE band", () => {
         expect(dialNote(record({
             grinderUsed: true, grindSize: 82, dialAfter: undefined
         }))).toBeNull();

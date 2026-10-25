@@ -4,6 +4,37 @@ Package acceptance, integration and release qualification are separate.
 Record the exact app commit, native build, platform, machine and firmware for
 each device result. Software transports do not qualify BLE or NFC hardware.
 
+## Selective preview reconciliation: remaining manual gates
+
+The implementation plan records software results separately from these open
+checks. No new native build or hardware qualification is claimed.
+
+Software-qualified tree: `3debb92e38d64afb4bef8706aa532c45d721bdc8`.
+Typecheck passed; lint passed with 0 errors/33 warnings; dual-platform Jest
+passed 924 suites/20,866 tests and both snapshots (2 skipped suites/26 skipped
+tests); Expo Doctor passed 21/21. The exact-once sharing-test retry correction
+was explicitly approved and changes no application code. PR #277 records
+subsequent exact-head CI and review results.
+
+- [ ] On narrow native screens and large system text, check long single words
+  in the editor title; retain the picture, pencil, and full-name accessibility.
+- [ ] In Light/Blue and Original/Magenta, inspect enabled primary controls,
+  unchanged disabled appearances, and neutral catalogue size selection.
+- [ ] Check roaster-first FROM and quiet xBloom profile presentation for imports,
+  BrewMind, personal shares with a roaster, blank roasters and local recipes.
+  Verify names/sharer data are preserved and photos respect their setting.
+- [ ] Read flavour lists and distinct notes using VoiceOver and TalkBack.
+  Inspect catalogue coffee facts, loading/error photos, and static stage-plan
+  colouring; confirm the live brew ladder remains unchanged.
+- [ ] Check Recipe card photos on recipe cards and Ready to brew. Verify paused
+  subscriptions without cached coffee say Updates paused.
+- [ ] Check the external button examples from an installed native app/browser.
+  The link kit offers no automatic installation or web fallback.
+
+Physical NFC and BLE release gates remain open unless separately signed off.
+History/handoff arithmetic and scripted transports cannot establish hardware
+safety or resolve the separate wrong-recipe report #251.
+
 ## Package E: Import, catalogues and saved-roaster shelves
 
 - [ ] On both native platforms, open Import with zero subscriptions, then with

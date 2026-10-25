@@ -171,6 +171,24 @@ describe("decorateImport", () => {
     });
 });
 
+describe("decorateImport with a roaster colour", () => {
+    it("selects the nearest accent without storing the raw colour", () => {
+        const decorated = decorateImport(recipe(), {colour: "#1D5F96"});
+        expect(decorated.accentIndex).toBe(0);
+        expect(JSON.stringify(decorated)).not.toContain("1D5F96");
+    });
+
+    it("never moves an existing accent", () => {
+        const held = recipe();
+        held.accentIndex = 5;
+        expect(decorateImport(held, {colour: "#1D5F96"}).accentIndex).toBe(5);
+    });
+
+    it.each(["#333333", "navy"])("leaves the accent unset for %p", colour => {
+        expect(decorateImport(recipe(), {colour}).accentIndex).toBeUndefined();
+    });
+});
+
 describe("fillImportBlanks", () => {
     const BAG = "https://example.com/bag.png";
 

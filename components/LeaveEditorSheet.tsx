@@ -49,8 +49,7 @@ export default function LeaveEditorSheet({
     open, intent, inLibrary = true, onSave, onDiscard, onCancel
 }: Props) {
     const appearance = useAppearance();
-    const {palette} = appearance;
-    const onAccent = appearance.onFill(palette.text);
+    const {palette, primary} = appearance;
     // BREW saves a rowless recipe before navigating, so the rowless wording is
     // unreachable there; only leaving can be about discarding the whole recipe.
     const words = intent === "brew"
@@ -67,11 +66,11 @@ export default function LeaveEditorSheet({
                     {words.body}
                 </Text>
 
-                {/* `palette.text` as the primary fill, matching RenameSheet's
+                {/* The primary fill, matching RenameSheet's
                     SAVE NAME. Not the recipe's accent: the accent marks the act
                     that runs the recipe, and this is a question about storage. */}
                 <Button accessibilityRole="button" accessibilityLabel={words.save}
-                        backgroundColor={palette.text} color={onAccent.text}
+                        backgroundColor={primary.fill} color={primary.ink}
                         onPress={onSave}>
                     {words.save}
                 </Button>

@@ -1,4 +1,24 @@
 import {LICENCES, LICENCE_TEXTS} from "@/constants/licences";
+import {dependencies} from "@/package.json";
+import {readdirSync, readFileSync} from "node:fs";
+import {join} from "node:path";
+
+it("ships self-contained external buttons and their notices", () => {
+    const root = join(process.cwd(), "assets/branding/link-buttons");
+    const files = readdirSync(root);
+    expect(files).toHaveLength(17);
+    for (const tone of ["bold", "muted"]) {
+        for (const kind of ["logo", "text"]) {
+            const stem = `open-in-xbrw-${tone}-${kind}`;
+            for (const suffix of [".svg", ".png", "@2x.png", "@3x.png"]) {
+                expect(files).toContain(`${stem}${suffix}`);
+            }
+            const svg = readFileSync(join(root, `${stem}.svg`), "utf8");
+            expect(svg).not.toMatch(/<text\b|<image\b|<script\b/i);
+        }
+    }
+    expect(readFileSync(join(root, "NOTICE.txt"), "utf8")).toContain("SIL OPEN FONT LICENSE");
+});
 
 describe("the generated licence list", () => {
     it("is not empty", () => {
@@ -46,7 +66,7 @@ describe("the generated licence list", () => {
         // A generator that quietly misses the tree is worse than no list: it
         // produces a confident, wrong one, and the obligation here is legal.
         const names = new Set(LICENCES.map((entry) => entry.name));
-        for (const declared of ["expo", "react", "react-native", "tamagui"]) {
+        for (const declared of Object.keys(dependencies)) {
             expect(names.has(declared)).toBe(true);
         }
     });

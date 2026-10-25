@@ -8,15 +8,15 @@ the branch, ownership or destructive-action gates here.
 
 ## Current integration base
 
-The active development and 2.1.0 beta-testing line is `develop`. Task branches
-start from a freshly fetched, pinned `origin/develop` commit.
-The former `integration/2.1.0` candidate was carried into develop without
-promoting its application code to main. Beta fixes use the ordinary task/PR
-workflow; do not recreate the old version integration branch.
+The active development line is `develop`; the next planned version is 2.2.0.
+Task branches start from a freshly fetched, pinned `origin/develop` commit.
+The shipped 2.1.0 source is tagged `v2.1.0` and was reconciled into develop
+before promotion to main. Use the ordinary task/PR workflow; do not recreate
+the former `integration/2.1.0` branch.
 Never pick a base merely because it is the current checkout.
 
-`main` is the approved release line. It already contains unreleased changes from
-the old workflow; do not rewind it to a guessed release baseline.
+`main` is the approved release line. Release reconciliation preserves existing
+history; do not rewind it to a guessed release baseline.
 Shipped source is identified by immutable release tags and artifact records,
 not by a branch name or an `app.json` version alone.
 

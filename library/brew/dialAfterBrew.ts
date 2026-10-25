@@ -142,8 +142,8 @@ export function dialNote(record: BrewRecord): GrindFigure | null {
         // being presented as one: the recipe's own setting is what was asked
         // for, drawn in an outline that says so. Reporting it is strictly more
         // than the silence this replaced, which threw away a fact we had.
-        // `grinderRan` has already established that this is a number in an
-        // on-card band; the typeof is only the narrowing TypeScript cannot get
+        // `grinderRan` has already established that this is a number in a
+        // valid BLE band; the typeof is only the narrowing TypeScript cannot get
         // from a boolean helper.
         return typeof recipeGrind === "number"
             ? {kind: "recipe", recipe: recipeGrind, ...baseline}

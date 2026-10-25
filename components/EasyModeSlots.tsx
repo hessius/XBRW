@@ -271,7 +271,7 @@ export default function EasyModeSlots({
     onAssign, onSetScaleEnabled, onWrite, onRecover, onCancel, onDismissWrite, onRestoreOriginal
 }: EasyModeSlotsProps) {
     const appearance = useAppearance();
-    const {palette} = appearance;
+    const {palette, primary} = appearance;
     const onAccent = appearance.onFill(palette.text);
     const [picker, setPicker] = useState<{deviceId: string; index: SlotIndex} | null>(null);
     const [search, setSearch] = useState("");
@@ -330,6 +330,7 @@ export default function EasyModeSlots({
     const displayedFailure = failure === null ? null : writeError(failure, journal);
     const availability = slotWriteAvailability({record, deviceId, connected, available, busy, serialMatches});
     const blocked = active || overlay || availability !== null;
+    const restoreBlocked = active || overlay || !connected || !serialMatches || busy || !available;
     const dirty = unwrittenSlotCount(record);
     const incomingProblem = incoming === undefined ? null : recipeProblem(incoming);
     const incomingKey = incoming === undefined ? null : JSON.stringify([deviceId, incoming]);
@@ -397,11 +398,12 @@ export default function EasyModeSlots({
                         <StoppedWrite journal={journal} failure={failure}/>
                         {availability !== null && <Text color={palette.dim}>{availability}</Text>}
                         <Button ref={retryRef} accessibilityLabel="Retry slot write" height="auto" minHeight={48}
-                            paddingVertical="$3" disabled={blocked} backgroundColor={palette.text} color={onAccent.text}
+                            paddingVertical="$3" disabled={blocked} backgroundColor={primary.fill}
+                            color={blocked ? onAccent.text : primary.ink}
                             disabledStyle={{backgroundColor: palette.text, opacity: 0.45}}
                             onPress={() => {
                                 focusOrigin.current = retryRef; setConfirmation({deviceId, kind: "retry"});
-                            }}><DotMatrixText fontSize={12} weight="bold" color={onAccent.text}>RETRY WRITE</DotMatrixText></Button>
+                            }}><DotMatrixText fontSize={12} weight="bold" color={blocked ? onAccent.text : primary.ink}>RETRY WRITE</DotMatrixText></Button>
                         <Button ref={cancelRef} accessibilityLabel={onDismissWrite ? "Stop slot write" : "Cancel slot write"} height="auto" minHeight={48}
                             paddingVertical="$3" disabled={blocked} backgroundColor={palette.raised} color={palette.text}
                             borderWidth={1} borderColor={palette.line}
@@ -442,18 +444,20 @@ export default function EasyModeSlots({
                     {availability !== null && <Text color={palette.dim}>{availability}</Text>}
                     {record.experiment?.phase === "active" && onRestoreOriginal !== undefined &&
                         <Button accessibilityLabel="Restore original slot set" height="auto" minHeight={48}
-                            paddingVertical="$3" backgroundColor={palette.text} color={onAccent.text}
-                            disabled={active || overlay || !connected || !serialMatches || busy || !available}
+                            paddingVertical="$3" backgroundColor={restoreBlocked ? palette.text : primary.fill}
+                            color={restoreBlocked ? onAccent.text : primary.ink}
+                            disabled={restoreBlocked}
                             onPress={onRestoreOriginal}>RESTORE ORIGINAL SET</Button>}
                     {overflow && <Text color={palette.dim}>
                         Stored slots do not run the app&apos;s automatic pause protection.
                     </Text>}
                     <Text color={palette.dim} fontSize={12} textAlign="center">Writes A, B and C. Switches to EASY.</Text>
                     <Button ref={writeRef} accessibilityLabel="Write all three slots" height="auto" minHeight="$4"
-                        paddingVertical="$3" disabled={blocked} backgroundColor={palette.text} color={onAccent.text}
+                        paddingVertical="$3" disabled={blocked} backgroundColor={primary.fill}
+                        color={blocked ? onAccent.text : primary.ink}
                         disabledStyle={{backgroundColor: palette.text, opacity: 0.45}}
                         onPress={() => { focusOrigin.current = writeRef; onWrite(); }}>
-                        <DotMatrixText fontSize={12} weight="bold" color={onAccent.text}>WRITE TO MACHINE</DotMatrixText>
+                        <DotMatrixText fontSize={12} weight="bold" color={blocked ? onAccent.text : primary.ink}>WRITE TO MACHINE</DotMatrixText>
                     </Button>
                     {record.written !== null && <Text color={palette.dim} fontSize={12} textAlign="center">
                         {`Last written by XBRW++ ${new Date(record.written.at).toLocaleString()}.`}
@@ -502,13 +506,15 @@ export default function EasyModeSlots({
                                 : "Cancelling clears this unfinished write from the app. Your assignments are kept, but the machine's slot contents remain unconfirmed."}
                     </Text>
                     {confirmationKind === "retry" && <Button height="auto" minHeight="$4" paddingVertical="$3"
-                        backgroundColor={palette.text} color={onAccent.text}
+                        backgroundColor={primary.fill} color={blocked ? onAccent.text : primary.ink}
                         disabledStyle={{backgroundColor: palette.text, opacity: 0.45}}
                         disabled={blocked} accessibilityLabel="Finish write while machine is still saving"
                         onPress={() => { setConfirmation(null); onRecover(false); }}>STILL SAVING, FINISH WRITE</Button>}
                     <Button height="auto" minHeight="$4" paddingVertical="$3" disabled={blocked}
-                        backgroundColor={confirmationKind === "retry" ? palette.raised : palette.text}
-                        color={confirmationKind === "retry" ? palette.text : onAccent.text}
+                        backgroundColor={confirmationKind === "retry" ? palette.raised
+                            : blocked ? palette.text : primary.fill}
+                        color={confirmationKind === "retry" ? palette.text
+                            : blocked ? onAccent.text : primary.ink}
                         accessibilityLabel={confirmationKind === "retry"
                             ? "Confirm machine is back to normal and retry"
                             : onDismissWrite ? "Confirm stop slot write" : "Confirm machine is back to normal and cancel"}
