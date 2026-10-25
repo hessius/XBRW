@@ -775,7 +775,7 @@ npx expo-doctor
   #252 only with permission and complete content accounting, never by merging
   or resetting historical preview wholesale.
 
-## Qualification results (2026-10-24)
+## Qualification results (2026-10-25)
 
 The application and test tree was qualified at
 `3debb92e38d64afb4bef8706aa532c45d721bdc8`, based on develop
@@ -810,9 +810,11 @@ Logs and the SVG comparison screenshot are retained in the coordination
 session's files under `reconcile-qualified-*`,
 `reconcile-share-race-fix-green.log`, `reconcile-support-extra-tests.log` and
 `reconciliation-button-artwork-light-dark.png`.
-PR CI and a new automated review have not run because no reconciliation PR
-has been authorised or created. This is local software qualification, not
-release/device sign-off. The native/manual checklist remains open.
+At this software-qualification checkpoint, no reconciliation PR or new automated
+review had been authorised or created. The maintainer subsequently authorised
+PR #277 and one Copilot review round with CI closeout, stopping before merge.
+The PR records exact-head review/check results. Local software qualification
+is not release/device sign-off; the native/manual checklist remains open.
 
 The owned worktree is retained for the pending lifecycle decision and has its
 pushed task branch as recovery pointer. Historical preview/Metro are unchanged.

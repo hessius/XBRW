@@ -9,7 +9,7 @@ verified release/source-reconciliation chronology.
 
 ## Selective preview reconciliation, implementation pending integration
 
-The approved sixteen-item review of #252 is implemented on
+PR #277 tracks the approved sixteen-item review of #252, implemented on
 `chore/2.2.0-preview-reconciliation-20261024`, pinned to develop
 `f48738fd9479ac0c9308eb9433678db02ca32c45`.
 The [approved design](superpowers/specs/2026-10-24-preview-reconciliation-design.md)

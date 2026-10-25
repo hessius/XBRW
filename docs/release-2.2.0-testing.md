@@ -13,7 +13,8 @@ Software-qualified tree: `3debb92e38d64afb4bef8706aa532c45d721bdc8`.
 Typecheck passed; lint passed with 0 errors/33 warnings; dual-platform Jest
 passed 924 suites/20,866 tests and both snapshots (2 skipped suites/26 skipped
 tests); Expo Doctor passed 21/21. The exact-once sharing-test retry correction
-was explicitly approved and changes no application code. PR CI has not run.
+was explicitly approved and changes no application code. PR #277 records
+subsequent exact-head CI and review results.
 
 - [ ] On narrow native screens and large system text, check long single words
   in the editor title; retain the picture, pencil, and full-name accessibility.

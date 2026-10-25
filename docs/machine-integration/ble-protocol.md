@@ -1223,7 +1223,7 @@ segment body; a 244-byte link budget is consequently tighter than the body's
 
 ---
 
-### Previously captured lifecycle evidence, reconciled 2026-10-24
+### Previously captured lifecycle evidence, reconciled 2026-10-25
 
 These observations already underpin the current implementation and regression
 fixtures. Recording them here is not a new hardware qualification or a transport
