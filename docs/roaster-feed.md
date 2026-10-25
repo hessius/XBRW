@@ -239,6 +239,35 @@ a recipe for everyone, update it on xBloom under the same share link; people get
 it the next time they open it from your catalogue or your link. A new share link
 is a new recipe.
 
+## xBloom's own releases
+
+xBloom publishes a recipe on its community catalogue
+([collective.xbloom.com](https://collective.xbloom.com)) for each coffee it
+releases, under "xBloom Official", but no feed. `api/feeds/xbloom.ts` writes
+one: `GET https://xbrwplusplus.vercel.app/api/feeds/xbloom` returns this format
+for the newest 60 official coffee releases, roaster name **xBloom Collective**.
+
+- Rows for the same coffee become one coffee, with a recipe per machine,
+  labelled by dose and model (`15g Original`, `15g Studio`, and `Omni` for the
+  dripper version). There is no `18g`, so the first, Original, opens first.
+- Origin, process, varietal, tasting notes, roast level and the pod photo come
+  from the catalogue row. `available` is always `true` and there are no
+  variants: pods are sold on xbloom.com, so nothing is offered to buy.
+- The id is a slug of the coffee's name (`xbloom-ethiopia-banko-chelbesa`), so
+  NEW stays on a release until it is seen, and a re-upload is not new.
+- The function reads only the catalogue list, at most four pages, never a
+  recipe. Its answer is cached by Vercel's CDN for six hours and served stale
+  for a day while it refreshes, so the catalogue is asked a few times a day
+  however many people subscribe. An empty or failed read is a 502 that is not
+  cached, so subscribers keep their last good copy.
+
+To subscribe, open any import link that carries the feed, for example one of
+its releases:
+
+```
+xbrw://import?v=1&source=xBloom%20Collective&feed=https%3A%2F%2Fxbrwplusplus.vercel.app%2Fapi%2Ffeeds%2Fxbloom&share=<a release's xBloom share URL, percent-encoded>
+```
+
 ## Polling
 
 Apps may poll a feed. XBRW++ reads it no more than every 12 hours per
