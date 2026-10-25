@@ -908,6 +908,19 @@ outside this original inventory are additional coverage, not unaccounted source.
 | `library/roasterRecipes.ts` | Omitted | Roast advice already enters through validated path. |
 | `library/subscriptionStatus.ts` | Accepted | Paused/no-cache copy before active loading/failure copy. |
 
+### Approved qualification-only exception
+
+Both full-suite attempts reached the unchanged Android invalid-accent sharing
+test, where `waitFor` pressed Share again before inspecting a capture that had
+completed between retries. Expected capture count 2 became 95/92 rather than
+2. The test passed unchanged in the 18-suite/784-test focused run.
+The maintainer explicitly approved a narrow test-only correction: retry a press
+only while no new capture has been observed, then retain the original exact
+`captures + 1` assertion and snapshot-preservation assertion. No sharing,
+capture, timeout or application implementation changes are authorised by this
+exception. `app/__tests__/brewRecord.test.tsx` is additional qualification work,
+not a previously unaccounted original preview path.
+
 The two omitted historical picture documents remain recoverable at the pinned
 preview commit. Their obsolete header-photo/implementation experiments are not
 current requirements; the current accepted placements and settings are retained.
