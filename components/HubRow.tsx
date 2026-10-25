@@ -42,7 +42,7 @@ export default function HubRow({
             accessibilityState={selecting ? {checked: selected} : undefined}
             onPress={onPress}
             onLongPress={onLongPress}>
-            <XStack alignItems="center" maxWidth={600}
+            <XStack alignItems="center"
                     paddingHorizontal={SIDE_PADDING}
                     paddingVertical={ROW_PADDING}
                     gap="$3">

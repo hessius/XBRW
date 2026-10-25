@@ -55,7 +55,7 @@ export default function RoasterCoffeeRow({coffee, badge, onPress, testID}: {
     return (
         <Pressable testID={testID} accessibilityRole="button" accessibilityLabel={spoken}
                    onPress={onPress}>
-            <XStack alignItems="center" maxWidth={600} paddingHorizontal={SIDE_PADDING}
+            <XStack alignItems="center" paddingHorizontal={SIDE_PADDING}
                     paddingVertical={ROW_PADDING} gap="$3"
                     opacity={coffee.available ? 1 : 0.6}>
                 {image !== null && image !== failedUri ? (
