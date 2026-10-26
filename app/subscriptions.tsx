@@ -8,12 +8,15 @@ import {ScrollView, Text, YStack} from "tamagui";
 import ScreenHeader from "@/components/ScreenHeader";
 import SettingsActionRow from "@/components/SettingsActionRow";
 import SettingsSection from "@/components/SettingsSection";
+import SettingsToggleRow from "@/components/SettingsToggleRow";
 
 import {sharedSettings} from "@/hooks/useSetting";
 import {useLiveBrew} from "@/hooks/useLiveBrew";
 import {useRoasterSubscriptions} from "@/hooks/useRoasterSubscriptions";
+import {BUILT_IN_FEEDS, setBuiltInOn} from "@/library/builtInFeeds";
 import {readCatalogue, scrollEndPadding} from "@/library/roasterCatalogue";
 import type {RoasterFeed} from "@/library/roasterFeed";
+import {parseSubscriptions, subscriptionFor} from "@/library/roasterSubscription";
 import {rowLine, shownKey} from "@/library/subscriptionStatus";
 import type {Settings} from "@/library/Settings";
 
@@ -25,7 +28,9 @@ import type {Settings} from "@/library/Settings";
  * opens that roaster's own screen (`app/subscription.tsx`), where it can be
  * browsed, refreshed, paused or ended. REFRESH ALL updates every roaster that
  * is not paused. Below them, the roasters the user asked never to be asked
- * about, so that answer can be taken back.
+ * about, so that answer can be taken back. Above them, the feeds the app
+ * ships with (`library/builtInFeeds.ts`), each a switch: on subscribes and
+ * reads it now, off unsubscribes.
  */
 export default function SubscriptionsScreen({settings, fetchBody, now: clock}: {
     /** Injected by tests. */
@@ -50,10 +55,26 @@ export default function SubscriptionsScreen({settings, fetchBody, now: clock}: {
                 <ScreenHeader title="Roaster feeds" onBack={() => router.back()}/>
                 <ScrollView testID="subscriptions-scroll"
                             contentContainerStyle={{padding: 16, paddingBottom: scrollEndPadding(48, insets.bottom)}}>
+                    <SettingsSection title="Built in">
+                        {BUILT_IN_FEEDS.map((feed) => (
+                            <SettingsToggleRow key={feed.feed} label={feed.roaster}
+                                               description={feed.description}
+                                               value={subscriptionFor(subs.subscriptions, feed.feed) !== undefined}
+                                               onChange={(on) => {
+                                                   setBuiltInOn(store, feed, on);
+                                                   const sub = subscriptionFor(
+                                                       parseSubscriptions(store.get("roasterSubscriptions")), feed.feed);
+                                                   if (on && sub !== undefined && subs.refreshing === null) {
+                                                       void subs.refresh(sub);
+                                                   }
+                                               }}/>
+                        ))}
+                    </SettingsSection>
+
                     {subs.subscriptions.length === 0 && (
                         <Text testID="subscriptions-empty" fontSize={14} lineHeight={20}
                               color={palette.dim} paddingTop="$4">
-                            Roasters appear here when you subscribe from a roaster&apos;s import link.
+                            Other roasters appear here when you subscribe from a roaster&apos;s import link.
                         </Text>
                     )}
 

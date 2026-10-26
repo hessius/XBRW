@@ -261,6 +261,7 @@ export default function SettingsScreen({settings}: Props) {
     const [myShelves, setMyShelves] = useSetting("myShelves", settings);
     const [roasterFeedOptOut, setRoasterFeedOptOut] = useSetting("roasterFeedOptOut", settings);
     const [roasterSubscriptions, setRoasterSubscriptions] = useSetting("roasterSubscriptions", settings);
+    const [builtInFeedsSeeded, setBuiltInFeedsSeeded] = useSetting("builtInFeedsSeeded", settings);
     const [importFingerprints, setImportFingerprints] = useSetting("importFingerprints", settings);
 
     // Deliberately given no query: this screen's questions are all about the
@@ -311,7 +312,7 @@ export default function SettingsScreen({settings}: Props) {
             brewHistorySort, brewHistorySortDirection,
             librarySort, librarySortDirection, libraryFavouritesFirst,
             libraryView, invertAutoShelves, hiddenShelves, myShelves,
-            roasterFeedOptOut, roasterSubscriptions, importFingerprints
+            roasterFeedOptOut, roasterSubscriptions, builtInFeedsSeeded, importFingerprints
         };
     }
 
@@ -497,6 +498,11 @@ export default function SettingsScreen({settings}: Props) {
             setRoasterSubscriptions(incoming.roasterSubscriptions === "" ? "" : serialiseSubscriptions(
                 parseSubscriptions(incoming.roasterSubscriptions).map((sub) =>
                     ({...sub, lastSync: 0, lastAttempt: 0}))));
+        }
+        // With the subscriptions, so a built-in feed switched off in the
+        // backup is not switched back on by the next sync.
+        if (typeof incoming.builtInFeedsSeeded === "string") {
+            setBuiltInFeedsSeeded(incoming.builtInFeedsSeeded);
         }
         if (typeof incoming.importFingerprints === "string") {
             setImportFingerprints(incoming.importFingerprints);

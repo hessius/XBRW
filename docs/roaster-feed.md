@@ -261,8 +261,15 @@ for the newest 60 official coffee releases, roaster name **xBloom Collective**.
   however many people subscribe. An empty or failed read is a 502 that is not
   cached, so subscribers keep their last good copy.
 
-To subscribe, open any import link that carries the feed, for example one of
-its releases:
+The app ships it as a built-in feed (`library/builtInFeeds.ts`). It is
+switched on once, the first time a build that has it opens, and appears under
+**Settings → Library → Roaster feeds → Built in** as a switch: off is an
+ordinary unsubscribe, on subscribes and reads it straight away. Which built-in
+feeds an install has already met is kept in `builtInFeedsSeeded` and carried in
+backups, so switching it off stays off. Every other roaster is still subscribed
+from its own import link.
+
+An import link can carry it too, like any feed:
 
 ```
 xbrw://import?v=1&source=xBloom%20Collective&feed=https%3A%2F%2Fxbrwplusplus.vercel.app%2Fapi%2Ffeeds%2Fxbloom&share=<a release's xBloom share URL, percent-encoded>

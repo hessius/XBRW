@@ -348,6 +348,12 @@ export const DEFAULTS = {
     roasterFeedOptOut: "",
     /** Validated subscription records; carried in backups. */
     roasterSubscriptions: "",
+    /**
+     * Feed keys of the built-in feeds (`library/builtInFeeds.ts`) this install
+     * has already switched on once, as a JSON array. Carried in backups, so a
+     * feed somebody switched off is not switched back on by a restore.
+     */
+    builtInFeedsSeeded: "",
     /** Cached feed bodies, refetched after restore rather than backed up. */
     roasterCatalogue: "",
     /** Alert bookkeeping for the cached feeds, also excluded from backups. */

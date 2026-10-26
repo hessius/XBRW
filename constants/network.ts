@@ -99,17 +99,21 @@ export const OUTBOUND_CALLS: OutboundCall[] = [
     {
         id:      "roasterFeed",
         title:   "Check a roaster's list of coffees",
-        trigger: "You open a roaster's import link that names a list of its coffees. If you subscribe, the app reads that list again when you open the app, at most once every 12 hours, and whenever you tap Refresh. Pausing or ending the subscription stops it.",
-        host:    "whichever roaster the import link named",
+        trigger: "You open a roaster's import link that names a list of its coffees. If you subscribe, the app reads that list again when you open the app, at most once every 12 hours, and whenever you tap Refresh. Pausing or ending the subscription stops it. The built-in xBloom Collective list, which lists xBloom's own new releases, starts switched on and is read the same way; switch it off in Roaster feeds.",
+        host:    "whichever roaster the import link named, or xbrwplusplus.vercel.app for the built-in xBloom Collective list",
         hostPinned: false,
         owner:   "The roaster who made the link",
         carries: [
             "Nothing but the request itself: your IP address, and the address of the list.",
             "No recipe, no account and nothing from your library. XBRW++ drops any address that is not https.",
             "Only while the app is open. There is no background fetch.",
-            "Checking the list never asks xBloom anything and never changes your library. A coffee's recipe is fetched from xBloom only when you open, brew or add it."
+            "Checking the list never asks xBloom anything and never changes your library. A coffee's recipe is fetched from xBloom only when you open, brew or add it.",
+            "The built-in xBloom Collective list comes from a small XBRW++ service, not from xBloom. That service reads xBloom's public recipe catalogue a few times a day, the same list the hub shows, and serves everyone the same copy, so your request never reaches xBloom and carries nothing about you to it."
         ],
-        source:  ["library/roasterFeed.ts", "library/roasterSync.ts", "hooks/useRoasterOffer.ts"]
+        source:  [
+            "library/roasterFeed.ts", "library/roasterSync.ts", "hooks/useRoasterOffer.ts",
+            "library/builtInFeeds.ts", "api/feeds/xbloom.ts", "api/_lib/collective.ts"
+        ]
     },
     {
         id:      "brewMind",

@@ -6,6 +6,7 @@ import {router} from "expo-router";
 import SubscriptionScreen from "@/app/subscription";
 import SubscriptionsScreen from "@/app/subscriptions";
 import {refreshAllMessage} from "@/hooks/useRoasterSubscriptions";
+import {XBLOOM_FEED_URL, seedBuiltInFeeds} from "@/library/builtInFeeds";
 import {readCatalogue} from "@/library/roasterCatalogue";
 import {readSubscriptions, resetSyncLockForTests, subscribe, updateSubscription} from "@/library/roasterSync";
 import {countLine, rowLine, statusLine} from "@/library/subscriptionStatus";
@@ -76,9 +77,33 @@ describe("the subscriptions list", () => {
     it("is titled Roaster feeds and explains where roasters come from when there are none", async () => {
         await drawList();
         expect(screen.getByText("Roaster feeds")).toBeTruthy();
-        expect(screen.getByText("Roasters appear here when you subscribe from a roaster's import link."))
+        expect(screen.getByText("Other roasters appear here when you subscribe from a roaster's import link."))
             .toBeTruthy();
         expect(screen.queryByText("Refresh all")).toBeNull();
+    });
+
+    it("offers xBloom's releases as a built-in switch, off when not subscribed", async () => {
+        await drawList();
+        expect(screen.getByText("BUILT IN")).toBeTruthy();
+        expect(screen.getByLabelText("xBloom Collective").props.accessibilityState.checked).toBe(false);
+    });
+
+    it("subscribes and reads the built-in feed when switched on", async () => {
+        const {settings, fetchBody} = await drawList();
+        await fireEvent(screen.getByLabelText("xBloom Collective"), "checkedChange", true);
+        expect(readSubscriptions(settings).map((sub) => sub.feed)).toEqual([XBLOOM_FEED_URL]);
+        await waitFor(() => expect(fetchBody).toHaveBeenCalledWith(XBLOOM_FEED_URL, undefined));
+        await waitFor(() => expect(screen.getByLabelText("xBloom Collective").props.accessibilityState.checked)
+            .toBe(true));
+    });
+
+    it("unsubscribes from the built-in feed when switched off, leaving other roasters", async () => {
+        const settings = subscribed();
+        seedBuiltInFeeds(settings);
+        await drawList(settings);
+        expect(screen.getByLabelText("xBloom Collective").props.accessibilityState.checked).toBe(true);
+        await fireEvent(screen.getByLabelText("xBloom Collective"), "checkedChange", false);
+        expect(readSubscriptions(settings).map((sub) => sub.feed)).toEqual([FEED_URL]);
     });
 
     it("ends its scroll clear of the bottom bar", async () => {

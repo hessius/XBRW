@@ -4,6 +4,7 @@ import {AppState} from "react-native";
 import {notify} from "@/components/XbrwToast";
 import {announceBack} from "@/hooks/useRoasterSubscriptions";
 import {sharedSettings} from "@/hooks/useSetting";
+import {seedBuiltInFeeds} from "@/library/builtInFeeds";
 import {syncDue} from "@/library/roasterSync";
 import type {Settings} from "@/library/Settings";
 
@@ -13,6 +14,8 @@ export function useRoasterForegroundSync(settings?: Settings): void {
     useEffect(() => {
         async function sync() {
             try {
+                // Before the sync, so a newly met built-in feed is read now.
+                seedBuiltInFeeds(store);
                 const results = await syncDue({settings: store});
                 for (const result of results) announceBack(result);
             } catch {

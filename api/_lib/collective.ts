@@ -14,6 +14,7 @@
  */
 
 const BASE = "https://collective-api.xbloom.com";
+const LIST_PATH = "/communityRecipe/index/page";
 
 export const FEED_ROASTER = "xBloom Collective";
 export const FEED_SITE = "https://collective.xbloom.com";
@@ -91,11 +92,13 @@ export type FetchLike = (url: string, init: {
  * the catalogue's own "Official, newest" view sends. Stops early once enough
  * distinct coffees have been seen, so a normal refresh is one or two calls.
  */
-export async function fetchOfficialRows(fetchImpl: FetchLike = fetch as unknown as FetchLike): Promise<CollectiveRow[]> {
+export async function fetchOfficialRows(
+    fetchImpl: FetchLike = (url, init) => fetch(url, init)
+): Promise<CollectiveRow[]> {
     const rows: CollectiveRow[] = [];
     const names = new Set<string>();
     for (let page = 1; page <= MAX_PAGES; page++) {
-        const res = await fetchImpl(`${BASE}/communityRecipe/index/page`, {
+        const res = await fetchImpl(`${BASE}${LIST_PATH}`, {
             method:  "POST",
             headers: {"content-type": "application/json", accept: "application/json", LanguageType: "0"},
             body:    JSON.stringify({
