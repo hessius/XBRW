@@ -429,3 +429,10 @@ runtime policy. The separately approved patch/runtime maintenance above replaces
 that policy. Package C itself did not change schemes, EAS profiles, channels,
 SDK or dependency manifests. This is not a native build,
 submission, deployment or hardware pass.
+
+## Proposed: catalogue OPEN RECIPE label
+
+Branch `fix/open-recipe-label`, not yet accepted into `develop`. A roaster
+coffee's primary action read BREW NOW but only opens the recipe in the editor,
+unsaved; the editor has its own BREW. It now reads OPEN RECIPE (spoken "Open
+recipe"). The test ID `roaster-coffee-brew` and the behaviour are unchanged.

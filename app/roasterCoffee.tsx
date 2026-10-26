@@ -280,9 +280,10 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
         return true;
     }
 
-    async function brewNow() {
+    async function openRecipe() {
         // Not saved: the editor opens it as an import does, and the user can
-        // brew, tune or save from there.
+        // brew, tune or save from there. The editor has its own BREW, so this
+        // says what it does rather than promising a brew.
         let fresh: FetchedCoffee;
         try {
             fresh = await latest();
@@ -465,8 +466,8 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
                                                 onKeep={() => answer(false)}/>
                         ) : (
                             <YStack gap="$2">
-                                <Action label="BREW NOW" spoken="Brew now" testID="roaster-coffee-brew"
-                                        primary disabled={recipe === null} onPress={() => void brewNow()}/>
+                                <Action label="OPEN RECIPE" spoken="Open recipe" testID="roaster-coffee-brew"
+                                        primary disabled={recipe === null} onPress={() => void openRecipe()}/>
                                 <Action label="ADD TO SHELF" spoken="Add to shelf"
                                         testID="roaster-coffee-shelf" disabled={recipe === null}
                                         onPress={() => void add()}/>
