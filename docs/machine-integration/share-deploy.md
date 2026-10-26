@@ -48,6 +48,12 @@ or point it at unowned `xbrw.app`. No mint credentials are required for import.
 
 ### Local dependency-closure proof
 
+`.vercelignore` must upload the shared pure runtime as well as `api/`.
+Its explicit allowlist excludes the mobile application. The import-boundary
+test follows runtime imports and checks those files against the actual Git
+ignore rules. A transpilation smoke alone cannot catch files omitted from the
+deployment upload.
+
 Run strict root typechecking **before** the transpile-only closure check.
 Choose a new persistent artifact directory outside the app dependency tree,
 with no ancestor `node_modules`; do not install packages into it.
