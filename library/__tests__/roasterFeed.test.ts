@@ -32,6 +32,30 @@ describe("the feed parameter on an import link", () => {
 });
 
 describe("parseRoasterFeed", () => {
+    it("keeps declared machine variants and rejects invalid declarations instead of treating them as generic", () => {
+        const body = JSON.parse(feedJson([{id: "a"}]));
+        body.coffees[0].recipes = [
+            {size: "Original", share: share("original"), machine_model: "original"},
+            {size: "Studio", share: share("studio"), machine_model: "studio"},
+            {size: "Invalid", share: share("wrong"), machine_model: "other"},
+            {size: "Null", share: share("null"), machine_model: null},
+            {size: "Generic", share: share("generic")}
+        ];
+        expect(parseRoasterFeed(JSON.stringify(body))?.coffees[0].recipes).toEqual([
+            {size: "Original", share: share("original"), machineModel: "original"},
+            {size: "Studio", share: share("studio"), machineModel: "studio"},
+            {size: "Generic", share: share("generic")}
+        ]);
+    });
+
+    it("retains catalogue provenance and refuses an unknown source kind", () => {
+        const body = JSON.parse(feedJson([{id: "a"}]));
+        body.roaster.kind = "catalogue";
+        expect(parseRoasterFeed(JSON.stringify(body))?.roaster.kind).toBe("catalogue");
+        body.roaster.kind = "unknown";
+        expect(parseRoasterFeed(JSON.stringify(body))).toBeNull();
+    });
+
     it("reads a valid feed, coffee fields included", () => {
         const feed = parseRoasterFeed(feedJson([{id: "a"}, {id: "b", available: false}]));
         expect(feed?.roaster).toEqual({name: "Test Roaster", url: "https://roaster.example"});

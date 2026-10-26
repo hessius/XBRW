@@ -427,6 +427,26 @@ async function renderHome(
 }
 
 describe("HomeScreen", () => {
+    it("applies the coffee-details preference to mounted list cards and shelf-picker rows", async () => {
+        const recipe = named("Coffee facts");
+        recipe.coffee = {name: "Coffee facts", variety: "Bourbon", processing: "Natural"};
+        const settings = new Settings(memoryStorage());
+        await renderHome({recipes: [recipe], settings});
+        expect(screen.queryByTestId("recipe-card-bean", {includeHiddenElements: true})).toBeNull();
+        await act(async () => { settings.set("showRecipeCardDetails", true); });
+        expect(screen.getByTestId("recipe-card-bean", {includeHiddenElements: true}))
+            .toHaveTextContent("Bourbon · Natural");
+        expect(screen.getByLabelText(/Coffee facts, Bourbon, Natural/)).toBeTruthy();
+        await act(async () => { settings.set("showRecipeCardDetails", false); });
+        expect(screen.queryByTestId("recipe-card-bean", {includeHiddenElements: true})).toBeNull();
+        await act(async () => { settings.set("showRecipeCardDetails", true); });
+        await fireEvent.press(screen.getByRole("tab", {name: "Shelves"}));
+        await fireEvent.press(screen.getByTestId("new-shelf"));
+        expect(screen.getByTestId("recipe-card-bean", {includeHiddenElements: true}))
+            .toHaveTextContent("Bourbon · Natural");
+        expect(screen.getByRole("checkbox", {name: /Bourbon, Natural/})).toBeTruthy();
+    });
+
     it("recolours the library and already-open import sheet without resetting its input", async () => {
         const db = store([named("Kept recipe")]);
         const settings = new Settings(memoryStorage());

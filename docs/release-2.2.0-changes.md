@@ -465,3 +465,18 @@ lists bags and prices.
 Settings > Recipe list > Coffee details on cards is off by default. On, a
 card without a note uses its second line for variety and process. A note
 still wins, the card keeps its height, and the choice travels in backups.
+
+The xBloom Collective feed uses the existing feed-management and catalogue
+surfaces, never new Home furniture. Subscription is explicit and off by
+default. Its built-in entry is hidden until an approved working HTTPS endpoint
+is configured with EXPO_PUBLIC_XBLOOM_FEED_URL; the proposed production path
+returned 404. This package does not deploy or enable that service.
+
+The dependency-free service checks both machine partitions with an eight-second
+shared deadline and a four-page cap per partition, validates rows, keeps Unicode
+coffee identities, and serves a bounded cached feed. It does not fetch recipes,
+scrape shop products or guess roasters. A catalogue's name is not used as the
+coffee's roaster. Tagged recipe variants must match the selected machine, and a
+model change discards an in-flight lookup. Existing untagged feeds retain their
+selection behaviour. Empty/error responses are uncached 502s, preserving the
+subscriber's last good catalogue.

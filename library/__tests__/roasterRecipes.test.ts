@@ -12,6 +12,26 @@ import {ROAST_LEVEL_DEFAULTS, startingFigures} from "@/library/restPeak";
 const coffees = feed([{id: "a"}, {id: "b", sizes: ["15g", "20g"]}]).coffees;
 
 describe("fetchCoffeeRecipe", () => {
+    it("uses the current model for selection and discards a response after that model changes", async () => {
+        const library = memoryLibrary();
+        let model: "studio" | "original" = "studio";
+        const coffee = {...coffees[0], recipes: [
+            {size: "15g Original", share: "https://share-h5.xbloom.com/?id=original", machineModel: "original" as const},
+            {size: "15g Studio", share: "https://share-h5.xbloom.com/?id=studio", machineModel: "studio" as const}
+        ]};
+        const fetchRecipe = jest.fn(library.deps.fetchRecipe);
+        const deps = {fetchRecipe, machineModel: () => model};
+        expect((await fetchCoffeeRecipe(coffee, "15g Original", deps)).size).toBe("15g Studio");
+        expect(fetchRecipe.mock.calls[0][0]).toBe(coffee.recipes[1].share);
+        const returned = await library.deps.fetchRecipe(coffee.recipes[0].share);
+        const switched = {
+            machineModel: () => model,
+            fetchRecipe: async () => { model = "original"; return returned; }
+        };
+        await expect(fetchCoffeeRecipe(coffee, undefined, switched)).rejects.toHaveProperty("name", "AbortError");
+        expect(returned?.coffee).toBeUndefined();
+    });
+
     it("preserves a level-only catalogue roast as the freshness fallback", async () => {
         const coffee = {...coffees[0], coffee: {name: "Dark coffee"}, roast: {level: "Dark"}};
         const {recipe} = await fetchCoffeeRecipe(coffee, undefined, memoryLibrary().deps);

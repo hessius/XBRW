@@ -6,6 +6,7 @@ import {router} from "expo-router";
 import SubscriptionScreen from "@/app/subscription";
 import SubscriptionsScreen from "@/app/subscriptions";
 import {refreshAllMessage} from "@/hooks/useRoasterSubscriptions";
+import {setBuiltInOn, type BuiltInFeed} from "@/library/builtInFeeds";
 import {readCatalogue} from "@/library/roasterCatalogue";
 import {readSubscriptions, resetSyncLockForTests, subscribe, updateSubscription} from "@/library/roasterSync";
 import {countLine, rowLine, statusLine} from "@/library/subscriptionStatus";
@@ -30,6 +31,9 @@ jest.mock("@/components/XbrwToast", () => ({
 const NOW = 2_000_000_000_000;
 const HOUR = 60 * 60 * 1000;
 const OTHER_URL = "https://other-roaster.example/feed";
+const XBLOOM: BuiltInFeed = {
+    feed: "https://approved.example/api/feeds/xbloom", roaster: "xBloom Collective", description: "New releases."
+};
 
 function subscribed(patch: Parameters<typeof updateSubscription>[2] = (sub) => sub) {
     const settings = memorySettings();
@@ -52,7 +56,7 @@ const fetched = () => jest.fn(async () => feedBody([{id: "a"}, {id: "b"}, {id: "
 
 async function drawList(settings = memorySettings(), fetchBody = fetched()) {
     await renderWithProviders(
-        <SubscriptionsScreen settings={settings} fetchBody={fetchBody} now={() => NOW}/>
+        <SubscriptionsScreen settings={settings} fetchBody={fetchBody} now={() => NOW} builtInFeeds={[XBLOOM]}/>
     );
     return {settings, fetchBody};
 }
@@ -76,9 +80,33 @@ describe("the subscriptions list", () => {
     it("is titled Roaster feeds and explains where roasters come from when there are none", async () => {
         await drawList();
         expect(screen.getByText("Roaster feeds")).toBeTruthy();
-        expect(screen.getByText("Roasters appear here when you subscribe from a roaster's import link."))
+        expect(screen.getByText("Other roasters appear here when you subscribe from a roaster's import link."))
             .toBeTruthy();
         expect(screen.queryByText("Refresh all")).toBeNull();
+    });
+
+    it("offers xBloom's releases as a built-in switch, off when not subscribed", async () => {
+        await drawList();
+        expect(screen.getByText("BUILT IN")).toBeTruthy();
+        expect(screen.getByLabelText("xBloom Collective").props.accessibilityState.checked).toBe(false);
+    });
+
+    it("subscribes and reads the built-in feed when switched on", async () => {
+        const {settings, fetchBody} = await drawList();
+        await fireEvent(screen.getByLabelText("xBloom Collective"), "checkedChange", true);
+        expect(readSubscriptions(settings).map((sub) => sub.feed)).toEqual([XBLOOM.feed]);
+        await waitFor(() => expect(fetchBody).toHaveBeenCalledWith(XBLOOM.feed, undefined));
+        await waitFor(() => expect(screen.getByLabelText("xBloom Collective").props.accessibilityState.checked)
+            .toBe(true));
+    });
+
+    it("unsubscribes from the built-in feed when switched off, leaving other roasters", async () => {
+        const settings = subscribed();
+        setBuiltInOn(settings, XBLOOM, true);
+        await drawList(settings);
+        expect(screen.getByLabelText("xBloom Collective").props.accessibilityState.checked).toBe(true);
+        await fireEvent(screen.getByLabelText("xBloom Collective"), "checkedChange", false);
+        expect(readSubscriptions(settings).map((sub) => sub.feed)).toEqual([FEED_URL]);
     });
 
     it("ends its scroll clear of the bottom bar", async () => {

@@ -514,6 +514,8 @@ export default function SettingsScreen({settings}: Props) {
                 parseSubscriptions(incoming.roasterSubscriptions).map((sub) =>
                     ({...sub, lastSync: 0, lastAttempt: 0}))));
         }
+        // With the subscriptions, so a built-in feed switched off in the
+        // backup is not switched back on by the next sync.
         if (typeof incoming.importFingerprints === "string") {
             setImportFingerprints(incoming.importFingerprints);
         }

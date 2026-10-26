@@ -17,6 +17,25 @@ each device result. Software transports do not qualify BLE or NFC hardware.
   pane, long pushed-screen titles wrap beside Back, and controls remain
   reachable. OPEN RECIPE must open the editor, not start a brew or save.
 
+## Second contributor round, package B
+
+- [ ] Check catalogue rows with missing facts, long facts and large text on
+  iOS/Android. Country/farm, variety/process, roast and flavours should be
+  readable; bags remain on the detail screen.
+- [ ] Coffee details on cards starts off. Toggle it with Home mounted and
+  check ordinary and shelf-picker rows. A note must still win. Verify both
+  backup choices and older backups without the preference.
+- [ ] In a build configured with an approved working feed endpoint, verify
+  that xBloom Collective starts off, opt-in refreshes it, opt-out stays off,
+  and no Home entry appears. Unconfigured builds must show no built-in entry.
+- [ ] Check Original/Studio selection, model changes during loading, missing
+  variants and explicit roaster preservation. Never use the catalogue's name
+  as a guessed roaster. These checks do not qualify the resulting machine
+  recipe on hardware.
+
+Feed deployment and endpoint configuration remain separate approval gates.
+There is no native dependency, NFC format or BLE command change in this package.
+
 ## Selective preview reconciliation: remaining manual gates
 
 The implementation plan records software results separately from these open

@@ -55,6 +55,7 @@ export function realLibraryDeps(settings: Settings): LibraryDeps {
     let store: RecipeDatabase | null = null;
     const open = () => (store ??= new RecipeDatabase());
     return {
+        machineModel: () => asMachineModel(settings.get("machineModel")),
         fetchRecipe: async (share, signal) => {
             const source = parseImportInput(share);
             if (source === null) return null;
