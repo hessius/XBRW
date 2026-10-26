@@ -1,12 +1,8 @@
-import Pour, {POUR_PATTERN} from "./Pour";
-import Recipe, {CUP_TYPE, GRINDER_OFF_VALUE} from "./Recipe";
-import {
-    BYPASS_DEFAULT_TEMPERATURE, BYPASS_TEMPERATURE, BYPASS_VOLUME
-} from "@/library/bypassLimits";
+import Recipe from "./Recipe";
 import {adaptedModelFor, type MachineModel} from "@/library/machine/machineModel";
 import {podCoffeeFromPodsVo, podImageUrl} from "@/library/podCoffee";
-import {clampCelsius, normaliseCelsius} from "@/library/units";
 import type {ImportSource} from "./importInput";
+import {normaliseXBloomRecipe, xbloomTitle} from "./xbloomRecipeData";
 
 /**
  * Attach the pod's coffee to the recipe it brewed, if it named one.
@@ -75,55 +71,7 @@ export class XBloomRecipe {
     public getRecipe(): Recipe | null {
         try {
             let recipe = new Recipe(undefined, undefined);
-            let ratio: number = this.xbRecipeJSON.recipeVo.grandWater;
-
-            let grindSize: number = this.xbRecipeJSON.recipeVo.grinderSize ?? GRINDER_OFF_VALUE;
-            let isSetGrinderSize: number = this.xbRecipeJSON.recipeVo.isSetGrinderSize ?? 2;
-
-            // 2 means grinder is disabled
-            if (isSetGrinderSize === 2 || grindSize === GRINDER_OFF_VALUE) {
-                recipe.grinder = false;
-            }
-
-            let dosage: number = this.xbRecipeJSON.recipeVo.dose;
-            let pourCount: number = this.xbRecipeJSON.recipeVo.pourCount;
-            let title = this.getRecipeTitle();
-
-            let xid = this.xbRecipeJSON.recipeVo.podsVo?.id ?? "";
-
-            recipe.ratio = ratio;
-            recipe.dosage = dosage;
-            recipe.xbloomName = title;
-            recipe.source = "import";
-
-            // Attribution and artwork live only in the response. `imagePath`
-            // was already being read into a private field that nothing
-            // persisted, so it was reaching the screen and then being thrown
-            // away; the two `shareMember` keys were not read at all. They sit
-            // beside `recipeVo`, not inside it, which is why an account row --
-            // which is a bare `recipeVo` -- carries the artwork but no sharer.
-            const detail = this.xbRecipeJSON as Record<string, unknown>;
-            if (typeof detail.shareMemberName === "string") {
-                recipe.sharedBy = detail.shareMemberName;
-            }
-            // Through the same https rule as every other picture. A restore
-            // already strips a non-https avatar (`backup.ts`), and an import is
-            // no more trustworthy a source: the URL is a third party's and it
-            // ends up in an `<Image>`, which would fetch it in the clear.
-            const avatar = podImageUrl(detail.shareMemberHead);
-            if (avatar !== undefined) {
-                recipe.sharedByAvatar = avatar;
-            }
-            const podsVo = this.xbRecipeJSON.recipeVo.podsVo;
-            applyPodCoffee(recipe, podsVo);
-            // Backup restore already strips non-HTTPS recipe artwork; imports
-            // use the same rule. The fallback keeps nameless pod artwork that
-            // `podCoffeeFromPodsVo` must ignore because it cannot match a bean.
-            // XBRW's `imageURL` and BC's `imageUrl` share a source, not an owner.
-            const artwork = recipe.coffee?.imageUrl ?? podImageUrl(podsVo?.imagePath);
-            if (artwork !== undefined) recipe.imageURL = artwork;
-            recipe.grindSize = grindSize;
-            recipe.xid = xid;
+            Object.assign(recipe, normaliseXBloomRecipe(this.xbRecipeJSON, this.getRecipeTitle()));
 
             if (this.byXid) {
                 let shareLink = this.xbRecipeJSON.recipeVo?.shareRecipeLink ?? "";
@@ -141,115 +89,23 @@ export class XBloomRecipe {
                 recipe.shareId = this.id;
             }
 
-            recipe.grindRPM = (this.xbRecipeJSON.recipeVo.rpm && this.xbRecipeJSON.recipeVo.rpm >= 60 && this.xbRecipeJSON.recipeVo.rpm <= 120)
-                ? this.xbRecipeJSON.recipeVo.rpm
-                : 120;
-
-            const rawBypassFlag   = this.xbRecipeJSON.recipeVo.isEnableBypassWater;
-            const rawBypassVolume = this.xbRecipeJSON.recipeVo.bypassVolume;
-            const rawBypassTemp   = this.xbRecipeJSON.recipeVo.bypassTemp;
-
-            // Accept volume/temp only when they are finite and within the range
-            // the editor itself allows -- the shared `bypassLimits` constants,
-            // not a restatement of them. An imported value outside that range
-            // would otherwise walk straight past the editor's own constraint
-            // and reach `Machine.brew` as a command argument the hardware has
-            // no meaning for. An out-of-range value is far more likely to be a
-            // schema change than a real recipe, and silently applying it would
-            // brew someone an unexpected dilution.
-            const bypassVolumeValid = typeof rawBypassVolume === "number" && Number.isFinite(rawBypassVolume)
-                && rawBypassVolume >= BYPASS_VOLUME.min && rawBypassVolume <= BYPASS_VOLUME.max;
-            const bypassTempValid = typeof rawBypassTemp === "number" && Number.isFinite(rawBypassTemp)
-                && rawBypassTemp >= BYPASS_TEMPERATURE.min && rawBypassTemp <= BYPASS_TEMPERATURE.max;
-
-            // Volume has no safe default: guessing one would brew someone an
-            // unexpected dilution, so an implausible volume drops the bypass
-            // entirely. Temperature does have one -- 85 C, the same value
-            // `Recipe` starts from -- so a missing or garbled temperature no
-            // longer costs the user their bypass. That asymmetry is deliberate.
-            if (bypassVolumeValid) {
-                recipe.bypassVolume = rawBypassVolume;
-                recipe.bypassTemp   = bypassTempValid ? normaliseCelsius(rawBypassTemp) : BYPASS_DEFAULT_TEMPERATURE;
-                // isEnableBypassWater: 1 = ON, 2 = OFF — xBloom's inverted scheme.
-                // A non-zero volume is also required; flag-on with zero water
-                // means the machine dispenses nothing, so treat it as off.
-                recipe.bypassEnabled = rawBypassFlag === 1 && rawBypassVolume > 0;
-            }
-            // An implausible volume leaves bypass at its defaults
-            // (bypassEnabled: false, bypassVolume: 0, bypassTemp: 85).
-
-            let cup = this.xbRecipeJSON.recipeVo.cupType ?? 1
-
-            switch (cup) {
-                case 1:
-                    recipe.cupType = CUP_TYPE.XPOD
-                    break;
-                case 2:
-                    recipe.cupType = CUP_TYPE.OMNI
-                    break;
-                case 3:
-                    recipe.cupType = CUP_TYPE.OTHER
-                    break;
-                case 4:
-                    recipe.cupType = CUP_TYPE.TEA
-                    recipe.defaultCups = pourCount
-                    break;
-                default:
-                    recipe.cupType = CUP_TYPE.XPOD
-            }
-
-            console.log('cup:', cup, 'cupType:', recipe.cupType);
-
-            // Tea is special-cased throughout the app; bypass is out of scope.
-            if (recipe.cupType === CUP_TYPE.TEA) {
-                recipe.bypassEnabled = false;
-            }
-
-            for (let i = 0; i < pourCount; i++) {
-                let pourData = this.xbRecipeJSON.recipeVo.pourList[i];
-                let flowRate = pourData.flowRate * 10;
-                let isEnableVibrationAfter = pourData.isEnableVibrationAfter === 1;
-                let isEnableVibrationBefore = pourData.isEnableVibrationBefore === 1;
-                let pattern: number;
-                switch (pourData.pattern) {
-                    case 1:
-                        pattern = POUR_PATTERN.CENTERED;
-                        break;
-                    case 2:
-                        pattern = POUR_PATTERN.SPIRAL;
-                        break;
-                    case 3:
-                        pattern = POUR_PATTERN.CIRCULAR;
-                        break;
-                    default:
-                        console.log("Unknown pour pattern, will use Circular: " + pourData.pattern)
-                        pattern = POUR_PATTERN.CIRCULAR
+            const row = this.xbRecipeJSON.recipeVo;
+            console.log('cup:', row.cupType ?? 1, 'cupType:', recipe.cupType);
+            for (let i = 0; i < recipe.pours.length; i++) {
+                const original = row.pourList[i];
+                const pour = recipe.pours[i];
+                if (![1, 2, 3].includes(original.pattern)) {
+                    console.log("Unknown pour pattern, will use Circular: " + original.pattern);
                 }
-                let pause = pourData.pausing;
-                let volume = pourData.volume;
-                let temperature = pourData.temperature;
-                if (recipe.cupType === CUP_TYPE.TEA && volume > 90) {
-                    console.log("Fixing tea pour volume to 90ml, was: " + volume + "ml")
-                    volume = 90;
+                if (pour.volume !== original.volume) {
+                    console.log("Fixing tea pour volume to 90ml, was: " + original.volume + "ml");
                 }
-                // A cloud recipe can carry a temperature the card cannot hold
-                // -- the official app's "BP" preset has arrived here as 99.4 C
-                // rather than a clean round number, from a lossy conversion
-                // somewhere upstream of us. Clamped and rounded at the door,
-                // the same way tea's volume is, so the card gets the hottest
-                // figure it can actually do instead of a write-time refusal.
-                const clampedTemperature = clampCelsius(Math.round(temperature));
-                if (clampedTemperature !== temperature) {
+                if (pour.temperature !== original.temperature) {
                     console.log(
-                        "Fixing pour temperature to " + clampedTemperature +
-                        "C, was: " + temperature + "C"
+                        "Fixing pour temperature to " + pour.temperature +
+                        "C, was: " + original.temperature + "C"
                     );
-                    temperature = clampedTemperature;
                 }
-                let pour = new Pour(i + 1, volume, temperature, flowRate, 0, pattern, pause);
-                pour.setAgitationAfter(isEnableVibrationAfter);
-                pour.setAgitationBefore(isEnableVibrationBefore);
-                recipe.pours.push(pour);
             }
             recipe.fixRatio();
             recipe.offline_backup = recipe.getData();
@@ -261,11 +117,7 @@ export class XBloomRecipe {
     }
 
     public getRecipeTitle() {
-        if (this.getSubtitle().length > 0 && this.getName().length > 0) {
-            return this.getName() + " | " + this.getSubtitle();
-        } else {
-            return this.getName();
-        }
+        return xbloomTitle(this.getName(), this.getSubtitle());
     }
 
     public getName() {
