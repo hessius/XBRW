@@ -419,6 +419,8 @@ Neither host adds a save action, and closing discards the adjustment.
 
 | ID | Source | Context — when the user sees this | Current text |
 |----|--------|-----------------------------------|--------------|
+| `editor.easyMode.saved` | `app/editRecipe.tsx` (`openInEasyMode`) | Assign to Easy Mode saved an unsaved catalogue, roaster or link recipe first, so the slot keeps its library link. | `Saved to your library.` |
+| `editor.easyMode.saveHint` | `components/RecipeOverflowSheet.tsx` | Visible and spoken before assignment, explaining the library side effect. | `Unsaved recipes are saved to your library first.` |
 | `editor.share.network` | `app/editRecipe.tsx:749` (`network`) | Share failed: no network. | `Could not reach the sharing service. Check your connection.` |
 | `editor.share.limited` | `app/editRecipe.tsx:750` (`limited`) | Share failed: rate limited. | `Sharing is busy right now. Try again in a few minutes.` |
 | `editor.share.unavailable` | `app/editRecipe.tsx:751` (`unavailable`) | Share failed: service down. | `Sharing is temporarily unavailable. Everything else still works.` |

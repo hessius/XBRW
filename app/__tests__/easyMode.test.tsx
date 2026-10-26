@@ -372,7 +372,7 @@ it("restores focus to help after closing its covering sheet", async () => {
     try {
         await renderWithProviders(<EasyModeScreen/>);
         await fireEvent.press(screen.getByRole("button", {name: "About Easy Mode"}));
-        expect(await screen.findByText("Assign all three recipes. Your choices are kept on this phone immediately.")).toBeOnTheScreen();
+        expect(await screen.findByText("Your choices are kept on this phone immediately.")).toBeOnTheScreen();
         await waitFor(async () => {
             const close = screen.queryByRole("button", {name: "Close"});
             if (close !== null) await fireEvent.press(close);

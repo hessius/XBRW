@@ -611,6 +611,31 @@ it("validates library updates instead of altering an invalid edited recipe", asy
     expect(options.onAssign).not.toHaveBeenCalled();
 });
 
+it("names the empty slots before the first write and says one change is enough after it", async () => {
+    const options = props();
+    options.record.drafts = [snapshotRecipe(recipes[0]), null, null];
+    await renderWithProviders(<EasyModeSlots {...options} available/>);
+    expect(screen.getByText("Choose a recipe for slots B and C before writing. The first write needs all three. "
+        + "After that you can change one at a time.")).toBeOnTheScreen();
+    expect(screen.getByRole("button", {name: "Write all three slots"})).toBeDisabled();
+    await fireEvent.press(screen.getByRole("button", {name: "About Easy Mode"}));
+    expect(await screen.findByText(
+        "Choose all three recipes the first time. After that, change any one and the other two are sent again."
+    )).toBeOnTheScreen();
+});
+
+it("reconnects a slot from an unsaved catalogue recipe to the library's copy of its link", async () => {
+    const options = props();
+    const fetched = coffee("Kenya - 18g");
+    fetched.shareId = "share-kenya";
+    options.record.drafts = [snapshotRecipe(fetched), null, null];
+    const saved = coffee("Kenya - 18g");
+    saved.shareId = "share-kenya";
+    await renderWithProviders(<EasyModeSlots {...options} recipes={[...recipes, saved]}/>);
+    expect(screen.queryByText("REMOVED FROM LIBRARY")).toBeNull();
+    expect(screen.queryByText("RECIPE UPDATED")).toBeNull();
+});
+
 it("shows only the highest-priority availability reason, not a warning stack", async () => {
     await renderWithProviders(<EasyModeSlots {...props()} busy connected={false} serialMatches={false}/>);
     expect(screen.getByText(/belongs to a different machine/)).toBeOnTheScreen();

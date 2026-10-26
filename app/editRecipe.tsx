@@ -5,6 +5,7 @@ import {resolveBagTracker} from "@/library/coffeeBag";
 import {useLocalSearchParams, useNavigation} from "expo-router";
 import router from "@/hooks/steadyRouter";
 import {openEasyModeRecipe} from "@/hooks/useEasyModeSlots";
+import {libraryRecipeForSlot} from "@/library/slots/slotSource";
 import React, {useEffect, useRef, useState} from "react";
 import {Pressable, ScrollView, Share, View, useWindowDimensions} from "react-native";
 import Animated, {FadeIn, FadeOut, SlideInDown, SlideOutDown} from "react-native-reanimated";
@@ -1310,6 +1311,35 @@ export default function EditRecipe(
         await writeCard(recipe);
     }
 
+    /**
+     * Put the open recipe in an Easy Mode slot, through the library.
+     *
+     * A slot links to its recipe by uuid. A recipe opened from a catalogue, a
+     * roaster or a link is not saved yet, so it is saved first (or matched to
+     * the library's identical copy of the same link) and the slot keeps the
+     * library's uuid. Assigned unsaved, the slot later read REMOVED FROM
+     * LIBRARY.
+     */
+    async function openInEasyMode() {
+        await flushDrafts();
+        if (!recipe || rememberedMachine === "") return;
+        let target: Recipe = recipe;
+        try {
+            if (recipeDatabase.getRecipe(recipe.uuid) === null) {
+                const linked = libraryRecipeForSlot(
+                    recipe, recipeDatabase.retrieveAllRecipes() ?? [], () => persistRecipe(),
+                    hasPendingEdits()
+                );
+                target = linked.recipe;
+                if (linked.saved) notify({tone: "success", message: "Saved to your library."});
+            }
+        } catch {
+            notify({tone: "error", message: "Could not save the recipe."});
+            return;
+        }
+        openEasyModeRecipe(target, rememberedMachine);
+    }
+
     async function deleteRecipe() {
         await flushDrafts();
         try {
@@ -1552,10 +1582,7 @@ export default function EditRecipe(
                                  showHints={showHint} onShowHintsChange={setShowHint}
                                  onShare={onSharePress}
                                  onDuplicate={duplicateRecipe}
-                                 onEasyMode={rememberedMachine !== "" ? async () => {
-                                     await flushDrafts();
-                                     openEasyModeRecipe(recipe, rememberedMachine);
-                                 } : undefined}
+                                 onEasyMode={rememberedMachine !== "" ? openInEasyMode : undefined}
                                  onRefreshName={async () => {
                                      // Refresh fetches against the recipe ID, so
                                      // a just-typed ID has to be committed first

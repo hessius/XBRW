@@ -9,6 +9,7 @@ import {
     type SlotIndex, type SlotJournal, type SlotRecord
 } from "@/library/slots/slotModel";
 import {SLOT_INTEGRATION_BLOCK} from "@/library/slots/slotWriter";
+import {slotSourceRecipe} from "@/library/slots/slotSource";
 import {useBottomInset} from "@/hooks/useBottomInset";
 import type {SlotAttempt} from "@/hooks/useEasyModeSlots";
 import {useLiveBrewBarGuard} from "@/hooks/useLiveBrewBarGuard";
@@ -98,7 +99,7 @@ const WRITE_FAILURES: Readonly<Record<string, WriteFailure>> = {
         message: "A recipe is too large to send. Reduce its stages or volumes before writing.", tone: "error"
     },
     "Choose all three recipes before writing.": {
-        message: "Choose all three recipes before writing.", tone: "error"
+        message: "Choose a recipe for A, B and C before writing. The first write needs all three.", tone: "error"
     },
     "The recipe's source identity is invalid.": RECIPE,
     "The recipe's grinder state is invalid.": RECIPE,
@@ -131,6 +132,20 @@ function writeError(message: string, journal: SlotJournal | null): WriteFailure 
         message: "XBRW++ could not complete this write. Your recipes are kept. Try again; if it repeats, contact support.",
         tone: "error"
     };
+}
+
+/**
+ * Why WRITE is waiting on empty slots. Only the first write needs all three:
+ * the phone keeps every slot it has written, so after that a change to one
+ * sends the other two again.
+ */
+export function emptySlotsMessage(drafts: SlotRecord["drafts"]): string | null {
+    const missing = SLOT_NAMES.filter((_, index) => drafts[index] === null);
+    if (missing.length === 0) return null;
+    const slots = missing.length === 1 ? `slot ${missing[0]}`
+        : `slots ${missing.slice(0, -1).join(", ")} and ${missing[missing.length - 1]}`;
+    return `Choose a recipe for ${slots} before writing. The first write needs all three. `
+        + "After that you can change one at a time.";
 }
 
 function recipeProblem(recipe: Recipe): string | null {
@@ -183,6 +198,8 @@ export function slotWriteAvailability({
     if (!connected) return "Connect to this machine before writing, retrying or cancelling.";
     if (record.journal === null) {
         if (record.experiment?.phase === "active") return "Restore the original set before writing slots.";
+        const empty = emptySlotsMessage(record.drafts);
+        if (empty !== null) return empty;
         try {
             prepareSet(record.drafts);
         } catch (error) {
@@ -417,7 +434,7 @@ export default function EasyModeSlots({
                         const slotIndex = index as SlotIndex;
                         const snapshot = (showingWrittenProbe
                                 ? record.written?.slots[index] : undefined) ?? record.drafts[index];
-                        const current = recipes.find(recipe => recipe.uuid === snapshot?.sourceUuid);
+                        const current = snapshot === null ? undefined : slotSourceRecipe(snapshot, recipes);
                         const status = snapshot === null || isTeaProbeSnapshot(snapshot)
                             ? null : snapshotStatus(snapshot, current);
                         return <EasyModeSlotCard key={name} index={slotIndex} snapshot={snapshot}
@@ -531,7 +548,10 @@ export default function EasyModeSlots({
             </XbrwSheet>
             <XbrwSheet open={helpOpen} onOpenChange={setHelp} title="ABOUT EASY MODE" heightPercent={70}>
                 <ScrollView contentContainerStyle={{gap: 16}}>
-                    <Text color={palette.text}>Assign all three recipes. Your choices are kept on this phone immediately.</Text>
+                    <Text color={palette.text}>
+                        Choose all three recipes the first time. After that, change any one and the other two are sent again.
+                    </Text>
+                    <Text color={palette.text}>Your choices are kept on this phone immediately.</Text>
                     <Text color={palette.text}>Writing replaces A, B and C and switches the machine to EASY.</Text>
                     <Text color={palette.text}>Scale ON automatically tares the scale when that slot is started.</Text>
                     <Text color={palette.dim}>Scale changes are kept here until you choose WRITE TO MACHINE.</Text>

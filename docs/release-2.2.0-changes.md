@@ -452,7 +452,7 @@ Accepted through package A (#280). A roaster
 coffee's primary action read BREW NOW but only opens the recipe in the editor,
 unsaved; the editor has its own BREW. It now reads OPEN RECIPE (spoken "Open
 recipe"). The test ID `roaster-coffee-brew` and the behaviour are unchanged.
-## Second contributor round, package B: pending integration
+## Second contributor round, package B: integrated in #281
 
 Adapted from #271 and #278 under the decisions on #279.
 
@@ -480,3 +480,35 @@ coffee's roaster. Tagged recipe variants must match the selected machine, and a
 model change discards an in-flight lookup. Existing untagged feeds retain their
 selection behaviour. Empty/error responses are uncached 502s, preserving the
 subscriber's last good catalogue.
+## Second contributor round, package C: implementation in progress
+
+Branch `feat/2.2.0-package-c-20261026`, pinned to develop
+`f24fc968a9f48232323145cfe99a6ba443f9d7c4`. Incorporates #272's source
+ancestry with the corrections approved on #279. This is not integrated yet.
+
+A slot links to its recipe by uuid. Catalogue, roaster and link recipes open
+unsaved, and each fetch mints a new uuid, so assigning one from the editor's
+Assign to Easy Mode left a slot that later read REMOVED FROM LIBRARY. The
+editor now saves such a recipe first (or uses the library's copy of the same
+share link when it brews exactly the same, the `planReimport` "same" test) and
+the slot snapshots the library uuid. The action explains the save before it
+is chosen, and a toast says "Saved to your library." Explicit edits to an
+unsaved copy, including notes, are kept rather than replaced by a same-link
+library copy. Library membership is checked again before assignment, so a
+recipe deleted while the editor was open is saved before linking the slot. A
+recipe a slot cannot hold is not saved; the existing error explains why.
+
+Existing slots reconnect for display: when a slot's uuid is not in the library,
+Easy Mode looks for the library copy of the same share link (preferring one
+that brews the same), then a unique link-less recipe with the same name and
+brew. Ambiguous matches stay unlinked.
+Home slot markers still match by uuid only; USE UPDATED RECIPE relinks a slot.
+
+Easy Mode help now says only the first write needs all three recipes, since the
+phone keeps every written slot and resends the other two. With empty slots the
+WRITE reason names them ("Choose a recipe for slots B and C before writing").
+
+Explicit WRITE TO MACHINE remains authoritative. #275's immediate-write
+behavior is deferred under the approved recommendation, not enabled by
+assignment. Physical assignment/write/recovery checks remain release gates;
+this identity repair does not resolve #251's stale-loaded-recipe report.
