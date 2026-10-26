@@ -15,6 +15,7 @@ import {useLiveBrewBarGuard} from "@/hooks/useLiveBrewBarGuard";
 import EasyModeSlotCard, {teaSlotFigures} from "@/components/EasyModeSlotCard";
 import EasyModeWriteOverlay, {slotOverlayVisible} from "@/components/EasyModeWriteOverlay";
 import DotMatrixText from "@/components/DotMatrixText";
+import FillLabel from "@/components/FillLabel";
 import PourProfile from "@/components/PourProfile";
 import XbrwSheet from "@/components/XbrwSheet";
 import TeaSlotProbePanel, {type TeaSlotProbePanelProps} from "@/components/TeaSlotProbePanel";
@@ -403,7 +404,7 @@ export default function EasyModeSlots({
                             disabledStyle={{backgroundColor: palette.text, opacity: 0.45}}
                             onPress={() => {
                                 focusOrigin.current = retryRef; setConfirmation({deviceId, kind: "retry"});
-                            }}><DotMatrixText fontSize={12} weight="bold" color={blocked ? onAccent.text : primary.ink}>RETRY WRITE</DotMatrixText></Button>
+                            }}><FillLabel fontSize={12} color={blocked ? onAccent.text : primary.ink}>RETRY WRITE</FillLabel></Button>
                         <Button ref={cancelRef} accessibilityLabel={onDismissWrite ? "Stop slot write" : "Cancel slot write"} height="auto" minHeight={48}
                             paddingVertical="$3" disabled={blocked} backgroundColor={palette.raised} color={palette.text}
                             borderWidth={1} borderColor={palette.line}
@@ -457,7 +458,7 @@ export default function EasyModeSlots({
                         color={blocked ? onAccent.text : primary.ink}
                         disabledStyle={{backgroundColor: palette.text, opacity: 0.45}}
                         onPress={() => { focusOrigin.current = writeRef; onWrite(); }}>
-                        <DotMatrixText fontSize={12} weight="bold" color={blocked ? onAccent.text : primary.ink}>WRITE TO MACHINE</DotMatrixText>
+                        <FillLabel fontSize={12} color={blocked ? onAccent.text : primary.ink}>WRITE TO MACHINE</FillLabel>
                     </Button>
                     {record.written !== null && <Text color={palette.dim} fontSize={12} textAlign="center">
                         {`Last written by XBRW++ ${new Date(record.written.at).toLocaleString()}.`}

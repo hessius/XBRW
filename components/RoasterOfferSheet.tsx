@@ -4,6 +4,7 @@ import {Pressable, ScrollView} from "react-native";
 import {Text, XStack, YStack} from "tamagui";
 
 import DotMatrixText from "@/components/DotMatrixText";
+import FillLabel from "@/components/FillLabel";
 import XbrwSheet from "@/components/XbrwSheet";
 
 import type {RoasterOfferState} from "@/hooks/useRoasterOffer";
@@ -96,10 +97,10 @@ export default function RoasterOfferSheet({state, onAccept, onDecline}: {
                         <XStack minHeight={BUTTON_HEIGHT} paddingVertical="$3"
                                 alignItems="center" justifyContent="center"
                                 borderRadius="$4" backgroundColor={palette.text}>
-                            <DotMatrixText fontSize={13} weight="bold" letterSpacing={1.5}
-                                           color={onAccent.text}>
+                            <FillLabel fontSize={13} letterSpacing={1.5}
+                                       color={onAccent.text}>
                                 SUBSCRIBE
-                            </DotMatrixText>
+                            </FillLabel>
                         </XStack>
                     </Pressable>
 

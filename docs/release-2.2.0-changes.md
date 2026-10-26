@@ -7,6 +7,22 @@ merged wholesale. Issue #249 records source heads, decisions and integration.
 The shipped 2.1.0 ledger retains its historical gates and now records the
 verified release/source-reconciliation chronology.
 
+## Second contributor round, package A: pending integration
+
+Issue #279 coordinates this round. Package A retains #269's pane-filling list
+rows, #276's wrapping header titles and #270's OPEN RECIPE catalogue action.
+The action still opens the editor without saving or brewing.
+
+The #268 adaptation adds Settings > Appearance > Solid button labels, off by
+default. On, filled actions and selected controls use solid body lettering;
+outlined controls retain Doto. Off retains the original font size, tracking
+and Doto scaling. The choice updates mounted labels immediately and travels
+in backups; older backups do not reset it. Accepted theme roles, neutral
+catalogue selection and disabled appearances remain unchanged.
+
+No new native dependency, machine command, NFC layout or deployment is added.
+Packages B/C and the wrong-recipe investigation remain separate.
+
 ## Selective preview reconciliation, implementation pending integration
 
 PR #277 tracks the approved sixteen-item review of #252, implemented on

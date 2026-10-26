@@ -173,7 +173,7 @@ describe("AppearanceScope", () => {
         expect(appDatabase).not.toHaveBeenCalled();
     });
 
-    it("preserves child identity and local input across scheme and mode changes", async () => {
+    it("preserves child identity and local input across scheme, mode and lettering changes", async () => {
         const mounted = jest.fn();
         const unmounted = jest.fn();
         function Input() {
@@ -184,11 +184,11 @@ describe("AppearanceScope", () => {
             }, []);
             return <><Reader/><TextInput accessibilityLabel="local input" value={text} onChangeText={setText}/></>;
         }
-        const tree = (choice: AppearanceChoice) =>
-            <AppearanceScope choice={choice}><Input/></AppearanceScope>;
+        const tree = (choice: AppearanceChoice, solidControlLabels = false) =>
+            <AppearanceScope choice={choice} solidControlLabels={solidControlLabels}><Input/></AppearanceScope>;
         const {rerender} = await renderWithProviders(tree(DEFAULT_APPEARANCE));
         await fireEvent.changeText(screen.getByLabelText("local input"), "keep me");
-        await rerender(tree(Object.freeze({theme: "light", recipeColours: "themed"})));
+        await rerender(tree(Object.freeze({theme: "light", recipeColours: "themed"}), true));
         expect(screen.getByTestId("choice")).toHaveTextContent("light/themed");
         expect(screen.getByDisplayValue("keep me")).toBeTruthy();
         await rerender(tree({theme: "magenta", recipeColours: "original"}));

@@ -3,6 +3,7 @@ import {Pressable} from "react-native";
 import {ScrollView, Text, XStack, YStack} from "tamagui";
 
 import XbrwSheet from "@/components/XbrwSheet";
+import SettingsToggleRow from "@/components/SettingsToggleRow";
 import {accents, resolveAppearance} from "@/constants/colors";
 import {useAppearance} from "@/hooks/useAppearance";
 import {THEME_IDS, type AppearanceChoice, type RecipeColourMode, type ThemeId} from "@/library/appearance";
@@ -13,6 +14,8 @@ type Props = {
     choice: AppearanceChoice;
     chooseTheme: (theme: ThemeId) => void;
     chooseRecipeColours: (mode: RecipeColourMode) => void;
+    solidControlLabels: boolean;
+    onSolidControlLabelsChange: (on: boolean) => void;
 };
 
 const LABELS: Record<ThemeId, string> = {
@@ -66,7 +69,10 @@ function ThemeChoice({theme, choice, onPress}: {
     );
 }
 
-export default function AppearanceSheet({open, onOpenChange, choice, chooseTheme, chooseRecipeColours}: Props) {
+export default function AppearanceSheet({
+    open, onOpenChange, choice, chooseTheme, chooseRecipeColours,
+    solidControlLabels, onSolidControlLabelsChange
+}: Props) {
     const {palette} = useAppearance();
     return (
         <XbrwSheet open={open} onOpenChange={onOpenChange} title="Appearance" heightPercent={85}>
@@ -85,6 +91,10 @@ export default function AppearanceSheet({open, onOpenChange, choice, chooseTheme
                         <ChoiceRow key={mode} label={mode === "original" ? "Original" : "Themed"}
                                    selected={choice.recipeColours === mode}
                                    onPress={() => chooseRecipeColours(mode)}/>)}
+                    <SettingsToggleRow label="Solid button labels"
+                                       description="Use solid lettering on filled buttons and selected controls. Off keeps the dotted labels."
+                                       value={solidControlLabels}
+                                       onChange={onSolidControlLabelsChange}/>
                 </YStack>
             </ScrollView>
         </XbrwSheet>

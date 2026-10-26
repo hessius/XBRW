@@ -4,6 +4,7 @@ import {Pressable} from "react-native";
 import {XStack, YStack} from "tamagui";
 
 import DotMatrixText from "@/components/DotMatrixText";
+import FillLabel from "@/components/FillLabel";
 
 
 const BAR_PADDING = 12;
@@ -63,10 +64,9 @@ export default function HubSaveBar({
                         alignItems="center" justifyContent="center"
                         borderRadius="$4"
                         backgroundColor={primary.fill}>
-                    <DotMatrixText fontSize={12} weight="bold" letterSpacing={1.5}
-                                   color={primary.ink}>
+                    <FillLabel fontSize={12} letterSpacing={1.5} color={primary.ink}>
                         {label}
-                    </DotMatrixText>
+                    </FillLabel>
                 </XStack>
             </XStack>
         </YStack>

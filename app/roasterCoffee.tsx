@@ -10,6 +10,7 @@ import {
     BuySection, CatalogueStatus, Chip, CoffeeBadgeTag, DetailPhoto, PageLinkRow, WatchToggle
 } from "@/components/CatalogueParts";
 import DotMatrixText from "@/components/DotMatrixText";
+import FillLabel from "@/components/FillLabel";
 import NameShelfSheet from "@/components/NameShelfSheet";
 import NewerVersionPrompt from "@/components/NewerVersionPrompt";
 import ScreenHeader from "@/components/ScreenHeader";
@@ -89,10 +90,10 @@ function Action({label, spoken, testID, primary = false, disabled = false, onPre
                     opacity={disabled ? 0.35 : 1}
                     backgroundColor={primary ? action.fill : palette.none}
                     borderWidth={primary ? 0 : 1} borderColor={palette.line}>
-                <DotMatrixText fontSize={12} weight="bold" letterSpacing={1.6}
-                               color={primary ? action.ink : palette.text}>
+                <FillLabel filled={primary} fontSize={12} letterSpacing={1.6}
+                           color={primary ? action.ink : palette.text}>
                     {label}
-                </DotMatrixText>
+                </FillLabel>
             </XStack>
         </Pressable>
     );
@@ -409,11 +410,11 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
                                                         height={36} paddingHorizontal="$3"
                                                         alignItems="center" borderRadius="$4"
                                                         backgroundColor={on ? selection.fill : palette.raised}>
-                                                    <DotMatrixText fontSize={12} weight="bold"
-                                                                   letterSpacing={1.4}
-                                                                   color={on ? selection.ink : palette.dim}>
+                                                    <FillLabel filled={on} fontSize={12}
+                                                               letterSpacing={1.4}
+                                                               color={on ? selection.ink : palette.dim}>
                                                         {entry.size.toUpperCase()}
-                                                    </DotMatrixText>
+                                                    </FillLabel>
                                                 </XStack>
                                             </Pressable>
                                         );

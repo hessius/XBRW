@@ -7,6 +7,7 @@ import {Text, XStack, YStack} from "tamagui";
 import BrewStageLadder from "@/components/BrewStageLadder";
 import {Chip, DetailPhoto} from "@/components/CatalogueParts";
 import DotMatrixText from "@/components/DotMatrixText";
+import FillLabel from "@/components/FillLabel";
 import ScreenHeader from "@/components/ScreenHeader";
 import {notify} from "@/components/XbrwToast";
 
@@ -122,10 +123,10 @@ function ErrorState({
                     <XStack height={44} paddingHorizontal="$4" borderRadius="$4"
                             alignItems="center" justifyContent="center"
                             backgroundColor={primary.fill}>
-                        <DotMatrixText fontSize={12} weight="bold" letterSpacing={1.5}
-                                       color={primary.ink}>
+                        <FillLabel fontSize={12} letterSpacing={1.5}
+                                   color={primary.ink}>
                             TRY AGAIN
-                        </DotMatrixText>
+                        </FillLabel>
                     </XStack>
                 </Pressable>
             )}
@@ -251,10 +252,9 @@ function RecipeDetail({
                     <XStack height={48} alignItems="center" justifyContent="center"
                             borderRadius="$4" backgroundColor={primary.fill}
                             opacity={saving ? 0.35 : 1}>
-                        <DotMatrixText fontSize={12} weight="bold" letterSpacing={1.6}
-                                       color={primary.ink}>
+                        <FillLabel fontSize={12} letterSpacing={1.6} color={primary.ink}>
                             {saving ? "SAVING" : "SAVE"}
-                        </DotMatrixText>
+                        </FillLabel>
                     </XStack>
                 </Pressable>
             </YStack>

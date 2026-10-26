@@ -3,7 +3,7 @@ import React from "react";
 import {Pressable} from "react-native";
 import {XStack} from "tamagui";
 
-import DotMatrixText from "@/components/DotMatrixText";
+import FillLabel from "@/components/FillLabel";
 
 
 export type Deck = "brew" | "stages" | "about";
@@ -61,10 +61,10 @@ export default function DeckSwitch({deck, stageCount, accent, onChange}: Props) 
                            borderRadius:    9,
                            backgroundColor: active ? selected.fill : undefined
                        }}>
-                <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.8}
-                               color={active ? selected.ink : palette.dim}>
+                <FillLabel filled={active} fontSize={11} letterSpacing={1.8}
+                           color={active ? selected.ink : palette.dim}>
                     {label}
-                </DotMatrixText>
+                </FillLabel>
             </Pressable>
         );
     }

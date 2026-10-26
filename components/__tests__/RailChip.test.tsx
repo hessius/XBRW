@@ -1,4 +1,5 @@
 import React from "react";
+import {StyleSheet} from "react-native";
 import {fireEvent, screen} from "@testing-library/react-native";
 
 import RailChip, {CHIP_HEIGHT} from "@/components/RailChip";
@@ -90,8 +91,10 @@ describe("RailChip", () => {
         const {rerender} = await renderWithProviders(
             <RailChip active label="TEA" accessibilityLabel="Tea" onPress={jest.fn()}/>
         );
-        const activeInk = screen.getByText("TEA").props.style as {color?: string}[];
-        expect(activeInk.some((s) => s?.color === onAccent.text)).toBe(true);
+        const activeInk = StyleSheet.flatten(screen.getByText("TEA").props.style) as
+            {color?: string; fontFamily?: string};
+        expect(activeInk.color).toBe(onAccent.text);
+        expect(activeInk.fontFamily?.startsWith("Doto-")).toBe(true);
 
         await rerender(
             <RailChip active={false} label="TEA" accessibilityLabel="Tea" onPress={jest.fn()}/>

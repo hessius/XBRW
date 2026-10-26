@@ -4,6 +4,7 @@ import {Button, Switch, Text, XStack, YStack} from "tamagui";
 
 import DotIcon from "@/components/DotIcon";
 import DotMatrixText from "@/components/DotMatrixText";
+import FillLabel from "@/components/FillLabel";
 import {openLink} from "@/components/openLink";
 import {useAppearance} from "@/hooks/useAppearance";
 import type {CoffeeBadge} from "@/library/roasterAlerts";
@@ -177,10 +178,10 @@ function BagWatch({label, bag, on, onWatch}: {
                 <XStack height={36} paddingHorizontal="$3" alignItems="center" borderRadius="$4"
                         borderWidth={on ? 0 : 1} borderColor={palette.line}
                         backgroundColor={on ? palette.success : palette.none}>
-                    <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.4}
-                                   color={on ? onFill(palette.success).text : palette.text}>
+                    <FillLabel filled={on} fontSize={11} letterSpacing={1.4}
+                               color={on ? onFill(palette.success).text : palette.text}>
                         {on ? "WATCHING" : "TELL ME"}
-                    </DotMatrixText>
+                    </FillLabel>
                 </XStack>
             </Pressable>
         </XStack>
@@ -237,10 +238,9 @@ export function BuySection({options, watching, onWatch}: {
                                    onPress={() => openLink(option.url as string)}>
                             <XStack height={36} paddingHorizontal="$3" alignItems="center"
                                     borderRadius="$4" backgroundColor={selection.fill}>
-                                <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.4}
-                                               color={selection.ink}>
+                                <FillLabel fontSize={11} letterSpacing={1.4} color={selection.ink}>
                                     BUY
-                                </DotMatrixText>
+                                </FillLabel>
                             </XStack>
                         </Pressable>
                     )}

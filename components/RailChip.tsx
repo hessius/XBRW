@@ -3,7 +3,7 @@ import Animated, {useAnimatedStyle, useSharedValue, withTiming} from "react-nati
 import {XStack} from "tamagui";
 
 import DotIcon from "@/components/DotIcon";
-import DotMatrixText from "@/components/DotMatrixText";
+import FillLabel from "@/components/FillLabel";
 import {useAppearance} from "@/hooks/useAppearance";
 import type {DotIconName} from "@/constants/dotIcons";
 import {DURATION, EASING, useReducedMotion} from "@/constants/motion";
@@ -196,9 +196,9 @@ export default function RailChip({
                 <DotIcon name={icon} size={ICON_SIZE} color={ink}/>
             )}
             {label !== undefined && (
-                <DotMatrixText fontSize={12} weight="bold" letterSpacing={1.5} color={ink}>
+                <FillLabel filled={selected} fontSize={12} letterSpacing={1.5} color={ink}>
                     {label}
-                </DotMatrixText>
+                </FillLabel>
             )}
             {caretOpen !== undefined && (
                 <RailCaret open={caretOpen} color={ink}/>

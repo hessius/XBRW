@@ -4,6 +4,19 @@ Package acceptance, integration and release qualification are separate.
 Record the exact app commit, native build, platform, machine and firmware for
 each device result. Software transports do not qualify BLE or NFC hardware.
 
+## Second contributor round, package A
+
+- [ ] With Solid button labels off (the default), verify existing dotted
+  labels and spacing. Switch it on and off in Settings > Appearance, close
+  and reopen the app, and back up/restore both choices. An older backup must
+  not reset the current choice.
+- [ ] Check filled actions, selected tabs/chips, outlined controls and disabled
+  controls in every appearance and both recipe-colour modes. Keep accepted
+  theme/selection roles and disabled colours unchanged.
+- [ ] Check narrow/wide panes and large text: list rows fill their containing
+  pane, long pushed-screen titles wrap beside Back, and controls remain
+  reachable. OPEN RECIPE must open the editor, not start a brew or save.
+
 ## Selective preview reconciliation: remaining manual gates
 
 The implementation plan records software results separately from these open

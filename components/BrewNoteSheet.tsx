@@ -5,6 +5,7 @@ import {XStack, YStack} from "tamagui";
 
 import BrewJudgement from "@/components/BrewJudgement";
 import DotMatrixText from "@/components/DotMatrixText";
+import FillLabel from "@/components/FillLabel";
 import XbrwSheet from "@/components/XbrwSheet";
 import {RATING_SHEET_DONE, RATING_SHEET_TITLE} from "@/constants/brewCopy";
 
@@ -85,10 +86,10 @@ export default function BrewNoteSheet({
                     height={48} alignItems="center" justifyContent="center"
                     borderRadius="$4"
                     backgroundColor={primary.fill}>
-                    <DotMatrixText fontSize={13} weight="bold" letterSpacing={1.5}
-                                   color={primary.ink}>
+                    <FillLabel fontSize={13} letterSpacing={1.5}
+                               color={primary.ink}>
                         {RATING_SHEET_DONE}
-                    </DotMatrixText>
+                    </FillLabel>
                 </XStack>
                 {footer}
             </YStack>

@@ -16,6 +16,7 @@ import BypassRung from "@/components/BypassRung";
 import BypassWriteSheet from "@/components/BypassWriteSheet";
 import DeckSwitch, {type Deck} from "@/components/DeckSwitch";
 import DotMatrixText from "@/components/DotMatrixText";
+import FillLabel from "@/components/FillLabel";
 import FieldRow from "@/components/FieldRow";
 import HelpSheet from "@/components/HelpSheet";
 import LeaveEditorSheet, {type LeaveIntent} from "@/components/LeaveEditorSheet";
@@ -707,12 +708,12 @@ function BarButton({label, accessibilityLabel, enabled, accent, flex, onPress}: 
                     // The accent button's own edge, so it reads as one solid
                     // block rather than a fill inside a grey ring.
                     borderColor={enabled && accent !== undefined ? fill : palette.line}>
-                <DotMatrixText fontSize={12} weight="bold" letterSpacing={2}
-                               color={enabled
-                                   ? (accent !== undefined ? appearance.onFill(fill).text : palette.text)
-                                   : palette.muted}>
+                <FillLabel filled={enabled && accent !== undefined} fontSize={12} letterSpacing={2}
+                           color={enabled
+                               ? (accent !== undefined ? appearance.onFill(fill).text : palette.text)
+                               : palette.muted}>
                     {label}
-                </DotMatrixText>
+                </FillLabel>
             </YStack>
         </Pressable>
     );
