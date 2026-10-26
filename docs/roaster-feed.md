@@ -253,6 +253,16 @@ for the newest 60 official coffee releases, roaster name **xBloom Collective**.
 - Origin, process, varietal, tasting notes, roast level and the pod photo come
   from the catalogue row. `available` is always `true` and there are no
   variants: pods are sold on xbloom.com, so nothing is offered to buy.
+- The roaster who made the pod is named in `bean.roaster` only when xBloom's
+  shop makes it plain: xbloom.com is a Shopify store whose products list their
+  roaster as the vendor, and the function reads that product list beside the
+  catalogue. A release is matched when the roaster's own name, or every
+  identifying word of one of its shop coffees, appears as whole words in the
+  release's name, and two roasters tying leaves it blank. On 26 Oct 2026 that
+  named 10 of the 60 releases; the rest are not sold there and stay blank. The
+  feed is still **xBloom Collective**, but a recipe saved from a named coffee
+  takes that roaster, so it shelves with the roaster's other coffees. If the
+  shop is unreachable the feed is served without roaster names.
 - The id is a slug of the coffee's name (`xbloom-ethiopia-banko-chelbesa`), so
   NEW stays on a release until it is seen, and a re-upload is not new.
 - The function reads only the catalogue list, at most four pages, never a

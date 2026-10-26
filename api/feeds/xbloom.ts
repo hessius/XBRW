@@ -1,6 +1,8 @@
 import type {IncomingMessage, ServerResponse} from "node:http";
 
-import {buildCollectiveFeed, fetchOfficialRows, type FetchLike} from "../_lib/collective";
+import {
+    buildCollectiveFeed, fetchOfficialRows, fetchShopProducts, roasterMatcher, type FetchLike
+} from "../_lib/collective";
 
 /**
  * xBloom's new releases as a roaster feed: `GET /api/feeds/xbloom`.
@@ -11,8 +13,10 @@ import {buildCollectiveFeed, fetchOfficialRows, type FetchLike} from "../_lib/co
  * Vercel's CDN holds each answer for six hours and serves the old one while it
  * refreshes, so the catalogue is asked a handful of times a day however many
  * phones subscribe. Subscribers read a feed at most every 12 hours anyway.
- * Recipes themselves are never fetched here: the phone opens each share link
- * from xBloom only when somebody opens the coffee.
+ * Roaster names, where xBloom's shop makes them plain, come from xbloom.com's
+ * public product list (see `roasterMatcher`). Recipes themselves are never
+ * fetched here: the phone opens each share link from xBloom only when
+ * somebody opens the coffee.
  *
  * Like `api/share.ts`, the logic is written against `Request`/`Response` and
  * the default export adapts it onto Node's `(req, res)`, which is what Vercel's
@@ -36,8 +40,15 @@ export async function respond(request: Request, fetchImpl?: FetchLike): Promise<
     // the advertised address is the bare path.
     const feedUrl = `${url.origin}${url.pathname}`;
     try {
-        const rows = await fetchOfficialRows(fetchImpl);
-        const feed = buildCollectiveFeed(rows, feedUrl);
+        // The shop only adds roaster names, so losing it costs nothing else.
+        const [rows, products] = await Promise.all([
+            fetchOfficialRows(fetchImpl),
+            fetchShopProducts(fetchImpl).catch((error: unknown) => {
+                console.warn("feeds/xbloom: shop unavailable", (error as Error)?.message);
+                return [];
+            })
+        ]);
+        const feed = buildCollectiveFeed(rows, feedUrl, roasterMatcher(products));
         if (feed.coffees.length === 0) {
             // An empty list would tell every subscriber their coffees were
             // all removed. Better to fail and let the cached copy stand.

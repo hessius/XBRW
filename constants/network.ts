@@ -108,7 +108,7 @@ export const OUTBOUND_CALLS: OutboundCall[] = [
             "No recipe, no account and nothing from your library. XBRW++ drops any address that is not https.",
             "Only while the app is open. There is no background fetch.",
             "Checking the list never asks xBloom anything and never changes your library. A coffee's recipe is fetched from xBloom only when you open, brew or add it.",
-            "The built-in xBloom Collective list comes from a small XBRW++ service, not from xBloom. That service reads xBloom's public recipe catalogue a few times a day, the same list the hub shows, and serves everyone the same copy, so your request never reaches xBloom and carries nothing about you to it."
+            "The built-in xBloom Collective list comes from a small XBRW++ service, not from xBloom. That service reads xBloom's public recipe catalogue and the public product list of xBloom's shop (to name who roasted each pod) a few times a day, and serves everyone the same copy, so your request never reaches xBloom and carries nothing about you to it."
         ],
         source:  [
             "library/roasterFeed.ts", "library/roasterSync.ts", "hooks/useRoasterOffer.ts",

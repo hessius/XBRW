@@ -81,8 +81,11 @@ export type CollectiveFeed = {
 export type FetchLike = (url: string, init: {
     method: string;
     headers: Record<string, string>;
-    body: string;
+    body?: string;
 }) => Promise<{ok: boolean; status: number; json(): Promise<unknown>}>;
+
+/** The one place this file reaches the network; everything else is injected. */
+const realFetch: FetchLike = (url, init) => fetch(url, init);
 
 /**
  * The newest official coffee rows, newest first.
@@ -93,7 +96,7 @@ export type FetchLike = (url: string, init: {
  * distinct coffees have been seen, so a normal refresh is one or two calls.
  */
 export async function fetchOfficialRows(
-    fetchImpl: FetchLike = (url, init) => fetch(url, init)
+    fetchImpl: FetchLike = realFetch
 ): Promise<CollectiveRow[]> {
     const rows: CollectiveRow[] = [];
     const names = new Set<string>();
@@ -131,7 +134,10 @@ export async function fetchOfficialRows(
  * model so the size picker reads "15G ORIGINAL" / "15G STUDIO". Rows that are
  * not official, have no name or no xBloom share link are skipped.
  */
-export function buildCollectiveFeed(rows: readonly CollectiveRow[], feedUrl: string): CollectiveFeed {
+export function buildCollectiveFeed(
+    rows: readonly CollectiveRow[], feedUrl: string,
+    roasterFor: (name: string) => string | undefined = () => undefined
+): CollectiveFeed {
     const coffees = new Map<string, FeedCoffee>();
     for (const row of rows) {
         if (row.official !== 1) continue;
@@ -144,6 +150,8 @@ export function buildCollectiveFeed(rows: readonly CollectiveRow[], feedUrl: str
         if (!coffee) {
             if (coffees.size >= MAX_COFFEES) continue;
             coffee = newCoffee(row, name, key);
+            const roaster = roasterFor(name);
+            if (roaster) coffee.bean.roaster = roaster;
             coffees.set(key, coffee);
         }
         const size = sizeLabel(row);
@@ -258,4 +266,135 @@ function shareLink(value: unknown): string | undefined {
     return /(^|\.)xbloom(coffee)?\.(com|cn)$/.test(parsed.hostname) && parsed.searchParams.get("id")
         ? url
         : undefined;
+}
+
+/*
+ * Who roasted it.
+ *
+ * The catalogue does not say, but xBloom's shop does: xbloom.com is a Shopify
+ * store, and every partner pod or bag lists its roaster as the product's
+ * vendor. Most releases are not on sale there (regional, or sold out and
+ * delisted), so this only fills in a roaster when the match is plain, and a
+ * coffee with no clear match keeps none rather than a guess. The feed itself
+ * stays "xBloom Collective"; a matched coffee carries `bean.roaster`, which the
+ * app prefers over the feed's name for that recipe.
+ */
+
+const SHOP = "https://xbloom.com/products.json";
+const SHOP_PAGE_SIZE = 250;
+const MAX_SHOP_PAGES = 3;
+
+/** The fields of a shop product the matcher reads. */
+export type ShopProduct = {title: string; vendor: string; product_type: string};
+
+/** Vendors that are not coffee roasters: xBloom itself and the add-ons it resells. */
+const NOT_ROASTERS = new Set(["xbloom", "shipinsure", "aeropress", "third wave water", "kilogram tea"]);
+
+/** Product types that are never a coffee, so their titles say nothing. */
+const NOT_COFFEE = new Set([
+    "tea", "gift card", "bundle", "bundle_pick", "merch", "package protection",
+    "gift pods", "repair", "machine", "bss", "coffee collection"
+]);
+
+/** Words in a shop title that do not identify a coffee. */
+const FILLER = new Set(["the", "and", "of", "by", "coffee", "xpod", "xpods", "pod", "pods", "decaf", "blend"]);
+
+/** Endings a roaster's name carries in one place and drops in another. */
+const ROASTER_SUFFIX = / (coffee|coffees|co|company|roasters|roastery|roasting)$/;
+
+function words(text: string): string {
+    return text
+        .normalize("NFKD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, " ")
+        .trim();
+}
+
+/** "Bean & Bean Coffee Roasters" and "Bean & Bean" are one roaster. */
+function roasterCore(vendor: string): string {
+    let core = words(vendor);
+    while (ROASTER_SUFFIX.test(core)) core = core.replace(ROASTER_SUFFIX, "");
+    return core;
+}
+
+/**
+ * Every product the shop lists, at most three pages.
+ *
+ * Throws on any failure; the caller treats that as "no roaster information",
+ * never as a reason to withhold the feed.
+ */
+export async function fetchShopProducts(fetchImpl: FetchLike = realFetch): Promise<ShopProduct[]> {
+    const products: ShopProduct[] = [];
+    for (let page = 1; page <= MAX_SHOP_PAGES; page++) {
+        const res = await fetchImpl(`${SHOP}?limit=${SHOP_PAGE_SIZE}&page=${page}`, {
+            method:  "GET",
+            headers: {accept: "application/json"}
+        });
+        if (!res.ok) throw new Error(`shop returned ${res.status}`);
+        const body = await res.json() as {products?: unknown};
+        if (!Array.isArray(body.products)) throw new Error("shop answered without products");
+        for (const raw of body.products as Record<string, unknown>[]) {
+            const title = clean(raw?.title);
+            const vendor = clean(raw?.vendor);
+            if (title && vendor) products.push({title, vendor, product_type: clean(raw.product_type) ?? ""});
+        }
+        if (body.products.length < SHOP_PAGE_SIZE) break;
+    }
+    return products;
+}
+
+/**
+ * A lookup from a release's name to its roaster, or undefined.
+ *
+ * Two plain kinds of match, both on whole words:
+ *
+ * - the roaster's own name is in the release's ("People Possession Peach",
+ *   "15 Mile Pettibone Coffee"); names shorter than four letters are ignored;
+ * - every identifying word of a shop coffee's title is in it ("Chelbesa" by
+ *   Flower Child in "Ethiopia Banko Chelbesa"). The title is read up to its
+ *   first " - " or " | ", and a one-word title must be at least six letters.
+ *
+ * The strongest match wins, the roaster's own name above a title. If two
+ * different roasters tie, nobody is named.
+ */
+export function roasterMatcher(products: readonly ShopProduct[]): (name: string) => string | undefined {
+    const roasters = new Map<string, string>();
+    const titles: {words: string[]; core: string; vendor: string}[] = [];
+    for (const product of products) {
+        const core = roasterCore(product.vendor);
+        if (!core || NOT_ROASTERS.has(core)) continue;
+        // The longest spelling of a roaster's name is the one shown.
+        const known = roasters.get(core);
+        if (!known || product.vendor.length > known.length) roasters.set(core, product.vendor);
+        if (NOT_COFFEE.has(product.product_type.toLowerCase())) continue;
+        const title = words(product.title.split(/ - | \| /)[0])
+            .split(" ")
+            .filter((word) => word !== "" && !FILLER.has(word));
+        if (title.length === 0 || (title.length === 1 && title[0].length < 6)) continue;
+        titles.push({words: title, core, vendor: product.vendor});
+    }
+
+    return (name) => {
+        const padded = ` ${words(name)} `;
+        const has = (phrase: string) => padded.includes(` ${phrase} `);
+        let best = 0;
+        let found = new Set<string>();
+        const consider = (core: string, score: number) => {
+            if (score > best) {
+                best = score;
+                found = new Set([core]);
+            } else if (score === best) {
+                found.add(core);
+            }
+        };
+        for (const core of roasters.keys()) {
+            if (core.replace(/ /g, "").length >= 4 && has(core)) consider(core, 1000 + core.length);
+        }
+        for (const title of titles) {
+            if (title.words.every(has)) consider(title.core, title.words.join(" ").length);
+        }
+        if (found.size !== 1) return undefined;
+        return roasters.get([...found][0]);
+    };
 }

@@ -1,8 +1,10 @@
 import {chooseRecipe} from "@/library/roasterCatalogue";
 import {parseRoasterFeed} from "@/library/roasterFeed";
 
-import {buildCollectiveFeed, coffeeKey, fetchOfficialRows, MAX_COFFEES, type CollectiveRow}
-    from "../_lib/collective";
+import {
+    buildCollectiveFeed, coffeeKey, fetchOfficialRows, fetchShopProducts, MAX_COFFEES, roasterMatcher,
+    type CollectiveRow, type ShopProduct
+} from "../_lib/collective";
 import {CACHE_CONTROL, respond} from "../feeds/xbloom";
 
 const FEED = "https://xbrwplusplus.vercel.app/api/feeds/xbloom";
@@ -120,16 +122,88 @@ describe("coffeeKey", () => {
     });
 });
 
-function catalogue(pages: CollectiveRow[][], totalPage = pages.length) {
+/** Live shop rows (xbloom.com/products.json, 26 Oct 2026), trimmed to the fields read. */
+const SHOP: ShopProduct[] = [
+    {title: "Chelbesa", vendor: "Flower Child", product_type: "Coffee Collection xPod"},
+    {title: "15 Mile", vendor: "Pettibone Coffee", product_type: "Whole Bag Bean"},
+    {title: "Companion Blend", vendor: "Little Wolf", product_type: "Whole Bag Bean"},
+    {title: "New School - Strawberry", vendor: "Black & White", product_type: "Market Seasonal"},
+    {title: "Hambela Deri Fahmi - Faysel Abdosh", vendor: "Regalia", product_type: "Whole Bag Bean"},
+    {title: "Hambela Natural", vendor: "Regalia Coffee", product_type: "Dropship"},
+    {title: "Tote Bag", vendor: "People Possession", product_type: "Merch"},
+    {title: "Kenya", vendor: "Onyx", product_type: "Evergreen"},
+    {title: "Gift Card", vendor: "xBloom", product_type: "Gift Card"},
+    {title: "Ethiopia Banko", vendor: "xBloom", product_type: "Coffee Collection"}
+];
+
+function catalogue(pages: CollectiveRow[][], totalPage = pages.length, shop: ShopProduct[] | null = []) {
     const bodies: unknown[] = [];
-    const fn = jest.fn(async (_url: string, init: {body: string}) => {
-        const body = JSON.parse(init.body) as {pageIndex: number};
+    const fn = jest.fn(async (url: string, init: {body?: string}) => {
+        if (url.startsWith("https://xbloom.com/products.json")) {
+            return shop === null
+                ? {ok: false, status: 429, json: async () => ({})}
+                : {ok: true, status: 200, json: async () => ({products: shop})};
+        }
+        const body = JSON.parse(init.body ?? "{}") as {pageIndex: number};
         bodies.push(body);
         return {ok: true, status: 200,
                 json: async () => ({code: 200, data: {list: pages[body.pageIndex - 1] ?? [], totalPage}})};
     });
     return {fn, bodies};
 }
+
+describe("roasterMatcher", () => {
+    const roasterFor = roasterMatcher(SHOP);
+
+    it("names the roaster when a shop coffee's title is in the release's name", () => {
+        expect(roasterFor("Ethiopia Banko Chelbesa")).toBe("Flower Child");
+        expect(roasterFor("Companion Blend")).toBe("Little Wolf");
+        expect(roasterFor("New School")).toBe("Black & White");
+    });
+
+    it("names the roaster when its own name is in the release's, even from a merch listing", () => {
+        expect(roasterFor("People Possession Peach")).toBe("People Possession");
+        expect(roasterFor("Strawberry Decaf Pettibone")).toBe("Pettibone Coffee");
+    });
+
+    it("treats spellings of one roaster as one, showing the longest", () => {
+        expect(roasterFor("Hambela Deri Fahmi")).toBe("Regalia Coffee");
+    });
+
+    it("leaves a release blank rather than guess", () => {
+        // On the shop, but only xBloom's own listing and a one-word title too short to trust.
+        expect(roasterFor("Ethiopia Banko Shakiso")).toBeUndefined();
+        expect(roasterFor("Kenya Simba")).toBeUndefined();
+        // Words must be whole: "Onyx" is not in "Onyxia".
+        expect(roasterFor("Onyxia Natural")).toBeUndefined();
+    });
+
+    it("names nobody when two roasters match equally", () => {
+        const tie = roasterMatcher([...SHOP, {title: "Chelbesa", vendor: "Someone Else", product_type: "Whole Bag Bean"}]);
+        expect(tie("Ethiopia Banko Chelbesa")).toBeUndefined();
+    });
+
+    it("puts the roaster on the coffee and keeps the feed xBloom Collective", () => {
+        const feed = buildCollectiveFeed([row(), studio], FEED, roasterFor);
+        expect(feed.roaster.name).toBe("xBloom Collective");
+        expect(feed.coffees[0].bean.roaster).toBe("Flower Child");
+        expect(parseRoasterFeed(JSON.stringify(feed))?.coffees[0].coffee.roaster).toBe("Flower Child");
+    });
+});
+
+describe("fetchShopProducts", () => {
+    it("reads one page when the shop has fewer than a page of products", async () => {
+        const {fn} = catalogue([[]], 1, SHOP);
+        expect(await fetchShopProducts(fn)).toHaveLength(SHOP.length);
+        expect(fn).toHaveBeenCalledTimes(1);
+        expect(fn.mock.calls[0][0]).toBe("https://xbloom.com/products.json?limit=250&page=1");
+    });
+
+    it("throws when the shop refuses, for the handler to shrug off", async () => {
+        const {fn} = catalogue([[]], 1, null);
+        await expect(fetchShopProducts(fn)).rejects.toThrow("429");
+    });
+});
 
 describe("fetchOfficialRows", () => {
     it("asks for official coffee, newest first, and stops at the last page", async () => {
@@ -169,6 +243,18 @@ describe("GET /api/feeds/xbloom", () => {
         const body = await res.json() as {roaster: {feed: string}; coffees: unknown[]};
         expect(body.roaster.feed).toBe(FEED);
         expect(body.coffees).toHaveLength(1);
+    });
+
+    it("names roasters from the shop, and still serves the feed when the shop is down", async () => {
+        const up = await respond(new Request(FEED), catalogue([[row(), studio]], 1, SHOP).fn);
+        const withShop = await up.json() as {coffees: {bean: {roaster?: string}}[]};
+        expect(withShop.coffees[0].bean.roaster).toBe("Flower Child");
+
+        jest.spyOn(console, "warn").mockImplementation(() => undefined);
+        const down = await respond(new Request(FEED), catalogue([[row(), studio]], 1, null).fn);
+        expect(down.status).toBe(200);
+        const withoutShop = await down.json() as {coffees: {bean: {roaster?: string}}[]};
+        expect(withoutShop.coffees[0].bean).not.toHaveProperty("roaster");
     });
 
     it("refuses to publish an empty list, so a cached copy stands", async () => {
