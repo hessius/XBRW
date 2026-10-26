@@ -233,7 +233,8 @@ then apply HTML escaping.
 
 `bean.name` is required for the coffee block to be retained. Without a usable
 name, the coffee block is ignored, but the recipe can still import. The
-independently parsed recipe-level flavours, tags and colour can still apply.
+recipe-level tags and colour can apply independently; flavours require the
+named coffee block.
 Fields are trimmed. Invalid, empty or over-length optional fields are omitted,
 not truncated; valid fields in the same block survive.
 

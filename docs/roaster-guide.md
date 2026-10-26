@@ -454,7 +454,9 @@ it has no name or no usable recipe.
 
 ### The button
 
-On any page, a plain link works. Encode each value (for example with
+On any page, a plain `xbrw://` link works only when XBRW++ is already installed;
+it provides no installation fallback or desktop redirect. Encode each value
+(for example with
 [an online URL encoder](https://www.urlencoder.org/), or `encodeURIComponent`
 in JavaScript), and write `&` as `&amp;` in HTML:
 
@@ -465,10 +467,11 @@ in JavaScript), and write `&` as `&amp;` in HTML:
 </a>
 ```
 
-Then add the same short script as in the Shopify snippet (the `<script>`
-block) once on the page. On Android it turns the link into one that opens the
-app, or the app's page if it is not installed. On a computer it points at the
-app's page.
+For people without the app, use the
+[HTTPS construction and return-after-install flow above](#a-browser-page-before-the-app-is-installed)
+only after its separately approved deployment and public smoke checks. That
+page is implemented on this branch, not yet deployed; installation does not
+automatically carry the recipe into the app.
 
 ## Images
 
