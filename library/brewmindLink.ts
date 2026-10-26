@@ -1,8 +1,8 @@
-import {fitSizedName} from "@/library/fitName";
-import {readLabels} from "@/library/coffeeLabels";
-import {MAX_NAME} from "@/library/Recipe";
-import {LEGACY_NAMES, PodCoffee, httpsUrl, podCoffeeFromStored} from "@/library/podCoffee";
-import {readRoasterColour} from "@/library/roasterColour";
+import {fitSizedName} from "./fitName";
+import {readLabels} from "./coffeeLabels";
+import {MAX_NAME} from "./recipeIdentity";
+import {LEGACY_NAMES, PodCoffee, httpsUrl, podCoffeeFromStored} from "./podCoffee";
+import {readRoasterColour} from "./roasterColour";
 
 /**
  * The deep link a coffee app hands XBRW++ (issue #159).

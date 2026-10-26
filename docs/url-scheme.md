@@ -1,7 +1,7 @@
 # XBRW++ URL integration
 
-This guide describes the version-1 import contract implemented in XBRW++ 2.1.0
-beta. It lets another app or website open an xBloom recipe in XBRW++, optionally
+This guide describes the version-1 import contract. It lets another app or
+website open an xBloom recipe in XBRW++, optionally
 carrying coffee metadata and a link back to the producer's recipe page.
 
 ## Supported entry point
@@ -15,9 +15,35 @@ integrations. Both schemes are registered on iOS and Android. The app must
 already be installed; these custom-scheme links do not provide installation or
 a web fallback. Provide a normal web link alongside the app button if needed.
 
-There is no configured HTTPS Universal Link / Android App Link entry point.
-The parser can read an HTTPS URL containing an `import` path, but that does not
-make such a URL launch XBRW++. Do not use `https://xbrw.app/import` as an app link.
+### HTTPS browser entry point: implemented, not yet deployed
+
+This branch implements `https://xbrwplusplus.vercel.app/import` (also `/import/`)
+as a full server-rendered recipe page. This is an existing-host checkpoint,
+not a claim that this implementation is already live. Publish links only after
+the separately approved deployment and public read-only smoke checks.
+
+The page works in a browser before native domain association: all recipe and
+coffee content is HTML without JavaScript. It uses the app's actual xBloom
+normalizer and import decorator, displaying every available coffee fact,
+flavours, tags, roast advice, notes, image and recipe stage rather than a
+summary-only preview. Missing fields stay absent. Lookup defaults to Studio;
+an explicit Original response remains Original, with no grind conversion.
+
+**Open in app** is an explicit `xbrw://import` link preserving every original
+query value, including duplicate and unknown parameters and nested URLs.
+Hosting may normalize equivalent encodings such as `+` to `%20` for spaces.
+Nothing automatically
+launches the app. Without the app, use the install destinations, then **return
+to the same browser page and tap Open in app**. There is no deferred/post-install
+handoff. iOS installation uses [the App Store](https://apps.apple.com/app/id6806339475);
+Android uses [GitHub Releases](https://github.com/hessius/XBRW/releases/latest),
+not Google Play. Product (`bean.url`), producer recipe (`recipe.url`) and
+**View on xBloom** destinations are separate.
+
+No current store binary's Universal Link / Android App Link support is claimed.
+Domain ownership, published association files, signing identities, a fresh
+fingerprinted native build and installed-device acceptance are separate gates.
+`xbrw.app` is not owned/verified for this integration; do not publish it.
 
 ## Ready-to-use buttons
 
@@ -154,7 +180,9 @@ Parameter names are case-sensitive. Send each parameter once.
 | `v` | Yes | Exactly `1`. Missing or unknown versions are not processed as version-1 imports. |
 | `share` | Yes | An xBloom HTTP(S) share URL with a nonempty `id` query parameter. A valid xBloom pod code (XID), such as `XB0001`, is also accepted. Prefer a share URL. |
 | `source` | No | Your producer/app identifier. Unknown identifiers are accepted; currently only the exact value `brewmind` receives a dedicated source label. Other values use ordinary import provenance. Do not impersonate another app. |
+| `recipe.name` | No | Producer's recipe title, independent of the coffee name. Whitespace is folded; long titles are fitted to the editor's 100-character ceiling, preserving a dose suffix where possible. |
 | `recipe.url` | No | Your own HTTPS page for this recipe, at most 2,000 characters. Separate from the xBloom share URL and the coffee's `bean.url`. |
+| `feed` | No | Public HTTPS catalogue address, at most 2,000 characters. Parsing/browser lookup does not fetch it; the app may offer a subscription through its normal workflow. Shared Vercel feed service B (#281) is not integrated in this branch. |
 | `bean.*` | No | Coffee metadata described below. |
 
 The share ID is opaque. Preserve its case and characters. Its decoded, trimmed
@@ -175,23 +203,21 @@ value. Do not concatenate an unescaped URL after `share=`: its `&`, `+`, `#` or
 `=` characters could otherwise change the outer query.
 
 ```js
-const link = new URL("xbrw://import");
+// Inputs supplied by your product/recipe, not constants from an example recipe.
+const link = new URL("https://xbrwplusplus.vercel.app/import");
 link.searchParams.set("v", "1");
 link.searchParams.set("source", "your-app");
-link.searchParams.set(
-  "share",
-  "https://share-h5.xbloom.com/?id=example%2Bshare%2Fid%3D"
-);
-link.searchParams.set("recipe.url", "https://example.com/recipes/morning");
-link.searchParams.set("bean.name", "Morning coffee");
-link.searchParams.set("bean.roaster", "Example Roastery");
+link.searchParams.set("share", xbloomShareURL);
+link.searchParams.set("bean.name", coffeeName);
+link.searchParams.set("bean.roaster", roasterName);
+link.searchParams.set("bean.image", coffeeImageURL);
 
-const appUrl = link.toString();
-// Launch appUrl using your platform's URL-opening API, or an HTML link.
+const browserUrl = link.toString(); // Use only after deployment is verified.
+const appUrl = `xbrw://import${link.search}`; // Installed-app-only alternative.
 ```
 
-The example ID is illustrative, not a working recipe. Replace the inner URL
-with a real share link. If it already contains `%2B`, `%2F` or `%3D`, keep that
+Use the real xBloom share URL and public HTTPS coffee image URL from your data.
+If the inner URL already contains `%2B`, `%2F` or `%3D`, keep that
 encoding intact when setting the outer parameter. `URLSearchParams` encodes the
 percent signs for the outer URL; the two nested URL parsers undo their own
 layers. Do not pre-encode a value before passing it to `searchParams.set`.
@@ -207,8 +233,10 @@ then apply HTML escaping.
 
 ## Optional coffee metadata
 
-`bean.name` is required for any coffee metadata to be retained. Without a usable
-name, the whole bean block is ignored, but the recipe can still import.
+`bean.name` is required for the coffee block to be retained. Without a usable
+name, the coffee block is ignored, but the recipe can still import. The
+recipe-level tags and colour can apply independently; flavours require the
+named coffee block.
 Fields are trimmed. Invalid, empty or over-length optional fields are omitted,
 not truncated; valid fields in the same block survive.
 
@@ -234,6 +262,12 @@ not truncated; valid fields in the same block survive.
 | `bean.decaffeinated` | Exactly `1` for decaffeinated or `0` for caffeinated. Omit when unknown; strings such as `true` are not accepted. |
 | `bean.url` | HTTPS coffee/product page; 2,000 characters. |
 | `bean.image` | HTTPS image URL; 2,000 characters. Stored internally as `imageUrl`. |
+| `bean.flavours` | Comma-separated short flavour labels, separate from `aromatics`. At most 500 input characters, 12 labels, 32 characters per label; whitespace is folded and duplicates removed case-insensitively. Invalid labels are omitted. |
+| `bean.tags` | Comma-separated tags; the same limits and normalization as flavours. |
+| `bean.colour` | Strict `#RRGGBB` label colour, matched to a canonical recipe accent rather than persisted as an arbitrary UI colour. `bean.color` is also read. |
+| `bean.rest_days` | Whole days after roasting before use, 0–540, at most four input characters; zero is valid. |
+| `bean.peak_day` | Recommended peak day after roasting, 0–540, at most four input characters. |
+| `bean.best_until_day` | Recommended end of the window after roasting, 0–540, at most four input characters. |
 
 Text caps count JavaScript string length (UTF-16 code units), not encoded URL
 bytes. There is no advertised whole-link size guarantee: browsers, launch APIs
@@ -243,7 +277,8 @@ for longer content.
 Legacy aliases remain readable: `bean.roastDate` (`roastingDate`),
 `bean.roastLevel` (`roast`), `bean.process` (`processing`),
 `bean.cuppingScore` (`cupping_points`), and `bean.decaf` (`decaffeinated`).
-`bean.imageUrl` is also read. New integrations should use the table above and
+`bean.imageUrl`, `bean.restDays`, `bean.peakDay`, and `bean.bestUntilDay` are
+also read. New integrations should use the table above and
 must not send both a legacy and current spelling; do not depend on collision
 ordering.
 
@@ -266,8 +301,11 @@ unmatched-route screen. A nonempty but unrecognisable `share` value can be
 ignored before lookup. There is no machine-readable success/failure callback.
 Do not treat successful URL opening as proof of import or saving.
 
-Avoid putting secrets or personal information into URLs: they may appear in
-browser history, application logs or analytics outside XBRW++.
+Use public URLs, not secrets, credentials, signed private image links or personal
+information: query strings may appear in browser history, application logs or
+analytics outside XBRW++. Browser responses use private/no-store at the browser,
+CDN and Vercel CDN layers and a no-referrer policy; this does not make a public
+URL a secret.
 
 ## Integration checks
 
@@ -277,7 +315,8 @@ reserved characters in coffee metadata, and a failed lookup/retry. Check that
 the selected machine model is correct; Studio and Original grind scales are
 not interchangeable.
 
-The implementation contract lives in `library/brewmindLink.ts`,
+The browser contract additionally lives in `api/import.ts` and `api/_lib/import*`.
+The native implementation contract lives in `library/brewmindLink.ts`,
 `library/importInput.ts`, `hooks/useImportLink.ts`, `hooks/useRecipeImport.ts`,
 `app/+native-intent.tsx` and `app/index.tsx`. The historical `brewmind` module
 names do not restrict this endpoint to BrewMind.

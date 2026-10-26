@@ -1,4 +1,4 @@
-import {isValidXID} from "./Recipe";
+import {isValidXID} from "./recipeIdentity";
 
 /**
  * What the import field will accept, and which endpoint it implies.

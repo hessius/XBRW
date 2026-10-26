@@ -51,6 +51,13 @@ xbrw://import?v=1&source=<your name>&feed=<https URL of the feed, percent-encode
 - A feed is identified by its origin and path. The query string is ignored, so
   `?view=xbrw&v=2` is the same feed as `?view=xbrw`.
 
+The browser import page preserves `feed` and the coffee metadata for the app
+handoff. It shows a catalogue link but does not subscribe on the website.
+Once its separately approved deployment is verified, publishers can use the
+[HTTPS import construction](url-scheme.md#https-browser-entry-point-implemented-not-yet-deployed) instead of an
+installed-app-only link. Integration does not deploy the page or enable the
+built-in xBloom feed.
+
 ## The file
 
 Serve it over https. Any content type works: the body is parsed as JSON whatever

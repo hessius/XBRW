@@ -1,5 +1,5 @@
-import {accents, type AccentGroup} from "@/constants/colors";
-import {MIN_ACCENT_CHROMA, toOklab} from "@/library/cloud/accentMatch";
+import {accents, type AccentGroup} from "../constants/colourValues";
+import {MIN_ACCENT_CHROMA, toOklab} from "./cloud/accentMatch";
 
 /**
  * A roaster's own colour for a coffee, and the recipe accent it becomes.

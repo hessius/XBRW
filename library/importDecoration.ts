@@ -1,8 +1,20 @@
-import Recipe, {type RecipeSource} from "@/library/Recipe";
-import {accentGroupFor} from "@/library/accent";
-import {fermentationFrom, processFrom, roastFrom} from "@/library/brew/beanTags";
-import {podImageUrl, type PodCoffee} from "@/library/podCoffee";
-import {roasterAccent} from "@/library/roasterColour";
+import type {RecipeSource} from "./recipeIdentity";
+import {accentGroupFor} from "./accent";
+import {fermentationFrom, processFrom, roastFrom} from "./brew/beanTags";
+import {podImageUrl, type PodCoffee} from "./podCoffee";
+import {roasterAccent} from "./roasterColour";
+
+export type ImportCandidate = {
+    source: RecipeSource;
+    recipeUrl?: string;
+    name: string;
+    tags: string[];
+    accentIndex?: number;
+    coffee?: PodCoffee;
+    imageURL?: string;
+    isTea(): boolean;
+    setTags(tags: unknown): void;
+};
 
 /**
  * What an import link adds to the recipe it points at (issue #159).
@@ -69,7 +81,7 @@ function tagsFrom(coffee: Partial<PodCoffee>): string[] {
  * stored recipe is not frozen, though. `fillImportBlanks` below gives it what
  * the link carries in the places it has nothing, and only there.
  */
-export function decorateImport(recipe: Recipe, decoration: ImportDecoration): Recipe {
+export function decorateImport<T extends ImportCandidate>(recipe: T, decoration: ImportDecoration): T {
     const {coffee, source, recipeUrl, recipeName, tags, colour} = decoration;
     if (source !== undefined) recipe.source = source;
     if (recipeUrl !== undefined) recipe.recipeUrl = recipeUrl;
@@ -142,7 +154,7 @@ export function decorateImport(recipe: Recipe, decoration: ImportDecoration): Re
  *
  * Returns whether anything changed, so the caller saves only when it must.
  */
-export function fillImportBlanks(recipe: Recipe, decoration: ImportDecoration): boolean {
+export function fillImportBlanks(recipe: ImportCandidate, decoration: ImportDecoration): boolean {
     const {coffee, recipeUrl} = decoration;
     let changed = false;
 
