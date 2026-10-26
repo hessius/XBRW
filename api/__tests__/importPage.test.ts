@@ -406,6 +406,7 @@ describe("safe document and persistent actions", () => {
         expect(css).toContain(palette.base);
         expect(css).toContain(palette.text);
         expect(css).toContain(onAccent.text);
+        expect(css).toContain(`.get-app:focus-visible{outline-color:${onAccent.text}}`);
         expect(css).not.toContain(view.link.colour);
         view.recipe.accentIndex = 10000;
         expect(renderImportPage(view, options)).toContain(`--accent:${accents.coffee[0]}`);

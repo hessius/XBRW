@@ -201,6 +201,7 @@ article p{margin:4px 0}
 .app-dock{background:${palette.surface};border-top:1px solid ${palette.line};max-height:45dvh;overflow:auto;padding:12px max(20px,env(safe-area-inset-right)) max(16px,env(safe-area-inset-bottom)) max(20px,env(safe-area-inset-left))}
 .dock-content{max-width:740px;margin:0 auto}
 .get-app{display:flex;align-items:center;justify-content:center;width:100%;padding:14px;min-height:48px;border-radius:10px;background:var(--accent);color:${onAccent.text};text-decoration:none;font-weight:750}
+.get-app:focus-visible{outline-color:${onAccent.text}}
 .dock-links{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px 20px;margin-top:4px}
 .dock-links a,.dock-links span{display:inline-flex;align-items:center;min-height:44px}
 .dock-links span{color:${palette.dim}}
