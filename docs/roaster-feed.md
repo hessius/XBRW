@@ -187,9 +187,11 @@ link tags the recipe it imports.
 - **Subscribing** stores the roaster and caches the feed. Nothing is imported and
   no shelf is made. A shelf is what the person owns, so they choose what goes on
   one.
-- **Browsing** the catalogue reads only the cached feed: photo, name, roast level,
-  tasting notes, bag sizes and whether each coffee is on sale. Sold-out coffees
-  are shown, after the ones on sale.
+- **Browsing** the catalogue reads only the cached feed: photo, name, country and
+  farm (or region), variety and process, roast level, tasting notes and whether
+  each coffee is on sale. A part the feed leaves out is skipped. Bag sizes and
+  prices are on the coffee's own screen. Sold-out coffees are shown, after the
+  ones on sale.
 - **Opening a coffee** fetches its recipe from xBloom at that moment, so it shows
   the roaster's latest. From there the person can:
   - **Open recipe**: the recipe opens in the editor without being saved. The
@@ -239,6 +241,60 @@ Either way their name for it, their notes, tags and brew history stay. To change
 a recipe for everyone, update it on xBloom under the same share link; people get
 it the next time they open it from your catalogue or your link. A new share link
 is a new recipe.
+
+## xBloom's own releases
+
+xBloom publishes a recipe on its community catalogue
+([collective.xbloom.com](https://collective.xbloom.com)) for each coffee it
+releases, under "xBloom Official", but no feed. `api/feeds/xbloom.ts` builds
+this format for the newest 60 official coffee releases, source name
+**xBloom Collective**. This service still needs an approved deployment.
+
+- Rows for the same coffee become one coffee, with a recipe per machine,
+  labelled by dose and model (`15g Original`, `15g Studio`, and `Omni` for the
+  dripper version). Every recipe also carries `machine_model`, either
+  `"original"` or `"studio"`. The app only offers variants for the selected
+  machine, with the usual preferred-dose selection within that model.
+  Untagged recipes in existing feeds remain machine-agnostic; an invalid
+  `machine_model` drops that recipe. A coffee with no compatible variant
+  explains why it cannot be opened or brewed.
+- Origin, process, varietal, tasting notes, roast level and the pod photo come
+  from the catalogue row. `available` is always `true` and there are no
+  variants: pods are sold on xbloom.com, so nothing is offered to buy.
+- `roaster.kind: "catalogue"` marks a source that is not itself a coffee
+  roaster. The app preserves explicit coffee or imported recipe roasters but
+  never fills a missing roaster with the catalogue's name. Unknown source kinds
+  refuse the feed, rather than guessing that its name is a roaster.
+  The service does not read shop products or infer a roaster from name matches.
+- The id is a slug of the coffee's name (`xbloom-ethiopia-banko-chelbesa`), so
+  NEW stays on a release until it is seen, and a re-upload is not new. Unicode
+  letters and numbers are retained so non-Latin names are not dropped.
+- The function reads only the catalogue list, at most four pages per machine
+  partition with one shared eight-second deadline, never an individual
+  recipe. It checks both HTTP and envelope status and drops malformed rows.
+  Its answer is cached by Vercel's CDN for six hours and served stale
+  for a day while it refreshes, so the catalogue is asked a few times a day
+  however many people subscribe. An empty or failed read is a 502 that is not
+  cached, so subscribers keep their last good copy.
+
+The app exposes a built-in entry only when an approved, working HTTPS endpoint
+is configured as `EXPO_PUBLIC_XBLOOM_FEED_URL` at build/update time. There is no
+fallback URL: the proposed production path returned 404 during this package.
+Deployment and configuration are separate approval gates, not part of this PR.
+
+Once configured, **Settings → Library → Roaster feeds → Built in** offers an
+off-by-default switch. Turning it on explicitly subscribes and reads the feed.
+Turning it off is an ordinary unsubscribe and stays off across launches and
+backups. No startup seeding or new Home screen entry is added. Every other
+roaster is still subscribed from its own import link.
+Enabling during a screen refresh is refused before subscribing, with a retry
+message; retrying after it finishes subscribes and fetches immediately.
+
+An import link can carry the deployed endpoint too, like any feed:
+
+```
+xbrw://import?v=1&source=xBloom%20Collective&feed=<approved feed URL, percent-encoded>&share=<a release's xBloom share URL, percent-encoded>
+```
 
 ## Polling
 

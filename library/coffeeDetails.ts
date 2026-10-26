@@ -214,3 +214,27 @@ export function coffeeDetails(
     if (url !== undefined) details.url = url;
     return details;
 }
+
+/** The parts that have something in them, joined the way a bag label reads. */
+function joinParts(parts: readonly (string | undefined)[]): string | undefined {
+    const kept = parts.map((part) => part?.trim() ?? "").filter((part) => part !== "");
+    return kept.length === 0 ? undefined : kept.join(" · ");
+}
+
+/**
+ * Where a coffee is from, in one short line: "Colombia · La Palma".
+ *
+ * The farm when there is one, else the region, after the country. Either part
+ * stands alone when the other is missing; undefined when both are.
+ */
+export function placeLine(coffee: PodCoffee | undefined): string | undefined {
+    if (coffee === undefined) return undefined;
+    const local = coffee.farm?.trim() ? coffee.farm : coffee.region;
+    return joinParts([coffee.country, local]);
+}
+
+/** What the bean is and how it was processed: "Gesha · Washed". */
+export function varietyProcessLine(coffee: PodCoffee | undefined): string | undefined {
+    if (coffee === undefined) return undefined;
+    return joinParts([coffee.variety, coffee.processing]);
+}

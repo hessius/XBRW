@@ -10,6 +10,7 @@ import {chooseRecipe} from "@/library/roasterCatalogue";
 import type {FeedCoffee} from "@/library/roasterFeed";
 import {reviveRoastAdvice} from "@/library/roastAdvice";
 import type {Settings} from "@/library/Settings";
+import type {MachineModel} from "@/library/machine/machineModel";
 
 /**
  * Putting a roaster catalogue coffee into the library.
@@ -23,6 +24,7 @@ import type {Settings} from "@/library/Settings";
 export type LibraryDeps = {
     /** Look a share link up. Null when xBloom has no recipe there. */
     fetchRecipe: (share: string, signal?: AbortSignal) => Promise<Recipe | null>;
+    machineModel?: () => MachineModel;
     /** The whole library. */
     stored: () => Recipe[];
     save: (recipe: Recipe) => void;
@@ -51,12 +53,13 @@ export type FetchedCoffee = {recipe: Recipe; size: string};
  * library or a shelf, which is the whole point of a catalogue.
  */
 export async function fetchCoffeeRecipe(
-    coffee: FeedCoffee, size: string | undefined, deps: Pick<LibraryDeps, "fetchRecipe">,
-    signal?: AbortSignal, feedRoaster?: string
+    coffee: FeedCoffee, size: string | undefined, deps: Pick<LibraryDeps, "fetchRecipe" | "machineModel">,
+    signal?: AbortSignal, feedRoaster?: string, machineModel?: MachineModel
 ): Promise<FetchedCoffee> {
-    const chosen = chooseRecipe(coffee, size);
+    const model = deps.machineModel?.() ?? machineModel;
+    const chosen = chooseRecipe(coffee, size, model);
     const recipe = await deps.fetchRecipe(chosen.share, signal);
-    if (signal?.aborted) {
+    if (signal?.aborted || (deps.machineModel !== undefined && deps.machineModel() !== model)) {
         const cancelled = new Error("Catalogue lookup cancelled.");
         cancelled.name = "AbortError";
         throw cancelled;

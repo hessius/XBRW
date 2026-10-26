@@ -35,6 +35,7 @@ export const DEFAULTS = {
     /** Coffee, pod and author pictures in ABOUT only; retain the legacy key. */
     showRecipeAvatars: true,
     showRecipeCardPhotos: false,
+    showRecipeCardDetails: false,
     showShelfPhotoPreviews: true,
     /**
      * Draw the one-line hint under every label on the BREW deck.
