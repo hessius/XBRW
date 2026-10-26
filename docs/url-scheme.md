@@ -29,8 +29,10 @@ flavours, tags, roast advice, notes, image and recipe stage rather than a
 summary-only preview. Missing fields stay absent. Lookup defaults to Studio;
 an explicit Original response remains Original, with no grind conversion.
 
-**Open in app** is an explicit `xbrw://import` link with the original query
-preserved losslessly, including unknown parameters. Nothing automatically
+**Open in app** is an explicit `xbrw://import` link preserving every original
+query value, including duplicate and unknown parameters and nested URLs.
+Hosting may normalize equivalent encodings such as `+` to `%20` for spaces.
+Nothing automatically
 launches the app. Without the app, use the install destinations, then **return
 to the same browser page and tap Open in app**. There is no deferred/post-install
 handoff. iOS installation uses [the App Store](https://apps.apple.com/app/id6806339475);

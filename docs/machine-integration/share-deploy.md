@@ -86,7 +86,10 @@ After an approved deployment, use a known public share link to GET both
 `/import?...` and `/import/?...`: expect complete HTML without JavaScript,
 the correct model/stages/metadata and the headers above. HEAD must omit the
 body; malformed imports must fail without a lookup. Verify the explicit app
-link preserves the original query and that product, producer recipe and
+link preserves all original query values, including duplicates, unknown
+parameters and nested URLs. Vercel may normalize equivalent space encodings
+from `+` to `%20`; byte-identical URL spelling is not required.
+Verify that product, producer recipe and
 xBloom links remain distinct. These are read-only checks: do not use a mint
 POST as an import smoke.
 

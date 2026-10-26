@@ -141,7 +141,10 @@ upstream artwork. Showing both does not expand the public URL grammar.
 Keep the incoming query for the app handoff instead of reconstructing a
 whitelist containing only `v` and `share`. Preserve unknown parameters and
 properly nested URLs as well. Attribute escaping must not alter query values
-or introduce an extra decoding/encoding pass.
+or introduce an extra decoding/encoding pass. Hosting may normalize equivalent
+URL encodings, such as spaces from `+` to `%20`; byte-identical spelling is not
+required. Every value, duplicate parameter and nested URL must survive. This
+clarification was approved during the live-preview review.
 
 The page's data view follows a fresh candidate import: xBloom supplies the
 recipe; validated link decoration supplies the supported additions, using
