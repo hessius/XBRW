@@ -7,7 +7,7 @@ merged wholesale. Issue #249 records source heads, decisions and integration.
 The shipped 2.1.0 ledger retains its historical gates and now records the
 verified release/source-reconciliation chronology.
 
-## Second contributor round, package A: pending integration
+## Second contributor round, package A: integrated in #280
 
 Issue #279 coordinates this round. Package A retains #269's pane-filling list
 rows, #276's wrapping header titles and #270's OPEN RECIPE catalogue action.
@@ -446,9 +446,37 @@ that policy. Package C itself did not change schemes, EAS profiles, channels,
 SDK or dependency manifests. This is not a native build,
 submission, deployment or hardware pass.
 
-## Proposed: catalogue OPEN RECIPE label
+## Catalogue OPEN RECIPE label
 
-Branch `fix/open-recipe-label`, not yet accepted into `develop`. A roaster
+Accepted through package A (#280). A roaster
 coffee's primary action read BREW NOW but only opens the recipe in the editor,
 unsaved; the editor has its own BREW. It now reads OPEN RECIPE (spoken "Open
 recipe"). The test ID `roaster-coffee-brew` and the behaviour are unchanged.
+## Second contributor round, package B: pending integration
+
+Adapted from #271 and #278 under the decisions on #279.
+
+A roaster's catalogue row now reads: name, then "Country · Farm" (the region
+when there is no farm), then "Variety · Process", then the roast level and
+flavours. Empty parts are skipped, so rows can differ in height. The bag-sizes
+line and its spoken part are gone from the row; the coffee's own screen still
+lists bags and prices.
+
+Settings > Recipe list > Coffee details on cards is off by default. On, a
+card without a note uses its second line for variety and process. A note
+still wins, the card keeps its height, and the choice travels in backups.
+
+The xBloom Collective feed uses the existing feed-management and catalogue
+surfaces, never new Home furniture. Subscription is explicit and off by
+default. Its built-in entry is hidden until an approved working HTTPS endpoint
+is configured with EXPO_PUBLIC_XBLOOM_FEED_URL; the proposed production path
+returned 404. This package does not deploy or enable that service.
+
+The dependency-free service checks both machine partitions with an eight-second
+shared deadline and a four-page cap per partition, validates rows, keeps Unicode
+coffee identities, and serves a bounded cached feed. It does not fetch recipes,
+scrape shop products or guess roasters. A catalogue's name is not used as the
+coffee's roaster. Tagged recipe variants must match the selected machine, and a
+model change discards an in-flight lookup. Existing untagged feeds retain their
+selection behaviour. Empty/error responses are uncached 502s, preserving the
+subscriber's last good catalogue.

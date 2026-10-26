@@ -147,16 +147,20 @@ describe("UnsubscribeSheet", () => {
 });
 
 describe("RoasterCoffeeRow", () => {
-    it("shows the roast, notes and bag sizes, and says sold out", async () => {
+    it("shows where it is from, the bean, the roast and notes, and says sold out", async () => {
         const [coffee] = feed([{id: "a", available: false}]).coffees;
         await renderWithProviders(<RoasterCoffeeRow coffee={coffee} testID="row" onPress={jest.fn()}/>);
         expect(screen.getByTestId("roaster-row-sold-out")).toBeTruthy();
         expect(screen.getByText("LIGHT")).toBeTruthy();
-        expect(screen.getByText("320 G · 160 G")).toBeTruthy();
+        expect(screen.getByTestId("roaster-row-place")).toHaveTextContent("Peru");
+        expect(screen.getByTestId("roaster-row-bean")).toHaveTextContent("Washed");
+        // Bag sizes are on the coffee's own screen now, not the row.
+        expect(screen.queryByText("320 G · 160 G")).toBeNull();
+        expect(screen.queryByTestId("roaster-row-bags")).toBeNull();
         // The secondary text colour the notes use, not the faint one.
-        expect(StyleSheet.flatten(screen.getByTestId("roaster-row-bags").props.style).color)
+        expect(StyleSheet.flatten(screen.getByTestId("roaster-row-place").props.style).color)
             .toBe(palette.dim);
-        expect(screen.getByLabelText(/Coffee a, sold out, Light roast/)).toBeTruthy();
+        expect(screen.getByLabelText("Coffee a, sold out, Peru, Washed, Light roast")).toBeTruthy();
     });
 });
 

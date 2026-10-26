@@ -6,6 +6,7 @@ import DotIcon from "@/components/DotIcon";
 import RecipeCard from "@/components/RecipeCard";
 import {useAppearance} from "@/hooks/useAppearance";
 import type Recipe from "@/library/Recipe";
+import {varietyProcessLine} from "@/library/coffeeDetails";
 import type {SlotMarkerValue} from "@/library/slots/slotModel";
 
 /** The tick's diameter. A touch under the card's own corner radius. */
@@ -39,7 +40,7 @@ const ROW_PADDING  = 6;
  * distrust.
  */
 export default function SelectableRecipeRow({
-    recipe, selected, onToggle, showCoffeeMarker, dottedProfile, showPicture, slotMarker
+    recipe, selected, onToggle, showCoffeeMarker, dottedProfile, showPicture, showCoffeeDetails, slotMarker
 }: {
     recipe: Recipe;
     selected: boolean;
@@ -47,13 +48,19 @@ export default function SelectableRecipeRow({
     showCoffeeMarker?: boolean;
     dottedProfile?: boolean;
     showPicture?: boolean;
+    showCoffeeDetails?: boolean;
     slotMarker?: SlotMarkerValue;
 }) {
     const {palette, selection} = useAppearance();
     return (
         <Pressable accessibilityRole="checkbox"
                    accessibilityState={{checked: selected}}
-                   accessibilityLabel={[recipe.displayName(), slotMarker?.label].filter(Boolean).join(", ")}
+                   accessibilityLabel={[
+                       recipe.displayName(),
+                       showCoffeeDetails && recipe.description.length === 0
+                           ? varietyProcessLine(recipe.coffee)?.replace(/ · /g, ", ") : undefined,
+                       slotMarker?.label
+                   ].filter(Boolean).join(", ")}
                    testID={`select-${recipe.uuid}`}
                    onPress={onToggle}>
             <XStack alignItems="center"
@@ -72,7 +79,8 @@ export default function SelectableRecipeRow({
                                 showCoffeeMarker={showCoffeeMarker}
                                 slotMarker={slotMarker}
                                 dottedProfile={dottedProfile}
-                                showPicture={showPicture}/>
+                                showPicture={showPicture}
+                                showCoffeeDetails={showCoffeeDetails}/>
                 </YStack>
 
                 <YStack width={TICK_SIZE} height={TICK_SIZE}

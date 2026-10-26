@@ -3,6 +3,7 @@ import {readLabels} from "@/library/coffeeLabels";
 import {parseImportInput} from "@/library/importInput";
 import {httpsUrl, type PodCoffee} from "@/library/podCoffee";
 import {readRoasterColour} from "@/library/roasterColour";
+import {isMachineModel, type MachineModel} from "@/library/machine/machineModel";
 
 /**
  * A roaster's feed: every coffee it has published a recipe for, in one file.
@@ -59,6 +60,7 @@ export type FeedRecipe = {
     size: string;
     /** An xBloom share link, already checked to be one `parseImportInput` reads. */
     share: string;
+    machineModel?: MachineModel;
 };
 
 /**
@@ -149,6 +151,8 @@ export type RoasterFeed = {
     version: typeof ROASTER_FEED_VERSION;
     roaster: {
         name: string;
+        /** A catalogue is a source, not an assertion about the coffee's roaster. */
+        kind?: "catalogue";
         url?: string;
         /**
          * A cart link with `{variant_id}` in it, e.g. a Shopify store's
@@ -187,7 +191,8 @@ function feedRecipe(value: unknown): FeedRecipe | null {
     // The same parser every other door uses. A link it cannot read would
     // only fail later, one request at a time, so it is dropped here.
     if (parseImportInput(share)?.kind !== "share") return null;
-    return {size, share};
+    if (entry.machine_model !== undefined && !isMachineModel(entry.machine_model)) return null;
+    return {size, share, ...(isMachineModel(entry.machine_model) ? {machineModel: entry.machine_model} : {})};
 }
 
 /** A whole number of days within range, or undefined. Zero is a real day here. */
@@ -353,6 +358,8 @@ export function parseRoasterFeed(text: string): RoasterFeed | null {
         .filter((coffee): coffee is FeedCoffee => coffee !== null);
 
     const result: RoasterFeed = {version: ROASTER_FEED_VERSION, roaster: {name}, coffees};
+    if (roaster.kind !== undefined && roaster.kind !== "catalogue") return null;
+    if (roaster.kind === "catalogue") result.roaster.kind = "catalogue";
     const url = cappedUrl(roaster.url);
     if (url !== undefined) result.roaster.url = url;
     const addToCart = cartTemplate(roaster.add_to_cart);

@@ -145,6 +145,7 @@ function callSites(): Map<string, number> {
  * to come back here and say what it now carries.
  */
 const EXPECTED_CALLS: Record<string, number> = {
+    "api/_lib/collective.ts":      1,
     "api/_lib/importLookup.ts":    1,
     "api/_lib/store.ts":           2,
     "api/_lib/xbloom.ts":          1,

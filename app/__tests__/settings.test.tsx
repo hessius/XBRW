@@ -493,6 +493,18 @@ describe("SettingsScreen", () => {
             .toBe(false);
     });
 
+    it("keeps coffee details on cards off by default and persists both choices", async () => {
+        const storage = memoryStorage();
+        const settings = new Settings(storage);
+        await renderWithProviders(<SettingsScreen settings={settings}/>);
+        const toggle = () => screen.getByLabelText("Coffee details on cards");
+        expect(toggle().props.accessibilityState.checked).toBe(false);
+        await fireEvent(toggle(), "checkedChange", true);
+        expect(new Settings(storage).get("showRecipeCardDetails")).toBe(true);
+        await fireEvent(toggle(), "checkedChange", false);
+        expect(new Settings(storage).get("showRecipeCardDetails")).toBe(false);
+    });
+
     it("persists a change to the toggle", async () => {
         const storage = memoryStorage();
         const settings = new Settings(storage);
