@@ -117,7 +117,7 @@ export class XBloomRecipe {
     }
 
     public getRecipeTitle() {
-        return xbloomTitle(this.getName(), this.getSubtitle());
+        return xbloomTitle(this.getName() ?? "", this.getSubtitle());
     }
 
     public getName() {

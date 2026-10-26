@@ -1,4 +1,5 @@
 import {XBloomRecipe} from "@/library/XBloomRecipe";
+import {decorateImport} from "@/library/importDecoration";
 import {buildCard} from "./cardFixtures";
 import {fullImportURL, importDetail} from "@/test-utils/importPageFixtures";
 import {
@@ -128,6 +129,16 @@ it("preserves nameless pod artwork without inventing a coffee or recipe title", 
     expect(data).not.toHaveProperty("coffee");
     expect(data.imageURL).toBe("https://images.example.test/pod.jpg");
     expect(await appRecipe(detail)).toMatchObject(data);
+});
+
+it.each([undefined, null])("imports an absent recipe title (%s) before producer decoration", async theName => {
+    const detail = importDetail();
+    Object.assign(detail.recipeVo, {theName});
+    const recipe = await appRecipe(detail);
+    expect(recipe.xbloomName).toBe("");
+    decorateImport(recipe, {recipeName: "Producer recipe"});
+    expect(recipe.name).toBe("Producer recipe");
+    expect(recipe.pours).toHaveLength(3);
 });
 
 it("omits absent coffee, artwork and attribution instead of inventing fallbacks", async () => {
