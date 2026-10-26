@@ -436,7 +436,10 @@ export default function SwipeableRecipeRow({
         onBrew !== undefined || onQuickEdit !== undefined || onWrite !== undefined;
 
     return (
-        <View style={{maxWidth: 600, paddingHorizontal: 12, paddingVertical: 6}}>
+        // No width cap. A 600 pt cap left the cards flush left on a wide
+        // window, such as an unfolded foldable, beside a toolbar and tiles
+        // that span it. The row takes the width its list gives it.
+        <View style={{paddingHorizontal: 12, paddingVertical: 6}}>
             <Swipeable
                 ref={swipeableRef}
                 friction={2}

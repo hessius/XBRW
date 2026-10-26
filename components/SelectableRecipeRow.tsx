@@ -56,7 +56,7 @@ export default function SelectableRecipeRow({
                    accessibilityLabel={[recipe.displayName(), slotMarker?.label].filter(Boolean).join(", ")}
                    testID={`select-${recipe.uuid}`}
                    onPress={onToggle}>
-            <XStack alignItems="center" maxWidth={600}
+            <XStack alignItems="center"
                     paddingHorizontal={SIDE_PADDING}
                     paddingVertical={ROW_PADDING}
                     gap="$2.5">
