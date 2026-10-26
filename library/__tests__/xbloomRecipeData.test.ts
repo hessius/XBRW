@@ -1,4 +1,5 @@
 import {XBloomRecipe} from "@/library/XBloomRecipe";
+import {buildCard} from "./cardFixtures";
 import {fullImportURL, importDetail} from "@/test-utils/importPageFixtures";
 import {
     InvalidImportDataError, normaliseXBloomRecipe, recordOf, xbloomTitle
@@ -29,8 +30,28 @@ it("characterizes the app's complete import before extraction", async () => {
     expect(recipe.pours.map(p => p.pourPattern)).toEqual([0, 2, 1]);
     expect(recipe.pours.map(p => p.flowRate)).toEqual([30, 35, 30]);
     expect(recipe.pours.map(p => p.agitation)).toEqual([0, 1, 2]);
-    expect(recipe.offline_backup.length).toBeGreaterThan(0);
     expect(recipe).toMatchObject(normaliseXBloomRecipe(importDetail()));
+});
+
+it.each([
+    ["coffee", {}, 2, 54, 16, [40, 120, 80]],
+    ["tea", {cupType: 4}, 3, 50, 14, [40, 90, 80]],
+    ["disabled grinder", {isSetGrinderSize: 2}, 2, 81, 16, [40, 120, 80]]
+] as const)("keeps %s offline backup equal to the independent card oracle", async (
+    _name, changes, cupType, grindSize, ratio, volumes
+) => {
+    const detail = importDetail();
+    Object.assign(detail.recipeVo, changes);
+    const recipe = await appRecipe(detail);
+    expect(recipe.offline_backup).toEqual(buildCard({
+        hash: new Array(32).fill(0), xid: "XB0001", cupType, teaCups: 3,
+        dosage: 15, grindRPM: 90, grindSize, ratio,
+        pours: [
+            {volume: volumes[0], temperature: 93, pattern: 0, agitation: 0, pauseSeconds: 30, flowRate: 30},
+            {volume: volumes[1], temperature: 93, pattern: 2, agitation: 1, pauseSeconds: 15, flowRate: 35},
+            {volume: volumes[2], temperature: 92, pattern: 1, agitation: 2, pauseSeconds: 0, flowRate: 30}
+        ]
+    }).slice(32));
 });
 
 const cases: [string, Record<string, unknown>, Record<string, unknown>][] = [

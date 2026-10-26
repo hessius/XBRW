@@ -3,13 +3,61 @@
 > Integration status: Package E connects the catalogue, Import choices,
 > subscription offers and staged re-imports. This guide is not a release
 > readiness or physical-device qualification claim.
+> The full HTTPS recipe page is implemented on this task branch, not yet
+> deployed. Shared Vercel feed service B (#281) is not integrated. Domain
+> association and production deployment are separately blocked/approval-gated.
 
 This guide is for coffee roasters who publish xBloom recipes for their coffees
 and want customers to find them in XBRW++. You do not need to be a developer.
 If you can edit your website's theme or upload a file, you can do this.
 
-The technical contract is in [roaster-feed.md](roaster-feed.md). This page is
-the practical version.
+The import-link contract is in [url-scheme.md](url-scheme.md). This page is
+the practical version; publishing your own catalogue is separate from the
+not-yet-integrated shared Vercel feed service.
+
+## A browser page before the app is installed
+
+After deployment is approved and verified, link to
+`https://xbrwplusplus.vercel.app/import` with the same version-1 query fields
+shown below. It renders the complete recipe, your named coffee's metadata,
+photo, flavour labels, tags, notes and roast guidance without JavaScript.
+It uses the app's actual normalizer/decorator, not a second recipe conversion.
+Studio is the lookup fallback; an explicit Original recipe stays Original.
+The two machines' grind scales are not converted.
+
+The customer chooses **Open in app**; no automatic app launch is attempted.
+If necessary, install from [the App Store](https://apps.apple.com/app/id6806339475)
+or [Android GitHub Releases](https://github.com/hessius/XBRW/releases/latest)
+(no Play listing), then return to the same browser page and tap **Open in app**.
+Installation does not carry the recipe forward automatically. The app link
+preserves the complete original query. Browser operation does not depend on
+Universal Links/App Links and is not proof that a current store binary
+supports them. Do not substitute `xbrw.app`: ownership is unverified.
+
+Keep the product page (`bean.url`), producer recipe explanation (`recipe.url`)
+and xBloom share link (`share`, shown as **View on xBloom**) distinct, even if
+your product and recipe happen to use the same page. `bean.name` is required
+for coffee metadata. Use public HTTPS images/pages, never private credentials
+or secrets in a URL. See the URL guide for all fields, caps and aliases.
+
+### Construct the browser link from your data
+
+```js
+const link = new URL("https://xbrwplusplus.vercel.app/import");
+link.searchParams.set("v", "1");
+link.searchParams.set("source", "your-app");
+link.searchParams.set("share", xbloomShareURL);
+link.searchParams.set("bean.name", coffeeName);
+link.searchParams.set("bean.roaster", roasterName);
+link.searchParams.set("bean.image", coffeeImageURL);
+const browserUrl = link.toString();
+```
+
+These variables are inputs from your actual coffee/product, not sample recipe
+constants. Do not pre-encode them before `searchParams.set`. Escape the
+generated URL for HTML attributes. The HTTPS snippet below is for use **only
+after** the new page is deployed and smoke-tested; until then use the
+installed-app-only `xbrw://import` entry point from the URL guide.
 
 ## What your customers get
 
@@ -262,7 +310,7 @@ template where you want the button:
   {%- assign product_url = shop.url | append: product.url -%}
   {%- assign feed_url = shop.url | append: '/collections/' | append: coffee_collection | append: '?view=xbrw' -%}
   {%- capture xbrw_link -%}
-    xbrw://import?v=1
+    https://xbrwplusplus.vercel.app/import?v=1
     &source={{ source_name | url_encode }}
     &feed={{ feed_url | url_encode }}
     &share={{ share | url_encode }}
@@ -279,27 +327,6 @@ template where you want the button:
   {%- endcapture -%}
   {%- assign xbrw_link = xbrw_link | strip_newlines | replace: ' ', '' -%}
   <a class="button xbrw-link" href="{{ xbrw_link | replace: '&', '&amp;' }}">Open in XBRW++</a>
-  <script>
-    (function () {
-      var ua = navigator.userAgent;
-      var android = /Android/i.test(ua);
-      var ios = /iPhone|iPad|iPod/i.test(ua) || (/Macintosh/i.test(ua) && navigator.maxTouchPoints > 1);
-      var appPage = 'https://github.com/hessius/XBRW';
-      document.querySelectorAll('.xbrw-link').forEach(function (link) {
-        var href = link.getAttribute('href');
-        if (android) {
-          // Opens the app, or the app's page if it is not installed.
-          link.setAttribute('href', 'intent://' + href.slice('xbrw://'.length) +
-            '#Intent;scheme=xbrw;S.browser_fallback_url=' + encodeURIComponent(appPage) + ';end');
-        } else if (!ios) {
-          // A computer cannot open a phone app, so show the app's page instead.
-          link.setAttribute('href', appPage);
-          link.setAttribute('target', '_blank');
-          link.setAttribute('rel', 'noopener');
-        }
-      });
-    })();
-  </script>
 {%- endif -%}
 ```
 

@@ -1,4 +1,107 @@
-# Deploying the share mint
+# Shared Vercel host: share mint and browser import
+
+## Implementation versus deployment
+
+The existing host is `https://xbrwplusplus.vercel.app`. This branch implements
+the full recipe HTML browser import page; it does **not** record deployment
+of that page. No domain configuration, Vercel deployment, production build or
+native qualification is authorized by this document. Shared feed service B
+(#281) is not integrated; do not advertise its routes here as deployed.
+
+`api/import.ts` exports the classic Node `(req, res)` adapter, with a Web
+`respond` core behind it. `vercel.json` rewrites **exactly** `/import` and
+`/import/` to `/api/import`; it does not catch arbitrary nested paths. Keep
+the no-op install/build commands and `public` output: the Node dependency
+closure is pure TypeScript/Node, not the Expo application or its native
+dependencies. Returning a Web `Response` directly to Vercel would leave the
+socket open; see the handler warning below.
+
+The import function is read-only. It posts only to the fixed xBloom
+`https://client-api.xbloom.com/RecipeDetail.html` (share ID) or
+`https://client-api.xbloom.com/tRecipeDetailOfPods.thtml` (pod XID) lookup
+endpoints, with an 8-second deadline, a 1 MiB streamed-response ceiling and
+redirects refused. Producer/product/feed URLs are not server lookup targets.
+The 64 KiB request-target ceiling also applies before lookup.
+
+Every import response, including errors and HEAD, sets:
+
+```text
+Cache-Control: private, no-store
+CDN-Cache-Control: no-store
+Vercel-CDN-Cache-Control: no-store
+Referrer-Policy: no-referrer
+```
+
+Do not copy future cached feed-response policy onto personalized query pages.
+Cached B feeds belong on this host **only once B is integrated**, with their
+own separately reviewed routes/cache behavior.
+
+### Public origin configuration
+
+`PUBLIC_IMPORT_ORIGIN` is a server environment setting for the canonical
+public HTTPS origin, not a secret and not an Expo public bundle variable.
+It must be a bare HTTPS origin without credentials, path, query or fragment.
+If absent, the adapter uses `https://${VERCEL_URL}` when supplied by Vercel,
+otherwise `https://xbrwplusplus.vercel.app`. Configure each environment
+deliberately: do not derive the public origin from an untrusted Host header
+or point it at unowned `xbrw.app`. No mint credentials are required for import.
+
+### Local dependency-closure proof
+
+Run strict root typechecking **before** the transpile-only closure check.
+Choose a new persistent artifact directory outside the app dependency tree,
+with no ancestor `node_modules`; do not install packages into it.
+
+```bash
+npm run typecheck
+npx --no-install tsc --ignoreConfig --noCheck --module commonjs \
+  --moduleResolution node --ignoreDeprecations 6.0 --target ES2022 \
+  --jsx react-jsx --esModuleInterop --skipLibCheck --rootDir . \
+  --outDir "$ARTIFACT" api/import.ts test-utils/importPageFixtures.ts
+```
+
+Set the artifact's `package.json` to `{"private":true,"type":"commonjs"}`.
+Copy `scripts/smoke-import-node.cjs` into that directory, then run **from the
+artifact** `node smoke-import-node.cjs .`. Alternatively
+`npm run test:import-node -- "$ARTIFACT"` runs the retained dependency-free
+check against the same isolated output.
+
+This requires the actual compiled adapter and synthetic fixture, refuses
+resolution of native/app dependencies, substitutes only the fixed read-only
+xBloom response, and performs a real IPv4 Node HTTP GET on an ephemeral port.
+It asserts full-roaster/photo/xBloom HTML and all three no-store headers.
+Request/deadline bounds and finally/error cleanup close the server. It does
+not start a persistent browser service or touch Metro. It is not a deployment
+or external-app pass.
+
+### Separately authorized public smoke and native gates
+
+After an approved deployment, use a known public share link to GET both
+`/import?...` and `/import/?...`: expect complete HTML without JavaScript,
+the correct model/stages/metadata and the headers above. HEAD must omit the
+body; malformed imports must fail without a lookup. Verify the explicit app
+link preserves the original query and that product, producer recipe and
+xBloom links remain distinct. These are read-only checks: do not use a mint
+POST as an import smoke.
+
+Real browser acceptance remains separate: 320/390/1280 widths, landscape,
+200% text, stationary visible footer, no horizontal overflow, all content
+reachable, keyboard focus, real/broken images and no-referrer behavior.
+No current store binary's Universal Links/App Links are qualified here.
+First verify domain ownership, public AASA/assetlinks content and MIME/status,
+Apple team/bundle identifiers and Android signing SHA-256 certificates.
+Then build a fresh fingerprint-runtime native artifact and verify installed
+iOS/Android link opening. Do not claim an old store binary gained native
+association from an HTML deployment.
+
+The page's explicit installation links are
+`https://apps.apple.com/app/id6806339475` and
+`https://github.com/hessius/XBRW/releases/latest` for Android (no Play listing).
+There is no automatic launch/deferred handoff: after installation return to
+the same browser URL and tap Open in app. Domain/association work (Task 7)
+and production deployment (Task 9) remain blocked/separately authorized.
+
+## Deploying the share mint
 
 The XBRW++ app can turn a recipe into a link that opens in the official xBloom
 app. Doing that means creating the recipe in an xBloom account, which means
@@ -79,9 +182,8 @@ catches it, because the tests call the logic directly. `api/share.ts` therefore
 keeps its logic written against `Request`/`Response` and exports a thin
 `(req, res)` adapter as the default, with tests of its own.
 
-If you ever add a second function here, give it the same shape. If you are
-unsure which shape a given Vercel project uses, deploy two three-line probes —
-one of each — and see which one answers.
+`api/import.ts` uses that same adapter shape. Its real HTTP tests and the
+isolated Node smoke above catch an unended socket without deploying probes.
 
 ## Troubleshooting
 

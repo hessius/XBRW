@@ -1811,7 +1811,7 @@ Physical signed-build acceptance is Task 9, not something these tests prove.
 `docs/machine-integration/share-deploy.md`,
 `docs/release-2.2.0-testing.md`, `.github/copilot-instructions.md`.
 
-- [ ] **Step 1: Update directly related documentation.**
+- [x] **Step 1: Update directly related documentation.**
 
 Replace the URL guide's old "no HTTPS entry point" statement only for the
 capability actually delivered at this checkpoint. Browser fallback works
@@ -1844,7 +1844,17 @@ In the contributor instructions, describe `constants/colors.ts` as the public
 app facade and `constants/colourValues.ts` as its canonical pure data source.
 Keep the no-literal-colours rule and canonical-identity invariant.
 
-- [ ] **Step 2: Prove the server runs outside the app dependency tree.**
+- [x] **Step 2: Prove the server runs outside the app dependency tree.**
+
+Task 8 proof: strict root typecheck passed before the specified transpilation.
+Artifact `S/files/import-api-node-smoke-task8` (`S` is the session-state
+directory named below) contains the actual compiled adapter/fixtures and a
+dependency-free CommonJS boundary. Running there passed real IPv4 HTTP GET,
+fixed read-only RecipeDetail lookup, full HTML and all three no-store checks.
+The retained `scripts/smoke-import-node.cjs` / `npm run test:import-node`
+also asserts native/app packages cannot resolve and no node_modules is loaded.
+Evidence: `S/files/import-task8-pretranspile-typecheck.log` and
+`S/files/import-task8-node-smoke.log`. This is not a deployment pass.
 
 After strict root typecheck passes, transpile only the API entry and synthetic
 fixture into a newly owned session artifact directory:
@@ -1917,7 +1927,20 @@ Expected: PASS without resolving a React Native, Expo, SQLite or
 normalize-colors runtime import. Do not "fix" a failure by installing the
 mobile dependency tree into the emitted directory.
 
-- [ ] **Step 3: Inspect a responsive loopback page, not the brainstorm mockup.**
+- [x] **Step 3: Inspect a responsive loopback page, not the brainstorm mockup.**
+
+Parent-owned local real-browser acceptance passed at implementation head
+`839e76877aa6cc9b42290bc78791dba0bece716c` against the actual compiled handler,
+not the prototype. Evidence: `S/files/import-browser-acceptance/results.json`;
+screenshots in primary `.playwright-mcp/import-actual-*.png`. Ordinary widths/
+landscape passed stationary above-fold footer, no overflow and final content
+reachability; 200% computed-font instrumentation and extreme 320×240 passed
+action/content reachability. Focus, complete metadata, distinct photos, real/
+broken images and empty image Referer, no-JS iOS/Android downloads, lossless
+app query, explicit Original and error pages passed. One read-only real xBloom
+lookup passed through compiled `respond`. No Vercel ingress/deployment,
+native association, installed-device or hardware qualification is claimed.
+The parent owns/stops its loopback server; Metro 8081 remains untouched.
 
 Use the same compiled handler and synthetic fixture in an attached loopback
 server. Verify its listener with a real request before using browser tools.
@@ -1948,7 +1971,21 @@ broken image and a real public xBloom image once; no imported URL is sent as
 its referrer. Inspect app-link hrefs without automatically launching an app.
 Save screenshots to the browser tool's allowed artifact location, not Git.
 
-- [ ] **Step 4: Run focused checks once, then the repository gates.**
+- [x] **Step 4: Run focused checks once, then the repository gates.**
+
+Local Task 8 evidence: affected suites passed 22/22, 774/774 tests on both
+platforms. The independent card-oracle characterization (including tea and
+grinder-disabled) passed first, 2/2 suites and 172/172 tests. The initial full
+run caught the newly added `api/_lib/importLookup.ts` missing from the outbound
+inventory (4 assertions across both platforms); the directly related disclosure
+and pinned call count were added, with 136/136 inventory tests passing.
+After that fix, serial strict typecheck passed, lint passed (0 errors,
+33 existing warnings), full Jest passed 940 suites/21,924 tests and both
+snapshots (2 suites/26 tests skipped), and Expo Doctor passed 21/21.
+Evidence: `S/files/import-task8-focused.log`, `import-task8-oracle.log`,
+`import-task8-network-inventory.log`, `import-task8-typecheck-final.log`,
+`import-task8-lint-final.log`, `import-task8-full-tests-final.log` and
+`import-task8-doctor-final.log`. No remote CI outcome is claimed.
 
 ```bash
 npx --no-install jest --runTestsByPath \
@@ -1973,7 +2010,14 @@ a missing-tool failure to resolve under the repository's dependency rules,
 not permission to skip the hard CI gate. Do not claim remote CI from local
 checks.
 
-- [ ] **Step 5: Commit documentation and hand off the checkpoint.**
+- [x] **Step 5: Commit documentation and hand off the checkpoint.**
+
+Task 8 local-only checkpoint includes the directly related independent byte
+oracle, retained Node smoke and missing outbound-network disclosure. Parent
+owns per-task spec/quality review and any later authorized push. Retain this
+owned worktree for that pending review; no PR, merge, deployment, native build,
+B integration or worktree cleanup is performed. Exact commit and recovery/
+validation pointers are recorded in `S/files/import-task8-handoff.md`.
 
 ```bash
 git add docs/url-scheme.md docs/roaster-guide.md \

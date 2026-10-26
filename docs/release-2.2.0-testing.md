@@ -4,6 +4,71 @@ Package acceptance, integration and release qualification are separate.
 Record the exact app commit, native build, platform, machine and firmware for
 each device result. Software transports do not qualify BLE or NFC hardware.
 
+## Full recipe browser import: existing-host checkpoint
+
+The branch implementation targets `https://xbrwplusplus.vercel.app/import`
+and `/import/`; this is not evidence of deployment, domain association or a
+current store binary's Universal Links/App Links. Shared feed B (#281) is
+not integrated. Task 7 domain/association and Task 9 production are blocked.
+Browser-only acceptance can proceed before association.
+
+- [x] Record local real-browser evidence and implementation commit. At 320/390/1280
+  widths and landscape, verify a stationary visible footer and no horizontal
+  overflow. At 200% text, keep all actions and stage/metadata/notes reachable,
+  including an extreme-zoom scrolling footer.
+- [x] Exercise visible keyboard focus, explicit Open in app, coffee product,
+  producer recipe and View on xBloom links. Verify real and broken images,
+  usable alt/fallback presentation, no-referrer image requests and link policy.
+- [x] Confirm complete content without JavaScript; no automatic launch.
+  Install links go to App Store id6806339475 and Android GitHub Releases,
+  not Play. After installation return to the same page and tap Open in app:
+  do not promise deferred handoff.
+- [ ] On installed iOS/Android clients, compare the full lossless query import
+  with browser content: all available coffee metadata, flavours/tags, roast
+  advice, notes, images, stages and bypass. Studio fallback must preserve an
+  explicit Original response; no grind conversion or unintended save/brew.
+- [ ] After separately approved deployment, run read-only public GET/HEAD
+  smokes on both exact paths; verify all three no-store layers, no-referrer,
+  errors and full content. A successful local Node smoke is not this result.
+- [ ] Only after verified ownership/association/signing configuration, qualify
+  Universal Links/App Links on a newly built fingerprint-runtime native
+  artifact. Record artifact, platform fingerprint and installed-device result;
+  do not infer compatibility from marketing version `2.2.0`.
+
+Automated acceptance uses the affected dual-platform Jest suites plus strict
+typecheck, lint, the full suite and Expo Doctor. The retained
+`npm run test:import-node -- <isolated-output>` proof uses the actual classic
+Node adapter over real loopback HTTP, synthetic read-only lookup and no app
+node_modules; see [share-deploy.md](machine-integration/share-deploy.md).
+These checks do not close the manual boxes above or NFC/BLE release gates.
+
+Task 8 local automated result: affected Jest 22 suites/774 tests passed;
+independent offline-backup oracle includes coffee, tea and grinder-disabled.
+The full gate initially caught an undisclosed new server lookup; its outbound
+inventory entry/count were added and the inventory passed 136 tests. Final
+serial gates: strict typecheck passed, lint 0 errors/33 existing warnings,
+dual-platform Jest 940 suites/21,924 tests and 2 snapshots passed (2 suites/
+26 tests skipped), Expo Doctor 21/21. Isolated CommonJS Node HTTP smoke passed
+without resolving mobile packages. Logs are `S/files/import-task8-*.log`.
+These are local results, not remote CI or public-host deployment evidence.
+
+Local browser evidence (parent-owned, actual compiled implementation head
+`839e76877aa6cc9b42290bc78791dba0bece716c`):
+`S/files/import-browser-acceptance/results.json` and primary checkout
+`.playwright-mcp/import-actual-*.png`, where `S` is
+`/Users/jesperhessius/.copilot/session-state/96519c03-5860-47ba-837c-30d9b0766696`.
+320×568, 390×844, 1280×900 and 844×390 passed stationary above-fold footer,
+no overflow and final-content access. Actions measured 52/44/44 px.
+200% browser-computed-font instrumentation (not native Safari accessibility
+qualification), including 320×240 extreme text, kept every action/content
+reachable. Focus outline, full metadata/notes, false decaf/zero rest days,
+two distinct photos, broken-image alt, real 2400 px public image displayed
+96×96 with empty Referer, no-JS iOS/Android download choices, lossless app
+query, explicit Original and 400/502 pages passed. One real public read-only
+xBloom fetch through compiled `respond` returned full HTML/private-no-store.
+This qualifies local browser behavior only, not Vercel rewrites/ingress,
+deployed content, native associations, installed clients or physical hardware.
+
 ## Second contributor round, package A
 
 - [ ] With Solid button labels off (the default), verify existing dotted

@@ -128,7 +128,7 @@ Three layers, strictly separated:
 - **`components/`** — Tamagui presentational/dialog components. Declare them at module scope: a component defined inside another component's body is a new type on every render, so React remounts it and throws away its state. That bug has already been fixed twice here.
   - `ShelfMark` is the 44 pt square on a shelf tile, and the size is the contract: three art candidates (`mosaic`, `profiles`, `glyph`) plus the `hybrid` default all draw at exactly that size so a variant swap cannot reflow the grid. The hybrid gives an auto shelf its glyph from `constants/shelfGlyphs.ts` and a manual shelf its members' pour profiles, so the art says which kind of shelf it is. Which one draws is the `shelfMarkVariant` LABS setting, which goes when the tester group answers. At most three members are read, enforced in the component as well as in the query.
   - `PourGlyph` is shared by the brew stage ladder and the editor's stage tile. The sharing is intentional — see §2.3 of `docs/superpowers/specs/2026-09-03-machine-ux-design.md`. Both use the same four glyphs (`centered`, `circular`, `spiral`, `agitation`) with the same accent colour, so the editor and the live screen read visually as the same recipe.
-- **`constants/colors.ts`** — every colour in the app. See below.
+- **`constants/colors.ts`** — public app colour facade; pure canonical values live in `constants/colourValues.ts`. See below.
 - **`constants/motion.ts`** — every duration, easing curve and spring. Same rule as colour: a timing that is not in here cannot take part when the app's motion is retuned. Spatial values (widths, opacities) stay with their component.
 - **`constants/licences.ts`** — **generated**. Run `npm run generate-licences` (`scripts/generate-licences.sh`); never hand-edit it. Bodies are deduplicated with copyright lines lifted out, so all MIT collapses to one entry.
 - **`test-utils/`** — the Tamagui-aware `render` wrapper for component tests.
@@ -159,7 +159,11 @@ Other domain invariants:
 
 ## UI conventions
 
-- **All colour comes from `constants/colors.ts`.** No hex literals and no named CSS colours in
+- **App colour comes through the public `constants/colors.ts` facade.**
+  Pure canonical values live in `constants/colourValues.ts`, which Node-safe
+  domain/browser-import code may import without pulling in React Native.
+  Do not introduce a second palette or change canonical persisted identities.
+  No hex literals and no named CSS colours in
   `app/` or `components/`. Tamagui's `$`-prefixed theme tokens are fine for spacing, size and
   radius, but colour is centralised in the palette module because roughly half the colour call
   sites are plain React Native, react-navigation or SVG props that cannot take a `$token` at all.
@@ -227,6 +231,17 @@ The animation clock (`useTraceAnimation`) only runs in `waking`, `sending`, and 
 RNTL v14 has removed both `UNSAFE_getAllByType` and `root.findAllByType`. A test cannot inspect a child component's props; assert on what the renderer actually produced — text content, test IDs, and accessible labels — rather than the tree.
 
 ## Platform notes
+
+- Browser import (`api/import.ts`, `api/_lib/import*`) is implemented as full
+  no-JavaScript HTML on this task branch, not a deployment claim. Keep its
+  actual classic Node adapter and exact `/import` and `/import/` rewrites,
+  pure normalizer/decorator dependency closure, bounded fixed read-only xBloom
+  lookup, lossless query app link and three private/no-store cache headers.
+  Studio is the fallback; preserve explicit Original recipes without grind
+  conversion. There is no automatic launch or post-install handoff. Existing
+  host `xbrwplusplus.vercel.app` does not prove native association in a store
+  binary; `xbrw.app` is unowned/unverified. Shared feed B (#281), domain/native
+  association acceptance and production deployment remain separate gates.
 
 - `NfcOverlay.tsx` is the scanning ceremony for both platforms. On iOS it sits above the system NFC sheet; on Android, where there is no system sheet at all, it *is* the entire experience. (It replaced the old Android-only `AndroidNFCDialog`.) NFC code paths check `nfc.getIsClosed()` before surfacing errors, since a user-cancelled Android scan throws.
 - Marketing version lives in `app.json` (`expo.version`, currently `2.2.0`); `runtimeVersion.policy` is `fingerprint`, so native compatibility follows native inputs rather than that version alone. A native-affecting change requires a new native build and device qualification, never an update to an older runtime. EAS build profiles: `development`, `preview`, `production`. Note `eas.json` sets `appVersionSource: "remote"`, so EAS holds the build number server-side.

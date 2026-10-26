@@ -97,6 +97,23 @@ export const OUTBOUND_CALLS: OutboundCall[] = [
         source:  ["library/XBloomRecipe.ts", "library/importInput.ts"]
     },
     {
+        id:      "browserImport",
+        title:   "Read a recipe in the browser",
+        trigger: "You open a browser import link, once the implemented page is deployed. No app launch or installation happens automatically.",
+        host:    "client-api.xbloom.com",
+        hostPinned: true,
+        owner:   "xBloom",
+        carries: [
+            "The browser page server sends xBloom only the share ID or pod code, with the fixed interface version and skey. Pod lookup also sends a language, client version, refresh flag and Studio fallback model.",
+            "An explicit Original recipe stays Original; its grind scale is not converted.",
+            "The complete import URL, including producer coffee metadata, reaches the XBRW++ page host through your browser. That metadata is not sent to xBloom by this lookup.",
+            "No account, password or library contents. This is a read-only recipe lookup, not creation.",
+            "The page may load public HTTPS photos directly from their named hosts, which see your IP address and the picture address. The page sends no referrer URL."
+        ],
+        source:  ["api/import.ts", "api/_lib/importLookup.ts"],
+        unverifiable: "The lookup happens on the page server, not this phone. Its source is linked here. The page returns complete HTML without JavaScript, private/no-store cache headers and explicit app/download links; it does not provide a post-install handoff."
+    },
+    {
         id:      "roasterFeed",
         title:   "Check a roaster's list of coffees",
         trigger: "You open a roaster's import link that names a list of its coffees. If you subscribe, the app reads that list again when you open the app, at most once every 12 hours, and whenever you tap Refresh. Pausing or ending the subscription stops it.",
@@ -196,7 +213,7 @@ export const OUTBOUND_CALLS: OutboundCall[] = [
             "api/_lib/store.ts"
         ],
         unverifiable:
-            "This is the one request you cannot follow to the end from your own phone. " +
+            "This request cannot be followed to the end from your own phone. " +
             "The recipe goes to a small service run by XBRW++, which adds it to an xBloom " +
             "account belonging to XBRW++ and hands back a link. That service keeps a count " +
             "of recent links against a salted hash of your IP address so it cannot be abused, " +
