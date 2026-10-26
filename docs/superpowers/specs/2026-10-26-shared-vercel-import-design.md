@@ -2,7 +2,7 @@
 
 Date: 2026-10-26
 
-Status: Design sections approved; written specification awaiting maintainer review.
+Status: Written specification approved by the maintainer; implementation plan requested.
 
 Related work: #177, #279 and package B PR #281.
 
