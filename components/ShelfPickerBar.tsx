@@ -4,6 +4,7 @@ import {Pressable} from "react-native";
 import {Text, XStack, YStack} from "tamagui";
 
 import DotMatrixText from "@/components/DotMatrixText";
+import FillLabel from "@/components/FillLabel";
 
 
 /**
@@ -93,10 +94,10 @@ export default function ShelfPickerBar({
                         // destructive, so the colour only ever appears when the
                         // button's meaning has actually changed.
                         backgroundColor={fill}>
-                    <DotMatrixText fontSize={12} weight="bold" letterSpacing={1.5}
-                                   color={onAccent.text}>
+                    <FillLabel fontSize={12} letterSpacing={1.5}
+                               color={onAccent.text}>
                         {label}
-                    </DotMatrixText>
+                    </FillLabel>
                 </XStack>
             </XStack>
         </YStack>

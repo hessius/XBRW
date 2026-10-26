@@ -5,6 +5,7 @@ import {XStack, YStack} from "tamagui";
 
 import DotIcon from "@/components/DotIcon";
 import DotMatrixText from "@/components/DotMatrixText";
+import FillLabel from "@/components/FillLabel";
 import RailChip, {CHIP_HEIGHT} from "@/components/RailChip";
 import SegmentedControl from "@/components/SegmentedControl";
 import XbrwSheet from "@/components/XbrwSheet";
@@ -94,10 +95,10 @@ export default function BrewHistoryControls({
                                 borderColor={checked ? palette.text : palette.line}
                                 backgroundColor={checked ? palette.text : palette.none}
                                 pressStyle={{opacity: 0.7}}>
-                            <DotMatrixText fontSize={12} weight="bold" letterSpacing={1.5}
-                                           color={checked ? onAccent.text : palette.text}>
+                            <FillLabel filled={checked} fontSize={12} letterSpacing={1.5}
+                                       color={checked ? onAccent.text : palette.text}>
                                 {label}
-                            </DotMatrixText>
+                            </FillLabel>
                         </XStack>
                     ))}
                 </ScrollView>

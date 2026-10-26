@@ -4,6 +4,7 @@ import {Pressable} from "react-native";
 import {Text, XStack, YStack} from "tamagui";
 
 import DotMatrixText from "@/components/DotMatrixText";
+import FillLabel from "@/components/FillLabel";
 import XbrwSheet from "@/components/XbrwSheet";
 
 import {useMachine} from "@/hooks/useMachine";
@@ -72,10 +73,10 @@ export default function ForgetMachineSheet({machineId, onClose, settings}: Props
                            onPress={confirm}>
                     <XStack height={48} alignItems="center" justifyContent="center"
                             borderRadius="$4" backgroundColor={palette.danger}>
-                        <DotMatrixText fontSize={13} weight="bold" letterSpacing={1.5}
-                                       color={onAccent.text}>
+                        <FillLabel fontSize={13} letterSpacing={1.5}
+                                   color={onAccent.text}>
                             FORGET
-                        </DotMatrixText>
+                        </FillLabel>
                     </XStack>
                 </Pressable>
 

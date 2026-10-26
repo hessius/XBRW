@@ -2,7 +2,7 @@ import React from "react";
 import {Pressable} from "react-native";
 import {XStack, YStack} from "tamagui";
 
-import DotMatrixText from "@/components/DotMatrixText";
+import FillLabel from "@/components/FillLabel";
 import {useAppearance} from "@/hooks/useAppearance";
 
 export type SplitBrewButtonProps = {
@@ -40,10 +40,10 @@ export default function SplitBrewButton({
                        style={{flex: 1.55}}>
                 <YStack flex={1} alignItems="center" justifyContent="center"
                         paddingVertical="$3.5" backgroundColor={brewFill}>
-                    <DotMatrixText fontSize={12} weight="bold" letterSpacing={2}
-                                   color={enabled ? onAccent.text : palette.muted}>
+                    <FillLabel filled={enabled} fontSize={12} letterSpacing={2}
+                               color={enabled ? onAccent.text : palette.muted}>
                         BREW
-                    </DotMatrixText>
+                    </FillLabel>
                 </YStack>
             </Pressable>
             <Pressable accessibilityRole="button"
@@ -68,10 +68,10 @@ export default function SplitBrewButton({
                         paddingVertical="$3.5"
                         borderLeftWidth={1} borderLeftColor={onAccent.text}
                         backgroundColor={displayFill}>
-                    <DotMatrixText fontSize={12} weight="bold" letterSpacing={1.6}
-                                   color={onAccent.text}>
+                    <FillLabel fontSize={12} letterSpacing={1.6}
+                               color={onAccent.text}>
                         {quickEditOpen ? "▼" : "▲"}
-                    </DotMatrixText>
+                    </FillLabel>
                 </YStack>
             </Pressable>
         </XStack>

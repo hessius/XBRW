@@ -234,6 +234,69 @@ describe("SettingsScreen", () => {
         }, {timeout: SHEET_PRESS_TIMEOUT});
     }
 
+    it("persists the opt-in solid label switch in Appearance and retains it after reopening", async () => {
+        const {settings, db} = sqlSettings();
+        await renderAppearanceSettings(settings);
+        await openAppearance();
+        expect(screen.getByRole("switch", {name: "Solid button labels"})).not.toBeChecked();
+        await waitFor(async () => {
+            await fireEvent.press(screen.getByRole("switch", {name: "Solid button labels"}));
+            expect(settings.get("solidControlLabels")).toBe(true);
+        }, {timeout: SHEET_PRESS_TIMEOUT});
+        expect(db.getFirstSync("SELECT value FROM settings WHERE key = ?", ["solidControlLabels"]))
+            .toEqual({value: "true"});
+        await fireEvent.press(screen.getByRole("button", {name: "Close"}));
+        await openAppearance();
+        expect(screen.getByRole("switch", {name: "Solid button labels"})).toBeChecked();
+        await waitFor(async () => {
+            await fireEvent.press(screen.getByRole("switch", {name: "Solid button labels"}));
+            expect(settings.get("solidControlLabels")).toBe(false);
+        }, {timeout: SHEET_PRESS_TIMEOUT});
+        expect(new Settings(new SqliteSettingsStorage()).get("solidControlLabels")).toBe(false);
+    });
+
+    it("reports a failed label preference write and keeps the previous choice", async () => {
+        const {settings, db} = sqlSettings();
+        settings.set("solidControlLabels", false);
+        db.execSync(`CREATE TRIGGER reject_labels BEFORE UPDATE ON settings
+            WHEN NEW.key = 'solidControlLabels'
+            BEGIN SELECT RAISE(FAIL, 'disk full'); END;`);
+        await renderAppearanceSettings(settings);
+        await openAppearance();
+        await waitFor(async () => {
+            await fireEvent.press(screen.getByRole("switch", {name: "Solid button labels"}));
+            expect(mockNotify).toHaveBeenCalledWith({
+                tone: "error", message: "Could not save button labels. Please try again."
+            });
+        }, {timeout: SHEET_PRESS_TIMEOUT});
+        expect(screen.getByRole("switch", {name: "Solid button labels"})).not.toBeChecked();
+        expect(new Settings(new SqliteSettingsStorage()).get("solidControlLabels")).toBe(false);
+    });
+
+    it.each([
+        [{solidControlLabels: true}, true, false],
+        [{solidControlLabels: false}, false, false],
+        [{}, true, false],
+        [{solidControlLabels: "true"}, true, true]
+    ] as const)("restores solid labels from %j without resetting an absent or invalid preference", async (incoming, expected, warning) => {
+        const {settings} = sqlSettings();
+        settings.set("solidControlLabels", true);
+        mockPickBackup.mockResolvedValue(backupOf([], incoming));
+        mockApplyRestore.mockReturnValue({status: "restored", added: 0});
+        await renderAppearanceSettings(settings);
+        await fireEvent.press(screen.getByRole("button", {name: /^Restore from a backup,/}));
+        await settleSheet();
+        await fireEvent(screen.getByLabelText(/settings from this backup/i), "checkedChange", true);
+        await waitFor(async () => {
+            await fireEvent.press(screen.getByRole("button", {name: "Take the settings"}));
+            expect(mockApplyRestore).toHaveBeenCalled();
+        }, {timeout: SHEET_PRESS_TIMEOUT});
+        expect(new Settings(new SqliteSettingsStorage()).get("solidControlLabels")).toBe(expected);
+        const notice = {tone: "error", message: "Some appearance preferences were not restored."};
+        if (warning) expect(mockNotify).toHaveBeenCalledWith(notice);
+        else expect(mockNotify).not.toHaveBeenCalledWith(notice);
+    });
+
     it("immediately persists independent appearance choices without Apply, retaining them after close", async () => {
         const {settings, db} = sqlSettings();
         await renderAppearanceSettings(settings);

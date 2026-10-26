@@ -2,7 +2,7 @@ import React, {useState} from "react";
 import {TextInput} from "react-native";
 import {Text, XStack, YStack} from "tamagui";
 
-import DotMatrixText from "@/components/DotMatrixText";
+import FillLabel from "@/components/FillLabel";
 import XbrwSheet from "@/components/XbrwSheet";
 import {useAppearance} from "@/hooks/useAppearance";
 import {MAX_NAME} from "@/library/Recipe";
@@ -152,10 +152,9 @@ export default function RenameSheet({open, onOpenChange, name, borrowedName, onR
                     borderRadius="$4"
                     backgroundColor={selection.fill}
                     pressStyle={{backgroundColor: selection.pressedFill, opacity: 1}}>
-                    <DotMatrixText fontSize={13} weight="bold" letterSpacing={1.5}
-                                   color={selection.ink}>
+                    <FillLabel fontSize={13} letterSpacing={1.5} color={selection.ink}>
                         SAVE NAME
-                    </DotMatrixText>
+                    </FillLabel>
                 </XStack>
             </YStack>
         </XbrwSheet>

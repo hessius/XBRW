@@ -18,6 +18,8 @@ import type {BagTrackerSetting} from './coffeeBag';
 export const DEFAULTS = {
     appearanceTheme: "original" as ThemeId,
     recipeColourMode: "original" as RecipeColourMode,
+    /** Opt-in solid lettering for filled buttons and selected controls. */
+    solidControlLabels: false,
     /**
      * The `TEA` marker is always shown; `COFFEE` is redundant in a mostly-coffee
      * library, so it can be turned off.

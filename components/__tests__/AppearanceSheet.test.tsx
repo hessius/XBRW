@@ -12,6 +12,7 @@ it("keeps all labelled choices inside a scroll container on a small, large-font 
     const fontScale = jest.spyOn(PixelRatio, "getFontScale").mockReturnValue(2);
     const chooseTheme = jest.fn();
     const chooseRecipeColours = jest.fn();
+    const chooseLabels = jest.fn();
     await renderWithProviders(
         <SafeAreaProvider initialMetrics={{
             frame: {x: 0, y: 0, width: 320, height: 480},
@@ -19,7 +20,8 @@ it("keeps all labelled choices inside a scroll container on a small, large-font 
         }}>
             <AppearanceSheet open onOpenChange={jest.fn()}
                 choice={{theme: "original", recipeColours: "themed"}}
-                chooseTheme={chooseTheme} chooseRecipeColours={chooseRecipeColours}/>
+                chooseTheme={chooseTheme} chooseRecipeColours={chooseRecipeColours}
+                solidControlLabels={false} onSolidControlLabelsChange={chooseLabels}/>
         </SafeAreaProvider>);
     const scroll = screen.getByTestId("appearance-scroll");
     await fireEvent(scroll, "layout", {nativeEvent: {layout: {width: 320, height: 180}}});
@@ -36,11 +38,14 @@ it("keeps all labelled choices inside a scroll container on a small, large-font 
     expect(choices.getByRole("radio", {name: "Original Dark"})).toBeChecked();
     expect(choices.getByRole("radio", {name: "Themed"})).toBeChecked();
     expect(choices.getAllByText("Selected")).toHaveLength(2);
+    expect(choices.getByRole("switch", {name: "Solid button labels"})).not.toBeChecked();
     await waitFor(async () => {
         await fireEvent.press(choices.getByRole("radio", {name: "Magenta"}));
         expect(chooseTheme).toHaveBeenCalledWith("magenta");
         await fireEvent.press(choices.getByRole("radio", {name: "Original"}));
         expect(chooseRecipeColours).toHaveBeenCalledWith("original");
+        await fireEvent.press(choices.getByRole("switch", {name: "Solid button labels"}));
+        expect(chooseLabels).toHaveBeenCalledWith(true);
     }, {timeout: SHEET_PRESS_TIMEOUT});
     fontScale.mockRestore();
 });
@@ -50,7 +55,8 @@ it("previews each candidate locally with foregrounds matching the actual recipe 
         <AppearanceScope choice={{theme: "blue", recipeColours: "themed"}}>
             <AppearanceSheet open onOpenChange={jest.fn()}
                 choice={{theme: "blue", recipeColours: "themed"}}
-                chooseTheme={jest.fn()} chooseRecipeColours={jest.fn()}/>
+                chooseTheme={jest.fn()} chooseRecipeColours={jest.fn()}
+                solidControlLabels={false} onSolidControlLabelsChange={jest.fn()}/>
         </AppearanceScope>);
     for (const theme of THEME_IDS) {
         const candidate = resolveAppearance({theme, recipeColours: "themed"});

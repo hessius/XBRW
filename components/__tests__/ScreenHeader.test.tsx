@@ -35,6 +35,16 @@ describe("ScreenHeader", () => {
         expect(screen.getByTestId("screen-title-text").props.numberOfLines).toBe(0);
     });
 
+    it("lets a long title shrink beside the back key instead of running off the edge", async () => {
+        await renderWithProviders(
+            <ScreenHeader title="Panama | Janson Estate | Gesha Natural Lot 797"
+                          titleLines={3} onBack={jest.fn()}/>
+        );
+        expect(StyleSheet.flatten(screen.getByTestId("screen-header-title").props.style))
+            .toEqual(expect.objectContaining({flexShrink: 1}));
+        expect(screen.getByTestId("screen-title-text").props.numberOfLines).toBe(3);
+    });
+
     it("names the screen it is heading", async () => {
         await renderWithProviders(<ScreenHeader title="Settings" onBack={jest.fn()}/>);
         expect(screen.getByText("Settings")).toBeTruthy();

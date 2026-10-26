@@ -192,7 +192,8 @@ link tags the recipe it imports.
   are shown, after the ones on sale.
 - **Opening a coffee** fetches its recipe from xBloom at that moment, so it shows
   the roaster's latest. From there the person can:
-  - **Brew now**: the recipe opens in the editor without being saved.
+  - **Open recipe**: the recipe opens in the editor without being saved. The
+    editor has its own BREW, so nothing brews until the person starts it there.
   - **Add to shelf**: saved to the library through the normal import path (or
     matched to the copy already there), then put on a shelf they pick or make.
     There is no separate Add to library; shelving does that.

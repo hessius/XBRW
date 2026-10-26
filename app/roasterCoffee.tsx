@@ -10,6 +10,7 @@ import {
     BuySection, CatalogueStatus, Chip, CoffeeBadgeTag, DetailPhoto, PageLinkRow, WatchToggle
 } from "@/components/CatalogueParts";
 import DotMatrixText from "@/components/DotMatrixText";
+import FillLabel from "@/components/FillLabel";
 import NameShelfSheet from "@/components/NameShelfSheet";
 import NewerVersionPrompt from "@/components/NewerVersionPrompt";
 import ScreenHeader from "@/components/ScreenHeader";
@@ -89,10 +90,10 @@ function Action({label, spoken, testID, primary = false, disabled = false, onPre
                     opacity={disabled ? 0.35 : 1}
                     backgroundColor={primary ? action.fill : palette.none}
                     borderWidth={primary ? 0 : 1} borderColor={palette.line}>
-                <DotMatrixText fontSize={12} weight="bold" letterSpacing={1.6}
-                               color={primary ? action.ink : palette.text}>
+                <FillLabel filled={primary} fontSize={12} letterSpacing={1.6}
+                           color={primary ? action.ink : palette.text}>
                     {label}
-                </DotMatrixText>
+                </FillLabel>
             </XStack>
         </Pressable>
     );
@@ -280,9 +281,10 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
         return true;
     }
 
-    async function brewNow() {
+    async function openRecipe() {
         // Not saved: the editor opens it as an import does, and the user can
-        // brew, tune or save from there.
+        // brew, tune or save from there. The editor has its own BREW, so this
+        // says what it does rather than promising a brew.
         let fresh: FetchedCoffee;
         try {
             fresh = await latest();
@@ -408,11 +410,11 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
                                                         height={36} paddingHorizontal="$3"
                                                         alignItems="center" borderRadius="$4"
                                                         backgroundColor={on ? selection.fill : palette.raised}>
-                                                    <DotMatrixText fontSize={12} weight="bold"
-                                                                   letterSpacing={1.4}
-                                                                   color={on ? selection.ink : palette.dim}>
+                                                    <FillLabel filled={on} fontSize={12}
+                                                               letterSpacing={1.4}
+                                                               color={on ? selection.ink : palette.dim}>
                                                         {entry.size.toUpperCase()}
-                                                    </DotMatrixText>
+                                                    </FillLabel>
                                                 </XStack>
                                             </Pressable>
                                         );
@@ -465,8 +467,8 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
                                                 onKeep={() => answer(false)}/>
                         ) : (
                             <YStack gap="$2">
-                                <Action label="BREW NOW" spoken="Brew now" testID="roaster-coffee-brew"
-                                        primary disabled={recipe === null} onPress={() => void brewNow()}/>
+                                <Action label="OPEN RECIPE" spoken="Open recipe" testID="roaster-coffee-brew"
+                                        primary disabled={recipe === null} onPress={() => void openRecipe()}/>
                                 <Action label="ADD TO SHELF" spoken="Add to shelf"
                                         testID="roaster-coffee-shelf" disabled={recipe === null}
                                         onPress={() => void add()}/>

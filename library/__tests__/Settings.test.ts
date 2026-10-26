@@ -12,6 +12,17 @@ function fakeStorage(seed: Record<string, string> = {}): SettingsStorage {
 }
 
 describe("Settings", () => {
+    it("keeps solid labels opt-in, including after reopening and switching them back off", () => {
+        const storage = fakeStorage();
+        expect(new Settings(storage).get("solidControlLabels")).toBe(false);
+        new Settings(storage).set("solidControlLabels", true);
+        expect(new Settings(storage).get("solidControlLabels")).toBe(true);
+        new Settings(storage).set("solidControlLabels", false);
+        expect(new Settings(storage).get("solidControlLabels")).toBe(false);
+        expect(new Settings(fakeStorage({solidControlLabels: '"true"'}))
+            .get("solidControlLabels")).toBe(false);
+    });
+
     it("defaults both appearance preferences independently", () => {
         expect(new Settings(fakeStorage()).get("appearanceTheme")).toBe("original");
         expect(new Settings(fakeStorage()).get("recipeColourMode")).toBe("original");

@@ -3,6 +3,7 @@ import {ScrollView, TextInput} from "react-native";
 import {Text, XStack, YStack} from "tamagui";
 
 import DotMatrixText from "@/components/DotMatrixText";
+import FillLabel from "@/components/FillLabel";
 import RoastDayField from "@/components/RoastDayField";
 import XbrwSheet from "@/components/XbrwSheet";
 import {useAppearance} from "@/hooks/useAppearance";
@@ -109,10 +110,10 @@ function Chip({label, spoken, selected, testID, onPress}: {
                 paddingHorizontal="$3" borderRadius="$4"
                 backgroundColor={selected ? selection.fill : palette.raised}
                 borderWidth={1} borderColor={selected ? selection.fill : palette.line}>
-            <DotMatrixText fontSize={12} weight="bold" letterSpacing={1.2}
-                           color={selected ? selection.ink : palette.text}>
+            <FillLabel filled={selected} fontSize={12} letterSpacing={1.2}
+                       color={selected ? selection.ink : palette.text}>
                 {label}
-            </DotMatrixText>
+            </FillLabel>
         </XStack>
     );
 }
@@ -131,11 +132,11 @@ function ActionButton({label, spoken, testID, tone, filled, disabled, onPress}: 
                 backgroundColor={filled === true
                     ? disabled ? palette.control : primary.fill : palette.raised}
                 borderWidth={filled === true ? 0 : 1} borderColor={palette.line}>
-            <DotMatrixText fontSize={13} weight="bold" letterSpacing={1.5}
-                           color={filled === true
-                               ? disabled ? palette.dim : primary.ink : tone}>
+            <FillLabel filled={filled === true} fontSize={13} letterSpacing={1.5}
+                       color={filled === true
+                       ? disabled ? palette.dim : primary.ink : tone}>
                 {label}
-            </DotMatrixText>
+            </FillLabel>
         </XStack>
     );
 }

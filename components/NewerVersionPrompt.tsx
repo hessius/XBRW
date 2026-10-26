@@ -4,6 +4,7 @@ import {Pressable} from "react-native";
 import {Text, XStack, YStack} from "tamagui";
 
 import DotMatrixText from "@/components/DotMatrixText";
+import FillLabel from "@/components/FillLabel";
 
 
 /**
@@ -36,10 +37,10 @@ export default function NewerVersionPrompt({name, onLatest, onKeep}: {
                        testID="newer-version-latest" onPress={onLatest}>
                 <XStack height={48} alignItems="center" justifyContent="center"
                         borderRadius="$4" backgroundColor={palette.text}>
-                    <DotMatrixText fontSize={12} weight="bold" letterSpacing={1.5}
-                                   color={onAccent.text}>
+                    <FillLabel fontSize={12} letterSpacing={1.5}
+                               color={onAccent.text}>
                         USE THE ROASTER&apos;S LATEST
-                    </DotMatrixText>
+                    </FillLabel>
                 </XStack>
             </Pressable>
             <Pressable accessibilityRole="button" accessibilityLabel="Keep mine"

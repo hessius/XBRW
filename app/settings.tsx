@@ -200,6 +200,7 @@ export default function SettingsScreen({settings}: Props) {
     const [showShelfPhotoPreviews, setShowShelfPhotoPreviews] = useSetting("showShelfPhotoPreviews", settings);
     const [appearanceTheme, setAppearanceTheme] = useSetting("appearanceTheme", settings);
     const [recipeColourMode, setRecipeColourMode] = useSetting("recipeColourMode", settings);
+    const [solidControlLabels, setSolidControlLabels] = useSetting("solidControlLabels", settings);
     const [appearanceOpen, setAppearanceOpen] = useState(false);
 
     function chooseTheme(theme: ThemeId) {
@@ -215,6 +216,14 @@ export default function SettingsScreen({settings}: Props) {
             setRecipeColourMode(mode);
         } catch {
             notify({tone: "error", message: "Could not save recipe colours. Please try again."});
+        }
+    }
+
+    function chooseSolidControlLabels(on: boolean) {
+        try {
+            setSolidControlLabels(on);
+        } catch {
+            notify({tone: "error", message: "Could not save button labels. Please try again."});
         }
     }
     // Not shown as a row on this screen -- the hints switch lives on the editor's
@@ -301,7 +310,7 @@ export default function SettingsScreen({settings}: Props) {
     // a key someone forgot.
     function settingsSnapshot(): Record<Exclude<SettingKey, BackupExcluded>, unknown> {
         return {
-            appearanceTheme, recipeColourMode,
+            appearanceTheme, recipeColourMode, solidControlLabels,
             showCoffeeMarker, dotMatrixProfile, showRecipeAvatars, showRecipeCardPhotos, showShelfPhotoPreviews, showHints,
             temperatureUnit,
             bypassTempEncoding,
@@ -400,6 +409,10 @@ export default function SettingsScreen({settings}: Props) {
         if (incoming.recipeColourMode !== undefined) {
             if (isRecipeColourMode(incoming.recipeColourMode)) setRecipeColourMode(incoming.recipeColourMode);
             else invalidAppearanceKeys.push("recipeColourMode");
+        }
+        if (incoming.solidControlLabels !== undefined) {
+            if (typeof incoming.solidControlLabels === "boolean") setSolidControlLabels(incoming.solidControlLabels);
+            else invalidAppearanceKeys.push("solidControlLabels");
         }
         if (typeof incoming.showCoffeeMarker === "boolean") {
             setShowCoffeeMarker(incoming.showCoffeeMarker);
@@ -832,7 +845,9 @@ export default function SettingsScreen({settings}: Props) {
 
             <AppearanceSheet open={appearanceOpen} onOpenChange={setAppearanceOpen}
                              choice={appearance.choice} chooseTheme={chooseTheme}
-                             chooseRecipeColours={chooseRecipeColours}/>
+                             chooseRecipeColours={chooseRecipeColours}
+                             solidControlLabels={solidControlLabels}
+                             onSolidControlLabelsChange={chooseSolidControlLabels}/>
 
             <RestoreSheet open={restoreOpen} payload={pending} existing={library.recipes}
                           onCancel={() => setRestoreOpen(false)}

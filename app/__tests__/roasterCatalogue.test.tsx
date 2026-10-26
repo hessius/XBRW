@@ -596,9 +596,12 @@ describe("one coffee", () => {
         expect(library.find("b-18g")?.name).toBe("Coffee b - 18g");
     });
 
-    it("offers BREW NOW and ADD TO SHELF, and no separate ADD TO LIBRARY", async () => {
+    it("offers OPEN RECIPE and ADD TO SHELF, and no separate ADD TO LIBRARY", async () => {
         await open();
         expect(screen.getByTestId("roaster-coffee-brew")).toBeTruthy();
+        expect(screen.getByText("OPEN RECIPE")).toBeTruthy();
+        expect(screen.getByLabelText("Open recipe")).toBeTruthy();
+        expect(screen.queryByText("BREW NOW")).toBeNull();
         expect(screen.getByTestId("roaster-coffee-shelf")).toBeTruthy();
         expect(screen.queryByTestId("roaster-coffee-add")).toBeNull();
         expect(screen.queryByText("ADD TO LIBRARY")).toBeNull();

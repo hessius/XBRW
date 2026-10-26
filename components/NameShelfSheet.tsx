@@ -4,7 +4,8 @@ import {Text, XStack, YStack} from "tamagui";
 
 import XbrwSheet from "@/components/XbrwSheet";
 import {useAppearance} from "@/hooks/useAppearance";
-import DotMatrixText, {dotMatrixTextProps} from "@/components/DotMatrixText";
+import {dotMatrixTextProps} from "@/components/DotMatrixText";
+import FillLabel from "@/components/FillLabel";
 
 /**
  * A tag longer than this is not a shelf name, it is a sentence.
@@ -135,10 +136,9 @@ export default function NameShelfSheet({
                     pressStyle={trimmed.length === 0 ? undefined : {
                         backgroundColor: primary.pressedFill, opacity: 1
                     }}>
-                    <DotMatrixText fontSize={13} weight="bold" letterSpacing={1.5}
-                                   color={primary.ink}>
+                    <FillLabel fontSize={13} letterSpacing={1.5} color={primary.ink}>
                         {renaming ? "RENAME SHELF" : "CREATE SHELF"}
-                    </DotMatrixText>
+                    </FillLabel>
                 </XStack>
             </YStack>
         </XbrwSheet>

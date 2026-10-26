@@ -4,6 +4,7 @@ import {Text, XStack, YStack} from "tamagui";
 
 import DotIcon from "@/components/DotIcon";
 import DotMatrixText from "@/components/DotMatrixText";
+import FillLabel from "@/components/FillLabel";
 import RecipePhoto from "@/components/RecipePhoto";
 import {CARD_PHOTO_SIZE, PHOTO_GAP} from "@/library/recipePictureLayout";
 import {useAppearance} from "@/hooks/useAppearance";
@@ -151,10 +152,10 @@ export default function ReadyToBrewCard<T>({
                             backgroundColor={emphasised ? colour.fill : palette.raised}
                             borderWidth={1} borderColor={emphasised ? colour.fill : palette.line}
                             pressStyle={{opacity: 0.7, scale: 0.98}}>
-                        <DotMatrixText fontSize={13} weight="bold" letterSpacing={1.6}
-                                       color={emphasised ? colour.onAccent.text : palette.dim}>
+                        <FillLabel filled={emphasised} fontSize={13} letterSpacing={1.6}
+                                   color={emphasised ? colour.onAccent.text : palette.dim}>
                             BREW
-                        </DotMatrixText>
+                        </FillLabel>
                     </XStack>
                 )}
             </XStack>
