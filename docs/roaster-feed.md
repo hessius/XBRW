@@ -287,6 +287,8 @@ off-by-default switch. Turning it on explicitly subscribes and reads the feed.
 Turning it off is an ordinary unsubscribe and stays off across launches and
 backups. No startup seeding or new Home screen entry is added. Every other
 roaster is still subscribed from its own import link.
+Enabling during a screen refresh is refused before subscribing, with a retry
+message; retrying after it finishes subscribes and fetches immediately.
 
 An import link can carry the deployed endpoint too, like any feed:
 

@@ -122,6 +122,25 @@ describe("buildCollectiveFeed", () => {
             row({dose: i + 1, shareRecipeLink: `https://share-h5.xbloom.com/?id=${i}`})), FEED)
             .coffees[0].recipes).toHaveLength(10);
     });
+
+    it("normalizes serialized facet arrays through the same cleaner as ordinary values", () => {
+        const feed = buildCollectiveFeed([row({
+            origin: ['["Ethiopia", "N/A"]'],
+            process: ['["Washed", "Natural · Anaerobic"]'],
+            flavor: ['["Apricot", "Vanilla, Mango", null, 42]']
+        })], FEED);
+        expect(feed.coffees[0].bean).toMatchObject({
+            country: "Ethiopia", processing: "Washed, Natural, Anaerobic",
+            flavours: ["Apricot", "Vanilla", "Mango"]
+        });
+    });
+
+    it("accepts a share id at the client's decoded length boundary", () => {
+        const feed = buildCollectiveFeed([row({
+            shareRecipeLink: `https://share-h5.xbloom.com/?id=${"a".repeat(256)}`
+        })], FEED);
+        expect(parseRoasterFeed(JSON.stringify(feed))?.coffees).toHaveLength(1);
+    });
 });
 
 it("keeps coffee keys stable across case, accents and punctuation", () => {
@@ -210,5 +229,13 @@ describe("GET /api/feeds/xbloom", () => {
         expect(res.status).toBe(405);
         expect(res.headers.get("allow")).toBe("GET, HEAD");
         expect(fn).not.toHaveBeenCalled();
+    });
+
+    it.each([" ", "a".repeat(257)])("refuses client-unreadable decoded share ids instead of caching an empty catalogue: %s", async id => {
+        const res = await respond(new Request(FEED), catalogue([[row({
+            shareRecipeLink: `https://share-h5.xbloom.com/?id=${encodeURIComponent(id)}`
+        })]]).fn);
+        expect(res.status).toBe(502);
+        expect(res.headers.get("cache-control")).toBe("no-store");
     });
 });

@@ -13,7 +13,7 @@ import {notify} from "@/components/XbrwToast";
 
 import {sharedSettings} from "@/hooks/useSetting";
 import {useLiveBrew} from "@/hooks/useLiveBrew";
-import {useRoasterSubscriptions} from "@/hooks/useRoasterSubscriptions";
+import {refreshMessage, useRoasterSubscriptions} from "@/hooks/useRoasterSubscriptions";
 import {BUILT_IN_FEEDS, setBuiltInOn, type BuiltInFeed} from "@/library/builtInFeeds";
 import {readCatalogue, scrollEndPadding} from "@/library/roasterCatalogue";
 import type {RoasterFeed} from "@/library/roasterFeed";
@@ -63,6 +63,10 @@ export default function SubscriptionsScreen({settings, fetchBody, now: clock, bu
                                                description={feed.description}
                                                value={subscriptionFor(subs.subscriptions, feed.feed) !== undefined}
                                                onChange={(on) => {
+                                                   if (on && subs.refreshing !== null) {
+                                                       notify(refreshMessage({ok: false, reason: "busy"}, feed.roaster));
+                                                       return;
+                                                   }
                                                    try {
                                                        setBuiltInOn(store, feed, on);
                                                    } catch {

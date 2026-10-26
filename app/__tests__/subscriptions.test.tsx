@@ -1,6 +1,6 @@
 import React from "react";
 import {Linking, StyleSheet} from "react-native";
-import {fireEvent, screen, waitFor} from "@testing-library/react-native";
+import {act, fireEvent, screen, waitFor} from "@testing-library/react-native";
 import {router} from "expo-router";
 
 import SubscriptionScreen from "@/app/subscription";
@@ -98,6 +98,31 @@ describe("the subscriptions list", () => {
         await waitFor(() => expect(fetchBody).toHaveBeenCalledWith(XBLOOM.feed, undefined));
         await waitFor(() => expect(screen.getByLabelText("xBloom Collective").props.accessibilityState.checked)
             .toBe(true));
+    });
+
+    it("refuses opt-in while Refresh all is running and fetches immediately after a retry", async () => {
+        const settings = subscribed();
+        let finish!: () => void;
+        const held = new Promise<void>((resolve) => { finish = resolve; });
+        const fetchBody = jest.fn(async () => {
+            await held;
+            return feedBody([{id: "a"}]);
+        });
+        await drawList(settings, fetchBody);
+        await fireEvent.press(screen.getByText("Refresh all"));
+        await waitFor(() => expect(fetchBody).toHaveBeenCalledTimes(1));
+        await fireEvent(screen.getByLabelText("xBloom Collective"), "checkedChange", true);
+        expect(readSubscriptions(settings).map(sub => sub.feed)).toEqual([FEED_URL]);
+        expect(mockNotify).toHaveBeenCalledWith({
+            tone: "info", message: "Already updating. Try again in a moment."
+        });
+        await act(async () => { finish(); });
+        await waitFor(() => expect(mockNotify).toHaveBeenCalledWith({
+            tone: "success", message: "Test Roaster: 1 coffee."
+        }));
+        await fireEvent(screen.getByLabelText("xBloom Collective"), "checkedChange", true);
+        await waitFor(() => expect(fetchBody).toHaveBeenCalledWith(XBLOOM.feed, undefined));
+        expect(readSubscriptions(settings).map(sub => sub.feed)).toContain(XBLOOM.feed);
     });
 
     it("unsubscribes from the built-in feed when switched off, leaving other roasters", async () => {

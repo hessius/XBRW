@@ -32,6 +32,8 @@ const MAX_SIZE_LABEL = 20;
 const MAX_RECIPES = 10;
 const MAX_FLAVOURS = 12;
 const MAX_FLAVOUR = 32;
+/** Kept aligned with library/importInput.ts; api/ cannot import app modules. */
+const MAX_SHARE_ID_LENGTH = 256;
 
 /** The catalogue's own roast vocabulary (`/communityRecipe/recipe/criteria`). */
 const ROAST_LEVELS: Record<number, string> = {
@@ -248,7 +250,19 @@ function facet(values: readonly (string | null)[] | null | undefined): string[] 
     const seen = new Set<string>();
     const out: string[] = [];
     for (const raw of values) {
-        for (const piece of (clean(raw) ?? "").split(/[\u00b7\u2022\u30fb\uff65\u3001,;]/)) {
+        const text = clean(raw) ?? "";
+        let pieces = text.split(/[\u00b7\u2022\u30fb\uff65\u3001,;]/);
+        if (text.startsWith("[") && text.endsWith("]")) {
+            try {
+                const parsed: unknown = JSON.parse(text);
+                if (Array.isArray(parsed)) {
+                    pieces = facet(parsed.filter((value): value is string => typeof value === "string"));
+                }
+            } catch {
+                // Like hubRow.splitFacet, keep malformed JSON as plain metadata.
+            }
+        }
+        for (const piece of pieces) {
             const value = piece.trim();
             if (!/[\p{L}\p{N}]/u.test(value) || /^(n\/?a|none|null|unknown)$/i.test(value)
                 || seen.has(value.toLowerCase())) continue;
@@ -305,7 +319,9 @@ function shareLink(value: unknown): string | undefined {
     const url = https(value);
     if (!url) return undefined;
     const parsed = new URL(url);
-    return /(^|\.)xbloom(coffee)?\.(com|cn)$/.test(parsed.hostname) && parsed.searchParams.get("id")
+    const id = parsed.searchParams.get("id")?.trim();
+    return /(^|\.)xbloom(coffee)?\.(com|cn)$/.test(parsed.hostname)
+        && id !== undefined && id.length > 0 && id.length <= MAX_SHARE_ID_LENGTH
         ? url
         : undefined;
 }

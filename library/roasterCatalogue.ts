@@ -112,7 +112,11 @@ export function chooseRecipe(
     const wanted = size === undefined ? DEFAULT_SIZE : sizeKey(size);
     const recipes = recipesForMachine(coffee, model);
     const chosen = recipes.find((recipe) => sizeKey(recipe.size) === wanted)
-        ?? recipes.find((recipe) => sizeKey(recipe.size) === DEFAULT_SIZE)
+        ?? recipes.find((recipe) => {
+            const key = sizeKey(recipe.size);
+            return key === DEFAULT_SIZE || (recipe.machineModel !== undefined
+                && key.match(/^\d+(?:\.\d+)?g/)?.[0] === DEFAULT_SIZE);
+        })
         ?? recipes[0];
     if (chosen === undefined) throw new Error("No recipe is listed for this machine.");
     return chosen;
