@@ -34,3 +34,38 @@ describe("roaster row photo failures", () => {
         expect(within(screen.getByTestId("second")).getByTestId("roaster-row-photo")).toBeTruthy();
     });
 });
+
+describe("roaster row details", () => {
+    function coffeeWith(bean: Record<string, unknown>) {
+        const [coffee] = feed([{id: "row"}]).coffees;
+        return {...coffee, coffee: {name: coffee.coffee.name, ...bean}, flavours: ["Plum", "Cocoa"]};
+    }
+
+    it("reads name, country and farm, variety and process, roast, then flavours", async () => {
+        await renderWithProviders(<RoasterCoffeeRow testID="row" onPress={jest.fn()} coffee={coffeeWith({
+            country: "Colombia", farm: "La Palma", region: "Cundinamarca",
+            variety: "Gesha", processing: "Washed"
+        })}/>);
+        expect(screen.getByTestId("roaster-row-place")).toHaveTextContent("Colombia · La Palma");
+        expect(screen.getByTestId("roaster-row-bean")).toHaveTextContent("Gesha · Washed");
+        expect(screen.getByText("Plum, Cocoa")).toBeTruthy();
+        expect(screen.getByLabelText(
+            "Coffee row, Colombia, La Palma, Gesha, Washed, Light roast, Plum, Cocoa"
+        )).toBeTruthy();
+    });
+
+    it("falls back to the region without a farm and skips empty parts", async () => {
+        await renderWithProviders(<RoasterCoffeeRow testID="row" onPress={jest.fn()} coffee={coffeeWith({
+            region: "Huila", farm: "  ", variety: "Caturra"
+        })}/>);
+        expect(screen.getByTestId("roaster-row-place")).toHaveTextContent("Huila");
+        expect(screen.getByTestId("roaster-row-bean")).toHaveTextContent("Caturra");
+    });
+
+    it("leaves out both lines when the feed has none of it", async () => {
+        await renderWithProviders(<RoasterCoffeeRow testID="row" onPress={jest.fn()} coffee={coffeeWith({})}/>);
+        expect(screen.queryByTestId("roaster-row-place")).toBeNull();
+        expect(screen.queryByTestId("roaster-row-bean")).toBeNull();
+        expect(screen.getByLabelText("Coffee row, Light roast, Plum, Cocoa")).toBeTruthy();
+    });
+});

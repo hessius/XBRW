@@ -346,6 +346,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
     const [showCoffeeMarker] = useSetting("showCoffeeMarker", settings);
     const [dottedProfile] = useSetting("dotMatrixProfile", settings);
     const [showRecipeCardPhotos] = useSetting("showRecipeCardPhotos", settings);
+    const [showRecipeCardDetails] = useSetting("showRecipeCardDetails", settings);
     const [bagExperimentEnabled] = useSetting("bagExperimentEnabled", settings);
     const [bagTracker] = useSetting("bagTracker", settings);
     const [beanconquerorHandoff] = useSetting("beanconquerorHandoff", settings);
@@ -1686,7 +1687,8 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                                 onToggle={() => picker.toggle(item.recipe.uuid)}
                                 showCoffeeMarker={showCoffeeMarker}
                                 dottedProfile={dottedProfile}
-                                showPicture={showRecipeCardPhotos}/>
+                                showPicture={showRecipeCardPhotos}
+                                showCoffeeDetails={showRecipeCardDetails}/>
                         ) : (
                             <SwipeableRecipeRow
                                 recipe={item.recipe}
@@ -1694,6 +1696,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                                 showCoffeeMarker={showCoffeeMarker}
                                 dottedProfile={dottedProfile}
                                 showPicture={showRecipeCardPhotos}
+                                showCoffeeDetails={showRecipeCardDetails}
                                 evidence={library.evidence[item.recipe.uuid]}
                                 bagBadge={bagSuggestions.badges[item.recipe.uuid]}
                                 slotMarker={slotMarkers(slotRecord, item.recipe)}
