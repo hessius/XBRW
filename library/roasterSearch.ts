@@ -57,17 +57,17 @@ function shareIdOf(share: string): string | null {
  * A coffee matches the same way it does in the roaster's own list
  * (`filterCoffees`), and every coffee matches when the term names the
  * roaster. On sale first, sold out after: a slot is for a coffee the person
- * may already have. A recipe the library already holds (the same share link)
- * is left out, because the library's own results show it. Nothing for an
+ * may already have. A recipe already in the visible library results (the same
+ * share link) is left out, because those results show it. Nothing for an
  * empty term.
  */
 export function searchRoasterRecipes(
-    catalogues: readonly SubscribedCatalogue[], term: string, library: readonly Recipe[] = [],
+    catalogues: readonly SubscribedCatalogue[], term: string, visibleLibrary: readonly Recipe[] = [],
     machineModel: MachineModel = "studio"
 ): RoasterRecipeChoice[] {
     const wanted = term.trim().toLocaleLowerCase();
     if (wanted === "") return [];
-    const held = new Set(library.map((recipe) => recipe.shareId.trim()).filter((id) => id !== ""));
+    const held = new Set(visibleLibrary.map((recipe) => recipe.shareId.trim()).filter((id) => id !== ""));
     const choices: RoasterRecipeChoice[] = [];
     for (const {feedUrl, roaster, feed} of catalogues) {
         const query = {...EMPTY_COFFEE_QUERY, inStock: false};

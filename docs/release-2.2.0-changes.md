@@ -494,8 +494,9 @@ share link when it brews exactly the same, the `planReimport` "same" test) and
 the slot snapshots the library uuid. The action explains the save before it
 is chosen, and a toast says "Saved to your library." Explicit edits to an
 unsaved copy, including notes, are kept rather than replaced by a same-link
-library copy. Library membership is checked again before assignment, so a
-recipe deleted while the editor was open is saved before linking the slot. A
+library copy. Every same-link copy is checked for an identical brew before
+saving another, not only the first match. Library membership is checked again
+before assignment, so a recipe deleted while the editor was open is saved before linking the slot. A
 recipe a slot cannot hold is not saved; the existing error explains why.
 
 Existing slots reconnect for display: when a slot's uuid is not in the library,
@@ -528,8 +529,9 @@ through this entry. The existing more-menu action shares the slot preflight.
 Preserves #274's ancestry. A search in the Easy Mode CHANGE picker still
 lists library recipes first. Under them, FROM YOUR ROASTERS lists matching
 recipes from the subscribed roasters' cached feeds, one row per coffee and size
-(on sale first, sold out after, at most 30, leaving out links the library
-already holds). Naming the roaster lists all its coffees. Only cached feeds are
+(on sale first, sold out after, at most 30, leaving out links already shown
+in the library results). Naming the roaster lists all its coffees, including
+saved coffees whose names do not match that search. Only cached feeds are
 read, so opening and searching the picker makes no request.
 
 Picking one fetches that size's recipe from xBloom and keeps it in the library

@@ -1,4 +1,4 @@
-import {contentPrint, heldByShare} from "@/library/importRefresh";
+import {contentPrint} from "@/library/importRefresh";
 import Recipe from "@/library/Recipe";
 import {snapshotRecipe, snapshotStatus, type SlotSnapshot} from "@/library/slots/slotModel";
 
@@ -40,8 +40,10 @@ export function libraryRecipeForSlot(
     } catch {
         return {recipe, saved: false};
     }
-    const held = heldByShare(stored, recipe.shareId);
-    if (!edited && held !== undefined && samePrint(held, recipe)) return {recipe: held, saved: false};
+    const shareId = recipe.shareId.trim();
+    const held = edited || shareId === "" ? undefined : stored.find(entry =>
+        entry.shareId.trim() === shareId && samePrint(entry, recipe));
+    if (held !== undefined) return {recipe: held, saved: false};
     save(recipe);
     return {recipe, saved: true};
 }

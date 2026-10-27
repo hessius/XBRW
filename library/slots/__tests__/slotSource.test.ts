@@ -46,12 +46,34 @@ describe("libraryRecipeForSlot", () => {
         expect(libraryRecipeForSlot(again, [held], save)).toEqual({recipe: again, saved: true});
     });
 
+    it("reuses a later same-link copy when the first copy brews differently", () => {
+        const changed = fetched();
+        changed.pours[0].temperature = 90;
+        const matching = fetched("My Kenya");
+        matching.shareId = " share-kenya ";
+        const again = fetched();
+        const save = jest.fn();
+        expect(libraryRecipeForSlot(again, [changed, matching], save))
+            .toEqual({recipe: matching, saved: false});
+        expect(save).not.toHaveBeenCalled();
+    });
+
+    it("does not deduplicate link-less recipes merely because they brew the same", () => {
+        const held = fetched("Other coffee", "");
+        const recipe = fetched("Morning", " ");
+        const save = jest.fn();
+        expect(libraryRecipeForSlot(recipe, [held], save)).toEqual({recipe, saved: true});
+        expect(save).toHaveBeenCalledWith(recipe);
+    });
+
     it("keeps explicit edits on an unsaved copy instead of reusing an unchanged brew", () => {
         const held = fetched();
+        const changed = fetched();
+        changed.pours[0].temperature = 90;
         const again = fetched();
         again.description = "My note for this coffee";
         const save = jest.fn();
-        expect(libraryRecipeForSlot(again, [held], save, true)).toEqual({recipe: again, saved: true});
+        expect(libraryRecipeForSlot(again, [changed, held], save, true)).toEqual({recipe: again, saved: true});
         expect(save).toHaveBeenCalledWith(again);
         expect(held.description).not.toBe(again.description);
     });

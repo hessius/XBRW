@@ -411,7 +411,7 @@ export default function EasyModeSlots({
     const filteredRecipes = recipes.filter(recipe =>
         recipe.displayName().toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
     const roasterChoices = pickerOpen && onAssignRoaster !== undefined
-        ? searchRoasterRecipes(roasterCatalogues, search, recipes, machineModel) : [];
+        ? searchRoasterRecipes(roasterCatalogues, search, filteredRecipes, machineModel) : [];
 
     async function pickRoaster(choice: RoasterRecipeChoice): Promise<void> {
         if (pickerIndex === null || !pickerOpen || fetchingKey !== null || onAssignRoaster === undefined) return;

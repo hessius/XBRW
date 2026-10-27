@@ -602,6 +602,34 @@ describe("FROM YOUR ROASTERS", () => {
         expect(options.onAssign).not.toHaveBeenCalled();
     });
 
+    it.each(["hill", "kenya"])("keeps a saved coffee discoverable when searching %s", async term => {
+        const held = coffee("Kenya Nyeri - 18g");
+        held.shareId = "kenya-18g";
+        const options = props();
+        const onAssignRoaster = jest.fn().mockResolvedValue({ok: true});
+        await renderWithProviders(<EasyModeSlots {...options} recipes={[held]}
+            roasterCatalogues={roasterCatalogues()} onAssignRoaster={onAssignRoaster}/>);
+        await fireEvent.press(screen.getByRole("button", {name: "Change slot A recipe"}));
+        await fireEvent.changeText(await screen.findByLabelText("Search recipes"), term);
+        if (term === "hill") {
+            await waitFor(async () => {
+                if (onAssignRoaster.mock.calls.length === 0) {
+                    await fireEvent.press(screen.getByRole("button", {
+                        name: "Choose Kenya Nyeri - 18g from Hill Roasters"
+                    }));
+                }
+                expect(onAssignRoaster).toHaveBeenCalledWith(0, expect.objectContaining({
+                    name: "Kenya Nyeri - 18g"
+                }), expect.any(AbortSignal));
+            }, {timeout: SHEET_PRESS_TIMEOUT});
+        } else {
+            expect(screen.getByRole("button", {name: "Choose Kenya Nyeri - 18g"})).toBeOnTheScreen();
+            expect(screen.queryByRole("button", {
+                name: "Choose Kenya Nyeri - 18g from Hill Roasters"
+            })).toBeNull();
+        }
+    });
+
     it("shows no roaster section without a handler", async () => {
         await renderWithProviders(<EasyModeSlots {...props()} roasterCatalogues={roasterCatalogues()}/>);
         await fireEvent.press(screen.getByRole("button", {name: "Change slot A recipe"}));
