@@ -108,10 +108,13 @@ export default function MachineHomeScreen({controls}: {controls?: MachineControl
     const {machineId} = useLocalSearchParams<{machineId?: string | string[]}>();
     const {machines} = useSavedMachines();
     const {palette} = useAppearance();
+    const {ratingNoteOpen} = useLiveBrew();
     const matches = typeof machineId === "string" && machineId.trim() !== ""
         ? machines.filter(entry => entry.id === machineId) : [];
     if (matches.length !== 1) {
-        return <YStack flex={1} backgroundColor={palette.base}>
+        return <YStack testID="machine-home-invalid" flex={1} backgroundColor={palette.base}
+            accessibilityElementsHidden={ratingNoteOpen}
+            importantForAccessibility={ratingNoteOpen ? "no-hide-descendants" : "auto"}>
             <ScreenHeader title="Machine settings and tools" onBack={() => router.back()}/>
             <Text selectable padding="$4" color={palette.danger}>
                 Invalid machine link. Choose one saved machine.

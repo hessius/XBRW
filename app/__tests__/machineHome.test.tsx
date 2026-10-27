@@ -100,6 +100,30 @@ it.each([{}, {machineId: ""}, {machineId: "unknown"}, {machineId: [kitchen.id]}]
     }
 );
 
+it.each(["unknown", [kitchen.id]])(
+    "covers an invalid route only while the global rating dialog is open: %j", async machineId => {
+        const s = await prepare();
+        mockParams = {machineId};
+        const view = await renderWithProviders(<MachineHomeScreen controls={s.controls}/>);
+        expect(screen.getByRole("button", {name: "Back"})).toBeVisible();
+
+        mockRatingOpen = true;
+        await view.rerender(<MachineHomeScreen controls={s.controls}/>);
+        expect(screen.queryByRole("button", {name: "Back"})).toBeNull();
+        expect(screen.getByTestId("machine-home-invalid", {includeHiddenElements: true}).props)
+            .toMatchObject({accessibilityElementsHidden: true, importantForAccessibility: "no-hide-descendants"});
+
+        mockRatingOpen = false;
+        await view.rerender(<MachineHomeScreen controls={s.controls}/>);
+        expect(screen.getByTestId("machine-home-invalid").props)
+            .toMatchObject({accessibilityElementsHidden: false, importantForAccessibility: "auto"});
+        await press("Back");
+        expect(mockBack).toHaveBeenCalledTimes(1);
+        expect(mockChoose).not.toHaveBeenCalled();
+        expect(s.radio.sent).toEqual([]);
+    }
+);
+
 it("uses identical explicit destinations from the home panel and machine page, even offline and unsupported", async () => {
     const s = await prepare();
     mockStatus = "disconnected";
