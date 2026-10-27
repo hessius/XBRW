@@ -174,6 +174,68 @@ it("keeps Stop's promise identity and waits for terminal, not native acceptance"
     await s.controls.close();
 });
 
+it("detaches shared reset deadlines and telemetry without treating disposal as terminal proof", async () => {
+    const s = await setup();
+    s.respond((item) => { if (item.command.kind !== "stop") accept(s.radio, item); });
+    await s.controls.open(identity, "grind");
+    await s.controls.startGrind(grind);
+    jest.useFakeTimers();
+    const baseline = jest.getTimerCount();
+    try {
+        feedback(s.radio, s.sent[0].tokens, {kind: "cup", grams: 12});
+        expect(jest.getTimerCount()).toBeGreaterThan(baseline);
+        const stopping = s.controls.stop();
+        const rejected = expect(stopping).rejects.toThrow(/reset/i);
+        await tick();
+        expect(s.sent.at(-1)?.command.kind).toBe("stop");
+        s.controls.dispose();
+        await rejected;
+        expect(jest.getTimerCount()).toBe(baseline);
+        feedback(s.radio, s.sent.at(-1)!.tokens, {kind: "terminal"});
+        expect(s.controls.getSnapshot()).toMatchObject({phase: "unknown", cupGrams: null});
+        expect(s.recovery.snapshot.marker).not.toBeNull();
+        expect(s.machine.controlBlocker).not.toBeNull();
+    } finally {
+        jest.useRealTimers();
+    }
+});
+
+it("does not clear recovery after reset from a terminal response awaiting its async continuation", async () => {
+    for (let turns = 0; turns < 16; turns++) {
+        const s = await setup();
+        s.respond((item) => { if (item.command.kind !== "stop") accept(s.radio, item); });
+        await s.controls.open(identity, "grind");
+        await s.controls.startGrind(grind);
+        const stopping = s.controls.stop().catch(() => {});
+        await tick();
+        feedback(s.radio, s.sent.at(-1)!.tokens, {kind: "terminal"});
+        for (let i = 0; i < turns; i++) await Promise.resolve();
+        const beforeReset = s.recovery.snapshot;
+        s.controls.dispose();
+        await stopping;
+        expect(s.recovery.snapshot).toBe(beforeReset);
+        expect(s.controls.getSnapshot().phase).toBe("unknown");
+    }
+});
+
+it.each(["enter", "exit"] as const)("does not revive or release a detached %s continuation", async command => {
+    for (let turns = 0; turns < 16; turns++) {
+        const s = await setup();
+        s.respond(item => accept(s.radio, item));
+        if (command === "exit") await s.controls.open(identity, "scale");
+        s.respond(() => {});
+        const operation = (command === "enter" ? s.controls.open(identity, "scale") : s.controls.close()).catch(() => {});
+        await tick();
+        feedback(s.radio, s.sent.at(-1)!.tokens, {kind: command === "enter" ? "ready" : "closed"});
+        for (let i = 0; i < turns; i++) await Promise.resolve();
+        const wasOwned = s.machine.controlBlocker !== null;
+        s.controls.dispose();
+        await operation;
+        expect(s.controls.getSnapshot().phase).toBe(wasOwned ? "unknown" : "closed");
+        if (wasOwned) expect(s.machine.controlBlocker).not.toBeNull();
+    }
+});
+
 it.each(["native", "missing", "contradictory"] as const)("retains reservation after %s Start uncertainty", async (mode) => {
     const s = await setup();
     s.respond((item) => {

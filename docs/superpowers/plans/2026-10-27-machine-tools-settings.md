@@ -488,7 +488,7 @@ matching fresh post-refresh value.
 
 For Task 5, install one owner above routes, pass `getSnapshot`/`subscribe` directly
 to `useSyncExternalStore`, and keep the controller alive across remounts. There
-is deliberately no dispose/unsubscribe-to-release shortcut and no new support
+is deliberately no route-disposal/unsubscribe-to-release shortcut and no new support
 helper/global flag. `open` is idempotent for the same owned identity/tool.
 `close()` is the only ordinary release path and requires ready plus qualified
 exit evidence. AppState/connection invalidation comes from the existing Machine
@@ -591,6 +591,47 @@ registration contract needs to support a focused tool host.
   modal dismissal, wrong-device recovery, background/foreground and forced
   unmount/remount without duplicate Start.
 - [ ] Run hook and existing machine lifecycle/slot-owner tests, then commit.
+
+### Task 5 software handoff contract
+
+`sharedMachineControls(): MachineControls` lazily obtains the same shared
+Machine and its single controller, installed after recovery/slot storage but
+before AppState listeners or route consumers. The constructor remains
+`new MachineControls(machine, {qualifications?: readonly ControlQualification[]})`;
+the shared production instance supplies no qualifications. No support
+descriptor or production adapter has been added.
+
+`useMachineControls(injected?: MachineControls)` returns `{controls, snapshot}`
+using the controller's stable `subscribe`/cached `getSnapshot` methods.
+Unmounting only unsubscribes the view. `MachineControls.dispose()` is a permanent
+shared-reset detach, called by `__resetSharedMachine`, **not** a tool exit: it
+cancels deadlines/listeners/telemetry, marks an owned context unknown, and retains
+the lease and recovery marker. Route cleanup must never call it.
+
+`useMachineToolNavigation(identity: ControlIdentity, injected?: MachineControls)`
+returns `{covered, requestDeparture, prompt}`. `prompt` is null unless the
+identity/session-bound departure is current; otherwise it supplies `open`,
+`busy`, `error`, `requiresStop`, `stopAndLeave()`, `stay()` and `onOpenChange()`.
+The later route hosts these props in XbrwSheet, labels a moving departure
+**Stop and leave / Stay**, and uses `covered` for both
+`accessibilityElementsHidden` and Android `importantForAccessibility="no-hide-descendants"`
+on the underlying content. Button handlers may invoke `void stopAndLeave()`.
+Ready tools await qualified close without motor Stop. Recovery-only terminal
+proof already closes its recovery lease; ordinary tools also require qualified
+exit. Stay/dismiss/blur/identity change/unmount cancel only departure replay,
+never a pending Stop. The original native action or brew-bar callback is replayed
+once, with no synthetic replacement navigation action.
+
+`holdLinkAcrossAppState` optionally accepts `{controls}` and a reconnect callback
+`(target?: string) => Promise<void>`. All owned controls, including persisted
+motor reservations and uncertain nonmoving ones, conservatively retain their
+link in the background. Foreground
+reconnect targets the owned identity or persisted marker, then calls qualified
+`recover()` before writes; it never replays Enter/Start/Apply. Closed settings
+readings do not pin ordinary reconnect. OS suspension/link retention cannot
+guarantee that hardware stopped. Production qualification and physical-device
+acceptance remain blocked; this contract is software scaffolding, not issue #64
+completion.
 
 ## Task 6: Build the three instrument views and shared activity signal
 

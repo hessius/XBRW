@@ -20,6 +20,8 @@ import Machine, {
 import {asMachineModel, type MachineModel} from "@/library/machine/machineModel";
 import type {Settings} from "@/library/Settings";
 import {ControlRecoveryStore} from "@/library/machine/controlRecovery";
+import type {ControlRecoverySnapshot} from "@/library/machine/controlRecovery";
+import MachineControls from "@/library/machine/MachineControls";
 import {
     BluetoothPermissionError,
     ControlOperationError,
@@ -63,6 +65,7 @@ export type LinkStatus = "idle" | "disconnected" | "connecting" | "connected" | 
  */
 let shared: Machine | undefined;
 let sharedPort: SlotPort = unavailableSlotPort;
+let sharedControls: MachineControls | undefined;
 let stopSharedLifecycle: (() => void) | undefined;
 let stopSharedControl: (() => void) | undefined;
 let stopSharedReadings: (() => void) | undefined;
@@ -76,7 +79,9 @@ export function sharedMachine(): Machine {
             write: (value) => settings.set("machineControlRecovery", value)
         }));
         sharedPort = installMachineSlotPort(machine, sharedSlotDatabase());
-        stopSharedLifecycle = holdLinkAcrossAppState(machine, () => openLink(machine, settingsStore()));
+        sharedControls = new MachineControls(machine);
+        stopSharedLifecycle = holdLinkAcrossAppState(machine,
+            (target) => openLink(machine, settingsStore(), undefined, {target}), {controls: sharedControls});
         // Whenever the machine describes itself, keep its serial against the
         // saved entry it belongs to. By `slotIdentity`, which names the
         // peripheral actually connected, never by `machineDeviceId`: during a
@@ -101,6 +106,11 @@ export function sharedMachine(): Machine {
         shared = machine;
     }
     return shared;
+}
+
+export function sharedMachineControls(): MachineControls {
+    sharedMachine();
+    return sharedControls!;
 }
 
 /**
@@ -241,6 +251,7 @@ type LinkLifecycleMachine = {
     note: (text: string) => void;
     onPhase: (listener: (phase: BrewPhase) => void) => () => void;
     setAppState?: (state: string | null) => void;
+    readonly controlRecovery?: ControlRecoverySnapshot | null;
 };
 
 /**
@@ -256,15 +267,14 @@ type LinkLifecycleMachine = {
  * centre, the app switcher and every system alert, and releasing the link for
  * those made the connection look random.
  *
- * A link is only restored if this function is the one that gave it up. Coming
- * to the front is not a request to connect: a beep at launch, for somebody who
- * opened the app to edit a recipe, is the machine shouting about something
- * nobody asked for.
+ * Without a control owner/recovery marker, a link is only restored if this
+ * function gave it up. Owned controls instead retain their link and reconcile
+ * their exact device on return: OS suspension cannot guarantee a motor stop.
  */
 export function holdLinkAcrossAppState(
     machine: LinkLifecycleMachine,
-    reconnect: () => Promise<void>,
-    options: {appState?: AppStateLike} = {}
+    reconnect: (target?: string) => Promise<void>,
+    options: {appState?: AppStateLike; controls?: MachineControls} = {}
 ): () => void {
     const appState = options.appState ?? AppState;
     machine.setAppState?.(appState.currentState ?? null);
@@ -274,8 +284,15 @@ export function holdLinkAcrossAppState(
     let backgrounded = false;
     let retainedForBrew = false;
     let releasePromise: Promise<void> | null = null;
+    let alive = true;
+    const controls = options.controls;
+    const ownedControl = () => (controls !== undefined && controls.getSnapshot().phase !== "closed")
+        || machine.controlRecovery?.marker != null;
+    const controlTarget = () => machine.controlRecovery?.marker?.deviceId
+        ?? (ownedControl() ? controls?.getSnapshot().identity?.deviceId : undefined);
 
     function release(note: string): void {
+        if (ownedControl()) return;
         if (!machine.isConnected() || released) return;
         released = true;
         retainedForBrew = false;
@@ -309,6 +326,12 @@ export function holdLinkAcrossAppState(
             backgrounded = true;
             if (!machine.isConnected()) return;
 
+            if (ownedControl()) {
+                released = false;
+                machine.note("owned machine control went to the back — retaining the link; OS suspension is not a stop");
+                return;
+            }
+
             if (isActiveBrewPhase(machine.phase)) {
                 retainedForBrew = true;
                 released = false;
@@ -323,18 +346,26 @@ export function holdLinkAcrossAppState(
         if (next !== "active") return;
         backgrounded = false;
         retainedForBrew = false;
-        if (!released || reconnecting) return;
+        const target = controlTarget();
+        const reconcile = target !== undefined && (ownedControl() || machine.controlRecovery?.marker != null);
+        if ((!released && !reconcile) || reconnecting) return;
 
         reconnecting = true;
         machine.note("app came to the front — taking the link back");
         void (async () => {
             try {
                 await releasePromise;
-                if (machine.isConnected()) {
-                    released = false;
-                    return;
+                if (!alive) return;
+                if (!machine.isConnected()) {
+                    if (target === undefined) await reconnect();
+                    else await reconnect(target);
                 }
-                await reconnect();
+                if (!alive) return;
+                // Inspection is qualified and never replays Enter or Start.
+                if (reconcile && controls && (controls.getSnapshot().phase === "unknown"
+                    || (controls.getSnapshot().phase === "closed" && machine.controlRecovery?.marker != null))) {
+                    await controls.recover();
+                }
                 if (backgrounded) {
                     released = false;
                     if (isActiveBrewPhase(machine.phase)) {
@@ -355,6 +386,7 @@ export function holdLinkAcrossAppState(
     });
 
     return () => {
+        alive = false;
         appStateSubscription.remove();
         phaseSubscription();
     };
@@ -423,6 +455,8 @@ export function __resetSharedMachine(): void {
     scanQueue = Promise.resolve();
     stopSharedLifecycle?.();
     stopSharedLifecycle = undefined;
+    sharedControls?.dispose();
+    sharedControls = undefined;
     stopSharedControl?.();
     stopSharedControl = undefined;
     stopSharedReadings?.();

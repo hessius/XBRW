@@ -82,6 +82,8 @@ export default class MachineControls {
     private telemetry: ControlTokens | null = null;
     private freshness = new Map<"cupGrams" | "dispensedMl", ReturnType<typeof setTimeout>>();
     private readonly qualifications: readonly ControlQualification[];
+    private disposed = false;
+    private deadlines = new Set<ReturnType<typeof setTimeout>>();
 
     constructor(private readonly machine: Machine, options: MachineControlsOptions = {}) {
         this.qualifications = Object.freeze((options.qualifications ?? []).map(capture));
@@ -89,17 +91,40 @@ export default class MachineControls {
 
     getSnapshot = (): ControlSnapshot => this.snapshot;
     subscribe = (listener: () => void): (() => void) => {
+        if (this.disposed) return () => {};
         this.listeners.add(listener);
         return () => { this.listeners.delete(listener); };
     };
 
+    /**
+     * Permanent shared-owner teardown, never route cleanup. Detaching cannot
+     * prove a motor stopped: keep the lease and durable recovery reservation.
+     */
+    dispose(): void {
+        if (this.disposed) return;
+        this.disposed = true;
+        this.contextInvalid = true;
+        ++this.epoch;
+        this.waiter?.reject(new Error("The shared control owner was reset."));
+        this.deadlines.forEach(clearTimeout);
+        this.deadlines.clear();
+        this.clearFreshness();
+        this.off.splice(0).forEach(off => off());
+        this.listeners.clear();
+        if (this.snapshot.phase !== "closed") {
+            this.update({phase: "unknown", error: "The shared control owner was reset.", cupGrams: null, dispensedMl: null});
+        }
+    }
+
     private update(patch: Partial<ControlSnapshot>): void {
+        if (this.disposed && patch.phase !== "unknown") return;
         if (Object.entries(patch).every(([key, value]) => this.snapshot[key as keyof ControlSnapshot] === value)) return;
         this.snapshot = Object.freeze({...this.snapshot, ...patch});
         this.listeners.forEach((listener) => listener());
     }
 
     private select(): ControlQualification {
+        if (this.disposed) throw new Error("The shared control owner was reset.");
         const info = this.machine.info;
         const selected = lookupControlCapabilities({
             model: info?.model ?? null, firmware: info?.firmware ?? null, serial: info?.serial ?? null
@@ -177,6 +202,7 @@ export default class MachineControls {
     }
 
     private release(): void {
+        if (this.disposed) return;
         this.clearFreshness();
         this.off.splice(0).forEach((off) => off());
         const lease = this.lease;
@@ -185,6 +211,7 @@ export default class MachineControls {
     }
 
     private terminal(): void {
+        if (this.disposed) return;
         const {identity, tool} = this.snapshot;
         if (!identity || (tool !== "grind" && tool !== "pour")) throw new Error("No matching moving operation.");
         this.clearing = true;
@@ -252,6 +279,7 @@ export default class MachineControls {
         let transactionFailure: Error | null = null;
         const timeout = new Promise<never>((_, reject) => {
             timer = setTimeout(() => reject(new Error("Qualified control response missing.")), plan.deadlineMs);
+            this.deadlines.add(timer);
         });
         const response = new Promise<ControlFeedback["value"]>((resolve, reject) => {
             const fail = (error: Error) => {
@@ -321,11 +349,13 @@ export default class MachineControls {
         } finally {
             cancelled = true;
             clearTimeout(timer!);
+            this.deadlines.delete(timer!);
             if (this.waiter?.tokens === tokens) this.waiter = null;
         }
     }
 
     async open(identity: ControlIdentity, tool: ToolId): Promise<void> {
+        if (this.disposed) throw new Error("The shared control owner was reset.");
         const current = this.snapshot;
         if (current.phase !== "closed") {
             if (current.identity?.deviceId === identity.deviceId && current.identity.serial === identity.serial

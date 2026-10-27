@@ -3,7 +3,8 @@ import {AppState, type AppStateStatus} from "react-native";
 import {act, fireEvent, renderHook, screen} from "@testing-library/react-native";
 import {renderWithProviders} from "@/test-utils/render";
 import {FRAME_GAP_MS} from "@/constants/machine";
-import {useMachine, sharedMachine, __resetSharedMachine, startMachineLink} from "@/hooks/useMachine";
+import {useMachine, sharedMachine, sharedMachineControls, __resetSharedMachine, startMachineLink} from "@/hooks/useMachine";
+import {useMachineControls} from "@/hooks/useMachineControls";
 import {sharedSlotDatabase, useEasyModeSlots} from "@/hooks/useEasyModeSlots";
 import {sharedSettings} from "@/hooks/useSetting";
 import {LiveBrewProvider, useLiveBrew} from "@/hooks/useLiveBrew";
@@ -173,9 +174,10 @@ it("restores control recovery before exposing the shared owner and pins startup 
     expect(mockRadio.scans).toHaveLength(0);
     sharedSettings().set("machineDeviceId", "other");
     await act(async () => { changes.forEach((handler) => handler("background")); await flush(); });
-    expect(mockRadio.connectedTo).toBeNull();
+    expect(mockRadio.connectedTo).toBe("recover");
     expect(machine.controlBlocker).not.toBeNull();
     await act(async () => {
+        mockRadio.drop();
         changes.forEach((handler) => handler("active"));
         await jest.advanceTimersByTimeAsync(2000);
         await flush();
@@ -185,6 +187,26 @@ it("restores control recovery before exposing the shared owner and pins startup 
     const {result} = await renderHook(() => useMachine());
     expect(result.current.changeBlocker).toBeTruthy();
     await expect(machine.send(buildType1(40521))).rejects.toBeInstanceOf(ControlOperationError);
+});
+
+it("installs exactly one unsupported control controller per shared machine before hook consumers", async () => {
+    const machine = sharedMachine();
+    const controls = sharedMachineControls();
+    const first = await renderHook(() => useMachineControls());
+    const second = await renderHook(() => useMachineControls());
+    expect(first.result.current.controls).toBe(controls);
+    expect(second.result.current.controls).toBe(controls);
+    expect(first.result.current.snapshot).toBe(second.result.current.snapshot);
+    expect(sharedMachine()).toBe(machine);
+    await connect();
+    mockRadio.emit(status(MACHINE_STATE.IDLE));
+    await expect(controls.open(machine.slotIdentity!, "grind")).rejects.toThrow("unqualified");
+    await first.unmount();
+    await second.unmount();
+    expect(sharedMachineControls()).toBe(controls);
+    __resetSharedMachine();
+    expect(sharedMachineControls()).not.toBe(controls);
+    await expect(controls.open({deviceId: "one", serial: "J15ABC123456"}, "grind")).rejects.toThrow(/reset/i);
 });
 
 it("surfaces malformed control recovery without startup or foreground fallback", async () => {
