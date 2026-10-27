@@ -8,9 +8,9 @@ import {
     BluetoothPermissionError,
     BrewOwnershipError,
     BrewUploadError,
+    ControlOperationError,
     type BrewRefusal,
     isBrewRefusal,
-    NoSavedMachineError,
     RadioUnavailableError,
     SlotOperationError,
     WrongMachineError
@@ -79,7 +79,7 @@ export function useBrew(injected?: Machine): Brewer {
             machine.setBypassTempEncoding(bypassTempEncoding as BypassTempEncoding);
             machine.setAutoStart(autoStart);
         } catch (error) {
-            if (!(error instanceof SlotOperationError)) throw error;
+            if (!(error instanceof SlotOperationError) && !(error instanceof ControlOperationError)) throw error;
             notify({tone: "error", message: error.message});
         }
     }, [machine, bypassTempEncoding, autoStart]);
@@ -157,17 +157,11 @@ export function useBrew(injected?: Machine): Brewer {
         // second attempt, and `openLink` deliberately keeps the permission
         // check outside its own retrying so nobody is asked twice.
         if (e instanceof RadioUnavailableError) return false;
-        if (e instanceof SlotOperationError) return false;
+        // Ownership and target refusals cannot be repaired by taking a new link.
+        if (isBrewRefusal(e)) return false;
         if (e instanceof BrewUploadError) return false;
         if (e instanceof BrewOwnershipError) return false;
         if (e instanceof BluetoothPermissionError) return false;
-        // A scan that listened for every saved machine and heard none of them
-        // is an answer about the room, not a flaky link. A second ten-second
-        // scan of the same room would only make somebody wait twice as long.
-        if (e instanceof NoSavedMachineError) return false;
-        // Landed on a machine the screen did not name. A relink would land
-        // there again, and the answer is for the user to look, not to retry.
-        if (e instanceof WrongMachineError) return false;
         const phase = machine.phase;
         // Every other failed phase is left alone, including `rejected`. The
         // transport writes without response, so a write that threw does not
@@ -263,6 +257,8 @@ export function useBrew(injected?: Machine): Brewer {
         const shown = remembered;
         const saved = machines;
         try {
+            machine.setBypassTempEncoding(bypassTempEncoding as BypassTempEncoding);
+            machine.setAutoStart(autoStart);
             await machine.switchToProAndRetry(recipe, () => checkMachine(shown, saved));
         } catch (e) {
             setError((e as Error).message);

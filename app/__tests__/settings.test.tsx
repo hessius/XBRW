@@ -868,6 +868,9 @@ describe("SettingsScreen", () => {
         const storage = memoryStorage();
         const settings = new Settings(storage);
         settings.set("machineDeviceId", "a-peripheral-on-this-phone-only");
+        settings.set("machineControlRecovery", JSON.stringify({
+            version: 1, deviceId: "mine", serial: null, tool: "grind"
+        }));
         await renderWithProviders(<SettingsScreen settings={settings}/>);
 
         await fireEvent.press(screen.getByRole("button",
@@ -875,6 +878,7 @@ describe("SettingsScreen", () => {
 
         const snapshot = mockExportBackup.mock.calls[0][1] as Record<string, unknown>;
         expect(snapshot).not.toHaveProperty("machineDeviceId");
+        expect(snapshot).not.toHaveProperty("machineControlRecovery");
     });
 
     it("ignores a machine identifier a backup carries anyway", async () => {
@@ -884,7 +888,11 @@ describe("SettingsScreen", () => {
         const storage = memoryStorage();
         const settings = new Settings(storage);
         settings.set("machineDeviceId", "mine");
-        mockPickBackup.mockResolvedValue(backupOf([recipeNamed("A", "u1")], {machineDeviceId: "theirs"}));
+        const marker = JSON.stringify({version: 1, deviceId: "mine", serial: null, tool: "grind"});
+        settings.set("machineControlRecovery", marker);
+        mockPickBackup.mockResolvedValue(backupOf([recipeNamed("A", "u1")], {
+            machineDeviceId: "theirs", machineControlRecovery: "untrusted marker"
+        }));
         mockApplyRestore.mockReturnValue({status: "restored", added: 1});
         await renderWithProviders(<SettingsScreen settings={settings}/>);
 
@@ -896,6 +904,7 @@ describe("SettingsScreen", () => {
         await fireEvent.press(screen.getByRole("button", {name: /add to my library/i}));
 
         expect(new Settings(storage).get("machineDeviceId")).toBe("mine");
+        expect(new Settings(storage).get("machineControlRecovery")).toBe(marker);
     });
 
     it("shows the brew detail storage budget and stores a choice of 25 MB", async () => {

@@ -14,10 +14,11 @@ import {
 } from "@/hooks/useMachine";
 import {FakeTransport, machineInfoFrame} from "@/library/machine/__tests__/FakeTransport";
 import Machine from "@/library/machine/Machine";
-import {NoSavedMachineError} from "@/library/machine/errors";
+import {ControlOperationError, NoSavedMachineError} from "@/library/machine/errors";
 import {forgetSavedMachine, loadSavedMachines} from "@/library/machine/savedMachineSettings";
 import {serialiseSavedMachines, type SavedMachine} from "@/library/machine/savedMachines";
 import {Settings, type SettingsStorage} from "@/library/Settings";
+import {ControlRecoveryStore} from "@/library/machine/controlRecovery";
 
 // `library/machine/Transport` (imported by the hook) builds a BleManager
 // singleton at module load, which throws under Jest. These tests inject a
@@ -67,6 +68,32 @@ function rig(settings: Settings, devices: {id: string; name: string}[]) {
 }
 
 beforeEach(() => __resetSharedMachine());
+
+it("pins reconnects to the recovery device without a scan or fallback to a saved candidate", async () => {
+    const settings = cafe();
+    const {transport, machine, store} = rig(settings, heard("bar-1", "bar-2"));
+    machine.installControlRecovery(new ControlRecoveryStore({
+        read: () => JSON.stringify({version: 1, deviceId: "missing", serial: null, tool: "grind"}),
+        write: () => {}
+    }));
+    transport.refuseIds = ["missing"];
+    await expect(openLink(machine, store, granted, {...instant, delays: [0]})).rejects.toThrow();
+    expect(transport.scans).toHaveLength(0);
+    expect(transport.connectedTo).toBeNull();
+    transport.refuseIds = [];
+    await openLink(machine, store, granted, {...instant, delays: [0]});
+    expect(transport.connectedTo).toBe("missing");
+    expect(transport.scans).toHaveLength(0);
+});
+
+it("does not scan or connect at all when recovery storage is malformed", async () => {
+    const {transport, machine, store} = rig(cafe(), heard("bar-1", "bar-2"));
+    machine.installControlRecovery(new ControlRecoveryStore({read: () => "?", write: () => {}}));
+    await expect(openLink(machine, store, granted, instant)).rejects.toBeInstanceOf(ControlOperationError);
+    expect(transport.connectedTo).toBeNull();
+    expect(transport.scans).toHaveLength(0);
+    expect(transport.sent).toEqual([]);
+});
 
 describe("one machine saved", () => {
     it("connects straight to it, with no scan, as it always has", async () => {

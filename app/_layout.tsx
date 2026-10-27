@@ -151,6 +151,9 @@ function AppFrame() {
                             <Stack.Screen name="licences" options={{headerShown: false}}/>
                             <Stack.Screen name="network" options={{headerShown: false}}/>
                             <Stack.Screen name="machine" options={{headerShown: false}}/>
+                            <Stack.Screen name="machineTool" options={{headerShown: false}}/>
+                            <Stack.Screen name="machineHome" options={{headerShown: false}}/>
+                            <Stack.Screen name="machineSetting" options={{headerShown: false}}/>
                             <Stack.Screen name="easyMode" options={{headerShown: false}}/>
                             <Stack.Screen name="importCloud" options={{headerShown: false}}/>
                             <Stack.Screen name="subscriptions" options={{headerShown: false}}/>

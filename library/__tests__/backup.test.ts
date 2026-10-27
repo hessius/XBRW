@@ -13,6 +13,15 @@ import {encodeHandoff} from "@/library/brew/handoff/encode";
 import {brew, samples} from "@/library/brew/handoff/__tests__/fixtures";
 import {buildSharePayload} from "@/library/shareLink";
 
+it("classifies control recovery as phone-local rather than a portable setting", () => {
+    expect(DEFAULTS.machineControlRecovery).toBe("");
+    expect(NOT_IN_BACKUP).toContain("machineControlRecovery");
+    const carried = Object.fromEntries(Object.entries(DEFAULTS)
+        .filter(([key]) => !NOT_IN_BACKUP.includes(key as SettingKey)));
+    const encoded = JSON.parse(buildBackup([], carried));
+    expect(encoded.settings).not.toHaveProperty("machineControlRecovery");
+});
+
 it("keeps backup, cloud data, handoff URL and canonical JSON unchanged by appearance resolution alone", () => {
     jest.useFakeTimers().setSystemTime(new Date("2026-10-22T12:00:00Z"));
     try {

@@ -369,6 +369,14 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
     // The same picker the editor's chip opens. Only with two or more saved:
     // one machine has nothing to choose between.
     const machinePicker = useMachinePicker(settings);
+    const homeMachine = machinePicker.machines.find(entry => entry.id === remembered);
+    // The legacy slots screen follows the live peer. Route via the named page
+    // instead if that peer is not the saved machine the home panel is about.
+    const easyModeMatchesHome = homeMachine !== undefined
+        && (machine.linkedDeviceId === null
+            || (machine.linkedDeviceId === homeMachine.id
+                && (homeMachine.serial.trim() === ""
+                    || machine.info?.serial.trim() === homeMachine.serial.trim())));
     const slotRecord = useSlotRecord(remembered);
     // Seeded from machine.info so a machine that is already connected when the
     // screen mounts does not show "Not in range" while the header dot says
@@ -1475,7 +1483,12 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                             now={popoverNow}
                             onRefreshWater={refreshWater}
                             onConnect={connectMachine}
-                            onEasyMode={() => router.push("/easyMode")}
+                            machineId={homeMachine?.id}
+                            onOpenMachine={() => router.push(homeMachine === undefined ? "/settings"
+                                : {pathname: "/machineHome", params: {machineId: homeMachine.id}})}
+                            onEasyMode={() => router.push(homeMachine === undefined ? "/settings"
+                                : easyModeMatchesHome ? "/easyMode"
+                                    : {pathname: "/machineHome", params: {machineId: homeMachine.id}})}
                             machineLabel={machinePicker.available ? machinePicker.label : undefined}
                             machineModel={machinePicker.model}
                             machineColour={machinePicker.colour.ink}

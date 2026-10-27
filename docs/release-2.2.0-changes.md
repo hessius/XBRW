@@ -7,6 +7,27 @@ merged wholesale. Issue #249 records source heads, decisions and integration.
 The shipped 2.1.0 ledger retains its historical gates and now records the
 verified release/source-reconciliation chronology.
 
+## Machine tools and settings: software implementation, not hardware-qualified
+
+Draft #284, related to #64, adds a named machine page under Settings and shortcuts in
+the expanded home machine panel. Both reach the same dedicated Grind, Scale
+and Pour screens. Six focused setting editors separate current readings from
+proposals and require explicit Apply and matching readback. The existing
+diagnostic console, saved-machine management and collapsed library remain.
+
+One shared control owner excludes recipe brews, Easy Mode writes and raw
+commands. Confirmed terminal feedback, not navigation or a successful write,
+permits departure. A local-only recovery marker survives a potentially moving
+operation; explicit reconnect targets that machine and never replays Start.
+
+**The production qualification registry is empty.** These screens therefore
+explain unavailability rather than sending unverified standalone commands.
+Continuous-pour encoding, physical Start/Stop, measured telemetry, live
+adjustments, settings/tuning mappings and supported firmware still need
+attended hardware qualification. Synthetic tests and software review do not
+close #64 or establish native visual/accessibility acceptance. No native
+dependency, NFC format, production build or deployment is introduced.
+
 ## Second contributor round, package A: integrated in #280
 
 Issue #279 coordinates this round. Package A retains #269's pane-filling list

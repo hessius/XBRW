@@ -1270,6 +1270,42 @@ Commands 8003 (enter), 8014 (exit), 8500 (tare). Continuous weight stream on FFE
 - Water source (4508): tank / tap
 - LED/Display brightness (8103): low(1) / medium(8) / high(15)
 
+#### Focused settings UI qualification boundary (2026-10-27)
+
+The focused editors are implemented, but **the production control qualification
+registry remains empty**. The command inventory above is research, not a
+qualified adapter, enum mapping, numeric policy, physical unit or reset value.
+No production settings command encoder has been added.
+
+`MachineSettingsList` groups temperature unit, weight unit, brightness and water
+source under **Machine settings**, and pour radius and vibration amplitude under
+**Tuning**. Its `onSelect(SettingId)` callback and
+`machineSettingRoute(machineId, setting)` target `/machineSetting` with exactly
+one saved machine id and one typed setting id. Opening either view sends nothing
+and never connects, activates or switches machines.
+
+`MachineControls.describeSettings(identity, id)` uses the owner's captured,
+immutable qualification and supplies named availability/readback reasons.
+`readSettings(identity, id)` explicitly obtains the shared exclusive lease and
+uses only a qualified info refresh: its inspection must have no command frame.
+A decoded reading is current only for the matching device, serial,
+qualification and info observation; other observations are last-known or
+unavailable, never app preferences. Numeric units are optional qualification
+metadata, not inferred millimetres or percentages.
+
+Editor proposals are a discriminated `SettingEditorState`, initially empty.
+Changing them sends nothing; Back discards them. Apply uses the existing typed
+setting transaction and requires fresh matching readback. Unit settings affect
+the machine only, not the app's display preferences. Water source explains tank
+versus an actual plumbed supply before Apply.
+
+Missing or contradictory readback retains the shared owner and the proposal.
+Qualified info-only reconciliation is required before releasing an uncertain
+settings session; it neither invents a motor recovery marker nor sends Stop.
+The settings-specific navigation guard waits for in-flight outcomes and hides
+underlying content on both accessibility platforms while covered. Existing
+instrument callers retain the default tool-navigation behavior.
+
 ### Mechanical Calibration `single-source` (HomoLand)
 - Pour radius (11506 read, 11507 write): 400–1000, step 80. The arm's sweep radius. Default baseline 560–840 per unit. Type 2 frames.
 - Vibration amplitude (11508 read, 11509 write): 1000–1500, step 100. Type 2 frames.  
