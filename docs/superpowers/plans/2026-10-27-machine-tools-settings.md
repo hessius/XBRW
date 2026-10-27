@@ -506,8 +506,13 @@ closed/terminal evidence, or current settings, before releasing that owner.
 atomically for its pinned identity: failed qualification/acquisition retains the
 old exclusion, and pending native writes or readback waits refuse handoff. With
 a moving marker the replacement has recovery-only authority; without one it
-keeps its existing purpose and fresh-normal acquisition gate. No motor marker
-is invented for nonmoving reconnect failures.
+has inspection-only authority and can refresh leased info before a fresh normal
+status exists. It cannot send ordinary/Stop frames, reserve motion or clear a
+motor marker. Every `recover()` plans `inspect` with `recovery: true`, requiring
+`frame: null` plus leased `refreshInfo`, including nonmoving recovery. Qualified
+closed/terminal/settings evidence is still required to release the owner; a new
+ordinary acquisition retains its fresh-normal gate. No motor marker is invented
+for nonmoving reconnect failures.
 The hook must keep a failed setting proposal in caller state: the snapshot
 retains `applyingSetting` and confirmed readings, never a success-shaped proposal.
 Tare pending uses `phase: "applying"` with `applyingSetting: null`, not an
@@ -606,7 +611,10 @@ using the controller's stable `subscribe`/cached `getSnapshot` methods.
 Unmounting only unsubscribes the view. `MachineControls.dispose()` is a permanent
 shared-reset detach, called by `__resetSharedMachine`, **not** a tool exit: it
 cancels deadlines/listeners/telemetry, marks an owned context unknown, and retains
-the lease and recovery marker. Route cleanup must never call it.
+the lease and recovery marker. Exchange cancellation rejects independently of
+feedback, even when feedback arrived before a native write settled. The native
+write tail and lease exclusion still survive until settlement; cancelling the
+public promise does not release ownership. Route cleanup must never call it.
 
 `useMachineToolNavigation(identity: ControlIdentity, injected?: MachineControls)`
 returns `{covered, requestDeparture, prompt}`. `prompt` is null unless the

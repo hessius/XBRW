@@ -54,13 +54,13 @@ export type ControlSession = {
     check: () => void;
     /** Only a future qualified adapter may supply frames; no encoders are provided here. */
     send: (frame: Uint8Array, beforeDispatch?: () => void, checkCurrent?: () => void) => Promise<void>;
-    /** Recovery authority is restricted to inspection and a qualified stop frame. */
+    /** Moving recovery may stop; a nonmoving inspection-only handoff may not. */
     sendStop: (frame: Uint8Array, beforeDispatch?: () => void, checkCurrent?: () => void) => Promise<void>;
     refreshInfo: (beforeDispatch?: () => void, checkCurrent?: () => void) => Promise<boolean>;
     assertPourPreflight: (qualifiedActualSource: "tank" | "tap" | null) => void;
     reserve: () => void;
     clearRecovery: (proof: ControlTerminalProof) => void;
-    /** Atomically replace this settled owner for the same identity; failure retains it. */
+    /** Atomic pinned handoff: moving recovery or nonmoving info-only inspection, never mutation. */
     reacquireForRecovery: () => ControlSession;
     onInvalidated: (listener: (error: Error) => void) => () => void;
     release: () => void;
@@ -355,7 +355,9 @@ export default class Machine {
         return this.acquireControlLease(identity, purpose);
     }
 
-    private acquireControlLease(identity: ControlIdentity, purpose: ControlPurpose, replacing?: symbol): ControlSession {
+    private acquireControlLease(
+        identity: ControlIdentity, purpose: ControlPurpose, replacing?: symbol, inspectionOnly = false
+    ): ControlSession {
         const refuse = (message: string): never => { throw new ControlOperationError(message); };
         if (this.controlStore === undefined) refuse("Install the shared control recovery store first.");
         const store = this.controlStore!;
@@ -399,7 +401,7 @@ export default class Machine {
                 refuse("Controls require a fresh known normal machine state.");
             }
         };
-        assertAvailable(purpose !== "recovery");
+        assertAvailable(purpose !== "recovery" && !inspectionOnly);
         const check = () => {
             if (failure !== null) throw failure;
             const current = this.slotIdentity;
@@ -414,6 +416,7 @@ export default class Machine {
                 refuse("Another machine operation blocks controls.");
             }
             const pending = store.snapshot.marker;
+            if (inspectionOnly && pending !== null) refuse("Nonmoving inspection cannot acquire motor recovery authority.");
             if (pending !== null && (pending.deviceId !== pinned.deviceId || pending.serial !== pinned.serial
                 || (purpose !== "recovery" && pending.tool !== purpose))) {
                 refuse("The control recovery reservation changed.");
@@ -479,6 +482,7 @@ export default class Machine {
                 const guard = () => {
                     check();
                     checkCurrent?.();
+                    if (inspectionOnly) refuse("Nonmoving recovery permits inspection only.");
                     if (purpose === "recovery") refuse("Recovery cannot start tools or change settings.");
                     if (store.snapshot.error !== null) throw store.snapshot.error;
                     if (purpose === "setting") assertAvailable(true);
@@ -486,7 +490,11 @@ export default class Machine {
                 await sendFrame(frame, guard, beforeDispatch);
             }),
             sendStop: (frame, beforeDispatch, checkCurrent) => owned(() => {
-                const guard = () => { check(); checkCurrent?.(); };
+                const guard = () => {
+                    check();
+                    checkCurrent?.();
+                    if (inspectionOnly) refuse("Nonmoving recovery permits inspection only.");
+                };
                 return sendFrame(frame, guard, beforeDispatch);
             }),
             refreshInfo: (beforeDispatch, checkCurrent) => owned(async () => {
@@ -498,6 +506,7 @@ export default class Machine {
             }),
             assertPourPreflight: (source) => {
                 check();
+                if (inspectionOnly) refuse("Nonmoving recovery permits inspection only.");
                 if (purpose !== "pour") refuse("Only a fresh pour session can prepare a pour.");
                 if (store.snapshot.error !== null) throw store.snapshot.error;
                 assertAvailable(true);
@@ -510,6 +519,7 @@ export default class Machine {
             },
             reserve: () => {
                 check();
+                if (inspectionOnly) refuse("Nonmoving recovery permits inspection only.");
                 if (purpose !== "grind" && purpose !== "pour") refuse("Only grind or pour can reserve a possible start.");
                 assertAvailable(true);
                 store.reserve({version: 1, ...pinned, tool: purpose as "grind" | "pour"});
@@ -517,13 +527,14 @@ export default class Machine {
             },
             clearRecovery: (proof) => {
                 check();
+                if (inspectionOnly) refuse("Nonmoving recovery permits inspection only.");
                 store.clear(proof);
             },
             reacquireForRecovery: () => {
                 if (released || this.controlSession?.token !== token) refuse("The control recovery owner changed.");
                 if (outstanding !== 0) refuse("The old control operations must settle before recovery handoff.");
                 const replacement = this.acquireControlLease(
-                    pinned, store.snapshot.marker === null ? purpose : "recovery", token
+                    pinned, store.snapshot.marker === null ? purpose : "recovery", token, store.snapshot.marker === null
                 );
                 invalidate(new ControlOperationError("The control session was replaced for recovery."));
                 released = true;

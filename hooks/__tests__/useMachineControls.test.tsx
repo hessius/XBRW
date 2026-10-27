@@ -159,3 +159,39 @@ it("retains a persisted motor reservation even before the controller has attache
     off();
     s.controls.dispose();
 });
+
+it("reconciles a stale surviving Scale link through inspection without weakening normal acquisition", async () => {
+    const s = await controlFixture();
+    await s.controls.open(identity, "scale");
+    let change: (state: string) => void = () => {};
+    const reconnect = jest.fn(async (_target?: string) => {});
+    const off = holdLinkAcrossAppState(s.machine, reconnect, {
+        controls: s.controls,
+        appState: {currentState: "active", addEventListener: (_type, handler) => {
+            change = handler;
+            return {remove: () => {}};
+        }}
+    });
+    s.respond(item => {
+        if (item.command.kind === "inspect") s.feedback(item, {kind: "closed"});
+        else s.accept(item);
+    });
+    jest.useFakeTimers();
+    try {
+        change("background");
+        await jest.advanceTimersByTimeAsync(16_000);
+        expect(s.machine.isConnected()).toBe(true);
+        change("active");
+        await flushControls();
+        expect(s.planned.map(p => p.command.kind)).toEqual(["enter", "inspect"]);
+        expect(s.controls.getSnapshot().phase).toBe("closed");
+        expect(s.machine.controlBlocker).toBeNull();
+        expect(s.recovery.snapshot.marker).toBeNull();
+        expect(reconnect).not.toHaveBeenCalled();
+        await expect(s.controls.open(identity, "scale")).rejects.toThrow(/fresh known normal/i);
+    } finally {
+        off();
+        s.controls.dispose();
+        jest.useRealTimers();
+    }
+});

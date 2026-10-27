@@ -236,6 +236,36 @@ it.each(["enter", "exit"] as const)("does not revive or release a detached %s co
     }
 });
 
+it.each(["enter", "grind"] as const)("rejects disposed %s even after feedback resolves while native send is pending", async command => {
+    const s = await setup();
+    s.respond(item => accept(s.radio, item));
+    if (command === "grind") await s.controls.open(identity, "grind");
+    let settleNative!: () => void;
+    const held = new Promise<void>(resolve => { settleNative = resolve; });
+    const previousWrite = s.radio.syntheticWrite!;
+    s.radio.syntheticWrite = async frame => {
+        await previousWrite(frame);
+        await held;
+    };
+    let outcome = "pending";
+    const operation = (command === "enter" ? s.controls.open(identity, "scale") : s.controls.startGrind(grind))
+        .then(() => { outcome = "resolved"; }, error => { outcome = error.message; });
+    await tick();
+    s.controls.dispose();
+    try {
+        await tick();
+        expect(outcome).toMatch(/reset/i);
+        expect(s.machine.controlBlocker).not.toBeNull();
+        expect(s.controls.getSnapshot().phase).toBe("unknown");
+        expect(s.recovery.snapshot.marker?.tool ?? null).toBe(command === "grind" ? "grind" : null);
+    } finally {
+        settleNative();
+        await operation;
+    }
+    expect(s.controls.getSnapshot().phase).toBe("unknown");
+    expect(s.machine.controlBlocker).not.toBeNull();
+});
+
 it.each(["native", "missing", "contradictory"] as const)("retains reservation after %s Start uncertainty", async (mode) => {
     const s = await setup();
     s.respond((item) => {
@@ -823,18 +853,17 @@ it("ignores synthetic contradictory feedback for a different transaction while S
     await s.controls.close();
 });
 
-it("retains nonmoving ownership when reconnect recovery has no fresh normal state", async () => {
+it("retains nonmoving ownership until qualified inspection succeeds without fresh normal state", async () => {
     const s = await setup();
     await expect(s.controls.open(identity, "scale")).rejects.toThrow("missing");
     s.radio.drop();
     await s.machine.connect(identity.deviceId);
-    await expect(s.controls.recover()).rejects.toThrow("normal");
+    await expect(s.controls.recover()).rejects.toThrow("missing");
     expect(s.controls.getSnapshot().phase).toBe("unknown");
     expect(s.recovery.snapshot.marker).toBeNull();
     expect(s.machine.controlBlocker).not.toBeNull();
     await expect(s.machine.askHowItIsDoing()).rejects.toThrow();
     await expect(s.machine.send(buildType1(60011))).rejects.toThrow();
-    s.radio.emit(status(MACHINE_STATE.IDLE));
     s.respond((item) => accept(s.radio, item));
     await s.controls.recover();
     expect(s.controls.getSnapshot().phase).toBe("closed");

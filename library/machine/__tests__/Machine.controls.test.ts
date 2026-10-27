@@ -216,22 +216,30 @@ it("cancels a synthetic queued control handshake without dispatching a nonessent
     }
 });
 
-it("retains a nonmoving lease atomically when recovery replacement fails its fresh-normal gate", async () => {
+it("keeps nonmoving recovery pinned and inspection-only even without fresh normal state", async () => {
     const {machine, radio} = await setup();
     const lease = machine.acquireControlSession(identity, "scale");
     radio.drop();
     await machine.connect(identity.deviceId);
-    expect(() => lease.reacquireForRecovery()).toThrow("normal");
+    radio.emit(machineInfoFrame({serial: "wrong-serial"}));
+    expect(() => lease.reacquireForRecovery()).toThrow("serial");
     expect(machine.controlBlocker).not.toBeNull();
     await expect(machine.askHowItIsDoing()).rejects.toThrow();
-    radio.emit(status(MACHINE_STATE.IDLE));
+    radio.emit(machineInfoFrame());
     const replacement = lease.reacquireForRecovery();
     expect(() => lease.check()).toThrow();
     lease.release();
     expect(machine.controlBlocker).not.toBeNull();
     replacement.check();
+    await expect(replacement.send(buildType1(60001))).rejects.toThrow(/inspection/i);
+    await expect(replacement.sendStop(buildType1(60002))).rejects.toThrow(/inspection/i);
+    expect(() => replacement.reserve()).toThrow();
+    await expect(replacement.refreshInfo()).resolves.toBe(true);
+    expect(radio.sent).toEqual([8100, 8100]);
+    expect(machine.controlRecovery?.marker).toBeNull();
     replacement.release();
     expect(machine.controlBlocker).toBeNull();
+    expect(() => machine.acquireControlSession(identity, "scale")).toThrow("normal");
 });
 
 it("requires every old native operation to settle before control recovery handoff", async () => {

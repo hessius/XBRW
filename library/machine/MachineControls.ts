@@ -268,7 +268,7 @@ export default class MachineControls {
         const tokens = Object.freeze({session: this.session, transaction: ++this.transaction});
         const plan = this.qualification.protocol.plan(command, tokens);
         if (!Number.isFinite(plan.deadlineMs) || plan.deadlineMs <= 0) throw new Error("A qualified deadline is required.");
-        if (this.recoveryOnly && command.kind === "inspect" && (plan.frame !== null || !plan.refreshInfo)) {
+        if (command.kind === "inspect" && command.recovery && (plan.frame !== null || !plan.refreshInfo)) {
             throw new Error("Recovery inspection must use leased info only.");
         }
         let timer: ReturnType<typeof setTimeout>;
@@ -277,6 +277,8 @@ export default class MachineControls {
         let cancelled = false;
         // A resolved response can still be contradicted before native settlement.
         let transactionFailure: Error | null = null;
+        let cancelExchange!: (error: Error) => void;
+        const cancellation = new Promise<never>((_, reject) => { cancelExchange = reject; });
         const timeout = new Promise<never>((_, reject) => {
             timer = setTimeout(() => reject(new Error("Qualified control response missing.")), plan.deadlineMs);
             this.deadlines.add(timer);
@@ -284,6 +286,7 @@ export default class MachineControls {
         const response = new Promise<ControlFeedback["value"]>((resolve, reject) => {
             const fail = (error: Error) => {
                 transactionFailure ??= error;
+                cancelExchange(error);
                 reject(error);
             };
             this.waiter = {
@@ -343,7 +346,7 @@ export default class MachineControls {
                 }
             });
             this.writeTail = sending.then(() => {}, () => {});
-            const [, result] = await Promise.race([Promise.all([sending, response]), timeout]);
+            const [, result] = await Promise.race([Promise.all([sending, response]), timeout, cancellation]);
             if (transactionFailure) throw transactionFailure;
             return result;
         } finally {
@@ -562,7 +565,7 @@ export default class MachineControls {
             this.update({identity: Object.freeze({deviceId: identity.deviceId, serial: identity.serial}),
                 tool: marker?.tool ?? this.snapshot.tool, phase: "unknown"});
             const settings = !marker && this.snapshot.applyingSetting !== null;
-            const result = await this.exchange({kind: "inspect", tool: this.snapshot.tool, recovery: marker != null},
+            const result = await this.exchange({kind: "inspect", tool: this.snapshot.tool, recovery: true},
                 marker ? ["terminal", "active"] : settings ? "settings" : ["terminal", "closed", "active"]);
             if (result.kind === "active") {
                 if (!marker) throw new Error("Unexpected active nonmoving control. Reconciliation required.");
