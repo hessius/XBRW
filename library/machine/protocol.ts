@@ -264,6 +264,15 @@ export const EVENT = {
 export const COMMAND_PAUSE = 40518;
 export const COMMAND_RESUME = 40524;
 
+/** Uninterpreted device values; these offsets do not qualify units or controls. */
+export type MachineSettingsRaw = {
+    temperatureUnit: number | null;
+    weightUnit: number | null;
+    brightness: number | null;
+    pourRadius: number | null;
+    vibrationAmplitude: number | null;
+};
+
 export type MachineInfo = {
     kind: "info";
     serial: string;
@@ -273,6 +282,7 @@ export type MachineInfo = {
     waterFeed: "tank" | "tap";
     grindSize: number;
     mode: "PRO" | "EASY";
+    settingsRaw?: MachineSettingsRaw;
 };
 
 export type Notification =
@@ -298,6 +308,11 @@ function text(bytes: Uint8Array, from: number, to: number): string {
     return out;
 }
 
+function optionalUint32(payload: Uint8Array, offset: number): number | null {
+    if (payload.byteLength < offset + 4) return null;
+    return new DataView(payload.buffer, payload.byteOffset, payload.byteLength).getUint32(offset, true);
+}
+
 function readInfo(payload: Uint8Array): MachineInfo {
     const modeHex = text(payload, 51, 58);
     return {
@@ -309,7 +324,14 @@ function readInfo(payload: Uint8Array): MachineInfo {
         waterFeed:   payload[36] === 1 ? "tap" : "tank",
         // The raw byte is offset by 30, and the machine never reports below 1.
         grindSize:   Math.max((payload[37] ?? 30) - 30, 1),
-        mode:        modeHex === "91327856" ? "EASY" : "PRO"
+        mode:        modeHex === "91327856" ? "EASY" : "PRO",
+        settingsRaw: {
+            temperatureUnit: payload[40],
+            weightUnit: payload[41],
+            brightness: payload[38],
+            pourRadius: optionalUint32(payload, 55),
+            vibrationAmplitude: optionalUint32(payload, 59)
+        }
     };
 }
 
