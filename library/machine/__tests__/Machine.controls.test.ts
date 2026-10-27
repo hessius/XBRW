@@ -179,6 +179,43 @@ it("shares tank readings but never guesses actual source from MachineInfo", asyn
     expect(() => machine.acquireControlSession(identity, "grind")).not.toThrow();
 });
 
+it("runs a synthetic control dispatch callback only after pacing and MTU checks", async () => {
+    const {machine, radio} = await setup("", 10);
+    const lease = machine.acquireControlSession(identity, "pour");
+    const dispatch = jest.fn(() => lease.assertPourPreflight("tank"));
+    radio.frameBudget = 2;
+    await expect(lease.send(buildType1(60001), dispatch)).rejects.toThrow("narrow");
+    expect(dispatch).not.toHaveBeenCalled();
+    radio.frameBudget = 244;
+    await lease.send(buildType1(60001));
+    const sending = lease.send(buildType1(60002), dispatch);
+    radio.emit(event(40522, 0));
+    await expect(sending).rejects.toThrow("water");
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    expect(radio.sent).toEqual([60001]);
+    lease.release();
+});
+
+it("cancels a synthetic queued control handshake without dispatching a nonessential frame", async () => {
+    const {machine, radio} = await setup("", 10);
+    const lease = machine.acquireControlSession(identity, "scale");
+    await lease.send(buildType1(60001));
+    const clock = jest.spyOn(Date, "now").mockReturnValue(Date.now() + HANDSHAKE_FRESH_MS + 1);
+    let current = true;
+    const dispatch = jest.fn();
+    const checkCurrent = () => { if (!current) throw new Error("cancelled"); };
+    try {
+        const sending = lease.send(buildType1(60002), dispatch, checkCurrent);
+        current = false;
+        await expect(sending).rejects.toThrow("cancelled");
+        expect(dispatch).not.toHaveBeenCalled();
+        expect(radio.sent).toEqual([60001]);
+    } finally {
+        clock.mockRestore();
+        lease.release();
+    }
+});
+
 it("refuses dispatch after failed reservation and keeps stop/recovery available after a failed clear", async () => {
     const radio = new Radio();
     const machine = new Machine(radio, {frameGapMs: 0});

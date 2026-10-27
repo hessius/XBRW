@@ -447,6 +447,59 @@ const recovery = {
 
 ## Task 4: Implement the shared tool and setting state machine
 
+### Software-only checkpoint (2026-10-27)
+
+`new MachineControls(machine, {qualifications?: readonly ControlQualification[]})`
+owns one shared session. Omitted qualifications mean **no support**. The production
+capability registry remains empty; no standalone production encoder/decoder is
+provided. The controller tests inject explicitly synthetic model/firmware/serial
+scopes, frames, correlation, numeric policies, deadlines and telemetry freshness.
+They do not qualify hardware or complete Task 1/Task 10.
+
+`controlProtocol.ts` defines the injected contract:
+
+- `ControlQualification` pairs a captured capability profile with `ControlProtocol`.
+- `plan(command: ControlCommand, tokens: ControlTokens): ControlExchange` supplies
+  the optional frame, required evidence-derived deadline and optional leased
+  info refresh. There are no fallback deadlines, units, bounds or sentinels.
+- `decode(frame): ControlFeedback | null` must prove session/transaction correlation.
+  Running, terminal, tare acceptance, fresh setting readback, cup grams and
+  run-scoped dispensed ml are distinct evidence, not successful writes.
+- `actualWaterSource(info, infoAt)` supplies a qualification-proven source;
+  `telemetryFreshMs?` optionally expires samples. Display units are irrelevant.
+- Moving recovery inspection **only** uses leased `refreshInfo`, never a
+  tool-entry frame or general-purpose recovery send.
+
+The lease's optional `beforeDispatch` callbacks on `send`, `sendStop` and
+`refreshInfo` run immediately before the native write, after pacing/MTU guards;
+handshake renewal does not run the tool command's callback. Start persists its
+marker at that boundary, and Pour rechecks actual source/tank availability there.
+An optional `checkCurrent` callback additionally cancels queued internal
+handshakes/readbacks as well as the final frame; it adds to, never replaces,
+Machine's identity/generation/ownership guards.
+Native writes/readbacks retain exclusion until they settle even after timeout.
+
+For Task 5, install one owner above routes, pass `getSnapshot`/`subscribe` directly
+to `useSyncExternalStore`, and keep the controller alive across remounts. There
+is deliberately no dispose/unsubscribe-to-release shortcut and no new support
+helper/global flag. `open` is idempotent for the same owned identity/tool.
+`close()` is the only ordinary release path and requires ready plus qualified
+exit evidence. AppState/connection invalidation comes from the existing Machine
+lease; the hook must preserve the blocked connection/recovery target and invoke
+`recover()` explicitly after reconnecting the exact device and serial. A
+recovered active operation remains unknown/Stop-only; terminal proof closes it
+rather than creating a fresh Start session.
+
+Nonmoving entry/Scale/Tare/setting uncertainty retains its in-memory owner without
+inventing a durable motor marker. Explicit `recover()` obtains fresh qualified
+closed/terminal evidence, or current settings, before releasing that owner.
+The hook must keep a failed setting proposal in caller state: the snapshot
+retains `applyingSetting` and confirmed readings, never a success-shaped proposal.
+Tare pending uses `phase: "applying"` with `applyingSetting: null`, not an
+optimistic zero. Full app restart has no durable nonmoving transaction record;
+the later hook must not infer that a failed Apply succeeded or automatically
+replay it.
+
 **Files:** create `MachineControls.ts`, `__tests__/MachineControls.test.ts`;
 extend FakeTransport only to replay independently scripted evidence, not to
 invent automatic success for each new outgoing code.

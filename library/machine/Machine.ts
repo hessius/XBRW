@@ -53,10 +53,10 @@ export type ControlPurpose = ToolId | "setting" | "recovery";
 export type ControlSession = {
     check: () => void;
     /** Only a future qualified adapter may supply frames; no encoders are provided here. */
-    send: (frame: Uint8Array) => Promise<void>;
+    send: (frame: Uint8Array, beforeDispatch?: () => void, checkCurrent?: () => void) => Promise<void>;
     /** Recovery authority is restricted to inspection and a qualified stop frame. */
-    sendStop: (frame: Uint8Array) => Promise<void>;
-    refreshInfo: () => Promise<boolean>;
+    sendStop: (frame: Uint8Array, beforeDispatch?: () => void, checkCurrent?: () => void) => Promise<void>;
+    refreshInfo: (beforeDispatch?: () => void, checkCurrent?: () => void) => Promise<boolean>;
     assertPourPreflight: (qualifiedActualSource: "tank" | "tap" | null) => void;
     reserve: () => void;
     clearRecovery: (proof: ControlTerminalProof) => void;
@@ -432,7 +432,7 @@ export default class Machine {
             }
         };
         let sent = false;
-        const write = async (frame: Uint8Array, guard = check) => {
+        const write = async (frame: Uint8Array, guard = check, beforeDispatch?: () => void) => {
             guard();
             if (sent && this.frameGapMs > 0) {
                 await new Promise<void>((resolve, reject) => {
@@ -451,35 +451,40 @@ export default class Machine {
                 guard();
             }
             sent = true;
-            await this.writeFrame(frame, guard);
+            await this.writeFrame(frame, guard, beforeDispatch);
             guard();
         };
-        const sendFrame = async (frame: Uint8Array, guard = check) => {
+        const sendFrame = async (frame: Uint8Array, guard = check, beforeDispatch?: () => void) => {
             guard();
             if (!this.sessionIsFresh()) {
                 await write(buildType1(8100, [185, 1]), guard);
                 guard();
                 this.lastHandshakeAt = Date.now();
             }
-            await write(frame, guard);
+            await write(frame, guard, beforeDispatch);
             guard();
         };
         return {
             check,
-            send: (frame) => owned(async () => {
+            send: (frame, beforeDispatch, checkCurrent) => owned(async () => {
                 const guard = () => {
                     check();
+                    checkCurrent?.();
                     if (purpose === "recovery") refuse("Recovery cannot start tools or change settings.");
                     if (store.snapshot.error !== null) throw store.snapshot.error;
                     if (purpose === "setting") assertAvailable(true);
                 };
-                await sendFrame(frame, guard);
+                await sendFrame(frame, guard, beforeDispatch);
             }),
-            sendStop: (frame) => owned(() => sendFrame(frame)),
-            refreshInfo: () => owned(async () => {
-                check();
-                const answered = await this.askInfo(check, (frame) => write(frame));
-                check();
+            sendStop: (frame, beforeDispatch, checkCurrent) => owned(() => {
+                const guard = () => { check(); checkCurrent?.(); };
+                return sendFrame(frame, guard, beforeDispatch);
+            }),
+            refreshInfo: (beforeDispatch, checkCurrent) => owned(async () => {
+                const guard = () => { check(); checkCurrent?.(); };
+                guard();
+                const answered = await this.askInfo(guard, (frame) => write(frame, guard, beforeDispatch));
+                guard();
                 return answered;
             }),
             assertPourPreflight: (source) => {
@@ -1246,7 +1251,7 @@ export default class Machine {
         }
     }
 
-    private async writeFrame(frame: Uint8Array, check?: () => void): Promise<void> {
+    private async writeFrame(frame: Uint8Array, check?: () => void, beforeDispatch?: () => void): Promise<void> {
         check?.();
         const generation = this.generation;
         // The MTU the radio actually granted, which on Android may be the
@@ -1265,6 +1270,7 @@ export default class Machine {
         // account we have of what actually reached the machine, and a line
         // written before the radio has accepted the frame says a frame was
         // sent when the write is about to throw.
+        beforeDispatch?.();
         try {
             await this.transport.write(frame);
         } catch (error) {
