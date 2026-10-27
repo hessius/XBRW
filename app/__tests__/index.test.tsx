@@ -156,6 +156,7 @@ jest.mock("@/hooks/useShareRecipe", () => ({
 // for screen tests, so the hook is stubbed here, the same way it is in
 // settings.test.tsx.
 let mockRemembered = "";
+let mockLinkedDeviceId: string | null | undefined;
 let mockMachineStatus = "disconnected";
 let mockMachineInfo: {
     waterEnough: boolean;
@@ -185,6 +186,11 @@ jest.mock("@/hooks/useMachine", () => ({
     useMachine:   () => ({
         machine:    {
             get info()   { return mockMachineInfo; },
+            get linkedDeviceId() {
+                return mockLinkedDeviceId === undefined
+                    ? mockMachineStatus === "connected" ? mockRemembered || "UNSAVED" : null
+                    : mockLinkedDeviceId;
+            },
             isConnected:     () => false,
             onLink:          (listener: () => void) => mockOnLink(listener),
             askHowItIsDoing: () => mockAskHowItIsDoing()
@@ -374,6 +380,7 @@ beforeEach(() => {
     mockNativePasteOnPress = undefined;
     mockFocusEpoch = 0;
     mockRemembered = "";
+    mockLinkedDeviceId = undefined;
     mockMachineStatus = "disconnected";
     mockMachineInfo = null;
     mockLiveRun = null;
@@ -3624,6 +3631,47 @@ describe("switching machines from the home screen", () => {
         mockRemembered = "HOME";
         mockMachineStatus = "connected";
         mockMachineInfo = {waterEnough: true, mode: "PRO", grindSize: 62};
+    });
+
+    it.each([false, true])("launches tools for the saved machine in use, not another machine (several: %s)", async several => {
+        const settings = several ? twoMachines()
+            : new Settings(memoryStorage({machineDeviceId: "HOME"}));
+        await renderWithProviders(<HomeScreen db={store([])} settings={settings}/>);
+        expect(screen.queryByRole("button", {name: "Grind"})).toBeNull();
+        await fireEvent.press(screen.getByLabelText(several ? "Connected to Home" : "Machine connected"));
+        await fireEvent.press(screen.getByRole("button", {name: "Grind"}));
+        expect(mockPush).toHaveBeenLastCalledWith({
+            pathname: "/machineTool", params: {machineId: "HOME", tool: "grind"}
+        });
+        await fireEvent.press(screen.getByRole("button", {name: "Machine settings and tools"}));
+        expect(mockPush).toHaveBeenLastCalledWith({pathname: "/machineHome", params: {machineId: "HOME"}});
+        expect(mockChooseMachine).not.toHaveBeenCalled();
+    });
+
+    it("directs an unpaired or unsaved ambient connection to existing pairing instead of inventing a target", async () => {
+        mockRemembered = "";
+        await renderWithProviders(<HomeScreen db={store([])} settings={new Settings(memoryStorage())}/>);
+        await fireEvent.press(screen.getByLabelText("Machine not connected"));
+        expect(screen.queryByRole("button", {name: "Grind"})).toBeNull();
+        await fireEvent.press(screen.getByRole("button", {name: "Machine settings and tools"}));
+        expect(mockPush).toHaveBeenLastCalledWith("/settings");
+        await fireEvent.press(screen.getByLabelText("Easy Mode slots"));
+        expect(mockPush).toHaveBeenLastCalledWith("/settings");
+        expect(mockChooseMachine).not.toHaveBeenCalled();
+    });
+
+    it("keeps all launchers about Home when an ambient link is to Work", async () => {
+        mockLinkedDeviceId = "WORK";
+        await renderWithProviders(<HomeScreen db={store([])} settings={twoMachines()}/>);
+        await fireEvent.press(screen.getByLabelText("Connected to Home"));
+        await fireEvent.press(screen.getByRole("button", {name: "Scale"}));
+        expect(mockPush).toHaveBeenLastCalledWith({
+            pathname: "/machineTool", params: {machineId: "HOME", tool: "scale"}
+        });
+        await fireEvent.press(screen.getByLabelText("Easy Mode slots"));
+        expect(mockPush).toHaveBeenLastCalledWith({pathname: "/machineHome", params: {machineId: "HOME"}});
+        expect(mockChooseMachine).not.toHaveBeenCalled();
+        expect(mockSurveyMachines).not.toHaveBeenCalled();
     });
 
     it("draws no switcher in the panel with one machine saved", async () => {

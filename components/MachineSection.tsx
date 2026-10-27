@@ -320,6 +320,9 @@ export default function MachineSection({settings, onOpenMachine, onAddMachine}: 
                                 onPress={() => switchTo(entry, name)}/>
                         )}
                         <SettingsActionRow
+                            label="Machine settings and tools"
+                            onPress={() => router.push({pathname: "/machineHome", params: {machineId: entry.id}})}/>
+                        <SettingsActionRow
                             label="Manage machine"
                             detail="Name, model, colour and connection order."
                             onPress={() => onOpenMachine?.(entry.id)}/>

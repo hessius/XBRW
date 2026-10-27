@@ -340,6 +340,19 @@ describe("one card per saved machine", () => {
         mockLink.machines = [entry("HOME", "Home", "studio", "J15A01D48H051"), entry("WORK", "Work", "original")];
     });
 
+    it("opens each saved machine's settings and tools by its own id, without connecting or selecting it", async () => {
+        await renderWithProviders(<MachineSection/>);
+        for (const [id, label] of [["HOME", "Home"], ["WORK", "Work"]]) {
+            await openCard(new RegExp(`^${label}, `));
+            await fireEvent.press(card(id).getByRole("button", {name: "Machine settings and tools"}));
+            expect(mockPush).toHaveBeenLastCalledWith({
+                pathname: "/machineHome", params: {machineId: id}
+            });
+        }
+        expect(mockLink.choose).not.toHaveBeenCalled();
+        expect(mockLink.connect).not.toHaveBeenCalled();
+    });
+
     it("lists them in order, each with its place in the order, and the one in use", async () => {
         await renderWithProviders(<MachineSection/>);
 

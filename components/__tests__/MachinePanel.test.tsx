@@ -190,9 +190,25 @@ describe("MachinePanel", () => {
     });
 
     it("shows nothing at all when closed", async () => {
-        const r = await draw({open: false, status: "connected", vitals: someVitals});
+        const r = await draw({open: false, status: "connected", vitals: someVitals,
+            machineId: "HOME", onEasyMode: jest.fn(), onOpenMachine: jest.fn()});
 
         expect(r.queryByTestId("machine-refresh")).toBeNull();
+        expect(r.queryByRole("button", {name: "Grind"})).toBeNull();
+        expect(r.queryByRole("button", {name: "Machine settings and tools"})).toBeNull();
+        expect(r.queryByRole("button", {name: "Easy Mode slots"})).toBeNull();
+    });
+
+    it("keeps Refresh and Easy Mode beside the machine page link, but offers no tools without a saved id", async () => {
+        const onEasyMode = jest.fn();
+        const onOpenMachine = jest.fn();
+        const r = await draw({onEasyMode, onOpenMachine});
+        expect(r.getByLabelText("Refresh the machine readings")).toBeTruthy();
+        expect(r.queryByRole("button", {name: "Grind"})).toBeNull();
+        await fireEvent.press(r.getByLabelText("Easy Mode slots"));
+        await fireEvent.press(r.getByRole("button", {name: "Machine settings and tools"}));
+        expect(onEasyMode).toHaveBeenCalledTimes(1);
+        expect(onOpenMachine).toHaveBeenCalledTimes(1);
     });
 
     it("reads the water level large enough to glance at", async () => {
