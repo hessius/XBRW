@@ -109,6 +109,15 @@ describe("explicit input policies", () => {
         expect(() => validateSetting("weightUnit", "ml", {weightUnit: ["ml"]})).not.toThrow();
     });
 
+    it.each([
+        {min: 7, max: 13, value: 7.1, offLadder: 7.1000000001},
+        {min: 100, max: 101, value: 100.1, offLadder: 100.1000000001}
+    ])("accepts a decimal rung from nonzero origin $min without accepting nearby inputs", ({min, max, value, offLadder}) => {
+        const policy = {brightness: {min, max, step: 0.1}};
+        expect(() => validateSetting("brightness", value, policy)).not.toThrow();
+        expect(() => validateSetting("brightness", offLadder, policy)).toThrow(ControlValidationError);
+    });
+
     it("does not let floating-point tolerance accept off-ladder values on a large range", () => {
         expect(() => validateSetting(
             "brightness", 1_000_000_000_000_000.25,

@@ -75,12 +75,17 @@ function validateNumber(field: string, value: number, policy: NumericPolicy | nu
         throw new ControlValidationError(field, "invalid-policy");
     }
     const steps = (value - min) / step;
-    // Decimal ladders can carry floating-point noise, but never round an input
-    // onto a legal setting. The tolerance only covers arithmetic precision.
-    const tolerance = Math.min(1e-9, Number.EPSILON * 8 * Math.max(1, Math.abs(steps)));
+    const nearestIndex = Math.round(steps);
+    const nearestValue = min + nearestIndex * step;
+    // Compare in value space so cancellation at a nonzero origin does not
+    // reject decimal rungs. Bound tolerance absolutely and relative to a step.
+    const tolerance = Math.min(
+        1e-9, step * 1e-9,
+        Number.EPSILON * 8 * Math.max(1, Math.abs(value), Math.abs(min), Math.abs(nearestValue))
+    );
     if (!Number.isFinite(value) || value < min || value > max
-        || !Number.isSafeInteger(Math.round(steps))
-        || Math.abs(steps - Math.round(steps)) > tolerance) {
+        || !Number.isSafeInteger(nearestIndex) || !Number.isFinite(nearestValue)
+        || Math.abs(value - nearestValue) > tolerance) {
         throw new ControlValidationError(field, "invalid-value");
     }
 }
