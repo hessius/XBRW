@@ -236,7 +236,9 @@ export default class MachineControls {
             bound,
             unavailable,
             // Stop does not use Start's normal-state or water preflight.
-            stopUnavailable: bound ? null : "Reconnect and reconcile the exact named machine before stopping.",
+            stopUnavailable: !bound ? "Reconnect and reconcile the exact named machine before stopping."
+                : this.snapshot.phase === "unknown" && marker == null
+                    ? "No moving operation is reserved. Reconcile this machine before continuing." : null,
             recoverable: !this.disposed && toolQualified && recoveryMatches
                 && actual?.deviceId === identity.deviceId && actual.serial === identity.serial
                 && ["closed", "unknown"].includes(this.snapshot.phase),
@@ -716,9 +718,8 @@ export default class MachineControls {
     private canReconnect(identity: ControlIdentity, tool: ToolId | null): boolean {
         const owner = this.snapshot.identity;
         const marker = this.machine.controlRecovery?.marker;
-        const nonmoving = tool === "scale" || (tool === null && this.snapshot.applyingSetting !== null);
-        const reservationMatches = nonmoving ? marker == null
-            : marker?.deviceId === identity.deviceId && marker.serial === identity.serial && marker.tool === tool;
+        const reservationMatches = marker == null
+            || marker.deviceId === identity.deviceId && marker.serial === identity.serial && marker.tool === tool;
         return !this.disposed && this.options.reconnect !== undefined && this.lease !== null
             && this.qualification !== null && this.snapshot.phase === "unknown" && this.snapshot.tool === tool
             && identity.serial !== null && owner?.deviceId === identity.deviceId && owner.serial === identity.serial
@@ -733,15 +734,14 @@ export default class MachineControls {
         const lease = this.lease;
         const qualification = this.qualification;
         const setting = this.snapshot.applyingSetting;
-        const nonmoving = tool === "scale" || (tool === null && setting !== null);
         const check = () => {
             if (this.disposed || this.epoch !== epoch || this.snapshot.identity !== owner
                 || this.snapshot.phase !== "unknown" || this.snapshot.tool !== tool
                 || !lease || this.lease !== lease || !qualification || this.qualification !== qualification
                 || this.snapshot.applyingSetting !== setting
                 || !identity.serial || owner?.deviceId !== identity.deviceId || owner.serial !== identity.serial
-                || (nonmoving ? marker != null
-                    : !marker || marker.deviceId !== identity.deviceId || marker.serial !== identity.serial || marker.tool !== tool)
+                || (marker != null && (marker.deviceId !== identity.deviceId
+                    || marker.serial !== identity.serial || marker.tool !== tool))
                 || this.machine.controlRecovery?.marker !== marker || this.machine.controlRecovery?.error !== null) {
                 throw new Error("Reconnect requires the exact retained tool owner and unchanged recovery state.");
             }

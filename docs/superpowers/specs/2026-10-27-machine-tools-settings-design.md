@@ -241,10 +241,12 @@ controls are not enabled merely because a general pour policy exists.
 The shared owner retains uncertainty across route lifetimes and app lifecycle
 changes. An owning tool can explicitly reconnect the exact retained device,
 then inspect before restoring Stop authority; it cannot switch machines or
-replay Start. A disconnected Scale or in-flight setting owner uses that same
-explicit reconnect for qualified INFO-only inspection, without creating a motor
-marker or replaying Enter, Tare, Read or Apply. The lease remains exclusive until
-qualified closed/settings proof arrives; local setting proposals survive.
+replay Start. Any disconnected retained owner without a motor marker uses that
+same explicit reconnect for qualified INFO-only inspection, including Grind/Pour
+entry, exit or already-terminal leases, Scale and in-flight settings. It creates
+no motor marker and never replays Enter, Tare, Read or Apply. The lease remains
+exclusive until qualified closed/settings proof arrives; local setting proposals
+survive. A present marker still requires the exact tool, device and serial.
 
 Machine numeric editing snaps to `min + n × step`, including an off-grid maximum
 and a decimal minimum, without enumerating the range. Domain validation remains

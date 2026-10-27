@@ -220,6 +220,36 @@ it("closes foreground recovery only on qualified terminal inspection, not on the
     expect(mockPrevention.prevent).toBe(false);
 });
 
+it.each(["grind", "pour"] as const)("reconnects marker-free %s entry only for qualified closed inspection", async tool => {
+    const s = await fixture();
+    mockParams.tool = tool;
+    s.respond(() => {});
+    await renderWithProviders(<MachineToolScreen controls={s.controls}/>);
+    await press("Open tool");
+    expect(s.controls.getSnapshot().phase).toBe("entering");
+    await act(async () => s.radio.drop());
+    expect(s.controls.getSnapshot().phase).toBe("unknown");
+    expect(s.recovery.snapshot.marker).toBeNull();
+    let inspection: Sent | undefined;
+    s.respond(item => {
+        expect(item.command).toEqual({kind: "inspect", tool, recovery: true});
+        inspection = item;
+    });
+    await press("Reconnect named machine");
+    expect(inspection).toBeDefined();
+    expect(s.controls.getSnapshot().phase).toBe("unknown");
+    expect(s.machine.controlBlocker).not.toBeNull();
+    expect(screen.getByRole("button", {name: "Stop"})).toBeDisabled();
+    await expect(s.controls.stop()).rejects.toThrow("No owned moving operation to stop.");
+    expect(s.recovery.snapshot.marker).toBeNull();
+    await act(async () => { s.feedback(inspection!, {kind: "closed"}); await flushControls(); });
+    expect(s.controls.getSnapshot().phase).toBe("closed");
+    expect(s.machine.controlBlocker).toBeNull();
+    expect(s.recovery.snapshot.marker).toBeNull();
+    expect(s.sent.map(item => item.command.kind)).toEqual(["enter", "inspect"]);
+    expect(s.store.rememberId).not.toHaveBeenCalled();
+});
+
 it.each(["enter", "ready", "tare"] as const)("reconnects a foreground-dropped Scale during %s without replay or motor markers", async operation => {
     const s = await fixture();
     mockParams.tool = "scale";
