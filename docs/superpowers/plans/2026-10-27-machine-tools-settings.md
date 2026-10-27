@@ -47,11 +47,38 @@ coverage findings were fixed at
 The fix's 582 tests across both platforms passed; the reviewer separately
 ran 12 focused reconnect/accessibility cases.
 
-The complete regression gates and GitHub review/CI are recorded separately
-below when available. A draft PR is a preservation/review boundary, not a
+Draft #284 is a preservation/review boundary, not a
 waiver of Task 1/10 or completion of #64. No merge is authorized.
 The approved physical iPhone 17 Pro was unavailable; no substitute device,
 motor/water experiment, production build or deployment was used.
+
+### Review and software verification record
+
+The single GitHub Copilot review at
+`8495c47d6e7de442e07fb86f965ab296865d996f` reported three valid medium issues.
+Commits `3c119bfb6493470c1c9fac9aa442a15d5e2ff980` and
+`de03fa97c881cc6e1bdbdb7ecce9566e281c030f` address them:
+
+- Numeric edits snap to the qualified ladder, including typed input and a
+  maximum that is not itself a rung; ordinary recipe fields retain their policy.
+- Every retained unknown lease can reconnect its exact owner and inspect without
+  replaying entry, Tare, Read, Apply or Start. Marker-free uncertainty never
+  invents motor recovery authority.
+- Busy navigation blocking is separate from actual overlay accessibility
+  coverage, so pending status and Back remain readable without a sheet.
+
+Parent verification at `de03fa97` passed typecheck, whole-repository lint
+(0 errors, 33 warnings), worktree-audit tests and Expo Doctor (21/21).
+The combined numeric-control, tool/setting route, capability and navigation
+regressions passed 222 tests in 10 suites across iOS and Android.
+
+CI run `40499312750` passed quality, both full Jest platforms and the required
+aggregate check at the reviewed head. The final-head CI result is authoritative
+on #284; no second Copilot round is requested after fixes. Redundant local full
+Jest attempts were stopped for review corrections, not counted as passes.
+Focused runs use one worker with `--workerIdleMemoryLimit=768MB` because an
+earlier unbounded serial run exhausted Node's approximately 4 GB heap.
+No Jest configuration, timeout, expectation or dependency was weakened.
 
 Design: `docs/superpowers/specs/2026-10-27-machine-tools-settings-design.md`.
 Planning base: `f24fc968a9f48232323145cfe99a6ba443f9d7c4`

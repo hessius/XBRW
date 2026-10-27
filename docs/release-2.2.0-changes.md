@@ -9,7 +9,7 @@ verified release/source-reconciliation chronology.
 
 ## Machine tools and settings: software implementation, not hardware-qualified
 
-The #64 task branch adds a named machine page under Settings and shortcuts in
+Draft #284, related to #64, adds a named machine page under Settings and shortcuts in
 the expanded home machine panel. Both reach the same dedicated Grind, Scale
 and Pour screens. Six focused setting editors separate current readings from
 proposals and require explicit Apply and matching readback. The existing
