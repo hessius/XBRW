@@ -13,6 +13,8 @@ export type ControlCapabilityProfile = {
     models: readonly string[];
     firmwares: readonly string[];
     serials: readonly string[];
+    /** Explicit standalone scale qualification; other tools imply nothing. */
+    scale?: boolean;
     grind: GrindPolicy | null;
     pour: PourPolicy | null;
     settings: SettingPolicy;

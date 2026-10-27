@@ -135,6 +135,49 @@ it("keeps production unsupported and enters only after correlated non-starting e
     expect(s.machine.controlBlocker).toBeNull();
 });
 
+it("describes only captured qualifications and exact connected identity without acquiring or sending", async () => {
+    const candidate: ControlCapabilityProfile = {
+        ...profile, scale: true,
+        grind: {grindSize: {...profile.grind!.grindSize}, rpm: {...profile.grind!.rpm}}
+    };
+    const s = await setup({profile: candidate});
+    candidate.scale = false;
+    candidate.grind!.grindSize.min = 9;
+    const described = s.controls.describeTool(identity, "grind");
+    expect(described).toMatchObject({
+        bound: false, unavailable: null, scale: true, grind: {grindSize: {min: 1}}
+    });
+    expect(s.controls.describeTool(identity, "grind")).toBe(described);
+    expect(s.controls.describeTool({...identity, serial: "other"}, "grind").unavailable).not.toBeNull();
+    expect(s.controls.describeTool({...identity, deviceId: "other"}, "grind").unavailable).not.toBeNull();
+    const production = new MachineControls(s.machine);
+    expect(production.describeTool(identity, "scale")).toMatchObject({
+        scale: false, bound: false, grind: null, pour: null,
+        unavailable: "Controls unavailable: unqualified"
+    });
+    expect(s.sent).toEqual([]);
+    expect(s.machine.controlBlocker).toBeNull();
+    expect(s.recovery.snapshot.marker).toBeNull();
+    production.dispose();
+    s.controls.dispose();
+});
+
+it("does not infer scale support and does not apply ordinary Start preflight to Stop support", async () => {
+    const s = await setup();
+    expect(s.controls.describeTool(identity, "scale")).toMatchObject({scale: false, bound: false});
+    expect(s.controls.describeTool(identity, "scale").unavailable).not.toBeNull();
+    s.respond(item => accept(s.radio, item));
+    await s.controls.open(identity, "pour");
+    await s.controls.startPour(pour);
+    s.radio.emit(machineInfoFrame({serial: identity.serial, model: "test", firmware: "test", waterEnough: 0}));
+    expect(s.controls.describeTool(identity, "pour")).toMatchObject({bound: true, stopUnavailable: null});
+    s.radio.drop();
+    await s.machine.connect(identity.deviceId);
+    expect(s.controls.describeTool(identity, "pour")).toMatchObject({bound: false, recoverable: true});
+    expect(s.controls.describeTool(identity, "pour").stopUnavailable).not.toBeNull();
+    s.controls.dispose();
+});
+
 it("reserves before a synchronous Start response and clears only a qualified terminal", async () => {
     const s = await setup();
     s.respond((item) => {

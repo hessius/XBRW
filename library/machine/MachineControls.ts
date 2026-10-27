@@ -1,14 +1,24 @@
 import type Machine from "./Machine";
+import {isActiveBrewPhase} from "./Machine";
 import type {ControlSession} from "./Machine";
 import {lookupControlCapabilities} from "./controlCapabilities";
 import {
     type ControlIdentity, type ControlSnapshot, type GrindRequest, type PourRequest, type ToolId,
-    type Pattern, type SettingId, type SettingValues,
+    type Pattern, type SettingId, type SettingValues, type GrindPolicy, type PourPolicy,
     validateGrindRequest, validatePourRequest, validateSetting
 } from "./controlModel";
 import type {ControlCommand, ControlFeedback, ControlQualification, ControlTokens} from "./controlProtocol";
 
 export type MachineControlsOptions = {qualifications?: readonly ControlQualification[]};
+export type MachineToolSupport = Readonly<{
+    grind: GrindPolicy | null;
+    pour: PourPolicy | null;
+    scale: boolean;
+    bound: boolean;
+    unavailable: string | null;
+    stopUnavailable: string | null;
+    recoverable: boolean;
+}>;
 let nextSession = 0;
 const initial: ControlSnapshot = {
     identity: null, tool: null, phase: "closed", error: null, cupGrams: null, dispensedMl: null,
@@ -84,6 +94,7 @@ export default class MachineControls {
     private readonly qualifications: readonly ControlQualification[];
     private disposed = false;
     private deadlines = new Set<ReturnType<typeof setTimeout>>();
+    private supportCache = new Map<string, MachineToolSupport>();
 
     constructor(private readonly machine: Machine, options: MachineControlsOptions = {}) {
         this.qualifications = Object.freeze((options.qualifications ?? []).map(capture));
@@ -95,6 +106,69 @@ export default class MachineControls {
         this.listeners.add(listener);
         return () => { this.listeners.delete(listener); };
     };
+
+    /** Read-only context subscription; a view never acquires or releases a lease. */
+    subscribeToolSupport = (listener: () => void): (() => void) => {
+        const off = [this.subscribe(listener), this.machine.onLink(listener), this.machine.onPhase(listener)];
+        return () => off.forEach(unsubscribe => unsubscribe());
+    };
+
+    /** Uses precisely the immutable qualifications captured by this owner. */
+    describeTool(identity: ControlIdentity, tool: ToolId): MachineToolSupport {
+        let unavailable: string | null = null;
+        let qualification: ControlQualification | null = null;
+        let toolQualified = false;
+        let bound = false;
+        const actual = this.machine.slotIdentity;
+        const own = this.snapshot.identity?.deviceId === identity.deviceId
+            && this.snapshot.identity.serial === identity.serial && this.snapshot.tool === tool;
+        try {
+            if (!identity.serial || !actual || actual.deviceId !== identity.deviceId || actual.serial !== identity.serial) {
+                throw new Error("Connect the named machine with its exact saved serial before using this tool.");
+            }
+            qualification = this.select();
+            const profile = qualification.profile;
+            if ((tool === "grind" && !profile.grind) || (tool === "pour" && !profile.pour)
+                || (tool === "scale" && profile.scale !== true)) {
+                throw new Error("This tool is not qualified for this machine and firmware.");
+            }
+            toolQualified = true;
+            if (own && this.lease && !this.contextInvalid && qualification === this.qualification) {
+                this.lease.check();
+                bound = true;
+            }
+            if (this.snapshot.phase !== "closed" && !own) {
+                throw new Error("Another machine control session owns the connection.");
+            }
+            if (isActiveBrewPhase(this.machine.phase) || this.machine.phase.name === "lostContact") {
+                throw new Error("A brew owns the connection. Finish or stop the brew first.");
+            }
+            if (this.snapshot.phase === "closed") this.machine.assertCanForgetDevice(identity.deviceId);
+        } catch (error) {
+            unavailable = failure(error).message;
+        }
+        const marker = this.machine.controlRecovery?.marker;
+        const recoveryMatches = marker
+            ? marker.deviceId === identity.deviceId && marker.serial === identity.serial && marker.tool === tool
+            : own;
+        const support: MachineToolSupport = Object.freeze({
+            grind: qualification?.profile.grind ?? null,
+            pour: qualification?.profile.pour ?? null,
+            scale: qualification?.profile.scale === true,
+            bound,
+            unavailable,
+            // Stop does not use Start's normal-state or water preflight.
+            stopUnavailable: bound ? null : "Reconnect and reconcile the exact named machine before stopping.",
+            recoverable: !this.disposed && toolQualified && recoveryMatches
+                && actual?.deviceId === identity.deviceId && actual.serial === identity.serial
+                && ["closed", "unknown"].includes(this.snapshot.phase)
+        });
+        const key = JSON.stringify([identity.deviceId, identity.serial, tool]);
+        const previous = this.supportCache.get(key);
+        if (previous && JSON.stringify(previous) === JSON.stringify(support)) return previous;
+        this.supportCache.set(key, support);
+        return support;
+    }
 
     /**
      * Permanent shared-owner teardown, never route cleanup. Detaching cannot
