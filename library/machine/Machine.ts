@@ -414,6 +414,23 @@ export default class Machine {
         };
         this.controlSession = {token, invalidate};
         this.announceLink();
+        let outstanding = 0;
+        const finishRelease = () => {
+            if (released && outstanding === 0 && this.controlSession?.token === token) {
+                this.controlSession = null;
+                this.announceLink();
+            }
+        };
+        const owned = async <T>(operation: () => Promise<T>): Promise<T> => {
+            check();
+            ++outstanding;
+            try {
+                return await operation();
+            } finally {
+                --outstanding;
+                finishRelease();
+            }
+        };
         let sent = false;
         const write = async (frame: Uint8Array, guard = check) => {
             guard();
@@ -449,7 +466,7 @@ export default class Machine {
         };
         return {
             check,
-            send: async (frame) => {
+            send: (frame) => owned(async () => {
                 const guard = () => {
                     check();
                     if (purpose === "recovery") refuse("Recovery cannot start tools or change settings.");
@@ -457,14 +474,14 @@ export default class Machine {
                     if (purpose === "setting") assertAvailable(true);
                 };
                 await sendFrame(frame, guard);
-            },
-            sendStop: (frame) => sendFrame(frame),
-            refreshInfo: async () => {
+            }),
+            sendStop: (frame) => owned(() => sendFrame(frame)),
+            refreshInfo: () => owned(async () => {
                 check();
                 const answered = await this.askInfo(check, (frame) => write(frame));
                 check();
                 return answered;
-            },
+            }),
             assertPourPreflight: (source) => {
                 check();
                 if (purpose !== "pour") refuse("Only a fresh pour session can prepare a pour.");
@@ -498,8 +515,9 @@ export default class Machine {
                 invalidate(new ControlOperationError("The control session was released."));
                 released = true;
                 listeners.clear();
-                if (this.controlSession?.token === token) this.controlSession = null;
-                this.announceLink();
+                // Native acceptance and info waits may outlive navigation.
+                // Keep the token until every operation has actually settled.
+                finishRelease();
             }
         };
     }
@@ -1733,36 +1751,41 @@ export default class Machine {
     /** Switch the machine to PRO, then send the recipe again. Once. */
     async switchToProAndRetry(recipe: Recipe, verifyTarget?: () => Promise<void>): Promise<void> {
         this.assertOrdinaryOperation();
-        const generation = this.generation;
-        const ticket = this.cancelTicket;
-        const canContinue = (): boolean => {
-            if (ticket !== this.cancelTicket) return false;
-            if (generation !== this.generation) throw new Error("The machine connection changed.");
-            return true;
-        };
-        if (verifyTarget !== undefined) {
-            await verifyTarget();
+        const finish = this.beginOrdinaryOperation();
+        try {
+            const generation = this.generation;
+            const ticket = this.cancelTicket;
+            const canContinue = (): boolean => {
+                if (ticket !== this.cancelTicket) return false;
+                if (generation !== this.generation) throw new Error("The machine connection changed.");
+                return true;
+            };
+            if (verifyTarget !== undefined) {
+                await verifyTarget();
+                if (!canContinue()) return;
+            }
+            this.retriedInPro = true;
+            // Byte-exact, confirmed on hardware: "00000000" is PRO, "91327856" EASY.
+            await this.send(buildType2(11511, ascii("00000000")));
+            // The brew opens with a handshake, and without this pause that
+            // handshake would tread on the mode frame -- the one unpaced seam in
+            // the whole sequence, at the position where a lost frame costs most.
+            await this.gap();
             if (!canContinue()) return;
-        }
-        this.retriedInPro = true;
-        // Byte-exact, confirmed on hardware: "00000000" is PRO, "91327856" EASY.
-        await this.send(buildType2(11511, ascii("00000000")));
-        // The brew opens with a handshake, and without this pause that
-        // handshake would tread on the mode frame -- the one unpaced seam in
-        // the whole sequence, at the position where a lost frame costs most.
-        await this.gap();
-        if (!canContinue()) return;
-        // Renewed after a mode change, as it always was. Nobody has looked at
-        // whether a session survives one, and this path is rare enough that a
-        // beep is the cheaper risk.
-        await this.shakeHands();
-        await this.gap();
-        if (!canContinue()) return;
-        if (verifyTarget !== undefined) {
-            await verifyTarget();
+            // Renewed after a mode change, as it always was. Nobody has looked at
+            // whether a session survives one, and this path is rare enough that a
+            // beep is the cheaper risk.
+            await this.shakeHands();
+            await this.gap();
             if (!canContinue()) return;
+            if (verifyTarget !== undefined) {
+                await verifyTarget();
+                if (!canContinue()) return;
+            }
+            await this.brewOnce(recipe);
+        } finally {
+            finish();
         }
-        await this.brewOnce(recipe);
     }
 
     private armAckTimer(): void {

@@ -45,6 +45,7 @@ it("excludes every ordinary radio path before even brew cleanup or refresh write
     await expect(machine.send(buildType1(40521))).rejects.toBeInstanceOf(ControlOperationError);
     await expect(machine.askHowItIsDoing()).rejects.toBeInstanceOf(ControlOperationError);
     await expect(machine.brew(coffee("test"))).rejects.toBeInstanceOf(ControlOperationError);
+    await expect(machine.switchToProAndRetry(coffee("test"))).rejects.toBeInstanceOf(ControlOperationError);
     expect(() => machine.acquireSlotSession(identity)).toThrow(ControlOperationError);
     expect(() => machine.assertCanForgetDevice("different")).toThrow(ControlOperationError);
     expect(radio.sent).toEqual([]);
@@ -342,4 +343,135 @@ it("rechecks known normal state before a settings mutation, not just at acquisit
     await expect(lease.send(buildType1(40521))).rejects.toBeInstanceOf(ControlOperationError);
     expect(radio.sent).toEqual([]);
     lease.release();
+});
+
+it("keeps the whole PRO retry reserved across normal-state replies, gaps and its handshake", async () => {
+    jest.useFakeTimers();
+    const {machine, radio} = await setup("", FRAME_GAP_MS);
+    const original = radio.write.bind(radio);
+    radio.write = async (frame) => {
+        await original(frame);
+        if ((frame[3] | frame[4] << 8) === 11511) radio.emit(status(MACHINE_STATE.IDLE));
+    };
+    machine.phase = {name: "failed", reason: "rejected"};
+    const pending = machine.switchToProAndRetry(coffee("test")).catch((error: unknown) => error);
+    try {
+        await jest.advanceTimersByTimeAsync(0);
+        expect(radio.sent).toEqual([11511]);
+        expect(() => machine.acquireControlSession(identity, "scale")).toThrow(ControlOperationError);
+        expect(() => machine.acquireSlotSession(identity)).toThrow(/busy/i);
+        await jest.advanceTimersByTimeAsync(FRAME_GAP_MS);
+        expect(radio.sent).toEqual([11511, 8100]);
+        expect(() => machine.acquireControlSession(identity, "setting")).toThrow(ControlOperationError);
+        await jest.advanceTimersByTimeAsync(FRAME_GAP_MS * 10);
+        expect(await pending).toBeUndefined();
+    } finally {
+        await machine.disconnect();
+        await jest.advanceTimersByTimeAsync(FRAME_GAP_MS * 10);
+        await pending;
+        jest.useRealTimers();
+    }
+});
+
+it.each(["send", "sendStop", "refreshInfo"] as const)(
+    "retains exclusion when released during an unresolved leased %s write",
+    async (method) => {
+        const {machine, radio} = await setup();
+        const original = radio.write.bind(radio);
+        let unblock!: () => void;
+        const held = new Promise<void>((resolve) => { unblock = resolve; });
+        let entered!: () => void;
+        const writing = new Promise<void>((resolve) => { entered = resolve; });
+        radio.write = async (frame) => {
+            entered();
+            await held;
+            await original(frame);
+        };
+        const lease = machine.acquireControlSession(identity, "scale");
+        const pending = (method === "refreshInfo"
+            ? lease.refreshInfo()
+            : lease[method](buildType1(40521))).catch((error: unknown) => error);
+        await writing;
+        try {
+            lease.release();
+            expect(machine.controlBlocker).toBeInstanceOf(ControlOperationError);
+            expect(() => machine.acquireControlSession(identity, "scale")).toThrow(ControlOperationError);
+            expect(() => machine.acquireSlotSession(identity)).toThrow(ControlOperationError);
+            await expect(machine.send(buildType1(40521))).rejects.toBeInstanceOf(ControlOperationError);
+            await expect(machine.askHowItIsDoing()).rejects.toBeInstanceOf(ControlOperationError);
+            await expect(machine.brew(coffee("test"))).rejects.toBeInstanceOf(ControlOperationError);
+            expect(radio.sent).toEqual([]);
+            unblock();
+            expect(await pending).toBeInstanceOf(ControlOperationError);
+            expect(radio.sent).toEqual([method === "refreshInfo" ? 8100 : 40521]);
+            const next = machine.acquireControlSession(identity, "scale");
+            await next.refreshInfo();
+            expect(radio.sent).toEqual([method === "refreshInfo" ? 8100 : 40521, 8100]);
+            next.release();
+        } finally {
+            unblock();
+            await pending;
+            lease.release();
+            await machine.disconnect();
+        }
+    }
+);
+
+it("retains a released refresh owner until its info wait settles, not just its native write", async () => {
+    const {machine, radio} = await setup();
+    radio.infoReply = null;
+    const lease = machine.acquireControlSession(identity, "scale");
+    const pending = lease.refreshInfo().catch((error: unknown) => error);
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+    try {
+        expect(radio.sent).toEqual([8100]);
+        lease.release();
+        expect(() => machine.acquireControlSession(identity, "scale")).toThrow(ControlOperationError);
+        radio.emit(machineInfoFrame());
+        expect(await pending).toBeInstanceOf(ControlOperationError);
+        const next = machine.acquireControlSession(identity, "scale");
+        next.release();
+    } finally {
+        radio.emit(machineInfoFrame());
+        await pending;
+        lease.release();
+        await machine.disconnect();
+    }
+});
+
+it("waits for every released operation to settle, including a rejected native write", async () => {
+    const {machine, radio} = await setup();
+    const original = radio.write.bind(radio);
+    const releases: (() => void)[] = [];
+    let entered!: () => void;
+    const writing = new Promise<void>((resolve) => { entered = resolve; });
+    radio.write = async (frame) => {
+        await new Promise<void>((resolve) => {
+            releases.push(resolve);
+            if (releases.length === 2) entered();
+        });
+        await original(frame);
+    };
+    const lease = machine.acquireControlSession(identity, "scale");
+    const first = lease.send(buildType1(40521)).catch((error: unknown) => error);
+    const second = lease.refreshInfo().catch((error: unknown) => error);
+    await writing;
+    try {
+        lease.release();
+        radio.failNextWrite = "native refusal";
+        releases[0]();
+        expect(await first).toBeInstanceOf(ControlOperationError);
+        expect(machine.controlBlocker).toBeInstanceOf(ControlOperationError);
+        expect(() => machine.acquireControlSession(identity, "scale")).toThrow(ControlOperationError);
+        releases[1]();
+        expect(await second).toBeInstanceOf(ControlOperationError);
+        expect(radio.sent).toEqual([8100]);
+        const next = machine.acquireControlSession(identity, "scale");
+        next.release();
+    } finally {
+        releases.forEach((release) => release());
+        await Promise.all([first, second]);
+        lease.release();
+        await machine.disconnect();
+    }
 });
