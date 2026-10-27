@@ -480,10 +480,10 @@ coffee's roaster. Tagged recipe variants must match the selected machine, and a
 model change discards an in-flight lookup. Existing untagged feeds retain their
 selection behaviour. Empty/error responses are uncached 502s, preserving the
 subscriber's last good catalogue.
-## Second contributor round, package C: implementation in progress
+## Second contributor round, package C: combined candidate
 
 Branch `feat/2.2.0-package-c-20261026`, pinned to develop
-`f24fc968a9f48232323145cfe99a6ba443f9d7c4`. Incorporates #272's source
+`f24fc968a9f48232323145cfe99a6ba443f9d7c4`. Preserves #272, #273 and #274's
 ancestry with the corrections approved on #279. This is not integrated yet.
 
 A slot links to its recipe by uuid. Catalogue, roaster and link recipes open
@@ -523,3 +523,28 @@ Each destination has its own eligibility and visible refusal reason.
 BLE-valid fine grinds and fractional ratios can reach Easy Mode without
 enabling an invalid NFC write. Unsupported bypass cannot be assigned or saved
 through this entry. The existing more-menu action shares the slot preflight.
+### Easy Mode picker searches subscribed roasters
+
+Preserves #274's ancestry. A search in the Easy Mode CHANGE picker still
+lists library recipes first. Under them, FROM YOUR ROASTERS lists matching
+recipes from the subscribed roasters' cached feeds, one row per coffee and size
+(on sale first, sold out after, at most 30, leaving out links the library
+already holds). Naming the roaster lists all its coffees. Only cached feeds are
+read, so opening and searching the picker makes no request.
+
+Picking one fetches that size's recipe from xBloom and keeps it in the library
+the way ADD TO SHELF does (`addToLibrary`: saved new, or matched to the copy
+already there), then assigns the library copy so the slot's uuid link holds. An
+edited library copy is used as it is; the coffee's own screen is still where the
+roaster's latest is offered. A failed fetch keeps the picker open with a
+message.
+
+Search includes only recipes for the selected machine, defaulting to Studio
+when no model is specified. The selected recipe is checked for Easy Mode
+eligibility before saving; an incompatible retained edited copy is refused
+without changing it. Refusals explain the local problem, while lookup/storage
+failures use safe app copy rather than upstream error text.
+
+Closing the picker, choosing a library recipe, leaving the route, switching
+machine/model/serial, starting a write, or unmounting cancels the lookup.
+A late result cannot save a library row, assign a slot or update a later picker.

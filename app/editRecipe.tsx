@@ -237,9 +237,9 @@ function BrewDeck({
             {/* A half ratio is deliberate and preserved: xBloom's own app makes
                 one, and the editor no longer flattens it. The card byte holds
                 only whole numbers, so `cardWriteProblems` refuses the write and
-                `canWrite` disables the WRITE button. Without this line the
-                button would simply be dead, leaving a user who typed 15.5 to
-                guess whether the app had lost their ratio. `warn`, like the
+                `canWrite` disables the NFC destination. Without this line a
+                user who typed 15.5 would have to guess whether the app had
+                lost their ratio. `warn`, like the
                 stage-ceiling banner: nothing is wrong, the recipe still saves
                 and brews over Bluetooth. */}
             {ratioNotWhole && (

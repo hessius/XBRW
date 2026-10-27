@@ -422,9 +422,20 @@ Neither host adds a save action, and closing discards the adjustment.
 |----|--------|-----------------------------------|--------------|
 | `editor.writeChooser.title` | `components/WriteChooserSheet.tsx` | Sheet title after WRITE, machine remembered. | `WRITE TO` |
 | `editor.writeChooser.easyMode` | `components/WriteChooserSheet.tsx` | Row: go to Assign to Easy Mode. | `EASY MODE SLOT` |
-| `editor.writeChooser.easyMode.detail` | `components/WriteChooserSheet.tsx` | Line under the Easy Mode row, also its a11y hint. | `Put it in slot A, B or C on your machine.` |
+| `editor.writeChooser.easyMode.detail` | `components/WriteChooserSheet.tsx` | Line under the Easy Mode row, also its a11y hint. A destination refusal replaces both. | `Assign to A, B or C. Unsaved recipes are saved to your library first.` |
 | `editor.writeChooser.card` | `components/WriteChooserSheet.tsx` | Row: write an NFC card. | `NFC CARD` |
 | `editor.writeChooser.card.detail` | `components/WriteChooserSheet.tsx` | Line under the card row, also its a11y hint. | `Write it to an xBloom recipe card.` |
+
+### Easy Mode cached roaster search
+
+| ID | Source | Context | Current text |
+|----|--------|---------|--------------|
+| `easyMode.roasters.heading` | `components/EasyModeSlots.tsx` | Matches below library recipes in the slot picker. | `FROM YOUR ROASTERS` |
+| `easyMode.roasters.choose` | `components/EasyModeSlots.tsx` | Spoken result label. | `Choose ${choice.name} from ${choice.roaster}` |
+| `easyMode.roasters.hint` | `components/EasyModeSlots.tsx` | Spoken disclosure before fetching and saving. | `Loads the recipe from xBloom and saves it to your library.` |
+| `easyMode.roasters.loading` | `components/EasyModeSlots.tsx` | Selected result while fetching. | `Loading the recipe from xBloom.` |
+| `easyMode.roasters.failed` | `app/easyMode.tsx` | Lookup or persistence failed; local eligibility refusals show their own reason. | `Couldn't load or save that recipe. Try again.` |
+| `easyMode.roasters.unexpected` | `components/EasyModeSlots.tsx` | Assignment callback unexpectedly rejected. | `Couldn't load that recipe. Try again.` |
 
 ### Editor toasts and errors
 

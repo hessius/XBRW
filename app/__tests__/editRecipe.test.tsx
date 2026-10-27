@@ -2134,6 +2134,8 @@ describe("WRITE with a machine remembered", () => {
         await fireEvent.press(screen.getByLabelText(MACHINE_WRITE));
         expect(screen.getByRole("button", {name: "Easy Mode slot"})).toBeDisabled();
         expect(screen.getByText("Recipes with bypass are not supported in Easy Mode.")).toBeTruthy();
+        expect(screen.getByRole("button", {name: "Easy Mode slot"}).props.accessibilityHint)
+            .toBe("Recipes with bypass are not supported in Easy Mode.");
         expect(screen.getByRole("button", {name: "NFC card"})).toBeEnabled();
         await fireEvent.press(screen.getByRole("button", {name: "Easy Mode slot"}));
         expect(mockPush).not.toHaveBeenCalled();

@@ -8,7 +8,7 @@ import XbrwSheet from "@/components/XbrwSheet";
 import {useAppearance} from "@/hooks/useAppearance";
 import type {DotIconName} from "@/constants/dotIcons";
 
-/** Two rows and nothing that scrolls, so the sheet is sized to them. */
+/** The rows can scroll when larger text exceeds the sheet. */
 export const WRITE_CHOOSER_HEIGHT = 36;
 
 type Props = {
@@ -43,7 +43,7 @@ export default function WriteChooserSheet({
         label: string, icon: DotIconName, detail: string, action: () => void,
         testID: string, problem: string | null
     ) => (
-        <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityHint={detail}
+        <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityHint={problem ?? detail}
                    accessibilityState={{disabled: problem !== null}} disabled={problem !== null}
                    testID={testID} onPress={() => pick(action)}>
             <XStack alignItems="center" gap="$3" paddingVertical="$3"
@@ -65,12 +65,12 @@ export default function WriteChooserSheet({
         <XbrwSheet open={open} onOpenChange={onOpenChange} title="WRITE TO"
                    heightPercent={WRITE_CHOOSER_HEIGHT}>
             <ScrollView>
-            <YStack gap="$2" paddingBottom="$4">
-                {row("Easy Mode slot", "brew", "Assign to A, B or C. Unsaved recipes are saved to your library first.",
-                    onEasyMode, "write-choice-easy-mode", easyModeProblem)}
-                {row("NFC card", "write", "Write it to an xBloom recipe card.",
-                    onCard, "write-choice-card", cardProblem)}
-            </YStack>
+                <YStack gap="$2" paddingBottom="$4">
+                    {row("Easy Mode slot", "brew", "Assign to A, B or C. Unsaved recipes are saved to your library first.",
+                        onEasyMode, "write-choice-easy-mode", easyModeProblem)}
+                    {row("NFC card", "write", "Write it to an xBloom recipe card.",
+                        onCard, "write-choice-card", cardProblem)}
+                </YStack>
             </ScrollView>
         </XbrwSheet>
     );
