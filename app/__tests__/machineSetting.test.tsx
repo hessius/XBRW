@@ -1,4 +1,5 @@
 import React from "react";
+import {Text} from "react-native";
 import {act, fireEvent, screen, waitFor} from "@testing-library/react-native";
 import {renderWithProviders, SHEET_PRESS_TIMEOUT} from "@/test-utils/render";
 import MachineSettingScreen from "@/app/machineSetting";
@@ -8,11 +9,13 @@ import {sharedSettings} from "@/hooks/useSetting";
 import {machineSettingsFixture, settingIdentity, settingReadings} from "@/test-utils/machineSettings";
 import {flushControls} from "@/hooks/__tests__/machineControlFixture";
 import {machineInfoFrame} from "@/library/machine/__tests__/FakeTransport";
+import {useLiveBrewBarCovered} from "@/hooks/useLiveBrewBarGuard";
 
 jest.mock("react-native-ble-manager", () => ({__esModule: true, default: {}}));
 jest.mock("@/components/XbrwToast", () => ({notify: jest.fn()}));
 jest.mock("@/hooks/useSetting", () => jest.requireActual("@/test-utils/settingsMock").settingsMock());
 jest.mock("@/hooks/useSavedMachines", () => ({useSavedMachines: () => ({machines: mockMachines})}));
+jest.mock("@/hooks/useLiveBrew", () => ({useLiveBrew: () => ({ratingNoteOpen: mockRatingOpen})}));
 jest.mock("@/hooks/steadyRouter", () => ({__esModule: true, default: {back: () => mockBack()}}));
 jest.mock("expo-router", () => ({
     useLocalSearchParams: () => mockParams,
@@ -27,6 +30,7 @@ type Prevention = (event: {data: {action: {type: string}}}) => void;
 let mockPrevention: {prevent: boolean; callback: Prevention};
 let mockParams: {machineId?: string | string[]; setting?: string | string[]};
 let mockMachines: SavedMachine[];
+let mockRatingOpen: boolean;
 const mockBack = jest.fn();
 const mockDispatch = jest.fn();
 const saved: SavedMachine = {
@@ -53,10 +57,38 @@ async function prepare(setting = "brightness") {
 beforeEach(() => {
     mockParams = {machineId: settingIdentity.deviceId, setting: "brightness"};
     mockMachines = [{...saved}];
+    mockRatingOpen = false;
     mockBack.mockClear();
     mockDispatch.mockClear();
 });
 afterEach(() => { owners.splice(0).forEach(owner => owner.dispose()); });
+
+function BarCoverage() {
+    const covered = useLiveBrewBarCovered();
+    return <Text>{covered ? "bar covered" : "bar available"}</Text>;
+}
+
+it.each([true, false])("covers the %s-valid host for a global rating sheet without covering the bar", async valid => {
+    const s = await fixture(true);
+    if (!valid) mockParams.setting = "invalid";
+    const contentId = valid ? "machine-setting-content" : "machine-setting-invalid";
+    const tree = () => <><MachineSettingScreen controls={s.controls}/><BarCoverage/></>;
+    const view = await renderWithProviders(tree());
+    expect(screen.getByRole("button", {name: "Back"})).toBeVisible();
+    mockRatingOpen = true;
+    await view.rerender(tree());
+    expect(screen.getByTestId(contentId, {includeHiddenElements: true})).toHaveProp("accessibilityElementsHidden", true);
+    expect(screen.getByTestId(contentId, {includeHiddenElements: true})).toHaveProp("importantForAccessibility", "no-hide-descendants");
+    expect(screen.queryByRole("button", {name: "Back"})).toBeNull();
+    expect(screen.getByText("bar available")).toBeTruthy();
+    mockRatingOpen = false;
+    await view.rerender(tree());
+    expect(screen.getByTestId(contentId)).toHaveProp("accessibilityElementsHidden", false);
+    expect(screen.getByTestId(contentId)).toHaveProp("importantForAccessibility", "auto");
+    await press("Back");
+    expect(mockBack).toHaveBeenCalledTimes(1);
+    expect(s.planned).toEqual([]);
+});
 
 it.each([
     {}, {machineId: settingIdentity.deviceId}, {setting: "brightness"}, {machineId: "unknown", setting: "brightness"},

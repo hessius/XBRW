@@ -9,7 +9,10 @@ import {
 } from "./controlModel";
 import type {ControlCommand, ControlFeedback, ControlQualification, ControlTokens} from "./controlProtocol";
 
-export type MachineControlsOptions = {qualifications?: readonly ControlQualification[]};
+export type MachineControlsOptions = {
+    qualifications?: readonly ControlQualification[];
+    reconnect?: (target: string, check: () => void) => Promise<void>;
+};
 export type MachineToolSupport = Readonly<{
     grind: GrindPolicy | null;
     pour: PourPolicy | null;
@@ -18,6 +21,7 @@ export type MachineToolSupport = Readonly<{
     unavailable: string | null;
     stopUnavailable: string | null;
     recoverable: boolean;
+    reconnectable: boolean;
 }>;
 export type MachineSettingsSupport = Readonly<{
     policy: SettingPolicy;
@@ -94,6 +98,7 @@ export default class MachineControls {
     private stopping: Promise<void> | null = null;
     private opening: Promise<ControlFeedback["value"]> | null = null;
     private recovering = false;
+    private reconnecting: Promise<void> | null = null;
     private recoveryOnly = false;
     private contextInvalid = false;
     private clearing = false;
@@ -107,7 +112,7 @@ export default class MachineControls {
     private settingsSupportCache = new Map<string, MachineSettingsSupport>();
     private settingsInfo: Machine["info"] = null;
 
-    constructor(private readonly machine: Machine, options: MachineControlsOptions = {}) {
+    constructor(private readonly machine: Machine, private readonly options: MachineControlsOptions = {}) {
         this.qualifications = Object.freeze((options.qualifications ?? []).map(capture));
     }
 
@@ -232,7 +237,11 @@ export default class MachineControls {
             stopUnavailable: bound ? null : "Reconnect and reconcile the exact named machine before stopping.",
             recoverable: !this.disposed && toolQualified && recoveryMatches
                 && actual?.deviceId === identity.deviceId && actual.serial === identity.serial
-                && ["closed", "unknown"].includes(this.snapshot.phase)
+                && ["closed", "unknown"].includes(this.snapshot.phase),
+            reconnectable: !this.disposed && this.options.reconnect !== undefined && own
+                && this.snapshot.phase === "unknown" && this.qualification !== null
+                && marker != null && recoveryMatches && this.machine.controlRecovery?.error === null
+                && !this.machine.isConnected()
         });
         const key = JSON.stringify([identity.deviceId, identity.serial, tool]);
         const previous = this.supportCache.get(key);
@@ -703,6 +712,51 @@ export default class MachineControls {
             this.uncertain(failure(error));
             throw error;
         }
+    }
+
+    /** Reconnect only the retained moving owner; no Enter, Start or selection change. */
+    reconnectTool(identity: ControlIdentity, tool: ToolId): Promise<void> {
+        const owner = this.snapshot.identity;
+        const marker = this.machine.controlRecovery?.marker;
+        const epoch = this.epoch;
+        const check = () => {
+            if (this.disposed || this.epoch !== epoch || this.snapshot.identity !== owner
+                || this.snapshot.phase !== "unknown" || this.snapshot.tool !== tool
+                || !identity.serial || owner?.deviceId !== identity.deviceId || owner.serial !== identity.serial
+                || !marker || marker.deviceId !== identity.deviceId || marker.serial !== identity.serial
+                || marker.tool !== tool || this.machine.controlRecovery?.marker !== marker
+                || this.machine.controlRecovery.error !== null) {
+                throw new Error("Reconnect requires the exact retained tool owner and valid recovery marker.");
+            }
+        };
+        try {
+            check();
+            if (this.reconnecting) return this.reconnecting;
+            if (!this.describeTool(identity, tool).reconnectable || !this.options.reconnect) {
+                throw new Error("Owned tool reconnect is unavailable.");
+            }
+        } catch (error) {
+            return Promise.reject(error);
+        }
+        const reconnect = this.options.reconnect;
+        const operation = async () => {
+            try {
+                // Native writes may outlive their cancelled response promises.
+                await this.writeTail;
+                check();
+                await reconnect(identity.deviceId, check);
+                check();
+                const actual = this.machine.slotIdentity;
+                if (actual?.deviceId !== identity.deviceId || actual.serial !== identity.serial) {
+                    throw new Error("Reconnect requires the exact connected device and saved serial.");
+                }
+                await this.recover();
+            } finally {
+                this.reconnecting = null;
+            }
+        };
+        this.reconnecting = operation();
+        return this.reconnecting;
     }
 
     /** Never re-enters a tool. A moving recovery remains Stop-only until proof. */

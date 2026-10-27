@@ -6,6 +6,7 @@ import MachineSettingEditor from "@/components/MachineSettingEditor";
 import ScreenHeader from "@/components/ScreenHeader";
 import XbrwSheet from "@/components/XbrwSheet";
 import {useAppearance} from "@/hooks/useAppearance";
+import {useLiveBrew} from "@/hooks/useLiveBrew";
 import {useMachineControls} from "@/hooks/useMachineControls";
 import {useMachineSetting} from "@/hooks/useMachineSetting";
 import {useMachineToolNavigation} from "@/hooks/useMachineToolNavigation";
@@ -23,12 +24,14 @@ function SettingScreen({identity, setting, name, injected}: {
     const {controls, snapshot} = useMachineControls(injected);
     const state = useMachineSetting(identity, setting, controls, snapshot);
     const nav = useMachineToolNavigation(identity, controls, "setting");
+    const {ratingNoteOpen} = useLiveBrew();
+    const covered = nav.covered || ratingNoteOpen;
     const prompt = nav.prompt;
     const current = state.support.reading === "unavailable" ? null : snapshot.settings?.[setting] ?? null;
     return <YStack flex={1} backgroundColor={palette.base}>
         <YStack testID="machine-setting-content" flex={1} minHeight={0}
-            accessibilityElementsHidden={nav.covered}
-            importantForAccessibility={nav.covered ? "no-hide-descendants" : "auto"}>
+            accessibilityElementsHidden={covered}
+            importantForAccessibility={covered ? "no-hide-descendants" : "auto"}>
             <ScreenHeader title={MACHINE_SETTING_TITLES[setting]}
                 subtitle={`${name} · ${identity.serial ?? "Serial not known"}`}
                 onBack={() => nav.requestDeparture(() => router.back())}/>
@@ -62,10 +65,13 @@ export default function MachineSettingScreen({controls}: {controls?: MachineCont
     const {machineId, setting} = useLocalSearchParams<{machineId?: string | string[]; setting?: string | string[]}>();
     const {machines} = useSavedMachines();
     const {palette} = useAppearance();
+    const {ratingNoteOpen} = useLiveBrew();
     const matches = typeof machineId === "string" ? machines.filter(machine => machine.id === machineId) : [];
     const machine = matches.length === 1 ? matches[0] : null;
     if (!machine || !isSettingId(setting)) {
-        return <YStack flex={1} backgroundColor={palette.base}>
+        return <YStack testID="machine-setting-invalid" flex={1} backgroundColor={palette.base}
+            accessibilityElementsHidden={ratingNoteOpen}
+            importantForAccessibility={ratingNoteOpen ? "no-hide-descendants" : "auto"}>
             <ScreenHeader title="Machine setting" onBack={() => router.back()}/>
             <Text selectable padding="$4" color={palette.danger}>
                 Invalid machine setting link. Choose one saved machine and one known setting.

@@ -116,6 +116,7 @@ export function useMachineTool(identity: ControlIdentity, tool: ToolId, controls
     return {
         support, owns, phase, bound, unavailable, error, busy, grind, pour,
         setGrind, setPour, chooseProposal, changeMode, start, open, recover,
+        reconnect: () => { void perform(() => controls.reconnectTool(identity, tool)); },
         stop: () => { void perform(async () => { requireBound(); await controls.stop(); }); },
         tare: () => { void perform(async () => { requireBound(); await controls.tare(); }); }
     };

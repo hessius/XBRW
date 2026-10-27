@@ -79,7 +79,9 @@ export function sharedMachine(): Machine {
             write: (value) => settings.set("machineControlRecovery", value)
         }));
         sharedPort = installMachineSlotPort(machine, sharedSlotDatabase());
-        sharedControls = new MachineControls(machine);
+        sharedControls = new MachineControls(machine, {
+            reconnect: (target, check) => openLink(machine, settingsStore(), undefined, {target, check, delays: [0]})
+        });
         stopSharedLifecycle = holdLinkAcrossAppState(machine,
             (target) => openLink(machine, settingsStore(), undefined, {target}), {controls: sharedControls});
         // Whenever the machine describes itself, keep its serial against the
@@ -94,6 +96,8 @@ export function sharedMachine(): Machine {
         stopSharedReadings = machine.onLink(() => {
             const identity = machine.slotIdentity;
             if (identity?.serial == null) return;
+            const reserved = machine.controlRecovery?.marker;
+            if (reserved && (reserved.deviceId !== identity.deviceId || reserved.serial !== identity.serial)) return;
             const pair = `${identity.deviceId}|${identity.serial}`;
             if (pair === kept) return;
             kept = pair;
@@ -177,8 +181,11 @@ export type RetryOptions = {delays?: number[]; wait?: (ms: number) => Promise<vo
  * `target` is a peripheral the link must connect to and nothing else: no
  * priority scan and no stale-id rescan. Choosing and adding a machine both
  * need it, because a rescan there could land on a machine nobody picked.
+ * `check` revalidates a retained control owner across permission and retries.
+ * Its explicit reconnect uses one attempt, so supersession cannot retry over
+ * another connection; the owning route offers a deliberate retry instead.
  */
-export type LinkOptions = RetryOptions & {target?: string};
+export type LinkOptions = RetryOptions & {target?: string; check?: () => void};
 
 /** What `useMachine` lets a test replace. */
 export type MachineOptions = RetryOptions & {settings?: Settings};
@@ -477,6 +484,7 @@ export async function openLink(
     ensurePermission: () => Promise<BluetoothPermissionResult> = ensureBluetoothPermission,
     options: LinkOptions = {}
 ): Promise<void> {
+    options.check?.();
     const recoveryTarget = machine.controlRecoveryTarget;
     if (recoveryTarget !== null && options.target !== undefined && options.target !== recoveryTarget) {
         throw new ControlOperationError("Recover the uncertain control operation before changing machines.");
@@ -491,6 +499,7 @@ export async function openLink(
     // Outside the retrying on purpose. Waiting fourteen seconds to be told the
     // app needs permission it has already been denied helps nobody.
     await requirePermission(ensurePermission);
+    options.check?.();
 
     // Which machine, decided once, before the retrying (see the spec's
     // "Connection algorithm"). With fewer than two saved, `target` stays
@@ -525,6 +534,7 @@ export async function openLink(
     let lastFailure: Error | null = null;
     for (const delay of delays) {
         if (delay > 0) await wait(delay);
+        options.check?.();
         if (machine.controlRecoveryTarget !== recoveryTarget) {
             throw new ControlOperationError("The control recovery target changed while connecting.");
         }
@@ -542,7 +552,8 @@ export async function openLink(
             );
         }
         try {
-            await attemptLink(machine, store, target);
+            await attemptLink(machine, store, target, recoveryTarget !== null, options.check);
+            options.check?.();
             return;
         } catch (e) {
             if (e instanceof RadioUnavailableError) throw e;
@@ -678,7 +689,9 @@ async function findSavedMachine(
  * answers first, which with several saved is quite possibly not the one that
  * was meant, and in a cafe possibly not one of the user's at all.
  */
-async function attemptLink(machine: Machine, store: LinkStore, target?: string): Promise<void> {
+async function attemptLink(
+    machine: Machine, store: LinkStore, target?: string, recoveryOnly = false, check?: () => void
+): Promise<void> {
     const scanForMachine = async (): Promise<string> => {
         const found = await exclusiveScan(machine);
         if (found.length === 0) {
@@ -695,6 +708,7 @@ async function attemptLink(machine: Machine, store: LinkStore, target?: string):
     // The remembered id first, so a returning user pays for no scan.
     let id = remembered === "" ? await scanForMachine() : remembered;
     try {
+        check?.();
         await machine.connect(id);
     } catch (e) {
         if (e instanceof RadioUnavailableError) throw e;
@@ -708,6 +722,9 @@ async function attemptLink(machine: Machine, store: LinkStore, target?: string):
         if (id === remembered) throw e;
         await machine.connect(id);
     }
+    check?.();
+    // Recovery reconnects a reserved owner, never selects or re-labels a machine.
+    if (recoveryOnly) return;
     // Remembering now comes before the reading. Remembering is what makes this
     // machine the active one, and the reading is written to the active
     // machine's keys: in the old order, a switch from Home to Work would have

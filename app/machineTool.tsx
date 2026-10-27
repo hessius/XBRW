@@ -8,6 +8,7 @@ import ScaleTool from "@/components/ScaleTool";
 import ScreenHeader from "@/components/ScreenHeader";
 import XbrwSheet from "@/components/XbrwSheet";
 import {useAppearance} from "@/hooks/useAppearance";
+import {useLiveBrew} from "@/hooks/useLiveBrew";
 import {useMachineControls} from "@/hooks/useMachineControls";
 import {useMachineToolNavigation} from "@/hooks/useMachineToolNavigation";
 import {useMachineTool} from "@/hooks/useMachineTool";
@@ -27,14 +28,16 @@ function ToolScreen({identity, tool, name, injected}: {
     const {controls, snapshot} = useMachineControls(injected);
     const state = useMachineTool(identity, tool, controls, snapshot);
     const nav = useMachineToolNavigation(identity, controls);
+    const {ratingNoteOpen} = useLiveBrew();
+    const covered = nav.covered || ratingNoteOpen;
     const [animationEnabled] = useSetting("animateBrewChart");
     const {support, owns, phase, bound, unavailable, error, busy, grind, pour} = state;
     const prompt = nav.prompt;
     return (
         <YStack flex={1} minHeight={0} backgroundColor={palette.base}>
             <YStack testID="machine-tool-content" flex={1} minHeight={0}
-                accessibilityElementsHidden={nav.covered}
-                importantForAccessibility={nav.covered ? "no-hide-descendants" : "auto"}>
+                accessibilityElementsHidden={covered}
+                importantForAccessibility={covered ? "no-hide-descendants" : "auto"}>
                 <ScreenHeader title={TITLES[tool]} subtitle={`${name} · ${identity.serial ?? "Serial not known"}`}
                     onBack={() => nav.requestDeparture(() => router.back())}/>
                 <YStack flex={1} minHeight={0} paddingHorizontal="$4" paddingBottom={Math.max(insets.bottom, 16)} gap="$2">
@@ -48,13 +51,20 @@ function ToolScreen({identity, tool, name, injected}: {
                         {!bound && <Text color={palette.muted}>
                             {support.unavailable ?? "Opening only prepares the tool. It never starts the machine."}
                         </Text>}
-                        {!bound && <Text color={palette.muted}>
+                        {!bound && !owns && <Text color={palette.muted}>
                             Brew, Easy Mode and other control operations must finish first. Connect this named machine from Machines; this screen never switches or connects automatically.
                         </Text>}
                         {phase === "closed" && <Button accessibilityRole="button"
                             disabled={busy || support.unavailable !== null} onPress={state.open}>Open tool</Button>}
                         {support.recoverable && <Button accessibilityRole="button" disabled={busy}
                             onPress={state.recover}>Reconcile connected machine</Button>}
+                        {support.reconnectable && <>
+                            <Text color={palette.muted}>
+                                Reconnect only this machine to inspect the uncertain operation. Reconnecting does not confirm Stop or restart the tool.
+                            </Text>
+                            <Button accessibilityRole="button" disabled={busy}
+                                onPress={state.reconnect}>Reconnect named machine</Button>
+                        </>}
                         {bound && phase === "ready" && tool !== "scale" && <Button accessibilityRole="button"
                             disabled={busy} onPress={state.chooseProposal}>
                             Choose editable proposal
@@ -101,10 +111,13 @@ export default function MachineToolScreen({controls}: {controls?: MachineControl
     const {machineId, tool} = useLocalSearchParams<{machineId?: string | string[]; tool?: string | string[]}>();
     const {machines} = useSavedMachines();
     const {palette} = useAppearance();
+    const {ratingNoteOpen} = useLiveBrew();
     const matches = typeof machineId === "string" ? machines.filter(machine => machine.id === machineId) : [];
     const machine = matches.length === 1 ? matches[0] : null;
     if (!machine || typeof tool !== "string" || !["grind", "scale", "pour"].includes(tool)) {
-        return <YStack flex={1} backgroundColor={palette.base}>
+        return <YStack testID="machine-tool-invalid" flex={1} backgroundColor={palette.base}
+            accessibilityElementsHidden={ratingNoteOpen}
+            importantForAccessibility={ratingNoteOpen ? "no-hide-descendants" : "auto"}>
             <ScreenHeader title="Machine tool" onBack={() => router.back()}/>
             <Text selectable padding="$4" color={palette.danger}>Invalid machine tool link. Choose one saved machine and Grind, Scale or Pour.</Text>
         </YStack>;
