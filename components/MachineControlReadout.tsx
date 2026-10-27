@@ -25,7 +25,7 @@ export default function MachineControlReadout({
         <YStack testID="machine-control-readout" accessible accessibilityRole="text"
                 accessibilityLabel={`${label}: ${display}`} accessibilityLiveRegion="none" gap="$2">
             <Text color={palette.muted}>{label}</Text>
-            <DotMatrixText testID="machine-control-value" fontSize={prominent ? 56 : 22}
+            <DotMatrixText testID="machine-control-value" fontSize={available && prominent ? 56 : 22}
                            color={available ? palette.text : palette.muted}
                            style={{flexShrink: 1}}>
                 {available ? `${value}${unit ? ` ${unit.toUpperCase()}` : ""}` : unavailable}

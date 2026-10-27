@@ -1,8 +1,18 @@
 import React, {useState} from "react";
 import {fireEvent, screen} from "@testing-library/react-native";
-import {MachineNumericControl} from "@/components/MachineControlReadout";
+import MachineControlReadout, {MachineNumericControl} from "@/components/MachineControlReadout";
 import {validateSetting, type NumericPolicy} from "@/library/machine/controlModel";
 import {renderWithProviders} from "@/test-utils/render";
+
+it("keeps unavailable prose at the secondary size without shrinking real zero readings", async () => {
+    const {rerender} = await renderWithProviders(<MachineControlReadout label="Selected size" value={null}/>);
+    expect(screen.getByLabelText("Selected size: Unavailable")).toBeTruthy();
+    expect(screen.getByTestId("machine-control-value")).toHaveStyle({fontSize: 22});
+
+    await rerender(<MachineControlReadout label="Selected size" value={0}/>);
+    expect(screen.getByLabelText("Selected size: 0")).toBeTruthy();
+    expect(screen.getByTestId("machine-control-value")).toHaveStyle({fontSize: 56});
+});
 
 function Host({policy, initial, changed}: {
     policy: NumericPolicy; initial: number; changed: (value: number) => void;
