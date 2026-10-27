@@ -1,3 +1,5 @@
+import {onNumericLadder, validNumericPolicy} from "@/library/numericLadder";
+
 export type ToolId = "grind" | "scale" | "pour";
 export type ControlIdentity = {deviceId: string; serial: string | null};
 export type Pattern = "centered" | "circular" | "spiral";
@@ -75,22 +77,10 @@ export class ControlValidationError extends Error {
 
 function validateNumber(field: string, value: number, policy: NumericPolicy | null | undefined): void {
     if (!policy) throw new ControlValidationError(field, "unsupported");
-    const {min, max, step} = policy;
-    if (![min, max, step].every(Number.isFinite) || min > max || step <= 0) {
+    if (!validNumericPolicy(policy)) {
         throw new ControlValidationError(field, "invalid-policy");
     }
-    const steps = (value - min) / step;
-    const nearestIndex = Math.round(steps);
-    const nearestValue = min + nearestIndex * step;
-    // Compare in value space so cancellation at a nonzero origin does not
-    // reject decimal rungs. Bound tolerance absolutely and relative to a step.
-    const tolerance = Math.min(
-        1e-9, step * 1e-9,
-        Number.EPSILON * 8 * Math.max(1, Math.abs(value), Math.abs(min), Math.abs(nearestValue))
-    );
-    if (!Number.isFinite(value) || value < min || value > max
-        || !Number.isSafeInteger(nearestIndex) || !Number.isFinite(nearestValue)
-        || Math.abs(value - nearestValue) > tolerance) {
+    if (!onNumericLadder(value, policy)) {
         throw new ControlValidationError(field, "invalid-value");
     }
 }

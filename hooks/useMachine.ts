@@ -486,6 +486,11 @@ export async function openLink(
 ): Promise<void> {
     options.check?.();
     const recoveryTarget = machine.controlRecoveryTarget;
+    // Capture the explicit retained-owner scope before awaiting permission.
+    // Its check pins the lease/identity across every await; ordinary connects
+    // still follow selection and never gain this info-only recovery path.
+    const ownedReconnect = options.check !== undefined && options.target !== undefined
+        && machine.controlBlocker !== null;
     if (recoveryTarget !== null && options.target !== undefined && options.target !== recoveryTarget) {
         throw new ControlOperationError("Recover the uncertain control operation before changing machines.");
     }
@@ -543,7 +548,7 @@ export async function openLink(
         // want, and connecting anyway would be the app arguing with them. The
         // same goes for picking another machine meanwhile, which moves the
         // active machine rather than emptying it: hence "changed", not "empty".
-        if (recoveryTarget === null && startedWith !== "" && store.rememberedId() !== startedWith) {
+        if (recoveryTarget === null && !ownedReconnect && startedWith !== "" && store.rememberedId() !== startedWith) {
             throw new WrongMachineError("Connecting was cancelled. The machine selection changed.");
         }
         if (saved.length >= 2 && !store.savedMachines?.().some(entry => entry.id === target)) {
@@ -552,7 +557,7 @@ export async function openLink(
             );
         }
         try {
-            await attemptLink(machine, store, target, recoveryTarget !== null, options.check);
+            await attemptLink(machine, store, target, recoveryTarget !== null || ownedReconnect, options.check);
             options.check?.();
             return;
         } catch (e) {

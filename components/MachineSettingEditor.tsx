@@ -18,11 +18,13 @@ type Props = {
     unavailable: string | null;
     error: string | null;
     recoverable: boolean;
+    reconnectable: boolean;
     onChange: (draft: SettingEditorState) => void;
     onChooseCurrent: () => void;
     onRead: () => void;
     onApply: () => void;
     onRecover: () => void;
+    onReconnect: () => void;
 };
 
 function ProposalControls({draft, policy, editable, onChange}: Pick<Props, "draft" | "policy" | "editable" | "onChange">) {
@@ -67,7 +69,7 @@ function ProposalControls({draft, policy, editable, onChange}: Pick<Props, "draf
 /** Machine readings and local proposals are deliberately separate surfaces. */
 export default function MachineSettingEditor({
     draft, policy, reading, current, editable, canApply, pending, applied, unavailable, error,
-    recoverable, onChange, onChooseCurrent, onRead, onApply, onRecover
+    recoverable, reconnectable, onChange, onChooseCurrent, onRead, onApply, onRecover, onReconnect
 }: Props) {
     const {palette, primary} = useAppearance();
     const title = MACHINE_SETTING_TITLES[draft.id];
@@ -87,6 +89,14 @@ export default function MachineSettingEditor({
             {recoverable && <Button accessibilityRole="button" disabled={pending} onPress={onRecover}>
                 Reconcile connected machine
             </Button>}
+            {reconnectable && <>
+                <Text color={palette.muted}>
+                    Reconnect only this machine to inspect the uncertain setting. Read and Apply are never replayed.
+                </Text>
+                <Button accessibilityRole="button" disabled={pending} onPress={onReconnect}>
+                    Reconnect named machine
+                </Button>
+            </>}
         </YStack>
         <Text color={palette.text}>Proposal · {settingValueLabel(draft.proposal)}{draft.proposal !== null && unit ? ` ${unit}` : ""}</Text>
         <Text color={palette.muted}>Changing a proposal sends nothing. Back discards it. Apply is a separate machine operation.</Text>

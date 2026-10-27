@@ -31,6 +31,7 @@ export type MachineSettingsSupport = Readonly<{
     readingReason: "offline" | "identity-mismatch" | "unqualified" | "unsupported" | "owned"
         | "missing-readback" | "stale-readback" | null;
     recoverable: boolean;
+    reconnectable: boolean;
 }>;
 let nextSession = 0;
 const initial: ControlSnapshot = {
@@ -180,7 +181,8 @@ export default class MachineControls {
             reading,
             readingReason: reading === "current" ? null : reason
                 ?? (reading === "unavailable" ? "missing-readback" : "stale-readback"),
-            recoverable: own && reason === null && this.snapshot.phase === "unknown"
+            recoverable: own && reason === null && this.snapshot.phase === "unknown",
+            reconnectable: this.canReconnect(identity, null)
         });
         const key = JSON.stringify([identity, id]);
         const previous = this.settingsSupportCache.get(key);
@@ -238,10 +240,7 @@ export default class MachineControls {
             recoverable: !this.disposed && toolQualified && recoveryMatches
                 && actual?.deviceId === identity.deviceId && actual.serial === identity.serial
                 && ["closed", "unknown"].includes(this.snapshot.phase),
-            reconnectable: !this.disposed && this.options.reconnect !== undefined && own
-                && this.snapshot.phase === "unknown" && this.qualification !== null
-                && marker != null && recoveryMatches && this.machine.controlRecovery?.error === null
-                && !this.machine.isConnected()
+            reconnectable: this.canReconnect(identity, tool)
         });
         const key = JSON.stringify([identity.deviceId, identity.serial, tool]);
         const previous = this.supportCache.get(key);
@@ -714,25 +713,43 @@ export default class MachineControls {
         }
     }
 
-    /** Reconnect only the retained moving owner; no Enter, Start or selection change. */
-    reconnectTool(identity: ControlIdentity, tool: ToolId): Promise<void> {
+    private canReconnect(identity: ControlIdentity, tool: ToolId | null): boolean {
+        const owner = this.snapshot.identity;
+        const marker = this.machine.controlRecovery?.marker;
+        const nonmoving = tool === "scale" || (tool === null && this.snapshot.applyingSetting !== null);
+        const reservationMatches = nonmoving ? marker == null
+            : marker?.deviceId === identity.deviceId && marker.serial === identity.serial && marker.tool === tool;
+        return !this.disposed && this.options.reconnect !== undefined && this.lease !== null
+            && this.qualification !== null && this.snapshot.phase === "unknown" && this.snapshot.tool === tool
+            && identity.serial !== null && owner?.deviceId === identity.deviceId && owner.serial === identity.serial
+            && reservationMatches && this.machine.controlRecovery?.error === null && !this.machine.isConnected();
+    }
+
+    /** Reconnect the retained owner to inspect only; null denotes its settings lease. */
+    reconnectTool(identity: ControlIdentity, tool: ToolId | null): Promise<void> {
         const owner = this.snapshot.identity;
         const marker = this.machine.controlRecovery?.marker;
         const epoch = this.epoch;
+        const lease = this.lease;
+        const qualification = this.qualification;
+        const setting = this.snapshot.applyingSetting;
+        const nonmoving = tool === "scale" || (tool === null && setting !== null);
         const check = () => {
             if (this.disposed || this.epoch !== epoch || this.snapshot.identity !== owner
                 || this.snapshot.phase !== "unknown" || this.snapshot.tool !== tool
+                || !lease || this.lease !== lease || !qualification || this.qualification !== qualification
+                || this.snapshot.applyingSetting !== setting
                 || !identity.serial || owner?.deviceId !== identity.deviceId || owner.serial !== identity.serial
-                || !marker || marker.deviceId !== identity.deviceId || marker.serial !== identity.serial
-                || marker.tool !== tool || this.machine.controlRecovery?.marker !== marker
-                || this.machine.controlRecovery.error !== null) {
-                throw new Error("Reconnect requires the exact retained tool owner and valid recovery marker.");
+                || (nonmoving ? marker != null
+                    : !marker || marker.deviceId !== identity.deviceId || marker.serial !== identity.serial || marker.tool !== tool)
+                || this.machine.controlRecovery?.marker !== marker || this.machine.controlRecovery?.error !== null) {
+                throw new Error("Reconnect requires the exact retained tool owner and unchanged recovery state.");
             }
         };
         try {
             check();
             if (this.reconnecting) return this.reconnecting;
-            if (!this.describeTool(identity, tool).reconnectable || !this.options.reconnect) {
+            if (!this.canReconnect(identity, tool) || !this.options.reconnect) {
                 throw new Error("Owned tool reconnect is unavailable.");
             }
         } catch (error) {
@@ -750,6 +767,7 @@ export default class MachineControls {
                 if (actual?.deviceId !== identity.deviceId || actual.serial !== identity.serial) {
                     throw new Error("Reconnect requires the exact connected device and saved serial.");
                 }
+                if (this.select() !== qualification) throw new Error("The qualified machine identity changed.");
                 await this.recover();
             } finally {
                 this.reconnecting = null;

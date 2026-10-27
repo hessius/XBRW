@@ -70,6 +70,7 @@ export function useMachineSetting(
                 void perform(() => applySettingProposal(controls, identity, draft), true);
             }
         },
-        recover: () => { if (support.recoverable) void perform(() => controls.recover()); }
+        recover: () => { if (support.recoverable) void perform(() => controls.recover()); },
+        reconnect: () => { if (support.reconnectable) void perform(() => controls.reconnectTool(identity, null)); }
     };
 }

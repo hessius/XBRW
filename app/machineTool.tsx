@@ -56,6 +56,8 @@ function ToolScreen({identity, tool, name, injected}: {
                         </Text>}
                         {phase === "closed" && <Button accessibilityRole="button"
                             disabled={busy || support.unavailable !== null} onPress={state.open}>Open tool</Button>}
+                        {phase === "entering" && <Text color={palette.muted}>Opening tool…</Text>}
+                        {phase === "leaving" && <Text color={palette.muted}>Closing tool…</Text>}
                         {support.recoverable && <Button accessibilityRole="button" disabled={busy}
                             onPress={state.recover}>Reconcile connected machine</Button>}
                         {support.reconnectable && <>

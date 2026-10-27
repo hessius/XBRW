@@ -41,6 +41,7 @@ function SettingScreen({identity, setting, name, injected}: {
                     editable={state.editable} canApply={state.canApply} pending={state.pending}
                     applied={state.applied} unavailable={state.support.unavailable} error={state.error}
                     recoverable={state.support.recoverable} onChange={state.change}
+                    reconnectable={state.support.reconnectable} onReconnect={state.reconnect}
                     onChooseCurrent={state.chooseCurrent} onRead={state.read} onApply={state.apply} onRecover={state.recover}/>
             </ScrollView>
         </YStack>

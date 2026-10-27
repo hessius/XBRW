@@ -9,7 +9,8 @@ import {sharedSettings} from "@/hooks/useSetting";
 import {machineSettingsFixture, settingIdentity, settingReadings} from "@/test-utils/machineSettings";
 import {flushControls} from "@/hooks/__tests__/machineControlFixture";
 import {machineInfoFrame} from "@/library/machine/__tests__/FakeTransport";
-import {useLiveBrewBarCovered} from "@/hooks/useLiveBrewBarGuard";
+import {performLiveBrewBarAction, requestLiveBrewBarNavigation, useLiveBrewBarCovered} from "@/hooks/useLiveBrewBarGuard";
+import {openLink} from "@/hooks/useMachine";
 
 jest.mock("react-native-ble-manager", () => ({__esModule: true, default: {}}));
 jest.mock("@/components/XbrwToast", () => ({notify: jest.fn()}));
@@ -39,9 +40,14 @@ const saved: SavedMachine = {
 };
 const owners: MachineControls[] = [];
 async function fixture(production = false) {
-    const s = await machineSettingsFixture({production});
+    const store = {
+        rememberedId: () => "not-this-machine", rememberId: jest.fn(),
+        recordMachine: jest.fn(() => false), recordSerial: jest.fn()
+    };
+    const s = await machineSettingsFixture({production, reconnect: (target, check) =>
+        openLink(s.machine, store, async () => ({granted: true}), {target, check, delays: [0]})});
     owners.push(s.controls);
-    return s;
+    return {...s, store};
 }
 async function press(label: string) {
     await fireEvent.press(screen.getByRole("button", {name: label}));
@@ -239,6 +245,78 @@ it("blocks repeated Apply and native departure during the in-flight setting; rel
         await act(flushControls);
         expect(mockDispatch).toHaveBeenCalledTimes(1);
     }, {timeout: SHEET_PRESS_TIMEOUT});
+});
+
+it.each(["read", "apply"] as const)("keeps %s accessible while busy and reconnects only to inspect the retained setting", async operation => {
+    const s = await fixture();
+    mockParams.setting = "temperatureUnit";
+    await renderWithProviders(<><MachineSettingScreen controls={s.controls}/><BarCoverage/></>);
+    await press("°F");
+    if (operation === "apply") await press("Read current value");
+    s.respond(item => {
+        if (operation === "apply" && item.command.kind !== "setting") s.accept(item);
+    });
+    await press(operation === "read" ? "Read current value" : "Apply");
+    expect(screen.getByRole("button", {name: "Back"})).toBeVisible();
+    expect(screen.getByText("Waiting for qualified machine readback…")).toBeTruthy();
+    expect(screen.getByTestId("machine-setting-content")).toHaveProp("accessibilityElementsHidden", false);
+    expect(screen.getByTestId("machine-setting-content")).toHaveProp("importantForAccessibility", "auto");
+    expect(screen.getByText("bar covered")).toBeTruthy();
+    const navigate = jest.fn();
+    performLiveBrewBarAction(navigate);
+    requestLiveBrewBarNavigation(navigate);
+    expect(navigate).not.toHaveBeenCalled();
+    expect(mockPrevention.prevent).toBe(true);
+    await act(async () => s.radio.drop());
+    expect(s.controls.getSnapshot().phase).toBe("unknown");
+    const before = s.planned.map(item => item.command.kind);
+    s.respond(item => {
+        if (item.command.kind !== "inspect" || !item.command.recovery) return;
+        expect(item.command).toEqual({kind: "inspect", tool: null, recovery: true});
+        expect(s.machine.controlBlocker).not.toBeNull();
+        s.accept(item);
+    });
+    await press("Back");
+    expect(mockBack).not.toHaveBeenCalled();
+    await waitFor(async () => {
+        await fireEvent.press(screen.getByRole("button", {name: "Stay"}));
+        expect(screen.getByRole("button", {name: "Reconnect named machine"})).toBeEnabled();
+    }, {timeout: SHEET_PRESS_TIMEOUT});
+    await waitFor(async () => {
+        const reconnect = screen.queryByRole("button", {name: "Reconnect named machine"});
+        if (reconnect) await fireEvent.press(reconnect);
+        await act(flushControls);
+        expect(s.controls.getSnapshot()).toMatchObject({phase: "closed", error: null});
+    }, {timeout: SHEET_PRESS_TIMEOUT});
+    expect(screen.getByText("Proposal · °F")).toBeTruthy();
+    expect(screen.queryByText(/Applied · confirmed/)).toBeNull();
+    expect(s.planned.map(item => item.command.kind)).toEqual([...before, "inspect"]);
+    expect(s.controls.getSnapshot().phase).toBe("closed");
+    expect(s.machine.controlBlocker).toBeNull();
+    expect(s.recovery.snapshot.marker).toBeNull();
+    expect(s.store.rememberId).not.toHaveBeenCalled();
+    expect(s.store.recordMachine).not.toHaveBeenCalled();
+    expect(s.store.recordSerial).not.toHaveBeenCalled();
+});
+
+it.each(["failure", "device", "serial"] as const)("retains the setting proposal and lease after reconnect %s", async mismatch => {
+    const s = await prepare("temperatureUnit");
+    await press("°F");
+    s.respond(() => {});
+    await press("Apply");
+    await act(async () => s.radio.drop());
+    const before = s.planned.length;
+    if (mismatch === "failure") s.radio.failConnect = new Error("Setting radio unavailable.");
+    else if (mismatch === "serial") s.radio.infoReply = machineInfoFrame({serial: "wrong", model: "test", firmware: "test"});
+    else jest.spyOn(s.radio, "connect").mockImplementationOnce(async () => { s.radio.connectedTo = "wrong"; });
+    await press("Reconnect named machine");
+    expect(screen.getByText(mismatch === "failure" ? "Setting radio unavailable."
+        : "Reconnect requires the exact connected device and saved serial.")).toBeTruthy();
+    expect(screen.getByText("Proposal · °F")).toBeTruthy();
+    expect(s.controls.getSnapshot().phase).toBe("unknown");
+    expect(s.machine.controlBlocker).not.toBeNull();
+    expect(s.recovery.snapshot.marker).toBeNull();
+    expect(s.planned).toHaveLength(before);
 });
 
 it("does not retarget an in-flight proposal when the saved route serial changes", async () => {

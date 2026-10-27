@@ -14,7 +14,7 @@ import {FakeTransport, machineInfoFrame} from "@/library/machine/__tests__/FakeT
 import {notification, status} from "@/library/machine/__tests__/protocolFixtures";
 import {flushControls} from "@/hooks/__tests__/machineControlFixture";
 import {openLink} from "@/hooks/useMachine";
-import {useLiveBrewBarCovered} from "@/hooks/useLiveBrewBarGuard";
+import {performLiveBrewBarAction, requestLiveBrewBarNavigation, useLiveBrewBarCovered} from "@/hooks/useLiveBrewBarGuard";
 import type {BluetoothPermissionResult} from "@/library/machine/Transport";
 
 jest.mock("react-native-ble-manager", () => ({__esModule: true, default: {}}));
@@ -220,6 +220,65 @@ it("closes foreground recovery only on qualified terminal inspection, not on the
     expect(mockPrevention.prevent).toBe(false);
 });
 
+it.each(["enter", "ready", "tare"] as const)("reconnects a foreground-dropped Scale during %s without replay or motor markers", async operation => {
+    const s = await fixture();
+    mockParams.tool = "scale";
+    s.respond(() => {});
+    await renderWithProviders(<><MachineToolScreen controls={s.controls}/><BarCoverage/></>);
+    if (operation !== "enter") {
+        s.respond(s.accept);
+        await press("Open tool");
+        if (operation === "tare") {
+            s.respond(() => {});
+            await press("Tare");
+        }
+    } else await press("Open tool");
+    expect(screen.getByRole("button", {name: "Back"})).toBeVisible();
+    expect(screen.getByTestId("machine-tool-content")).toHaveProp("accessibilityElementsHidden", false);
+    expect(screen.getByTestId("machine-tool-content")).toHaveProp("importantForAccessibility", "auto");
+    expect(screen.getByText(operation === "ready" ? "bar available" : "bar covered")).toBeTruthy();
+    if (operation !== "ready") {
+        const navigate = jest.fn();
+        performLiveBrewBarAction(navigate);
+        requestLiveBrewBarNavigation(navigate);
+        expect(navigate).not.toHaveBeenCalled();
+        expect(mockPrevention.prevent).toBe(true);
+    }
+    if (operation === "tare") expect(screen.getByText("Taring…")).toBeTruthy();
+    if (operation === "enter") expect(screen.getByText("Opening tool…")).toBeTruthy();
+    const before = s.sent.map(item => item.command.kind);
+    await act(async () => s.radio.drop());
+    expect(s.controls.getSnapshot().phase).toBe("unknown");
+    expect(s.machine.controlBlocker).not.toBeNull();
+    expect(s.recovery.snapshot.marker).toBeNull();
+    s.respond(item => {
+        expect(item.command).toEqual({kind: "inspect", tool: "scale", recovery: true});
+        expect(s.machine.controlBlocker).not.toBeNull();
+        s.feedback(item, {kind: "closed"});
+    });
+    await press("Reconnect named machine");
+    expect(s.sent.map(item => item.command.kind)).toEqual([...before, "inspect"]);
+    expect(s.controls.getSnapshot().phase).toBe("closed");
+    expect(s.machine.controlBlocker).toBeNull();
+    expect(s.recovery.snapshot.marker).toBeNull();
+    expect(s.store.rememberId).not.toHaveBeenCalled();
+});
+
+it.each(["failure", "device", "serial"] as const)("keeps a nonmoving Scale lease on reconnect %s", async mismatch => {
+    const s = await prepare("scale");
+    await act(async () => s.radio.drop());
+    if (mismatch === "failure") s.radio.failConnect = new Error("Scale radio unavailable.");
+    else if (mismatch === "serial") s.radio.infoReply = machineInfoFrame({serial: "wrong", model: "test", firmware: "test"});
+    else jest.spyOn(s.radio, "connect").mockImplementationOnce(async () => { s.radio.connectedTo = "wrong"; });
+    await press("Reconnect named machine");
+    expect(screen.getByText(mismatch === "failure" ? "Scale radio unavailable."
+        : "Reconnect requires the exact connected device and saved serial.")).toBeTruthy();
+    expect(s.sent.map(item => item.command.kind)).toEqual(["enter"]);
+    expect(s.controls.getSnapshot().phase).toBe("unknown");
+    expect(s.machine.controlBlocker).not.toBeNull();
+    expect(s.recovery.snapshot.marker).toBeNull();
+});
+
 it("keeps a failed reconnect guarded and retryable on the owning route", async () => {
     const s = await prepare();
     await press("Choose editable proposal");
@@ -312,6 +371,38 @@ it("coalesces repeated reconnects and waits for a cancelled native Start write b
     expect(connect).toHaveBeenCalledWith(identity.deviceId);
     expect(s.sent.map(item => item.command.kind)).toEqual(["enter", "grind", "inspect"]);
     expect(s.recovery.snapshot.marker).toBe(marker);
+});
+
+it("waits for a cancelled native Tare before nonmoving reconnect and rejects stale proof", async () => {
+    const s = await prepare("scale");
+    let settle!: () => void;
+    const nativeWrite = new Promise<void>(resolve => { settle = resolve; });
+    s.radio.syntheticWrite = async frame => {
+        const code = frame[3] | frame[4] << 8;
+        if (code === 60001 && s.sent.at(-1)?.command.kind === "tare") await nativeWrite;
+    };
+    await press("Tare");
+    const tare = s.sent.at(-1)!;
+    await act(async () => s.radio.drop());
+    const connect = jest.spyOn(s.machine, "connect");
+    const reconnect = s.controls.reconnectTool(identity, "scale");
+    expect(s.controls.reconnectTool(identity, "scale")).toBe(reconnect);
+    await act(flushControls);
+    expect(connect).not.toHaveBeenCalled();
+    s.radio.syntheticWrite = frame => {
+        if ((frame[3] | frame[4] << 8) === 8100 && s.sent.at(-1)?.command.kind === "inspect") {
+            s.feedback(tare, {kind: "closed"});
+            expect(s.machine.controlBlocker).not.toBeNull();
+            expect(s.controls.getSnapshot().phase).toBe("unknown");
+            s.feedback(s.sent.at(-1)!, {kind: "closed"});
+        }
+    };
+    await act(async () => { settle(); await reconnect; });
+    expect(connect).toHaveBeenCalledTimes(1);
+    expect(s.sent.map(item => item.command.kind)).toEqual(["enter", "tare", "inspect"]);
+    expect(s.controls.getSnapshot().phase).toBe("closed");
+    expect(s.machine.controlBlocker).toBeNull();
+    expect(s.recovery.snapshot.marker).toBeNull();
 });
 
 it("rejects a superseding connection generation without inspecting or clearing recovery", async () => {

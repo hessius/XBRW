@@ -1,5 +1,5 @@
 import Machine from "@/library/machine/Machine";
-import MachineControls from "@/library/machine/MachineControls";
+import MachineControls, {type MachineControlsOptions} from "@/library/machine/MachineControls";
 import {ControlRecoveryStore} from "@/library/machine/controlRecovery";
 import type {ControlCapabilityProfile} from "@/library/machine/controlCapabilities";
 import type {ControlCommand, ControlFeedback, ControlTokens} from "@/library/machine/controlProtocol";
@@ -31,6 +31,7 @@ class Radio extends FakeTransport {
 }
 export async function machineSettingsFixture(options: {
     production?: boolean; profile?: ControlCapabilityProfile; unsafeInspectionFrame?: boolean;
+    reconnect?: MachineControlsOptions["reconnect"];
 } = {}) {
     const radio = new Radio();
     radio.infoReply = machineInfoFrame({serial: settingIdentity.serial, model: "test", firmware: "test"});
@@ -50,7 +51,7 @@ export async function machineSettingsFixture(options: {
         feedbacks.set(id, {...item.tokens, value});
         radio.emit(notification(0xFE, 0xFE, [id & 255, id >> 8]));
     }
-    const controls = new MachineControls(machine, options.production ? {} : {qualifications: [{
+    const controls = new MachineControls(machine, options.production ? {} : {reconnect: options.reconnect, qualifications: [{
         profile: options.profile ?? settingProfile(),
         protocol: {
             actualWaterSource: () => null,

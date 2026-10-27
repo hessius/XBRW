@@ -134,8 +134,9 @@ export function useMachineToolNavigation(
     const visible = state !== null && focused && !state.request.cancel.signal.aborted
         && state.request.deviceId === deviceId && state.request.serial === serial
         && (state.request.owner === snapshot.identity || (state.busy && snapshot.phase === "closed"));
-    const covered = visible || (focused && ["entering", "leaving", "applying"].includes(snapshot.phase));
-    useLiveBrewBarGuard(focused, {covered, requestNavigation: requestDeparture});
+    const covered = visible;
+    const navigationBlocked = covered || (focused && ["entering", "leaving", "applying"].includes(snapshot.phase));
+    useLiveBrewBarGuard(focused, {covered: navigationBlocked, requestNavigation: requestDeparture});
     const prompt = visible ? {
         open: true,
         busy: state.busy || snapshot.phase === "applying",
@@ -146,5 +147,5 @@ export function useMachineToolNavigation(
         stay: () => stay(state.request),
         onOpenChange: (open: boolean) => { if (!open) stay(state.request); }
     } : null;
-    return {covered, prompt, requestDeparture};
+    return {covered, navigationBlocked, prompt, requestDeparture};
 }

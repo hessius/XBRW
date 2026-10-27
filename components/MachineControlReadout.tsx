@@ -4,6 +4,7 @@ import DotMatrixText from "@/components/DotMatrixText";
 import Stepper from "@/components/Stepper";
 import {useAppearance} from "@/hooks/useAppearance";
 import type {ControlPhase, NumericPolicy} from "@/library/machine/controlModel";
+import {editableNumericLadder} from "@/library/numericLadder";
 
 export type MachineControlReadoutProps = {
     label: string;
@@ -34,8 +35,7 @@ export default function MachineControlReadout({
 }
 
 export function usableNumericPolicy(policy: NumericPolicy | null): policy is NumericPolicy {
-    return policy !== null && [policy.min, policy.max, policy.step].every(Number.isFinite)
-        && policy.min <= policy.max && policy.step > 0;
+    return policy !== null && editableNumericLadder(policy);
 }
 
 export type MachineNumericControlProps = {
@@ -55,7 +55,7 @@ export function MachineNumericControl({
         <YStack gap="$2">
             {editable && value !== null && usableNumericPolicy(policy) ? <>
                 <Text color={palette.muted}>{label}</Text>
-                <Stepper label={label} value={value} unit={unit} {...policy} onChange={onChange}/>
+                <Stepper label={label} value={value} unit={unit} {...policy} snapToStep onChange={onChange}/>
             </> : <MachineControlReadout label={label} value={value} unit={unit} prominent={false}/>}
             {editable && !usableNumericPolicy(policy) && <Text color={palette.muted}>
                 {`${label} control is unavailable: no qualified range.`}

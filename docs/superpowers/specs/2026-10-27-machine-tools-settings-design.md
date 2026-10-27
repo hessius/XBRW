@@ -241,8 +241,19 @@ controls are not enabled merely because a general pour policy exists.
 The shared owner retains uncertainty across route lifetimes and app lifecycle
 changes. An owning tool can explicitly reconnect the exact retained device,
 then inspect before restoring Stop authority; it cannot switch machines or
-replay Start. Tool and setting routes cover their underlying accessibility
-content for both departure prompts and the global brew-rating note sheet.
+replay Start. A disconnected Scale or in-flight setting owner uses that same
+explicit reconnect for qualified INFO-only inspection, without creating a motor
+marker or replaying Enter, Tare, Read or Apply. The lease remains exclusive until
+qualified closed/settings proof arrives; local setting proposals survive.
+
+Machine numeric editing snaps to `min + n × step`, including an off-grid maximum
+and a decimal minimum, without enumerating the range. Domain validation remains
+the authority and shares the ladder's bounded value-space tolerance.
+
+Tool and setting routes cover their underlying accessibility content only for
+departure prompts and the global brew-rating note sheet. Busy entry, exit, Tare,
+Read and Apply leave status and Back readable while separately blocking the
+global brew bar; native Back still requests safe departure rather than escaping.
 
 Task 1 qualification and physical Task 10 acceptance remain incomplete.
 Issue #64 must stay open unless those gates pass or the user explicitly accepts
