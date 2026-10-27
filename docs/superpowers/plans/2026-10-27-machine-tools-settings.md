@@ -478,6 +478,8 @@ An optional `checkCurrent` callback additionally cancels queued internal
 handshakes/readbacks as well as the final frame; it adds to, never replaces,
 Machine's identity/generation/ownership guards.
 Native writes/readbacks retain exclusion until they settle even after timeout.
+Correlated transaction failures remain latched through native settlement, even
+when earlier synchronous running feedback already satisfied the response waiter.
 
 For Task 5, install one owner above routes, pass `getSnapshot`/`subscribe` directly
 to `useSyncExternalStore`, and keep the controller alive across remounts. There
@@ -489,6 +491,8 @@ lease; the hook must preserve the blocked connection/recovery target and invoke
 `recover()` explicitly after reconnecting the exact device and serial. A
 recovered active operation remains unknown/Stop-only; terminal proof closes it
 rather than creating a fresh Start session.
+Moving recovery rejects `closed`, `ready` and other nonterminal feedback:
+only qualified `terminal` clears its marker; `active` merely exposes Stop.
 
 Nonmoving entry/Scale/Tare/setting uncertainty retains its in-memory owner without
 inventing a durable motor marker. Explicit `recover()` obtains fresh qualified

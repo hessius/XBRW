@@ -237,16 +237,22 @@ export default class MachineControls {
         let timer: ReturnType<typeof setTimeout>;
         let armed = false;
         let cancelled = false;
+        // A resolved response can still be contradicted before native settlement.
+        let transactionFailure: Error | null = null;
         const timeout = new Promise<never>((_, reject) => {
             timer = setTimeout(() => reject(new Error("Qualified control response missing.")), plan.deadlineMs);
         });
         const response = new Promise<ControlFeedback["value"]>((resolve, reject) => {
+            const fail = (error: Error) => {
+                transactionFailure ??= error;
+                reject(error);
+            };
             this.waiter = {
-                tokens, reject,
+                tokens, reject: fail,
                 receive: (value) => {
                     if (!armed) return;
                     if (typeof expected === "string" ? value.kind === expected : expected.includes(value.kind)) resolve(value);
-                    else reject(new Error(value.kind === "refused" ? value.reason : "Contradictory control feedback."));
+                    else fail(new Error(value.kind === "refused" ? value.reason : "Contradictory control feedback."));
                 }
             };
         });
@@ -257,6 +263,7 @@ export default class MachineControls {
             const epoch = this.epoch;
             const sending = this.writeTail.then(async () => {
                 const checkCurrent = () => {
+                    if (transactionFailure) throw transactionFailure;
                     if (cancelled || epoch !== this.epoch || this.contextInvalid) throw new Error("Control transaction cancelled.");
                 };
                 checkCurrent();
@@ -283,6 +290,7 @@ export default class MachineControls {
             });
             this.writeTail = sending.then(() => {}, () => {});
             const [, result] = await Promise.race([Promise.all([sending, response]), timeout]);
+            if (transactionFailure) throw transactionFailure;
             return result;
         } finally {
             cancelled = true;
@@ -498,12 +506,14 @@ export default class MachineControls {
                 tool: marker?.tool ?? this.snapshot.tool, phase: "unknown"});
             const settings = !marker && this.snapshot.applyingSetting !== null;
             const result = await this.exchange({kind: "inspect", tool: this.snapshot.tool, recovery: marker != null},
-                settings ? "settings" : ["terminal", "closed", "active"]);
+                marker ? ["terminal", "active"] : settings ? "settings" : ["terminal", "closed", "active"]);
             if (result.kind === "active") {
                 if (!marker) throw new Error("Unexpected active nonmoving control. Reconciliation required.");
                 this.update({phase: "unknown", error: "The recovered operation is active. Stop is required."});
-            } else if (marker) this.terminal();
-            else {
+            } else if (marker) {
+                if (result.kind !== "terminal") throw new Error("Qualified terminal proof is required for moving recovery.");
+                this.terminal();
+            } else {
                 this.release();
                 this.update({...initial, settings: result.kind === "settings" ? Object.freeze({...result.readings}) : null});
             }

@@ -678,3 +678,79 @@ it("keeps a running motor uncertain when later correlated lifecycle feedback con
     await s.controls.stop();
     await s.controls.close();
 });
+
+it.each(["closed", "ready", "running", "tared"] as const)(
+    "retains moving recovery's marker and owner after synthetic nonterminal %s feedback",
+    async (kind) => {
+        const marker = {version: 1, ...identity, tool: "pour"};
+        const s = await setup({raw: JSON.stringify(marker)});
+        s.respond((item) => {
+            if (item.command.kind === "inspect") feedback(s.radio, item.tokens, {kind});
+        });
+        await expect(s.controls.recover()).rejects.toThrow("Contradictory");
+        expect(s.controls.getSnapshot()).toMatchObject({phase: "unknown", identity, tool: "pour"});
+        expect(s.recovery.snapshot.marker).toEqual(marker);
+        expect(s.machine.controlBlocker).not.toBeNull();
+        expect(() => s.machine.acquireControlSession(identity, "recovery")).toThrow("Another");
+        await expect(s.controls.close()).rejects.toThrow();
+        s.respond((item) => accept(s.radio, item));
+        await s.controls.recover();
+        expect(s.recovery.snapshot.marker).toBeNull();
+    }
+);
+
+it.each(["same-write", "pending-native"] as const)(
+    "rejects Start on synthetic running then refused feedback during %s completion",
+    async (timing) => {
+        const s = await setup();
+        s.respond((item) => accept(s.radio, item));
+        await s.controls.open(identity, "grind");
+        let settle = () => {};
+        if (timing === "pending-native") {
+            const write = s.radio.syntheticWrite;
+            s.radio.syntheticWrite = async (frame) => {
+                await write?.(frame);
+                if ((frame[3] | frame[4] << 8) === codes.grind) {
+                    await new Promise<void>((resolve) => { settle = resolve; });
+                }
+            };
+        }
+        s.respond((item) => {
+            accept(s.radio, item);
+            if (item.command.kind === "grind" && timing === "same-write") {
+                feedback(s.radio, item.tokens, {kind: "refused", reason: "synthetic refusal"});
+            }
+        });
+        const starting = s.controls.startGrind(grind);
+        const rejected = expect(starting).rejects.toThrow("Contradictory");
+        if (timing === "pending-native") {
+            await tick();
+            feedback(s.radio, s.sent[1].tokens, {kind: "refused", reason: "synthetic refusal"});
+            settle();
+        }
+        await rejected;
+        expect(s.controls.getSnapshot().phase).toBe("unknown");
+        expect(s.recovery.snapshot.marker?.tool).toBe("grind");
+        expect(s.machine.controlBlocker).not.toBeNull();
+        expect(() => s.machine.acquireControlSession(identity, "recovery")).toThrow("Another");
+        s.respond((item) => accept(s.radio, item));
+        await s.controls.stop();
+        await s.controls.close();
+    }
+);
+
+it("ignores synthetic contradictory feedback for a different transaction while Start completes", async () => {
+    const s = await setup();
+    s.respond((item) => {
+        accept(s.radio, item);
+        if (item.command.kind === "grind") {
+            feedback(s.radio, s.sent[0].tokens, {kind: "refused", reason: "stale synthetic refusal"});
+        }
+    });
+    await s.controls.open(identity, "grind");
+    await expect(s.controls.startGrind(grind)).resolves.toBeUndefined();
+    expect(s.controls.getSnapshot().phase).toBe("running");
+    expect(s.recovery.snapshot.marker?.tool).toBe("grind");
+    await s.controls.stop();
+    await s.controls.close();
+});
