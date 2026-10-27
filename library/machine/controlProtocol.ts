@@ -9,7 +9,7 @@ type SettingCommand = {
 }[SettingId];
 export type ControlCommand =
     | {kind: "enter" | "exit" | "stop"; tool: ToolId | null}
-    | {kind: "inspect"; tool: ToolId | null; recovery?: boolean}
+    | {kind: "inspect"; tool: ToolId | null; recovery?: boolean; readOnly?: boolean}
     | {kind: "grind"; request: Readonly<GrindRequest>}
     | {kind: "pour"; request: Readonly<PourRequest>}
     | {kind: "tare"}

@@ -24,7 +24,9 @@ function moving(snapshot: ControlSnapshot): boolean {
  * to both accessibilityElementsHidden and Android's no-hide-descendants.
  * Dismissing cancels departure, never an already dispatched Stop.
  */
-export function useMachineToolNavigation(identity: ControlIdentity, injected?: MachineControls) {
+export function useMachineToolNavigation(
+    identity: ControlIdentity, injected?: MachineControls, mode: "tool" | "setting" = "tool"
+) {
     const {deviceId, serial} = identity;
     const {controls, snapshot} = useMachineControls(injected);
     const navigation = useNavigation();
@@ -77,7 +79,13 @@ export function useMachineToolNavigation(identity: ControlIdentity, injected?: M
             if (request.owner?.deviceId !== request.deviceId || request.owner.serial !== request.serial) {
                 throw new Error("The tool identity does not match the owned machine.");
             }
+            if (mode === "setting" && controls.getSnapshot().tool !== null) {
+                throw new Error("A different tool owns the connection. Return to that tool to close it safely.");
+            }
             pending.current!.closing = true;
+            if (mode === "setting" && controls.getSnapshot().phase === "unknown") {
+                await controls.recover();
+            }
             if (moving(controls.getSnapshot())) await controls.stop();
             // A recovery-only Stop closes its lease on terminal proof; an
             // ordinary tool still requires its separate qualified exit.
@@ -130,8 +138,9 @@ export function useMachineToolNavigation(identity: ControlIdentity, injected?: M
     useLiveBrewBarGuard(focused, {covered, requestNavigation: requestDeparture});
     const prompt = visible ? {
         open: true,
-        busy: state.busy,
-        error: state.error,
+        busy: state.busy || snapshot.phase === "applying",
+        error: state.error ?? snapshot.error,
+        requiresReconciliation: mode === "setting" && snapshot.tool === null && snapshot.phase === "unknown",
         requiresStop: moving(snapshot),
         stopAndLeave: () => leave(state.request),
         stay: () => stay(state.request),

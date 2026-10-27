@@ -4,7 +4,7 @@ import type {ControlSession} from "./Machine";
 import {lookupControlCapabilities} from "./controlCapabilities";
 import {
     type ControlIdentity, type ControlSnapshot, type GrindRequest, type PourRequest, type ToolId,
-    type Pattern, type SettingId, type SettingValues, type GrindPolicy, type PourPolicy,
+    type Pattern, type SettingId, type SettingValues, type GrindPolicy, type PourPolicy, type SettingPolicy,
     validateGrindRequest, validatePourRequest, validateSetting
 } from "./controlModel";
 import type {ControlCommand, ControlFeedback, ControlQualification, ControlTokens} from "./controlProtocol";
@@ -17,6 +17,15 @@ export type MachineToolSupport = Readonly<{
     bound: boolean;
     unavailable: string | null;
     stopUnavailable: string | null;
+    recoverable: boolean;
+}>;
+export type MachineSettingsSupport = Readonly<{
+    policy: SettingPolicy;
+    unavailable: string | null;
+    reason: "offline" | "identity-mismatch" | "unqualified" | "unsupported" | "owned" | null;
+    reading: "current" | "last-known" | "unavailable";
+    readingReason: "offline" | "identity-mismatch" | "unqualified" | "unsupported" | "owned"
+        | "missing-readback" | "stale-readback" | null;
     recoverable: boolean;
 }>;
 let nextSession = 0;
@@ -95,6 +104,8 @@ export default class MachineControls {
     private disposed = false;
     private deadlines = new Set<ReturnType<typeof setTimeout>>();
     private supportCache = new Map<string, MachineToolSupport>();
+    private settingsSupportCache = new Map<string, MachineSettingsSupport>();
+    private settingsInfo: Machine["info"] = null;
 
     constructor(private readonly machine: Machine, options: MachineControlsOptions = {}) {
         this.qualifications = Object.freeze((options.qualifications ?? []).map(capture));
@@ -112,6 +123,66 @@ export default class MachineControls {
         const off = [this.subscribe(listener), this.machine.onLink(listener), this.machine.onPhase(listener)];
         return () => off.forEach(unsubscribe => unsubscribe());
     };
+
+    /** Read-only description; never infers settings support from a tool. */
+    describeSettings(identity: ControlIdentity, id: SettingId): MachineSettingsSupport {
+        const actual = this.machine.slotIdentity;
+        const own = this.snapshot.identity?.deviceId === identity.deviceId
+            && this.snapshot.identity.serial === identity.serial && this.snapshot.tool === null;
+        let qualification: ControlQualification | null = null;
+        let reason: MachineSettingsSupport["reason"] = null;
+        let unavailable: string | null = null;
+        try {
+            if (!actual) {
+                reason = "offline";
+                throw new Error("Machine offline. Connect this named machine from Machines.");
+            }
+            if (!identity.serial || actual.deviceId !== identity.deviceId || actual.serial !== identity.serial) {
+                reason = "identity-mismatch";
+                throw new Error("The connected machine does not match the saved device and serial.");
+            }
+            reason = "unqualified";
+            qualification = this.select();
+            if (!qualification.profile.settings[id]) {
+                reason = "unsupported";
+                throw new Error("This setting has no qualified policy for this machine and firmware.");
+            }
+            reason = "owned";
+            if (this.snapshot.phase !== "closed" && !own) throw new Error("Another control session owns the connection.");
+            if (isActiveBrewPhase(this.machine.phase) || this.machine.phase.name === "lostContact") {
+                throw new Error("Finish the brew before reading or changing machine settings.");
+            }
+            if (this.snapshot.phase === "closed") this.machine.assertCanForgetDevice(identity.deviceId);
+            reason = null;
+        } catch (error) {
+            unavailable = failure(error).message;
+        }
+        let hasReading = false;
+        const value = this.snapshot.settings?.[id];
+        if (own && value != null && this.qualification) {
+            try {
+                validateSetting(id, value, this.qualification.profile.settings);
+                hasReading = true;
+            } catch { /* An unsupported or unqualified value is never an actual reading. */ }
+        }
+        const reading = !hasReading ? "unavailable"
+            : reason === null && qualification === this.qualification && !this.contextInvalid
+                && this.settingsInfo !== null && this.settingsInfo === this.machine.info && this.snapshot.phase === "closed"
+                ? "current" : "last-known";
+        const support: MachineSettingsSupport = Object.freeze({
+            policy: qualification?.profile.settings ?? Object.freeze({}),
+            reason, unavailable,
+            reading,
+            readingReason: reading === "current" ? null : reason
+                ?? (reading === "unavailable" ? "missing-readback" : "stale-readback"),
+            recoverable: own && reason === null && this.snapshot.phase === "unknown"
+        });
+        const key = JSON.stringify([identity, id]);
+        const previous = this.settingsSupportCache.get(key);
+        if (previous && JSON.stringify(previous) === JSON.stringify(support)) return previous;
+        this.settingsSupportCache.set(key, support);
+        return support;
+    }
 
     /** Uses precisely the immutable qualifications captured by this owner. */
     describeTool(identity: ControlIdentity, tool: ToolId): MachineToolSupport {
@@ -342,8 +413,8 @@ export default class MachineControls {
         const tokens = Object.freeze({session: this.session, transaction: ++this.transaction});
         const plan = this.qualification.protocol.plan(command, tokens);
         if (!Number.isFinite(plan.deadlineMs) || plan.deadlineMs <= 0) throw new Error("A qualified deadline is required.");
-        if (command.kind === "inspect" && command.recovery && (plan.frame !== null || !plan.refreshInfo)) {
-            throw new Error("Recovery inspection must use leased info only.");
+        if (command.kind === "inspect" && (command.recovery || command.readOnly) && (plan.frame !== null || !plan.refreshInfo)) {
+            throw new Error("Read-only or recovery inspection must use leased info only.");
         }
         let timer: ReturnType<typeof setTimeout>;
         let armed = false;
@@ -588,6 +659,27 @@ export default class MachineControls {
         return operation;
     }
 
+    /** Explicit info-only read under the shared exclusive lease, never an Apply. */
+    async readSettings(identity: ControlIdentity, id: SettingId): Promise<void> {
+        if (this.snapshot.phase !== "closed") throw new Error("Settings require a closed control session.");
+        const support = this.describeSettings(identity, id);
+        if (support.unavailable) throw new Error(support.unavailable);
+        this.attach(identity, "setting");
+        this.recoveryOnly = false;
+        this.update({...initial, identity: Object.freeze({...identity}), phase: "applying", applyingSetting: id});
+        try {
+            const result = await this.exchange({kind: "inspect", tool: null, readOnly: true}, "settings");
+            if (result.kind !== "settings" || result.readings[id] === null) throw new Error("Qualified current setting unavailable.");
+            validateSetting(id, result.readings[id], this.qualification!.profile.settings);
+            this.settingsInfo = this.machine.info;
+            this.release();
+            this.update({phase: "closed", applyingSetting: null, error: null, settings: Object.freeze({...result.readings})});
+        } catch (error) {
+            this.uncertain(failure(error));
+            throw error;
+        }
+    }
+
     async applySetting<K extends SettingId>(identity: ControlIdentity, id: K, value: SettingValues[K]): Promise<void> {
         if (this.snapshot.phase !== "closed") throw new Error("Settings require a closed control session.");
         const qualification = this.select();
@@ -604,6 +696,7 @@ export default class MachineControls {
             const command = {kind: "setting", id, value} as Extract<ControlCommand, {kind: "setting"}>;
             const result = await this.exchange(command, "settings");
             if (result.kind !== "settings" || result.readings[id] !== value) throw new Error("Setting readback does not match the proposal.");
+            this.settingsInfo = this.machine.info;
             this.release();
             this.update({phase: "closed", applyingSetting: null, error: null, settings: Object.freeze({...result.readings})});
         } catch (error) {
@@ -636,7 +729,8 @@ export default class MachineControls {
                 this.release();
                 this.attach(identity, marker ? "recovery" : this.snapshot.tool ?? "setting", replacement);
             } else this.lease.check();
-            this.update({identity: Object.freeze({deviceId: identity.deviceId, serial: identity.serial}),
+            this.update({identity: !marker && this.snapshot.identity ? this.snapshot.identity
+                    : Object.freeze({deviceId: identity.deviceId, serial: identity.serial}),
                 tool: marker?.tool ?? this.snapshot.tool, phase: "unknown"});
             const settings = !marker && this.snapshot.applyingSetting !== null;
             const result = await this.exchange({kind: "inspect", tool: this.snapshot.tool, recovery: true},
@@ -648,8 +742,18 @@ export default class MachineControls {
                 if (result.kind !== "terminal") throw new Error("Qualified terminal proof is required for moving recovery.");
                 this.terminal();
             } else {
+                const id = this.snapshot.applyingSetting;
+                if (settings && (result.kind !== "settings" || id === null || result.readings[id] === null)) {
+                    throw new Error("Qualified current setting unavailable.");
+                }
+                if (result.kind === "settings" && id !== null) {
+                    validateSetting(id, result.readings[id]!, this.qualification!.profile.settings);
+                    this.settingsInfo = this.machine.info;
+                }
+                const settingsIdentity = settings ? this.snapshot.identity : null;
                 this.release();
-                this.update({...initial, settings: result.kind === "settings" ? Object.freeze({...result.readings}) : null});
+                this.update({...initial, identity: settingsIdentity,
+                    settings: result.kind === "settings" ? Object.freeze({...result.readings}) : null});
             }
         } catch (error) {
             this.uncertain(failure(error));

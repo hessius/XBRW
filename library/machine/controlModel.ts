@@ -45,6 +45,8 @@ export type ControlRecovery = {
 
 /** A qualified inclusive ladder anchored at min, never an inferred card limit. */
 export type NumericPolicy = {min: number; max: number; step: number};
+/** A display unit requires the same evidence as the numeric ladder. */
+export type NumericSettingPolicy = NumericPolicy & {unit?: string};
 export type GrindPolicy = {grindSize: NumericPolicy; rpm: NumericPolicy};
 export type PourPolicy = {
     temperatureC: NumericPolicy;
@@ -55,8 +57,11 @@ export type PourPolicy = {
 };
 /** Omitted settings are unsupported, not defaults waiting to be filled. */
 export type SettingPolicy = {
-    [K in SettingId]?: SettingValues[K] extends number ? NumericPolicy : readonly SettingValues[K][];
+    [K in SettingId]?: SettingValues[K] extends number ? NumericSettingPolicy : readonly SettingValues[K][];
 };
+export type SettingEditorState = {
+    [K in SettingId]: {id: K; proposal: SettingValues[K] | null}
+}[SettingId];
 
 export class ControlValidationError extends Error {
     constructor(
