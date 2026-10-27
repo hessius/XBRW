@@ -36,6 +36,23 @@ work may proceed behind explicit unavailable capabilities. Command encoders,
 production capability enablement and physical acceptance remain gated on real
 evidence; synthetic tests do not satisfy that gate.
 
+### Software checkpoint and remaining acceptance
+
+Tasks 2-9 have software implementations and serial specification/quality
+reviews. Task 2's production encoders and capability activation remain blocked
+by Task 1; the completed software slices do not qualify hardware.
+The final integration review's foreground reconnect and global rating-sheet
+coverage findings were fixed at
+`3ecb2e8d6a4dac0f17423e8d0d8e717a14046c3a` and approved on focused follow-up.
+The fix's 582 tests across both platforms passed; the reviewer separately
+ran 12 focused reconnect/accessibility cases.
+
+The complete regression gates and GitHub review/CI are recorded separately
+below when available. A draft PR is a preservation/review boundary, not a
+waiver of Task 1/10 or completion of #64. No merge is authorized.
+The approved physical iPhone 17 Pro was unavailable; no substitute device,
+motor/water experiment, production build or deployment was used.
+
 Design: `docs/superpowers/specs/2026-10-27-machine-tools-settings-design.md`.
 Planning base: `f24fc968a9f48232323145cfe99a6ba443f9d7c4`
 (`origin/develop`, fetched 2026-10-27).

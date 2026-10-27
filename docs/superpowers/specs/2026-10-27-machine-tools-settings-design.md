@@ -1,8 +1,10 @@
 # Machine tools and settings
 
 Design for #64, agreed through an interactive brainstorming session on
-2026-10-27. This document and the accompanying implementation plan describe
-future work; they do not establish new hardware support.
+2026-10-27. The software interface and ownership foundation are implemented
+on the accompanying plan's task branch. Production capabilities remain
+unavailable; neither this document nor that implementation establishes new
+hardware support.
 
 ## Purpose and scope
 
@@ -228,3 +230,20 @@ Physical device acceptance covers real Start/Stop, targeted and continuous
 pouring, live changes, display-unit changes, tuning read/write, physical-machine
 controls, missing feedback, backgrounding and reconnect. Software tests prove
 ownership, framing and UI behaviour, not physical hardware safety.
+
+### Implementation boundary
+
+The named machine page, both discovery routes, three instruments and six
+focused editors are present. Tool entry is explicit and never starts motion.
+Unqualified controls remain named and unavailable. Live temperature/pattern
+controls are not enabled merely because a general pour policy exists.
+
+The shared owner retains uncertainty across route lifetimes and app lifecycle
+changes. An owning tool can explicitly reconnect the exact retained device,
+then inspect before restoring Stop authority; it cannot switch machines or
+replay Start. Tool and setting routes cover their underlying accessibility
+content for both departure prompts and the global brew-rating note sheet.
+
+Task 1 qualification and physical Task 10 acceptance remain incomplete.
+Issue #64 must stay open unless those gates pass or the user explicitly accepts
+a reduced scope.
