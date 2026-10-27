@@ -66,9 +66,7 @@ describe("RecipeShelfTile picture", () => {
         await measureTilePicture();
 
         expect(photo()?.props.source).toEqual({uri: PHOTO});
-        const style = photo()?.props.style as {width: number; height: number};
-        expect(style.width).toBe(TILE_PHOTO_SIZE);
-        expect(style.height).toBe(TILE_PHOTO_SIZE);
+        expect(photo()?.parent).toHaveStyle({width: TILE_PHOTO_SIZE, height: TILE_PHOTO_SIZE});
 
         // One band across the top: the picture, then a column with the badges
         // over the name. The figures and the profile are not in it.

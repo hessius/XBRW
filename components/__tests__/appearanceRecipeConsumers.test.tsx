@@ -163,7 +163,7 @@ it.each(choices)("pairs metadata photo backing with its actual card fill: %o", a
     await measureTilePicture();
     const photo = screen.getByTestId("recipe-card-photo", {includeHiddenElements: true});
     expect(photo.parent).toHaveStyle({backgroundColor: resolveAppearance(choice).recipe(accents.coffee[0]).fill});
-    expect(style(photo).width).toBe(20);
+    expect(photo.parent).toHaveStyle({width: 20, height: 20});
     expect(screen.getByTestId("recipe-tile-photo", {includeHiddenElements: true}).parent)
         .toHaveStyle({backgroundColor: resolveAppearance(choice).recipe(accents.coffee[0]).fill});
     expect(screen.queryByTestId("recipe-card-bottom-shade")).toBeNull();
