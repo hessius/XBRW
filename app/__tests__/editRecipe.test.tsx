@@ -473,6 +473,93 @@ it("opens Easy Mode with the editor's current recipe through the recipe menu", a
     expect(sharedSlotDatabase().read(deviceId).drafts[0]?.name).toBe("Current slot recipe");
 });
 
+it("saves an unsaved recipe before putting it in an Easy Mode slot, so the slot keeps its library link", async () => {
+    const deviceId = "slot-save-device";
+    mockSettings = {machineDeviceId: deviceId};
+    const RecipeDatabase = jest.requireMock("@/library/RecipeDatabase").default;
+    RecipeDatabase.mockClear();
+    RecipeDatabase.prototype.getRecipe.mockReturnValue(null);
+    RecipeDatabase.prototype.retrieveAllRecipes.mockReturnValue([]);
+    try {
+        await renderEditor({name: "Catalogue recipe"});
+        const recipeUuid = JSON.parse(mockRecipeJSON as string).uuid;
+        await fireEvent.press(screen.getByLabelText("More"));
+        await waitFor(async () => {
+            if (mockPush.mock.calls.length === 0) {
+                await fireEvent.press(screen.getByRole("button", {name: "Assign to Easy Mode"}));
+            }
+            expect(mockPush).toHaveBeenCalledWith({pathname: "/easyMode"});
+        }, {timeout: SHEET_PRESS_TIMEOUT});
+        const saves = RecipeDatabase.mock.instances.flatMap(
+            (store: {updateRecipe: {mock: {calls: unknown[][]}}}) => store.updateRecipe.mock.calls);
+        expect(saves.map((call: unknown[]) => call[0])).toContain(recipeUuid);
+        expect(mockNotify).toHaveBeenCalledWith({tone: "success", message: "Saved to your library."});
+        expect(sharedSlotDatabase().read(deviceId).drafts[0]?.sourceUuid).toBe(recipeUuid);
+    } finally {
+        RecipeDatabase.prototype.getRecipe.mockReset();
+        RecipeDatabase.prototype.retrieveAllRecipes.mockReset();
+    }
+});
+
+it("restores library backing if the recipe was deleted after the editor opened", async () => {
+    const deviceId = "slot-deleted-source";
+    mockSettings = {machineDeviceId: deviceId};
+    const RecipeDatabase = jest.requireMock("@/library/RecipeDatabase").default;
+    const held = fixture();
+    RecipeDatabase.mockClear();
+    RecipeDatabase.prototype.getRecipe.mockReturnValue(held);
+    RecipeDatabase.prototype.retrieveAllRecipes.mockReturnValue([]);
+    try {
+        await renderEditor({uuid: held.uuid});
+        RecipeDatabase.prototype.getRecipe.mockReturnValue(null);
+        await fireEvent.press(screen.getByLabelText("More"));
+        await waitFor(async () => {
+            if (mockPush.mock.calls.length === 0) {
+                await fireEvent.press(screen.getByRole("button", {name: "Assign to Easy Mode"}));
+            }
+            expect(mockPush).toHaveBeenCalledWith({pathname: "/easyMode"});
+        }, {timeout: SHEET_PRESS_TIMEOUT});
+        const saves = RecipeDatabase.mock.instances.flatMap(
+            (store: {updateRecipe: {mock: {calls: unknown[][]}}}) => store.updateRecipe.mock.calls);
+        expect(saves.map((call: unknown[]) => call[0])).toContain(held.uuid);
+        expect(sharedSlotDatabase().read(deviceId).drafts[0]?.sourceUuid).toBe(held.uuid);
+    } finally {
+        RecipeDatabase.prototype.getRecipe.mockReset();
+        RecipeDatabase.prototype.retrieveAllRecipes.mockReset();
+    }
+});
+
+it("keeps a note edited on an unsaved recipe instead of assigning a same-link library copy", async () => {
+    const deviceId = "slot-edited-copy";
+    mockSettings = {machineDeviceId: deviceId};
+    const RecipeDatabase = jest.requireMock("@/library/RecipeDatabase").default;
+    const held = fixture();
+    held.shareId = "same-coffee-link";
+    held.description = "The library note";
+    RecipeDatabase.prototype.getRecipe.mockReturnValue(null);
+    RecipeDatabase.prototype.retrieveAllRecipes.mockReturnValue([held]);
+    try {
+        await renderEditor({shareId: held.shareId});
+        const recipeUuid = JSON.parse(mockRecipeJSON as string).uuid;
+        await openAbout();
+        await fireEvent.changeText(screen.getByTestId("note-field"), "My assignment note");
+        await fireEvent.press(screen.getByLabelText("More"));
+        await waitFor(async () => {
+            if (mockPush.mock.calls.length === 0) {
+                await fireEvent.press(screen.getByRole("button", {name: "Assign to Easy Mode"}));
+            }
+            expect(mockPush).toHaveBeenCalledWith({pathname: "/easyMode"});
+        }, {timeout: SHEET_PRESS_TIMEOUT});
+        const slot = sharedSlotDatabase().read(deviceId).drafts[0];
+        expect(slot?.sourceUuid).toBe(recipeUuid);
+        expect(JSON.parse(slot?.recipeJSON ?? "{}").description).toBe("My assignment note");
+        expect(held.description).toBe("The library note");
+    } finally {
+        RecipeDatabase.prototype.getRecipe.mockReset();
+        RecipeDatabase.prototype.retrieveAllRecipes.mockReset();
+    }
+});
+
 async function openTheQuickEditPanel(): Promise<void> {
     mockSettings = {machineDeviceId: "AA:BB:CC:DD:EE:FF"};
     await renderEditor();
@@ -1918,6 +2005,9 @@ describe("grind-too-fine banner", () => {
  * which leaves `machineDeviceId` unset and falling back to its `""` default,
  * so no separate clear is needed.
  */
+/** WRITE's spoken name once a machine is remembered: it asks slot or card. */
+const MACHINE_WRITE = "Write to Easy Mode or card";
+
 function rememberMachine(id: string) {
     mockSettings = {...mockSettings, machineDeviceId: id};
 }
@@ -1935,7 +2025,7 @@ describe("the action bar", () => {
         rememberMachine("AA:BB");
         await renderEditor();
         expect(screen.getByLabelText("Brew")).toBeTruthy();
-        expect(screen.getByLabelText("Write card")).toBeTruthy();
+        expect(screen.getByLabelText(MACHINE_WRITE)).toBeTruthy();
     });
 
     it("tells its three buttons apart by fill, not by one step of grey", async () => {
@@ -1947,8 +2037,8 @@ describe("the action bar", () => {
 
         expect(inkOf("Brew", "BREW")).toBe(palette.muted);
         expect(fillOf("Brew")).toBe("transparent");
-        expect(inkOf("Write card", "WRITE")).toBe(palette.muted);
-        expect(fillOf("Write card")).toBe("transparent");
+        expect(inkOf(MACHINE_WRITE, "WRITE")).toBe(palette.muted);
+        expect(fillOf(MACHINE_WRITE)).toBe("transparent");
         // SAVE is never refused -- a half-finished recipe is still worth
         // keeping -- so it is the live neutral the other two are read against.
         expect(inkOf("Save", "SAVE")).toBe(palette.text);
@@ -1964,8 +2054,8 @@ describe("the action bar", () => {
         expect(inkOf("Brew", "BREW")).toBe(resolveAppearance({theme: "original", recipeColours: "original"})
             .recipe(pinnedAccent()).onAccent.text);
         // WRITE and SAVE are live but secondary: filled, not accented.
-        expect(fillOf("Write card")).toBe(palette.raised);
-        expect(inkOf("Write card", "WRITE")).toBe(palette.text);
+        expect(fillOf(MACHINE_WRITE)).toBe(palette.raised);
+        expect(inkOf(MACHINE_WRITE, "WRITE")).toBe(palette.text);
     });
 
     it("hands the accent to WRITE when there is no machine to brew on", async () => {
@@ -1996,7 +2086,7 @@ describe("the action bar", () => {
         expect(brew.props.accessibilityState.disabled).toBe(true);
     });
 
-    it("brews a balanced half-ratio recipe while refusing to write it to a card", async () => {
+    it("lets a balanced half-ratio recipe reach Easy Mode but not the NFC destination", async () => {
         rememberMachine("AA:BB");
         await renderEditor({
             dosage: 20,
@@ -2009,10 +2099,84 @@ describe("the action bar", () => {
 
         expect(screen.getByLabelText("Brew").props.accessibilityState.disabled)
             .toBe(false);
-        expect(screen.getByLabelText("Write card").props.accessibilityState.disabled)
-            .toBe(true);
+        expect(screen.getByLabelText(MACHINE_WRITE).props.accessibilityState.disabled)
+            .toBe(false);
         expect(screen.getByText(/can still be saved and brewed over Bluetooth/i))
             .toBeTruthy();
+        await fireEvent.press(screen.getByLabelText(MACHINE_WRITE));
+        expect(screen.getByRole("button", {name: "NFC card"})).toBeDisabled();
+        expect(screen.getByRole("button", {name: "Easy Mode slot"})).toBeEnabled();
+    });
+});
+
+describe("WRITE with a machine remembered", () => {
+    it("assigns a BLE-valid fine grind without enabling NFC writing", async () => {
+        const deviceId = "chooser-fine-grind";
+        rememberMachine(deviceId);
+        await renderEditor({grindSize: 20});
+        expect(screen.getByLabelText(MACHINE_WRITE)).toBeEnabled();
+        await fireEvent.press(screen.getByLabelText(MACHINE_WRITE));
+        expect(screen.getByRole("button", {name: "NFC card"})).toBeDisabled();
+        await waitFor(async () => {
+            if (mockPush.mock.calls.length === 0) {
+                await fireEvent.press(screen.getByRole("button", {name: "Easy Mode slot"}));
+            }
+            expect(mockPush).toHaveBeenCalledWith({pathname: "/easyMode"});
+        }, {timeout: SHEET_PRESS_TIMEOUT});
+        const slot = sharedSlotDatabase().read(deviceId).drafts[0];
+        expect(JSON.parse(slot?.recipeJSON ?? "{}").grindSize).toBe(20);
+        expect(mockWriteCard).not.toHaveBeenCalled();
+    });
+
+    it("explains unsupported bypass at the Easy Mode destination without blocking the card", async () => {
+        rememberMachine("chooser-bypass");
+        await renderEditor({bypassEnabled: true, bypassVolume: 50});
+        await fireEvent.press(screen.getByLabelText(MACHINE_WRITE));
+        expect(screen.getByRole("button", {name: "Easy Mode slot"})).toBeDisabled();
+        expect(screen.getByText("Recipes with bypass are not supported in Easy Mode.")).toBeTruthy();
+        expect(screen.getByRole("button", {name: "Easy Mode slot"}).props.accessibilityHint)
+            .toBe("Recipes with bypass are not supported in Easy Mode.");
+        expect(screen.getByRole("button", {name: "NFC card"})).toBeEnabled();
+        await fireEvent.press(screen.getByRole("button", {name: "Easy Mode slot"}));
+        expect(mockPush).not.toHaveBeenCalled();
+        expect(mockWriteCard).not.toHaveBeenCalled();
+    });
+
+    it("asks between an Easy Mode slot and a card, and NFC card writes the card", async () => {
+        rememberMachine("chooser-card");
+        await renderEditor();
+        await fireEvent.press(screen.getByLabelText(MACHINE_WRITE));
+        expect(mockWriteCard).not.toHaveBeenCalled();
+        expect(await screen.findByText("WRITE TO")).toBeTruthy();
+        expect(screen.getByRole("button", {name: "Easy Mode slot"})).toBeTruthy();
+        await waitFor(async () => {
+            if (mockWriteCard.mock.calls.length === 0) {
+                await fireEvent.press(screen.getByRole("button", {name: "NFC card"}));
+            }
+            expect(mockWriteCard).toHaveBeenCalledTimes(1);
+        }, {timeout: SHEET_PRESS_TIMEOUT});
+    });
+
+    it("sends Easy Mode slot to Assign to Easy Mode", async () => {
+        const deviceId = "chooser-slot";
+        rememberMachine(deviceId);
+        await renderEditor({name: "Chooser slot recipe"});
+        await fireEvent.press(screen.getByLabelText(MACHINE_WRITE));
+        await waitFor(async () => {
+            if (mockPush.mock.calls.length === 0) {
+                await fireEvent.press(screen.getByRole("button", {name: "Easy Mode slot"}));
+            }
+            expect(mockPush).toHaveBeenCalledWith({pathname: "/easyMode"});
+        }, {timeout: SHEET_PRESS_TIMEOUT});
+        expect(mockWriteCard).not.toHaveBeenCalled();
+        expect(sharedSlotDatabase().read(deviceId).drafts[0]?.name).toBe("Chooser slot recipe");
+    });
+
+    it("writes the card straight away with no machine, with no chooser", async () => {
+        await renderEditor();
+        await fireEvent.press(screen.getByLabelText("Write card"));
+        expect(mockWriteCard).toHaveBeenCalledTimes(1);
+        expect(screen.queryByText("WRITE TO")).toBeNull();
     });
 });
 

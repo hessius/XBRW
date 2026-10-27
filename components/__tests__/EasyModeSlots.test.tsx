@@ -19,6 +19,9 @@ import * as motion from "@/constants/motion";
 import {restoreTeaSlotOriginal, writeTeaSlotProbe} from "@/library/slots/teaSlotProbe";
 import {buildProfilePath, PROFILE_BLEED} from "@/components/PourProfile";
 import {DOTO_FAMILIES} from "@/components/DotMatrixText";
+import {subscribedCatalogues} from "@/library/roasterSearch";
+import {subscribe} from "@/library/roasterSync";
+import {FEED_URL, feedBody, memorySettings} from "@/test-utils/roasterFeed";
 
 const recipes = [coffee("Morning"), coffee("Evening")];
 const native = jest.requireActual<typeof import("react-native")>("react-native");
@@ -552,6 +555,138 @@ it("keeps the picker selection on storage failure and searches the full supplied
     expect(screen.queryByRole("button", {name: "Write all three slots"})).toBeNull();
 });
 
+describe("FROM YOUR ROASTERS", () => {
+    function roasterCatalogues() {
+        const settings = memorySettings();
+        const {feed, body} = feedBody([{id: "kenya", name: "Kenya Nyeri", sizes: ["18g"]}], "Hill Roasters");
+        subscribe(settings, FEED_URL, feed, body, 1000);
+        return subscribedCatalogues(settings);
+    }
+
+    it("lists matching roaster recipes under the library's and assigns the picked one", async () => {
+        const options = props();
+        const onAssignRoaster = jest.fn().mockResolvedValue({ok: true});
+        await renderWithProviders(<EasyModeSlots {...options} roasterCatalogues={roasterCatalogues()}
+            onAssignRoaster={onAssignRoaster}/>);
+        await fireEvent.press(screen.getByRole("button", {name: "Change slot B recipe"}));
+        expect(screen.queryByText("FROM YOUR ROASTERS")).toBeNull();
+        await fireEvent.changeText(await screen.findByLabelText("Search recipes"), "kenya");
+        expect(screen.getByText("No matching recipes.")).toBeOnTheScreen();
+        expect(screen.getByText("FROM YOUR ROASTERS")).toBeOnTheScreen();
+        expect(screen.getByText("Hill Roasters · Light roast")).toBeOnTheScreen();
+        await waitFor(async () => {
+            if (onAssignRoaster.mock.calls.length === 0) {
+                await fireEvent.press(screen.getByRole("button", {name: "Choose Kenya Nyeri - 18g from Hill Roasters"}));
+            }
+            expect(onAssignRoaster).toHaveBeenCalledWith(1, expect.objectContaining({
+                name: "Kenya Nyeri - 18g", size: "18g", roaster: "Hill Roasters"
+            }), expect.any(AbortSignal));
+        }, {timeout: SHEET_PRESS_TIMEOUT});
+        await waitFor(() => expect(screen.queryByText("FROM YOUR ROASTERS")).toBeNull());
+    });
+
+    it("keeps the picker open and says why when the recipe cannot be loaded", async () => {
+        const options = props();
+        const onAssignRoaster = jest.fn().mockResolvedValue({ok: false, message: "Couldn't load that recipe."});
+        await renderWithProviders(<EasyModeSlots {...options} roasterCatalogues={roasterCatalogues()}
+            onAssignRoaster={onAssignRoaster}/>);
+        await fireEvent.press(screen.getByRole("button", {name: "Change slot A recipe"}));
+        await fireEvent.changeText(await screen.findByLabelText("Search recipes"), "hill");
+        await waitFor(async () => {
+            if (onAssignRoaster.mock.calls.length === 0) {
+                await fireEvent.press(screen.getByRole("button", {name: "Choose Kenya Nyeri - 18g from Hill Roasters"}));
+            }
+            expect(await screen.findByText("Couldn't load that recipe.")).toBeOnTheScreen();
+        }, {timeout: SHEET_PRESS_TIMEOUT});
+        expect(screen.getByText("FROM YOUR ROASTERS")).toBeOnTheScreen();
+        expect(options.onAssign).not.toHaveBeenCalled();
+    });
+
+    it.each(["hill", "kenya"])("keeps a saved coffee discoverable when searching %s", async term => {
+        const held = coffee("Kenya Nyeri - 18g");
+        held.shareId = "kenya-18g";
+        const options = props();
+        const onAssignRoaster = jest.fn().mockResolvedValue({ok: true});
+        await renderWithProviders(<EasyModeSlots {...options} recipes={[held]}
+            roasterCatalogues={roasterCatalogues()} onAssignRoaster={onAssignRoaster}/>);
+        await fireEvent.press(screen.getByRole("button", {name: "Change slot A recipe"}));
+        await fireEvent.changeText(await screen.findByLabelText("Search recipes"), term);
+        if (term === "hill") {
+            await waitFor(async () => {
+                if (onAssignRoaster.mock.calls.length === 0) {
+                    await fireEvent.press(screen.getByRole("button", {
+                        name: "Choose Kenya Nyeri - 18g from Hill Roasters"
+                    }));
+                }
+                expect(onAssignRoaster).toHaveBeenCalledWith(0, expect.objectContaining({
+                    name: "Kenya Nyeri - 18g"
+                }), expect.any(AbortSignal));
+            }, {timeout: SHEET_PRESS_TIMEOUT});
+        } else {
+            expect(screen.getByRole("button", {name: "Choose Kenya Nyeri - 18g"})).toBeOnTheScreen();
+            expect(screen.queryByRole("button", {
+                name: "Choose Kenya Nyeri - 18g from Hill Roasters"
+            })).toBeNull();
+        }
+    });
+
+    it("shows no roaster section without a handler", async () => {
+        await renderWithProviders(<EasyModeSlots {...props()} roasterCatalogues={roasterCatalogues()}/>);
+        await fireEvent.press(screen.getByRole("button", {name: "Change slot A recipe"}));
+        await fireEvent.changeText(await screen.findByLabelText("Search recipes"), "kenya");
+        expect(screen.queryByText("FROM YOUR ROASTERS")).toBeNull();
+    });
+
+    it.each(["close", "library", "device", "model", "unmount"] as const)(
+        "cancels the owned lookup on %s and never updates a later picker",
+        async action => {
+            const options = props();
+            let signal: AbortSignal | undefined;
+            let finish: (value: {ok: true}) => void = () => { throw new Error("Lookup not started"); };
+            const onAssignRoaster = jest.fn((_index: number, _choice: unknown, owner?: AbortSignal) =>
+                new Promise<{ok: true} | {ok: false; message: string}>(resolve => {
+                    signal = owner;
+                    finish = resolve;
+                    owner?.addEventListener("abort", () => resolve({
+                        ok: false, message: "Abandoned lookup"
+                    }), {once: true});
+                }));
+            const catalogues = roasterCatalogues();
+            const tree = (deviceId = "one", machineModel: "studio" | "original" = "studio") =>
+                <EasyModeSlots {...options} deviceId={deviceId} machineModel={machineModel}
+                    roasterCatalogues={catalogues} onAssignRoaster={onAssignRoaster}/>;
+            const view = await renderWithProviders(tree());
+            await fireEvent.press(screen.getByRole("button", {name: "Change slot A recipe"}));
+            await fireEvent.changeText(await screen.findByLabelText("Search recipes"), "kenya");
+            await waitFor(async () => {
+                if (onAssignRoaster.mock.calls.length === 0) {
+                    await fireEvent.press(screen.getByRole("button", {name: "Choose Kenya Nyeri - 18g from Hill Roasters"}));
+                }
+                expect(onAssignRoaster).toHaveBeenCalledTimes(1);
+            }, {timeout: SHEET_PRESS_TIMEOUT});
+            if (action === "close") {
+                await fireEvent.press(screen.getByRole("button", {name: "Close"}));
+            } else if (action === "library") {
+                await fireEvent.changeText(screen.getByLabelText("Search recipes"), "");
+                await fireEvent.press(screen.getByRole("button", {name: "Choose Morning"}));
+            } else if (action === "device") {
+                await view.rerender(tree("two"));
+            } else if (action === "model") {
+                await view.rerender(tree("one", "original"));
+            } else {
+                await view.unmount();
+            }
+            expect(signal?.aborted).toBe(true);
+            if (action === "unmount") return;
+            await fireEvent.press(await screen.findByRole("button", {name: "Change slot B recipe"}));
+            expect(await screen.findByLabelText("Search recipes")).toBeTruthy();
+            await act(async () => finish({ok: true}));
+            expect(screen.getByLabelText("Search recipes")).toBeTruthy();
+            expect(screen.queryByText("Abandoned lookup")).toBeNull();
+        }
+    );
+});
+
 it.each([null, 1] as const)("offers deliberate still-saving recovery for B boundary %p", async (inFlight) => {
     const options = props();
     const saved = snapshotRecipe(recipes[0]);
@@ -609,6 +744,31 @@ it("validates library updates instead of altering an invalid edited recipe", asy
     expect(screen.getByRole("button", {name: "Update slot A from library"})).toBeDisabled();
     expect(screen.getByText(/Recipes with bypass are not supported/)).toBeOnTheScreen();
     expect(options.onAssign).not.toHaveBeenCalled();
+});
+
+it("names the empty slots before the first write and says one change is enough after it", async () => {
+    const options = props();
+    options.record.drafts = [snapshotRecipe(recipes[0]), null, null];
+    await renderWithProviders(<EasyModeSlots {...options} available/>);
+    expect(screen.getByText("Choose a recipe for slots B and C before writing. The first write needs all three. "
+        + "After that you can change one at a time.")).toBeOnTheScreen();
+    expect(screen.getByRole("button", {name: "Write all three slots"})).toBeDisabled();
+    await fireEvent.press(screen.getByRole("button", {name: "About Easy Mode"}));
+    expect(await screen.findByText(
+        "Choose all three recipes the first time. After that, change any one and the other two are sent again."
+    )).toBeOnTheScreen();
+});
+
+it("reconnects a slot from an unsaved catalogue recipe to the library's copy of its link", async () => {
+    const options = props();
+    const fetched = coffee("Kenya - 18g");
+    fetched.shareId = "share-kenya";
+    options.record.drafts = [snapshotRecipe(fetched), null, null];
+    const saved = coffee("Kenya - 18g");
+    saved.shareId = "share-kenya";
+    await renderWithProviders(<EasyModeSlots {...options} recipes={[...recipes, saved]}/>);
+    expect(screen.queryByText("REMOVED FROM LIBRARY")).toBeNull();
+    expect(screen.queryByText("RECIPE UPDATED")).toBeNull();
 });
 
 it("shows only the highest-priority availability reason, not a warning stack", async () => {

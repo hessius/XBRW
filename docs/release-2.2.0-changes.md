@@ -452,7 +452,7 @@ Accepted through package A (#280). A roaster
 coffee's primary action read BREW NOW but only opens the recipe in the editor,
 unsaved; the editor has its own BREW. It now reads OPEN RECIPE (spoken "Open
 recipe"). The test ID `roaster-coffee-brew` and the behaviour are unchanged.
-## Second contributor round, package B: pending integration
+## Second contributor round, package B: integrated in #281
 
 Adapted from #271 and #278 under the decisions on #279.
 
@@ -480,3 +480,73 @@ coffee's roaster. Tagged recipe variants must match the selected machine, and a
 model change discards an in-flight lookup. Existing untagged feeds retain their
 selection behaviour. Empty/error responses are uncached 502s, preserving the
 subscriber's last good catalogue.
+## Second contributor round, package C: combined candidate
+
+Branch `feat/2.2.0-package-c-20261026`, pinned to develop
+`f24fc968a9f48232323145cfe99a6ba443f9d7c4`. Preserves #272, #273 and #274's
+ancestry with the corrections approved on #279. This is not integrated yet.
+
+A slot links to its recipe by uuid. Catalogue, roaster and link recipes open
+unsaved, and each fetch mints a new uuid, so assigning one from the editor's
+Assign to Easy Mode left a slot that later read REMOVED FROM LIBRARY. The
+editor now saves such a recipe first (or uses the library's copy of the same
+share link when it brews exactly the same, the `planReimport` "same" test) and
+the slot snapshots the library uuid. The action explains the save before it
+is chosen, and a toast says "Saved to your library." Explicit edits to an
+unsaved copy, including notes, are kept rather than replaced by a same-link
+library copy. Every same-link copy is checked for an identical brew before
+saving another, not only the first match. Library membership is checked again
+before assignment, so a recipe deleted while the editor was open is saved before linking the slot. A
+recipe a slot cannot hold is not saved; the existing error explains why.
+
+Existing slots reconnect for display: when a slot's uuid is not in the library,
+Easy Mode looks for the library copy of the same share link (preferring one
+that brews the same), then a unique link-less recipe with the same name and
+brew. Ambiguous matches stay unlinked.
+Home slot markers still match by uuid only; USE UPDATED RECIPE relinks a slot.
+
+Easy Mode help now says only the first write needs all three recipes, since the
+phone keeps every written slot and resends the other two. With empty slots the
+WRITE reason names them ("Choose a recipe for slots B and C before writing").
+
+Explicit WRITE TO MACHINE remains authoritative. #275's immediate-write
+behavior is deferred under the approved recommendation, not enabled by
+assignment. Physical assignment/write/recovery checks remain release gates;
+this identity repair does not resolve #251's stale-loaded-recipe report.
+### WRITE asks Easy Mode slot or NFC card
+
+Preserves #273's ancestry. With a machine remembered, the editor's WRITE opens a
+small WRITE TO sheet: Easy Mode slot (the existing Assign to Easy Mode, which
+saves an unsaved recipe first) or NFC card (the existing card write, bypass
+question included). With no machine WRITE writes the card straight away as
+before. WRITE's spoken name with a machine is "Write to Easy Mode or card".
+Each destination has its own eligibility and visible refusal reason.
+BLE-valid fine grinds and fractional ratios can reach Easy Mode without
+enabling an invalid NFC write. Unsupported bypass cannot be assigned or saved
+through this entry. The existing more-menu action shares the slot preflight.
+### Easy Mode picker searches subscribed roasters
+
+Preserves #274's ancestry. A search in the Easy Mode CHANGE picker still
+lists library recipes first. Under them, FROM YOUR ROASTERS lists matching
+recipes from the subscribed roasters' cached feeds, one row per coffee and size
+(on sale first, sold out after, at most 30, leaving out links already shown
+in the library results). Naming the roaster lists all its coffees, including
+saved coffees whose names do not match that search. Only cached feeds are
+read, so opening and searching the picker makes no request.
+
+Picking one fetches that size's recipe from xBloom and keeps it in the library
+the way ADD TO SHELF does (`addToLibrary`: saved new, or matched to the copy
+already there), then assigns the library copy so the slot's uuid link holds. An
+edited library copy is used as it is; the coffee's own screen is still where the
+roaster's latest is offered. A failed fetch keeps the picker open with a
+message.
+
+Search includes only recipes for the selected machine, defaulting to Studio
+when no model is specified. The selected recipe is checked for Easy Mode
+eligibility before saving; an incompatible retained edited copy is refused
+without changing it. Refusals explain the local problem, while lookup/storage
+failures use safe app copy rather than upstream error text.
+
+Closing the picker, choosing a library recipe, leaving the route, switching
+machine/model/serial, starting a write, or unmounting cancels the lookup.
+A late result cannot save a library row, assign a slot or update a later picker.

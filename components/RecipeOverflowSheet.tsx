@@ -92,8 +92,8 @@ export default function RecipeOverflowSheet({
     // does not become a new type on every render.
     const row = (
         label: string, icon: DotIconName, action: () => void,
-        {tone = palette.text, testID, caption, hint}: {
-            tone?: string; testID?: string; caption?: string; hint?: string;
+        {tone = palette.text, testID, caption, hint, detail}: {
+            tone?: string; testID?: string; caption?: string; hint?: string; detail?: string;
         } = {}
     ) => (
         <Pressable accessibilityRole="button" accessibilityLabel={label}
@@ -103,10 +103,13 @@ export default function RecipeOverflowSheet({
                     paddingHorizontal="$3" backgroundColor={palette.raised}
                     borderRadius="$4">
                 <DotIcon name={icon} size={16} color={tone}/>
-                <DotMatrixText testID={testID} fontSize={11} weight="bold"
-                               letterSpacing={1.8} color={tone}>
-                    {(caption ?? label).toUpperCase()}
-                </DotMatrixText>
+                <YStack flex={1} gap="$1">
+                    <DotMatrixText testID={testID} fontSize={11} weight="bold"
+                                   letterSpacing={1.8} color={tone}>
+                        {(caption ?? label).toUpperCase()}
+                    </DotMatrixText>
+                    {detail && <Text fontSize={13} color={palette.dim}>{detail}</Text>}
+                </YStack>
             </XStack>
         </Pressable>
     );
@@ -163,7 +166,10 @@ export default function RecipeOverflowSheet({
                 {onWrite && row("Write recipe to card", "write", onWrite, {
                     caption: "Write to card"
                 })}
-                {onEasyMode && row("Assign to Easy Mode", "brew", onEasyMode)}
+                {onEasyMode && row("Assign to Easy Mode", "brew", onEasyMode, {
+                    detail: "Unsaved recipes are saved to your library first.",
+                    hint: "Unsaved recipes are saved to your library first."
+                })}
 
                 {row("Share", "share", onShare, {
                     testID: "overflow-share-label",
