@@ -480,6 +480,11 @@ Machine's identity/generation/ownership guards.
 Native writes/readbacks retain exclusion until they settle even after timeout.
 Correlated transaction failures remain latched through native settlement, even
 when earlier synchronous running feedback already satisfied the response waiter.
+Every armed response also validates the requested temperature, pattern or
+relevant setting value, including responses arriving after an earlier match.
+Required info readback is armed only at the actual refresh dispatch, not at
+proposal dispatch; success requires both a successful leased refresh and a
+matching fresh post-refresh value.
 
 For Task 5, install one owner above routes, pass `getSnapshot`/`subscribe` directly
 to `useSyncExternalStore`, and keep the controller alive across remounts. There
@@ -497,6 +502,12 @@ only qualified `terminal` clears its marker; `active` merely exposes Stop.
 Nonmoving entry/Scale/Tare/setting uncertainty retains its in-memory owner without
 inventing a durable motor marker. Explicit `recover()` obtains fresh qualified
 closed/terminal evidence, or current settings, before releasing that owner.
+`ControlSession.reacquireForRecovery(): ControlSession` replaces a settled lease
+atomically for its pinned identity: failed qualification/acquisition retains the
+old exclusion, and pending native writes or readback waits refuse handoff. With
+a moving marker the replacement has recovery-only authority; without one it
+keeps its existing purpose and fresh-normal acquisition gate. No motor marker
+is invented for nonmoving reconnect failures.
 The hook must keep a failed setting proposal in caller state: the snapshot
 retains `applyingSetting` and confirmed readings, never a success-shaped proposal.
 Tare pending uses `phase: "applying"` with `applyingSetting: null`, not an

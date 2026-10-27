@@ -60,6 +60,8 @@ export type ControlSession = {
     assertPourPreflight: (qualifiedActualSource: "tank" | "tap" | null) => void;
     reserve: () => void;
     clearRecovery: (proof: ControlTerminalProof) => void;
+    /** Atomically replace this settled owner for the same identity; failure retains it. */
+    reacquireForRecovery: () => ControlSession;
     onInvalidated: (listener: (error: Error) => void) => () => void;
     release: () => void;
 };
@@ -350,12 +352,19 @@ export default class Machine {
     }
 
     acquireControlSession(identity: ControlIdentity, purpose: ControlPurpose): ControlSession {
+        return this.acquireControlLease(identity, purpose);
+    }
+
+    private acquireControlLease(identity: ControlIdentity, purpose: ControlPurpose, replacing?: symbol): ControlSession {
         const refuse = (message: string): never => { throw new ControlOperationError(message); };
         if (this.controlStore === undefined) refuse("Install the shared control recovery store first.");
         const store = this.controlStore!;
         const marker = store.snapshot.marker;
         if (store.snapshot.error !== null && (purpose !== "recovery" || marker === null)) throw store.snapshot.error;
-        if (this.controlSession !== null) refuse("Another machine control session owns the connection.");
+        if (replacing !== undefined && this.controlSession?.token !== replacing) refuse("The control recovery owner changed.");
+        if (this.controlSession !== null && this.controlSession.token !== replacing) {
+            refuse("Another machine control session owns the connection.");
+        }
         if (purpose === "recovery") {
             if (marker === null || marker.deviceId !== identity.deviceId || marker.serial !== identity.serial) {
                 refuse("Recovery requires the exact persisted device and serial.");
@@ -509,6 +518,17 @@ export default class Machine {
             clearRecovery: (proof) => {
                 check();
                 store.clear(proof);
+            },
+            reacquireForRecovery: () => {
+                if (released || this.controlSession?.token !== token) refuse("The control recovery owner changed.");
+                if (outstanding !== 0) refuse("The old control operations must settle before recovery handoff.");
+                const replacement = this.acquireControlLease(
+                    pinned, store.snapshot.marker === null ? purpose : "recovery", token
+                );
+                invalidate(new ControlOperationError("The control session was replaced for recovery."));
+                released = true;
+                listeners.clear();
+                return replacement;
             },
             onInvalidated: (listener) => {
                 listeners.add(listener);

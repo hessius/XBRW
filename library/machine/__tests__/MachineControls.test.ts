@@ -40,6 +40,7 @@ async function setup(options: {
     raw?: string; failStorage?: () => boolean; refreshSettings?: boolean;
     profile?: ControlCapabilityProfile;
     decodeInfo?: () => ControlFeedback | null;
+    infoWaitMs?: number;
 } = {}) {
     const radio = new Radio();
     radio.infoReply = machineInfoFrame({serial: identity.serial, model: "test", firmware: "test"});
@@ -48,7 +49,7 @@ async function setup(options: {
         read: () => raw,
         write: (value) => { if (options.failStorage?.()) throw new Error("storage"); raw = value; }
     });
-    const machine = new Machine(radio, {frameGapMs: 0});
+    const machine = new Machine(radio, {frameGapMs: 0, infoWaitMs: options.infoWaitMs});
     machine.installControlRecovery(recovery);
     await machine.connect(identity.deviceId);
     radio.emit(status(MACHINE_STATE.IDLE));
@@ -751,6 +752,115 @@ it("ignores synthetic contradictory feedback for a different transaction while S
     await expect(s.controls.startGrind(grind)).resolves.toBeUndefined();
     expect(s.controls.getSnapshot().phase).toBe("running");
     expect(s.recovery.snapshot.marker?.tool).toBe("grind");
+    await s.controls.stop();
+    await s.controls.close();
+});
+
+it("retains nonmoving ownership when reconnect recovery has no fresh normal state", async () => {
+    const s = await setup();
+    await expect(s.controls.open(identity, "scale")).rejects.toThrow("missing");
+    s.radio.drop();
+    await s.machine.connect(identity.deviceId);
+    await expect(s.controls.recover()).rejects.toThrow("normal");
+    expect(s.controls.getSnapshot().phase).toBe("unknown");
+    expect(s.recovery.snapshot.marker).toBeNull();
+    expect(s.machine.controlBlocker).not.toBeNull();
+    await expect(s.machine.askHowItIsDoing()).rejects.toThrow();
+    await expect(s.machine.send(buildType1(60011))).rejects.toThrow();
+    s.radio.emit(status(MACHINE_STATE.IDLE));
+    s.respond((item) => accept(s.radio, item));
+    await s.controls.recover();
+    expect(s.controls.getSnapshot().phase).toBe("closed");
+    expect(s.machine.controlBlocker).toBeNull();
+});
+
+it.each(["missing-info", "silent-refresh", "wrong-post-refresh"] as const)(
+    "does not accept early proposal feedback instead of required fresh settings readback: %s",
+    async (mode) => {
+        const s = await setup({refreshSettings: true, infoWaitMs: 10});
+        const originalInfo = s.radio.infoReply;
+        if (mode !== "wrong-post-refresh") s.radio.infoReply = null;
+        s.respond((item) => {
+            if (item.command.kind === "inspect") feedback(s.radio, item.tokens, {kind: "settings", readings});
+            if (item.command.kind === "setting") {
+                if (s.radio.sent.at(-1) === codes.setting) {
+                    feedback(s.radio, item.tokens, {kind: "settings", readings: {...readings, brightness: 3}});
+                } else if (mode === "wrong-post-refresh") {
+                    feedback(s.radio, item.tokens, {kind: "settings", readings});
+                } else if (mode === "missing-info") {
+                    feedback(s.radio, item.tokens, {kind: "settings", readings: {...readings, brightness: 3}});
+                }
+            }
+        });
+        await expect(s.controls.applySetting(identity, "brightness", 3)).rejects.toThrow(/refresh|readback|response/);
+        expect(s.controls.getSnapshot()).toMatchObject({
+            phase: "unknown", applyingSetting: "brightness", settings: {brightness: 1}
+        });
+        expect(s.machine.controlBlocker).not.toBeNull();
+        expect(s.recovery.snapshot.marker).toBeNull();
+        s.radio.infoReply = originalInfo;
+        await s.controls.recover();
+        expect(s.machine.controlBlocker).toBeNull();
+    }
+);
+
+it.each(["temperature", "pattern", "setting"] as const)(
+    "latches a synthetic same-kind %s value mismatch after an earlier matching response",
+    async (kind) => {
+        const s = await setup();
+        s.respond((item) => accept(s.radio, item));
+        if (kind !== "setting") {
+            await s.controls.open(identity, "pour");
+            await s.controls.startPour(pour);
+        }
+        s.respond((item) => {
+            if (item.command.kind === "inspect") feedback(s.radio, item.tokens, {kind: "settings", readings});
+            if (item.command.kind === "temperature") {
+                feedback(s.radio, item.tokens, {kind: "temperature", celsius: 85});
+                feedback(s.radio, item.tokens, {kind: "temperature", celsius: 84});
+            }
+            if (item.command.kind === "pattern") {
+                feedback(s.radio, item.tokens, {kind: "pattern", pattern: "centered"});
+                feedback(s.radio, item.tokens, {kind: "pattern", pattern: "circular"});
+            }
+            if (item.command.kind === "setting") {
+                feedback(s.radio, item.tokens, {kind: "settings", readings: {...readings, brightness: 3}});
+                feedback(s.radio, item.tokens, {kind: "settings", readings});
+            }
+        });
+        const operation = kind === "temperature" ? s.controls.setTemperature(85)
+            : kind === "pattern" ? s.controls.setPattern("centered")
+                : s.controls.applySetting(identity, "brightness", 3);
+        await expect(operation).rejects.toThrow("readback");
+        expect(s.controls.getSnapshot().phase).toBe("unknown");
+        expect(s.machine.controlBlocker).not.toBeNull();
+        if (kind === "setting") {
+            expect(s.controls.getSnapshot().settings?.brightness).toBe(1);
+            expect(s.recovery.snapshot.marker).toBeNull();
+            await s.controls.recover();
+        } else {
+            expect(s.controls.getSnapshot()).toMatchObject({temperatureC: 80, pattern: "spiral"});
+            expect(s.recovery.snapshot.marker?.tool).toBe("pour");
+            s.respond((item) => accept(s.radio, item));
+            await s.controls.stop();
+            await s.controls.close();
+        }
+    }
+);
+
+it("ignores a stale other-transaction value mismatch during synthetic live confirmation", async () => {
+    const s = await setup();
+    s.respond((item) => accept(s.radio, item));
+    await s.controls.open(identity, "pour");
+    await s.controls.startPour(pour);
+    s.respond((item) => {
+        if (item.command.kind === "temperature") {
+            feedback(s.radio, item.tokens, {kind: "temperature", celsius: 85});
+            feedback(s.radio, s.sent[0].tokens, {kind: "temperature", celsius: 84});
+        } else accept(s.radio, item);
+    });
+    await s.controls.setTemperature(85);
+    expect(s.controls.getSnapshot()).toMatchObject({phase: "running", temperatureC: 85});
     await s.controls.stop();
     await s.controls.close();
 });

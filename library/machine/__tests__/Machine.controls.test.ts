@@ -216,6 +216,72 @@ it("cancels a synthetic queued control handshake without dispatching a nonessent
     }
 });
 
+it("retains a nonmoving lease atomically when recovery replacement fails its fresh-normal gate", async () => {
+    const {machine, radio} = await setup();
+    const lease = machine.acquireControlSession(identity, "scale");
+    radio.drop();
+    await machine.connect(identity.deviceId);
+    expect(() => lease.reacquireForRecovery()).toThrow("normal");
+    expect(machine.controlBlocker).not.toBeNull();
+    await expect(machine.askHowItIsDoing()).rejects.toThrow();
+    radio.emit(status(MACHINE_STATE.IDLE));
+    const replacement = lease.reacquireForRecovery();
+    expect(() => lease.check()).toThrow();
+    lease.release();
+    expect(machine.controlBlocker).not.toBeNull();
+    replacement.check();
+    replacement.release();
+    expect(machine.controlBlocker).toBeNull();
+});
+
+it("requires every old native operation to settle before control recovery handoff", async () => {
+    const {machine, radio} = await setup();
+    const lease = machine.acquireControlSession(identity, "scale");
+    let settle = () => {};
+    radio.syntheticWrite = () => new Promise<void>((resolve) => { settle = resolve; });
+    const sending = lease.send(buildType1(60001));
+    expect(() => lease.reacquireForRecovery()).toThrow("settle");
+    expect(machine.controlBlocker).not.toBeNull();
+    settle();
+    await sending;
+    const replacement = lease.reacquireForRecovery();
+    expect(() => lease.reacquireForRecovery()).toThrow();
+    lease.release();
+    replacement.check();
+    replacement.release();
+    expect(machine.controlBlocker).toBeNull();
+});
+
+it("narrows a reserved moving lease to recovery authority during atomic handoff", async () => {
+    const {machine} = await setup();
+    const lease = machine.acquireControlSession(identity, "grind");
+    lease.reserve();
+    const replacement = lease.reacquireForRecovery();
+    await expect(replacement.send(buildType1(60001))).rejects.toThrow("Recovery");
+    expect(() => replacement.reserve()).toThrow();
+    replacement.clearRecovery({version: 1, ...identity, tool: "grind", qualifiedTerminal: true});
+    replacement.release();
+    expect(machine.controlBlocker).toBeNull();
+});
+
+it("retains the old owner through an info readback wait before recovery handoff", async () => {
+    const {machine, radio} = await setup();
+    const lease = machine.acquireControlSession(identity, "scale");
+    radio.infoReply = null;
+    const refreshing = lease.refreshInfo();
+    for (let i = 0; i < 20; i++) await Promise.resolve();
+    expect(radio.sent).toEqual([8100]);
+    expect(() => lease.reacquireForRecovery()).toThrow("settle");
+    expect(machine.controlBlocker).not.toBeNull();
+    radio.emit(machineInfoFrame());
+    await expect(refreshing).resolves.toBe(true);
+    const replacement = lease.reacquireForRecovery();
+    lease.release();
+    replacement.check();
+    replacement.release();
+    expect(machine.controlBlocker).toBeNull();
+});
+
 it("refuses dispatch after failed reservation and keeps stop/recovery available after a failed clear", async () => {
     const radio = new Radio();
     const machine = new Machine(radio, {frameGapMs: 0});

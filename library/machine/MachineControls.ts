@@ -24,6 +24,13 @@ function failure(error: unknown): Error {
     return error instanceof Error ? error : new Error("Machine control failed.");
 }
 
+function matchesProposal(command: ControlCommand, value: ControlFeedback["value"]): boolean {
+    if (command.kind === "temperature") return value.kind === "temperature" && value.celsius === command.celsius;
+    if (command.kind === "pattern") return value.kind === "pattern" && value.pattern === command.pattern;
+    if (command.kind === "setting") return value.kind === "settings" && value.readings[command.id] === command.value;
+    return true;
+}
+
 function capture({profile: p, protocol}: ControlQualification): ControlQualification {
     const number = (rule: {min: number; max: number; step: number}) => Object.freeze({...rule});
     return Object.freeze({
@@ -102,13 +109,16 @@ export default class MachineControls {
         return qualification;
     }
 
-    private attach(callerIdentity: ControlIdentity, purpose: ToolId | "setting" | "recovery"): void {
+    private attach(
+        callerIdentity: ControlIdentity, purpose: ToolId | "setting" | "recovery", replacement?: ControlSession
+    ): void {
         const identity = Object.freeze({...callerIdentity});
+        if (replacement) this.lease = replacement;
         this.qualification = this.select();
         const protocol = this.qualification.protocol;
         const ms = protocol.telemetryFreshMs;
         if (ms !== undefined && (!Number.isFinite(ms) || ms <= 0)) throw new Error("Invalid qualified telemetry freshness.");
-        const lease = this.machine.acquireControlSession(identity, purpose);
+        const lease = replacement ?? this.machine.acquireControlSession(identity, purpose);
         this.lease = lease;
         this.contextInvalid = false;
         const session = this.session = ++nextSession;
@@ -236,6 +246,7 @@ export default class MachineControls {
         }
         let timer: ReturnType<typeof setTimeout>;
         let armed = false;
+        let dispatched = false;
         let cancelled = false;
         // A resolved response can still be contradicted before native settlement.
         let transactionFailure: Error | null = null;
@@ -250,9 +261,15 @@ export default class MachineControls {
             this.waiter = {
                 tokens, reject: fail,
                 receive: (value) => {
-                    if (!armed) return;
-                    if (typeof expected === "string" ? value.kind === expected : expected.includes(value.kind)) resolve(value);
-                    else fail(new Error(value.kind === "refused" ? value.reason : "Contradictory control feedback."));
+                    if (!armed) {
+                        if (dispatched && value.kind === "refused") fail(new Error(value.reason));
+                        return;
+                    }
+                    if (!(typeof expected === "string" ? value.kind === expected : expected.includes(value.kind))) {
+                        fail(new Error(value.kind === "refused" ? value.reason : "Contradictory control feedback."));
+                    } else if (!matchesProposal(command, value)) {
+                        fail(new Error("Control readback does not match the proposal."));
+                    } else resolve(value);
                 }
             };
         });
@@ -279,14 +296,22 @@ export default class MachineControls {
                     checkCurrent();
                     if (command.kind === "grind" || command.kind === "pour") this.run = tokens;
                     if (command.kind === "enter") this.telemetry = tokens;
-                    armed = true;
+                    dispatched = true;
+                    armed = !plan.refreshInfo;
                 };
                 if (plan.frame !== null) {
                     if (command.kind === "stop") await lease.sendStop(plan.frame, dispatch, checkCurrent);
                     else await lease.send(plan.frame, dispatch, checkCurrent);
                 }
                 checkCurrent();
-                if (plan.refreshInfo) await lease.refreshInfo(dispatch, checkCurrent);
+                if (plan.refreshInfo) {
+                    const answered = await lease.refreshInfo(() => {
+                        checkCurrent();
+                        dispatched = true;
+                        armed = true;
+                    }, checkCurrent);
+                    if (!answered) throw new Error("Qualified info refresh did not succeed.");
+                }
             });
             this.writeTail = sending.then(() => {}, () => {});
             const [, result] = await Promise.race([Promise.all([sending, response]), timeout]);
@@ -499,8 +524,9 @@ export default class MachineControls {
             }
             this.recoveryOnly = marker != null;
             if (marker || this.contextInvalid || !this.lease) {
+                const replacement = this.lease?.reacquireForRecovery();
                 this.release();
-                this.attach(identity, marker ? "recovery" : this.snapshot.tool ?? "setting");
+                this.attach(identity, marker ? "recovery" : this.snapshot.tool ?? "setting", replacement);
             } else this.lease.check();
             this.update({identity: Object.freeze({deviceId: identity.deviceId, serial: identity.serial}),
                 tool: marker?.tool ?? this.snapshot.tool, phase: "unknown"});
