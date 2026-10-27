@@ -307,6 +307,7 @@ export default class MachineControls {
                 if (plan.refreshInfo) {
                     const answered = await lease.refreshInfo(() => {
                         checkCurrent();
+                        if (!dispatched && command.kind === "enter") this.telemetry = tokens;
                         dispatched = true;
                         armed = true;
                     }, checkCurrent);

@@ -41,6 +41,7 @@ async function setup(options: {
     profile?: ControlCapabilityProfile;
     decodeInfo?: () => ControlFeedback | null;
     infoWaitMs?: number;
+    refreshOnlyScale?: boolean;
 } = {}) {
     const radio = new Radio();
     radio.infoReply = machineInfoFrame({serial: identity.serial, model: "test", firmware: "test"});
@@ -64,6 +65,9 @@ async function setup(options: {
             const item = {command, tokens};
             const frame = buildType1(codes[command.kind], [tokens.session, tokens.transaction]);
             sent.push(item);
+            if (command.kind === "enter" && command.tool === "scale" && options.refreshOnlyScale) {
+                return {frame: null, refreshInfo: true, deadlineMs: 50};
+            }
             if (command.kind === "inspect" && command.recovery) return {frame: null, refreshInfo: true, deadlineMs: 50};
             if (command.kind === "setting" && options.refreshSettings) return {frame, refreshInfo: true, deadlineMs: 50};
             return {frame, deadlineMs: 50};
@@ -75,7 +79,8 @@ async function setup(options: {
     radio.syntheticWrite = (frame) => {
         const code = frame[3] | frame[4] << 8;
         const item = code === 8100 ? sent.findLast((s) =>
-            (s.command.kind === "inspect" && s.command.recovery) || s.command.kind === "setting")
+            (s.command.kind === "inspect" && s.command.recovery) || s.command.kind === "setting"
+            || (s.command.kind === "enter" && s.command.tool === "scale" && options.refreshOnlyScale))
             : sent.findLast((s) => codes[s.command.kind] === code
                 && new DataView(frame.buffer, frame.byteOffset).getUint32(10, true) === s.tokens.session
                 && new DataView(frame.buffer, frame.byteOffset).getUint32(14, true) === s.tokens.transaction);
@@ -862,5 +867,26 @@ it("ignores a stale other-transaction value mismatch during synthetic live confi
     await s.controls.setTemperature(85);
     expect(s.controls.getSnapshot()).toMatchObject({phase: "running", temperatureC: 85});
     await s.controls.stop();
+    await s.controls.close();
+});
+
+it("streams correlated grams after synthetic refresh-only Scale entry and ignores wrong or stale tokens", async () => {
+    const s = await setup({refreshOnlyScale: true});
+    s.respond((item) => accept(s.radio, item));
+    await s.controls.open(identity, "scale");
+    const entry = s.sent[0].tokens;
+    expect(s.radio.sent).toEqual([8100]);
+    expect(s.controls.getSnapshot()).toMatchObject({phase: "ready", cupGrams: null});
+    feedback(s.radio, {...entry, session: entry.session + 1}, {kind: "cup", grams: 99});
+    feedback(s.radio, {...entry, transaction: entry.transaction + 1}, {kind: "cup", grams: 99});
+    expect(s.controls.getSnapshot().cupGrams).toBeNull();
+    feedback(s.radio, entry, {kind: "cup", grams: 42.5});
+    expect(s.controls.getSnapshot().cupGrams).toBe(42.5);
+    await s.controls.close();
+    await s.controls.open(identity, "scale");
+    feedback(s.radio, entry, {kind: "cup", grams: 99});
+    expect(s.controls.getSnapshot().cupGrams).toBeNull();
+    feedback(s.radio, s.sent[2].tokens, {kind: "cup", grams: 44});
+    expect(s.controls.getSnapshot().cupGrams).toBe(44);
     await s.controls.close();
 });
