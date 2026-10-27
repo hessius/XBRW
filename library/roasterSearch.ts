@@ -107,6 +107,11 @@ export async function saveRoasterChoice(
     const fetched = await fetchCoffeeRecipe(
         choice.coffee, choice.size, deps, signal, choice.roaster, "studio"
     );
+    if (signal?.aborted) {
+        const cancelled = new Error("Catalogue lookup cancelled.");
+        cancelled.name = "AbortError";
+        throw cancelled;
+    }
     const problem = slotRecipeProblem(fetched.recipe);
     if (problem !== null) throw new SlotRecipeError(problem);
     const outcome = addToLibrary(fetched, deps, settings);

@@ -94,6 +94,20 @@ describe("searchRoasterRecipes", () => {
 });
 
 describe("saveRoasterChoice", () => {
+    it("does not persist if cancelled between lookup completion and saving", async () => {
+        const settings = subscribedSettings([{id: "kenya"}]);
+        const library = memoryLibrary();
+        const controller = new AbortController();
+        let finish: (recipe: ReturnType<typeof brewable>) => void = () => { throw new Error("Lookup not started"); };
+        library.deps.fetchRecipe = () => new Promise(resolve => { finish = resolve; });
+        const [choice] = searchRoasterRecipes(subscribedCatalogues(settings), "kenya");
+        const pending = saveRoasterChoice(choice, library.deps, settings, controller.signal);
+        finish(brewable("kenya-18g"));
+        queueMicrotask(() => controller.abort());
+        await expect(pending).rejects.toMatchObject({name: "AbortError"});
+        expect(library.all()).toEqual([]);
+    });
+
     it("rejects an unsupported recipe before creating a library row", async () => {
         const settings = subscribedSettings([{id: "kenya"}]);
         const library = memoryLibrary();
