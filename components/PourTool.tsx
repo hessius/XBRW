@@ -85,7 +85,7 @@ export default function PourTool({
                             </Button>)}
                         </XStack>}
                     </YStack>
-                    {request?.mode === "target" && !active && <MachineNumericControl
+                    {request?.mode === "target" && <MachineNumericControl
                         label="Target volume" value={request.volumeMl} unit="ml" policy={policy?.volumeMl ?? null}
                         editable={editable} onChange={(volumeMl) => onRequestChange({...request, volumeMl})}/>}
                     <MachineNumericControl label="Flow" value={request?.flowMlPerSecond ?? null} unit="ml/s"

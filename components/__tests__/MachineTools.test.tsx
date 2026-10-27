@@ -152,6 +152,16 @@ it("shows target before starting and only independent dispensed telemetry during
     expect(screen.getByLabelText("DISPENSED: Unavailable")).toBeTruthy();
 });
 
+it("retains a readonly target alongside the independent dispensed readout while running", async () => {
+    await renderWithProviders(<PourTool {...pour} phase="running" dispensedMl={18.2}/>);
+    expect(screen.getByLabelText("DISPENSED: 18.2 ml")).toBeTruthy();
+    expect(screen.getByLabelText("Target volume: 150 ml")).toBeTruthy();
+    expect(screen.queryByLabelText("Increase Target volume")).toBeNull();
+    expect(screen.queryByLabelText("Decrease Target volume")).toBeNull();
+    expect(screen.queryByLabelText("Edit Target volume")).toBeNull();
+    expect(screen.getByRole("button", {name: "Stop"})).toBeEnabled();
+});
+
 it("never displays a volume or progress for continuous pour", async () => {
     const {volumeMl: _volume, ...common} = pour.request as Extract<NonNullable<PourToolProps["request"]>, {mode: "target"}>;
     await renderWithProviders(<PourTool {...pour} request={{...common, mode: "continuous"}} phase="running" dispensedMl={42}/>);
