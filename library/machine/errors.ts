@@ -38,6 +38,13 @@ export class SlotOperationError extends Error {
     }
 }
 
+export class ControlOperationError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = "ControlOperationError";
+    }
+}
+
 /**
  * Upload began, so a lost link does not prove the machine missed the recipe.
  * This must never enter the automatic pre-flight relink retry.
@@ -82,10 +89,10 @@ export class NoSavedMachineError extends Error {
     }
 }
 
-export type BrewRefusal = SlotOperationError | WrongMachineError | NoSavedMachineError;
+export type BrewRefusal = SlotOperationError | ControlOperationError | WrongMachineError | NoSavedMachineError;
 
 export function isBrewRefusal(error: unknown): error is BrewRefusal {
-    return error instanceof SlotOperationError || error instanceof WrongMachineError
+    return error instanceof SlotOperationError || error instanceof ControlOperationError || error instanceof WrongMachineError
         || error instanceof NoSavedMachineError;
 }
 

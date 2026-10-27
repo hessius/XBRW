@@ -10,7 +10,9 @@ import type {SlotDatabase} from "@/library/slots/SlotDatabase";
 import type {SlotAcquireOptions, SlotIdentity} from "@/library/slots/slotWriter";
 import {sameBytes} from "@/library/slots/slotModel";
 
-import {BrewOwnershipError, BrewUploadError, RadioUnavailableError, SlotOperationError} from "./errors";
+import {BrewOwnershipError, BrewUploadError, ControlOperationError, RadioUnavailableError, SlotOperationError} from "./errors";
+import type {ControlIdentity, ToolId} from "./controlModel";
+import type {ControlRecoverySnapshot, ControlRecoveryStore, ControlTerminalProof} from "./controlRecovery";
 
 import {frameLogText, historyLine} from "./frameLog";
 import {
@@ -45,6 +47,21 @@ export type SlotSession = {
     invalidate: (error: Error) => void;
     onInvalidated: (listener: (error: Error) => void) => () => void;
     release: (safe: boolean) => void;
+};
+
+export type ControlPurpose = ToolId | "setting" | "recovery";
+export type ControlSession = {
+    check: () => void;
+    /** Only a future qualified adapter may supply frames; no encoders are provided here. */
+    send: (frame: Uint8Array) => Promise<void>;
+    /** Recovery authority is restricted to inspection and a qualified stop frame. */
+    sendStop: (frame: Uint8Array) => Promise<void>;
+    refreshInfo: () => Promise<boolean>;
+    assertPourPreflight: (qualifiedActualSource: "tank" | "tap" | null) => void;
+    reserve: () => void;
+    clearRecovery: (proof: ControlTerminalProof) => void;
+    onInvalidated: (listener: (error: Error) => void) => () => void;
+    release: () => void;
 };
 
 /**
@@ -298,6 +315,194 @@ export default class Machine {
     private backgrounded = false;
     private connectedId: string | null = null;
     private unsettledCommand = false;
+    private controlStore: ControlRecoveryStore | undefined;
+    private controlSession: {token: symbol; invalidate: (error: Error) => void} | null = null;
+
+    installControlRecovery(store: ControlRecoveryStore): () => void {
+        if (this.controlStore !== undefined) {
+            if (this.controlStore !== store) throw new ControlOperationError("The shared control recovery store is already installed.");
+            return () => {};
+        }
+        this.controlStore = store;
+        const unsubscribe = store.subscribe(() => this.announceLink());
+        this.announceLink();
+        return () => {
+            this.controlSession?.invalidate(new ControlOperationError("The shared control owner was reset."));
+            unsubscribe();
+        };
+    }
+
+    /** A global exclusion, including when its device is disconnected or no longer selected. */
+    get controlBlocker(): ControlOperationError | null {
+        return this.controlStore?.blocker ?? (this.controlSession === null ? null
+            : new ControlOperationError("A machine control session owns the connection."));
+    }
+
+    get controlRecovery(): ControlRecoverySnapshot | null {
+        return this.controlStore?.snapshot ?? null;
+    }
+
+    /** Invalid storage throws rather than being mistaken for no reservation. */
+    get controlRecoveryTarget(): string | null {
+        const snapshot = this.controlStore?.snapshot;
+        if (snapshot?.marker == null && snapshot?.error != null) throw snapshot.error;
+        return snapshot?.marker?.deviceId ?? null;
+    }
+
+    acquireControlSession(identity: ControlIdentity, purpose: ControlPurpose): ControlSession {
+        const refuse = (message: string): never => { throw new ControlOperationError(message); };
+        if (this.controlStore === undefined) refuse("Install the shared control recovery store first.");
+        const store = this.controlStore!;
+        const marker = store.snapshot.marker;
+        if (store.snapshot.error !== null && (purpose !== "recovery" || marker === null)) throw store.snapshot.error;
+        if (this.controlSession !== null) refuse("Another machine control session owns the connection.");
+        if (purpose === "recovery") {
+            if (marker === null || marker.deviceId !== identity.deviceId || marker.serial !== identity.serial) {
+                refuse("Recovery requires the exact persisted device and serial.");
+            }
+        } else if (store.blocker !== null) throw store.blocker;
+        const actual = this.slotIdentity;
+        if (actual === null || actual.deviceId !== identity.deviceId || actual.serial !== identity.serial) {
+            refuse("The connected peripheral and reported serial must match the control identity.");
+        }
+        const pinned = actual!;
+        const generation = this.generation;
+        const token = Symbol("control");
+        let failure: Error | null = null;
+        let released = false;
+        const listeners = new Set<(error: Error) => void>();
+        const invalidate = (error: Error) => {
+            if (failure !== null || released) return;
+            failure = error;
+            listeners.forEach((listener) => listener(error));
+            this.announceLink();
+        };
+        const assertAvailable = (requireNormal: boolean) => {
+            if (this.backgrounded || this.slotSession !== null
+                || this.slotStore?.read(pinned.deviceId).journal != null
+                || this.unsettledCommand
+                || Array.from(this.ordinaryOperations).some((operation) => operation.generation === generation)
+                || isActiveBrewPhase(this.phase) || this.phase.name === "lostContact") {
+                refuse("The machine is busy or unavailable for controls.");
+            }
+            if (requireNormal && (this.state === null || !STARTABLE.has(this.state)
+                || Date.now() - this.stateAt > STATE_FRESH_MS)) {
+                refuse("Controls require a fresh known normal machine state.");
+            }
+        };
+        assertAvailable(purpose !== "recovery");
+        const check = () => {
+            if (failure !== null) throw failure;
+            const current = this.slotIdentity;
+            if (released || this.controlSession?.token !== token || generation !== this.generation
+                || current === null || current.deviceId !== pinned.deviceId || current.serial !== pinned.serial
+                || this.backgrounded) {
+                refuse("The control connection changed. The operation is uncertain.");
+            }
+            if (store.snapshot.error !== null && store.snapshot.marker === null) throw store.snapshot.error;
+            if (this.slotSession !== null || this.slotStore?.read(pinned.deviceId).journal != null
+                || isActiveBrewPhase(this.phase) || this.phase.name === "lostContact") {
+                refuse("Another machine operation blocks controls.");
+            }
+            const pending = store.snapshot.marker;
+            if (pending !== null && (pending.deviceId !== pinned.deviceId || pending.serial !== pinned.serial
+                || (purpose !== "recovery" && pending.tool !== purpose))) {
+                refuse("The control recovery reservation changed.");
+            }
+            if (purpose === "recovery" && pending === null) refuse("The recovery reservation is no longer held.");
+            if (purpose === "recovery" && pending?.tool !== marker?.tool) refuse("The recovery tool changed.");
+        };
+        this.controlSession = {token, invalidate};
+        this.announceLink();
+        let sent = false;
+        const write = async (frame: Uint8Array, guard = check) => {
+            guard();
+            if (sent && this.frameGapMs > 0) {
+                await new Promise<void>((resolve, reject) => {
+                    const onFailure = (error: Error) => {
+                        clearTimeout(timer);
+                        listeners.delete(onFailure);
+                        reject(error);
+                    };
+                    const timer = setTimeout(() => {
+                        listeners.delete(onFailure);
+                        resolve();
+                    }, this.frameGapMs);
+                    timer.unref?.();
+                    listeners.add(onFailure);
+                });
+                guard();
+            }
+            sent = true;
+            await this.writeFrame(frame, guard);
+            guard();
+        };
+        const sendFrame = async (frame: Uint8Array, guard = check) => {
+            guard();
+            if (!this.sessionIsFresh()) {
+                await write(buildType1(8100, [185, 1]), guard);
+                guard();
+                this.lastHandshakeAt = Date.now();
+            }
+            await write(frame, guard);
+            guard();
+        };
+        return {
+            check,
+            send: async (frame) => {
+                const guard = () => {
+                    check();
+                    if (purpose === "recovery") refuse("Recovery cannot start tools or change settings.");
+                    if (store.snapshot.error !== null) throw store.snapshot.error;
+                    if (purpose === "setting") assertAvailable(true);
+                };
+                await sendFrame(frame, guard);
+            },
+            sendStop: (frame) => sendFrame(frame),
+            refreshInfo: async () => {
+                check();
+                const answered = await this.askInfo(check, (frame) => write(frame));
+                check();
+                return answered;
+            },
+            assertPourPreflight: (source) => {
+                check();
+                if (purpose !== "pour") refuse("Only a fresh pour session can prepare a pour.");
+                if (store.snapshot.error !== null) throw store.snapshot.error;
+                assertAvailable(true);
+                // The caller supplies a qualified actual-source reading. The
+                // info frame's waterFeed field is not that qualification.
+                if (source !== "tap" && (source !== "tank" || !this.infoIsFresh()
+                    || this.info?.waterEnough !== true || this.waterPresent === false)) {
+                    refuse("A pour needs a known available water supply.");
+                }
+            },
+            reserve: () => {
+                check();
+                if (purpose !== "grind" && purpose !== "pour") refuse("Only grind or pour can reserve a possible start.");
+                assertAvailable(true);
+                store.reserve({version: 1, ...pinned, tool: purpose as "grind" | "pour"});
+                check();
+            },
+            clearRecovery: (proof) => {
+                check();
+                store.clear(proof);
+            },
+            onInvalidated: (listener) => {
+                listeners.add(listener);
+                if (failure !== null) listener(failure);
+                return () => { listeners.delete(listener); };
+            },
+            release: () => {
+                if (released) return;
+                invalidate(new ControlOperationError("The control session was released."));
+                released = true;
+                listeners.clear();
+                if (this.controlSession?.token === token) this.controlSession = null;
+                this.announceLink();
+            }
+        };
+    }
 
     installSlotDatabase(store: SlotDatabase): void {
         if (this.slotStore !== undefined && this.slotStore !== store) {
@@ -337,9 +542,13 @@ export default class Machine {
         if (this.backgrounded) this.slotSession?.invalidate(
             new Error("Easy Mode writing stopped because the app entered the background.")
         );
+        if (this.backgrounded) this.controlSession?.invalidate(
+            new ControlOperationError("Machine controls stopped because the app entered the background.")
+        );
     }
 
     assertCanForgetDevice(deviceId: string): void {
+        if (this.controlBlocker !== null) throw this.controlBlocker;
         if (this.slotStore === undefined) return;
         if (this.slotStore.read(deviceId).journal !== null
             || (this.slotSession !== null && this.slotIdentity?.deviceId === deviceId)) {
@@ -354,6 +563,7 @@ export default class Machine {
     }
 
     private assertOrdinaryOperation(): void {
+        if (this.controlBlocker !== null) throw this.controlBlocker;
         const ids = [this.connectedId, this.transport.connectedDeviceId];
         if (this.slotSession !== null || ids.some((id) => id != null
             && this.slotStore?.read(id).journal != null)) {
@@ -362,6 +572,7 @@ export default class Machine {
     }
 
     acquireSlotSession(identity: SlotIdentity, options?: SlotAcquireOptions): SlotSession {
+        if (this.controlBlocker !== null) throw this.controlBlocker;
         if (this.slotStore === undefined) throw new Error("Install the shared Easy Mode database first.");
         if (this.backgrounded) throw new Error("Easy Mode writing is unavailable in the background.");
         const actual = this.slotIdentity;
@@ -721,6 +932,10 @@ export default class Machine {
     get advertisedName(): string { return this.transport.advertisedName; }
 
     async connect(id: string): Promise<void> {
+        const recoveryTarget = this.controlRecoveryTarget;
+        if (recoveryTarget !== null && recoveryTarget !== id) {
+            throw new ControlOperationError("Connect only to the machine with pending control recovery.");
+        }
         this.slotSession?.invalidate(new Error("Easy Mode connection was replaced."));
         this.forget();
         const generation = this.generation;
@@ -925,22 +1140,32 @@ export default class Machine {
         }
     }
 
-    private async askInfo(): Promise<boolean> {
+    private async askInfo(check?: () => void, write?: (frame: Uint8Array) => Promise<void>): Promise<boolean> {
+        check?.();
         const generation = this.generation;
         const infoBeforeRequest = this.info;
         // Listening before the handshake, not after: the info can arrive
         // inside the write, since the radio delivers on its own thread.
         const answered = this.waitForInfo();
         try {
-            await this.shakeHands();
+            if (write === undefined) await this.shakeHands();
+            else {
+                await write(buildType1(8100, [185, 1]));
+                check?.();
+                this.lastHandshakeAt = Date.now();
+            }
         } catch (error) {
+            if (check !== undefined) throw error;
             if (generation !== this.generation) throw error;
             // A handshake the radio would not carry is not a reason to abandon
             // what the caller was doing. The brew decides on what it last
             // heard, and fails on its own first frame if the radio is gone.
             return false;
         }
-        return await answered || this.info !== infoBeforeRequest;
+        check?.();
+        const result = await answered || this.info !== infoBeforeRequest;
+        check?.();
+        return result;
     }
 
     async disconnect(): Promise<void> {
@@ -1004,6 +1229,7 @@ export default class Machine {
     }
 
     private async writeFrame(frame: Uint8Array, check?: () => void): Promise<void> {
+        check?.();
         const generation = this.generation;
         // The MTU the radio actually granted, which on Android may be the
         // 20-byte floor. A recipe blob does not fit in that, and a write that
@@ -1021,9 +1247,14 @@ export default class Machine {
         // account we have of what actually reached the machine, and a line
         // written before the radio has accepted the frame says a frame was
         // sent when the write is about to throw.
-        await this.transport.write(frame);
-        if (generation !== this.generation) throw new Error("The machine connection changed during the write.");
+        try {
+            await this.transport.write(frame);
+        } catch (error) {
+            check?.();
+            throw error;
+        }
         check?.();
+        if (generation !== this.generation) throw new Error("The machine connection changed during the write.");
         // A pause reports the same ARMED state a loaded recipe does, so the
         // only thing that can tell them apart is having sent one. Read off the
         // bytes here rather than tracked by a caller, because the machine
@@ -1210,6 +1441,9 @@ export default class Machine {
      * offers nothing, because the dose is already spent.
      */
     brewBlock(recipe: Recipe): BrewBlock | null {
+        if (this.controlBlocker !== null) {
+            return {kind: "busy", message: this.controlBlocker.message};
+        }
         if (!this.isConnected()) {
             return {kind: "notConnected", message: "The machine is not connected."};
         }
@@ -1995,6 +2229,7 @@ export default class Machine {
     }
 
     private forget(): void {
+        this.controlSession?.invalidate(new ControlOperationError("The control link was lost. Recovery is retained."));
         ++this.generation;
         ++this.sequence;
         this.ordinaryOperations.clear();

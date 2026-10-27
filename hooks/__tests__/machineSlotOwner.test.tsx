@@ -3,7 +3,7 @@ import {AppState, type AppStateStatus} from "react-native";
 import {act, fireEvent, renderHook, screen} from "@testing-library/react-native";
 import {renderWithProviders} from "@/test-utils/render";
 import {FRAME_GAP_MS} from "@/constants/machine";
-import {useMachine, sharedMachine, __resetSharedMachine} from "@/hooks/useMachine";
+import {useMachine, sharedMachine, __resetSharedMachine, startMachineLink} from "@/hooks/useMachine";
 import {sharedSlotDatabase, useEasyModeSlots} from "@/hooks/useEasyModeSlots";
 import {sharedSettings} from "@/hooks/useSetting";
 import {LiveBrewProvider, useLiveBrew} from "@/hooks/useLiveBrew";
@@ -20,6 +20,7 @@ import EasyModeScreen from "@/app/easyMode";
 import {teaProbeSnapshot} from "@/library/slots/teaSlotCandidate";
 import {restoreTeaSlotOriginal, teaProbeStatus, writeTeaSlotProbe} from "@/library/slots/teaSlotProbe";
 import {installMachineSlotPort} from "@/library/slots/machineSlotPort";
+import {ControlOperationError} from "@/library/machine/errors";
 
 jest.mock("react-native-ble-manager", () => ({__esModule: true, default: {}}));
 jest.mock("@/library/machine/Transport", () => ({
@@ -116,6 +117,8 @@ beforeEach(() => {
         return {remove: () => { changes.delete(handler); }};
     });
     sharedSettings().set("machineDeviceId", "one");
+    sharedSettings().set("savedMachines", "");
+    sharedSettings().set("machineControlRecovery", "");
     sharedSettings().set("machineAutoStart", false);
     sharedSettings().set("bypassTempEncoding", "scaled");
 });
@@ -155,6 +158,62 @@ async function connect() {
     await jest.advanceTimersByTimeAsync(2000);
     await connecting;
 }
+
+it("restores control recovery before exposing the shared owner and pins startup and foreground to it", async () => {
+    const marker = {version: 1, deviceId: "recover", serial: "J15ABC123456", tool: "grind"};
+    sharedSettings().set("machineDeviceId", "");
+    sharedSettings().set("machineControlRecovery", JSON.stringify(marker));
+    const machine = sharedMachine();
+    expect(machine.controlBlocker).toBeInstanceOf(ControlOperationError);
+    expect(mockRadio.sent).toEqual([]);
+    startMachineLink();
+    await jest.advanceTimersByTimeAsync(2000);
+    await flush();
+    expect(mockRadio.connectedTo).toBe("recover");
+    expect(mockRadio.scans).toHaveLength(0);
+    sharedSettings().set("machineDeviceId", "other");
+    await act(async () => { changes.forEach((handler) => handler("background")); await flush(); });
+    expect(mockRadio.connectedTo).toBeNull();
+    expect(machine.controlBlocker).not.toBeNull();
+    await act(async () => {
+        changes.forEach((handler) => handler("active"));
+        await jest.advanceTimersByTimeAsync(2000);
+        await flush();
+    });
+    expect(mockRadio.connectedTo).toBe("recover");
+    expect(mockRadio.scans).toHaveLength(0);
+    const {result} = await renderHook(() => useMachine());
+    expect(result.current.changeBlocker).toBeTruthy();
+    await expect(machine.send(buildType1(40521))).rejects.toBeInstanceOf(ControlOperationError);
+});
+
+it("surfaces malformed control recovery without startup or foreground fallback", async () => {
+    sharedSettings().set("machineControlRecovery", "broken");
+    const {result} = await renderHook(() => useMachine());
+    expect(result.current.error).toMatch(/recovery.*invalid/i);
+    startMachineLink();
+    await jest.advanceTimersByTimeAsync(2000);
+    expect(mockRadio.sent).toEqual([]);
+    expect(mockRadio.scans).toHaveLength(0);
+});
+
+it("resets the shared control owner and subscriptions without clearing its durable reservation", async () => {
+    const original = sharedMachine();
+    await connect();
+    mockRadio.emit(status(MACHINE_STATE.IDLE));
+    const lease = original.acquireControlSession(original.slotIdentity!, "grind");
+    lease.reserve();
+    const marker = sharedSettings().get("machineControlRecovery");
+    __resetSharedMachine();
+    expect(changes.size).toBe(0);
+    const replacement = sharedMachine();
+    expect(replacement).not.toBe(original);
+    expect(changes.size).toBe(1);
+    expect(replacement.controlRecovery?.marker?.deviceId).toBe("one");
+    expect(sharedSettings().get("machineControlRecovery")).toBe(marker);
+    await expect(lease.refreshInfo()).rejects.toBeInstanceOf(ControlOperationError);
+    lease.release();
+});
 
 it("installs the durable restart reservation before the shared owner can connect or mutate", async () => {
     const store = journal();

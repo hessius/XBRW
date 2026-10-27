@@ -19,8 +19,10 @@ import Machine, {
 } from "@/library/machine/Machine";
 import {asMachineModel, type MachineModel} from "@/library/machine/machineModel";
 import type {Settings} from "@/library/Settings";
+import {ControlRecoveryStore} from "@/library/machine/controlRecovery";
 import {
     BluetoothPermissionError,
+    ControlOperationError,
     NoSavedMachineError,
     RadioUnavailableError,
     SlotOperationError,
@@ -62,10 +64,17 @@ export type LinkStatus = "idle" | "disconnected" | "connecting" | "connected" | 
 let shared: Machine | undefined;
 let sharedPort: SlotPort = unavailableSlotPort;
 let stopSharedLifecycle: (() => void) | undefined;
+let stopSharedControl: (() => void) | undefined;
+let stopSharedReadings: (() => void) | undefined;
 
 export function sharedMachine(): Machine {
     if (shared === undefined) {
         const machine = new Machine(new BleTransport());
+        const settings = sharedSettings();
+        stopSharedControl = machine.installControlRecovery(new ControlRecoveryStore({
+            read: () => settings.get("machineControlRecovery"),
+            write: (value) => settings.set("machineControlRecovery", value)
+        }));
         sharedPort = installMachineSlotPort(machine, sharedSlotDatabase());
         stopSharedLifecycle = holdLinkAcrossAppState(machine, () => openLink(machine, settingsStore()));
         // Whenever the machine describes itself, keep its serial against the
@@ -77,7 +86,7 @@ export function sharedMachine(): Machine {
         // Link events are frequent (every console note is one), so the pair
         // last kept is remembered and the store is only read when it changes.
         let kept = "";
-        machine.onLink(() => {
+        stopSharedReadings = machine.onLink(() => {
             const identity = machine.slotIdentity;
             if (identity?.serial == null) return;
             const pair = `${identity.deviceId}|${identity.serial}`;
@@ -369,9 +378,9 @@ export async function connectRememberedMachine(
     ensurePermission: () => Promise<BluetoothPermissionResult> = ensureBluetoothPermission,
     options: RetryOptions = {}
 ): Promise<void> {
-    if (store.rememberedId() === "") return;
-    machine.note("launch — connecting to the remembered machine");
     try {
+        if (machine.controlRecoveryTarget === null && store.rememberedId() === "") return;
+        machine.note("launch — connecting to the remembered or recovery machine");
         await openLink(machine, store, ensurePermission, options);
     } catch {
         // Deliberately swallowed. See above.
@@ -397,7 +406,13 @@ export function startMachineLink(): void {
     // different reason: building the shared machine builds the BLE manager,
     // which is enough on its own to put a "turn Bluetooth on" alert in front of
     // somebody who has never paired anything and never will.
-    if (store.rememberedId() === "") return;
+    if (store.rememberedId() === "") {
+        try {
+            if (sharedSettings().get("machineControlRecovery") === "") return;
+        } catch {
+            // Construct the owner so its recovery-store error stays visible.
+        }
+    }
     void connectRememberedMachine(sharedMachine(), store);
 }
 
@@ -408,6 +423,10 @@ export function __resetSharedMachine(): void {
     scanQueue = Promise.resolve();
     stopSharedLifecycle?.();
     stopSharedLifecycle = undefined;
+    stopSharedControl?.();
+    stopSharedControl = undefined;
+    stopSharedReadings?.();
+    stopSharedReadings = undefined;
     shared = undefined;
     sharedPort = unavailableSlotPort;
 }
@@ -424,7 +443,16 @@ export async function openLink(
     ensurePermission: () => Promise<BluetoothPermissionResult> = ensureBluetoothPermission,
     options: LinkOptions = {}
 ): Promise<void> {
-    if (machine.isConnected()) return;
+    const recoveryTarget = machine.controlRecoveryTarget;
+    if (recoveryTarget !== null && options.target !== undefined && options.target !== recoveryTarget) {
+        throw new ControlOperationError("Recover the uncertain control operation before changing machines.");
+    }
+    if (machine.isConnected()) {
+        if (recoveryTarget !== null && machine.linkedDeviceId !== recoveryTarget) {
+            throw new ControlOperationError("The connected device is not the control recovery device.");
+        }
+        return;
+    }
     const startedWith = store.rememberedId();
     // Outside the retrying on purpose. Waiting fourteen seconds to be told the
     // app needs permission it has already been denied helps nobody.
@@ -443,7 +471,7 @@ export async function openLink(
     // 2. A machine picked by hand this session.
     // 3. One scan, which prefers the machine in use when it is heard and
     //    otherwise follows the priority order.
-    let target = options.target;
+    let target = recoveryTarget ?? options.target;
     const saved = target === undefined ? store.savedMachines?.() ?? [] : [];
     if (saved.length >= 2) {
         const active = store.rememberedId();
@@ -463,12 +491,15 @@ export async function openLink(
     let lastFailure: Error | null = null;
     for (const delay of delays) {
         if (delay > 0) await wait(delay);
+        if (machine.controlRecoveryTarget !== recoveryTarget) {
+            throw new ControlOperationError("The control recovery target changed while connecting.");
+        }
         // The retrying takes the better part of fifteen seconds. Somebody who
         // gives up on it and presses "forget this machine" has said what they
         // want, and connecting anyway would be the app arguing with them. The
         // same goes for picking another machine meanwhile, which moves the
         // active machine rather than emptying it: hence "changed", not "empty".
-        if (startedWith !== "" && store.rememberedId() !== startedWith) {
+        if (recoveryTarget === null && startedWith !== "" && store.rememberedId() !== startedWith) {
             throw new WrongMachineError("Connecting was cancelled. The machine selection changed.");
         }
         if (saved.length >= 2 && !store.savedMachines?.().some(entry => entry.id === target)) {
@@ -685,6 +716,7 @@ async function attemptLink(machine: Machine, store: LinkStore, target?: string):
  * too, which `assertCanForgetDevice` already knows how to say.
  */
 export function machineChangeBlocker(machine: Machine, activeId: string): string | null {
+    if (machine.controlBlocker !== null) return machine.controlBlocker.message;
     if (isActiveBrewPhase(machine.phase) || machine.phase.name === "lostContact") {
         return "A brew is running. Stop it or let it finish before changing machines.";
     }
@@ -693,7 +725,7 @@ export function machineChangeBlocker(machine: Machine, activeId: string): string
         if (actual !== null) machine.assertCanForgetDevice(actual.deviceId);
         if (activeId !== "") machine.assertCanForgetDevice(activeId);
     } catch (failure) {
-        if (failure instanceof SlotOperationError) return failure.message;
+        if (failure instanceof SlotOperationError || failure instanceof ControlOperationError) return failure.message;
         throw failure;
     }
     return null;
@@ -974,7 +1006,7 @@ export function useMachine(injected?: Machine, options: MachineOptions = {}): Ma
             }
             machine.assertCanForgetDevice(id);
         } catch (failure) {
-            if (!(failure instanceof SlotOperationError)) throw failure;
+            if (!(failure instanceof SlotOperationError) && !(failure instanceof ControlOperationError)) throw failure;
             setError(failure.message);
             notify({tone: "error", message: failure.message});
             return false;
@@ -1014,7 +1046,8 @@ export function useMachine(injected?: Machine, options: MachineOptions = {}): Ma
 
     return {
         machine, slotPort: injected === undefined ? sharedPort : unavailableSlotPort,
-        status, error, remembered, connect, forget, forgetMachine, choose, add, machines,
+        status, error: machine.controlBlocker?.message ?? error,
+        remembered, connect, forget, forgetMachine, choose, add, machines,
         keepMachineInUse,
         changeBlocker: machineChangeBlocker(machine, remembered),
         canOpenSettings,
