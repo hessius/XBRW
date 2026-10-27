@@ -1,8 +1,8 @@
 # Machine Tools and Settings Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use `executing-plans` to implement
-> this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-> Do not dispatch subagents or compete for hardware unless explicitly requested.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use `subagent-driven-development`
+> to implement this plan task-by-task, as explicitly requested by the user.
+> Steps use checkbox (`- [ ]`) syntax for tracking. Do not compete for hardware.
 
 **Goal:** Implement #64 as a discoverable machine page with home shortcuts,
 dedicated Grind/Scale/Pour instruments and focused machine-setting editors.
@@ -21,10 +21,20 @@ No new native dependency is planned.
 
 ## Status, ownership and execution gates
 
-This is a plan, not an implementation or hardware qualification.
-The user authorized planning now and said the concurrent session will be idle
-before actual implementation. **Confirm it is idle before executing Task 1.**
-Do not infer that from the passage of time or from a clean checkout.
+This plan does not establish hardware qualification. The user subsequently
+confirmed the other session is idle and authorized subagent-driven
+implementation, a PR against develop and one Copilot review round, but not a
+merge or deployment.
+
+Implementation worktree: `/Users/jesperhessius/Dev/XBRW-machine-tools-20261027`.
+Implementation branch: `feat/machine-tools-settings-20261027`.
+Freshly fetched implementation base: `229511ffcb235b430585ce0bf9931213d5b196cc`.
+
+Task 1's evidence audit found no complete qualified standalone tool/settings
+profile, and the approved physical iPhone 17 Pro was unavailable. Software-only
+work may proceed behind explicit unavailable capabilities. Command encoders,
+production capability enablement and physical acceptance remain gated on real
+evidence; synthetic tests do not satisfy that gate.
 
 Design: `docs/superpowers/specs/2026-10-27-machine-tools-settings-design.md`.
 Planning base: `f24fc968a9f48232323145cfe99a6ba443f9d7c4`
@@ -717,6 +727,6 @@ owned by this task, with the documentation commit as its recovery pointer.
 Browser mockups live in this Copilot session's files and are illustrations;
 the committed spec is the portable design authority.
 
-Do not begin implementation until the concurrent owner is idle. Plan execution
-uses the serial inline approach unless the user explicitly requests otherwise.
-Hardware gates remain open until actual captures and device acceptance exist.
+The user confirmed the concurrent owner is idle and requested serial
+subagent-driven execution. Hardware gates remain open until actual captures
+and device acceptance exist.
