@@ -9,7 +9,7 @@ import {
     type SlotIndex, type SlotJournal, type SlotRecord
 } from "@/library/slots/slotModel";
 import {SLOT_INTEGRATION_BLOCK} from "@/library/slots/slotWriter";
-import {slotSourceRecipe} from "@/library/slots/slotSource";
+import {slotSourceRecipe, slotRecipeProblem as recipeProblem} from "@/library/slots/slotSource";
 import {useBottomInset} from "@/hooks/useBottomInset";
 import type {SlotAttempt} from "@/hooks/useEasyModeSlots";
 import {useLiveBrewBarGuard} from "@/hooks/useLiveBrewBarGuard";
@@ -146,15 +146,6 @@ export function emptySlotsMessage(drafts: SlotRecord["drafts"]): string | null {
         : `slots ${missing.slice(0, -1).join(", ")} and ${missing[missing.length - 1]}`;
     return `Choose a recipe for ${slots} before writing. The first write needs all three. `
         + "After that you can change one at a time.";
-}
-
-function recipeProblem(recipe: Recipe): string | null {
-    try {
-        snapshotRecipe(recipe);
-        return null;
-    } catch (error) {
-        return error instanceof Error ? error.message : String(error);
-    }
 }
 
 export type EasyModeSlotsProps = {

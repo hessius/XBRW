@@ -512,3 +512,14 @@ Explicit WRITE TO MACHINE remains authoritative. #275's immediate-write
 behavior is deferred under the approved recommendation, not enabled by
 assignment. Physical assignment/write/recovery checks remain release gates;
 this identity repair does not resolve #251's stale-loaded-recipe report.
+### WRITE asks Easy Mode slot or NFC card
+
+Preserves #273's ancestry. With a machine remembered, the editor's WRITE opens a
+small WRITE TO sheet: Easy Mode slot (the existing Assign to Easy Mode, which
+saves an unsaved recipe first) or NFC card (the existing card write, bypass
+question included). With no machine WRITE writes the card straight away as
+before. WRITE's spoken name with a machine is "Write to Easy Mode or card".
+Each destination has its own eligibility and visible refusal reason.
+BLE-valid fine grinds and fractional ratios can reach Easy Mode without
+enabling an invalid NFC write. Unsupported bypass cannot be assigned or saved
+through this entry. The existing more-menu action shares the slot preflight.

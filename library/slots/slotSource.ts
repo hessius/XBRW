@@ -2,6 +2,15 @@ import {contentPrint, heldByShare} from "@/library/importRefresh";
 import Recipe from "@/library/Recipe";
 import {snapshotRecipe, snapshotStatus, type SlotSnapshot} from "@/library/slots/slotModel";
 
+export function slotRecipeProblem(recipe: Recipe): string | null {
+    try {
+        snapshotRecipe(recipe);
+        return null;
+    } catch (error) {
+        return error instanceof Error ? error.message : String(error);
+    }
+}
+
 /**
  * Keeping an Easy Mode slot linked to the library recipe it came from.
  *
