@@ -399,6 +399,31 @@ describe("the device-local one-tap placement experiment", () => {
         expect(mockBack).not.toHaveBeenCalled();
     });
 
+    it.each(["disconnect", "serial change"])("restores manual controls after confirmed placement and %s", async change => {
+        changedDrafts();
+        mockWriteTo.mockImplementation(async () => {
+            const drafts = mockRecord.drafts;
+            mockRecord = {...mockRecord, written: {at: 1, slots: [drafts[0]!, drafts[1]!, drafts[2]!]}};
+            mockAttempt = {deviceId: "one", serial: "serial", operation: "write", status: "success"};
+        });
+        const view = await renderWithProviders(<EasyModeScreen/>);
+        await fireEvent.press(screen.getByRole("button", {name: label("B")}));
+        expect(await screen.findByText("SLOTS WRITTEN")).toBeTruthy();
+        if (change === "disconnect") mockConnected = false;
+        else mockSerial = "different-serial";
+        mockAttempt = null;
+        await view.rerender(<EasyModeScreen/>);
+        expect(screen.queryByText("SLOTS WRITTEN")).toBeNull();
+        expect(screen.queryByTestId("easy-mode-placing")).toBeNull();
+        expect(screen.getAllByText("CHANGE")).toHaveLength(3);
+        expect(screen.getByRole("button", {name: "Write all three slots"})).toBeTruthy();
+        await fireEvent.press(screen.getByRole("button", {name: "Change slot A recipe"}));
+        expect(await screen.findByLabelText("Search recipes")).toBeTruthy();
+        expect(mockWriteTo).toHaveBeenCalledTimes(1);
+        expect(mockNotify).not.toHaveBeenCalled();
+        expect(mockBack).not.toHaveBeenCalled();
+    });
+
     it("returns to the editor only after the confirmed write overlay has been shown", async () => {
         changedDrafts();
         mockWriteTo.mockImplementation(async () => {

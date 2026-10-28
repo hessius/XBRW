@@ -15,6 +15,9 @@ each device result. Software transports do not qualify BLE or NFC hardware.
   or REPLACE. The choice must write exactly once. Confirm the other two
   transmitted recipes are the phone's displayed drafts, including any unwritten
   changes; do not assume they match what was previously on the machine.
+- [ ] Before ADD or REPLACE, check the automatic pause protection warning with
+  that protection configured on the incoming recipe and on another slot draft.
+  Stored slots must never imply that the app's pause protection will run.
 - [ ] With a disconnected machine, verify the connecting message, navigation
   lock and duplicate-tap exclusion. A connection to another saved machine, a
   changed serial or a newly started brew must not send slot frames.
@@ -30,6 +33,9 @@ each device result. Software transports do not qualify BLE or NFC hardware.
   Preserve the immutable journal and uncertainty; show recovery, not a fresh
   write or an automatic retry. Confirm successful A/B/C receipts and final save
   before SLOTS WRITTEN, returning to the editor and announcing success.
+- [ ] Disconnect immediately after confirmed saving but before the success
+  overlay dismisses. The screen must restore usable manual controls rather
+  than leave inactive ADD or REPLACE buttons, with no automatic second write.
 - [ ] With the experiment enabled, recipe-menu assignment, scale changes,
   library updates and ordinary Easy Mode visits still require manual writing.
   Check long names, large text, narrow screens and spoken action labels.

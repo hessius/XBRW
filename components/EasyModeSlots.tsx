@@ -480,6 +480,9 @@ export default function EasyModeSlots({
                         <Text color={palette.dim}>
                             Choose a slot. Choosing ADD or REPLACE writes all three slot drafts to your machine.
                         </Text>
+                        {(overflow || overflowFor(incoming) !== undefined) && <Text color={palette.dim}>
+                            Stored slots do not run the app&apos;s automatic pause protection.
+                        </Text>}
                         {incomingProblem !== null && <Text color={palette.danger}>{incomingProblem}</Text>}
                         {placing.connecting && <Text accessibilityLiveRegion="polite" color={palette.dim}>
                             Connecting to your machine.

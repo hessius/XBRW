@@ -85,7 +85,7 @@ export function useEasyModePlacement({
 
     return {
         place,
-        placing: enabled && recipe !== undefined && current?.phase !== "manual",
+        placing: enabled && recipe !== undefined && current?.phase !== "manual" && current?.phase !== "confirmed",
         pending: current?.phase === "connecting" || current?.phase === "writing",
         connecting: current?.phase === "connecting",
         confirmed: current?.phase === "confirmed" && current.serial === serial,

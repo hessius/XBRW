@@ -21,13 +21,18 @@ disclose the all-three-slot effect; the other two drafts are not read back from
 the machine. Recipe-menu assignment, ordinary slot edits and the default
 explicit WRITE TO MACHINE flow are unchanged.
 
+Before selection, placement also warns when the incoming recipe or an existing
+draft uses automatic pause protection, which stored slots cannot run.
+
 A disconnected machine connects first. The operation must still belong to the
 intended device and serial; brewing, incomplete sets and recovery reservations
 retain their guards. Disabling the opt-in, changing machines or leaving the route
 during connection abandons the pending automatic write. An error keeps local
 choices and exposes the existing manual or recovery controls without retrying.
 Only confirmed save completion shows SLOTS WRITTEN, then returns to the editor
-with a success toast. Physical iOS/Android machine qualification remains open.
+with a success toast. A disconnect after confirmation restores manual controls
+if it interrupts the success overlay, without automatically writing again.
+Physical iOS/Android machine qualification remains open.
 
 ## Recipe card metadata and thumbnail reuse: pending integration
 
