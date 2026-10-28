@@ -14,12 +14,13 @@ export const WRITE_CHOOSER_HEIGHT = 36;
 type Props = {
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    /** Goes to Assign to Easy Mode, which saves an unsaved recipe first. */
+    /** Goes to Easy Mode, saving an unsaved recipe first. */
     onEasyMode: () => void;
     /** The editor's own card write, bypass question and all. */
     onCard: () => void;
     easyModeProblem?: string | null;
     cardProblem?: string | null;
+    oneTapEasyMode?: boolean;
 };
 
 /**
@@ -31,7 +32,7 @@ type Props = {
  * menu (`RecipeOverflowSheet`): a picked row closes the sheet, then acts.
  */
 export default function WriteChooserSheet({
-    open, onOpenChange, onEasyMode, onCard, easyModeProblem = null, cardProblem = null
+    open, onOpenChange, onEasyMode, onCard, easyModeProblem = null, cardProblem = null, oneTapEasyMode = false
 }: Props) {
     const {palette} = useAppearance();
     function pick(action: () => void) {
@@ -66,7 +67,9 @@ export default function WriteChooserSheet({
                    heightPercent={WRITE_CHOOSER_HEIGHT}>
             <ScrollView>
                 <YStack gap="$2" paddingBottom="$4">
-                    {row("Easy Mode slot", "brew", "Assign to A, B or C. Unsaved recipes are saved to your library first.",
+                    {row("Easy Mode slot", "brew", oneTapEasyMode
+                        ? "Choosing a slot writes all three slot drafts. Unsaved recipes are saved to your library first."
+                        : "Assign to A, B or C. Unsaved recipes are saved to your library first.",
                         onEasyMode, "write-choice-easy-mode", easyModeProblem)}
                     {row("NFC card", "write", "Write it to an xBloom recipe card.",
                         onCard, "write-choice-card", cardProblem)}

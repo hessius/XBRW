@@ -155,6 +155,7 @@ export type EasyModeSlotsProps = {
     /** The full library, not the active home search or shelf result. */
     recipes: readonly Recipe[];
     incoming?: Recipe;
+    placing?: {pending: boolean; connecting: boolean; onPlace: (index: SlotIndex) => void};
     header?: React.ReactNode;
     deviceId: string;
     serial?: string | null;
@@ -313,7 +314,7 @@ function StoppedWrite({journal, failure}: {journal: SlotJournal; failure: string
 }
 
 export default function EasyModeSlots({
-    record, recipes, incoming, header, deviceId, serial, connected, available, running, error,
+    record, recipes, incoming, placing, header, deviceId, serial, connected, available, running, error,
     attempt = null, onDismissSuccess, writeControlRef, busy = false, serialMatches = true,
     guardLiveBrewBar = false, teaProbe, teaProbeOpen = false, onTeaProbeOpenChange,
     onAssign, onSetScaleEnabled, onWrite, onRecover, onCancel, onDismissWrite, onRestoreOriginal,
@@ -351,12 +352,14 @@ export default function EasyModeSlots({
         : attempt?.deviceId === deviceId
             && (serial === undefined || attempt.serial === serial) ? attempt : null;
     const overlay = slotOverlayVisible(record, currentAttempt);
-    const active = running || (currentAttempt !== null
+    const active = running || placing?.pending === true || (currentAttempt !== null
         && ["writing", "saving", "cancelling"].includes(currentAttempt.status));
     const journal = record.journal;
     const probeStatus = teaProbeStatus(record);
     const showingWrittenProbe = probeStatus === "candidate-written";
-    const locked = journal !== null || active || deviceId === "" || overlay || record.experiment?.phase === "active";
+    const incomingProblem = incoming === undefined ? null : recipeProblem(incoming);
+    const locked = journal !== null || active || deviceId === "" || overlay || record.experiment?.phase === "active"
+        || (placing !== undefined && incomingProblem !== null);
     const pickerIndex = picker?.deviceId === deviceId && picker.model === machineModel
         && picker.serial === (serial ?? null) ? picker.index : null;
     const confirmationKind = confirmation?.deviceId === deviceId ? confirmation.kind : null;
@@ -404,7 +407,6 @@ export default function EasyModeSlots({
     const blocked = active || overlay || availability !== null;
     const restoreBlocked = active || overlay || !connected || !serialMatches || busy || !available;
     const dirty = unwrittenSlotCount(record);
-    const incomingProblem = incoming === undefined ? null : recipeProblem(incoming);
     const incomingKey = incoming === undefined ? null : JSON.stringify([deviceId, incoming]);
     const overflow = (journal?.slots ?? record.drafts).some(snapshot => snapshot !== null
         && overflowFor(new Recipe(undefined, snapshot.recipeJSON)) !== undefined);
@@ -471,7 +473,22 @@ export default function EasyModeSlots({
                             <DotMatrixText fontSize={14} color={palette.dim}>?</DotMatrixText>
                         </Button>
                     </XStack>
-                    {incoming !== undefined && usedIncoming !== incomingKey && (
+                    {placing !== undefined && incoming !== undefined && <YStack testID="easy-mode-placing"
+                        gap="$2" padding="$3" backgroundColor={palette.raised} borderRadius="$4">
+                        <DotMatrixText fontSize={12} color={palette.dim}>PLACING</DotMatrixText>
+                        <Text color={palette.text} fontSize={23} fontWeight="600">{incoming.displayName()}</Text>
+                        <Text color={palette.dim}>
+                            Choose a slot. Choosing ADD or REPLACE writes all three slot drafts to your machine.
+                        </Text>
+                        {(overflow || overflowFor(incoming) !== undefined) && <Text color={palette.dim}>
+                            Stored slots do not run the app&apos;s automatic pause protection.
+                        </Text>}
+                        {incomingProblem !== null && <Text color={palette.danger}>{incomingProblem}</Text>}
+                        {placing.connecting && <Text accessibilityLiveRegion="polite" color={palette.dim}>
+                            Connecting to your machine.
+                        </Text>}
+                    </YStack>}
+                    {placing === undefined && incoming !== undefined && usedIncoming !== incomingKey && (
                         <YStack gap="$2" padding="$3" backgroundColor={palette.raised} borderRadius="$4">
                             <Text color={palette.text}>Choose a slot for {incoming.displayName()}.</Text>
                             {incomingProblem !== null && <Text color={palette.danger}>{incomingProblem}</Text>}
@@ -516,10 +533,18 @@ export default function EasyModeSlots({
                             needsWrite={!showingWrittenProbe && slotNeedsWrite(record, slotIndex)} status={status}
                             recovery={false} locked={locked}
                             updateProblem={status === "edited" && current !== undefined ? recipeProblem(current) : null}
+                            action={placing !== undefined && incoming !== undefined ? {
+                                label: snapshot === null ? "ADD" : "REPLACE",
+                                accessibilityLabel: `Put ${incoming.displayName()} in slot ${name}`
+                            } : undefined}
                             changeRef={changeRefs[index]}
                             onSetScaleEnabled={onSetScaleEnabled === undefined ? undefined
                                 : enabled => onSetScaleEnabled(slotIndex, enabled)}
                             onChange={() => {
+                                if (placing !== undefined) {
+                                    placing.onPlace(slotIndex);
+                                    return;
+                                }
                                 focusOrigin.current = changeRefs[index];
                                 setSearch(""); setPicker({
                                     deviceId, index: slotIndex, model: machineModel, serial: serial ?? null
@@ -528,7 +553,7 @@ export default function EasyModeSlots({
                             onUpdate={() => { if (current !== undefined) onAssign(slotIndex, current); }}/>;
                     })}
                 </ScrollView>
-                {journal === null && <ScrollView testID="easy-mode-actions" nestedScrollEnabled
+                {journal === null && placing === undefined && <ScrollView testID="easy-mode-actions" nestedScrollEnabled
                     style={{flexGrow: 0, flexShrink: 1, maxHeight: "60%", backgroundColor: palette.base,
                         borderTopWidth: 1, borderTopColor: palette.line}}
                     contentContainerStyle={{padding: 14, gap: 10, paddingBottom: Math.max(bottomInset, 14)}}>

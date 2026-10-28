@@ -734,6 +734,32 @@ it("keeps applicable automatic protection limitations visible next to WRITE", as
         .getByText(/Stored slots do not run.*automatic pause protection/)).toBeOnTheScreen();
 });
 
+it.each(["incoming", "another draft", "none"])(
+    "shows applicable automatic protection limitations before placement: %s", async source => {
+        const options = props();
+        const incoming = coffee("Incoming");
+        const draft = coffee("Another draft");
+        const protectedRecipe = source === "incoming" ? incoming : draft;
+        if (source !== "none") {
+            protectedRecipe.cupType = CUP_TYPE.OTHER;
+            protectedRecipe.overflowProtection = {retainedGrams: 60, checkSeconds: 15};
+        }
+        const saved = snapshotRecipe(draft);
+        options.record.drafts = [saved, saved, saved];
+        const onPlace = jest.fn();
+        await renderWithProviders(<EasyModeSlots {...options} available incoming={incoming}
+            placing={{pending: false, connecting: false, onPlace}}/>);
+        const panel = within(screen.getByTestId("easy-mode-placing"));
+        const warning = /Stored slots do not run.*automatic pause protection/;
+        if (source === "none") expect(panel.queryByText(warning)).toBeNull();
+        else expect(panel.getByText(warning)).toBeOnTheScreen();
+        expect(screen.queryByTestId("easy-mode-actions")).toBeNull();
+        expect(onPlace).not.toHaveBeenCalled();
+        await fireEvent.press(screen.getByRole("button", {name: "Put Incoming in slot B"}));
+        expect(onPlace).toHaveBeenCalledWith(1);
+        expect(options.onWrite).not.toHaveBeenCalled();
+    });
+
 it("validates library updates instead of altering an invalid edited recipe", async () => {
     const options = props();
     const original = coffee("Saved snapshot");

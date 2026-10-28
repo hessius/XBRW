@@ -4,6 +4,45 @@ Package acceptance, integration and release qualification are separate.
 Record the exact app commit, native build, platform, machine and firmware for
 each device result. Software transports do not qualify BLE or NFC hardware.
 
+## One-tap Easy Mode writing (#275, Labs opt-in)
+
+- [ ] On physical iOS and Android, confirm the normal flow is unchanged on
+  upgrade and with the setting off. Unlock Labs with seven taps on About's
+  version, then enable Write Easy Mode slots on selection. A relaunch retains
+  it; hiding Labs leaves it enabled. Backup/restore must never transfer it.
+- [ ] From editor WRITE > Easy Mode slot, verify the saved library identity,
+  incoming recipe name and all-three-drafts disclosure before selecting ADD
+  or REPLACE. The choice must write exactly once. Confirm the other two
+  transmitted recipes are the phone's displayed drafts, including any unwritten
+  changes; do not assume they match what was previously on the machine.
+- [ ] Before ADD or REPLACE, check the automatic pause protection warning with
+  that protection configured on the incoming recipe and on another slot draft.
+  Stored slots must never imply that the app's pause protection will run.
+- [ ] With a disconnected machine, verify the connecting message, navigation
+  lock and duplicate-tap exclusion. A connection to another saved machine, a
+  changed serial or a newly started brew must not send slot frames.
+- [ ] During connection, disable the preference, change the selected machine
+  or leave the route where possible. A late connection must not revive the
+  automatic write. Toggling the preference or merely opening the page never
+  sends anything.
+- [ ] Check empty first-write slots, unsupported recipes, unavailable transport,
+  failed persistence and connection failure. Keep the assigned choice on the
+  phone only when assignment succeeded, explain the refusal, and leave the
+  existing manual flow available without a success toast.
+- [ ] Interrupt a real write using the existing safe recovery procedure.
+  Preserve the immutable journal and uncertainty; show recovery, not a fresh
+  write or an automatic retry. Confirm successful A/B/C receipts and final save
+  before SLOTS WRITTEN, returning to the editor and announcing success.
+- [ ] Disconnect immediately after confirmed saving but before the success
+  overlay dismisses. The screen must restore usable manual controls rather
+  than leave inactive ADD or REPLACE buttons, with no automatic second write.
+- [ ] With the experiment enabled, recipe-menu assignment, scale changes,
+  library updates and ordinary Easy Mode visits still require manual writing.
+  Check long names, large text, narrow screens and spoken action labels.
+
+Software regressions exercise both platforms with the existing writer and
+real SQLite storage. No physical machine pass is implied by these checks.
+
 ## Recipe metadata and photos (#262, #253)
 
 - [ ] On iOS and Android, check every recipe accent and appearance with dotted

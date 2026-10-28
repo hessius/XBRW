@@ -127,10 +127,20 @@ export default function SettingsScreen({settings}: Props) {
     const router = useSteadyRouter();
     const {ratingNoteOpen} = useLiveBrew();
     const [labsUnlocked, setLabsUnlocked] = useSetting("labsUnlocked", settings);
+    const [easyModeOneTapWrite, setEasyModeOneTapWrite] = useSetting("easyModeOneTapWrite", settings);
     const [beanconquerorHandoff, setBeanconquerorHandoff] =
         useSetting("beanconquerorHandoff", settings);
     const [bagExperimentEnabled, setBagExperimentEnabled] = useSetting("bagExperimentEnabled", settings);
     const [bagTracker, setBagTracker] = useSetting("bagTracker", settings);
+
+    function changeOneTapWrite(enabled: boolean) {
+        try {
+            setEasyModeOneTapWrite(enabled);
+        } catch (error) {
+            console.warn("Could not change Easy Mode writing.", error);
+            notify({tone: "error", message: "Could not change Easy Mode writing. Your setting has not changed."});
+        }
+    }
 
     function changeBagExperiment(enabled: boolean) {
         try {
@@ -817,6 +827,9 @@ export default function SettingsScreen({settings}: Props) {
                     honest reading of two separate switches. */}
                 {labsUnlocked && <>
                 <SettingsSection title="Labs">
+                    <SettingsToggleRow label="Write Easy Mode slots on selection"
+                        description="Experimental. From WRITE, choosing a slot writes all three slot drafts to your machine."
+                        value={easyModeOneTapWrite} onChange={changeOneTapWrite}/>
                     <SettingsActionRow label="Machine console"
                                        detail="Connection logs and diagnostic commands."
                                        onPress={() => router.push("/machine")}/>

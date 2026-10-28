@@ -7,6 +7,33 @@ merged wholesale. Issue #249 records source heads, decisions and integration.
 The shipped 2.1.0 ledger retains its historical gates and now records the
 verified release/source-reconciliation chronology.
 
+## One-tap Easy Mode writing: Labs opt-in, pending integration
+
+The limited #275 adaptation adds Labs > Write Easy Mode slots on selection,
+off by default and excluded from backups. Unlock Labs by tapping the version
+on About seven times. Hiding Labs does not disable an enabled experiment.
+
+Only the editor's WRITE > Easy Mode slot uses this preference. On, the editor
+still saves an unsaved recipe first, then asks explicitly where to put it.
+ADD or REPLACE assigns the chosen draft and writes all three slot drafts through
+the existing journalled writer. Both the write chooser and placement screen
+disclose the all-three-slot effect; the other two drafts are not read back from
+the machine. Recipe-menu assignment, ordinary slot edits and the default
+explicit WRITE TO MACHINE flow are unchanged.
+
+Before selection, placement also warns when the incoming recipe or an existing
+draft uses automatic pause protection, which stored slots cannot run.
+
+A disconnected machine connects first. The operation must still belong to the
+intended device and serial; brewing, incomplete sets and recovery reservations
+retain their guards. Disabling the opt-in, changing machines or leaving the route
+during connection abandons the pending automatic write. An error keeps local
+choices and exposes the existing manual or recovery controls without retrying.
+Only confirmed save completion shows SLOTS WRITTEN, then returns to the editor
+with a success toast. A disconnect after confirmation restores manual controls
+if it interrupts the success overlay, without automatically writing again.
+Physical iOS/Android machine qualification remains open.
+
 ## Recipe card metadata and thumbnail reuse: pending integration
 
 The #262 fix clears the pour-profile texture beneath card metadata with an
@@ -548,9 +575,10 @@ Easy Mode help now says only the first write needs all three recipes, since the
 phone keeps every written slot and resends the other two. With empty slots the
 WRITE reason names them ("Choose a recipe for slots B and C before writing").
 
-Explicit WRITE TO MACHINE remains authoritative. #275's immediate-write
-behavior is deferred under the approved recommendation, not enabled by
-assignment. Physical assignment/write/recovery checks remain release gates;
+Explicit WRITE TO MACHINE remains the default. The limited #275 Labs experiment
+above is a separate, default-off opt-in for the editor's WRITE flow only, not
+automatic writing after ordinary assignment.
+Physical assignment/write/recovery checks remain release gates;
 this identity repair does not resolve #251's stale-loaded-recipe report.
 ### WRITE asks Easy Mode slot or NFC card
 

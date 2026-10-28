@@ -296,6 +296,8 @@ export const DEFAULTS = {
      * feature deserves, and it survives a relaunch like any other preference.
      */
     beanconquerorHandoff: false,
+    /** Device-local experiment: only the editor's WRITE flow may place and write. */
+    easyModeOneTapWrite: false,
     /** Device-local opt-in; inventory survives when this is off. */
     bagExperimentEnabled: false,
     bagTracker: "auto" as BagTrackerSetting,
@@ -431,14 +433,14 @@ export type SettingKey = keyof typeof DEFAULTS;
  * in a backup or on this list, never quietly missing from both.
  */
 export type BackupExcluded =
-    "machineControlRecovery" | "machineDeviceId" | "savedMachines" | "lastCardRead" | "labsUnlocked" | "beanconquerorHandoff" |
+    "machineControlRecovery" | "machineDeviceId" | "savedMachines" | "lastCardRead" | "labsUnlocked" | "beanconquerorHandoff" | "easyModeOneTapWrite" |
     "bagExperimentEnabled" | "bagTracker" | "readyToBrewDismissedOn" |
     "machineModelString" | "machineName" | "ratingPromptDismissed" |
     "drawerHintLastShownAt" | "drawerHintShownCount" | "drawerHintManualOpens" |
     "drawerHintSignature" | "drawerHintLastSeenAt" | "roasterCatalogue" | "roasterAlerts";
 export const NOT_IN_BACKUP: readonly SettingKey[] = [
     "machineControlRecovery",
-    "machineDeviceId", "savedMachines", "lastCardRead", "labsUnlocked", "beanconquerorHandoff",
+    "machineDeviceId", "savedMachines", "lastCardRead", "labsUnlocked", "beanconquerorHandoff", "easyModeOneTapWrite",
     "bagExperimentEnabled", "bagTracker", "readyToBrewDismissedOn",
     "machineModelString", "machineName", "ratingPromptDismissed",
     "drawerHintLastShownAt", "drawerHintShownCount", "drawerHintManualOpens",
