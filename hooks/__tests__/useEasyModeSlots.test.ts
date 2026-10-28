@@ -73,6 +73,16 @@ it("context entry fills only an empty slot and full sets require replacement cho
     expect(store.read("one").drafts.every((slot) => slot?.sourceUuid === recipe.uuid)).toBe(true);
 });
 
+it("placing entry carries the saved recipe and intended machine without assigning an empty slot", () => {
+    const store = new SlotDatabase(createTestDatabase());
+    const recipe = coffee("Choose the slot");
+    expect(prepareEasyModeEntry(store, "one", recipe, {place: true})).toEqual({
+        pathname: "/easyMode",
+        params: {recipeJSON: JSON.stringify(recipe), place: "1", placeDeviceId: "one"}
+    });
+    expect(store.read("one").drafts).toEqual([null, null, null]);
+});
+
 it("notifies both screen and library subscribers after a durable assignment", async () => {
     const store = new SlotDatabase(createTestDatabase());
     const editor = await renderHook(() => useEasyModeSlots(
@@ -114,6 +124,8 @@ it("context entry during recovery opens the frozen batch without proposing a rep
         acknowledged: 0, inFlight: null, error: null
     });
     expect(prepareEasyModeEntry(store, "one", coffee("Replacement")))
+        .toEqual({pathname: "/easyMode"});
+    expect(prepareEasyModeEntry(store, "one", coffee("Replacement"), {place: true}))
         .toEqual({pathname: "/easyMode"});
     expect(store.read("one").drafts).toEqual([null, null, null]);
 });
@@ -160,6 +172,57 @@ it("holds the screen lock across a duplicate tap while lease acquisition is pend
         await first;
     });
     expect(editor.result.current.running).toBe(false);
+});
+
+it("writes to the same machine's newly connected identity and waits for save confirmation", async () => {
+    const store = new SlotDatabase(createTestDatabase());
+    for (const index of [0, 1, 2] as const) store.assign("one", index, snapshotRecipe(coffee()));
+    let confirm!: () => void;
+    const saved = new Promise<void>(resolve => { confirm = resolve; });
+    const acquire = jest.fn(async () => ({
+        sendAndConfirm: async () => {}, confirmSaved: () => saved, release: jest.fn()
+    }));
+    const editor = await renderHook(({serial}: {serial: string | null}) => useEasyModeSlots(
+        {deviceId: "one", serial}, {available: true, acquire}, store
+    ), {initialProps: {serial: null}});
+    let writing!: Promise<void>;
+    await act(async () => { writing = editor.result.current.writeTo({deviceId: "one", serial: "fresh"}); });
+    expect(acquire).toHaveBeenCalledWith({deviceId: "one", serial: "fresh"}, {restart: false});
+    expect(store.read("one").journal?.acknowledged).toBe(3);
+    expect(store.read("one").written).toBeNull();
+    await act(async () => {
+        await expect(editor.result.current.writeTo({deviceId: "one", serial: "fresh"}))
+            .rejects.toThrow(/current slot operation/);
+    });
+    expect(acquire).toHaveBeenCalledTimes(1);
+    await act(async () => { confirm(); await writing; });
+    await editor.rerender({serial: "fresh"});
+    expect(editor.result.current.attempt).toMatchObject({operation: "write", status: "success"});
+    expect(store.read("one").journal).toBeNull();
+    expect(store.read("one").written).not.toBeNull();
+});
+
+it("does not retarget a placing write or hide a writer refusal from its caller", async () => {
+    const store = new SlotDatabase(createTestDatabase());
+    for (const index of [0, 1, 2] as const) store.assign("one", index, snapshotRecipe(coffee()));
+    const acquire = jest.fn(async () => { throw new Error("Machine is busy"); });
+    const editor = await renderHook(() => useEasyModeSlots(
+        {deviceId: "one", serial: "original"}, {available: true, acquire}, store
+    ));
+    await act(async () => {
+        await expect(editor.result.current.writeTo({deviceId: "other", serial: "original"}))
+            .rejects.toThrow(/different machine/i);
+        await expect(editor.result.current.writeTo({deviceId: "one", serial: "different"}))
+            .rejects.toThrow(/different machine/i);
+    });
+    expect(acquire).not.toHaveBeenCalled();
+    await act(async () => {
+        await expect(editor.result.current.writeTo({deviceId: "one", serial: "original"}))
+            .rejects.toThrow("Machine is busy");
+    });
+    expect(editor.result.current.error).toBe("Machine is busy");
+    expect(editor.result.current.attempt?.status).toBe("error");
+    expect(store.read("one").journal).toBeNull();
 });
 
 it("exposes a dedicated tea probe action through the normal hook lock and supplied port", async () => {

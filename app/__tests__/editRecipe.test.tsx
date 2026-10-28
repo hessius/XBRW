@@ -2110,6 +2110,42 @@ describe("the action bar", () => {
 });
 
 describe("WRITE with a machine remembered", () => {
+    it("offers explicit slot placement from WRITE only when the Labs opt-in is enabled", async () => {
+        const deviceId = "chooser-labs-placement";
+        mockSettings = {machineDeviceId: deviceId, easyModeOneTapWrite: true};
+        await renderEditor({name: "Choose my slot"});
+        const uuid = JSON.parse(mockRecipeJSON as string).uuid;
+        await fireEvent.press(screen.getByLabelText(MACHINE_WRITE));
+        expect(screen.getByRole("button", {name: "Easy Mode slot"}).props.accessibilityHint)
+            .toMatch(/writes all three slot drafts/);
+        await waitFor(async () => {
+            if (mockPush.mock.calls.length === 0) {
+                await fireEvent.press(screen.getByRole("button", {name: "Easy Mode slot"}));
+            }
+            expect(mockPush).toHaveBeenCalledWith({
+                pathname: "/easyMode",
+                params: {recipeJSON: expect.any(String), place: "1", placeDeviceId: deviceId}
+            });
+        }, {timeout: SHEET_PRESS_TIMEOUT});
+        expect(JSON.parse(mockPush.mock.calls[0][0].params.recipeJSON).uuid).toBe(uuid);
+        expect(sharedSlotDatabase().read(deviceId).drafts).toEqual([null, null, null]);
+        expect(mockWriteCard).not.toHaveBeenCalled();
+    });
+
+    it("keeps the recipe menu manual even with the one-tap Labs opt-in enabled", async () => {
+        const deviceId = "menu-labs-placement";
+        mockSettings = {machineDeviceId: deviceId, easyModeOneTapWrite: true};
+        await renderEditor({name: "Manual assignment"});
+        await fireEvent.press(screen.getByLabelText("More"));
+        await waitFor(async () => {
+            if (mockPush.mock.calls.length === 0) {
+                await fireEvent.press(screen.getByRole("button", {name: "Assign to Easy Mode"}));
+            }
+            expect(mockPush).toHaveBeenCalledWith({pathname: "/easyMode"});
+        }, {timeout: SHEET_PRESS_TIMEOUT});
+        expect(sharedSlotDatabase().read(deviceId).drafts[0]?.name).toBe("Manual assignment");
+    });
+
     it("assigns a BLE-valid fine grind without enabling NFC writing", async () => {
         const deviceId = "chooser-fine-grind";
         rememberMachine(deviceId);

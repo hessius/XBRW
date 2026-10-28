@@ -10,6 +10,7 @@ import {useLiveBrew} from "@/hooks/useLiveBrew";
 import {useLiveBrewBarGuard} from "@/hooks/useLiveBrewBarGuard";
 import {useRecipeLibrary} from "@/hooks/useRecipeLibrary";
 import {incomingEasyModeRecipe, useEasyModeSlots} from "@/hooks/useEasyModeSlots";
+import {useEasyModePlacement} from "@/hooks/useEasyModePlacement";
 import EasyModeSlots, {slotWriteAvailability} from "@/components/EasyModeSlots";
 import {slotOverlayVisible} from "@/components/EasyModeWriteOverlay";
 import XbrwSheet from "@/components/XbrwSheet";
@@ -19,7 +20,8 @@ import DotMatrixText from "@/components/DotMatrixText";
 import FillLabel from "@/components/FillLabel";
 import {isActiveBrewPhase} from "@/library/machine/Machine";
 import {unavailableSlotPort} from "@/library/slots/slotWriter";
-import {unwrittenSlotCount} from "@/library/slots/slotModel";
+import {SLOT_NAMES, unwrittenSlotCount} from "@/library/slots/slotModel";
+import {notify} from "@/components/XbrwToast";
 import {STABLE_HOST} from "@/constants/views";
 import {sharedSettings, useSetting} from "@/hooks/useSetting";
 import {realLibraryDeps} from "@/library/roasterSync";
@@ -33,12 +35,15 @@ export default function EasyModeScreen() {
     const appearance = useAppearance();
     const {palette} = appearance;
     const {primary} = appearance;
-    const {recipeJSON} = useLocalSearchParams<{recipeJSON?: string | string[]}>();
+    const {recipeJSON, place, placeDeviceId} = useLocalSearchParams<{
+        recipeJSON?: string | string[]; place?: string; placeDeviceId?: string
+    }>();
     const navigation = useNavigation();
     const focused = useIsFocused();
     const [selectedModel] = useSetting("machineModel");
+    const [easyModeOneTapWrite] = useSetting("easyModeOneTapWrite");
     const machineModel = asMachineModel(selectedModel);
-    const {remembered, machine, status, slotPort} = useMachine();
+    const {remembered, machine, status, slotPort, connect} = useMachine();
     const {ratingNoteOpen} = useLiveBrew();
     const library = useRecipeLibrary();
     const actual = machine.slotIdentity ?? null;
@@ -51,6 +56,11 @@ export default function EasyModeScreen() {
         ?? (slots.record.experiment?.phase === "active" ? slots.record.experiment.serial : null);
     const serialMatches = retainedSerial == null || actual === null || retainedSerial === actual.serial;
     const [incoming] = useState(() => incomingEasyModeRecipe(recipeJSON));
+    const placement = useEasyModePlacement({
+        enabled: easyModeOneTapWrite && place === "1" && remembered !== "" && placeDeviceId === remembered
+            && deviceId === remembered && focused,
+        recipe: incoming.recipe, deviceId, serial, serialMatches, machine, connect, slots
+    });
     // Read once from the cached feeds: opening or searching the picker costs
     // no request. A recipe is fetched only when one is picked.
     const [roasterCatalogues] = useState(() => subscribedCatalogues(sharedSettings()));
@@ -61,7 +71,7 @@ export default function EasyModeScreen() {
     const writeRef = useRef<React.ComponentRef<typeof Button>>(null);
     const wasDepartureOpen = useRef(false);
     const sameMachine = leavePrompt?.deviceId === deviceId && leavePrompt.serial === serial;
-    const active = slots.running || (slots.attempt !== null && slots.attempt !== undefined
+    const active = placement.pending || slots.running || (slots.attempt !== null && slots.attempt !== undefined
         && ["writing", "saving", "cancelling"].includes(slots.attempt.status));
     const changed = unwrittenSlotCount(slots.record) > 0;
     // Never revive an old departure after a machine change or recovery operation.
@@ -171,13 +181,35 @@ export default function EasyModeScreen() {
                                        {incoming.error}
                                    </Text>
                                )}
+                               {placement.notice !== null && <Text testID="easy-mode-place-notice"
+                                   selectable accessibilityRole="alert" color={palette.danger} padding="$4">
+                                   {placement.notice}
+                               </Text>}
+                               {easyModeOneTapWrite && place === "1"
+                                   && (placeDeviceId !== remembered || deviceId !== remembered) && (
+                                   <Text accessibilityRole="alert" color={palette.danger} padding="$4">
+                                       This placement was opened for a different machine. Choose the machine and try again.
+                                   </Text>
+                               )}
                            </>}
-                           incoming={incoming.recipe} deviceId={deviceId} serial={serial}
+                           incoming={placement.placing || placement.index === null ? incoming.recipe : undefined}
+                           placing={placement.placing ? {
+                               pending: placement.pending, connecting: placement.connecting,
+                               onPlace: index => void placement.place(index)
+                           } : undefined}
+                           deviceId={deviceId} serial={serial}
                            connected={connected} busy={busy}
                            serialMatches={serialMatches} available={slots.available}
                            running={slots.running} error={slots.error}
                            guardLiveBrewBar={focused}
-                           attempt={slots.attempt} onDismissSuccess={slots.resetAttempt}
+                           attempt={slots.attempt} onDismissSuccess={() => {
+                               slots.resetAttempt();
+                               if (placement.confirmed && incoming.recipe !== undefined && placement.index !== null) {
+                                   notify({tone: "success",
+                                       message: `Written. ${incoming.recipe.displayName()} is in slot ${SLOT_NAMES[placement.index]}.`});
+                                   router.back();
+                               }
+                           }}
                            writeControlRef={writeRef}
                            onRestoreOriginal={() => void slots.restoreTeaOriginal()}
                            onDismissWrite={() => void slots.dismissWrite()}

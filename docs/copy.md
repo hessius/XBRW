@@ -423,8 +423,25 @@ Neither host adds a save action, and closing discards the adjustment.
 | `editor.writeChooser.title` | `components/WriteChooserSheet.tsx` | Sheet title after WRITE, machine remembered. | `WRITE TO` |
 | `editor.writeChooser.easyMode` | `components/WriteChooserSheet.tsx` | Row: go to Assign to Easy Mode. | `EASY MODE SLOT` |
 | `editor.writeChooser.easyMode.detail` | `components/WriteChooserSheet.tsx` | Line under the Easy Mode row, also its a11y hint. A destination refusal replaces both. | `Assign to A, B or C. Unsaved recipes are saved to your library first.` |
+| `editor.writeChooser.easyMode.oneTap` | `components/WriteChooserSheet.tsx` | Replaces the detail and hint only when the Labs opt-in is enabled. | `Choosing a slot writes all three slot drafts. Unsaved recipes are saved to your library first.` |
 | `editor.writeChooser.card` | `components/WriteChooserSheet.tsx` | Row: write an NFC card. | `NFC CARD` |
 | `editor.writeChooser.card.detail` | `components/WriteChooserSheet.tsx` | Line under the card row, also its a11y hint. | `Write it to an xBloom recipe card.` |
+
+### Easy Mode one-tap placement (Labs)
+
+This flow exists only after editor WRITE with the device-local opt-in enabled.
+It does not turn ordinary assignment into a machine write.
+
+| ID | Source | Context | Current text |
+|----|--------|---------|--------------|
+| `easyMode.placing.title` | `components/EasyModeSlots.tsx` | Above the incoming recipe name. | `PLACING` |
+| `easyMode.placing.detail` | `components/EasyModeSlots.tsx` | Before any slot action; refers to the phone's drafts, not read-back machine contents. | `Choose a slot. Choosing ADD or REPLACE writes all three slot drafts to your machine.` |
+| `easyMode.placing.action` | `components/EasyModeSlotCard.tsx` | Empty/occupied slot action while placing. | `ADD` / `REPLACE` |
+| `easyMode.placing.action.a11y` | `components/EasyModeSlots.tsx` | Spoken slot action. | `Put ${recipe} in slot ${slot}` |
+| `easyMode.placing.connecting` | `components/EasyModeSlots.tsx` | After a deliberate slot press, before connecting completes. | `Connecting to your machine.` |
+| `easyMode.placing.local` | `hooks/useEasyModePlacement.ts` | Prefix on failure, only after successful local assignment; followed by the reason. | `${recipe} is kept in slot ${slot} on this phone.` |
+| `easyMode.placing.wrongMachine` | `app/easyMode.tsx` | Placement entry no longer names the selected/connected machine. | `This placement was opened for a different machine. Choose the machine and try again.` |
+| `easyMode.placing.success` | `app/easyMode.tsx` | After save confirmation and the success overlay, returning to the editor. | `Written. ${recipe} is in slot ${slot}.` |
 
 ### Easy Mode cached roaster search
 
@@ -1352,6 +1369,9 @@ About. Neither has a duplicate shortcut in Settings.
 | `settings.deleteAll.keep` | `components/DeleteAllSheet.tsx:58` | Cancel button label. | `Keep my recipes` |
 | `settings.labs.handoff.label` | `app/settings.tsx` | Labs toggle for the Beanconqueror handoff. | `Send brews to Beanconqueror` |
 | `settings.labs.handoff.description` | `app/settings.tsx` | Why the toggle is off by default, in terms of what goes wrong if it is switched on too early. | `Needs a version of Beanconqueror that can read the link. Older ones will say they do not recognise it.` |
+| `settings.labs.easyMode.label` | `app/settings.tsx` | Device-local, default-off experiment. | `Write Easy Mode slots on selection` |
+| `settings.labs.easyMode.description` | `app/settings.tsx` | Disclosure before enabling. | `Experimental. From WRITE, choosing a slot writes all three slot drafts to your machine.` |
+| `settings.labs.easyMode.failed` | `app/settings.tsx` | Persistence failure leaves the prior preference unchanged. | `Could not change Easy Mode writing. Your setting has not changed.` |
 
 ### Backup / restore messages (`hooks/useBackup.ts`, `library/backup.ts`)
 

@@ -15,13 +15,15 @@ import type {StoredBrew} from "@/library/BrewDatabase";
 import type {LiveBrewSnapshot} from "@/hooks/useLiveBrew";
 import {accents} from "@/constants/colors";
 import {restoreTeaSlotOriginal, writeTeaSlotProbe} from "@/library/slots/teaSlotProbe";
+import {sharedSettings} from "@/hooks/useSetting";
 
 const mockAllRecipes = [coffee("Whole library recipe")];
 let mockRecord = emptySlotRecord();
-let mockParams: {recipeJSON?: string} = {};
+let mockParams: {recipeJSON?: string; place?: string; placeDeviceId?: string} = {};
 let mockRatingNoteOpen = false;
 let mockDeviceId = "one";
 let mockSerial = "serial";
+let mockActualDeviceId: string | null = null;
 let mockConnected = true;
 let mockBusy = false;
 let mockRunning = false;
@@ -36,6 +38,10 @@ const mockPrompt = {
     rate: jest.fn(), annotate: jest.fn(), dismiss: jest.fn(), refresh: jest.fn()
 };
 const mockWrite = jest.fn();
+const mockWriteTo = jest.fn();
+const mockConnect = jest.fn();
+const mockBack = jest.fn(() => mockRemove());
+const mockNotify = jest.fn();
 const mockSetScaleEnabled = jest.fn();
 const mockReset = jest.fn();
 const mockProbe = jest.fn();
@@ -83,16 +89,19 @@ jest.mock("expo-router", () => ({
     useLocalSearchParams: () => mockParams,
     useNavigation: () => mockNavigation,
     usePathname: () => mockFocused ? "/easyMode" : "/settings",
-    router: {push: mockPush, back: () => mockRemove(), canGoBack: () => true},
+    router: {push: mockPush, back: () => mockBack(), canGoBack: () => true},
     useRouter: () => ({push: mockPush, back: jest.fn()})
 }));
 jest.mock("@/hooks/useMachine", () => ({
     useMachine: () => ({
         remembered: mockDeviceId, status: mockConnected ? "connected" : "disconnected",
-        machine: {slotIdentity: mockConnected ? {deviceId: mockDeviceId, serial: mockSerial} : null,
+        connect: mockConnect,
+        machine: {get slotIdentity() {
+            return mockConnected ? {deviceId: mockActualDeviceId ?? mockDeviceId, serial: mockSerial} : null;
+        },
             info: {model: "X15", firmware: "V12.0D.500"},
             modelNumber: "X15", advertisedName: "XBLOOM",
-            phase: mockBusy ? {name: "pouring"} : undefined}
+            get phase() { return mockBusy ? {name: "pouring"} : undefined; }}
     })
 }));
 jest.mock("@/hooks/useEasyModeSlots", () => ({
@@ -102,10 +111,15 @@ jest.mock("@/hooks/useEasyModeSlots", () => ({
         available: mockAvailable, running: mockRunning, attempt: mockAttempt,
         resetAttempt: mockReset,
         setScaleEnabled: mockSetScaleEnabled,
-        assign: mockAssign, write: mockWrite, recover: jest.fn(), cancel: jest.fn(), dismissWrite: mockStopWrite,
+        assign: mockAssign, write: mockWrite, writeTo: mockWriteTo,
+        recover: jest.fn(), cancel: jest.fn(), dismissWrite: mockStopWrite,
         writeTeaProbe: mockProbe, restoreTeaOriginal: mockRestore, observeTeaProbe: mockObserve,
         writeSlotLab: mockLab, sendRecoveryProbe: mockRecoveryProbe, clearRecoveryProbe: mockClearRecovery
     })
+}));
+jest.mock("@/components/XbrwToast", () => ({
+    ...jest.requireActual("@/components/XbrwToast"),
+    notify: (...args: unknown[]) => mockNotify(...args)
 }));
 jest.mock("expo-sqlite", () => ({
     openDatabaseSync: () => jest.requireActual("@/test-utils/sqlite").createTestDatabase()
@@ -120,9 +134,13 @@ jest.mock("@/library/roasterSync", () => {
 
 beforeEach(() => {
     mockParams = {}; mockRatingNoteOpen = false; mockRecord = emptySlotRecord();
-    mockDeviceId = "one"; mockSerial = "serial"; mockConnected = true; mockBusy = false;
+    mockDeviceId = "one"; mockActualDeviceId = null; mockSerial = "serial"; mockConnected = true; mockBusy = false;
     mockRunning = false; mockAvailable = false; mockAttempt = null;
     mockDispatch.mockClear(); mockWrite.mockClear(); mockReset.mockClear();
+    mockWriteTo.mockReset(); mockWriteTo.mockResolvedValue(undefined);
+    mockConnect.mockReset(); mockConnect.mockImplementation(async () => { mockConnected = true; });
+    mockBack.mockClear(); mockNotify.mockClear();
+    sharedSettings().set("easyModeOneTapWrite", false);
     mockFocused = true; mockRun = null; mockPrompt.brew = null;
     mockPreventRemove.mockClear(); mockPush.mockClear(); mockDismiss.mockClear();
     mockPrompt.rate.mockClear(); mockPrompt.dismiss.mockClear();
@@ -130,7 +148,8 @@ beforeEach(() => {
     mockLab.mockClear(); mockRecoveryProbe.mockClear(); mockClearRecovery.mockClear();
     mockStopWrite.mockClear();
     mockSetScaleEnabled.mockClear();
-    mockAssign.mockClear(); mockRefresh.mockClear(); mockLibraryDeps = null;
+    mockAssign.mockReset(); mockAssign.mockImplementation(() => true);
+    mockRefresh.mockClear(); mockLibraryDeps = null;
     Object.defineProperty(global, "__DEV__", {value: dev});
     forgetLastMove();
 });
@@ -141,6 +160,261 @@ function changedDrafts() {
     mockRecord.drafts = [saved, saved, saved];
     mockAvailable = true;
 }
+
+describe("the device-local one-tap placement experiment", () => {
+    const placed = coffee("Placed recipe");
+    const label = (name: string) => `Put Placed recipe in slot ${name}`;
+
+    beforeEach(() => {
+        sharedSettings().set("easyModeOneTapWrite", true);
+        mockParams = {recipeJSON: snapshotRecipe(placed).recipeJSON, place: "1", placeDeviceId: "one"};
+        mockAssign.mockImplementation((index: unknown) => {
+            if (index !== 0 && index !== 1 && index !== 2) throw new Error("Invalid fixture slot");
+            const drafts: typeof mockRecord.drafts = [...mockRecord.drafts];
+            drafts[index] = snapshotRecipe(placed);
+            mockRecord = {...mockRecord, drafts};
+            return true;
+        });
+    });
+
+    it("names the recipe and warns about all three drafts before offering ADD or REPLACE", async () => {
+        await renderWithProviders(<EasyModeScreen/>);
+        expect(within(screen.getByTestId("easy-mode-placing")).getByText("Placed recipe")).toBeOnTheScreen();
+        expect(screen.getByText(/writes all three slot drafts/i)).toBeTruthy();
+        expect(screen.getAllByText("ADD")).toHaveLength(3);
+        expect(screen.queryByText(/Choose a slot for/i)).toBeNull();
+        expect(screen.queryByRole("button", {name: "Write all three slots"})).toBeNull();
+        expect(mockAssign).not.toHaveBeenCalled();
+        expect(mockConnect).not.toHaveBeenCalled();
+        expect(mockWriteTo).not.toHaveBeenCalled();
+    });
+
+    it("keeps forged placement routes manual while the opt-in is off", async () => {
+        sharedSettings().set("easyModeOneTapWrite", false);
+        changedDrafts();
+        await renderWithProviders(<EasyModeScreen/>);
+        expect(screen.queryByTestId("easy-mode-placing")).toBeNull();
+        expect(screen.getByRole("button", {name: "Write all three slots"})).toBeTruthy();
+        expect(mockWriteTo).not.toHaveBeenCalled();
+    });
+
+    it("does not turn ordinary Easy Mode visits into automatic writing", async () => {
+        mockParams = {};
+        changedDrafts();
+        await renderWithProviders(<EasyModeScreen/>);
+        expect(screen.queryByTestId("easy-mode-placing")).toBeNull();
+        expect(screen.getAllByText("CHANGE")).toHaveLength(3);
+        expect(mockWriteTo).not.toHaveBeenCalled();
+    });
+
+    it("does not send anything just because the opt-in becomes enabled", async () => {
+        sharedSettings().set("easyModeOneTapWrite", false);
+        changedDrafts();
+        await renderWithProviders(<EasyModeScreen/>);
+        await act(() => sharedSettings().set("easyModeOneTapWrite", true));
+        expect(screen.getByTestId("easy-mode-placing")).toBeTruthy();
+        expect(mockAssign).not.toHaveBeenCalled();
+        expect(mockConnect).not.toHaveBeenCalled();
+        expect(mockWriteTo).not.toHaveBeenCalled();
+    });
+
+    it("assigns the selected slot then writes once to that connected machine", async () => {
+        changedDrafts();
+        const otherDrafts = [mockRecord.drafts[0], mockRecord.drafts[2]];
+        await renderWithProviders(<EasyModeScreen/>);
+        expect(screen.getAllByText("REPLACE")).toHaveLength(3);
+        await fireEvent.press(screen.getByRole("button", {name: label("B")}));
+        await waitFor(() => expect(mockWriteTo).toHaveBeenCalledTimes(1));
+        expect(mockAssign).toHaveBeenCalledWith(1, expect.objectContaining({uuid: placed.uuid}));
+        expect(mockWriteTo).toHaveBeenCalledWith({deviceId: "one", serial: "serial"});
+        expect([mockRecord.drafts[0], mockRecord.drafts[2]]).toEqual(otherDrafts);
+        expect(mockConnect).not.toHaveBeenCalled();
+        expect(mockWrite).not.toHaveBeenCalled();
+    });
+
+    it("holds navigation and duplicate taps while connecting, then uses the newly reported serial", async () => {
+        changedDrafts();
+        mockConnected = false;
+        let finish!: () => void;
+        mockConnect.mockImplementation(() => new Promise<void>(resolve => { finish = resolve; }));
+        await renderWithProviders(<EasyModeScreen/>);
+        const button = screen.getByRole("button", {name: label("A")});
+        await fireEvent.press(button);
+        expect(screen.getByText("Connecting to your machine.")).toBeTruthy();
+        expect(mockWriteTo).not.toHaveBeenCalled();
+        await fireEvent.press(button);
+        expect(mockConnect).toHaveBeenCalledTimes(1);
+        expect((await departure()).preventDefault).toHaveBeenCalled();
+        expect(screen.queryByText("BEFORE YOU LEAVE")).toBeNull();
+        await act(async () => { mockConnected = true; mockSerial = "fresh-serial"; finish(); });
+        await waitFor(() => expect(mockWriteTo).toHaveBeenCalledWith({deviceId: "one", serial: "fresh-serial"}));
+    });
+
+    it("keeps a failed connection local and returns to explicit manual writing", async () => {
+        changedDrafts();
+        mockConnected = false;
+        mockConnect.mockRejectedValue(new Error("Machine not found"));
+        await renderWithProviders(<EasyModeScreen/>);
+        await fireEvent.press(screen.getByRole("button", {name: label("C")}));
+        expect(await screen.findByTestId("easy-mode-place-notice")).toHaveTextContent(/Machine not found/);
+        expect(screen.getByTestId("easy-mode-place-notice")).toHaveTextContent(/on this phone/);
+        expect(screen.queryByTestId("easy-mode-placing")).toBeNull();
+        expect(screen.getByRole("button", {name: "Write all three slots"})).toBeTruthy();
+        expect(mockWriteTo).not.toHaveBeenCalled();
+        expect(mockNotify).not.toHaveBeenCalled();
+    });
+
+    it("does not connect or write when the other two first-write slots are empty", async () => {
+        mockAvailable = true;
+        mockConnected = false;
+        await renderWithProviders(<EasyModeScreen/>);
+        await fireEvent.press(screen.getByRole("button", {name: label("A")}));
+        expect(await screen.findByTestId("easy-mode-place-notice")).toHaveTextContent(
+            /Choose a recipe for slots B and C before writing/);
+        expect(mockRecord.drafts[0]?.sourceUuid).toBe(placed.uuid);
+        expect(mockConnect).not.toHaveBeenCalled();
+        expect(mockWriteTo).not.toHaveBeenCalled();
+    });
+
+    it("refuses a connection that lands on another saved machine", async () => {
+        changedDrafts();
+        mockConnected = false;
+        mockConnect.mockImplementation(async () => { mockConnected = true; mockActualDeviceId = "other"; });
+        await renderWithProviders(<EasyModeScreen/>);
+        await fireEvent.press(screen.getByRole("button", {name: label("A")}));
+        await waitFor(() => expect(mockConnect).toHaveBeenCalledTimes(1));
+        expect(mockWriteTo).not.toHaveBeenCalled();
+        expect(mockNotify).not.toHaveBeenCalled();
+        expect(mockBack).not.toHaveBeenCalled();
+    });
+
+    it.each(["before", "during"] as const)("refuses a brew that starts %s connection", async timing => {
+        changedDrafts();
+        mockConnected = timing === "before";
+        mockBusy = timing === "before";
+        mockConnect.mockImplementation(async () => { mockConnected = true; mockBusy = true; });
+        await renderWithProviders(<EasyModeScreen/>);
+        await fireEvent.press(screen.getByRole("button", {name: label("B")}));
+        expect(await screen.findByTestId("easy-mode-place-notice")).toHaveTextContent(/brew/i);
+        expect(mockWriteTo).not.toHaveBeenCalled();
+        expect(mockConnect).toHaveBeenCalledTimes(timing === "before" ? 0 : 1);
+    });
+
+    it("does not claim a draft was kept when assignment fails", async () => {
+        changedDrafts();
+        mockAssign.mockReturnValue(false);
+        await renderWithProviders(<EasyModeScreen/>);
+        await fireEvent.press(screen.getByRole("button", {name: label("A")}));
+        expect(await screen.findByTestId("easy-mode-place-notice")).toHaveTextContent(/Could not assign/);
+        expect(screen.getByTestId("easy-mode-place-notice")).not.toHaveTextContent(/is kept/);
+        expect(mockWriteTo).not.toHaveBeenCalled();
+        expect(mockConnect).not.toHaveBeenCalled();
+    });
+
+    it("does not revive a pending write after the selected machine changes", async () => {
+        changedDrafts();
+        mockConnected = false;
+        let finish!: () => void;
+        mockConnect.mockImplementation(() => new Promise<void>(resolve => { finish = resolve; }));
+        const view = await renderWithProviders(<EasyModeScreen/>);
+        await fireEvent.press(screen.getByRole("button", {name: label("A")}));
+        mockDeviceId = "other";
+        await view.rerender(<EasyModeScreen/>);
+        await act(async () => { mockConnected = true; finish(); });
+        expect(mockWriteTo).not.toHaveBeenCalled();
+        expect(screen.getByText(/opened for a different machine/)).toBeTruthy();
+    });
+
+    it("does not revive a pending write after leaving the foreground route", async () => {
+        changedDrafts();
+        mockConnected = false;
+        let finish!: () => void;
+        mockConnect.mockImplementation(() => new Promise<void>(resolve => { finish = resolve; }));
+        const view = await renderWithProviders(<EasyModeScreen/>);
+        await fireEvent.press(screen.getByRole("button", {name: label("A")}));
+        mockFocused = false;
+        await view.rerender(<EasyModeScreen/>);
+        await act(async () => { mockConnected = true; finish(); });
+        expect(mockWriteTo).not.toHaveBeenCalled();
+    });
+
+    it("cancels the pending automatic write if the opt-in is disabled while connecting", async () => {
+        changedDrafts();
+        mockConnected = false;
+        let finish!: () => void;
+        mockConnect.mockImplementation(() => new Promise<void>(resolve => { finish = resolve; }));
+        await renderWithProviders(<EasyModeScreen/>);
+        await fireEvent.press(screen.getByRole("button", {name: label("A")}));
+        await act(() => sharedSettings().set("easyModeOneTapWrite", false));
+        await act(async () => { mockConnected = true; finish(); });
+        expect(mockWriteTo).not.toHaveBeenCalled();
+        expect(screen.queryByTestId("easy-mode-placing")).toBeNull();
+    });
+
+    it("cancels the pending automatic write when the route unmounts", async () => {
+        changedDrafts();
+        mockConnected = false;
+        let finish!: () => void;
+        mockConnect.mockImplementation(() => new Promise<void>(resolve => { finish = resolve; }));
+        const view = await renderWithProviders(<EasyModeScreen/>);
+        await fireEvent.press(screen.getByRole("button", {name: label("A")}));
+        await view.unmount();
+        await act(async () => { mockConnected = true; finish(); });
+        expect(mockWriteTo).not.toHaveBeenCalled();
+    });
+
+    it("leaves a refused write manual without a success toast or automatic retry", async () => {
+        changedDrafts();
+        mockWriteTo.mockRejectedValue(new Error("Save confirmation was not received"));
+        const view = await renderWithProviders(<EasyModeScreen/>);
+        await fireEvent.press(screen.getByRole("button", {name: label("A")}));
+        expect(await screen.findByTestId("easy-mode-place-notice")).toHaveTextContent(/Save confirmation/);
+        await view.rerender(<EasyModeScreen/>);
+        expect(mockWriteTo).toHaveBeenCalledTimes(1);
+        expect(screen.getByRole("button", {name: "Write all three slots"})).toBeTruthy();
+        expect(mockNotify).not.toHaveBeenCalled();
+        expect(mockBack).not.toHaveBeenCalled();
+    });
+
+    it("retains the recovery screen after an interrupted write instead of offering a fresh write", async () => {
+        changedDrafts();
+        mockWriteTo.mockImplementation(async () => {
+            const drafts = mockRecord.drafts;
+            mockRecord = {...mockRecord, journal: {
+                id: "interrupted", serial: "serial", frames: prepareSet(drafts),
+                slots: [drafts[0]!, drafts[1]!, drafts[2]!],
+                acknowledged: 1, inFlight: 1, error: "Connection lost during slot B"
+            }};
+            mockAttempt = {deviceId: "one", serial: "serial", operation: "write", status: "error"};
+            throw new Error("Connection lost during slot B");
+        });
+        const view = await renderWithProviders(<EasyModeScreen/>);
+        await fireEvent.press(screen.getByRole("button", {name: label("B")}));
+        expect(await screen.findByTestId("easy-mode-place-notice")).toHaveTextContent(/Connection lost/);
+        expect(screen.getByRole("button", {name: "Retry slot write"})).toBeTruthy();
+        expect(screen.queryByRole("button", {name: "Write all three slots"})).toBeNull();
+        await view.rerender(<EasyModeScreen/>);
+        expect(mockWriteTo).toHaveBeenCalledTimes(1);
+        expect(mockNotify).not.toHaveBeenCalled();
+        expect(mockBack).not.toHaveBeenCalled();
+    });
+
+    it("returns to the editor only after the confirmed write overlay has been shown", async () => {
+        changedDrafts();
+        mockWriteTo.mockImplementation(async () => {
+            const drafts = mockRecord.drafts;
+            mockRecord = {...mockRecord, written: {at: 1, slots: [drafts[0]!, drafts[1]!, drafts[2]!]}};
+            mockAttempt = {deviceId: "one", serial: "serial", operation: "write", status: "success"};
+        });
+        await renderWithProviders(<EasyModeScreen/>);
+        await fireEvent.press(screen.getByRole("button", {name: label("B")}));
+        expect(await screen.findByText("SLOTS WRITTEN")).toBeTruthy();
+        expect(mockBack).not.toHaveBeenCalled();
+        await waitFor(() => expect(mockBack).toHaveBeenCalledTimes(1), {timeout: 5000});
+        expect(mockNotify).toHaveBeenCalledWith({tone: "success", message: "Written. Placed recipe is in slot B."});
+        expect(mockReset).toHaveBeenCalled();
+    });
+});
 
 it("wires per-slot scale changes to the live hook handler", async () => {
     changedDrafts();

@@ -894,6 +894,7 @@ export default function EditRecipe(
     const [bagExperimentEnabled] = useSetting("bagExperimentEnabled");
     const [bagTracker] = useSetting("bagTracker");
     const [beanconquerorHandoff] = useSetting("beanconquerorHandoff");
+    const [easyModeOneTapWrite] = useSetting("easyModeOneTapWrite");
     const [rememberedMachine] = useSetting("machineDeviceId");
     const [rawTemperatureUnit] = useSetting("temperatureUnit");
     const [lastCardRead] = useSetting("lastCardRead");
@@ -1341,7 +1342,7 @@ export default function EditRecipe(
      * library's uuid. Assigned unsaved, the slot later read REMOVED FROM
      * LIBRARY.
      */
-    async function openInEasyMode() {
+    async function openInEasyMode(place = false) {
         await flushDrafts();
         if (!recipe || rememberedMachine === "") return;
         const problem = slotRecipeProblem(recipe);
@@ -1363,7 +1364,7 @@ export default function EditRecipe(
             notify({tone: "error", message: "Could not save the recipe."});
             return;
         }
-        openEasyModeRecipe(target, rememberedMachine);
+        openEasyModeRecipe(target, rememberedMachine, {place});
     }
 
     async function deleteRecipe() {
@@ -1608,7 +1609,7 @@ export default function EditRecipe(
                                  showHints={showHint} onShowHintsChange={setShowHint}
                                  onShare={onSharePress}
                                  onDuplicate={duplicateRecipe}
-                                 onEasyMode={rememberedMachine !== "" ? openInEasyMode : undefined}
+                                 onEasyMode={rememberedMachine !== "" ? () => void openInEasyMode() : undefined}
                                  onRefreshName={async () => {
                                      // Refresh fetches against the recipe ID, so
                                      // a just-typed ID has to be committed first
@@ -1658,7 +1659,8 @@ export default function EditRecipe(
             <WriteChooserSheet open={writeChooserOpen} onOpenChange={setWriteChooserOpen}
                                easyModeProblem={inputError ? "Finish editing the recipe first." : easyModeProblem}
                                cardProblem={inputError ? "Finish editing the recipe first." : writeProblems.join(" ") || null}
-                               onEasyMode={() => void openInEasyMode()}
+                               oneTapEasyMode={easyModeOneTapWrite}
+                               onEasyMode={() => void openInEasyMode(easyModeOneTapWrite)}
                                onCard={() => void writeToCard()}/>
 
             <BypassWriteSheet open={bypassWriteOpen}
