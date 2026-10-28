@@ -7,6 +7,24 @@ merged wholesale. Issue #249 records source heads, decisions and integration.
 The shipped 2.1.0 ledger retains its historical gates and now records the
 verified release/source-reconciliation chronology.
 
+## Recipe card metadata and thumbnail reuse: pending integration
+
+The #262 fix clears the pour-profile texture beneath card metadata with an
+opaque, card-coloured capsule. It grows with its contents; long values and
+larger text may wrap onto another row without changing their meaning or
+accessibility labels. Unbrewed recipes still show no invented history.
+
+The #253 investigation reproduced another image fetch when the same large
+source moved between the shelf cover's 21 pt frame and a tile's 20 pt frame.
+Recipe thumbnails now share a 44 pt native decode canvas while retaining
+their existing visible frame sizes and whole-image containment. This reuses
+the native decoded cache across covers, tiles, cards and Ready to brew,
+without a new cache library, cache-policy override or native dependency.
+Larger pictures still decode at their requested resolution.
+
+The testing checklist separates simulator request/timing evidence from
+remaining physical-device and cache-eviction acceptance.
+
 ## Machine tools and settings: software implementation, not hardware-qualified
 
 Draft #284, related to #64, adds a named machine page under Settings and shortcuts in

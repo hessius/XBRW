@@ -8,7 +8,7 @@ import Recipe, {CUP_TYPE} from "@/library/Recipe";
 import Pour, {POUR_PATTERN} from "@/library/Pour";
 import {accents, onAccent, palette, resolveAppearance} from "@/constants/colors";
 import {AppearanceScope} from "@/hooks/useAppearance";
-import type {AppearanceChoice} from "@/library/appearance";
+import {THEME_IDS, type AppearanceChoice} from "@/library/appearance";
 import {DOT_ICONS, litCells} from "@/constants/dotIcons";
 import {AA_LARGE, contrast} from "@/test-utils/contrast";
 import {DOTO_MAX_FONT_SCALE} from "@/components/DotMatrixText";
@@ -70,7 +70,7 @@ it("admits a 20pt bottom-right metadata photo without moving or resizing the gra
     const graphStyle = {...screen.getByTestId("recipe-card-profile").parent!.props.style};
     const path = profilePath();
     await measureCardPicture();
-    expect(photo()?.props.style.width).toBe(20);
+    expect(photo()?.parent).toHaveStyle({width: 20, height: 20});
     expect(within(screen.getByTestId("recipe-card-metadata"))
         .getByTestId("recipe-card-photo", {includeHiddenElements: true})).toBeTruthy();
     expect(screen.getByTestId("recipe-card-profile").parent!.props.style).toEqual(graphStyle);
@@ -145,7 +145,7 @@ it("omits metadata photos before editing controls or crowded evidence, not long 
     expect(screen.getByTestId("recipe-card-title-row").props.style.paddingRight).toBeUndefined();
 });
 
-it("admits the exact metadata boundary without wrapping, omits one point below and at large text", async () => {
+it("admits the exact photo boundary and lets evidence wrap rather than overflow at large text", async () => {
     const recipe = makeRecipe({imageURL: "https://coffee.example/bag.jpg"});
     await renderWithProviders(<RecipeCard recipe={recipe} showPicture onPress={jest.fn()}
         evidence={{brews: 9, avgRating: 4, lastBrewedAt: 0}}/>);
@@ -154,8 +154,8 @@ it("admits the exact metadata boundary without wrapping, omits one point below a
     // 190pt figures + 16pt row gap + 70pt evidence + 6pt photo gap + 20pt photo.
     await pictureLayout("recipe-card-bottom-row", 302, 34);
     expect(photo()).toBeTruthy();
-    expect(screen.getByTestId("recipe-card-metadata")).toHaveStyle({flexShrink: 0});
-    expect(screen.getByTestId("recipe-card-bottom-row").props.style.flexWrap).not.toBe("wrap");
+    expect(screen.getByTestId("recipe-card-metadata")).toHaveStyle({flexShrink: 1, maxWidth: "100%"});
+    expect(screen.getByTestId("recipe-card-bottom-row")).toHaveStyle({flexWrap: "wrap"});
     await pictureLayout("recipe-card-bottom-row", 301, 34);
     expect(photo()).toBeNull();
     expect(screen.getByTestId("recipe-card-evidence")).toBeTruthy();
@@ -1251,6 +1251,48 @@ describe("the evidence a card carries", () => {
             .toHaveTextContent("4.3 · 12 · 3D");
     });
 
+    it.each(THEME_IDS.flatMap(theme => (["original", "themed"] as const).map(recipeColours =>
+        ({theme, recipeColours}))))("clears the profile beneath evidence in %o", async choice => {
+        const recipe = makeRecipe();
+        const view = await renderWithProviders(
+            <AppearanceScope choice={choice}>
+                <RecipeCard recipe={recipe} onPress={jest.fn()} evidence={evidence()} dottedProfile/>
+            </AppearanceScope>
+        );
+        for (const [cupType, colours] of [[CUP_TYPE.OMNI, accents.coffee], [CUP_TYPE.TEA, accents.tea]] as const) {
+            for (let index = 0; index < colours.length; index++) {
+                recipe.cupType = cupType;
+                recipe.accentIndex = index;
+                await view.rerender(
+                    <AppearanceScope choice={choice}>
+                        <RecipeCard recipe={recipe} onPress={jest.fn()} evidence={evidence()}
+                            dottedProfile={index % 2 === 0}/>
+                    </AppearanceScope>
+                );
+                const fill = screen.getByTestId("recipe-card-surface").props.style.backgroundColor;
+                expect(screen.getByTestId("recipe-card-evidence")).toHaveStyle({
+                    backgroundColor: fill, paddingLeft: 6, paddingRight: 6, paddingTop: 3, paddingBottom: 3
+                });
+            }
+        }
+    });
+
+    it("keeps long evidence readable without fixed bounds or smaller text", async () => {
+        await renderWithProviders(<RecipeCard recipe={makeRecipe()} onPress={jest.fn()}
+            evidence={evidence({brews: 12345, lastBrewedAt: Date.now() - 1500 * DAY})}
+            bagBadge={{label: "PAST PEAK", spoken: "Bag past estimated peak"}} dottedProfile/>);
+        const capsule = screen.getByTestId("recipe-card-evidence");
+        expect(capsule).toHaveTextContent("4.3 · 12345 · 4Y · PAST PEAK");
+        expect(capsule.props.style.width).toBeUndefined();
+        expect(capsule.props.style.height).toBeUndefined();
+        expect(screen.getByTestId("recipe-card-bottom-row")).toHaveStyle({flexWrap: "wrap"});
+        expect(screen.getByTestId("recipe-card-metadata")).toHaveStyle({marginLeft: "auto"});
+        const text = within(capsule).getByText("4.3 · 12345 · 4Y · PAST PEAK");
+        expect(text).toHaveStyle({fontSize: 11});
+        expect(text.props.numberOfLines).toBeUndefined();
+        expect(screen.getByRole("button").props.accessibilityLabel).toContain("brewed 12345 times");
+    });
+
     // The other two figures carry their own units: 12 is a count because it is
     // a whole number, 3D says what it is. An average is the only one that needs
     // to be told apart from its neighbours, and the star is what the rest of
@@ -1433,9 +1475,7 @@ describe("the picture a card carries", () => {
 
         const nameSize = styleValueOf(screen.getByText("Ethiopia Guji"), "fontSize") as number;
         await measureCardPicture();
-        const style = photo()?.props.style as {width: number; height: number};
-        expect(style.height).toBe(CARD_PHOTO_SIZE);
-        expect(style.width).toBe(CARD_PHOTO_SIZE);
+        expect(photo()?.parent).toHaveStyle({width: CARD_PHOTO_SIZE, height: CARD_PHOTO_SIZE});
         // Two lines of the name at a normal 1.2 line height.
         expect(CARD_PHOTO_SIZE).toBeLessThanOrEqual(2 * nameSize * 1.2);
     });

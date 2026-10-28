@@ -3,6 +3,8 @@ import {Image, View} from "react-native";
 
 import {useAppearance} from "@/hooks/useAppearance";
 
+const THUMBNAIL_DECODE_SIZE = 44;
+
 type Props = {
     /** An https URL, already gated on the surface's preference by the caller. */
     uri: string;
@@ -40,15 +42,18 @@ type Props = {
  *
  * React Native's own `Image`, as every other picture in the app is, so the
  * platform's HTTP cache can serve repeat views, subject to response headers
- * and eviction. `resizeMethod="resize"` lets
- * Android decode a 600 px bag photo at roughly the size it is drawn, which
- * matters in a scrolling list.
+ * and eviction. The 20 pt tile, 21 pt collage and 44 pt single cover share
+ * one decode size: the native decoded-image cache is size-specific, and a
+ * large source may otherwise be fetched again when opening a shelf.
+ * The outer frame keeps its requested size; larger pictures still decode
+ * at their own size. `resizeMethod="resize"` keeps Android's decode bounded.
  */
 export default function RecipePhoto({
     uri, size, radius, backing: suppliedBacking, visible = true, testID, onError
 }: Props) {
     const {palette} = useAppearance();
     const backing = suppliedBacking ?? palette.raised;
+    const decodeSize = Math.max(size, THUMBNAIL_DECODE_SIZE);
     const [failed, setFailed] = useState<string | null>(null);
 
     if (uri.length === 0 || failed === uri) {
@@ -66,7 +71,9 @@ export default function RecipePhoto({
                    importantForAccessibility="no"
                    resizeMode="contain" resizeMethod="resize"
                    onError={() => { setFailed(uri); onError?.(); }}
-                   style={{width: size, height: size}}/>
+                   style={{width: decodeSize, height: decodeSize, position: "absolute",
+                           left: (size - decodeSize) / 2, top: (size - decodeSize) / 2,
+                           transform: [{scale: size / decodeSize}]}}/>
         </View>
     );
 

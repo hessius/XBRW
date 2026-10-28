@@ -475,7 +475,8 @@ export default function RecipeCard({
                 </XStack>
 
                 <XStack key={`bottom-${geometryKey}`} testID="recipe-card-bottom-row" onLayout={measure("bottom")}
-                        justifyContent="space-between" alignItems="flex-end" gap={BOTTOM_GAP}>
+                        justifyContent="space-between" alignItems="flex-end" gap={BOTTOM_GAP}
+                        flexWrap="wrap" rowGap={6}>
                     <XStack testID="recipe-card-figures" onLayout={measure("figures")} gap="$5" alignItems="flex-end">
                         <Stat displayFill={accent} label="DOSE" value={recipe.dosage} suffix="g"/>
                         <Stat displayFill={accent} label="RATIO" value={recipe.ratio}
@@ -489,12 +490,14 @@ export default function RecipeCard({
                         cannot share it, and a destructive control has the
                         stronger claim on a row the user opened to manage. */}
                     {!editing && <XStack testID="recipe-card-metadata" alignItems="center"
-                        gap={PHOTO_GAP} flexShrink={0}>
+                        gap={PHOTO_GAP} flexShrink={1} maxWidth="100%" marginLeft="auto">
                         {shownEvidence !== null && (
                             // Doto has no star glyph; use the app's dot icon.
                             <XStack testID="recipe-card-evidence"
                                     onLayout={measure("end")}
-                                    alignItems="center" gap={3}>
+                                    alignItems="center" gap={3} flexShrink={1}
+                                    backgroundColor={accent} borderRadius={12}
+                                    paddingHorizontal={6} paddingVertical={3}>
                                 {(evidence?.avgRating ?? 0) > 0 && (
                                     <DotIcon name="favourite" size={9}
                                              testID="recipe-card-evidence-star"
@@ -502,6 +505,7 @@ export default function RecipeCard({
                                 )}
                                 <DotMatrixText fontSize={11} weight="bold"
                                                letterSpacing={1.2}
+                                               style={{flexShrink: 1}}
                                                color={onAccent.label}>
                                     {shownEvidence}
                                 </DotMatrixText>

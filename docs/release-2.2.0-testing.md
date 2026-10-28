@@ -4,6 +4,47 @@ Package acceptance, integration and release qualification are separate.
 Record the exact app commit, native build, platform, machine and firmware for
 each device result. Software transports do not qualify BLE or NFC hardware.
 
+## Recipe metadata and photos (#262, #253)
+
+- [ ] On iOS and Android, check every recipe accent and appearance with dotted
+  and solid profiles, no history, an unrated history and a rated history.
+  The opaque metadata capsule must match the card, not the screen, including
+  its star and padding. Check long counts, recency and bag text at narrow
+  widths and large system text; wrap instead of shrinking or clipping.
+- [ ] With photos enabled, open single-photo and mosaic shelves, then their
+  recipe tiles and the list. Keep the existing 44/21/20 pt frames, whole-image
+  containment, title allowance and photo-fit boundaries. Check Ready to brew,
+  disabled photos, changed URLs and failed images too.
+- [ ] Compare cold opening, warm reopening and reopening after a successful
+  load with the origin unavailable. Record cache lookup, native load completion
+  and layout reveal separately. Repeat with a large source and with the same
+  URL moving from a 21 pt mosaic to a 20 pt tile and a 44 pt single cover.
+  Record backgrounding/memory pressure separately: the native cache can evict
+  pictures, so this is not a promise of permanent offline storage.
+
+Local iOS 26.5 / iPhone 17 Pro simulator evidence identified a size-specific
+decoded-cache miss, not simply slow metadata measurement. Six public catalogue
+photos took up to 2.36 s cold but about 37-40 ms to load warm, with layout reveal
+at 54-61 ms. One 2400x2400 PNG was 1,929,039 bytes; its URL stayed identical,
+with Last-Modified/ETag but no explicit Cache-Control. Loading it at a new
+thumbnail size took another 1.8-2.6 s even after a successful 20 pt load.
+
+A loopback reproduction served those exact PNG bytes and observed headers,
+with a controlled 120 ms origin delay and request/response logging. Before the
+fix, 21-to-20 pt fetched again (181 ms), and a previously unseen 44 pt size
+failed when the origin refused requests. With one shared 44 pt decode canvas,
+the same transitions made zero additional requests and completed in 10-12 ms,
+including the 44 pt unavailable-origin case. Larger requested photos retain
+their own decode resolution. No cache policy, dependency or native cache
+capacity changed. The actual photo frame, not the internal decode canvas,
+continues to own layout.
+Six real-origin photos primed through 21 pt covers then loaded on 20 pt tiles
+in 45 ms, with a 0.5 ms load spread and layout reveal at 63 ms.
+
+Native simulator captures also cover long metadata at default and accessibility
+text sizes. These observations and dual-platform component regressions do not
+close the physical iOS/Android, memory-pressure or screen-reader checks above.
+
 ## Full recipe browser import: existing-host checkpoint
 
 The branch implementation targets `https://xbrwplusplus.vercel.app/import`
