@@ -98,3 +98,34 @@ one of each — and see which one answers.
   `login rejected` means the password changed. `share link not found` means the
   mint succeeded but the new row was not in the first 20 of the library listing
   — see the `adaptedModel` note in `cloud-api.md` § C-bis.
+
+## Static landing-page source
+
+`scripts/generate-landing.mjs` owns the landing markup/content in
+`public/index.html` and `public/landing/tokens.css`, derived directly from the
+shared canonical palette in `constants/colors.ts`. After source or palette
+edits, run `npm run generate:landing` and commit both generated outputs.
+`public/landing/site.css`, `carousel.mjs` and `rotation.mjs` are hand-maintained.
+Vercel serves `public` as static files; no Expo/app build is needed.
+`.vercelignore` includes the landing assets while excluding scripts and mobile
+dependencies. The existing API functions remain unchanged; this web-only port
+does not add the unreleased `/import` handoff or other backend/mobile changes.
+
+The six approved raw store-tool screenshots have separate optimized web
+images in `public/landing/screenshots`; captions are HTML, not composed store
+artwork. Before production, confirm the assets and pictured capabilities are
+eligible for the released build. Keep the font's OFL copy byte-identical to
+upstream, including its trailing whitespace; do not rewrite its copyright or
+license to silence a whole-diff whitespace check.
+
+`npm run test:landing` checks rotation and the live-caption adapter regression.
+CI also regenerates the page and rejects drift in either generated output.
+Real-browser acceptance remains required: keyboard/pointer pause and visible
+focus, accessible controls/contrast and targets, initial and runtime native
+reduced motion, no JavaScript, 320/390/1280 widths with 200% text and the longest
+Doto caption, correct download/source URLs, lazy loading and visible broken-image
+fallbacks. The page has no automatic app launch or analytics.
+
+Production DNS/Cloudflare and Vercel domain attachment, deployment, native
+association/signatures and physical-device qualification are separate,
+explicitly authorized gates. This source/CI work closes none of them.
