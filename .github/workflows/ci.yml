@@ -37,6 +37,12 @@ jobs:
       - name: Worktree audit tests
         run: npm run test:worktrees
 
+      - name: Static landing page
+        run: |
+          npm run generate:landing
+          git diff --exit-code -- public/index.html public/landing/tokens.css
+          npm run test:landing
+
       # Dependency/configuration drift remains a hard failure.
       - name: Expo Doctor
         run: npx expo-doctor
