@@ -106,7 +106,10 @@ test('DOM adapter clears a manual announcement when autoplay advances', async (t
     }), { classList: { toggle: () => {} } });
   });
   const next = element();
-  const toggle = element();
+  const toggleAttrs = {};
+  const toggle = Object.assign(element(), {
+    setAttribute: (name, value) => { toggleAttrs[name] = value; },
+  });
   const position = {};
   const announcement = { textContent: '' };
   const controls = element({
@@ -133,10 +136,16 @@ test('DOM adapter clears a manual announcement when autoplay advances', async (t
   }
 
   await import('../../public/landing/carousel.mjs');
+  assert.equal(toggle.textContent, 'Pause');
+  assert.equal(toggleAttrs['aria-label'], 'Pause automatic screenshot rotation');
   next.dispatchEvent(new Event('click'));
   assert.equal(position.textContent, '2 / 3');
   assert.equal(announcement.textContent, 'Second caption (2 of 3)');
+  assert.equal(toggle.textContent, 'Play');
+  assert.equal(toggleAttrs['aria-label'], 'Play automatic screenshot rotation');
   toggle.dispatchEvent(new Event('click'));
+  assert.equal(toggle.textContent, 'Pause');
+  assert.equal(toggleAttrs['aria-label'], 'Pause automatic screenshot rotation');
   t.mock.timers.tick(8000);
   assert.equal(position.textContent, '3 / 3');
   assert.equal(announcement.textContent, '');

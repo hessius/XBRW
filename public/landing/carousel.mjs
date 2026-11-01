@@ -46,7 +46,7 @@ if (region) {
       toggle.hidden = reduced;
       toggle.textContent = paused ? 'Play' : 'Pause';
       toggle.setAttribute('aria-label', paused
-        ? 'Start automatic screenshot rotation'
+        ? 'Play automatic screenshot rotation'
         : 'Pause automatic screenshot rotation');
     },
   });
