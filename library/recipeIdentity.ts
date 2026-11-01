@@ -83,6 +83,16 @@ export const MAX_TAGS_PER_RECIPE = 20;
 export const MAX_NAME = 100;
 
 /**
+ * The description's ceiling, in characters.
+ *
+ * Enforced in the editor with a live counter, not on `Recipe`. A limit a user
+ * can see is a limit; a limit they discover by having their words vanish is a
+ * bug. This constant is what the editor, the import link reader and the backup
+ * validator all read, so they cannot drift.
+ */
+export const MAX_DESCRIPTION = 60;
+
+/**
  * Where a recipe came from. Drives the placeholder name.
  *
  * A closed union on purpose. The verb table in `placeholderName` is typed

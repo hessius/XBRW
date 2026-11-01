@@ -262,6 +262,7 @@ export function renderImportPage(view: ImportPageView, options: ImportPageOption
     ].join("");
     const content = `<header><p class="eyebrow">Shared recipe · ${view.model === "original" ? "Original" : "Studio"}</p>
 <h1>${escapeHTML(title)}</h1>${alternate}
+${recipe.description?.trim() ? `<p class="notes">${escapeHTML(recipe.description)}</p>` : ""}
 ${recipe.coffee?.name ? `<p class="coffee-name">${escapeHTML(recipe.coffee.name)}</p>` : ""}
 ${recipe.coffee?.roaster ? `<p>Roaster: ${escapeHTML(recipe.coffee.roaster)}</p>` : ""}</header>
 ${photos.html}<dl class="metrics">${metrics}</dl>

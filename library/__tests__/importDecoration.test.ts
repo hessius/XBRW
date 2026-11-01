@@ -1,5 +1,5 @@
 import Recipe from "@/library/Recipe";
-import {decorateImport, fillImportBlanks} from "@/library/importDecoration";
+import {decorateImport, fillImportBlanks, parseImportEntry} from "@/library/importDecoration";
 
 const recipe = () => new Recipe();
 
@@ -317,5 +317,63 @@ describe("fillImportBlanks", () => {
         fillImportBlanks(held, {coffee: {name: "X", imageUrl: "http://example.com/bag.png"}});
 
         expect(held.imageURL).toBeUndefined();
+    });
+
+    it("fills blank description, xid and recipeImage without overwriting existing values", () => {
+        const blank = recipe();
+        expect(fillImportBlanks(blank, {
+            recipeDescription: "Floral and juicy",
+            recipeXid: "ETH120",
+            recipeImage: "https://example.com/pod.png"
+        })).toBe(true);
+        expect(blank.description).toBe("Floral and juicy");
+        expect(blank.xid).toBe("ETH120");
+        expect(blank.imageURL).toBe("https://example.com/pod.png");
+
+        const held = recipe();
+        held.description = "My note";
+        held.xid = "COL01";
+        held.imageURL = "https://example.com/mine.png";
+        expect(fillImportBlanks(held, {
+            recipeDescription: "Theirs",
+            recipeXid: "ETH120",
+            recipeImage: "https://example.com/pod.png"
+        })).toBe(false);
+        expect(held.description).toBe("My note");
+        expect(held.xid).toBe("COL01");
+        expect(held.imageURL).toBe("https://example.com/mine.png");
+    });
+});
+
+describe("parseImportEntry", () => {
+    it("unpacks an xbrw.app/import link into its share source and decoration", () => {
+        const entry = parseImportEntry(
+            "https://xbrw.app/import?v=1&share=https%3A%2F%2Fshare-h5.xbloom.com%2F%3Fid%3Dabc123&bean.name=Guji&bean.roaster=Standout"
+        );
+        expect(entry).toEqual({
+            source: {kind: "share", id: "abc123"},
+            decoration: {
+                coffee: {name: "Guji", roaster: "Standout"},
+                recipeUrl: undefined,
+                recipeName: undefined,
+                recipeDescription: undefined,
+                recipeXid: undefined,
+                recipeImage: undefined,
+                feed: undefined,
+                colour: undefined,
+                tags: undefined,
+                source: "import"
+            }
+        });
+    });
+
+    it("falls back to plain share URLs and XIDs with no decoration", () => {
+        expect(parseImportEntry("ETH120")).toEqual({
+            source: {kind: "xid", xid: "ETH120"}
+        });
+        expect(parseImportEntry("https://share-h5.xbloom.com/?id=abc123")).toEqual({
+            source: {kind: "share", id: "abc123"}
+        });
+        expect(parseImportEntry("not a link")).toBeNull();
     });
 });

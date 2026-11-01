@@ -139,9 +139,9 @@ describe("import endpoint", () => {
             expect(result.body).toContain('src="https://images.example.test/pod.jpg"');
             originalQueryAction(result, url.search);
             expect(result.body).toContain(
-                `property="og:url" content="${importPage.escapeHTML(`https://xbrwplusplus.vercel.app/import${url.search}`)}"`
+                `property="og:url" content="${importPage.escapeHTML(`https://xbrw.app/import${url.search}`)}"`
             );
-            expect(result.body).not.toMatch(/attacker\.example|forwarded\.example|xbrw\.app/);
+            expect(result.body).not.toMatch(/attacker\.example|forwarded\.example/);
             expect(global.fetch).toHaveBeenCalledTimes(1);
             expect(global.fetch).toHaveBeenCalledWith("https://client-api.xbloom.com/RecipeDetail.html",
                 expect.objectContaining({
@@ -364,7 +364,7 @@ describe("import endpoint", () => {
         ["https://public.example.test", "ignored.vercel.app", "https://public.example.test"],
         ["https://public.example.test/", undefined, "https://public.example.test"],
         [undefined, "trusted-preview.vercel.app", "https://trusted-preview.vercel.app"],
-        [undefined, undefined, "https://xbrwplusplus.vercel.app"]
+        [undefined, undefined, "https://xbrw.app"]
     ])("uses only configured public origins: %s / %s", async (origin, vercel, expected) => {
         if (origin !== undefined) process.env.PUBLIC_IMPORT_ORIGIN = origin;
         if (vercel !== undefined) process.env.VERCEL_URL = vercel;

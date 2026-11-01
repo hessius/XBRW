@@ -1,6 +1,6 @@
 import {parseImportInput, type ImportSource} from "../../library/importInput";
 import type {BrewMindLink} from "../../library/brewmindLink";
-import {decorateImport, type ImportCandidate} from "../../library/importDecoration";
+import {decorateImport, decorationFromLink, type ImportCandidate} from "../../library/importDecoration";
 import {CUP_TYPE, normaliseRecipeTags} from "../../library/recipeIdentity";
 import {InvalidImportDataError, normaliseXBloomRecipe, recordOf, type XBloomRecipeData} from "../../library/xbloomRecipeData";
 import type {MachineModel} from "../../library/machine/machineModel";
@@ -60,10 +60,7 @@ export function buildImportView(
         isTea() { return this.cupType === CUP_TYPE.TEA; },
         setTags(tags) { this.tags = normaliseRecipeTags(tags); }
     };
-    decorateImport(recipe, {
-        coffee: link.coffee, recipeUrl: link.recipeUrl, recipeName: link.recipeName, tags: link.tags,
-        colour: link.colour, feed: link.feed, source: link.source === "brewmind" ? "brewmind" : "import"
-    });
+    decorateImport(recipe, decorationFromLink(link));
     if (!Number.isFinite(recipe.dosage) || recipe.dosage <= 0 || !Number.isFinite(recipe.ratio)
         || ![recipe.grindSize, recipe.grindRPM, recipe.defaultCups, recipe.cupType,
             recipe.bypassVolume, recipe.bypassTemp].every(Number.isFinite)

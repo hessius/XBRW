@@ -14,20 +14,10 @@ import uuid from 'react-native-uuid';
 
 export {
     CUP_TYPE, GRINDER_OFF, GRIND_SIZE_OFFSET, GRINDER_OFF_VALUE, XID_LENGTH,
-    MAX_NAME, MAX_TAG_LENGTH, MAX_TAGS_PER_RECIPE, isValidXID, type RecipeSource,
+    MAX_NAME, MAX_DESCRIPTION, MAX_TAG_LENGTH, MAX_TAGS_PER_RECIPE, isValidXID, type RecipeSource,
 } from "./recipeIdentity";
 
 export const DEFAULT_GRIND_SIZE = 50;
-
-/**
- * The description's ceiling, in characters.
- *
- * Enforced in the editor with a live counter, not here. A limit a user can see
- * is a limit; a limit they discover by having their words vanish is a bug. This
- * constant is what the editor and the backup validator both read, so the two
- * cannot drift.
- */
-export const MAX_DESCRIPTION = 60;
 
 const POLY_TABLE = [
     0x00, 0x5E, 0xBC, 0xE2, 0x61, 0x3F, 0xDD, 0x83,

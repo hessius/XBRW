@@ -79,7 +79,7 @@ export async function respond(request: Request): Promise<Response> {
 
 function importOrigin(): string {
     const raw = process.env.PUBLIC_IMPORT_ORIGIN ?? (process.env.VERCEL_URL
-        ? `https://${process.env.VERCEL_URL}` : "https://xbrwplusplus.vercel.app");
+        ? `https://${process.env.VERCEL_URL}` : "https://xbrw.app");
     const configurationError = new Error("Invalid public import origin configuration");
     let url: URL;
     try {
