@@ -788,7 +788,7 @@ export default class Machine {
         // has to land, so its failure is worth a line of its own.
         // Listening before the handshake: the machine sends its vitals by
         // itself right after acknowledging it, and nothing else asks for them.
-        const heard = this.waitForAnyInfo();
+        const heard = await this.waitForAnyInfo();
         try {
             await this.shakeHands();
         } catch (e) {
@@ -1814,8 +1814,16 @@ export default class Machine {
     async setBrightness(level: 0 | 1 | 8 | 15): Promise<0 | 1 | 8 | 15 | null> {
         this.assertOrdinaryOperation();
         const generation = this.generation;
+        const oldBrightness = this.info?.brightness;
         await this.send(buildType1(8103, [level]));
-        const info = await this.waitForInfo((info) => info.brightness === level, 3000);
+        // Machine may report intermediate values; wait for a valid brightness
+        // that differs from the old value (or matches target if old was null).
+        const info = await this.waitForInfo(
+            (info) => info.brightness !== undefined
+                && (oldBrightness === undefined || info.brightness !== oldBrightness)
+                && [0, 1, 8, 15].includes(info.brightness),
+            3000
+        );
         if (info === null || generation !== this.generation) return null;
         return info.brightness as 0 | 1 | 8 | 15;
     }
@@ -1886,6 +1894,11 @@ export default class Machine {
                 if (parsed.kind === "info" && predicate(parsed)) {
                     settled = true;
                     off();
+                    // Ensure this.info is updated (receiveFrame does this too,
+                    // but updating here guarantees consistency for the caller)
+                    this.info = parsed;
+                    this.infoAt = Date.now();
+                    this.announceLink();
                     resolve(parsed);
                 }
             });

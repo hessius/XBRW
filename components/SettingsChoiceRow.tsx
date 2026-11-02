@@ -55,7 +55,7 @@ export default function SettingsChoiceRow({
                     <Text fontSize={16} color={disabled ? palette.dim : palette.text}>{label}</Text>
                     <Text fontSize={13} color={palette.dim}>{description}</Text>
                 </YStack>
-                <SegmentedControl value={value} options={options} onChange={disabled ? () => {} : onChange}
+                <SegmentedControl value={value} options={options} onChange={onChange}
                                   accessibilityLabel={label} disabled={disabled}/>
             </YStack>
         );
@@ -75,7 +75,7 @@ export default function SettingsChoiceRow({
                 <Text fontSize={16} color={disabled ? palette.dim : palette.text}>{label}</Text>
                 <Text fontSize={13} color={palette.dim}>{description}</Text>
             </YStack>
-            <SegmentedControl value={value} options={options} onChange={disabled ? () => {} : onChange}
+            <SegmentedControl value={value} options={options} onChange={onChange}
                               accessibilityLabel={label} disabled={disabled}/>
         </XStack>
     );

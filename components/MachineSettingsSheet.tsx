@@ -1,5 +1,5 @@
 import React, {useEffect, useState} from "react";
-import {Pressable, ScrollView} from "react-native";
+import {Pressable, ScrollView, Alert} from "react-native";
 import {Text, XStack, YStack} from "tamagui";
 
 import SettingsActionRow from "@/components/SettingsActionRow";
@@ -58,22 +58,6 @@ export default function MachineSettingsSheet({machineId, onClose, settings}: Pro
     const linked = machineId === machine.linkedDeviceId;
 
     const [sending, setSending] = useState<string | null>(null);
-    const [lastReadback, setLastReadback] = useState<Partial<MachineInfo> | null>(null);
-    const [showReadback, setShowReadback] = useState(false);
-
-    // Refresh readback when info changes
-    useEffect(() => {
-        if (info !== null) {
-            setLastReadback({
-                tempUnit: info.tempUnit,
-                weightUnit: info.weightUnit,
-                brightness: info.brightness,
-                waterFeed: info.waterFeed,
-                pourRadius: info.pourRadius,
-                vibration: info.vibration,
-            });
-        }
-    }, [info]);
 
     async function sendSetting<T>(
         label: string,
@@ -145,7 +129,7 @@ export default function MachineSettingsSheet({machineId, onClose, settings}: Pro
     }
 
     // Brightness
-    const currentBrightness = info?.brightness ?? 10;
+    const currentBrightness = info?.brightness ?? 1;
     function onBrightnessChange(value: string) {
         sendSetting(
             "Brightness",
@@ -159,10 +143,20 @@ export default function MachineSettingsSheet({machineId, onClose, settings}: Pro
     function onWaterSourceChange(value: string) {
         const source = Number(value) as 0 | 1;
         if (source === 1) {
-            // Warn about physical water supply
-            if (!confirm("Switching to Tap (plumbed) requires a physical water connection. Is the machine plumbed in?")) {
-                return;
-            }
+            // Warn about physical water supply - use Alert instead of confirm (not available in React Native)
+            Alert.alert(
+                "Switch to Tap (plumbed)?",
+                "This requires a physical water connection. Is the machine plumbed in?",
+                [
+                    {text: "Cancel", style: "cancel"},
+                    {text: "Confirm", onPress: () => sendSetting(
+                        "Water source",
+                        () => machine.setWaterSource(source),
+                        (result) => notify({tone: "success", message: `Water source: ${WATER_SOURCE_LABELS[result]}`})
+                    )},
+                ]
+            );
+            return;
         }
         sendSetting(
             "Water source",
