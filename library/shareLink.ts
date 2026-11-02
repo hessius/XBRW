@@ -1,8 +1,14 @@
+import {SHARE_IMPORT_URL} from "@/constants/share";
 import {resolveAccent} from "./accent";
+import {BREWMIND_LINK_VERSION, CAPS, MAX_URL, SHORT_TEXT} from "./brewmindLink";
+import {MAX_LABEL_PARAM, readLabels} from "./coffeeLabels";
+import {fitSizedName} from "./fitName";
 import {adaptedModelFor, type MachineModel} from "./machine/machineModel";
+import {MAX_CUPPING_SCORE, MAX_ELEVATION, httpsUrl, isoDate, podImageUrl, type PodCoffee} from "./podCoffee";
 import type Pour from "./Pour";
 import {POUR_PATTERN} from "./Pour";
-import Recipe, {CUP_TYPE, DEFAULT_GRIND_SIZE} from "./Recipe";
+import Recipe, {CUP_TYPE, DEFAULT_GRIND_SIZE, MAX_DESCRIPTION, MAX_NAME, isValidXID} from "./Recipe";
+import {readRoasterColour} from "./roasterColour";
 
 /**
  * The recipe as xBloom's cloud wants it.
@@ -180,4 +186,124 @@ export function shareBlockReason(recipe: Recipe): ShareBlockReason | null {
         return "volumeMismatch";
     }
     return null;
+}
+
+const COFFEE_TEXT_FIELDS = [
+    "roaster", "roast", "origin", "country", "region",
+    "farm", "farmer", "processing", "fermentation", "variety", "beanMix",
+    "aromatics", "note"
+] as const;
+
+function appendCoffeeFields(params: URLSearchParams, coffee: PodCoffee): void {
+    for (const field of COFFEE_TEXT_FIELDS) {
+        const trimmed = coffee[field]?.trim();
+        const cap = CAPS[field];
+        if (trimmed !== undefined && trimmed !== "" && (cap === undefined || trimmed.length <= cap)) {
+            params.set(`bean.${field}`, trimmed);
+        }
+    }
+    const roastingDate = isoDate(coffee.roastingDate);
+    if (roastingDate !== undefined && roastingDate.length <= CAPS.roastingDate) {
+        params.set("bean.roastingDate", roastingDate);
+    }
+    const beanUrl = httpsUrl(coffee.url);
+    if (beanUrl !== undefined && beanUrl.length <= MAX_URL) {
+        params.set("bean.url", beanUrl);
+    }
+    if (typeof coffee.elevation === "number" && Number.isInteger(coffee.elevation)
+        && coffee.elevation > 0 && coffee.elevation <= MAX_ELEVATION) {
+        params.set("bean.elevation", String(coffee.elevation));
+    }
+    if (typeof coffee.cupping_points === "number" && Number.isFinite(coffee.cupping_points)
+        && coffee.cupping_points > 0 && coffee.cupping_points <= MAX_CUPPING_SCORE) {
+        params.set("bean.cupping_points", String(coffee.cupping_points));
+    }
+    if (typeof coffee.decaffeinated === "boolean") {
+        params.set("bean.decaffeinated", coffee.decaffeinated ? "1" : "0");
+    }
+    const flavours = readLabels(coffee.flavours);
+    if (flavours.length > 0) {
+        const joined = flavours.join(", ");
+        if (joined.length <= MAX_LABEL_PARAM) params.set("bean.flavours", joined);
+    }
+    for (const [field, param] of [
+        ["restDays", "bean.rest_days"],
+        ["peakDay", "bean.peak_day"],
+        ["bestUntilDay", "bean.best_until_day"]
+    ] as const) {
+        const value = coffee[field];
+        if (typeof value === "number" && Number.isInteger(value)
+            && value >= 0 && String(value).length <= CAPS[field]) {
+            params.set(param, String(value));
+        }
+    }
+}
+
+/**
+ * Wrap a minted xBloom share link in an `xbrw.app/import` URL carrying all of
+ * the recipe's local metadata (name, note, pod ID, recipe URL, artwork, tags,
+ * accent colour and full coffee details).
+ *
+ * The upstream `xbloomShareUrl` (`https://share-h5.xbloom.com/?id=...`) stays
+ * the value stored in `recipe.shareUrl`: it identifies the brewing numbers on
+ * xBloom's server, while this link layers on everything xBloom's share format
+ * would otherwise drop.
+ */
+export function buildShareUrl(
+    recipe: Recipe,
+    xbloomShareUrl: string,
+    baseImportUrl: string = SHARE_IMPORT_URL
+): string {
+    const url = new URL(baseImportUrl);
+    url.searchParams.set("v", BREWMIND_LINK_VERSION);
+    url.searchParams.set("share", xbloomShareUrl);
+
+    const name = recipe.name.replace(/\s+/g, " ").trim();
+    if (name !== "") {
+        url.searchParams.set("recipe.name", fitSizedName(name, MAX_NAME));
+    }
+    const description = recipe.description.replace(/\s+/g, " ").trim();
+    if (description !== "" && description.length <= MAX_DESCRIPTION) {
+        url.searchParams.set("recipe.description", description);
+    }
+    const xid = recipe.xid.trim().toUpperCase();
+    if (xid !== "" && isValidXID(xid)) {
+        url.searchParams.set("recipe.xid", xid);
+    }
+    const recipeUrl = httpsUrl(recipe.recipeUrl);
+    if (recipeUrl !== undefined && recipeUrl.length <= MAX_URL) {
+        url.searchParams.set("recipe.url", recipeUrl);
+    }
+
+    const recipeImage = podImageUrl(recipe.imageURL);
+    const coffee = recipe.coffee;
+    const coffeeName = coffee?.name?.replace(/\s+/g, " ").trim() ?? "";
+    if (coffee !== undefined && coffeeName !== "") {
+        url.searchParams.set("bean.name", fitSizedName(coffeeName, SHORT_TEXT));
+        const coffeeImage = podImageUrl(coffee.imageUrl) ?? recipeImage;
+        if (coffeeImage !== undefined && coffeeImage.length <= MAX_URL) {
+            url.searchParams.set("bean.image", coffeeImage);
+        }
+        if (recipeImage !== undefined && recipeImage.length <= MAX_URL && recipeImage !== coffeeImage) {
+            url.searchParams.set("recipe.image", recipeImage);
+        }
+        appendCoffeeFields(url.searchParams, coffee);
+    } else if (recipeImage !== undefined && recipeImage.length <= MAX_URL) {
+        url.searchParams.set("recipe.image", recipeImage);
+    }
+
+    const tags = readLabels(recipe.tags);
+    if (tags.length > 0) {
+        const joined = tags.join(", ");
+        if (joined.length <= MAX_LABEL_PARAM) url.searchParams.set("bean.tags", joined);
+    }
+
+    if (recipe.accentIndex !== undefined) {
+        const colour = readRoasterColour(resolveAccent(recipe));
+        if (colour !== undefined) {
+            url.searchParams.set("bean.colour", colour);
+        }
+    }
+
+    return url.toString();
 }

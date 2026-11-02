@@ -1,4 +1,4 @@
-import type {PodCoffee} from "@/library/podCoffee";
+import type {PodCoffee} from "./podCoffee";
 
 /**
  * What the XPOD section on ABOUT says about a recipe's coffee.

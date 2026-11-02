@@ -1,6 +1,8 @@
 import type {RecipeSource} from "./recipeIdentity";
 import {accentGroupFor} from "./accent";
 import {fermentationFrom, processFrom, roastFrom} from "./brew/beanTags";
+import {BREWMIND_SOURCE, parseBrewMindLink, type BrewMindLink} from "./brewmindLink";
+import {parseImportInput, type ImportSource} from "./importInput";
 import {podImageUrl, type PodCoffee} from "./podCoffee";
 import {roasterAccent} from "./roasterColour";
 
@@ -8,6 +10,8 @@ export type ImportCandidate = {
     source: RecipeSource;
     recipeUrl?: string;
     name: string;
+    description?: string;
+    xid?: string;
     tags: string[];
     accentIndex?: number;
     coffee?: PodCoffee;
@@ -33,11 +37,59 @@ export type ImportDecoration = {
      * never to `xbloomName`, which stays what xBloom published.
      */
     recipeName?: string;
+    /** `recipe.image`: the recipe's own artwork when distinct from or without `bean.image`. */
+    recipeImage?: string;
+    /** `recipe.description`: the authored one-line note for this recipe. */
+    recipeDescription?: string;
+    /** `recipe.xid`: the xPod ID linked to this recipe. */
+    recipeXid?: string;
     tags?: readonly string[];
     colour?: string;
     /** A validated catalogue URL, followed only after this import succeeds. */
     feed?: string;
 };
+
+export function decorationFromLink(link: BrewMindLink): ImportDecoration {
+    return {
+        coffee: link.coffee,
+        recipeUrl: link.recipeUrl,
+        recipeName: link.recipeName,
+        recipeImage: link.recipeImage,
+        recipeDescription: link.recipeDescription,
+        recipeXid: link.recipeXid,
+        tags: link.tags,
+        colour: link.colour,
+        feed: link.feed,
+        // Only a stated `brewmind` source earns the provenance. Anything else
+        // still imports and reads as an ordinary import, because the link is
+        // useful to anyone who can mint one.
+        source: link.source === BREWMIND_SOURCE ? "brewmind" : "import"
+    };
+}
+
+export type ParsedImportEntry = {
+    source: ImportSource;
+    decoration?: ImportDecoration;
+};
+
+/**
+ * Parse any import input — a plain xBloom share URL, a pod XID, or a decorated
+ * `xbrw.app/import` / `xbrw://import` link — into its lookup source and
+ * optional metadata decoration.
+ */
+export function parseImportEntry(raw: string): ParsedImportEntry | null {
+    const trimmed = raw.trim();
+    if (trimmed.length === 0) return null;
+
+    const link = parseBrewMindLink(trimmed);
+    if (link !== null) {
+        const source = parseImportInput(link.share);
+        return source === null ? null : {source, decoration: decorationFromLink(link)};
+    }
+
+    const source = parseImportInput(trimmed);
+    return source === null ? null : {source};
+}
 
 /**
  * Tags worth deriving from a coffee.
@@ -82,17 +134,29 @@ function tagsFrom(coffee: Partial<PodCoffee>): string[] {
  * the link carries in the places it has nothing, and only there.
  */
 export function decorateImport<T extends ImportCandidate>(recipe: T, decoration: ImportDecoration): T {
-    const {coffee, source, recipeUrl, recipeName, tags, colour} = decoration;
+    const {
+        coffee, source, recipeUrl, recipeName, recipeImage, recipeDescription, recipeXid, tags, colour
+    } = decoration;
     if (source !== undefined) recipe.source = source;
     if (recipeUrl !== undefined) recipe.recipeUrl = recipeUrl;
     // `name`, not `xbloomName`. `displayName()` already prefers `name`, so the
     // recipe reads as the producer called it, while xBloom's own title stays
     // cached underneath for USE THIS NAME to restore.
     if (recipeName !== undefined) recipe.name = recipeName;
+    if (recipeDescription !== undefined && (recipe.description ?? "") === "") {
+        recipe.description = recipeDescription;
+    }
+    if (recipeXid !== undefined && (recipe.xid ?? "").trim() === "") {
+        recipe.xid = recipeXid;
+    }
     if (tags !== undefined && tags.length > 0) recipe.setTags([...recipe.tags, ...tags]);
     if (colour !== undefined && recipe.accentIndex === undefined) {
         const index = roasterAccent(colour, accentGroupFor(recipe));
         if (index !== null) recipe.accentIndex = index;
+    }
+    if ((recipe.imageURL ?? "") === "" && recipeImage !== undefined) {
+        const picture = podImageUrl(recipeImage);
+        if (picture !== undefined) recipe.imageURL = picture;
     }
     if (coffee === undefined) return recipe;
 
@@ -155,12 +219,27 @@ export function decorateImport<T extends ImportCandidate>(recipe: T, decoration:
  * Returns whether anything changed, so the caller saves only when it must.
  */
 export function fillImportBlanks(recipe: ImportCandidate, decoration: ImportDecoration): boolean {
-    const {coffee, recipeUrl} = decoration;
+    const {coffee, recipeUrl, recipeImage, recipeDescription, recipeXid} = decoration;
     let changed = false;
 
     if (recipeUrl !== undefined && (recipe.recipeUrl ?? "") === "") {
         recipe.recipeUrl = recipeUrl;
         changed = true;
+    }
+    if (recipeDescription !== undefined && (recipe.description ?? "") === "") {
+        recipe.description = recipeDescription;
+        changed = true;
+    }
+    if (recipeXid !== undefined && (recipe.xid ?? "").trim() === "") {
+        recipe.xid = recipeXid;
+        changed = true;
+    }
+    if ((recipe.imageURL ?? "") === "" && recipeImage !== undefined) {
+        const picture = podImageUrl(recipeImage);
+        if (picture !== undefined) {
+            recipe.imageURL = picture;
+            changed = true;
+        }
     }
     if (coffee === undefined) return changed;
 

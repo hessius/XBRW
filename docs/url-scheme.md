@@ -15,11 +15,10 @@ integrations. Both schemes are registered on iOS and Android. The app must
 already be installed; these custom-scheme links do not provide installation or
 a web fallback. Provide a normal web link alongside the app button if needed.
 
-### HTTPS browser entry point: implemented, not yet deployed
+### HTTPS browser entry point
 
-This branch implements `https://xbrwplusplus.vercel.app/import` (also `/import/`)
-as a full server-rendered recipe page. This is an existing-host checkpoint,
-not a claim that this implementation is already live. Publish links only after
+`https://xbrw.app/import` (also `/import/`, and `https://xbrwplusplus.vercel.app/import`)
+renders a full server-rendered recipe page. Publish links only after
 the separately approved deployment and public read-only smoke checks.
 
 The page works in a browser before native domain association: all recipe and
@@ -41,9 +40,8 @@ not Google Play. Product (`bean.url`), producer recipe (`recipe.url`) and
 **View on xBloom** destinations are separate.
 
 No current store binary's Universal Link / Android App Link support is claimed.
-Domain ownership, published association files, signing identities, a fresh
-fingerprinted native build and installed-device acceptance are separate gates.
-`xbrw.app` is not owned/verified for this integration; do not publish it.
+Published association files, signing identities, a fresh fingerprinted native
+build and installed-device acceptance are separate gates.
 
 ## Ready-to-use buttons
 
@@ -204,7 +202,7 @@ value. Do not concatenate an unescaped URL after `share=`: its `&`, `+`, `#` or
 
 ```js
 // Inputs supplied by your product/recipe, not constants from an example recipe.
-const link = new URL("https://xbrwplusplus.vercel.app/import");
+const link = new URL("https://xbrw.app/import");
 link.searchParams.set("v", "1");
 link.searchParams.set("source", "your-app");
 link.searchParams.set("share", xbloomShareURL);

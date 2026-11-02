@@ -58,7 +58,7 @@ export async function respond(request: Request, fetchImpl?: FetchLike): Promise<
 export default async function handler(
     req: IncomingMessage, res: ServerResponse
 ): Promise<void> {
-    const host = typeof req.headers.host === "string" ? req.headers.host : "xbrwplusplus.vercel.app";
+    const host = typeof req.headers.host === "string" ? req.headers.host : "xbrw.app";
     let response: Response;
     try {
         response = await respond(new Request(`https://${host}${req.url ?? "/api/feeds/xbloom"}`, {

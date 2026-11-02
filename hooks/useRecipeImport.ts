@@ -6,9 +6,10 @@ import {resolveOnOpen} from "@/library/duplicates";
 import {
     decorateImport,
     fillImportBlanks,
+    parseImportEntry,
     type ImportDecoration
 } from "@/library/importDecoration";
-import {parseImportInput, type ImportSource} from "@/library/importInput";
+import {type ImportSource} from "@/library/importInput";
 import {planReimport, readPrints, rememberPrint, takeLatest} from "@/library/importRefresh";
 import {asMachineModel} from "@/library/machine/machineModel";
 import Recipe from "@/library/Recipe";
@@ -480,10 +481,10 @@ export function useRecipeImport({
         // character still nets a single insert.
         const inserted = next.length - previous.length + replaced;
         const pasted = inserted > 1;
-        const source = parseImportInput(next);
+        const entry = parseImportEntry(next);
 
-        if (pasted && source) {
-            void resolve(source, "atomic");
+        if (pasted && entry) {
+            void resolve(entry.source, "atomic", entry.decoration);
             return;
         }
 
@@ -493,9 +494,9 @@ export function useRecipeImport({
         inFlight.current?.abort();
         setState({status: "idle"});
 
-        if (source) {
+        if (entry) {
             debounceTimer.current = setTimeout(() => {
-                void resolve(source, "deliberate");
+                void resolve(entry.source, "deliberate", entry.decoration);
             }, DEBOUNCE_MS);
             return;
         }
@@ -529,9 +530,9 @@ export function useRecipeImport({
 
         lastValue.current = text;
         setValue(text);
-        const source = parseImportInput(text);
-        if (source) {
-            void resolve(source, "atomic");
+        const entry = parseImportEntry(text);
+        if (entry) {
+            void resolve(entry.source, "atomic", entry.decoration);
             return;
         }
 

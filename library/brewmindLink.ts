@@ -1,7 +1,7 @@
 import {fitSizedName} from "./fitName";
 import {readLabels} from "./coffeeLabels";
-import {MAX_NAME} from "./recipeIdentity";
-import {LEGACY_NAMES, PodCoffee, httpsUrl, podCoffeeFromStored} from "./podCoffee";
+import {MAX_DESCRIPTION, MAX_NAME, isValidXID} from "./recipeIdentity";
+import {LEGACY_NAMES, PodCoffee, httpsUrl, podCoffeeFromStored, podImageUrl} from "./podCoffee";
 import {readRoasterColour} from "./roasterColour";
 
 /**
@@ -43,7 +43,7 @@ export const BREWMIND_SOURCE = "brewmind";
 export const SHORT_TEXT = 120;
 /** A URL's cap, shared by the coffee's link, its image, and `recipe.url`. */
 export const MAX_URL = 2000;
-const CAPS: Readonly<Record<string, number>> = {
+export const CAPS: Readonly<Record<string, number>> = {
     restDays: 4,
     peakDay: 4,
     bestUntilDay: 4,
@@ -122,6 +122,12 @@ export type BrewMindLink = {
      * still has something to go back to.
      */
     recipeName?: string;
+    /** `recipe.image`: the recipe's own artwork when distinct from or without `bean.image`. */
+    recipeImage?: string;
+    /** `recipe.description`: the authored one-line note for this recipe. */
+    recipeDescription?: string;
+    /** `recipe.xid`: the xPod ID linked to this recipe. */
+    recipeXid?: string;
     /** Address of the producer's catalogue; parsing never fetches it. */
     feed?: string;
     colour?: string;
@@ -198,6 +204,19 @@ export function parseBrewMindLink(link: string): BrewMindLink | null {
     const recipeName = params.get("recipe.name")?.replace(/\s+/g, " ").trim();
     if (recipeName !== undefined && recipeName !== "") {
         result.recipeName = fitSizedName(recipeName, MAX_NAME);
+    }
+    const recipeImage = params.get("recipe.image")?.trim();
+    if (recipeImage !== undefined && recipeImage.length <= MAX_URL) {
+        const checked = podImageUrl(recipeImage);
+        if (checked !== undefined) result.recipeImage = checked;
+    }
+    const recipeDescription = params.get("recipe.description")?.replace(/\s+/g, " ").trim();
+    if (recipeDescription !== undefined && recipeDescription !== "" && recipeDescription.length <= MAX_DESCRIPTION) {
+        result.recipeDescription = recipeDescription;
+    }
+    const recipeXid = params.get("recipe.xid")?.trim().toUpperCase();
+    if (recipeXid !== undefined && recipeXid !== "" && isValidXID(recipeXid)) {
+        result.recipeXid = recipeXid;
     }
     const flavours = readLabels(params.get("bean.flavours") ?? "");
     if (flavours.length > 0) result.flavours = flavours;

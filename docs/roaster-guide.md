@@ -18,7 +18,7 @@ not-yet-integrated shared Vercel feed service.
 ## A browser page before the app is installed
 
 After deployment is approved and verified, link to
-`https://xbrwplusplus.vercel.app/import` with the same version-1 query fields
+`https://xbrw.app/import` with the same version-1 query fields
 shown below. It renders the complete recipe, your named coffee's metadata,
 photo, flavour labels, tags, notes and roast guidance without JavaScript.
 It uses the app's actual normalizer/decorator, not a second recipe conversion.
@@ -32,7 +32,7 @@ or [Android GitHub Releases](https://github.com/hessius/XBRW/releases/latest)
 Installation does not carry the recipe forward automatically. The app link
 preserves the complete original query. Browser operation does not depend on
 Universal Links/App Links and is not proof that a current store binary
-supports them. Do not substitute `xbrw.app`: ownership is unverified.
+supports them.
 
 Keep the product page (`bean.url`), producer recipe explanation (`recipe.url`)
 and xBloom share link (`share`, shown as **View on xBloom**) distinct, even if
@@ -43,7 +43,7 @@ or secrets in a URL. See the URL guide for all fields, caps and aliases.
 ### Construct the browser link from your data
 
 ```js
-const link = new URL("https://xbrwplusplus.vercel.app/import");
+const link = new URL("https://xbrw.app/import");
 link.searchParams.set("v", "1");
 link.searchParams.set("source", "your-app");
 link.searchParams.set("share", xbloomShareURL);
@@ -310,7 +310,7 @@ template where you want the button:
   {%- assign product_url = shop.url | append: product.url -%}
   {%- assign feed_url = shop.url | append: '/collections/' | append: coffee_collection | append: '?view=xbrw' -%}
   {%- capture xbrw_link -%}
-    https://xbrwplusplus.vercel.app/import?v=1
+    https://xbrw.app/import?v=1
     &source={{ source_name | url_encode }}
     &feed={{ feed_url | url_encode }}
     &share={{ share | url_encode }}

@@ -2,10 +2,10 @@
 
 ## Implementation versus deployment
 
-The existing host is `https://xbrwplusplus.vercel.app`. This branch implements
-the full recipe HTML browser import page; it does **not** record deployment
-of that page. No domain configuration, Vercel deployment, production build or
-native qualification is authorized by this document. Shared feed service B
+The primary public host is `https://xbrw.app` (attached to the Vercel project
+`https://xbrwplusplus.vercel.app`). This document describes the full recipe
+HTML browser import page; it does **not** authorize unapproved Vercel
+deployments, production builds or native qualification. Shared feed service B
 (#281) is not integrated; do not advertise its routes here as deployed.
 
 `api/import.ts` exports the classic Node `(req, res)` adapter, with a Web
@@ -42,9 +42,9 @@ own separately reviewed routes/cache behavior.
 public HTTPS origin, not a secret and not an Expo public bundle variable.
 It must be a bare HTTPS origin without credentials, path, query or fragment.
 If absent, the adapter uses `https://${VERCEL_URL}` when supplied by Vercel,
-otherwise `https://xbrwplusplus.vercel.app`. Configure each environment
-deliberately: do not derive the public origin from an untrusted Host header
-or point it at unowned `xbrw.app`. No mint credentials are required for import.
+otherwise `https://xbrw.app`. Configure each environment
+deliberately: do not derive the public origin from an untrusted Host header.
+No mint credentials are required for import.
 
 ### Local dependency-closure proof
 
@@ -209,3 +209,34 @@ isolated Node smoke above catch an unended socket without deploying probes.
   `login rejected` means the password changed. `share link not found` means the
   mint succeeded but the new row was not in the first 20 of the library listing
   — see the `adaptedModel` note in `cloud-api.md` § C-bis.
+
+## Static landing-page source
+
+`scripts/generate-landing.mjs` owns the landing markup/content in
+`public/index.html` and `public/landing/tokens.css`, derived directly from the
+shared canonical palette in `constants/colors.ts`. After source or palette
+edits, run `npm run generate:landing` and commit both generated outputs.
+`public/landing/site.css`, `carousel.mjs` and `rotation.mjs` are hand-maintained.
+Vercel serves `public` as static files; no Expo/app build is needed.
+`.vercelignore` includes the landing assets while excluding scripts and mobile
+dependencies. The existing API functions remain unchanged; this web-only port
+does not add the unreleased `/import` handoff or other backend/mobile changes.
+
+The six approved raw store-tool screenshots have separate optimized web
+images in `public/landing/screenshots`; captions are HTML, not composed store
+artwork. Before production, confirm the assets and pictured capabilities are
+eligible for the released build. Keep the font's OFL copy byte-identical to
+upstream, including its trailing whitespace; do not rewrite its copyright or
+license to silence a whole-diff whitespace check.
+
+`npm run test:landing` checks rotation and the live-caption adapter regression.
+CI also regenerates the page and rejects drift in either generated output.
+Real-browser acceptance remains required: keyboard/pointer pause and visible
+focus, accessible controls/contrast and targets, initial and runtime native
+reduced motion, no JavaScript, 320/390/1280 widths with 200% text and the longest
+Doto caption, correct download/source URLs, lazy loading and visible broken-image
+fallbacks. The page has no automatic app launch or analytics.
+
+Production DNS/Cloudflare and Vercel domain attachment, deployment, native
+association/signatures and physical-device qualification are separate,
+explicitly authorized gates. This source/CI work closes none of them.
