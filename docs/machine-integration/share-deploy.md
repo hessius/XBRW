@@ -2,10 +2,10 @@
 
 ## Implementation versus deployment
 
-The existing host is `https://xbrwplusplus.vercel.app`. This branch implements
-the full recipe HTML browser import page; it does **not** record deployment
-of that page. No domain configuration, Vercel deployment, production build or
-native qualification is authorized by this document. Shared feed service B
+The primary public host is `https://xbrw.app` (attached to the Vercel project
+`https://xbrwplusplus.vercel.app`). This document describes the full recipe
+HTML browser import page; it does **not** authorize unapproved Vercel
+deployments, production builds or native qualification. Shared feed service B
 (#281) is not integrated; do not advertise its routes here as deployed.
 
 `api/import.ts` exports the classic Node `(req, res)` adapter, with a Web
@@ -42,9 +42,9 @@ own separately reviewed routes/cache behavior.
 public HTTPS origin, not a secret and not an Expo public bundle variable.
 It must be a bare HTTPS origin without credentials, path, query or fragment.
 If absent, the adapter uses `https://${VERCEL_URL}` when supplied by Vercel,
-otherwise `https://xbrwplusplus.vercel.app`. Configure each environment
-deliberately: do not derive the public origin from an untrusted Host header
-or point it at unowned `xbrw.app`. No mint credentials are required for import.
+otherwise `https://xbrw.app`. Configure each environment
+deliberately: do not derive the public origin from an untrusted Host header.
+No mint credentials are required for import.
 
 ### Local dependency-closure proof
 

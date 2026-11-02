@@ -238,10 +238,11 @@ RNTL v14 has removed both `UNSAFE_getAllByType` and `root.findAllByType`. A test
   pure normalizer/decorator dependency closure, bounded fixed read-only xBloom
   lookup, lossless query app link and three private/no-store cache headers.
   Studio is the fallback; preserve explicit Original recipes without grind
-  conversion. There is no automatic launch or post-install handoff. Existing
-  host `xbrwplusplus.vercel.app` does not prove native association in a store
-  binary; `xbrw.app` is unowned/unverified. Shared feed B (#281), domain/native
-  association acceptance and production deployment remain separate gates.
+  conversion. There is no automatic launch or post-install handoff. Production
+  host `https://xbrw.app` (with `https://xbrwplusplus.vercel.app` as the Vercel
+  project alias) serves the web landing and `/import` browser page; native
+  Universal Links / Android App Links association in a store binary, shared feed
+  B (#281) and production release promotion remain separate gates.
 
 - `NfcOverlay.tsx` is the scanning ceremony for both platforms. On iOS it sits above the system NFC sheet; on Android, where there is no system sheet at all, it *is* the entire experience. (It replaced the old Android-only `AndroidNFCDialog`.) NFC code paths check `nfc.getIsClosed()` before surfacing errors, since a user-cancelled Android scan throws.
 - Marketing version lives in `app.json` (`expo.version`, currently `2.2.0`); `runtimeVersion.policy` is `fingerprint`, so native compatibility follows native inputs rather than that version alone. A native-affecting change requires a new native build and device qualification, never an update to an older runtime. EAS build profiles: `development`, `preview`, `production`. Note `eas.json` sets `appVersionSource: "remote"`, so EAS holds the build number server-side.

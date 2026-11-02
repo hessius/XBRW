@@ -75,10 +75,14 @@ function hueGap(x: number, y: number): number {
 export function roasterAccent(colour: unknown, group: AccentGroup): number | null {
     const hex = readRoasterColour(colour);
     if (hex === undefined) return null;
+
+    const palette = accents[group];
+    const exact = palette.findIndex(entry => entry.toUpperCase() === hex);
+    if (exact !== -1) return exact;
+
     const target = hueOf(hex);
     if (!target || target.chroma < MIN_ACCENT_CHROMA) return null;
 
-    const palette = accents[group];
     let best: number | null = null;
     let bestGap = Infinity;
     for (let i = 0; i < palette.length; i++) {
