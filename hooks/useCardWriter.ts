@@ -118,7 +118,7 @@ export function useCardWriter(
             if (e instanceof CardCapacityError) {
                 notify({
                     tone: "error",
-                    message: cardTooSmall(recipe?.pours.length ?? 0, e.maxStages())
+                    message: cardTooSmall(recipe?.getCardPourCount() ?? 0, e.maxStages())
                 });
             } else if (e instanceof CardWriteError) {
                 notify({tone: "error", message: CARD_SIZE_UNKNOWN});

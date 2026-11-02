@@ -20,8 +20,8 @@ export {
 export {MAX_CARD_POUR_VOLUME} from "./cardWriteErrors";
 export const DEFAULT_GRIND_SIZE = 50;
 
-/** Byte 40 encodes the record count as `count << 3`, so 31 is the 5-bit ceiling. */
-const MAX_CARD_POUR_RECORDS = 31;
+/** The largest stage volume `cardLimits` permits on a coffee recipe (`COFFEE_POUR_VOLUME.max`). */
+const MAX_COFFEE_STAGE_VOLUME = 240;
 
 type CardPourRecord = {
     volume: number;
@@ -32,14 +32,16 @@ type CardPourRecord = {
     flowRate: number;
 };
 
-function expandPoursForCard(pours: readonly Pour[]): CardPourRecord[] {
+function expandPoursForCard(pours: readonly Pour[], isTea: boolean): CardPourRecord[] {
     const records: CardPourRecord[] = [];
     for (const pour of pours) {
         const volume = pour.getVolume();
         if (
+            isTea ||
             !Number.isFinite(volume) ||
+            !Number.isInteger(volume) ||
             volume <= MAX_CARD_POUR_VOLUME ||
-            !Number.isInteger(volume)
+            volume > MAX_COFFEE_STAGE_VOLUME
         ) {
             records.push({
                 volume,
@@ -52,33 +54,28 @@ function expandPoursForCard(pours: readonly Pour[]): CardPourRecord[] {
             continue;
         }
 
-        let remaining = volume;
-        let firstChunk = true;
-        while (remaining > MAX_CARD_POUR_VOLUME && records.length < MAX_CARD_POUR_RECORDS - 1) {
-            records.push({
+        records.push(
+            {
                 volume: MAX_CARD_POUR_VOLUME,
                 temperature: pour.getTemperature(),
                 pourPattern: pour.getPourPattern(),
-                agitation: firstChunk && pour.getAgitationBefore()
+                agitation: pour.getAgitationBefore()
                     ? AGITATION.BEFORE_ON_AFTER_OFF
                     : AGITATION.ALL_OFF,
                 pauseTime: 0,
                 flowRate: pour.getFlowRate(),
-            });
-            remaining -= MAX_CARD_POUR_VOLUME;
-            firstChunk = false;
-        }
-
-        records.push({
-            volume: remaining,
-            temperature: pour.getTemperature(),
-            pourPattern: pour.getPourPattern(),
-            agitation: pour.getAgitationAfter()
-                ? AGITATION.BEFORE_OFF_AFTER_ON
-                : AGITATION.ALL_OFF,
-            pauseTime: pour.getPauseTime(),
-            flowRate: pour.getFlowRate(),
-        });
+            },
+            {
+                volume: volume - MAX_CARD_POUR_VOLUME,
+                temperature: pour.getTemperature(),
+                pourPattern: pour.getPourPattern(),
+                agitation: pour.getAgitationAfter()
+                    ? AGITATION.BEFORE_OFF_AFTER_ON
+                    : AGITATION.ALL_OFF,
+                pauseTime: pour.getPauseTime(),
+                flowRate: pour.getFlowRate(),
+            }
+        );
     }
     return records;
 }
@@ -788,7 +785,7 @@ class Recipe {
      * card records so the volume byte stays positive (`<= 0x7F`, `#289`).
      */
     public getCardPourCount(): number {
-        return expandPoursForCard(this.pours).length;
+        return expandPoursForCard(this.pours, this.isTea()).length;
     }
 
     public getData(prefix: number[] | null = null, withSignature: boolean = false): number[] {
@@ -813,7 +810,7 @@ class Recipe {
             data.push(this.cupType);
         }
 
-        const cardPours = expandPoursForCard(this.pours);
+        const cardPours = expandPoursForCard(this.pours, this.isTea());
         data.push(cardPours.length << 3);
         let pourNumber = 0;
         for (const pour of cardPours) {

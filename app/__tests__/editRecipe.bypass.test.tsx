@@ -350,6 +350,20 @@ describe("stage ceiling advisory", () => {
         expect(screen.getByLabelText("Save").props.accessibilityState.disabled)
             .toBeFalsy();
     });
+
+    it("advises when ten editor stages expand to eleven card stages because a stage exceeds 127 ml", async () => {
+        mockSettings.lastCardRead = "";
+        const r = recipeWithStageCount(10) as Recipe;
+        r.dosage = 15;
+        r.ratio = 15;
+        r.pours[0].volume = 135;
+        for (let i = 1; i < 10; i++) r.pours[i].volume = 10;
+        await renderEditor(r);
+        await fireEvent.press(screen.getByLabelText(/^Stages,/));
+
+        expect(screen.getByTestId("stage-ceiling"))
+            .toHaveTextContent(/Stages above 127 ml take two card stages, so this recipe needs 11 stages on a card that holds 10/);
+    });
 });
 
 describe("editor XID lookup", () => {

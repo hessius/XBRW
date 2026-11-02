@@ -163,20 +163,16 @@ function recipeProblems(
     }
 
     const maxPours = tea ? MAX_TEA_POURS : MAX_POURS;
-    const volumeRange = tea ? TEA_POUR_VOLUME : COFFEE_POUR_VOLUME;
-    const pauseRange = tea ? TEA_POUR_PAUSE : COFFEE_POUR_PAUSE;
-
     if (recipe.pours.length < 1) {
         problems.push("The recipe has no stages.");
     } else if (recipe.pours.length > maxPours) {
         problems.push(STAGE_COUNT(recipe.pours.length, maxPours));
-    } else if (
-        !tea &&
-        recipe.pours.every((pour) => !outside(pour.volume, volumeRange)) &&
-        recipe.getCardPourCount() > maxPours
-    ) {
+    } else if (!tea && recipe.getCardPourCount() > maxPours) {
         problems.push(CARD_STAGE_COUNT(recipe.getCardPourCount(), maxPours));
     }
+
+    const volumeRange = tea ? TEA_POUR_VOLUME : COFFEE_POUR_VOLUME;
+    const pauseRange = tea ? TEA_POUR_PAUSE : COFFEE_POUR_PAUSE;
 
     recipe.pours.forEach((pour, index) => {
         const stage = index + 1;

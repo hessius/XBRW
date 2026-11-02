@@ -107,6 +107,23 @@ describe("Bluetooth stages are not NFC card capacity", () => {
         ];
 
         expect(cardWriteProblems(nineEditorStagesTenCardStages)).toEqual([]);
+
+        const splitStagePlusOutOfRangeStage = validRecipe();
+        splitStagePlusOutOfRangeStage.dosage = 15;
+        splitStagePlusOutOfRangeStage.ratio = 15;
+        splitStagePlusOutOfRangeStage.pours = [
+            new Pour(1, 135, 93, 30, 0, POUR_PATTERN.CIRCULAR, 0),
+            ...Array.from({length: 8}, (_, i) =>
+                new Pour(i + 2, 10, 93, 30, 0, POUR_PATTERN.CIRCULAR, 0)
+            ),
+            new Pour(10, 0, 93, 30, 0, POUR_PATTERN.CIRCULAR, 0),
+        ];
+
+        const problems = cardWriteProblems(splitStagePlusOutOfRangeStage);
+        expect(problems).toContain(
+            "Stages above 127 ml take two card stages, so this recipe needs 11 stages on the card. The most is 10."
+        );
+        expect(problems).toContain("Stage 10 pours 0 ml. The most is 240 ml.");
     });
 });
 
