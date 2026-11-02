@@ -1,5 +1,5 @@
-import Recipe, {CUP_TYPE, DEFAULT_GRIND_SIZE, GRIND_SIZE_OFFSET, GRINDER_OFF} from '../Recipe';
-import {AGITATION, POUR_PATTERN} from '../Pour';
+import Recipe, {CUP_TYPE, DEFAULT_GRIND_SIZE, GRIND_SIZE_OFFSET, GRINDER_OFF, MAX_CARD_POUR_VOLUME} from '../Recipe';
+import Pour, {AGITATION, POUR_PATTERN} from '../Pour';
 import {buildCard, crc8MaximDow, HASH_LENGTH, makeHash, TEA_CARD, XPOD_CARD} from './cardFixtures';
 import {resolveAppearance} from "@/constants/colors";
 import {THEME_IDS} from "@/library/appearance";
@@ -332,5 +332,112 @@ describe('dripper overflow protection and the card', () => {
 
         expect(after).toEqual(before);
         expect(after.slice(0, HASH_LENGTH)).toEqual(prefix);
+    });
+});
+
+describe('splitting pours above 127 ml on the card (#289)', () => {
+    it('splits the 135 ml stage of the #289 Happiness recipe into 127 ml + 8 ml card records', () => {
+        const hash = makeHash();
+        const recipe = new Recipe();
+        recipe.xid = '';
+        recipe.cupType = CUP_TYPE.OTHER;
+        recipe.dosage = 15;
+        recipe.ratio = 15;
+        recipe.grinder = true;
+        recipe.grindSize = 60;
+        recipe.grindRPM = 60;
+        recipe.pours = [
+            new Pour(1, 45, 80, 30, AGITATION.ALL_OFF, POUR_PATTERN.SPIRAL, 15),
+            new Pour(2, 45, 90, 35, AGITATION.BEFORE_OFF_AFTER_ON, POUR_PATTERN.CIRCULAR, 18),
+            new Pour(3, 135, 88, 35, AGITATION.BEFORE_OFF_AFTER_ON, POUR_PATTERN.SPIRAL, 0),
+        ];
+
+        expect(recipe.getCardPourCount()).toBe(4);
+        const encoded = recipe.getData(hash, true);
+
+        const expected = buildCard({
+            hash,
+            xid: '',
+            cupType: CUP_TYPE.OTHER,
+            dosage: 15,
+            grindRPM: 60,
+            grindSize: 60,
+            ratio: 15,
+            pours: [
+                {volume: 45, temperature: 80, pattern: POUR_PATTERN.SPIRAL, agitation: AGITATION.ALL_OFF, pauseSeconds: 15, flowRate: 30},
+                {volume: 45, temperature: 90, pattern: POUR_PATTERN.CIRCULAR, agitation: AGITATION.BEFORE_OFF_AFTER_ON, pauseSeconds: 18, flowRate: 35},
+                {volume: 127, temperature: 88, pattern: POUR_PATTERN.SPIRAL, agitation: AGITATION.ALL_OFF, pauseSeconds: 0, flowRate: 35},
+                {volume: 8, temperature: 88, pattern: POUR_PATTERN.SPIRAL, agitation: AGITATION.BEFORE_OFF_AFTER_ON, pauseSeconds: 0, flowRate: 35},
+            ],
+        });
+
+        expect(encoded).toEqual(expected);
+
+        const decoded = new Recipe(encoded);
+        expect(decoded.pours.map(p => p.volume)).toEqual([45, 45, 127, 8]);
+        expect(decoded.getPourTotalVolume()).toBe(225);
+        expect(decoded.dosage).toBe(15);
+        expect(decoded.grindRPM).toBe(60);
+        expect(decoded.grindSize).toBe(60);
+        expect(decoded.ratio).toBe(15);
+        expect(decoded.fingerprint()).toBe(recipe.fingerprint());
+    });
+
+    it('keeps dose, grind RPM and before-agitation on the lead record and moves pause and after-agitation to the trailing record when Stage 1 exceeds 127 ml', () => {
+        const hash = makeHash();
+        const recipe = new Recipe();
+        recipe.xid = 'ONE225';
+        recipe.cupType = CUP_TYPE.XPOD;
+        recipe.dosage = 15;
+        recipe.ratio = 15;
+        recipe.grinder = true;
+        recipe.grindSize = 55;
+        recipe.grindRPM = 90;
+        recipe.pours = [
+            new Pour(1, 225, 93, 32, AGITATION.BEFORE_ON_AFTER_ON, POUR_PATTERN.CIRCULAR, 20),
+        ];
+
+        expect(recipe.getCardPourCount()).toBe(2);
+        const encoded = recipe.getData(hash, true);
+
+        const expected = buildCard({
+            hash,
+            xid: 'ONE225',
+            cupType: CUP_TYPE.XPOD,
+            dosage: 15,
+            grindRPM: 90,
+            grindSize: 55,
+            ratio: 15,
+            pours: [
+                {volume: MAX_CARD_POUR_VOLUME, temperature: 93, pattern: POUR_PATTERN.CIRCULAR, agitation: AGITATION.BEFORE_ON_AFTER_OFF, pauseSeconds: 0, flowRate: 32},
+                {volume: 98, temperature: 93, pattern: POUR_PATTERN.CIRCULAR, agitation: AGITATION.BEFORE_OFF_AFTER_ON, pauseSeconds: 20, flowRate: 32},
+            ],
+        });
+
+        expect(encoded).toEqual(expected);
+
+        const decoded = new Recipe(encoded);
+        expect(decoded.dosage).toBe(15);
+        expect(decoded.grindRPM).toBe(90);
+        expect(decoded.getPourTotalVolume()).toBe(225);
+        expect(decoded.pours[0].agitation).toBe(AGITATION.BEFORE_ON_AFTER_OFF);
+        expect(decoded.pours[0].pauseTime).toBe(0);
+        expect(decoded.pours[1].agitation).toBe(AGITATION.BEFORE_OFF_AFTER_ON);
+        expect(decoded.pours[1].pauseTime).toBe(20);
+        expect(decoded.fingerprint()).toBe(recipe.fingerprint());
+    });
+
+    it('leaves a 127 ml stage as a single card pour record', () => {
+        const recipe = new Recipe(buildCard({
+            ...XPOD_CARD,
+            dosage: 15,
+            ratio: 10,
+            pours: [
+                {volume: 127, temperature: 93, pattern: POUR_PATTERN.CIRCULAR, agitation: AGITATION.BEFORE_ON_AFTER_ON, pauseSeconds: 10, flowRate: 30},
+                {volume: 23, temperature: 93, pattern: POUR_PATTERN.CIRCULAR, agitation: AGITATION.ALL_OFF, pauseSeconds: 0, flowRate: 30},
+            ],
+        }));
+
+        expect(recipe.getCardPourCount()).toBe(2);
     });
 });

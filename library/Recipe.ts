@@ -1,5 +1,5 @@
 import NFC from "./NFC";
-import {CardWriteError} from "./cardWriteErrors";
+import {CardWriteError, MAX_CARD_POUR_VOLUME} from "./cardWriteErrors";
 import type {CardCapture} from "./cardDiagnostics";
 import {httpsUrl, podCoffeeFromStored, podImageUrl, type PodCoffee} from "./podCoffee";
 import Pour, {AGITATION, POUR_PATTERN} from "./Pour";
@@ -17,7 +17,71 @@ export {
     MAX_NAME, MAX_DESCRIPTION, MAX_TAG_LENGTH, MAX_TAGS_PER_RECIPE, isValidXID, type RecipeSource,
 } from "./recipeIdentity";
 
+export {MAX_CARD_POUR_VOLUME} from "./cardWriteErrors";
 export const DEFAULT_GRIND_SIZE = 50;
+
+/** Byte 40 encodes the record count as `count << 3`, so 31 is the 5-bit ceiling. */
+const MAX_CARD_POUR_RECORDS = 31;
+
+type CardPourRecord = {
+    volume: number;
+    temperature: number;
+    pourPattern: number;
+    agitation: number;
+    pauseTime: number;
+    flowRate: number;
+};
+
+function expandPoursForCard(pours: readonly Pour[]): CardPourRecord[] {
+    const records: CardPourRecord[] = [];
+    for (const pour of pours) {
+        const volume = pour.getVolume();
+        if (
+            !Number.isFinite(volume) ||
+            volume <= MAX_CARD_POUR_VOLUME ||
+            !Number.isInteger(volume)
+        ) {
+            records.push({
+                volume,
+                temperature: pour.getTemperature(),
+                pourPattern: pour.getPourPattern(),
+                agitation: pour.getAgitation(),
+                pauseTime: pour.getPauseTime(),
+                flowRate: pour.getFlowRate(),
+            });
+            continue;
+        }
+
+        let remaining = volume;
+        let firstChunk = true;
+        while (remaining > MAX_CARD_POUR_VOLUME && records.length < MAX_CARD_POUR_RECORDS - 1) {
+            records.push({
+                volume: MAX_CARD_POUR_VOLUME,
+                temperature: pour.getTemperature(),
+                pourPattern: pour.getPourPattern(),
+                agitation: firstChunk && pour.getAgitationBefore()
+                    ? AGITATION.BEFORE_ON_AFTER_OFF
+                    : AGITATION.ALL_OFF,
+                pauseTime: 0,
+                flowRate: pour.getFlowRate(),
+            });
+            remaining -= MAX_CARD_POUR_VOLUME;
+            firstChunk = false;
+        }
+
+        records.push({
+            volume: remaining,
+            temperature: pour.getTemperature(),
+            pourPattern: pour.getPourPattern(),
+            agitation: pour.getAgitationAfter()
+                ? AGITATION.BEFORE_OFF_AFTER_ON
+                : AGITATION.ALL_OFF,
+            pauseTime: pour.getPauseTime(),
+            flowRate: pour.getFlowRate(),
+        });
+    }
+    return records;
+}
 
 const POLY_TABLE = [
     0x00, 0x5E, 0xBC, 0xE2, 0x61, 0x3F, 0xDD, 0x83,
@@ -716,6 +780,17 @@ class Recipe {
         return false;
     }
 
+    /**
+     * The number of 8-byte pour records `getData()` will write to the card.
+     *
+     * Usually `this.pours.length`, except when a coffee stage pours more than
+     * `MAX_CARD_POUR_VOLUME` (127 ml) and has to be split across consecutive
+     * card records so the volume byte stays positive (`<= 0x7F`, `#289`).
+     */
+    public getCardPourCount(): number {
+        return expandPoursForCard(this.pours).length;
+    }
+
     public getData(prefix: number[] | null = null, withSignature: boolean = false): number[] {
         let data: number[] = [];
 
@@ -738,16 +813,17 @@ class Recipe {
             data.push(this.cupType);
         }
 
-        data.push(this.pours.length << 3);
+        const cardPours = expandPoursForCard(this.pours);
+        data.push(cardPours.length << 3);
         let pourNumber = 0;
-        for (let pour of this.pours) {
+        for (const pour of cardPours) {
             pourNumber++;
-            data.push(pour.getVolume());
-            data.push(pour.getTemperature());
-            data.push(pour.getPourPattern());
-            data.push(pour.getAgitation());
+            data.push(pour.volume);
+            data.push(pour.temperature);
+            data.push(pour.pourPattern);
+            data.push(pour.agitation);
 
-            let pauseTime = pour.getPauseTime();
+            let pauseTime = pour.pauseTime;
 
             let waitSeconds = 0;
             let waitMinutes = 0;
@@ -776,7 +852,7 @@ class Recipe {
                 data.push(0x00);
             }
 
-            data.push(pour.getFlowRate());
+            data.push(pour.flowRate);
         }
 
         if (this.isTea()) {

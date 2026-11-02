@@ -77,6 +77,37 @@ describe("Bluetooth stages are not NFC card capacity", () => {
         expect(brewProblems(stages(22, 135, 30, 99)))
             .toContain("The recipe is too large to send over Bluetooth. Reduce the number or volume of stages.");
     });
+
+    it("counts split pours above 127 ml against the 10-stage NFC card ceiling while still allowing Bluetooth", () => {
+        const tenEditorStagesElevenCardStages = validRecipe();
+        tenEditorStagesElevenCardStages.dosage = 15;
+        tenEditorStagesElevenCardStages.ratio = 15;
+        tenEditorStagesElevenCardStages.pours = [
+            new Pour(1, 135, 93, 30, 0, POUR_PATTERN.CIRCULAR, 0),
+            ...Array.from({length: 9}, (_, i) =>
+                new Pour(i + 2, 10, 93, 30, 0, POUR_PATTERN.CIRCULAR, 0)
+            ),
+        ];
+
+        expect(cardWriteProblems(tenEditorStagesElevenCardStages)).toEqual([
+            "Stages above 127 ml take two card stages, so this recipe needs 11 stages on the card. The most is 10.",
+        ]);
+        expect(brewProblems(tenEditorStagesElevenCardStages)).toEqual([]);
+        expect(outOfRangeProblems(tenEditorStagesElevenCardStages)).toEqual([]);
+
+        const nineEditorStagesTenCardStages = validRecipe();
+        nineEditorStagesTenCardStages.dosage = 15;
+        nineEditorStagesTenCardStages.ratio = 15;
+        nineEditorStagesTenCardStages.pours = [
+            new Pour(1, 135, 93, 30, 0, POUR_PATTERN.CIRCULAR, 0),
+            new Pour(2, 20, 93, 30, 0, POUR_PATTERN.CIRCULAR, 0),
+            ...Array.from({length: 7}, (_, i) =>
+                new Pour(i + 3, 10, 93, 30, 0, POUR_PATTERN.CIRCULAR, 0)
+            ),
+        ];
+
+        expect(cardWriteProblems(nineEditorStagesTenCardStages)).toEqual([]);
+    });
 });
 
 describe("a recipe outside the machine's bounds", () => {
