@@ -1,9 +1,10 @@
-import React, {useState} from "react";
+import React, {useState, Fragment} from "react";
 import {Pressable, ScrollView, TextInput, View} from "react-native";
 import {Text, XStack, YStack} from "tamagui";
 
 import SegmentedControl from "@/components/SegmentedControl";
 import SettingsActionRow from "@/components/SettingsActionRow";
+import MachineSettingsSheet from "@/components/MachineSettingsSheet";
 import {MODEL_NAMES} from "@/components/MachinePickerSheet";
 import XbrwSheet from "@/components/XbrwSheet";
 import {notify} from "@/components/XbrwToast";
@@ -87,35 +88,38 @@ type Props = {
 export default function MachineDetailSheet({machineId, onClose, onForget, settings}: Props) {
     const {palette} = useAppearance();
     const {machines, rename, setModel, setColour, makeDefault, move} = useSavedMachines(settings);
-    const {remembered, status, changeBlocker, choose}
+    const {remembered, status, changeBlocker, choose, machine}
         = useMachine(undefined, {settings});
     const index = machines.findIndex((entry) => entry.id === machineId);
-    const machine = index < 0 ? null : machines[index];
+    const machineEntry = index < 0 ? null : machines[index];
 
-    const [draft, setDraft] = useState(machine?.label ?? "");
+    const [draft, setDraft] = useState(machineEntry?.label ?? "");
     // Seeded per machine rather than per mount, the `RenameSheet` way: read at
     // render against the machine it was seeded for, never from an effect.
     const [seededFor, setSeededFor] = useState(machineId);
+    const [settingsSheetOpen, setSettingsSheetOpen] = useState(false);
     if (seededFor !== machineId) {
         setSeededFor(machineId);
-        setDraft(machine?.label ?? "");
+        setDraft(machineEntry?.label ?? "");
     }
 
     function commitName(): void {
-        if (machine !== null && draft.trim() !== machine.label) rename(machine.id, draft);
+        if (machineEntry !== null && draft.trim() !== machineEntry.label) rename(machineEntry.id, draft);
     }
 
-    const active = machine !== null && machine.id === remembered;
-    const title = machine === null ? "Machine" : machineLabel(machine, index);
+    const active = machineEntry !== null && machineEntry.id === remembered;
+    const linked = machineEntry !== null && machineEntry.id === machine.linkedDeviceId;
+    const title = machineEntry === null ? "Machine" : machineLabel(machineEntry, index);
 
     return (
-        <XbrwSheet open={machine !== null}
-                   onOpenChange={(next) => {
-                       if (next) return;
-                       commitName();
-                       onClose();
-                   }}
-                   title={title} heightPercent={80}>
+        <Fragment>
+            <XbrwSheet open={machine !== null}
+                       onOpenChange={(next) => {
+                           if (next) return;
+                           commitName();
+                           onClose();
+                       }}
+                       title={title} heightPercent={80}>
             {machine !== null && (
                 // Scrolls: with the keyboard up on a small screen, or on a
                 // folded phone's cover screen, the rows below the name field
@@ -130,9 +134,9 @@ export default function MachineDetailSheet({machineId, onClose, onForget, settin
                             : index === 0 ? "Tried first." : `Tried after ${index} other${index === 1 ? "" : "s"}.`}
                     </Text>
                     <Text testID="machine-detail-id" fontSize={13} color={palette.dim}>
-                        {machine.serial !== ""
-                            ? `Serial ${machine.serial}. Printed on the machine, so you can check which one this is.`
-                            : `${machineTag(machine)}. The serial shows here once it has connected.`}
+                        {machineEntry?.serial !== ""
+                            ? `Serial ${machineEntry?.serial}. Printed on the machine, so you can check which one this is.`
+                            : `${machineTag(machineEntry)}. The serial shows here once it has connected.`}
                     </Text>
 
                     <TextInput
@@ -160,37 +164,37 @@ export default function MachineDetailSheet({machineId, onClose, onForget, settin
                         this machine from the others at a glance. Only with
                         two or more saved, so one machine stays the green it
                         has always been. */}
-                    {machines.length > 1 && (
+                    {machines.length > 1 && machineEntry && (
                         <YStack gap="$1">
                             <Text fontSize={13} color={palette.dim}>
                                 Colour. The link glyph on the home screen takes it while this machine is connected.
                             </Text>
-                            <ColourChoice value={machineColours.indexOf(machineColourOf(machine))}
-                                          onChange={(next) => setColour(machine.id, next)}/>
+                            <ColourChoice value={machineColours.indexOf(machineColourOf(machineEntry))}
+                                          onChange={(next) => setColour(machineEntry.id, next)}/>
                         </YStack>
                     )}
 
                     {/* No choice once the serial has named the model: the
                         serial set it, and a choice could only point imports at
                         the wrong grind scale. */}
-                    {modelFromSerial(machine.serial) === machine.model ? (
+                    {machineEntry && modelFromSerial(machineEntry.serial) === machineEntry.model ? (
                         <Text testID="machine-detail-model" fontSize={13} color={palette.dim}>
-                            {`${MODEL_NAMES[machine.model]}, read from its serial. Recipes are fetched for this model.`}
+                            {`${MODEL_NAMES[machineEntry.model]}, read from its serial. Recipes are fetched for this model.`}
                         </Text>
-                    ) : <YStack gap="$2">
+                    ) : machineEntry && <YStack gap="$2">
                         <Text fontSize={13} color={palette.dim}>
                             Which xBloom this is. Recipes are fetched for the model of the machine in use, and grind
                             scales differ, so set each machine to its own model.
                         </Text>
-                        <SegmentedControl value={machine.model} options={MODEL_OPTIONS}
+                        <SegmentedControl value={machineEntry.model} options={MODEL_OPTIONS}
                                           accessibilityLabel="Model"
                                           onChange={(value) => {
-                                              if (isMachineModel(value)) setModel(machine.id, value);
+                                              if (isMachineModel(value)) setModel(machineEntry.id, value);
                                           }}/>
                     </YStack>}
 
                     <YStack borderRadius="$4" backgroundColor={palette.surface} overflow="hidden">
-                        {!(active && status === "connected") && (
+                        {!(active && status === "connected") && machineEntry && (
                             <SettingsActionRow
                                 label="Use this machine now"
                                 disabled={changeBlocker !== null}
@@ -203,7 +207,7 @@ export default function MachineDetailSheet({machineId, onClose, onForget, settin
                                     // outcome is said in a toast, the way the
                                     // picker says it.
                                     notify({tone: "info", message: `Connecting to ${title}…`});
-                                    choose(machine.id).then(
+                                    choose(machineEntry.id).then(
                                         () => notify({tone: "success", message: `Connected to ${title}`}),
                                         (error: unknown) => notify({
                                             tone: "error",
@@ -213,42 +217,57 @@ export default function MachineDetailSheet({machineId, onClose, onForget, settin
                                     );
                                 }}/>
                         )}
-                        {index > 0 && (
+                        {index > 0 && machineEntry && (
                             <SettingsActionRow label="Try this one first"
                                                detail="Moves it to the top. When the app connects by itself, it takes the highest machine nearby."
-                                               onPress={() => makeDefault(machine.id)}/>
+                                               onPress={() => makeDefault(machineEntry.id)}/>
                         )}
-                        {index > 0 && (
+                        {index > 0 && machineEntry && (
                             <SettingsActionRow label="Move up"
-                                               onPress={() => move(machine.id, -1)}/>
+                                               onPress={() => move(machineEntry.id, -1)}/>
                         )}
-                        {index < machines.length - 1 && (
+                        {index < machines.length - 1 && machineEntry && (
                             <SettingsActionRow label="Move down"
-                                               onPress={() => move(machine.id, 1)}/>
+                                               onPress={() => move(machineEntry.id, 1)}/>
                         )}
-                        <SettingsActionRow
-                            label="Forget this machine" tone="danger"
-                            disabled={changeBlocker !== null}
-                            // Locked like "Use this machine now": forgetting
-                            // the machine in use mid-brew would hand the next
-                            // BREW to another machine while this one pours.
-                            detail={changeBlocker ?? (machines.length > 1
-                                ? "Takes it off the list. Add it again to get it back."
-                                : "XBRW++ will scan again next time.")}
-                            // Asks first: it used to forget on the tap, and a
-                            // machine forgotten by accident has to be found
-                            // by a scan again. This sheet closes so the
-                            // question is the only sheet up.
-                            onPress={() => {
-                                if (changeBlocker !== null) return;
-                                commitName();
-                                onClose();
-                                onForget?.(machine.id);
-                            }}/>
+                        {active && linked && machineEntry && (
+                            <SettingsActionRow
+                                label="Machine settings"
+                                detail="Temperature, weight, brightness, water source, calibration"
+                                onPress={() => setSettingsSheetOpen(true)}/>
+                        )}
+                        {machineEntry && (
+                            <SettingsActionRow
+                                label="Forget this machine" tone="danger"
+                                disabled={changeBlocker !== null}
+                                // Locked like "Use this machine now": forgetting
+                                // the machine in use mid-brew would hand the next
+                                // BREW to another machine while this one pours.
+                                detail={changeBlocker ?? (machines.length > 1
+                                    ? "Takes it off the list. Add it again to get it back."
+                                    : "XBRW++ will scan again next time.")}
+                                // Asks first: it used to forget on the tap, and a
+                                // machine forgotten by accident has to be found
+                                // by a scan again. This sheet closes so the
+                                // question is the only sheet up.
+                                onPress={() => {
+                                    if (changeBlocker !== null) return;
+                                    commitName();
+                                    onClose();
+                                    onForget?.(machineEntry.id);
+                                }}/>
+                        )}
                     </YStack>
                 </YStack>
                 </ScrollView>
             )}
         </XbrwSheet>
+
+        <MachineSettingsSheet
+            machineId={settingsSheetOpen ? machineId : null}
+            onClose={() => setSettingsSheetOpen(false)}
+            settings={settings}
+        />
+    </Fragment>
     );
 }

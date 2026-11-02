@@ -788,7 +788,7 @@ export default class Machine {
         // has to land, so its failure is worth a line of its own.
         // Listening before the handshake: the machine sends its vitals by
         // itself right after acknowledging it, and nothing else asks for them.
-        const heard = this.waitForInfo();
+        const heard = this.waitForAnyInfo();
         try {
             await this.shakeHands();
         } catch (e) {
@@ -803,7 +803,7 @@ export default class Machine {
         // on V12.0D.500 a bare request is ignored (2026-10-19), and a second
         // handshake would beep twice for one connect. A machine that stays
         // quiet is asked once more, with a handshake, at the first BREW.
-        if (!await heard && this.info === null) this.note("machine did not say how it is doing");
+        if (!heard && this.info === null) this.note("machine did not say how it is doing");
         if (generation !== this.generation) throw new Error("Connection was superseded.");
     }
 
@@ -843,7 +843,7 @@ export default class Machine {
     }
 
     /**
-     * Wait for the next info frame.
+     * Wait for the next info frame (any info frame).
      *
      * The *next* one, not "one at some point": a caller asking how the machine
      * is doing now must not be handed the answer to a question asked when the
@@ -853,7 +853,7 @@ export default class Machine {
      *
      * @returns whether the machine answered before the window closed.
      */
-    private waitForInfo(): Promise<boolean> {
+    private waitForAnyInfo(): Promise<boolean> {
         return new Promise((resolve) => {
             const finish = (answered: boolean): void => {
                 clearTimeout(timer);
@@ -930,7 +930,7 @@ export default class Machine {
         const infoBeforeRequest = this.info;
         // Listening before the handshake, not after: the info can arrive
         // inside the write, since the radio delivers on its own thread.
-        const answered = this.waitForInfo();
+        const answered = this.waitForAnyInfo();
         try {
             await this.shakeHands();
         } catch (error) {
@@ -1761,6 +1761,159 @@ export default class Machine {
         this.assertOrdinaryOperation();
         this.leavePause();
         await this.send(buildType1(COMMAND_RESUME, [1]));
+    }
+
+    // ——— Machine Settings (evidence-backed, V12.0D.500 2026-11-02) ————————
+
+    /**
+     * Set the temperature unit and wait for readback confirmation.
+     *
+     * Sends 8010 with the unit value, then waits for a 40521 info frame
+     * with the updated tempUnit_40 field. Returns the confirmed unit.
+     *
+     * @param unit 0 = Fahrenheit, 1 = Celsius
+     * @returns the unit confirmed by the machine, or null if no readback
+     */
+    async setTemperatureUnit(unit: 0 | 1): Promise<0 | 1 | null> {
+        this.assertOrdinaryOperation();
+        const generation = this.generation;
+        await this.send(buildType1(8010, [unit]));
+        // Wait for the info blob with updated tempUnit_40
+        const info = await this.waitForInfo((info) => info.tempUnit === unit, 3000);
+        if (info === null || generation !== this.generation) return null;
+        return info.tempUnit as 0 | 1;
+    }
+
+    /**
+     * Set the weight unit and wait for readback confirmation.
+     *
+     * Sends 8005 with the unit value, then waits for a 40521 info frame
+     * with the updated weightUnit_41 field. Returns the confirmed unit.
+     *
+     * @param unit 0 = ml, 1 = g, 2 = oz
+     * @returns the unit confirmed by the machine, or null if no readback
+     */
+    async setWeightUnit(unit: 0 | 1 | 2): Promise<0 | 1 | 2 | null> {
+        this.assertOrdinaryOperation();
+        const generation = this.generation;
+        await this.send(buildType1(8005, [unit]));
+        const info = await this.waitForInfo((info) => info.weightUnit === unit, 3000);
+        if (info === null || generation !== this.generation) return null;
+        return info.weightUnit as 0 | 1 | 2;
+    }
+
+    /**
+     * Set the display brightness and wait for readback confirmation.
+     *
+     * Sends 8103 with the brightness level, then waits for a 40521 info frame
+     * with the updated ledType_38 field. Returns the confirmed level.
+     *
+     * @param level 0 = off/dim, 1 = dim, 8 = mid, 15 = bright
+     * @returns the level confirmed by the machine, or null if no readback
+     */
+    async setBrightness(level: 0 | 1 | 8 | 15): Promise<0 | 1 | 8 | 15 | null> {
+        this.assertOrdinaryOperation();
+        const generation = this.generation;
+        await this.send(buildType1(8103, [level]));
+        const info = await this.waitForInfo((info) => info.brightness === level, 3000);
+        if (info === null || generation !== this.generation) return null;
+        return info.brightness as 0 | 1 | 8 | 15;
+    }
+
+    /**
+     * Set the water source and wait for readback confirmation.
+     *
+     * Sends 4508 with the source value, then waits for a 40521 info frame
+     * with the updated waterFeed_36 field. Returns the confirmed source.
+     *
+     * @param source 0 = tank, 1 = tap
+     * @returns the source confirmed by the machine, or null if no readback
+     */
+    async setWaterSource(source: 0 | 1): Promise<0 | 1 | null> {
+        this.assertOrdinaryOperation();
+        const generation = this.generation;
+        await this.send(buildType1(4508, [source]));
+        const info = await this.waitForInfo((info) => info.waterFeed === (source === 1 ? "tap" : "tank"), 3000);
+        if (info === null || generation !== this.generation) return null;
+        return info.waterFeed === "tap" ? 1 : 0;
+    }
+
+    /**
+     * Read the current pour radius setting.
+     *
+     * Sends 11506 (type 2), then waits for a 40521 info frame
+     * with the updated pouringRadius_55 field. Returns the radius value.
+     */
+    async readPourRadius(): Promise<number | null> {
+        this.assertOrdinaryOperation();
+        const generation = this.generation;
+        await this.send(buildType2(11506, new Uint8Array()));
+        const info = await this.waitForInfo((info) => info.pourRadius !== undefined, 3000);
+        if (info === null || generation !== this.generation) return null;
+        return info.pourRadius ?? null;
+    }
+
+    /**
+     * Read the current vibration amplitude setting.
+     *
+     * Sends 11508 (type 2), then waits for a 40521 info frame
+     * with the updated vibrationInit_59 field. Returns the vibration value.
+     */
+    async readVibrationAmplitude(): Promise<number | null> {
+        this.assertOrdinaryOperation();
+        const generation = this.generation;
+        await this.send(buildType2(11508, new Uint8Array()));
+        const info = await this.waitForInfo((info) => info.vibration !== undefined, 3000);
+        if (info === null || generation !== this.generation) return null;
+        return info.vibration ?? null;
+    }
+
+    /**
+     * Wait for a 40521 MachineInfo frame matching the predicate.
+     *
+     * @param predicate Function that returns true when the info matches what we expect
+     * @param timeoutMs Maximum time to wait
+     * @returns the MachineInfo if matched, null on timeout
+     */
+    private waitForInfo(
+        predicate: (info: MachineInfo) => boolean,
+        timeoutMs: number
+    ): Promise<MachineInfo | null> {
+        return new Promise((resolve) => {
+            let settled = false;
+            const off = this.onNotification((parsed) => {
+                if (settled) return;
+                if (parsed.kind === "info" && predicate(parsed)) {
+                    settled = true;
+                    off();
+                    resolve(parsed);
+                }
+            });
+            const timer = setTimeout(() => {
+                if (!settled) {
+                    settled = true;
+                    off();
+                    resolve(null);
+                }
+            }, timeoutMs);
+            timer.unref?.();
+        });
+    }
+
+    /**
+     * Request a fresh 40521 MachineInfo blob from the machine.
+     *
+     * Sends the 8100 handshake (which triggers the info blob) and waits
+     * for the info frame. Returns the MachineInfo or null on timeout.
+     */
+    async refreshInfo(): Promise<MachineInfo | null> {
+        this.assertOrdinaryOperation();
+        const generation = this.generation;
+        // The handshake triggers the info blob on V12.0D.500
+        await this.send(buildType1(8100, [185, 1]));
+        const info = await this.waitForInfo(() => true, 4000);
+        if (info === null || generation !== this.generation) return null;
+        return info;
     }
 
     /**
