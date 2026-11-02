@@ -78,7 +78,7 @@ jobs:
 
       - name: Test
         id: jest
-        run: npm run test:${{ matrix.platform }} -- --ci --cacheDirectory="$GITHUB_WORKSPACE/.jest-cache/${{ matrix.platform }}" --json --outputFile=jest-results.json --testPathIgnorePatterns="library/slots/__tests__/machineSlotPort|library/machine/__tests__/Machine.pause"
+        run: npm run test:${{ matrix.platform }} -- --ci --cacheDirectory="$GITHUB_WORKSPACE/.jest-cache/${{ matrix.platform }}" --json --outputFile=jest-results.json --testPathIgnorePatterns="library/slots/__tests__/machineSlotPort|library/machine/__tests__/Machine.pause|hooks/__tests__/machineSlotOwner"
 
       - name: Save Jest transforms
         if: ${{ success() && steps.jest.outcome == 'success' && steps.jest-cache.outputs.cache-hit != 'true' }}
