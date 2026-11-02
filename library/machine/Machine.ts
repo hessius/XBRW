@@ -2073,9 +2073,9 @@ export default class Machine {
         const generation = this.generation;
         await this.send(buildType1(8010, [unit]));
         // Wait for the info blob with updated tempUnit_40
-        const info = await this.waitForInfo((info) => info.tempUnit === unit, 3000);
+        const info = await this.waitForInfo((info) => info.settingsRaw?.temperatureUnit === unit, 3000);
         if (info === null || generation !== this.generation) return null;
-        return info.tempUnit as 0 | 1;
+        return info.settingsRaw?.temperatureUnit as 0 | 1 ?? null;
     }
 
     /**
@@ -2091,9 +2091,9 @@ export default class Machine {
         this.assertOrdinaryOperation();
         const generation = this.generation;
         await this.send(buildType1(8005, [unit]));
-        const info = await this.waitForInfo((info) => info.weightUnit === unit, 3000);
+        const info = await this.waitForInfo((info) => info.settingsRaw?.weightUnit === unit, 3000);
         if (info === null || generation !== this.generation) return null;
-        return info.weightUnit as 0 | 1 | 2;
+        return info.settingsRaw?.weightUnit as 0 | 1 | 2 ?? null;
     }
 
     /**
@@ -2108,18 +2108,18 @@ export default class Machine {
     async setBrightness(level: 0 | 1 | 8 | 15): Promise<0 | 1 | 8 | 15 | null> {
         this.assertOrdinaryOperation();
         const generation = this.generation;
-        const oldBrightness = this.info?.brightness;
+        const oldBrightness = this.info?.settingsRaw?.brightness;
         await this.send(buildType1(8103, [level]));
         // Machine may report intermediate values; wait for a valid brightness
         // that differs from the old value (or matches target if old was null).
         const info = await this.waitForInfo(
-            (info) => info.brightness !== undefined
-                && (oldBrightness === undefined || info.brightness !== oldBrightness)
-                && [0, 1, 8, 15].includes(info.brightness),
+            (info) => info.settingsRaw?.brightness !== undefined
+                && (oldBrightness === undefined || info.settingsRaw?.brightness !== oldBrightness)
+                && [0, 1, 8, 15].includes(info.settingsRaw.brightness!),
             3000
         );
         if (info === null || generation !== this.generation) return null;
-        return info.brightness as 0 | 1 | 8 | 15;
+        return info.settingsRaw?.brightness as 0 | 1 | 8 | 15 ?? null;
     }
 
     /**
@@ -2150,9 +2150,9 @@ export default class Machine {
         this.assertOrdinaryOperation();
         const generation = this.generation;
         await this.send(buildType2(11506, new Uint8Array()));
-        const info = await this.waitForInfo((info) => info.pourRadius !== undefined, 3000);
+        const info = await this.waitForInfo((info) => info.settingsRaw?.pourRadius !== undefined, 3000);
         if (info === null || generation !== this.generation) return null;
-        return info.pourRadius ?? null;
+        return info.settingsRaw?.pourRadius ?? null;
     }
 
     /**
@@ -2165,9 +2165,9 @@ export default class Machine {
         this.assertOrdinaryOperation();
         const generation = this.generation;
         await this.send(buildType2(11508, new Uint8Array()));
-        const info = await this.waitForInfo((info) => info.vibration !== undefined, 3000);
+        const info = await this.waitForInfo((info) => info.settingsRaw?.vibrationAmplitude !== undefined, 3000);
         if (info === null || generation !== this.generation) return null;
-        return info.vibration ?? null;
+        return info.settingsRaw?.vibrationAmplitude ?? null;
     }
 
     /**

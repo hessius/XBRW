@@ -109,7 +109,7 @@ export default function MachineSettingsSheet({machineId, onClose, settings}: Pro
     }
 
     // Temperature Unit
-    const currentTempUnit = info?.tempUnit ?? 1;
+    const currentTempUnit = info?.settingsRaw?.temperatureUnit ?? 1;
     function onTempUnitChange(value: string) {
         sendSetting(
             "Temperature unit",
@@ -119,7 +119,7 @@ export default function MachineSettingsSheet({machineId, onClose, settings}: Pro
     }
 
     // Weight Unit
-    const currentWeightUnit = info?.weightUnit ?? 1;
+    const currentWeightUnit = info?.settingsRaw?.weightUnit ?? 1;
     function onWeightUnitChange(value: string) {
         sendSetting(
             "Weight unit",
@@ -129,7 +129,7 @@ export default function MachineSettingsSheet({machineId, onClose, settings}: Pro
     }
 
     // Brightness
-    const currentBrightness = info?.brightness ?? 1;
+    const currentBrightness = info?.settingsRaw?.brightness ?? 1;
     function onBrightnessChange(value: string) {
         sendSetting(
             "Brightness",
@@ -249,13 +249,13 @@ export default function MachineSettingsSheet({machineId, onClose, settings}: Pro
                     <SettingsSection title="Mechanical Calibration (Read Only)">
                         <SettingsActionRow
                             label="Read pour radius"
-                            detail={info?.pourRadius !== undefined ? `${info.pourRadius}` : "Not read yet"}
+                            detail={info?.settingsRaw?.pourRadius !== undefined ? `${info.settingsRaw.pourRadius}` : "Not read yet"}
                             onPress={onReadPourRadius}
                             disabled={!linked || sending !== null}
                         />
                         <SettingsActionRow
                             label="Read vibration amplitude"
-                            detail={info?.vibration !== undefined ? `${info.vibration}` : "Not read yet"}
+                            detail={info?.settingsRaw?.vibrationAmplitude !== undefined ? `${info.settingsRaw.vibrationAmplitude}` : "Not read yet"}
                             onPress={onReadVibration}
                             disabled={!linked || sending !== null}
                         />
