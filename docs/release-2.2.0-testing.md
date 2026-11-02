@@ -4,6 +4,151 @@ Package acceptance, integration and release qualification are separate.
 Record the exact app commit, native build, platform, machine and firmware for
 each device result. Software transports do not qualify BLE or NFC hardware.
 
+## One-tap Easy Mode writing (#275, Labs opt-in)
+
+- [ ] On physical iOS and Android, confirm the normal flow is unchanged on
+  upgrade and with the setting off. Unlock Labs with seven taps on About's
+  version, then enable Write Easy Mode slots on selection. A relaunch retains
+  it; hiding Labs leaves it enabled. Backup/restore must never transfer it.
+- [ ] From editor WRITE > Easy Mode slot, verify the saved library identity,
+  incoming recipe name and all-three-drafts disclosure before selecting ADD
+  or REPLACE. The choice must write exactly once. Confirm the other two
+  transmitted recipes are the phone's displayed drafts, including any unwritten
+  changes; do not assume they match what was previously on the machine.
+- [ ] Before ADD or REPLACE, check the automatic pause protection warning with
+  that protection configured on the incoming recipe and on another slot draft.
+  Stored slots must never imply that the app's pause protection will run.
+- [ ] With a disconnected machine, verify the connecting message, navigation
+  lock and duplicate-tap exclusion. A connection to another saved machine, a
+  changed serial or a newly started brew must not send slot frames.
+- [ ] During connection, disable the preference, change the selected machine
+  or leave the route where possible. A late connection must not revive the
+  automatic write. Toggling the preference or merely opening the page never
+  sends anything.
+- [ ] Check empty first-write slots, unsupported recipes, unavailable transport,
+  failed persistence and connection failure. Keep the assigned choice on the
+  phone only when assignment succeeded, explain the refusal, and leave the
+  existing manual flow available without a success toast.
+- [ ] Interrupt a real write using the existing safe recovery procedure.
+  Preserve the immutable journal and uncertainty; show recovery, not a fresh
+  write or an automatic retry. Confirm successful A/B/C receipts and final save
+  before SLOTS WRITTEN, returning to the editor and announcing success.
+- [ ] Disconnect immediately after confirmed saving but before the success
+  overlay dismisses. The screen must restore usable manual controls rather
+  than leave inactive ADD or REPLACE buttons, with no automatic second write.
+- [ ] With the experiment enabled, recipe-menu assignment, scale changes,
+  library updates and ordinary Easy Mode visits still require manual writing.
+  Check long names, large text, narrow screens and spoken action labels.
+
+Software regressions exercise both platforms with the existing writer and
+real SQLite storage. No physical machine pass is implied by these checks.
+
+## Recipe metadata and photos (#262, #253)
+
+- [ ] On iOS and Android, check every recipe accent and appearance with dotted
+  and solid profiles, no history, an unrated history and a rated history.
+  The opaque metadata capsule must match the card, not the screen, including
+  its star and padding. Check long counts, recency and bag text at narrow
+  widths and large system text; wrap instead of shrinking or clipping.
+- [ ] With photos enabled, open single-photo and mosaic shelves, then their
+  recipe tiles and the list. Keep the existing 44/21/20 pt frames, whole-image
+  containment, title allowance and photo-fit boundaries. Check Ready to brew,
+  disabled photos, changed URLs and failed images too.
+- [ ] Compare cold opening, warm reopening and reopening after a successful
+  load with the origin unavailable. Record cache lookup, native load completion
+  and layout reveal separately. Repeat with a large source and with the same
+  URL moving from a 21 pt mosaic to a 20 pt tile and a 44 pt single cover.
+  Record backgrounding/memory pressure separately: the native cache can evict
+  pictures, so this is not a promise of permanent offline storage.
+
+Local iOS 26.5 / iPhone 17 Pro simulator evidence identified a size-specific
+decoded-cache miss, not simply slow metadata measurement. Six public catalogue
+photos took up to 2.36 s cold but about 37-40 ms to load warm, with layout reveal
+at 54-61 ms. One 2400x2400 PNG was 1,929,039 bytes; its URL stayed identical,
+with Last-Modified/ETag but no explicit Cache-Control. Loading it at a new
+thumbnail size took another 1.8-2.6 s even after a successful 20 pt load.
+
+A loopback reproduction served those exact PNG bytes and observed headers,
+with a controlled 120 ms origin delay and request/response logging. Before the
+fix, 21-to-20 pt fetched again (181 ms), and a previously unseen 44 pt size
+failed when the origin refused requests. With one shared 44 pt decode canvas,
+the same transitions made zero additional requests and completed in 10-12 ms,
+including the 44 pt unavailable-origin case. Larger requested photos retain
+their own decode resolution. No cache policy, dependency or native cache
+capacity changed. The actual photo frame, not the internal decode canvas,
+continues to own layout.
+Six real-origin photos primed through 21 pt covers then loaded on 20 pt tiles
+in 45 ms, with a 0.5 ms load spread and layout reveal at 63 ms.
+
+Native simulator captures also cover long metadata at default and accessibility
+text sizes. These observations and dual-platform component regressions do not
+close the physical iOS/Android, memory-pressure or screen-reader checks above.
+
+## Full recipe browser import: existing-host checkpoint
+
+The branch implementation targets `https://xbrwplusplus.vercel.app/import`
+and `/import/`; this is not evidence of deployment, domain association or a
+current store binary's Universal Links/App Links. Shared feed B (#281) is
+not integrated. Task 7 domain/association and Task 9 production are blocked.
+Browser-only acceptance can proceed before association.
+
+- [x] Record local real-browser evidence and implementation commit. At 320/390/1280
+  widths and landscape, verify a stationary visible footer and no horizontal
+  overflow. At 200% text, keep all actions and stage/metadata/notes reachable,
+  including an extreme-zoom scrolling footer.
+- [x] Exercise visible keyboard focus, explicit Open in app, coffee product,
+  producer recipe and View on xBloom links. Verify real and broken images,
+  usable alt/fallback presentation, no-referrer image requests and link policy.
+- [x] Confirm complete content without JavaScript; no automatic launch.
+  Install links go to App Store id6806339475 and Android GitHub Releases,
+  not Play. After installation return to the same page and tap Open in app:
+  do not promise deferred handoff.
+- [ ] On installed iOS/Android clients, compare the full lossless query import
+  with browser content: all available coffee metadata, flavours/tags, roast
+  advice, notes, images, stages and bypass. Studio fallback must preserve an
+  explicit Original response; no grind conversion or unintended save/brew.
+- [ ] After separately approved deployment, run read-only public GET/HEAD
+  smokes on both exact paths; verify all three no-store layers, no-referrer,
+  errors and full content. A successful local Node smoke is not this result.
+- [ ] Only after verified ownership/association/signing configuration, qualify
+  Universal Links/App Links on a newly built fingerprint-runtime native
+  artifact. Record artifact, platform fingerprint and installed-device result;
+  do not infer compatibility from marketing version `2.2.0`.
+
+Automated acceptance uses the affected dual-platform Jest suites plus strict
+typecheck, lint, the full suite and Expo Doctor. The retained
+`npm run test:import-node -- <isolated-output>` proof uses the actual classic
+Node adapter over real loopback HTTP, synthetic read-only lookup and no app
+node_modules; see [share-deploy.md](machine-integration/share-deploy.md).
+These checks do not close the manual boxes above or NFC/BLE release gates.
+
+Task 8 local automated result: affected Jest 22 suites/774 tests passed;
+independent offline-backup oracle includes coffee, tea and grinder-disabled.
+The full gate initially caught an undisclosed new server lookup; its outbound
+inventory entry/count were added and the inventory passed 136 tests. Final
+serial gates: strict typecheck passed, lint 0 errors/33 existing warnings,
+dual-platform Jest 940 suites/21,924 tests and 2 snapshots passed (2 suites/
+26 tests skipped), Expo Doctor 21/21. Isolated CommonJS Node HTTP smoke passed
+without resolving mobile packages. Logs are `S/files/import-task8-*.log`.
+These are local results, not remote CI or public-host deployment evidence.
+
+Local browser evidence (parent-owned, actual compiled implementation head
+`839e76877aa6cc9b42290bc78791dba0bece716c`):
+`S/files/import-browser-acceptance/results.json` and primary checkout
+`.playwright-mcp/import-actual-*.png`, where `S` is
+`/Users/jesperhessius/.copilot/session-state/96519c03-5860-47ba-837c-30d9b0766696`.
+320×568, 390×844, 1280×900 and 844×390 passed stationary above-fold footer,
+no overflow and final-content access. Actions measured 52/44/44 px.
+200% browser-computed-font instrumentation (not native Safari accessibility
+qualification), including 320×240 extreme text, kept every action/content
+reachable. Focus outline, full metadata/notes, false decaf/zero rest days,
+two distinct photos, broken-image alt, real 2400 px public image displayed
+96×96 with empty Referer, no-JS iOS/Android download choices, lossless app
+query, explicit Original and 400/502 pages passed. One real public read-only
+xBloom fetch through compiled `respond` returned full HTML/private-no-store.
+This qualifies local browser behavior only, not Vercel rewrites/ingress,
+deployed content, native associations, installed clients or physical hardware.
+
 ## Second contributor round, package A
 
 - [ ] With Solid button labels off (the default), verify existing dotted
@@ -16,6 +161,25 @@ each device result. Software transports do not qualify BLE or NFC hardware.
 - [ ] Check narrow/wide panes and large text: list rows fill their containing
   pane, long pushed-screen titles wrap beside Back, and controls remain
   reachable. OPEN RECIPE must open the editor, not start a brew or save.
+
+## Second contributor round, package B
+
+- [ ] Check catalogue rows with missing facts, long facts and large text on
+  iOS/Android. Country/farm, variety/process, roast and flavours should be
+  readable; bags remain on the detail screen.
+- [ ] Coffee details on cards starts off. Toggle it with Home mounted and
+  check ordinary and shelf-picker rows. A note must still win. Verify both
+  backup choices and older backups without the preference.
+- [ ] In a build configured with an approved working feed endpoint, verify
+  that xBloom Collective starts off, opt-in refreshes it, opt-out stays off,
+  and no Home entry appears. Unconfigured builds must show no built-in entry.
+- [ ] Check Original/Studio selection, model changes during loading, missing
+  variants and explicit roaster preservation. Never use the catalogue's name
+  as a guessed roaster. These checks do not qualify the resulting machine
+  recipe on hardware.
+
+Feed deployment and endpoint configuration remain separate approval gates.
+There is no native dependency, NFC format or BLE command change in this package.
 
 ## Selective preview reconciliation: remaining manual gates
 

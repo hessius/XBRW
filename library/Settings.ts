@@ -6,6 +6,7 @@ import type {MachineModel} from './machine/machineModel';
 import type {HistorySort, HistorySortDirection} from './brew/historyQuery';
 import type {ThemeId, RecipeColourMode} from './appearance';
 import type {BagTrackerSetting} from './coffeeBag';
+import {ControlOperationError} from './machine/errors';
 
 /**
  * Every setting, with its default.
@@ -35,6 +36,7 @@ export const DEFAULTS = {
     /** Coffee, pod and author pictures in ABOUT only; retain the legacy key. */
     showRecipeAvatars: true,
     showRecipeCardPhotos: false,
+    showRecipeCardDetails: false,
     showShelfPhotoPreviews: true,
     /**
      * Draw the one-line hint under every label on the BREW deck.
@@ -80,6 +82,8 @@ export const DEFAULTS = {
      * dead button on every recipe would be worse than no button.
      */
     machineDeviceId: "",
+    /** A possible motor/water start on this phone; never portable or cleared by unpairing. */
+    machineControlRecovery: "",
     /**
      * Every machine the user has saved, in the order the app reaches for them.
      *
@@ -292,6 +296,8 @@ export const DEFAULTS = {
      * feature deserves, and it survives a relaunch like any other preference.
      */
     beanconquerorHandoff: false,
+    /** Device-local experiment: only the editor's WRITE flow may place and write. */
+    easyModeOneTapWrite: false,
     /** Device-local opt-in; inventory survives when this is off. */
     bagExperimentEnabled: false,
     bagTracker: "auto" as BagTrackerSetting,
@@ -401,6 +407,10 @@ export type SettingKey = keyof typeof DEFAULTS;
  * identifiers. The names the user gave them go with it, which is the price of
  * not restoring a list of machines the new phone cannot reach.
  *
+ * `machineControlRecovery` reserves a possible motor/water start on this
+ * phone. A backup must neither clear that uncertainty nor import another
+ * phone's peripheral identity as a new control reservation.
+ *
  * `labsUnlocked` is held out for a different reason: a backup file is not
  * private. It goes to the share sheet, and the whole point of the seven taps
  * is that an unfinished feature is off for everybody who has not deliberately
@@ -423,13 +433,14 @@ export type SettingKey = keyof typeof DEFAULTS;
  * in a backup or on this list, never quietly missing from both.
  */
 export type BackupExcluded =
-    "machineDeviceId" | "savedMachines" | "lastCardRead" | "labsUnlocked" | "beanconquerorHandoff" |
+    "machineControlRecovery" | "machineDeviceId" | "savedMachines" | "lastCardRead" | "labsUnlocked" | "beanconquerorHandoff" | "easyModeOneTapWrite" |
     "bagExperimentEnabled" | "bagTracker" | "readyToBrewDismissedOn" |
     "machineModelString" | "machineName" | "ratingPromptDismissed" |
     "drawerHintLastShownAt" | "drawerHintShownCount" | "drawerHintManualOpens" |
     "drawerHintSignature" | "drawerHintLastSeenAt" | "roasterCatalogue" | "roasterAlerts";
 export const NOT_IN_BACKUP: readonly SettingKey[] = [
-    "machineDeviceId", "savedMachines", "lastCardRead", "labsUnlocked", "beanconquerorHandoff",
+    "machineControlRecovery",
+    "machineDeviceId", "savedMachines", "lastCardRead", "labsUnlocked", "beanconquerorHandoff", "easyModeOneTapWrite",
     "bagExperimentEnabled", "bagTracker", "readyToBrewDismissedOn",
     "machineModelString", "machineName", "ratingPromptDismissed",
     "drawerHintLastShownAt", "drawerHintShownCount", "drawerHintManualOpens",
@@ -538,10 +549,14 @@ export class Settings {
             // is an object or array needs a real shape check here rather than
             // this one.
             if (typeof parsed !== typeof DEFAULTS[key]) {
+                if (key === "machineControlRecovery") throw new Error("Invalid recovery storage.");
                 return DEFAULTS[key] as SettingValue<K>;
             }
             return parsed as SettingValue<K>;
         } catch {
+            if (key === "machineControlRecovery") {
+                throw new ControlOperationError("The machine control recovery storage is invalid. Machine use is blocked.");
+            }
             return DEFAULTS[key] as SettingValue<K>;
         }
     }

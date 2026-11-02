@@ -5,10 +5,13 @@ import Recipe from "@/library/Recipe";
 import {resolveAccent} from "@/library/accent";
 import {overflowFor} from "@/library/brew/overflowConfig";
 import {
-    SLOT_NAMES, prepareSet, slotNeedsWrite, snapshotRecipe, snapshotStatus, unwrittenSlotCount,
+    SLOT_NAMES, prepareSet, slotNeedsWrite, snapshotStatus, unwrittenSlotCount,
     type SlotIndex, type SlotJournal, type SlotRecord
 } from "@/library/slots/slotModel";
 import {SLOT_INTEGRATION_BLOCK} from "@/library/slots/slotWriter";
+import {slotSourceRecipe, slotRecipeProblem as recipeProblem} from "@/library/slots/slotSource";
+import {searchRoasterRecipes, type RoasterRecipeChoice, type SubscribedCatalogue} from "@/library/roasterSearch";
+import type {MachineModel} from "@/library/machine/machineModel";
 import {useBottomInset} from "@/hooks/useBottomInset";
 import type {SlotAttempt} from "@/hooks/useEasyModeSlots";
 import {useLiveBrewBarGuard} from "@/hooks/useLiveBrewBarGuard";
@@ -98,7 +101,7 @@ const WRITE_FAILURES: Readonly<Record<string, WriteFailure>> = {
         message: "A recipe is too large to send. Reduce its stages or volumes before writing.", tone: "error"
     },
     "Choose all three recipes before writing.": {
-        message: "Choose all three recipes before writing.", tone: "error"
+        message: "Choose a recipe for A, B and C before writing. The first write needs all three.", tone: "error"
     },
     "The recipe's source identity is invalid.": RECIPE,
     "The recipe's grinder state is invalid.": RECIPE,
@@ -133,13 +136,18 @@ function writeError(message: string, journal: SlotJournal | null): WriteFailure 
     };
 }
 
-function recipeProblem(recipe: Recipe): string | null {
-    try {
-        snapshotRecipe(recipe);
-        return null;
-    } catch (error) {
-        return error instanceof Error ? error.message : String(error);
-    }
+/**
+ * Why WRITE is waiting on empty slots. Only the first write needs all three:
+ * the phone keeps every slot it has written, so after that a change to one
+ * sends the other two again.
+ */
+export function emptySlotsMessage(drafts: SlotRecord["drafts"]): string | null {
+    const missing = SLOT_NAMES.filter((_, index) => drafts[index] === null);
+    if (missing.length === 0) return null;
+    const slots = missing.length === 1 ? `slot ${missing[0]}`
+        : `slots ${missing.slice(0, -1).join(", ")} and ${missing[missing.length - 1]}`;
+    return `Choose a recipe for ${slots} before writing. The first write needs all three. `
+        + "After that you can change one at a time.";
 }
 
 export type EasyModeSlotsProps = {
@@ -147,6 +155,7 @@ export type EasyModeSlotsProps = {
     /** The full library, not the active home search or shelf result. */
     recipes: readonly Recipe[];
     incoming?: Recipe;
+    placing?: {pending: boolean; connecting: boolean; onPlace: (index: SlotIndex) => void};
     header?: React.ReactNode;
     deviceId: string;
     serial?: string | null;
@@ -167,6 +176,20 @@ export type EasyModeSlotsProps = {
     onCancel: () => void;
     onDismissWrite?: () => void;
     onRestoreOriginal?: () => void;
+    /**
+     * The subscribed roasters' cached catalogues. A search in the picker lists
+     * their recipes under the library's as FROM YOUR ROASTERS.
+     */
+    roasterCatalogues?: readonly SubscribedCatalogue[];
+    /**
+     * Fetch a roaster's recipe, keep it in the library and put it in the slot.
+     * A failure the host has not already reported comes back as a message.
+     */
+    onAssignRoaster?: (
+        index: SlotIndex, choice: RoasterRecipeChoice, signal: AbortSignal
+    ) => Promise<{ok: true} | {ok: false; message?: string}>;
+    machineModel?: MachineModel;
+    lookupEnabled?: boolean;
     teaProbe?: Pick<TeaSlotProbePanelProps, "onWriteProbe" | "onRestore" | "onObserve"
         | "onWriteLab" | "onRecoveryCommand" | "onClearRecovery">;
     teaProbeOpen?: boolean;
@@ -183,6 +206,8 @@ export function slotWriteAvailability({
     if (!connected) return "Connect to this machine before writing, retrying or cancelling.";
     if (record.journal === null) {
         if (record.experiment?.phase === "active") return "Restore the original set before writing slots.";
+        const empty = emptySlotsMessage(record.drafts);
+        if (empty !== null) return empty;
         try {
             prepareSet(record.drafts);
         } catch (error) {
@@ -215,6 +240,29 @@ function RecipeChoice({recipe, onPick}: {recipe: Recipe; onPick: () => void}) {
                     </View>
                 </XStack>
                 {problem !== null && <Text color={onAccent.text} fontSize={13}>{problem}</Text>}
+            </YStack>
+        </Pressable>
+    );
+}
+
+function RoasterChoiceRow({choice, loading, disabled, onPick}: {
+    choice: RoasterRecipeChoice; loading: boolean; disabled: boolean; onPick: () => void;
+}) {
+    const {palette} = useAppearance();
+    const roast = choice.coffee.roast?.level;
+    const detail = [choice.roaster, roast === undefined ? undefined : `${roast} roast`,
+        choice.coffee.available ? undefined : "Sold out"].filter(Boolean).join(" · ");
+    return (
+        <Pressable accessibilityRole="button" accessibilityLabel={`Choose ${choice.name} from ${choice.roaster}`}
+            accessibilityHint="Loads the recipe from xBloom and saves it to your library."
+            accessibilityState={{disabled, busy: loading}} disabled={disabled} onPress={onPick}
+            testID={`roaster-choice-${choice.key}`}>
+            <YStack gap="$1" padding="$3" marginBottom="$2" borderRadius="$3"
+                backgroundColor={palette.raised} borderWidth={1} borderColor={palette.line}>
+                <Text color={palette.text} fontSize={16} fontWeight="600">{choice.name}</Text>
+                <Text color={palette.dim} fontSize={13}>
+                    {loading ? "Loading the recipe from xBloom." : detail}
+                </Text>
             </YStack>
         </Pressable>
     );
@@ -266,19 +314,26 @@ function StoppedWrite({journal, failure}: {journal: SlotJournal; failure: string
 }
 
 export default function EasyModeSlots({
-    record, recipes, incoming, header, deviceId, serial, connected, available, running, error,
+    record, recipes, incoming, placing, header, deviceId, serial, connected, available, running, error,
     attempt = null, onDismissSuccess, writeControlRef, busy = false, serialMatches = true,
     guardLiveBrewBar = false, teaProbe, teaProbeOpen = false, onTeaProbeOpenChange,
-    onAssign, onSetScaleEnabled, onWrite, onRecover, onCancel, onDismissWrite, onRestoreOriginal
+    onAssign, onSetScaleEnabled, onWrite, onRecover, onCancel, onDismissWrite, onRestoreOriginal,
+    roasterCatalogues = [], onAssignRoaster, machineModel = "studio", lookupEnabled = true
 }: EasyModeSlotsProps) {
     const appearance = useAppearance();
     const {palette, primary} = appearance;
     const onAccent = appearance.onFill(palette.text);
-    const [picker, setPicker] = useState<{deviceId: string; index: SlotIndex} | null>(null);
+    const [picker, setPickerState] = useState<{
+        deviceId: string; index: SlotIndex; model: MachineModel; serial: string | null
+    } | null>(null);
     const [search, setSearch] = useState("");
     const [usedIncoming, setUsedIncoming] = useState<string | null>(null);
     const [confirmation, setConfirmation] = useState<{deviceId: string; kind: "retry" | "cancel"} | null>(null);
     const [help, setHelp] = useState(false);
+    const [fetching, setFetching] = useState<{key: string; controller: AbortController} | null>(null);
+    const lookup = useRef<AbortController | null>(null);
+    const fetchingKey = fetching !== null && !fetching.controller.signal.aborted ? fetching.key : null;
+    const [roasterError, setRoasterError] = useState<string | null>(null);
     const changeA = useRef<React.ComponentRef<typeof Button>>(null);
     const changeB = useRef<React.ComponentRef<typeof Button>>(null);
     const changeC = useRef<React.ComponentRef<typeof Button>>(null);
@@ -297,15 +352,34 @@ export default function EasyModeSlots({
         : attempt?.deviceId === deviceId
             && (serial === undefined || attempt.serial === serial) ? attempt : null;
     const overlay = slotOverlayVisible(record, currentAttempt);
-    const active = running || (currentAttempt !== null
+    const active = running || placing?.pending === true || (currentAttempt !== null
         && ["writing", "saving", "cancelling"].includes(currentAttempt.status));
     const journal = record.journal;
     const probeStatus = teaProbeStatus(record);
     const showingWrittenProbe = probeStatus === "candidate-written";
-    const locked = journal !== null || active || deviceId === "" || overlay || record.experiment?.phase === "active";
-    const pickerIndex = picker?.deviceId === deviceId ? picker.index : null;
+    const incomingProblem = incoming === undefined ? null : recipeProblem(incoming);
+    const locked = journal !== null || active || deviceId === "" || overlay || record.experiment?.phase === "active"
+        || (placing !== undefined && incomingProblem !== null);
+    const pickerIndex = picker?.deviceId === deviceId && picker.model === machineModel
+        && picker.serial === (serial ?? null) ? picker.index : null;
     const confirmationKind = confirmation?.deviceId === deviceId ? confirmation.kind : null;
-    const pickerOpen = pickerIndex !== null && !locked;
+    const pickerOpen = pickerIndex !== null && !locked && lookupEnabled;
+    useEffect(() => () => {
+        lookup.current?.abort();
+        lookup.current = null;
+    }, [deviceId, serial, machineModel, locked, lookupEnabled]);
+
+    function cancelLookup(): void {
+        lookup.current?.abort();
+        lookup.current = null;
+        setFetching(null);
+    }
+
+    function setPicker(value: typeof picker): void {
+        cancelLookup();
+        setRoasterError(null);
+        setPickerState(value);
+    }
     const confirmationOpen = confirmationKind !== null && !overlay && !active;
     const helpOpen = help && !overlay && !active;
     const probeOpen = teaProbeOpen && !overlay && !active && teaProbe !== undefined;
@@ -333,12 +407,32 @@ export default function EasyModeSlots({
     const blocked = active || overlay || availability !== null;
     const restoreBlocked = active || overlay || !connected || !serialMatches || busy || !available;
     const dirty = unwrittenSlotCount(record);
-    const incomingProblem = incoming === undefined ? null : recipeProblem(incoming);
     const incomingKey = incoming === undefined ? null : JSON.stringify([deviceId, incoming]);
     const overflow = (journal?.slots ?? record.drafts).some(snapshot => snapshot !== null
         && overflowFor(new Recipe(undefined, snapshot.recipeJSON)) !== undefined);
     const filteredRecipes = recipes.filter(recipe =>
         recipe.displayName().toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
+    const roasterChoices = pickerOpen && onAssignRoaster !== undefined
+        ? searchRoasterRecipes(roasterCatalogues, search, filteredRecipes, machineModel) : [];
+
+    async function pickRoaster(choice: RoasterRecipeChoice): Promise<void> {
+        if (pickerIndex === null || !pickerOpen || fetchingKey !== null || onAssignRoaster === undefined) return;
+        const controller = new AbortController();
+        lookup.current = controller;
+        setFetching({key: choice.key, controller});
+        setRoasterError(null);
+        let result: Awaited<ReturnType<typeof onAssignRoaster>>;
+        try {
+            result = await onAssignRoaster(pickerIndex, choice, controller.signal);
+        } catch {
+            result = {ok: false, message: "Couldn't load that recipe. Try again."};
+        }
+        if (lookup.current !== controller || controller.signal.aborted) return;
+        lookup.current = null;
+        setFetching(null);
+        if (result.ok) setPicker(null);
+        else if (result.message !== undefined) setRoasterError(result.message);
+    }
 
     return (
         <YStack flex={1} backgroundColor={palette.base}>
@@ -379,7 +473,22 @@ export default function EasyModeSlots({
                             <DotMatrixText fontSize={14} color={palette.dim}>?</DotMatrixText>
                         </Button>
                     </XStack>
-                    {incoming !== undefined && usedIncoming !== incomingKey && (
+                    {placing !== undefined && incoming !== undefined && <YStack testID="easy-mode-placing"
+                        gap="$2" padding="$3" backgroundColor={palette.raised} borderRadius="$4">
+                        <DotMatrixText fontSize={12} color={palette.dim}>PLACING</DotMatrixText>
+                        <Text color={palette.text} fontSize={23} fontWeight="600">{incoming.displayName()}</Text>
+                        <Text color={palette.dim}>
+                            Choose a slot. Choosing ADD or REPLACE writes all three slot drafts to your machine.
+                        </Text>
+                        {(overflow || overflowFor(incoming) !== undefined) && <Text color={palette.dim}>
+                            Stored slots do not run the app&apos;s automatic pause protection.
+                        </Text>}
+                        {incomingProblem !== null && <Text color={palette.danger}>{incomingProblem}</Text>}
+                        {placing.connecting && <Text accessibilityLiveRegion="polite" color={palette.dim}>
+                            Connecting to your machine.
+                        </Text>}
+                    </YStack>}
+                    {placing === undefined && incoming !== undefined && usedIncoming !== incomingKey && (
                         <YStack gap="$2" padding="$3" backgroundColor={palette.raised} borderRadius="$4">
                             <Text color={palette.text}>Choose a slot for {incoming.displayName()}.</Text>
                             {incomingProblem !== null && <Text color={palette.danger}>{incomingProblem}</Text>}
@@ -417,24 +526,34 @@ export default function EasyModeSlots({
                         const slotIndex = index as SlotIndex;
                         const snapshot = (showingWrittenProbe
                                 ? record.written?.slots[index] : undefined) ?? record.drafts[index];
-                        const current = recipes.find(recipe => recipe.uuid === snapshot?.sourceUuid);
+                        const current = snapshot === null ? undefined : slotSourceRecipe(snapshot, recipes);
                         const status = snapshot === null || isTeaProbeSnapshot(snapshot)
                             ? null : snapshotStatus(snapshot, current);
                         return <EasyModeSlotCard key={name} index={slotIndex} snapshot={snapshot}
                             needsWrite={!showingWrittenProbe && slotNeedsWrite(record, slotIndex)} status={status}
                             recovery={false} locked={locked}
                             updateProblem={status === "edited" && current !== undefined ? recipeProblem(current) : null}
+                            action={placing !== undefined && incoming !== undefined ? {
+                                label: snapshot === null ? "ADD" : "REPLACE",
+                                accessibilityLabel: `Put ${incoming.displayName()} in slot ${name}`
+                            } : undefined}
                             changeRef={changeRefs[index]}
                             onSetScaleEnabled={onSetScaleEnabled === undefined ? undefined
                                 : enabled => onSetScaleEnabled(slotIndex, enabled)}
                             onChange={() => {
+                                if (placing !== undefined) {
+                                    placing.onPlace(slotIndex);
+                                    return;
+                                }
                                 focusOrigin.current = changeRefs[index];
-                                setSearch(""); setPicker({deviceId, index: slotIndex});
+                                setSearch(""); setPicker({
+                                    deviceId, index: slotIndex, model: machineModel, serial: serial ?? null
+                                });
                             }}
                             onUpdate={() => { if (current !== undefined) onAssign(slotIndex, current); }}/>;
                     })}
                 </ScrollView>
-                {journal === null && <ScrollView testID="easy-mode-actions" nestedScrollEnabled
+                {journal === null && placing === undefined && <ScrollView testID="easy-mode-actions" nestedScrollEnabled
                     style={{flexGrow: 0, flexShrink: 1, maxHeight: "60%", backgroundColor: palette.base,
                         borderTopWidth: 1, borderTopColor: palette.line}}
                     contentContainerStyle={{padding: 14, gap: 10, paddingBottom: Math.max(bottomInset, 14)}}>
@@ -481,7 +600,18 @@ export default function EasyModeSlots({
                         ListEmptyComponent={<Text color={palette.dim}>
                             {recipes.length === 0 ? "No recipes in your library." : "No matching recipes."}
                         </Text>}
+                        ListFooterComponent={roasterChoices.length === 0 ? null : <YStack gap="$2" paddingTop="$3">
+                            <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.5} color={palette.dim}>
+                                FROM YOUR ROASTERS</DotMatrixText>
+                            {roasterError !== null && <Text selectable accessibilityRole="alert" color={palette.danger}>
+                                {roasterError}
+                            </Text>}
+                            {roasterChoices.map(choice => <RoasterChoiceRow key={choice.key} choice={choice}
+                                loading={fetchingKey === choice.key} disabled={locked || fetchingKey !== null}
+                                onPick={() => void pickRoaster(choice)}/>)}
+                        </YStack>}
                         renderItem={({item}) => <RecipeChoice recipe={item} onPick={() => {
+                            cancelLookup();
                             if (pickerIndex !== null && !locked && onAssign(pickerIndex, item) !== false) setPicker(null);
                         }}/>}/>
                 </YStack>
@@ -531,7 +661,10 @@ export default function EasyModeSlots({
             </XbrwSheet>
             <XbrwSheet open={helpOpen} onOpenChange={setHelp} title="ABOUT EASY MODE" heightPercent={70}>
                 <ScrollView contentContainerStyle={{gap: 16}}>
-                    <Text color={palette.text}>Assign all three recipes. Your choices are kept on this phone immediately.</Text>
+                    <Text color={palette.text}>
+                        Choose all three recipes the first time. After that, change any one and the other two are sent again.
+                    </Text>
+                    <Text color={palette.text}>Your choices are kept on this phone immediately.</Text>
                     <Text color={palette.text}>Writing replaces A, B and C and switches the machine to EASY.</Text>
                     <Text color={palette.text}>Scale ON automatically tares the scale when that slot is started.</Text>
                     <Text color={palette.dim}>Scale changes are kept here until you choose WRITE TO MACHINE.</Text>

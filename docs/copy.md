@@ -410,15 +410,56 @@ Neither host adds a save action, and closing discards the adjustment.
 |----|--------|-----------------------------------|--------------|
 | `editor.action.brew.a11y` | `app/editRecipe.tsx:610` (a11y) | (a11y) Brew button in the editor action bar. | `Brew` |
 | `editor.action.brew.label` | `app/editRecipe.tsx:616` | Doto label on the Brew button. | `BREW` |
-| `editor.action.write.a11y` | `app/editRecipe.tsx:623` (a11y) | (a11y) Write-card button. | `Write card` |
+| `editor.action.write.a11y` | `app/editRecipe.tsx` (a11y) | (a11y) Write button with no machine remembered; writes a card. | `Write card` |
+| `editor.action.write.chooser.a11y` | `app/editRecipe.tsx` (a11y) | (a11y) Write button with a machine remembered; opens the write chooser. | `Write to Easy Mode or card` |
 | `editor.action.write.label` | `app/editRecipe.tsx:635` | Doto label on the Write button. | `WRITE` |
 | `editor.action.save.a11y` | `app/editRecipe.tsx:641` (a11y) | (a11y) Save button. | `Save` |
 | `editor.action.save.label` | `app/editRecipe.tsx:647` | Doto label on the Save button. | `SAVE` |
+
+### Write chooser (`components/WriteChooserSheet.tsx`)
+
+| ID | Source | Context — when the user sees this | Current text |
+|----|--------|-----------------------------------|--------------|
+| `editor.writeChooser.title` | `components/WriteChooserSheet.tsx` | Sheet title after WRITE, machine remembered. | `WRITE TO` |
+| `editor.writeChooser.easyMode` | `components/WriteChooserSheet.tsx` | Row: go to Assign to Easy Mode. | `EASY MODE SLOT` |
+| `editor.writeChooser.easyMode.detail` | `components/WriteChooserSheet.tsx` | Line under the Easy Mode row, also its a11y hint. A destination refusal replaces both. | `Assign to A, B or C. Unsaved recipes are saved to your library first.` |
+| `editor.writeChooser.easyMode.oneTap` | `components/WriteChooserSheet.tsx` | Replaces the detail and hint only when the Labs opt-in is enabled. | `Choosing a slot writes all three slot drafts. Unsaved recipes are saved to your library first.` |
+| `editor.writeChooser.card` | `components/WriteChooserSheet.tsx` | Row: write an NFC card. | `NFC CARD` |
+| `editor.writeChooser.card.detail` | `components/WriteChooserSheet.tsx` | Line under the card row, also its a11y hint. | `Write it to an xBloom recipe card.` |
+
+### Easy Mode one-tap placement (Labs)
+
+This flow exists only after editor WRITE with the device-local opt-in enabled.
+It does not turn ordinary assignment into a machine write.
+
+| ID | Source | Context | Current text |
+|----|--------|---------|--------------|
+| `easyMode.placing.title` | `components/EasyModeSlots.tsx` | Above the incoming recipe name. | `PLACING` |
+| `easyMode.placing.detail` | `components/EasyModeSlots.tsx` | Before any slot action; refers to the phone's drafts, not read-back machine contents. | `Choose a slot. Choosing ADD or REPLACE writes all three slot drafts to your machine.` |
+| `easyMode.placing.action` | `components/EasyModeSlotCard.tsx` | Empty/occupied slot action while placing. | `ADD` / `REPLACE` |
+| `easyMode.placing.action.a11y` | `components/EasyModeSlots.tsx` | Spoken slot action. | `Put ${recipe} in slot ${slot}` |
+| `easyMode.placing.connecting` | `components/EasyModeSlots.tsx` | After a deliberate slot press, before connecting completes. | `Connecting to your machine.` |
+| `easyMode.placing.local` | `hooks/useEasyModePlacement.ts` | Prefix on failure, only after successful local assignment; followed by the reason. | `${recipe} is kept in slot ${slot} on this phone.` |
+| `easyMode.placing.wrongMachine` | `app/easyMode.tsx` | Placement entry no longer names the selected/connected machine. | `This placement was opened for a different machine. Choose the machine and try again.` |
+| `easyMode.placing.success` | `app/easyMode.tsx` | After save confirmation and the success overlay, returning to the editor. | `Written. ${recipe} is in slot ${slot}.` |
+
+### Easy Mode cached roaster search
+
+| ID | Source | Context | Current text |
+|----|--------|---------|--------------|
+| `easyMode.roasters.heading` | `components/EasyModeSlots.tsx` | Matches below library recipes in the slot picker. | `FROM YOUR ROASTERS` |
+| `easyMode.roasters.choose` | `components/EasyModeSlots.tsx` | Spoken result label. | `Choose ${choice.name} from ${choice.roaster}` |
+| `easyMode.roasters.hint` | `components/EasyModeSlots.tsx` | Spoken disclosure before fetching and saving. | `Loads the recipe from xBloom and saves it to your library.` |
+| `easyMode.roasters.loading` | `components/EasyModeSlots.tsx` | Selected result while fetching. | `Loading the recipe from xBloom.` |
+| `easyMode.roasters.failed` | `app/easyMode.tsx` | Lookup or persistence failed; local eligibility refusals show their own reason. | `Couldn't load or save that recipe. Try again.` |
+| `easyMode.roasters.unexpected` | `components/EasyModeSlots.tsx` | Assignment callback unexpectedly rejected. | `Couldn't load that recipe. Try again.` |
 
 ### Editor toasts and errors
 
 | ID | Source | Context — when the user sees this | Current text |
 |----|--------|-----------------------------------|--------------|
+| `editor.easyMode.saved` | `app/editRecipe.tsx` (`openInEasyMode`) | Assign to Easy Mode saved an unsaved catalogue, roaster or link recipe first, so the slot keeps its library link. | `Saved to your library.` |
+| `editor.easyMode.saveHint` | `components/RecipeOverflowSheet.tsx` | Visible and spoken before assignment, explaining the library side effect. | `Unsaved recipes are saved to your library first.` |
 | `editor.share.network` | `app/editRecipe.tsx:749` (`network`) | Share failed: no network. | `Could not reach the sharing service. Check your connection.` |
 | `editor.share.limited` | `app/editRecipe.tsx:750` (`limited`) | Share failed: rate limited. | `Sharing is busy right now. Try again in a few minutes.` |
 | `editor.share.unavailable` | `app/editRecipe.tsx:751` (`unavailable`) | Share failed: service down. | `Sharing is temporarily unavailable. Everything else still works.` |
@@ -1328,6 +1369,9 @@ About. Neither has a duplicate shortcut in Settings.
 | `settings.deleteAll.keep` | `components/DeleteAllSheet.tsx:58` | Cancel button label. | `Keep my recipes` |
 | `settings.labs.handoff.label` | `app/settings.tsx` | Labs toggle for the Beanconqueror handoff. | `Send brews to Beanconqueror` |
 | `settings.labs.handoff.description` | `app/settings.tsx` | Why the toggle is off by default, in terms of what goes wrong if it is switched on too early. | `Needs a version of Beanconqueror that can read the link. Older ones will say they do not recognise it.` |
+| `settings.labs.easyMode.label` | `app/settings.tsx` | Device-local, default-off experiment. | `Write Easy Mode slots on selection` |
+| `settings.labs.easyMode.description` | `app/settings.tsx` | Disclosure before enabling. | `Experimental. From WRITE, choosing a slot writes all three slot drafts to your machine.` |
+| `settings.labs.easyMode.failed` | `app/settings.tsx` | Persistence failure leaves the prior preference unchanged. | `Could not change Easy Mode writing. Your setting has not changed.` |
 
 ### Backup / restore messages (`hooks/useBackup.ts`, `library/backup.ts`)
 

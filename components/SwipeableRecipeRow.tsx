@@ -61,6 +61,7 @@ type Props = {
     dottedProfile?: boolean;
     /** Forwarded to the card: `showRecipeAvatars`. */
     showPicture?: boolean;
+    showCoffeeDetails?: boolean;
     /** Forwarded to the card: what this recipe's brews add up to. */
     evidence?: RecipeEvidence;
     bagBadge?: BagBadge;
@@ -186,6 +187,7 @@ export default function SwipeableRecipeRow({
                                                showCoffeeMarker = true,
                                                dottedProfile = false,
                                                showPicture = false,
+                                               showCoffeeDetails = false,
                                                evidence,
                                                bagBadge,
                                                onBrew,
@@ -461,6 +463,7 @@ export default function SwipeableRecipeRow({
                             showCoffeeMarker={showCoffeeMarker}
                             dottedProfile={dottedProfile}
                             showPicture={showPicture}
+                            showCoffeeDetails={showCoffeeDetails}
                             onBrew={onBrew}
                             onQuickEdit={onQuickEdit}
                             onShare={onShare} onWrite={onWrite}

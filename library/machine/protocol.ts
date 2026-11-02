@@ -264,6 +264,15 @@ export const EVENT = {
 export const COMMAND_PAUSE = 40518;
 export const COMMAND_RESUME = 40524;
 
+/** Uninterpreted device values; these offsets do not qualify units or controls. */
+export type MachineSettingsRaw = {
+    temperatureUnit: number | null;
+    weightUnit: number | null;
+    brightness: number | null;
+    pourRadius: number | null;
+    vibrationAmplitude: number | null;
+};
+
 export type MachineInfo = {
     kind: "info";
     serial: string;
@@ -274,11 +283,7 @@ export type MachineInfo = {
     grindSize: number;
     mode: "PRO" | "EASY";
     // Settings readback (confirmed V12.0D.500 2026-11-02)
-    tempUnit?: 0 | 1;           // 0 = Fahrenheit, 1 = Celsius (from tempUnit_40)
-    weightUnit?: 0 | 1 | 2;     // 0 = ml, 1 = g, 2 = oz (from weightUnit_41)
-    brightness?: number;         // 0-15 (from ledType_38)
-    pourRadius?: number;         // from pouringRadius_55_u32
-    vibration?: number;          // from vibrationInit_59_u32
+    settingsRaw?: MachineSettingsRaw;
 };
 
 export type Notification =
@@ -304,6 +309,11 @@ function text(bytes: Uint8Array, from: number, to: number): string {
     return out;
 }
 
+function optionalUint32(payload: Uint8Array, offset: number): number | null {
+    if (payload.byteLength < offset + 4) return null;
+    return new DataView(payload.buffer, payload.byteOffset, payload.byteLength).getUint32(offset, true);
+}
+
 function readInfo(payload: Uint8Array): MachineInfo {
     const modeHex = text(payload, 51, 58);
     const n = payload.length;
@@ -320,11 +330,13 @@ function readInfo(payload: Uint8Array): MachineInfo {
         grindSize:   Math.max((payload[37] ?? 30) - 30, 1),
         mode:        modeHex === "91327856" ? "EASY" : "PRO",
         // Settings readback (confirmed V12.0D.500 2026-11-02)
-        tempUnit:     u8(40) as 0 | 1 | undefined,       // 0 = Fahrenheit, 1 = Celsius
-        weightUnit:   u8(41) as 0 | 1 | 2 | undefined,   // 0 = ml, 1 = g, 2 = oz
-        brightness:   u8(38),                            // 0-15 (ledType_38)
-        pourRadius:   u32(55),                           // pouringRadius_55_u32
-        vibration:    u32(59),                           // vibrationInit_59_u32
+        settingsRaw: {
+            temperatureUnit: payload[40],           // 0 = Fahrenheit, 1 = Celsius (from tempUnit_40)
+            weightUnit: payload[41],                // 0 = ml, 1 = g, 2 = oz (from weightUnit_41)
+            brightness: payload[38],                // 0-15 (from ledType_38)
+            pourRadius: optionalUint32(payload, 55), // from pouringRadius_55_u32
+            vibrationAmplitude: optionalUint32(payload, 59) // from vibrationInit_59_u32
+        }
     };
 }
 

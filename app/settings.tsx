@@ -127,10 +127,20 @@ export default function SettingsScreen({settings}: Props) {
     const router = useSteadyRouter();
     const {ratingNoteOpen} = useLiveBrew();
     const [labsUnlocked, setLabsUnlocked] = useSetting("labsUnlocked", settings);
+    const [easyModeOneTapWrite, setEasyModeOneTapWrite] = useSetting("easyModeOneTapWrite", settings);
     const [beanconquerorHandoff, setBeanconquerorHandoff] =
         useSetting("beanconquerorHandoff", settings);
     const [bagExperimentEnabled, setBagExperimentEnabled] = useSetting("bagExperimentEnabled", settings);
     const [bagTracker, setBagTracker] = useSetting("bagTracker", settings);
+
+    function changeOneTapWrite(enabled: boolean) {
+        try {
+            setEasyModeOneTapWrite(enabled);
+        } catch (error) {
+            console.warn("Could not change Easy Mode writing.", error);
+            notify({tone: "error", message: "Could not change Easy Mode writing. Your setting has not changed."});
+        }
+    }
 
     function changeBagExperiment(enabled: boolean) {
         try {
@@ -197,6 +207,7 @@ export default function SettingsScreen({settings}: Props) {
     const [showRecipeAvatars, setShowRecipeAvatars] =
         useSetting("showRecipeAvatars", settings);
     const [showRecipeCardPhotos, setShowRecipeCardPhotos] = useSetting("showRecipeCardPhotos", settings);
+    const [showRecipeCardDetails, setShowRecipeCardDetails] = useSetting("showRecipeCardDetails", settings);
     const [showShelfPhotoPreviews, setShowShelfPhotoPreviews] = useSetting("showShelfPhotoPreviews", settings);
     const [appearanceTheme, setAppearanceTheme] = useSetting("appearanceTheme", settings);
     const [recipeColourMode, setRecipeColourMode] = useSetting("recipeColourMode", settings);
@@ -311,7 +322,8 @@ export default function SettingsScreen({settings}: Props) {
     function settingsSnapshot(): Record<Exclude<SettingKey, BackupExcluded>, unknown> {
         return {
             appearanceTheme, recipeColourMode, solidControlLabels,
-            showCoffeeMarker, dotMatrixProfile, showRecipeAvatars, showRecipeCardPhotos, showShelfPhotoPreviews, showHints,
+            showCoffeeMarker, dotMatrixProfile, showRecipeAvatars, showRecipeCardPhotos, showRecipeCardDetails,
+            showShelfPhotoPreviews, showHints,
             temperatureUnit,
             bypassTempEncoding,
             firstBrewDone, machineConsoleAcknowledged, machineConsoleConfirmations,
@@ -423,6 +435,7 @@ export default function SettingsScreen({settings}: Props) {
         const pictures = pictureSettingsFromBackup(incoming);
         if (pictures.showRecipeAvatars !== undefined) setShowRecipeAvatars(pictures.showRecipeAvatars);
         if (pictures.showRecipeCardPhotos !== undefined) setShowRecipeCardPhotos(pictures.showRecipeCardPhotos);
+        if (typeof incoming.showRecipeCardDetails === "boolean") setShowRecipeCardDetails(incoming.showRecipeCardDetails);
         if (pictures.showShelfPhotoPreviews !== undefined) setShowShelfPhotoPreviews(pictures.showShelfPhotoPreviews);
         if (typeof incoming.showHints === "boolean") {
             setShowHints(incoming.showHints);
@@ -511,6 +524,8 @@ export default function SettingsScreen({settings}: Props) {
                 parseSubscriptions(incoming.roasterSubscriptions).map((sub) =>
                     ({...sub, lastSync: 0, lastAttempt: 0}))));
         }
+        // With the subscriptions, so a built-in feed switched off in the
+        // backup is not switched back on by the next sync.
         if (typeof incoming.importFingerprints === "string") {
             setImportFingerprints(incoming.importFingerprints);
         }
@@ -681,6 +696,17 @@ export default function SettingsScreen({settings}: Props) {
 
                 <SettingsSection title="Recipe list">
                     <SettingsToggleRow
+                        label="Coffee details on cards"
+                        description="Show variety and process when a recipe has no note."
+                        value={showRecipeCardDetails}
+                        onChange={(on) => {
+                            try {
+                                setShowRecipeCardDetails(on);
+                            } catch {
+                                notify({tone: "error", message: "Could not save coffee details. Please try again."});
+                            }
+                        }}/>
+                    <SettingsToggleRow
                         label="Show the COFFEE marker"
                         description="The TEA marker is always shown. COFFEE is redundant in a mostly-coffee library."
                         value={showCoffeeMarker}
@@ -801,6 +827,9 @@ export default function SettingsScreen({settings}: Props) {
                     honest reading of two separate switches. */}
                 {labsUnlocked && <>
                 <SettingsSection title="Labs">
+                    <SettingsToggleRow label="Write Easy Mode slots on selection"
+                        description="Experimental. From WRITE, choosing a slot writes all three slot drafts to your machine."
+                        value={easyModeOneTapWrite} onChange={changeOneTapWrite}/>
                     <SettingsActionRow label="Machine console"
                                        detail="Connection logs and diagnostic commands."
                                        onPress={() => router.push("/machine")}/>

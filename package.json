@@ -12,11 +12,14 @@
     "test:android": "jest --selectProjects android",
     "test:watch": "jest --watchAll",
     "typecheck": "tsc --noEmit",
+    "test:import-node": "node scripts/smoke-import-node.cjs",
     "lint": "eslint .",
     "worktrees:check": "node scripts/worktree-audit.mjs",
     "check-feed": "node scripts/check-feed.mjs",
     "test:worktrees": "node --test scripts/__tests__/worktree-audit.test.mjs",
-    "generate-licences": "./scripts/generate-licences.sh"
+    "test:landing": "node --test scripts/__tests__/landing-carousel.test.mjs",
+    "generate-licences": "./scripts/generate-licences.sh",
+    "generate:landing": "node scripts/generate-landing.mjs"
   },
   "dependencies": {
     "@backpackapp-io/react-native-toast": "^0.15.1",

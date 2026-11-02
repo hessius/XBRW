@@ -76,6 +76,48 @@ beforeEach(() => {
 });
 
 describe("catalogue screen-reader coverage", () => {
+    it("selects the active machine variant, updates on model changes and never assigns the catalogue as roaster", async () => {
+        const settings = memorySettings();
+        const raw = JSON.parse(feedJson([{id: "a"}]));
+        raw.roaster.kind = "catalogue";
+        delete raw.coffees[0].bean.roaster;
+        raw.coffees[0].recipes = [
+            {size: "15g Original", share: "https://share-h5.xbloom.com/?id=original", machine_model: "original"},
+            {size: "15g Studio", share: "https://share-h5.xbloom.com/?id=studio", machine_model: "studio"}
+        ];
+        const body = JSON.stringify(raw);
+        subscribe(settings, FEED_URL, parseRoasterFeed(body)!, body, 1000);
+        const library = memoryLibrary();
+        await renderWithProviders(
+            <RoasterCoffeeScreen settings={settings} feedUrl={FEED_URL} coffeeId="a" library={library.deps}/>);
+        await waitFor(() => expect(library.fetched).toContain("studio"));
+        expect(library.fetched).not.toContain("original");
+        await act(() => settings.set("machineModel", "original"));
+        await waitFor(() => expect(library.fetched).toContain("original"));
+        await waitFor(async () => {
+            await fireEvent.press(screen.getByTestId("roaster-coffee-brew"));
+            expect(router.push).toHaveBeenCalled();
+        });
+        const navigation = (router.push as jest.Mock).mock.calls[0][0];
+        expect(JSON.parse(navigation.params.recipeJSON).coffee.roaster).toBeUndefined();
+    });
+
+    it("refuses a coffee with no variant for the current machine before fetching anything", async () => {
+        const settings = memorySettings();
+        const raw = JSON.parse(feedJson([{id: "a"}]));
+        raw.coffees[0].recipes = [
+            {size: "15g Original", share: "https://share-h5.xbloom.com/?id=original", machine_model: "original"}
+        ];
+        const body = JSON.stringify(raw);
+        subscribe(settings, FEED_URL, parseRoasterFeed(body)!, body, 1000);
+        const library = memoryLibrary();
+        await renderWithProviders(
+            <RoasterCoffeeScreen settings={settings} feedUrl={FEED_URL} coffeeId="a" library={library.deps}/>);
+        expect(screen.getByText("NO RECIPE FOR THIS MACHINE")).toBeTruthy();
+        expect(library.fetched).toEqual([]);
+        expect(screen.queryByTestId("roaster-coffee-brew")).toBeNull();
+    });
+
     it.each([
         ["roaster list", () => <RoastersScreen settings={subscribed()}/>, "roasters-scroll"],
         ["empty roaster list", () => <RoastersScreen settings={memorySettings()}/>, "roasters-empty"],

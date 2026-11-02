@@ -31,7 +31,9 @@ it.each([0, 1, 2, 3, 4])("draws %s roaster photos in individual cells without ch
         cells().forEach((cell, index) => expect(cell).toHaveStyle({
             width: 21, height: 21, backgroundColor: members(count).coverMembers[index].accent
         }));
-        expect(photos().every(photo => photo.props.style.width === 21)).toBe(true);
+        for (const photo of photos()) {
+            expect(photo.parent).toHaveStyle({width: 21, height: 21});
+        }
     }
 });
 
@@ -98,6 +100,6 @@ it("never enlarges the only roaster photo even on a single-member shelf", async 
         members={{accents: [palette.text], coverMembers: members(1).coverMembers.slice(0, 1)}}
         onPress={jest.fn()}/>);
     expect(photos()).toHaveLength(1);
-    expect(photos()[0]).toHaveStyle({width: 21, height: 21});
+    expect(photos()[0].parent).toHaveStyle({width: 21, height: 21});
     expect(cells()).toHaveLength(4);
 });

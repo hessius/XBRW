@@ -1,4 +1,4 @@
-import {accents, type AccentGroup} from "@/constants/colors";
+import {accents, type AccentGroup} from "../../constants/colourValues";
 
 /**
  * Give an imported recipe the palette accent closest to the colour it wore in

@@ -4,7 +4,7 @@ import {SHARE_API_URL, SHARE_TIMEOUT_MS} from "@/constants/share";
 import {useSetting} from "@/hooks/useSetting";
 import {asMachineModel} from "@/library/machine/machineModel";
 import type Recipe from "@/library/Recipe";
-import {buildSharePayload, canonicalSnapshot, shareBlockReason} from "@/library/shareLink";
+import {buildSharePayload, buildShareUrl, canonicalSnapshot, shareBlockReason} from "@/library/shareLink";
 
 /**
  * Why a share did not happen.
@@ -91,7 +91,7 @@ export function useShareRecipe() {
         const snapshot = canonicalSnapshot(payload);
         if (recipe.shareUrl && recipe.shareSnapshot === snapshot) {
             setState({status: "idle"});
-            return recipe.shareUrl;
+            return buildShareUrl(recipe, recipe.shareUrl);
         }
 
         inFlight.current = true;
@@ -149,7 +149,7 @@ export function useShareRecipe() {
             keys.current.delete(snapshot);
 
             setState({status: "idle"});
-            return body.url;
+            return buildShareUrl(recipe, body.url);
         } catch {
             setState({status: "failed", reason: "network"});
             return null;

@@ -474,6 +474,26 @@ describe("a paste", () => {
         expect(onOpenRecipe.mock.calls[0][1]).toBe(false);
     });
 
+    it("resolves and decorates an xbrw.app/import link pasted into the field", async () => {
+        const {onOpenRecipe, stored} = setup();
+        const {result} = await renderHook(() => useRecipeImport({stored, onOpenRecipe}));
+
+        await act(async () => {
+            result.current.onChangeText(
+                "https://xbrw.app/import?v=1&share=https%3A%2F%2Fshare-h5.xbloom.com%2F%3Fid%3Dabc123&bean.name=Guji&bean.roaster=Standout&bean.image=https%3A%2F%2Fexample.com%2Fbag.png&recipe.description=Sweet+notes"
+            );
+        });
+
+        await waitFor(() => expect(onOpenRecipe).toHaveBeenCalledTimes(1));
+        const opened = onOpenRecipe.mock.calls[0][0];
+        expect(opened.coffee).toEqual({
+            name: "Guji",
+            roaster: "Standout",
+            imageUrl: "https://example.com/bag.png"
+        });
+        expect(opened.description).toBe("Sweet notes");
+    });
+
     it("keeps the field on screen while it resolves, since it was pasted into one", async () => {
         // A paste *into* the field is not a share intent: the field and its
         // keyboard are already there, so hiding them while the lookup runs would
@@ -734,6 +754,23 @@ describe("the tile's paste shortcut", () => {
 
         await waitFor(() => expect(onOpenRecipe).toHaveBeenCalledTimes(1));
         expect(onOpenRecipe.mock.calls[0][1]).toBe(false);
+    });
+
+    it("resolves and decorates an xbrw.app/import link via onPastedText", async () => {
+        const {onOpenRecipe, stored} = setup();
+        const {result} = await renderHook(() => useRecipeImport({stored, onOpenRecipe}));
+
+        await act(async () => {
+            result.current.onPastedText(
+                "https://xbrw.app/import?v=1&share=https%3A%2F%2Fshare-h5.xbloom.com%2F%3Fid%3Dabc123&bean.name=Guji&bean.roaster=Standout"
+            );
+        });
+
+        await waitFor(() => expect(onOpenRecipe).toHaveBeenCalledTimes(1));
+        expect(onOpenRecipe.mock.calls[0][0].coffee).toEqual({
+            name: "Guji",
+            roaster: "Standout"
+        });
     });
 
     it("degrades to the found panel with the field shown when the recipe is already held", async () => {

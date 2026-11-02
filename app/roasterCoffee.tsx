@@ -28,7 +28,7 @@ import {
     bagWatchKey, coffeeBadge, coffeeKey, readAlerts, recordOpened, setWatch
 } from "@/library/roasterAlerts";
 import {
-    bagLine, beanFacts, chooseRecipe, detailTitle, findCoffee, readCatalogue,
+    bagLine, beanFacts, chooseRecipe, detailTitle, findCoffee, readCatalogue, recipesForMachine,
     roastAdvice, scrollEndPadding, tasteOf
 } from "@/library/roasterCatalogue";
 import {buyOptions} from "@/library/roasterBuy";
@@ -39,6 +39,7 @@ import {
 } from "@/library/roasterRecipes";
 import {realLibraryDeps, realUserShelves} from "@/library/roasterSync";
 import type {Settings} from "@/library/Settings";
+import {asMachineModel} from "@/library/machine/machineModel";
 
 const LADDER_BAR_HEIGHT = 18;
 const LADDER_RUNG_GAP = 12;
@@ -126,6 +127,8 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
     useSetting("roasterCatalogue", store);
     // So the watch switches redraw when they are pressed.
     useSetting("roasterAlerts", store);
+    const [storedModel] = useSetting("machineModel", store);
+    const machineModel = asMachineModel(storedModel);
     const insets = useSafeAreaInsets();
     const [deps] = useState(() => library ?? realLibraryDeps(store));
     const cached = readCatalogue(store, feed);
@@ -151,8 +154,10 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
     const [pendingAt, setPendingAt] = useState<{request: string; value: Pending} | null>(null);
     const [namingAt, setNamingAt] = useState<string | null>(null);
     const action = useRef<AbortController | null>(null);
-    const chosen = coffee === undefined ? undefined : chooseRecipe(coffee, size);
-    const request = JSON.stringify([feed, cached?.feed.roaster.name, coffee, chosen?.size, retry]);
+    const recipes = coffee === undefined ? [] : recipesForMachine(coffee, machineModel);
+    const chosen = coffee === undefined || recipes.length === 0 ? undefined : chooseRecipe(coffee, size, machineModel);
+    const feedRoaster = cached?.feed.roaster.kind === "catalogue" ? undefined : cached?.feed.roaster.name;
+    const request = JSON.stringify([feed, cached?.feed.roaster, coffee, chosen?.size, machineModel, retry]);
     const pending = pendingAt?.request === request ? pendingAt.value : null;
     const naming = namingAt === request;
     if (pendingAt !== null && pendingAt.request !== request) setPendingAt(null);
@@ -170,7 +175,7 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
         if (coffee === undefined || chosen === undefined) return;
         const controller = new AbortController();
         let alive = true;
-        fetchCoffeeRecipe(coffee, chosen.size, deps, controller.signal, cached?.feed.roaster.name)
+        fetchCoffeeRecipe(coffee, chosen.size, deps, controller.signal, feedRoaster, machineModel)
             .then((fetched) => {
                 if (alive) setLoaded({request, fetched, failed: false});
             })
@@ -192,8 +197,11 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
                     accessibilityElementsHidden={ratingNoteOpen}
                     importantForAccessibility={ratingNoteOpen ? "no-hide-descendants" : "auto"}>
                 <ScreenHeader title="Coffee" onBack={() => router.back()}/>
-                <CatalogueStatus testID="roaster-coffee-missing" title="NOT IN THE CATALOGUE"
-                                 body="This coffee is no longer in the roaster's list."/>
+                <CatalogueStatus testID="roaster-coffee-missing"
+                                 title={coffee !== undefined ? "NO RECIPE FOR THIS MACHINE" : "NOT IN THE CATALOGUE"}
+                                 body={coffee !== undefined
+                                     ? `This coffee has no ${machineModel === "studio" ? "Studio" : "Original"} recipe. Choose another machine in Settings to see its recipes.`
+                                     : "This coffee is no longer in the roaster's list."}/>
             </YStack>
         );
     }
@@ -223,7 +231,7 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
         const controller = new AbortController();
         action.current = controller;
         return fetchCoffeeRecipe(
-            coffee as FeedCoffee, chosen?.size, deps, controller.signal, cached?.feed.roaster.name
+            coffee as FeedCoffee, chosen?.size, deps, controller.signal, feedRoaster, machineModel
         );
     }
 
@@ -396,9 +404,9 @@ export default function RoasterCoffeeScreen({settings, feedUrl, coffeeId, librar
                                            color={palette.dim}>
                                 RECIPE
                             </DotMatrixText>
-                            {coffee.recipes.length > 1 && (
+                            {recipes.length > 1 && (
                                 <XStack gap="$2" accessibilityRole="radiogroup">
-                                    {coffee.recipes.map((entry) => {
+                                    {recipes.map((entry) => {
                                         const on = entry.size === chosen.size;
                                         return (
                                             <Pressable key={entry.size} accessibilityRole="radio"

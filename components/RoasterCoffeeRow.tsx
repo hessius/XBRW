@@ -7,7 +7,8 @@ import {CoffeeBadgeTag} from "@/components/CatalogueParts";
 import DotMatrixText from "@/components/DotMatrixText";
 
 import type {CoffeeBadge} from "@/library/roasterAlerts";
-import {bagLine, notesLine} from "@/library/roasterCatalogue";
+import {placeLine, varietyProcessLine} from "@/library/coffeeDetails";
+import {notesLine} from "@/library/roasterCatalogue";
 import type {FeedCoffee} from "@/library/roasterFeed";
 
 /** The hub row's measurements, so a roaster's list reads as the same catalogue. */
@@ -22,9 +23,11 @@ const ROW_PADDING = 8;
  * Built on `HubRow`'s layout rather than on the component itself: a hub row
  * leads with dose, ratio and grind, which a roaster's list does not have
  * until a recipe is opened. A coffee leads with what a bag says instead:
- * roast level, tasting notes, the sizes on sale, and whether it is on sale
- * at all. Sold out is shown, never hidden: a coffee someone has a bag of is
- * still worth looking up.
+ * where it is from, the variety and process, the roast level, the tasting
+ * notes, and whether it is on sale at all. Bag sizes and prices are on the
+ * coffee's own screen. Sold out is shown, never hidden: a coffee someone has
+ * a bag of is still worth looking up. A line with nothing in it is left out,
+ * so rows differ in height.
  */
 export default function RoasterCoffeeRow({coffee, badge, onPress, testID}: {
     coffee: FeedCoffee;
@@ -42,14 +45,16 @@ export default function RoasterCoffeeRow({coffee, badge, onPress, testID}: {
     const notes = coffee.flavours.length > 0
         ? coffee.flavours.join(", ")
         : notesLine(coffee.coffee.aromatics);
-    const bags = bagLine(coffee);
+    const place = placeLine(coffee.coffee);
+    const bean = varietyProcessLine(coffee.coffee);
     const spoken = [
         coffee.name,
         badge === "new" ? "new" : badge === "back" ? "back in stock" : undefined,
         coffee.available ? undefined : "sold out",
+        place?.replace(/ · /g, ", "),
+        bean?.replace(/ · /g, ", "),
         roast === undefined ? undefined : `${roast} roast`,
-        notes,
-        bags === null ? undefined : `bags ${bags.replace(/ · /g, ", ")}`
+        notes
     ].filter((part) => part !== undefined).join(", ");
 
     return (
@@ -78,6 +83,14 @@ export default function RoasterCoffeeRow({coffee, badge, onPress, testID}: {
                     <Text color={palette.text} fontSize={17} fontWeight="700" numberOfLines={2}>
                         {coffee.name}
                     </Text>
+                    {place !== undefined && (
+                        <Text testID="roaster-row-place" color={palette.dim} fontSize={13}
+                              numberOfLines={1}>{place}</Text>
+                    )}
+                    {bean !== undefined && (
+                        <Text testID="roaster-row-bean" color={palette.dim} fontSize={13}
+                              numberOfLines={1}>{bean}</Text>
+                    )}
                     {roast !== undefined && (
                         <DotMatrixText testID="roaster-row-roast" fontSize={11} weight="bold"
                                        letterSpacing={1.4} color={palette.dim} numberOfLines={1}>
@@ -86,12 +99,6 @@ export default function RoasterCoffeeRow({coffee, badge, onPress, testID}: {
                     )}
                     {notes !== undefined && (
                         <Text color={palette.dim} fontSize={13} numberOfLines={2}>{notes}</Text>
-                    )}
-                    {bags !== null && (
-                        <DotMatrixText testID="roaster-row-bags" fontSize={11} weight="bold"
-                                       letterSpacing={1.2} color={palette.dim} numberOfLines={1}>
-                            {bags.toUpperCase()}
-                        </DotMatrixText>
                     )}
                 </YStack>
             </XStack>

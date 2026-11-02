@@ -3,6 +3,7 @@ import {
 } from "@/library/roasterFeed";
 import type {Settings} from "@/library/Settings";
 import {coffeeDetails, formatCuppingPoints, formatElevation} from "@/library/coffeeDetails";
+import type {MachineModel} from "@/library/machine/machineModel";
 
 /**
  * The cached catalogue: the last feed body each subscription read.
@@ -99,12 +100,26 @@ function sizeKey(size: string): string {
 /** The dose offered first, when a coffee has it. */
 export const DEFAULT_SIZE = "18g";
 
-/** The recipe for a size, or the 18g one, or the first. */
-export function chooseRecipe(coffee: FeedCoffee, size?: string): FeedRecipe {
+/** Untagged recipes remain compatible with either machine. */
+export function recipesForMachine(coffee: FeedCoffee, model?: MachineModel): FeedRecipe[] {
+    return coffee.recipes.filter((recipe) => recipe.machineModel === undefined || recipe.machineModel === model);
+}
+
+/** The compatible recipe for a size, or the 18g one, or the first. */
+export function chooseRecipe(
+    coffee: FeedCoffee, size?: string, model?: MachineModel
+): FeedRecipe {
     const wanted = size === undefined ? DEFAULT_SIZE : sizeKey(size);
-    return coffee.recipes.find((recipe) => sizeKey(recipe.size) === wanted)
-        ?? coffee.recipes.find((recipe) => sizeKey(recipe.size) === DEFAULT_SIZE)
-        ?? coffee.recipes[0];
+    const recipes = recipesForMachine(coffee, model);
+    const chosen = recipes.find((recipe) => sizeKey(recipe.size) === wanted)
+        ?? recipes.find((recipe) => {
+            const key = sizeKey(recipe.size);
+            return key === DEFAULT_SIZE || (recipe.machineModel !== undefined
+                && key.match(/^\d+(?:\.\d+)?g/)?.[0] === DEFAULT_SIZE);
+        })
+        ?? recipes[0];
+    if (chosen === undefined) throw new Error("No recipe is listed for this machine.");
+    return chosen;
 }
 
 /**

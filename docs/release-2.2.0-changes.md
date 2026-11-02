@@ -7,7 +7,73 @@ merged wholesale. Issue #249 records source heads, decisions and integration.
 The shipped 2.1.0 ledger retains its historical gates and now records the
 verified release/source-reconciliation chronology.
 
-## Second contributor round, package A: pending integration
+## One-tap Easy Mode writing: Labs opt-in, pending integration
+
+The limited #275 adaptation adds Labs > Write Easy Mode slots on selection,
+off by default and excluded from backups. Unlock Labs by tapping the version
+on About seven times. Hiding Labs does not disable an enabled experiment.
+
+Only the editor's WRITE > Easy Mode slot uses this preference. On, the editor
+still saves an unsaved recipe first, then asks explicitly where to put it.
+ADD or REPLACE assigns the chosen draft and writes all three slot drafts through
+the existing journalled writer. Both the write chooser and placement screen
+disclose the all-three-slot effect; the other two drafts are not read back from
+the machine. Recipe-menu assignment, ordinary slot edits and the default
+explicit WRITE TO MACHINE flow are unchanged.
+
+Before selection, placement also warns when the incoming recipe or an existing
+draft uses automatic pause protection, which stored slots cannot run.
+
+A disconnected machine connects first. The operation must still belong to the
+intended device and serial; brewing, incomplete sets and recovery reservations
+retain their guards. Disabling the opt-in, changing machines or leaving the route
+during connection abandons the pending automatic write. An error keeps local
+choices and exposes the existing manual or recovery controls without retrying.
+Only confirmed save completion shows SLOTS WRITTEN, then returns to the editor
+with a success toast. A disconnect after confirmation restores manual controls
+if it interrupts the success overlay, without automatically writing again.
+Physical iOS/Android machine qualification remains open.
+
+## Recipe card metadata and thumbnail reuse: pending integration
+
+The #262 fix clears the pour-profile texture beneath card metadata with an
+opaque, card-coloured capsule. It grows with its contents; long values and
+larger text may wrap onto another row without changing their meaning or
+accessibility labels. Unbrewed recipes still show no invented history.
+
+The #253 investigation reproduced another image fetch when the same large
+source moved between the shelf cover's 21 pt frame and a tile's 20 pt frame.
+Recipe thumbnails now share a 44 pt native decode canvas while retaining
+their existing visible frame sizes and whole-image containment. This reuses
+the native decoded cache across covers, tiles, cards and Ready to brew,
+without a new cache library, cache-policy override or native dependency.
+Larger pictures still decode at their requested resolution.
+
+The testing checklist separates simulator request/timing evidence from
+remaining physical-device and cache-eviction acceptance.
+
+## Machine tools and settings: software implementation, not hardware-qualified
+
+Draft #284, related to #64, adds a named machine page under Settings and shortcuts in
+the expanded home machine panel. Both reach the same dedicated Grind, Scale
+and Pour screens. Six focused setting editors separate current readings from
+proposals and require explicit Apply and matching readback. The existing
+diagnostic console, saved-machine management and collapsed library remain.
+
+One shared control owner excludes recipe brews, Easy Mode writes and raw
+commands. Confirmed terminal feedback, not navigation or a successful write,
+permits departure. A local-only recovery marker survives a potentially moving
+operation; explicit reconnect targets that machine and never replays Start.
+
+**The production qualification registry is empty.** These screens therefore
+explain unavailability rather than sending unverified standalone commands.
+Continuous-pour encoding, physical Start/Stop, measured telemetry, live
+adjustments, settings/tuning mappings and supported firmware still need
+attended hardware qualification. Synthetic tests and software review do not
+close #64 or establish native visual/accessibility acceptance. No native
+dependency, NFC format, production build or deployment is introduced.
+
+## Second contributor round, package A: integrated in #280
 
 Issue #279 coordinates this round. Package A retains #269's pane-filling list
 rows, #276's wrapping header titles and #270's OPEN RECIPE catalogue action.
@@ -446,9 +512,108 @@ that policy. Package C itself did not change schemes, EAS profiles, channels,
 SDK or dependency manifests. This is not a native build,
 submission, deployment or hardware pass.
 
-## Proposed: catalogue OPEN RECIPE label
+## Catalogue OPEN RECIPE label
 
-Branch `fix/open-recipe-label`, not yet accepted into `develop`. A roaster
+Accepted through package A (#280). A roaster
 coffee's primary action read BREW NOW but only opens the recipe in the editor,
 unsaved; the editor has its own BREW. It now reads OPEN RECIPE (spoken "Open
 recipe"). The test ID `roaster-coffee-brew` and the behaviour are unchanged.
+## Second contributor round, package B: integrated in #281
+
+Adapted from #271 and #278 under the decisions on #279.
+
+A roaster's catalogue row now reads: name, then "Country · Farm" (the region
+when there is no farm), then "Variety · Process", then the roast level and
+flavours. Empty parts are skipped, so rows can differ in height. The bag-sizes
+line and its spoken part are gone from the row; the coffee's own screen still
+lists bags and prices.
+
+Settings > Recipe list > Coffee details on cards is off by default. On, a
+card without a note uses its second line for variety and process. A note
+still wins, the card keeps its height, and the choice travels in backups.
+
+The xBloom Collective feed uses the existing feed-management and catalogue
+surfaces, never new Home furniture. Subscription is explicit and off by
+default. Its built-in entry is hidden until an approved working HTTPS endpoint
+is configured with EXPO_PUBLIC_XBLOOM_FEED_URL; the proposed production path
+returned 404. This package does not deploy or enable that service.
+
+The dependency-free service checks both machine partitions with an eight-second
+shared deadline and a four-page cap per partition, validates rows, keeps Unicode
+coffee identities, and serves a bounded cached feed. It does not fetch recipes,
+scrape shop products or guess roasters. A catalogue's name is not used as the
+coffee's roaster. Tagged recipe variants must match the selected machine, and a
+model change discards an in-flight lookup. Existing untagged feeds retain their
+selection behaviour. Empty/error responses are uncached 502s, preserving the
+subscriber's last good catalogue.
+## Second contributor round, package C: combined candidate
+
+Branch `feat/2.2.0-package-c-20261026`, pinned to develop
+`f24fc968a9f48232323145cfe99a6ba443f9d7c4`. Preserves #272, #273 and #274's
+ancestry with the corrections approved on #279. This is not integrated yet.
+
+A slot links to its recipe by uuid. Catalogue, roaster and link recipes open
+unsaved, and each fetch mints a new uuid, so assigning one from the editor's
+Assign to Easy Mode left a slot that later read REMOVED FROM LIBRARY. The
+editor now saves such a recipe first (or uses the library's copy of the same
+share link when it brews exactly the same, the `planReimport` "same" test) and
+the slot snapshots the library uuid. The action explains the save before it
+is chosen, and a toast says "Saved to your library." Explicit edits to an
+unsaved copy, including notes, are kept rather than replaced by a same-link
+library copy. Every same-link copy is checked for an identical brew before
+saving another, not only the first match. Library membership is checked again
+before assignment, so a recipe deleted while the editor was open is saved before linking the slot. A
+recipe a slot cannot hold is not saved; the existing error explains why.
+
+Existing slots reconnect for display: when a slot's uuid is not in the library,
+Easy Mode looks for the library copy of the same share link (preferring one
+that brews the same), then a unique link-less recipe with the same name and
+brew. Ambiguous matches stay unlinked.
+Home slot markers still match by uuid only; USE UPDATED RECIPE relinks a slot.
+
+Easy Mode help now says only the first write needs all three recipes, since the
+phone keeps every written slot and resends the other two. With empty slots the
+WRITE reason names them ("Choose a recipe for slots B and C before writing").
+
+Explicit WRITE TO MACHINE remains the default. The limited #275 Labs experiment
+above is a separate, default-off opt-in for the editor's WRITE flow only, not
+automatic writing after ordinary assignment.
+Physical assignment/write/recovery checks remain release gates;
+this identity repair does not resolve #251's stale-loaded-recipe report.
+### WRITE asks Easy Mode slot or NFC card
+
+Preserves #273's ancestry. With a machine remembered, the editor's WRITE opens a
+small WRITE TO sheet: Easy Mode slot (the existing Assign to Easy Mode, which
+saves an unsaved recipe first) or NFC card (the existing card write, bypass
+question included). With no machine WRITE writes the card straight away as
+before. WRITE's spoken name with a machine is "Write to Easy Mode or card".
+Each destination has its own eligibility and visible refusal reason.
+BLE-valid fine grinds and fractional ratios can reach Easy Mode without
+enabling an invalid NFC write. Unsupported bypass cannot be assigned or saved
+through this entry. The existing more-menu action shares the slot preflight.
+### Easy Mode picker searches subscribed roasters
+
+Preserves #274's ancestry. A search in the Easy Mode CHANGE picker still
+lists library recipes first. Under them, FROM YOUR ROASTERS lists matching
+recipes from the subscribed roasters' cached feeds, one row per coffee and size
+(on sale first, sold out after, at most 30, leaving out links already shown
+in the library results). Naming the roaster lists all its coffees, including
+saved coffees whose names do not match that search. Only cached feeds are
+read, so opening and searching the picker makes no request.
+
+Picking one fetches that size's recipe from xBloom and keeps it in the library
+the way ADD TO SHELF does (`addToLibrary`: saved new, or matched to the copy
+already there), then assigns the library copy so the slot's uuid link holds. An
+edited library copy is used as it is; the coffee's own screen is still where the
+roaster's latest is offered. A failed fetch keeps the picker open with a
+message.
+
+Search includes only recipes for the selected machine, defaulting to Studio
+when no model is specified. The selected recipe is checked for Easy Mode
+eligibility before saving; an incompatible retained edited copy is refused
+without changing it. Refusals explain the local problem, while lookup/storage
+failures use safe app copy rather than upstream error text.
+
+Closing the picker, choosing a library recipe, leaving the route, switching
+machine/model/serial, starting a write, or unmounting cancels the lookup.
+A late result cannot save a library row, assign a slot or update a later picker.

@@ -1,7 +1,7 @@
 import {MACHINE_CARD_MAX_STAGES} from "./cardWriteErrors";
 import {AGITATION, POUR_PATTERN} from "./Pour";
 import type Recipe from "./Recipe";
-import {displayRange, toDisplay, type TemperatureUnit} from "./units";
+import {CELSIUS_RANGE, displayRange, toDisplay, type TemperatureUnit} from "./units";
 import {grindTooFine} from "@/constants/copy";
 import {encodedSegmentsLength, MAX_BLOB_SEGMENT_BYTES} from "@/library/machine/protocol";
 
@@ -37,7 +37,7 @@ export const GRIND_SIZE: Range = {min: 40, max: 80};
 export const BLE_GRIND_SIZE: Range = {min: 1, max: 80};
 export const GRIND_RPM: Range = {min: 60, max: 120};
 /** Exported for the test that keeps `library/units` in step with the card. */
-export const TEMPERATURE: Range = {min: 39, max: 99};
+export const TEMPERATURE: Range = CELSIUS_RANGE;
 /** Tenths of a millilitre per second: the byte 30 means 3.0 ml/s. */
 export const FLOW_RATE: Range = {min: 30, max: 35};
 /** Derived from POUR_PATTERN enum: CENTERED=0, CIRCULAR=1, SPIRAL=2. */

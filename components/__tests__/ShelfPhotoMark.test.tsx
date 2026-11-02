@@ -15,11 +15,11 @@ it("keeps a one-photo multi-member shelf a four-cell cover", async () => {
     expect(photos()).toHaveLength(1);
     expect(screen.getAllByTestId("shelf-cover-cell", {includeHiddenElements: true})).toHaveLength(4);
     expect(photos()[0].props.resizeMode).toBe("contain");
-    expect(photos()[0].props.style.width).toBe(21);
+    expect(photos()[0].parent).toHaveStyle({width: 21, height: 21});
 });
 it("uses the full circle only for one actual member", async () => {
     await renderWithProviders(<ShelfPhotoMark members={members.slice(0, 1)} count={1} fallback={fallback}/>);
-    expect(photos()[0].props.style.width).toBe(44);
+    expect(photos()[0].parent).toHaveStyle({width: 44, height: 44});
 });
 it("holds cell geometry on failure and retries a changed URL", async () => {
     const view = await renderWithProviders(<ShelfPhotoMark members={members} count={2} fallback={fallback}/>);
@@ -85,7 +85,9 @@ it.each(["xbloom", "favourites", "pods", "mostBrewed", "recentlyAdded"])(
         await renderWithProviders(<ShelfTile shelf={{id, label: id, kind: "auto", count: 12}}
             members={{accents: ["red"], coverMembers: fourPhotos}} onPress={jest.fn()}/>);
         expect(photos()).toHaveLength(4);
-        expect(photos().every(photo => photo.props.style.width === 21)).toBe(true);
+        for (const photo of photos()) {
+            expect(photo.parent).toHaveStyle({width: 21, height: 21});
+        }
     }
 );
 

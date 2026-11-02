@@ -146,7 +146,14 @@ describe("reading what the machine says", () => {
             waterEnough: true,
             waterFeed: "tank",
             grindSize: 55,
-            mode: "PRO"
+            mode: "PRO",
+            settingsRaw: {
+                temperatureUnit: 1,
+                weightUnit: 1,
+                brightness: 15,
+                pourRadius: null,
+                vibrationAmplitude: null
+            }
         });
     });
 

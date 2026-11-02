@@ -1,8 +1,8 @@
-import Recipe from "./Recipe";
-import {accents, type AccentGroup} from "@/constants/colors";
+import type Recipe from "./Recipe";
+import {accents, type AccentGroup} from "../constants/colourValues";
 
 /** Which half of the palette a recipe draws from. */
-export function accentGroupFor(recipe: Recipe): AccentGroup {
+export function accentGroupFor(recipe: {isTea(): boolean}): AccentGroup {
     // Ask Recipe rather than comparing `cupType` here. The tea byte can carry
     // the default cup count in its high nibble, and legacy cards arrive as 0x13
     // or 0x23; every one of those normalisations lives behind `isTea()`. A

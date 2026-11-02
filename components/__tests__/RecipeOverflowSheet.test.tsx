@@ -64,6 +64,13 @@ describe("RecipeOverflowSheet", () => {
         expect(onOpenChange).toHaveBeenCalledWith(false);
     });
 
+    it("explains the library save before an Easy Mode assignment is chosen", async () => {
+        await renderWithProviders(
+            <RecipeOverflowSheet open canRefreshName {...ACTIONS} onEasyMode={jest.fn()}/>
+        );
+        expect(screen.getByText("Unsaved recipes are saved to your library first.")).toBeTruthy();
+    });
+
     it("draws the share row as a normal action, not a destructive one", async () => {
         // Delete is the only red row. Sharing creates something permanent in a
         // shared account, which is worth a moment's thought, but it is not a

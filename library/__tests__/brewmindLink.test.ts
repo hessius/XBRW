@@ -1,5 +1,5 @@
 import {FIT_NAME_MAX} from "@/library/fitName";
-import {MAX_NAME} from "@/library/Recipe";
+import {MAX_DESCRIPTION, MAX_NAME} from "@/library/Recipe";
 import {parseBrewMindLink} from "@/library/brewmindLink";
 
 const SHARE = "https://xbloom.com/share?id=abc123";
@@ -306,5 +306,28 @@ describe("parseBrewMindLink", () => {
             "bean.elevation": "5,900 ft"
         }));
         expect(parsed?.coffee?.elevation).toBe(1798);
+    });
+
+    describe("recipe.image, recipe.description and recipe.xid", () => {
+        it("reads a validated https recipe.image", () => {
+            expect(parseBrewMindLink(valid({"recipe.image": "https://example.com/pod.png"}))?.recipeImage)
+                .toBe("https://example.com/pod.png");
+            expect(parseBrewMindLink(valid({"recipe.image": "http://example.com/pod.png"}))?.recipeImage)
+                .toBeUndefined();
+        });
+
+        it("reads and folds recipe.description within MAX_DESCRIPTION", () => {
+            expect(parseBrewMindLink(valid({"recipe.description": "  Sweet\n&\tfloral  "}))?.recipeDescription)
+                .toBe("Sweet & floral");
+            expect(parseBrewMindLink(valid({"recipe.description": "D".repeat(MAX_DESCRIPTION)}))?.recipeDescription)
+                .toHaveLength(MAX_DESCRIPTION);
+            expect(parseBrewMindLink(valid({"recipe.description": "D".repeat(MAX_DESCRIPTION + 1)}))?.recipeDescription)
+                .toBeUndefined();
+        });
+
+        it("reads and uppercases a valid recipe.xid", () => {
+            expect(parseBrewMindLink(valid({"recipe.xid": "eth120"}))?.recipeXid).toBe("ETH120");
+            expect(parseBrewMindLink(valid({"recipe.xid": "not-an-xid"}))?.recipeXid).toBeUndefined();
+        });
     });
 });

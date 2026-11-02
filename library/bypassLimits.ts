@@ -8,13 +8,13 @@
  * range a stage may use is not a thing the hardware can do.
  */
 
-import {TEMPERATURE, type Range} from "@/library/cardLimits";
+import {CELSIUS_RANGE} from "./units";
 
 /** 1 ml because zero water with bypass on is bypass off wearing a hat. */
-export const BYPASS_VOLUME: Range = {min: 1, max: 500};
+export const BYPASS_VOLUME = {min: 1, max: 500};
 
 /** The range the temperature control offers. Shared with the stage tiles. */
-export const BYPASS_TEMPERATURE: Range = TEMPERATURE;
+export const BYPASS_TEMPERATURE = CELSIUS_RANGE;
 
 /**
  * What a freshly enabled bypass starts at.

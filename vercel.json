@@ -3,5 +3,9 @@
   "framework": null,
   "installCommand": "echo skipping install: the mint function has no dependencies",
   "buildCommand": "echo skipping build: only api/ is deployed",
-  "outputDirectory": "public"
+  "outputDirectory": "public",
+  "rewrites": [
+    {"source": "/import", "destination": "/api/import"},
+    {"source": "/import/", "destination": "/api/import"}
+  ]
 }

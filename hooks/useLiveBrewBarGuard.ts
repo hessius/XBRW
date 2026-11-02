@@ -5,7 +5,7 @@ type BarGuard = {
     requestNavigation?: (navigate: () => void) => void;
 };
 
-// Only focused Easy Mode hosts register here. This does not own or stop a brew.
+// Only focused Easy Mode/tool hosts register here. This does not own or stop a brew.
 const guards = new Set<BarGuard>();
 const listeners = new Set<() => void>();
 const covered = () => [...guards].some(guard => guard.covered);

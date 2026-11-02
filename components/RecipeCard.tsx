@@ -17,6 +17,7 @@ import type {SlotMarkerValue} from "@/library/slots/slotModel";
 import {accentGroupFor, resolveAccent} from "@/library/accent";
 import {canWriteToCard} from "@/library/cardLimits";
 import {useAppearance} from "@/hooks/useAppearance";
+import {varietyProcessLine} from "@/library/coffeeDetails";
 import type {DotIconName} from "@/constants/dotIcons";
 
 const CARD_HEIGHT = 116;
@@ -137,6 +138,7 @@ type Props = {
     dottedProfile?: boolean;
     /** Optional coffee/pod circle beside brew evidence, never at the name's expense. */
     showPicture?: boolean;
+    showCoffeeDetails?: boolean;
     /** Called by the accessibility action that mirrors the swipe tray's BREW tile. */
     onBrew?: () => void;
     /** Called by the accessibility action that mirrors the swipe tray's TUNE tile. */
@@ -209,6 +211,7 @@ export default function RecipeCard({
     showCoffeeMarker = true,
     dottedProfile = false,
     showPicture = false,
+    showCoffeeDetails = false,
     onBrew,
     onQuickEdit,
     onShare,
@@ -232,11 +235,16 @@ export default function RecipeCard({
     // this label or it is, to a screen reader, conveyed by the accent colour
     // alone -- which is the state the TEA/COFFEE marker exists to prevent.
     const hasNote = recipe.description.length > 0;
+    // Without a note, the second line says what the bean is ("Gesha · Washed"),
+    // so a card for a catalogue coffee is not left with a blank line.
+    const secondary = hasNote ? recipe.description
+        : showCoffeeDetails ? varietyProcessLine(recipe.coffee) : undefined;
+    const hasSecondary = secondary !== undefined;
 
     const shownEvidence = [evidenceLine(evidence), bagBadge?.label].filter(Boolean).join(" · ") || null;
     const {width, fontScale} = useWindowDimensions();
     const signature = JSON.stringify([
-        recipe.uuid, recipe.displayName(), recipe.description, recipe.favourite, recipe.dosage,
+        recipe.uuid, recipe.displayName(), secondary, recipe.favourite, recipe.dosage,
         recipe.ratio, recipe.grindSize, recipe.grinder, recipe.pours.map(pour => pour.volume),
         isTea, showMarker, shownEvidence, slotMarker?.slots, editing,
         !!onDuplicate, !!onDelete, picture, width, fontScale
@@ -261,7 +269,7 @@ export default function RecipeCard({
 
     const summary = [
         recipe.displayName(),
-        hasNote ? recipe.description : undefined,
+        hasNote ? recipe.description : secondary?.replace(/ · /g, ", "),
         marker.toLowerCase(),
         recipe.favourite ? "starred" : undefined,
         slotMarker?.label,
@@ -425,22 +433,22 @@ export default function RecipeCard({
                         doing the note's job. */}
                     <YStack testID="recipe-card-prose" flex={1} gap="$1">
                         <Text fontSize={17} fontWeight="700"
-                              numberOfLines={hasNote ? 1 : 2}
+                              numberOfLines={hasSecondary ? 1 : 2}
                               maxFontSizeMultiplier={DOTO_MAX_FONT_SCALE}
                               color={recipe.hasName() ? onAccent.text : onAccent.label}>
                             {recipe.displayName()}
                         </Text>
-                        {hasNote && (
+                        {hasSecondary && (
                             // Out of the accessibility tree: it is already in
                             // the card's own label above, which is the single
                             // announced element here.
-                            <Text testID="recipe-card-note"
+                            <Text testID={hasNote ? "recipe-card-note" : "recipe-card-bean"}
                                   accessibilityElementsHidden
                                   importantForAccessibility="no-hide-descendants"
                                   fontSize={13} numberOfLines={1}
                                   maxFontSizeMultiplier={DOTO_MAX_FONT_SCALE}
                                   color={onAccent.label}>
-                                {recipe.description}
+                                {secondary}
                             </Text>
                         )}
                     </YStack>
@@ -467,7 +475,8 @@ export default function RecipeCard({
                 </XStack>
 
                 <XStack key={`bottom-${geometryKey}`} testID="recipe-card-bottom-row" onLayout={measure("bottom")}
-                        justifyContent="space-between" alignItems="flex-end" gap={BOTTOM_GAP}>
+                        justifyContent="space-between" alignItems="flex-end" gap={BOTTOM_GAP}
+                        flexWrap="wrap" rowGap={6}>
                     <XStack testID="recipe-card-figures" onLayout={measure("figures")} gap="$5" alignItems="flex-end">
                         <Stat displayFill={accent} label="DOSE" value={recipe.dosage} suffix="g"/>
                         <Stat displayFill={accent} label="RATIO" value={recipe.ratio}
@@ -481,12 +490,14 @@ export default function RecipeCard({
                         cannot share it, and a destructive control has the
                         stronger claim on a row the user opened to manage. */}
                     {!editing && <XStack testID="recipe-card-metadata" alignItems="center"
-                        gap={PHOTO_GAP} flexShrink={0}>
+                        gap={PHOTO_GAP} flexShrink={1} maxWidth="100%" marginLeft="auto">
                         {shownEvidence !== null && (
                             // Doto has no star glyph; use the app's dot icon.
                             <XStack testID="recipe-card-evidence"
                                     onLayout={measure("end")}
-                                    alignItems="center" gap={3}>
+                                    alignItems="center" gap={3} flexShrink={1}
+                                    backgroundColor={accent} borderRadius={12}
+                                    paddingHorizontal={6} paddingVertical={3}>
                                 {(evidence?.avgRating ?? 0) > 0 && (
                                     <DotIcon name="favourite" size={9}
                                              testID="recipe-card-evidence-star"
@@ -494,6 +505,7 @@ export default function RecipeCard({
                                 )}
                                 <DotMatrixText fontSize={11} weight="bold"
                                                letterSpacing={1.2}
+                                               style={{flexShrink: 1}}
                                                color={onAccent.label}>
                                     {shownEvidence}
                                 </DotMatrixText>

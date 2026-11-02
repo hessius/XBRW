@@ -5,6 +5,7 @@ import {Input, XStack} from "tamagui";
 import DotIcon from "@/components/DotIcon";
 import DotMatrixText from "@/components/DotMatrixText";
 import {useAppearance} from "@/hooks/useAppearance";
+import {snapNumericLadder, stepNumericLadder} from "@/library/numericLadder";
 
 /** Delay before a held button starts repeating, and the fastest it repeats. */
 const REPEAT_START_MS = 200;
@@ -86,6 +87,8 @@ type Props = {
      * from `min`, `max` and `step` as before.
      */
     values?: readonly number[];
+    /** Opt in to an inclusive ladder anchored at min; ordinary recipe fields retain clamping. */
+    snapToStep?: boolean;
     /** Canonical recipe accent, resolved to readable ink on app chrome. */
     accent?: string;
     /** Appended to the spoken value, e.g. "g". */
@@ -111,7 +114,7 @@ type Props = {
  * must not become "9" the moment it is entered.
  */
 export default function Stepper({
-    label, value, min, max, step, values, accent, unit, formatValue, signedInput, onChange
+    label, value, min, max, step, values, snapToStep, accent, unit, formatValue, signedInput, onChange
 }: Props) {
     const appearance = useAppearance();
     const {palette} = appearance;
@@ -147,6 +150,7 @@ export default function Stepper({
     function nudge(direction: 1 | -1) {
         const next = values
             ? steppedThrough(value, values, direction)
+            : snapToStep ? stepNumericLadder(value, direction, {min, max, step})
             : stepped(value, step, direction, min, max);
         if (next !== value) onChange(next);
     }
@@ -157,6 +161,7 @@ export default function Stepper({
             const current = latestValue.current;
             const next = values
                 ? steppedThrough(current, values, direction)
+                : snapToStep ? stepNumericLadder(current, direction, {min, max, step})
                 : stepped(current, step, direction, min, max);
             if (next === current) return;
             onChange(next);
@@ -180,6 +185,7 @@ export default function Stepper({
         if (draft.trim() === "" || Number.isNaN(parsed)) return;
         const next = values
             ? snapThrough(parsed, values)
+            : snapToStep ? snapNumericLadder(parsed, {min, max, step})
             : clamp(parsed, min, max);
         if (next !== value) onChange(next);
     }

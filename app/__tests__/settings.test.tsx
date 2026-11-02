@@ -493,6 +493,18 @@ describe("SettingsScreen", () => {
             .toBe(false);
     });
 
+    it("keeps coffee details on cards off by default and persists both choices", async () => {
+        const storage = memoryStorage();
+        const settings = new Settings(storage);
+        await renderWithProviders(<SettingsScreen settings={settings}/>);
+        const toggle = () => screen.getByLabelText("Coffee details on cards");
+        expect(toggle().props.accessibilityState.checked).toBe(false);
+        await fireEvent(toggle(), "checkedChange", true);
+        expect(new Settings(storage).get("showRecipeCardDetails")).toBe(true);
+        await fireEvent(toggle(), "checkedChange", false);
+        expect(new Settings(storage).get("showRecipeCardDetails")).toBe(false);
+    });
+
     it("persists a change to the toggle", async () => {
         const storage = memoryStorage();
         const settings = new Settings(storage);
@@ -856,6 +868,9 @@ describe("SettingsScreen", () => {
         const storage = memoryStorage();
         const settings = new Settings(storage);
         settings.set("machineDeviceId", "a-peripheral-on-this-phone-only");
+        settings.set("machineControlRecovery", JSON.stringify({
+            version: 1, deviceId: "mine", serial: null, tool: "grind"
+        }));
         await renderWithProviders(<SettingsScreen settings={settings}/>);
 
         await fireEvent.press(screen.getByRole("button",
@@ -863,6 +878,7 @@ describe("SettingsScreen", () => {
 
         const snapshot = mockExportBackup.mock.calls[0][1] as Record<string, unknown>;
         expect(snapshot).not.toHaveProperty("machineDeviceId");
+        expect(snapshot).not.toHaveProperty("machineControlRecovery");
     });
 
     it("ignores a machine identifier a backup carries anyway", async () => {
@@ -872,7 +888,11 @@ describe("SettingsScreen", () => {
         const storage = memoryStorage();
         const settings = new Settings(storage);
         settings.set("machineDeviceId", "mine");
-        mockPickBackup.mockResolvedValue(backupOf([recipeNamed("A", "u1")], {machineDeviceId: "theirs"}));
+        const marker = JSON.stringify({version: 1, deviceId: "mine", serial: null, tool: "grind"});
+        settings.set("machineControlRecovery", marker);
+        mockPickBackup.mockResolvedValue(backupOf([recipeNamed("A", "u1")], {
+            machineDeviceId: "theirs", machineControlRecovery: "untrusted marker"
+        }));
         mockApplyRestore.mockReturnValue({status: "restored", added: 1});
         await renderWithProviders(<SettingsScreen settings={settings}/>);
 
@@ -884,6 +904,7 @@ describe("SettingsScreen", () => {
         await fireEvent.press(screen.getByRole("button", {name: /add to my library/i}));
 
         expect(new Settings(storage).get("machineDeviceId")).toBe("mine");
+        expect(new Settings(storage).get("machineControlRecovery")).toBe(marker);
     });
 
     it("shows the brew detail storage budget and stores a choice of 25 MB", async () => {
@@ -1699,6 +1720,7 @@ describe("SettingsScreen", () => {
             expect(screen.queryByText("LABS")).toBeNull();
             expect(screen.queryByText("CARD DIAGNOSTICS")).toBeNull();
             expect(screen.queryByRole("button", {name: /^Machine console/})).toBeNull();
+            expect(screen.queryByRole("switch", {name: "Write Easy Mode slots on selection"})).toBeNull();
         });
 
         it("offers card diagnostics and the guarded console from Labs", async () => {
@@ -1722,6 +1744,46 @@ describe("SettingsScreen", () => {
             expect(screen.getByText("LABS")).toBeTruthy();
             expect(screen.getByRole("button",
                 {name: "Hide Labs, Anything you switched on here stays on."})).toBeTruthy();
+        });
+
+        it("offers one-tap Easy Mode writing only as a default-off Labs opt-in", async () => {
+            const storage = memoryStorage();
+            const settings = new Settings(storage);
+            settings.set("labsUnlocked", true);
+            await renderWithProviders(<SettingsScreen settings={settings}/>);
+            expect(screen.getByRole("switch", {name: "Write Easy Mode slots on selection"})).not.toBeChecked();
+            expect(screen.getByText(/choosing a slot writes all three slot drafts/i)).toBeTruthy();
+            await fireEvent.press(screen.getByRole("switch", {name: "Write Easy Mode slots on selection"}));
+            expect(new Settings(storage).get("easyModeOneTapWrite")).toBe(true);
+            mockExportBackup.mockResolvedValue({ok: true});
+            await fireEvent.press(screen.getByRole("button", {name: /^Back up my recipes,/}));
+            expect(mockExportBackup.mock.calls[0][1]).not.toHaveProperty("easyModeOneTapWrite");
+            await fireEvent.press(screen.getByRole("button",
+                {name: "Hide Labs, Anything you switched on here stays on."}));
+            expect(settings.get("easyModeOneTapWrite")).toBe(true);
+        });
+
+        it("reports a refused one-tap preference write without enabling the experiment", async () => {
+            const {settings, db} = sqlSettings();
+            settings.set("labsUnlocked", true);
+            settings.set("easyModeOneTapWrite", false);
+            db.execSync(`CREATE TRIGGER reject_one_tap BEFORE UPDATE ON settings
+                WHEN NEW.key = 'easyModeOneTapWrite'
+                BEGIN SELECT RAISE(FAIL, 'disk full'); END;`);
+            const warning = jest.spyOn(console, "warn").mockImplementation(() => {});
+            try {
+                await renderWithProviders(<SettingsScreen settings={settings}/>);
+                await fireEvent.press(screen.getByRole("switch", {name: "Write Easy Mode slots on selection"}));
+                expect(mockNotify).toHaveBeenCalledWith({
+                    tone: "error", message: "Could not change Easy Mode writing. Your setting has not changed."
+                });
+                expect(screen.getByRole("switch", {name: "Write Easy Mode slots on selection"})).not.toBeChecked();
+                expect(settings.get("easyModeOneTapWrite")).toBe(false);
+                expect(warning).toHaveBeenCalledWith("Could not change Easy Mode writing.",
+                    expect.objectContaining({message: "disk full"}));
+            } finally {
+                warning.mockRestore();
+            }
         });
 
         it("switches the Beanconqueror handoff on from Labs", async () => {
@@ -1841,7 +1903,7 @@ describe("SettingsScreen", () => {
             const storage = memoryStorage();
             mockPickBackup.mockResolvedValue(backupOf(
                 [recipeNamed("A", "u1")],
-                {labsUnlocked: true, beanconquerorHandoff: true,
+                {labsUnlocked: true, beanconquerorHandoff: true, easyModeOneTapWrite: true,
                  bagExperimentEnabled: true, bagTracker: "beanconqueror", readyToBrewDismissedOn: "2026-10-23",
                  dotMatrixProfile: true}
             ));
@@ -1858,6 +1920,7 @@ describe("SettingsScreen", () => {
             const restored = new Settings(storage);
             expect(restored.get("labsUnlocked")).toBe(false);
             expect(restored.get("beanconquerorHandoff")).toBe(false);
+            expect(restored.get("easyModeOneTapWrite")).toBe(false);
             expect(restored.get("bagExperimentEnabled")).toBe(false);
             expect(restored.get("bagTracker")).toBe("auto");
             expect(restored.get("readyToBrewDismissedOn")).toBe("");

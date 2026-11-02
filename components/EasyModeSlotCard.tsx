@@ -22,6 +22,7 @@ type Props = {
     onChange: () => void;
     onUpdate: () => void;
     onSetScaleEnabled?: (enabled: boolean) => boolean | void;
+    action?: {label: "ADD" | "REPLACE"; accessibilityLabel: string};
 };
 
 export function teaSlotFigures(recipe: Recipe, historicalProbe = false): string {
@@ -35,7 +36,7 @@ export function teaSlotFigures(recipe: Recipe, historicalProbe = false): string 
 
 export default function EasyModeSlotCard({
     index, snapshot, needsWrite, status, recovery, locked, updateProblem, changeRef, onChange, onUpdate,
-    onSetScaleEnabled
+    onSetScaleEnabled, action
 }: Props) {
     const appearance = useAppearance();
     const {palette} = appearance;
@@ -96,16 +97,16 @@ export default function EasyModeSlotCard({
                 </XStack>}
                 {!locked && <Button ref={changeRef} height="auto" minHeight={44} paddingVertical="$2"
                     paddingHorizontal="$3" borderRadius={8}
-                    accessibilityLabel={`Change slot ${name} recipe`} onPress={onChange}
+                    accessibilityLabel={action?.accessibilityLabel ?? `Change slot ${name} recipe`} onPress={onChange}
                     backgroundColor={actionFill} color={actionInk}>
                     <DotMatrixText fontSize={11} weight="bold" color={actionInk}>
-                        {snapshot === null ? "CHOOSE RECIPE" : "CHANGE"}
+                        {action?.label ?? (snapshot === null ? "CHOOSE RECIPE" : "CHANGE")}
                     </DotMatrixText>
                 </Button>}
             </XStack>
             {!probe && status === "edited" && <YStack gap="$2">
                 <DotMatrixText fontSize={11} weight="bold" color={ink}>RECIPE UPDATED</DotMatrixText>
-                {!locked && <Button height="auto" minHeight={44} paddingVertical="$3"
+                {!locked && action === undefined && <Button height="auto" minHeight={44} paddingVertical="$3"
                     accessibilityLabel={`Update slot ${name} from library`}
                     disabled={updateProblem !== null} onPress={onUpdate}
                     backgroundColor={actionFill} color={actionInk}>USE UPDATED RECIPE</Button>}

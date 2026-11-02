@@ -7,6 +7,8 @@ import DotMatrixText from "@/components/DotMatrixText";
 import DotIcon from "@/components/DotIcon";
 import Collapsible from "@/components/Collapsible";
 import MachineColourDot from "@/components/MachineColourDot";
+import MachineTools from "@/components/MachineTools";
+import SettingsActionRow from "@/components/SettingsActionRow";
 
 import {useRefreshRequest} from "@/hooks/useRefreshRequest";
 import type {LinkStatus} from "@/hooks/useMachine";
@@ -33,6 +35,9 @@ type Props = {
     onRefreshWater: () => Promise<boolean>;
     onConnect: () => void;
     onEasyMode?: () => void;
+    /** A known saved machine in use, never the ambient Bluetooth peer. */
+    machineId?: string;
+    onOpenMachine?: () => void;
     /**
      * The active machine's name, with two or more saved. Absent with one or
      * none, and the panel then looks exactly as it did before the list.
@@ -183,8 +188,7 @@ function RefreshButton({accent, onRefresh}: {
  * The machine status panel.
  *
  * Shows only what changes: water level with its age, mode, and grind size, with
- * a REFRESH button beneath the readings. No MACHINE SETTINGS button — the gear
- * is twenty pixels away in the same header and leads to the same place.
+ * a REFRESH button beneath the readings, tool launchers and the machine's page.
  *
  * TRY NOW appears only when the machine is out of range. The refresh button
  * sits under all three readings rather than on the water row, because a press
@@ -196,7 +200,7 @@ function RefreshButton({accent, onRefresh}: {
  */
 export default function MachinePanel({
     open, status, accent, vitals, now, onRefreshWater, onConnect, onEasyMode,
-    machineLabel, machineModel, machineColour, onChooseMachine
+    machineLabel, machineModel, machineColour, onChooseMachine, machineId, onOpenMachine
 }: Props) {
     const appearance = useAppearance();
     const {palette} = appearance;
@@ -329,6 +333,9 @@ export default function MachinePanel({
                                       onPress={onChooseMachine}/>
                 )}
                 {body}
+                {machineId !== undefined && <YStack marginTop="$3">
+                    <MachineTools machineId={machineId}/>
+                </YStack>}
                 {onEasyMode !== undefined && (
                     <Pressable accessibilityRole="button" accessibilityLabel="Easy Mode slots"
                                onPress={onEasyMode}>
@@ -344,6 +351,8 @@ export default function MachinePanel({
                         </XStack>
                     </Pressable>
                 )}
+                {onOpenMachine !== undefined && <SettingsActionRow
+                    label="Machine settings and tools" onPress={onOpenMachine}/>}
             </YStack>
         </Collapsible>
     );

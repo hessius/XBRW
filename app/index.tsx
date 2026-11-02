@@ -76,7 +76,8 @@ import ShelfPickerBar, {PICKER_BAR_HEIGHT} from "@/components/ShelfPickerBar";
 import ShelfRoom, {type RoomRecipeActions} from "@/components/ShelfRoom";
 import RecipeOverflowSheet from "@/components/RecipeOverflowSheet";
 import {resolveOnOpen} from "@/library/duplicates";
-import {BREWMIND_SOURCE, type BrewMindLink} from "@/library/brewmindLink";
+import {type BrewMindLink} from "@/library/brewmindLink";
+import {decorationFromLink, parseImportEntry} from "@/library/importDecoration";
 import {useBrewMindCreate} from "@/hooks/useBrewMindCreate";
 import {useImportLink} from "@/hooks/useImportLink";
 
@@ -346,6 +347,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
     const [showCoffeeMarker] = useSetting("showCoffeeMarker", settings);
     const [dottedProfile] = useSetting("dotMatrixProfile", settings);
     const [showRecipeCardPhotos] = useSetting("showRecipeCardPhotos", settings);
+    const [showRecipeCardDetails] = useSetting("showRecipeCardDetails", settings);
     const [bagExperimentEnabled] = useSetting("bagExperimentEnabled", settings);
     const [bagTracker] = useSetting("bagTracker", settings);
     const [beanconquerorHandoff] = useSetting("beanconquerorHandoff", settings);
@@ -368,6 +370,14 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
     // The same picker the editor's chip opens. Only with two or more saved:
     // one machine has nothing to choose between.
     const machinePicker = useMachinePicker(settings);
+    const homeMachine = machinePicker.machines.find(entry => entry.id === remembered);
+    // The legacy slots screen follows the live peer. Route via the named page
+    // instead if that peer is not the saved machine the home panel is about.
+    const easyModeMatchesHome = homeMachine !== undefined
+        && (machine.linkedDeviceId === null
+            || (machine.linkedDeviceId === homeMachine.id
+                && (homeMachine.serial.trim() === ""
+                    || machine.info?.serial.trim() === homeMachine.serial.trim())));
     const slotRecord = useSlotRecord(remembered);
     // Seeded from machine.info so a machine that is already connected when the
     // screen mounts does not show "Not in range" while the header dot says
@@ -1049,11 +1059,11 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
             return;
         }
         handledShareUrl.current = liveShareUrl;
-        // The screen no longer knows what an xBloom link looks like. One module
-        // does, and it is the same one the field uses -- two that had to agree
-        // eventually would not.
-        const source = parseImportInput(liveShareUrl);
-        if (source) {
+        // The screen no longer knows what an xBloom or XBRW++ link looks like.
+        // One module does, and it is the same one the field uses -- two that
+        // had to agree eventually would not.
+        const entry = parseImportEntry(liveShareUrl);
+        if (entry) {
             // Reacting to an inbound share intent — an external system pushing
             // into React, which is what effects are for. The field is hidden by
             // the hook's `"shared"` path, not here; and if the lookup fails the
@@ -1062,7 +1072,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
             // from.
             // eslint-disable-next-line react-hooks/set-state-in-effect
             setImportOpen(true);
-            importer.resolveNow(source, "shared");
+            importer.resolveNow(entry.source, "shared", entry.decoration);
         }
         resetShareIntent();
         // `importer` is rebuilt every render; depending on it would re-run this
@@ -1097,18 +1107,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
         // in the app they came from. That is the same situation, so it gets
         // the same answer.
         setImportOpen(true);
-        importer.resolveNow(source, "shared", {
-            coffee: link.coffee,
-            recipeUrl: link.recipeUrl,
-            recipeName: link.recipeName,
-            feed: link.feed,
-            colour: link.colour,
-            tags: link.tags,
-            // Only a stated `brewmind` source earns the provenance. Anything
-            // else still imports and reads as an ordinary import, because the
-            // link is useful to anyone who can mint one.
-            source: link.source === BREWMIND_SOURCE ? "brewmind" : "import"
-        });
+        importer.resolveNow(source, "shared", decorationFromLink(link));
     }
 
     // Every link the system delivers, launch URL and later events alike.
@@ -1474,7 +1473,12 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                             now={popoverNow}
                             onRefreshWater={refreshWater}
                             onConnect={connectMachine}
-                            onEasyMode={() => router.push("/easyMode")}
+                            machineId={homeMachine?.id}
+                            onOpenMachine={() => router.push(homeMachine === undefined ? "/settings"
+                                : {pathname: "/machineHome", params: {machineId: homeMachine.id}})}
+                            onEasyMode={() => router.push(homeMachine === undefined ? "/settings"
+                                : easyModeMatchesHome ? "/easyMode"
+                                    : {pathname: "/machineHome", params: {machineId: homeMachine.id}})}
                             machineLabel={machinePicker.available ? machinePicker.label : undefined}
                             machineModel={machinePicker.model}
                             machineColour={machinePicker.colour.ink}
@@ -1509,7 +1513,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                         <ImportTile
                             onOpen={() => setImportOpen(true)}
                             onPasted={(text) => {
-                                const source = parseImportInput(text);
+                                const entry = parseImportEntry(text);
                                 setImportOpen(true);
                                 // The tile's paste shortcut: atomic, but the hook
                                 // degrades it to the found panel with the field
@@ -1519,7 +1523,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                                 // not parse opens the sheet with a plain field
                                 // (the hook's default), indistinguishable from a
                                 // plain tap.
-                                if (source) importer.resolveNow(source, "shortcut");
+                                if (entry) importer.resolveNow(entry.source, "shortcut", entry.decoration);
                             }}/>
                         <CtaTile icon="plus" label="NEW"
                                  accessibilityLabel="Create a recipe"
@@ -1686,7 +1690,8 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                                 onToggle={() => picker.toggle(item.recipe.uuid)}
                                 showCoffeeMarker={showCoffeeMarker}
                                 dottedProfile={dottedProfile}
-                                showPicture={showRecipeCardPhotos}/>
+                                showPicture={showRecipeCardPhotos}
+                                showCoffeeDetails={showRecipeCardDetails}/>
                         ) : (
                             <SwipeableRecipeRow
                                 recipe={item.recipe}
@@ -1694,6 +1699,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                                 showCoffeeMarker={showCoffeeMarker}
                                 dottedProfile={dottedProfile}
                                 showPicture={showRecipeCardPhotos}
+                                showCoffeeDetails={showRecipeCardDetails}
                                 evidence={library.evidence[item.recipe.uuid]}
                                 bagBadge={bagSuggestions.badges[item.recipe.uuid]}
                                 slotMarker={slotMarkers(slotRecord, item.recipe)}

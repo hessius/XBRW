@@ -10,15 +10,15 @@ import {notification, status} from "./protocolFixtures";
  * the only report of the water level.
  */
 export function machineInfoFrame(
-    overrides: {mode?: string; waterEnough?: number; waterFeed?: number; serial?: string} = {}
+    overrides: {mode?: string; waterEnough?: number; waterFeed?: number; serial?: string; model?: string; firmware?: string} = {}
 ): number[] {
     const payload = new Array(63).fill(0);
     const put = (at: number, textValue: string) => {
         for (let i = 0; i < textValue.length; i++) payload[at + i] = textValue.charCodeAt(i);
     };
     put(0, overrides.serial ?? "J15ABC123456");
-    put(13, "J15");
-    put(19, "V12.0D.500");
+    put(13, overrides.model ?? "J15");
+    put(19, overrides.firmware ?? "V12.0D.500");
     payload[33] = overrides.waterEnough ?? 1;
     payload[36] = overrides.waterFeed ?? 0;
     payload[37] = 30 + 62;
@@ -64,6 +64,8 @@ function refusal(): Error {
 }
 
 export class FakeTransport implements MachineTransport {
+    /** Explicitly scripted synthetic commands only; no automatic successes. */
+    public syntheticWrite: ((frame: Uint8Array) => void | Promise<void>) | null = null;
     /** Every frame written, as raw bytes. */
     public written: Uint8Array[] = [];
     public connectedTo: string | null = null;
@@ -196,6 +198,7 @@ export class FakeTransport implements MachineTransport {
             throw new Error(reason);
         }
         this.written.push(frame);
+        if (this.syntheticWrite !== null) await this.syntheticWrite(frame);
         const code = frame[3] | (frame[4] << 8);
         if (code === 40519 && this.cancelReply !== null) this.emit(this.cancelReply);
         if (code === 8022 && this.homeReply !== null) this.emit(this.homeReply);

@@ -42,11 +42,43 @@ describe("useShareRecipe", () => {
             url = await result.current.share(recipe);
         });
 
-        expect(url).toBe("https://share-h5.xbloom.com/?id=ok");
+        expect(url).toBe(
+            "https://xbrw.app/import?v=1&share=https%3A%2F%2Fshare-h5.xbloom.com%2F%3Fid%3Dok&recipe.name=Ethiopia+Guji"
+        );
         expect(recipe.sharedTableId).toBe(42);
         expect(recipe.shareUrl).toBe("https://share-h5.xbloom.com/?id=ok");
         expect(recipe.shareSnapshot).toBeTruthy();
         await waitFor(() => expect(result.current.state).toEqual({status: "idle"}));
+    });
+
+    it("reflects local metadata edits in the returned link without re-minting", async () => {
+        const fetchMock = respond({tableId: 42, url: "https://share-h5.xbloom.com/?id=ok"});
+        global.fetch = fetchMock;
+        const recipe = drip();
+        const {result} = await renderHook(() => useShareRecipe());
+
+        await act(async () => { await result.current.share(recipe); });
+
+        recipe.coffee = {
+            name: "Guji Uraga",
+            roaster: "Standout Coffee",
+            imageUrl: "https://example.com/bag.png"
+        };
+        recipe.imageURL = "https://example.com/recipe.png";
+
+        let secondUrl: string | null = null;
+        await act(async () => {
+            secondUrl = await result.current.share(recipe);
+        });
+
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(recipe.shareUrl).toBe("https://share-h5.xbloom.com/?id=ok");
+        const parsed = new URL(secondUrl!);
+        expect(parsed.origin + parsed.pathname).toBe("https://xbrw.app/import");
+        expect(parsed.searchParams.get("bean.name")).toBe("Guji Uraga");
+        expect(parsed.searchParams.get("bean.roaster")).toBe("Standout Coffee");
+        expect(parsed.searchParams.get("bean.image")).toBe("https://example.com/bag.png");
+        expect(parsed.searchParams.get("recipe.image")).toBe("https://example.com/recipe.png");
     });
 
     /**

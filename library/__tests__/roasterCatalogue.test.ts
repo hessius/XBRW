@@ -60,6 +60,19 @@ describe("what a coffee says", () => {
         expect(chooseRecipe(feed([{id: "b", sizes: ["20g"]}]).coffees[0]).size).toBe("20g");
     });
 
+    it("prefers 18g within the selected model without losing an explicit variant choice", () => {
+        const variants = {...coffee, recipes: [
+            {size: "15g Studio", share: "studio-15", machineModel: "studio" as const},
+            {size: "18g Original", share: "original-18", machineModel: "original" as const},
+            {size: "18g Studio", share: "studio-18", machineModel: "studio" as const}
+        ]};
+        expect(chooseRecipe(variants, undefined, "studio").share).toBe("studio-18");
+        expect(chooseRecipe(variants, "15g Studio", "studio").share).toBe("studio-15");
+        expect(chooseRecipe(variants, undefined, "original").share).toBe("original-18");
+        expect(chooseRecipe({...variants, recipes: variants.recipes.map(({size, share}) => ({size, share}))})
+            .share).toBe("studio-15");
+    });
+
     it("puts the roast advice in one line", () => {
         expect(roastAdvice(coffee)).toBe("Rest 11 days, peak day 28, best by day 42");
         expect(roastAdvice({...coffee, roast: {peakDay: 35}})).toBe("Peak day 35");

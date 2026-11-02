@@ -14,8 +14,9 @@ import {PAUSE_ACK_MS} from "@/constants/machine";
 import {useBrew} from "@/hooks/useBrew";
 import {useBrewRun} from "@/hooks/useBrewRun";
 import {
-    BluetoothPermissionError, NoSavedMachineError, RadioUnavailableError, WrongMachineError
+    BluetoothPermissionError, ControlOperationError, NoSavedMachineError, RadioUnavailableError, WrongMachineError
 } from "@/library/machine/errors";
+import {ControlRecoveryStore} from "@/library/machine/controlRecovery";
 import Machine from "@/library/machine/Machine";
 import type {BrewPhase} from "@/library/machine/Machine";
 import {FakeTransport, machineInfoFrame} from "@/library/machine/__tests__/FakeTransport";
@@ -31,10 +32,11 @@ import {coffee} from "@/library/slots/__tests__/fixtures";
 jest.mock("@/components/XbrwToast", () => ({notify: jest.fn()}));
 
 let mockAutoStart = true;
+let mockBypassEncoding = "scaled";
 
 jest.mock("@/hooks/useSetting", () => ({
     sharedSettings: () => ({get: () => 10}),
-    useSetting: (key: string) => [key === "machineAutoStart" ? mockAutoStart : "scaled", () => undefined]
+    useSetting: (key: string) => [key === "machineAutoStart" ? mockAutoStart : mockBypassEncoding, () => undefined]
 }));
 
 const mockConnect = jest.fn(async () => {});
@@ -105,6 +107,7 @@ async function run(machine: FakeMachine) {
 beforeEach(() => {
     mockConnect.mockClear();
     mockAutoStart = true;
+    mockBypassEncoding = "scaled";
     jest.mocked(notify).mockClear();
 });
 
@@ -258,6 +261,87 @@ it("does not treat a slot exclusion refusal as permission to disconnect and retr
     expect(disconnect).not.toHaveBeenCalled();
     expect(radio.written).toHaveLength(traffic);
     next.release(true);
+    await machine.disconnect();
+});
+
+const controlMarker = {version: 1, deviceId: "one", serial: "J15ABC123456", tool: "grind"} as const;
+
+function controlRig(raw = "") {
+    class Radio extends FakeTransport {
+        get connectedDeviceId() { return this.connectedTo; }
+    }
+    const radio = new Radio();
+    const machine = new Machine(radio, {frameGapMs: 0});
+    const recovery = new ControlRecoveryStore({
+        read: () => raw, write: (value) => { raw = value; }
+    });
+    machine.installControlRecovery(recovery);
+    return {machine, radio, recovery};
+}
+
+it.each([JSON.stringify(controlMarker), "malformed"])(
+    "mounts the recipe-free run owner safely while recovery is reserved: %s", async raw => {
+        const {machine, radio} = controlRig(raw);
+        mockSharedMachine = machine;
+        const store = {insert: jest.fn(), sweepWhenReady: jest.fn(async () => {})};
+        const {result} = await renderHook(() => useBrewRun(null, store));
+        expect(result.current.machine).toBe(machine);
+        expect(notify).toHaveBeenCalledWith({
+            tone: "error", message: machine.controlBlocker!.message
+        });
+        expect(machine.controlBlocker).toBeInstanceOf(ControlOperationError);
+        expect(() => machine.setAutoStart(false)).toThrow(ControlOperationError);
+        expect(() => machine.setBypassTempEncoding("plain")).toThrow(ControlOperationError);
+        await expect(machine.brew(coffee())).rejects.toBeInstanceOf(ControlOperationError);
+        expect(radio.sent).toEqual([]);
+        expect(store.insert).not.toHaveBeenCalled();
+    }
+);
+
+it.each(["brew", "switchToProAndRetry"] as const)(
+    "applies deferred saved configuration on a legitimate %s after recovery", async method => {
+        const {machine, radio, recovery} = controlRig(JSON.stringify(controlMarker));
+        await machine.connect("one");
+        radio.emit(status(0x01));
+        radio.written = [];
+        mockAutoStart = false;
+        mockBypassEncoding = "plain";
+        const {result, rerender} = await renderHook(() => useBrew(machine));
+        expect(machine.bypassTempEncoding).toBe("scaled");
+        recovery.clear({...controlMarker, qualifiedTerminal: true});
+        await rerender(undefined);
+        expect(radio.sent).toEqual([]);
+        expect(machine.bypassTempEncoding).toBe("scaled");
+        await act(async () => { await result.current[method](coffee()); });
+        expect(result.current.error).toBeNull();
+        expect(machine.bypassTempEncoding).toBe("plain");
+        expect(machine.phase.name).toBe("readyToStart");
+        expect(radio.sent).not.toContain(8002);
+        await machine.disconnect();
+    }
+);
+
+it("reports a control refusal immediately without retrying, disconnecting or sending frames", async () => {
+    const {machine, radio} = controlRig();
+    await machine.connect("one");
+    radio.emit(status(0x01));
+    const {result} = await renderHook(() => useBrew(machine));
+    const lease = machine.acquireControlSession(machine.slotIdentity!, "scale");
+    radio.written = [];
+    const disconnect = jest.spyOn(machine, "disconnect");
+    const retry = jest.fn();
+    const refused = jest.fn();
+    await act(async () => { await result.current.brew(coffee(), retry, refused); });
+    expect(result.current.error).toMatch(/control session/i);
+    expect(refused).toHaveBeenCalledTimes(1);
+    expect(refused).toHaveBeenCalledWith(expect.any(ControlOperationError));
+    expect(retry).not.toHaveBeenCalled();
+    expect(disconnect).not.toHaveBeenCalled();
+    expect(mockConnect).not.toHaveBeenCalled();
+    expect(machine.isConnected()).toBe(true);
+    expect(machine.phase.name).toBe("idle");
+    expect(radio.sent).toEqual([]);
+    lease.release();
     await machine.disconnect();
 });
 

@@ -1,4 +1,4 @@
-import {DEFAULTS, Settings, type SettingsStorage} from "../Settings";
+import {DEFAULTS, NOT_IN_BACKUP, Settings, type SettingsStorage} from "../Settings";
 
 /** A storage backend that keeps everything in memory. */
 function fakeStorage(seed: Record<string, string> = {}): SettingsStorage {
@@ -12,6 +12,18 @@ function fakeStorage(seed: Record<string, string> = {}): SettingsStorage {
 }
 
 describe("Settings", () => {
+    it("keeps one-tap Easy Mode writing a persistent, device-local opt-in", () => {
+        const storage = fakeStorage();
+        expect(new Settings(storage).get("easyModeOneTapWrite")).toBe(false);
+        new Settings(storage).set("easyModeOneTapWrite", true);
+        expect(new Settings(storage).get("easyModeOneTapWrite")).toBe(true);
+        new Settings(storage).set("easyModeOneTapWrite", false);
+        expect(new Settings(storage).get("easyModeOneTapWrite")).toBe(false);
+        expect(new Settings(fakeStorage({easyModeOneTapWrite: '"true"'}))
+            .get("easyModeOneTapWrite")).toBe(false);
+        expect(NOT_IN_BACKUP).toContain("easyModeOneTapWrite");
+    });
+
     it("keeps solid labels opt-in, including after reopening and switching them back off", () => {
         const storage = fakeStorage();
         expect(new Settings(storage).get("solidControlLabels")).toBe(false);

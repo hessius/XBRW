@@ -43,11 +43,14 @@ export function useSlotRecord(deviceId: string, supplied?: SlotDatabase): SlotRe
 }
 
 export function prepareEasyModeEntry(
-    store: SlotDatabase, deviceId: string, recipe: Recipe
-): {pathname: "/easyMode"; params?: {recipeJSON: string}} {
+    store: SlotDatabase, deviceId: string, recipe: Recipe, {place = false}: {place?: boolean} = {}
+): {pathname: "/easyMode"; params?: {recipeJSON: string; place?: string; placeDeviceId?: string}} {
     const record = store.read(deviceId);
     if (record.journal !== null || record.experiment?.phase === "active") return {pathname: "/easyMode"};
     const snapshot = snapshotRecipe(recipe);
+    if (place) return {
+        pathname: "/easyMode", params: {recipeJSON: snapshot.recipeJSON, place: "1", placeDeviceId: deviceId}
+    };
     const empty = record.drafts.findIndex((slot) => slot === null);
     if (deviceId !== "" && record.journal === null && (empty === 0 || empty === 1 || empty === 2)) {
         store.assign(deviceId, empty, snapshot);
@@ -56,10 +59,10 @@ export function prepareEasyModeEntry(
     return {pathname: "/easyMode", params: {recipeJSON: snapshot.recipeJSON}};
 }
 
-export function openEasyModeRecipe(recipe: Recipe, deviceId: string): void {
+export function openEasyModeRecipe(recipe: Recipe, deviceId: string, {place = false}: {place?: boolean} = {}): void {
     try {
-        pushPrepared(JSON.stringify(["easyMode", deviceId, recipe.uuid]),
-            () => prepareEasyModeEntry(sharedSlotDatabase(), deviceId, recipe));
+        pushPrepared(JSON.stringify(["easyMode", deviceId, recipe.uuid, place]),
+            () => prepareEasyModeEntry(sharedSlotDatabase(), deviceId, recipe, {place}));
     } catch (error) {
         notify({tone: "error", message: error instanceof Error ? error.message : String(error)});
     }
@@ -129,11 +132,19 @@ export function useEasyModeSlots(
     }
 
     async function run(
-        operation: SlotOperation, restart = false, probeOptions: TeaProbeOptions = {}
+        operation: SlotOperation, restart = false, probeOptions: TeaProbeOptions = {},
+        writeIdentity?: SlotIdentity
     ): Promise<void> {
-        if (active.current) return;
+        if (writeIdentity !== undefined && (writeIdentity.deviceId !== identity.deviceId
+            || (identity.serial !== null && writeIdentity.serial !== identity.serial))) {
+            throw new Error("This placement belongs to a different machine.");
+        }
+        if (active.current) {
+            if (writeIdentity !== undefined) throw new Error("Wait for the current slot operation to finish.");
+            return;
+        }
         active.current = true;
-        const target = Object.freeze({...identity});
+        const target = Object.freeze({...(writeIdentity ?? identity)});
         const attempting: SlotAttempt = {
             ...target, operation, status: operation === "cancel" || operation === "dismiss" ? "cancelling" : "writing"
         };
@@ -155,6 +166,10 @@ export function useEasyModeSlots(
         } catch (failure) {
             setFailure({...target, message: failure instanceof Error ? failure.message : String(failure)});
             setReading({...attempting, status: "error"});
+            if (writeIdentity !== undefined) {
+                active.current = false;
+                throw failure;
+            }
         }
         active.current = false;
     }
@@ -196,6 +211,8 @@ export function useEasyModeSlots(
         resetAttempt: () => { if (!active.current) { setReading(null); setFailure(null); } },
         running, available: port.available, assign, setScaleEnabled, observeTeaProbe,
         write: () => run("write"), recover: (restart = false) => run("recover", restart),
+        /** Bind a just-connected identity and propagate failures to the placing flow. */
+        writeTo: (target: SlotIdentity) => run("write", false, {}, target),
         cancel: () => run("cancel"),
         dismissWrite: () => run("dismiss"),
         writeTeaProbe: (options: TeaProbeOptions = {}) => run("probe", false, options),

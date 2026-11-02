@@ -1,5 +1,5 @@
-import {readLabels} from "@/library/coffeeLabels";
-import {reviveRoastAdvice, type RoastAdvice} from "@/library/roastAdvice";
+import {readLabels} from "./coffeeLabels";
+import {reviveRoastAdvice, type RoastAdvice} from "./roastAdvice";
 
 /**
  * What we know about a coffee, and hand onwards.
