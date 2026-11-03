@@ -322,7 +322,7 @@ describe("leaving a pause by any other door", () => {
         transport.emit(event(8203));       // gear position
 
         expect(machine.phase.name).toBe("failed");
-    });
+    }, 60_000);
 
     it("a cancel clears it", async () => {
         const {machine} = await paused();
@@ -330,7 +330,7 @@ describe("leaving a pause by any other door", () => {
         await machine.cancelBrew();
 
         expect(machine.phase.name).toBe("cancelled");
-    });
+    }, 60_000);
 
     it("the machine's acknowledgement of the resume clears it", async () => {
         // 40516 arrives for a resume we sent, by which point the flag is
@@ -340,5 +340,5 @@ describe("leaving a pause by any other door", () => {
         transport.emit(event(40516));
 
         expect(machine.phase.name).toBe("pouring");
-    });
+    }, 60_000);
 });

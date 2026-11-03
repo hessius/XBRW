@@ -143,17 +143,34 @@ export const COMMANDS: Command[] = [
     {code: 40525, name: "Send recipe count", packet: "type1", args: [int("count")], tier: "moves",
      note: "Sends the count of recipes being synced."},
     {code: 11506, name: "Read pour radius", packet: "type2", args: [], tier: "inert",
-     note: "Read current mechanical pour radius. Response format is not documented."},
+     note: "Read current mechanical pour radius. Confirmed on V12.0D.500 (2026-11-02). Response is 40521 info blob with pouringRadius_55 updated."},
     {code: 11508, name: "Read vibration amplitude", packet: "type2", args: [], tier: "inert",
-     note: "Read current vibration amplitude setting. Response format is not documented."},
-    {code: 8103, name: "Display brightness", packet: "type1", args: [int("1, 8 or 15")], tier: "moves"},
-    {code: 4508, name: "Water source", packet: "type1", args: [int("0 tank, 1 tap")], tier: "moves"},
+     note: "Read current vibration amplitude setting. Confirmed on V12.0D.500 (2026-11-02). Response is 40521 info blob with vibrationInit_59 updated."},
+    {code: 8103, name: "Display brightness", packet: "type1", args: [int("0, 1, 8, 15")], tier: "moves",
+     note: "Set display brightness. Readback via 40521 info blob (ledType_38). Confirmed on V12.0D.500 (2026-11-02). Levels: 0=off/dim, 1=dim, 8=mid, 15=bright."},
+    {code: 4508, name: "Water source", packet: "type1", args: [int("0 tank, 1 tap")], tier: "moves",
+     note: "Set water source. Readback via 40521 info blob (waterFeed_36). Confirmed on V12.0D.500 (2026-11-02). Check physical water supply before changing."},
     {code: 8111, name: "Easy mode begin", packet: "type1", args: [], tier: "inert",
      note: "Initiate Auto Mode recipe display."},
     {code: 40526, name: "CurrentGrinder / back to normal", packet: "type1", args: [], tier: "inert",
      note: "Return from grinder to normal state."},
 
-    // — Unresolved —————————————————————————————————————————————————
+    // — Settings with confirmed readback (evidence-backed) —————————————
+    {code: 8005, name: "Weight unit", packet: "type1", args: [int("0=ml, 1=g, 2=oz")], tier: "moves",
+     note: "Set weight unit. Readback via 40521 info blob (weightUnit_41). Confirmed on V12.0D.500 (2026-11-02): 0=ml, 1=g, 2=oz. HomoLand mapping confirmed, brAzzi64 was reversed."},
+    {code: 8010, name: "Temperature unit", packet: "type1", args: [int("0=F, 1=C")], tier: "moves",
+     note: "Set temperature unit. Readback via 40521 info blob (tempUnit_40). Confirmed on V12.0D.500 (2026-11-02): 0=Fahrenheit, 1=Celsius. brAzzi64 mapping was reversed."},
+
+    // — Unresolved (write-only, no readback confirmed) ———————————————
+    {code: 11507, name: "Write pour radius", packet: "type2", args: [int("value")], tier: "unresolved",
+     contradiction:
+        "Mechanical calibration, single-source (HomoLand), range 400-1000 in steps of 80. " +
+        "Nobody has confirmed what a wrong value does to the arm. Readback via 11506 confirmed."},
+    {code: 11509, name: "Write vibration amplitude", packet: "type2", args: [int("value")], tier: "unresolved",
+     contradiction:
+        "Mechanical calibration, single-source (HomoLand), range 1000-1500 in steps of 100. Unverified. Readback via 11508 confirmed."},
+
+    // — Brewing controls (confirmed on hardware) —————————————————————
     {code: 40518, name: "Coffee pause", packet: "type1", args: [int("1")], tier: "moves",
      note:
         "Settled on hardware 2026-10-08 (V12.0D.500): it pauses a running recipe. 40515 reports the " +
@@ -165,22 +182,7 @@ export const COMMANDS: Command[] = [
         "Three implementations send three materially different value sets — (200, 80), (110, 90), (80-90, 40) — " +
         "the machine reportedly brews correctly regardless, and nobody knows what the field means. " +
         "They disagree about the values, not about whether to send it, so XBRW++ sends it on every " +
-        "coffee brew with the reference's own (200, 80) — the widest of the three."},
-    {code: 8005, name: "Weight unit", packet: "type1", args: [int("unit")], tier: "unresolved",
-     contradiction:
-        "brAzzi64 reads the values as 0 g, 1 oz, 2 ml. HomoLand reads them as 0 ml, 1 g, 2 oz. " +
-        "These cannot both be right and no one has checked against a machine."},
-    {code: 8010, name: "Temperature unit", packet: "type1", args: [int("unit")], tier: "unresolved",
-     contradiction:
-        "brAzzi64 reads the values as 0 Celsius, 1 Fahrenheit. HomoLand reads them the other way round. " +
-        "Unverified either way."},
-    {code: 11507, name: "Write pour radius", packet: "type2", args: [int("value")], tier: "unresolved",
-     contradiction:
-        "Mechanical calibration, single-source (HomoLand), range 400-1000 in steps of 80. " +
-        "Nobody has confirmed what a wrong value does to the arm."},
-    {code: 11509, name: "Write vibration amplitude", packet: "type2", args: [int("value")], tier: "unresolved",
-     contradiction:
-        "Mechanical calibration, single-source (HomoLand), range 1000-1500 in steps of 100. Unverified."}
+        "coffee brew with the reference's own (200, 80) — the widest of the three."}
 ];
 
 const BY_CODE = new Map(COMMANDS.map((command) => [command.code, command]));

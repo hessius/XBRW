@@ -36,6 +36,8 @@ type Props = {
      * down here instead.
      */
     accessibilityLabel?: string;
+    /** Disable the control. */
+    disabled?: boolean;
 };
 
 /**
@@ -48,7 +50,7 @@ type Props = {
  * control.
  */
 export default function SegmentedControl({
-    value, options, onChange, accent, accessibilityLabel
+    value, options, onChange, accent, accessibilityLabel, disabled = false
 }: Props) {
     const appearance = useAppearance();
     const {selection, palette} = appearance;
@@ -59,7 +61,8 @@ export default function SegmentedControl({
         // that announces both labels and can activate neither.
         <XStack accessibilityRole="radiogroup" accessibilityLabel={accessibilityLabel}
                 backgroundColor={palette.raised}
-                borderRadius="$3" padding={2} gap={2}>
+                borderRadius="$3" padding={2} gap={2}
+                opacity={disabled ? 0.5 : 1}>
             {options.map((option) => {
                 const selected = option.value === value;
                 return (
@@ -70,7 +73,7 @@ export default function SegmentedControl({
                                    opacity: 1,
                                    transform: [{scale: pressed && recipe !== undefined ? 0.98 : 1}]
                                })}
-                               onPress={() => onChange(option.value)}>
+                               onPress={disabled ? undefined : () => onChange(option.value)}>
                         {({pressed}) => {
                             const fill = selected
                                 ? recipe?.fill ?? (pressed ? selection.pressedFill : selection.fill)
