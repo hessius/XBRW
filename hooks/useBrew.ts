@@ -4,7 +4,6 @@ import {useMachine} from "@/hooks/useMachine";
 import {useSetting} from "@/hooks/useSetting";
 import type Machine from "@/library/machine/Machine";
 import {isActiveBrewPhase, type BrewPhase} from "@/library/machine/Machine";
-import {MACHINE_STATE} from "@/library/machine/protocol";
 import {
     BluetoothPermissionError,
     BrewOwnershipError,
@@ -30,24 +29,6 @@ import type Recipe from "@/library/Recipe";
  * a fresh link does fix.
  */
 const RELINK_BLOCKS: ReadonlySet<string> = new Set(["notConnected", "noVitals"]);
-
-/**
- * Machine states that are temporarily non-startable but will become startable
- * on their own within a short time. These should be auto-retried.
- *
- * LOADING (0x1D): Machine is booting/processing handshake after connect
- * SAVING_SLOTS (0x43): Machine is writing Easy Mode slots
- * AWAITING_CONFIRM (0x1E): Machine is waiting for user confirmation on the device
- * PRE_BREW (0x20): Transient state between ARMED and BREWING
- * STARTING (0x22): Machine is starting up
- */
-const TRANSIENT_BUSY_STATES: ReadonlySet<number> = new Set([
-    MACHINE_STATE.LOADING,
-    MACHINE_STATE.SAVING_SLOTS,
-    MACHINE_STATE.AWAITING_CONFIRM,
-    MACHINE_STATE.PRE_BREW,
-    MACHINE_STATE.STARTING
-]);
 
 /**
  * Maximum number of auto-retry attempts for transient busy states.
@@ -262,8 +243,7 @@ export function useBrew(injected?: Machine): Brewer {
      * should be auto-retried.
      */
     function isTransientBusyState(): boolean {
-        const state = machine.freshState();
-        return state !== null && TRANSIENT_BUSY_STATES.has(state);
+        return machine.isTransientBusy();
     }
 
     /**
@@ -303,7 +283,7 @@ export function useBrew(injected?: Machine): Brewer {
             const errorMessage = (e as Error).message;
             if (errorMessage.includes("The machine is busy") && isTransientBusyState()) {
                 // Auto-retry for transient states
-                for (let attempt = 1; attempt <= MAX_AUTO_RETRIES; attempt++) {
+                for (let retryAttempt = 1; retryAttempt <= MAX_AUTO_RETRIES; retryAttempt++) {
                     await wait(AUTO_RETRY_DELAY_MS);
                     try {
                         await attempt(recipe, shown, saved);
@@ -312,7 +292,7 @@ export function useBrew(injected?: Machine): Brewer {
                         const retryMessage = (retryError as Error).message;
                         // If it's still a transient busy state, continue retrying
                         if (retryMessage.includes("The machine is busy") && isTransientBusyState()) {
-                            if (attempt === MAX_AUTO_RETRIES) {
+                            if (retryAttempt === MAX_AUTO_RETRIES) {
                                 // Last attempt failed, fall through to set error
                                 break;
                             }

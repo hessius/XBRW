@@ -1468,6 +1468,24 @@ export default class Machine {
     }
 
     /**
+     * Machine states that are temporarily non-startable but will become startable
+     * on their own within a short time. These should be auto-retried.
+     *
+     * LOADING (0x1D): Machine is booting/processing handshake after connect
+     * SAVING_SLOTS (0x43): Machine is writing Easy Mode slots
+     * AWAITING_CONFIRM (0x1E): Machine is waiting for user confirmation on the device
+     * PRE_BREW (0x20): Transient state between ARMED and BREWING
+     * STARTING (0x22): Machine is starting up
+     */
+    private static readonly TRANSIENT_BUSY_STATES: ReadonlySet<number> = new Set([
+        MACHINE_STATE.LOADING,
+        MACHINE_STATE.SAVING_SLOTS,
+        MACHINE_STATE.AWAITING_CONFIRM,
+        MACHINE_STATE.PRE_BREW,
+        MACHINE_STATE.STARTING
+    ]);
+
+    /**
      * The machine's state, with an expired fault treated as unknown.
      *
      * Only a fault expires. The alternative to expiring one is refusing a brew
@@ -1480,6 +1498,20 @@ export default class Machine {
         if (FAULT_BLOCKS[this.state] === undefined) return this.state;
         if (Date.now() - this.stateAt > STATE_FRESH_MS) return null;
         return this.state;
+    }
+
+    /**
+     * Check if the machine is currently in a transient busy state that
+     * should be auto-retried.
+     *
+     * Transient states are those that resolve on their own within a short time:
+     * LOADING (0x1D), SAVING_SLOTS (0x43), AWAITING_CONFIRM (0x1E),
+     * PRE_BREW (0x20), STARTING (0x22).
+     */
+    isTransientBusy(): boolean {
+        const state = this.freshState();
+        if (state === null) return false;
+        return (this.constructor as typeof Machine).TRANSIENT_BUSY_STATES.has(state);
     }
 
     /**
