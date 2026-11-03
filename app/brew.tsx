@@ -24,7 +24,6 @@ import {AppearanceScope, useAppearance} from "@/hooks/useAppearance";
 import DotIcon from "@/components/DotIcon";
 import OverflowStatus from "@/components/OverflowStatus";
 import DotMatrixText from "@/components/DotMatrixText";
-import LinkText from "@/components/LinkText";
 import MachineDot from "@/components/MachineDot";
 import {notify} from "@/components/XbrwToast";
 import {parseBagRunRequest} from "@/library/bagRun";
@@ -209,6 +208,22 @@ function Action({label, color, onPress}: {label: string; color: string; onPress:
     );
 }
 
+/** Diagnostic log button — styled like Action but only for Labs users. */
+function DiagnosticLogButton({onPress}: {onPress: () => void}) {
+    const appearance = useAppearance();
+    const {palette} = appearance;
+    return (
+        <Pressable accessibilityRole="button" accessibilityLabel="Copy diagnostic log" onPress={onPress}>
+            <YStack alignItems="center" paddingVertical="$3.5" borderRadius="$4"
+                    borderWidth={1} borderColor={palette.dim}>
+                <DotMatrixText fontSize={12} weight="bold" letterSpacing={2} color={palette.dim}>
+                    COPY DIAGNOSTIC LOG
+                </DotMatrixText>
+            </YStack>
+        </Pressable>
+    );
+}
+
 export default function Brew({historyStore}: {historyStore?: ExportStore} = {}) {
     const appearance = useAppearance();
     const {palette} = appearance;
@@ -309,6 +324,7 @@ export default function Brew({historyStore}: {historyStore?: ExportStore} = {}) 
     const [doneHeight, setDoneHeight] = useState(0);
     const doneFade = useScrollFade();
     const [firstBrewDone, setFirstBrewDone] = useSetting("firstBrewDone");
+    const [labsUnlocked] = useSetting("labsUnlocked");
 
     useEffect(() => {
         if (phase.name === "pouring" && !firstBrewDone) setFirstBrewDone(true);
@@ -784,9 +800,8 @@ export default function Brew({historyStore}: {historyStore?: ExportStore} = {}) 
                 retry button to sit near — diagnostics matter there too. Not
                 an Action: this is an aid, not a recovery option, and must not
                 visually compete with TRY AGAIN. */}
-            {(blocked || failed) && (
-                <LinkText label="Copy diagnostic log" onPress={copyDiagnosticLog}
-                          fontSize={13} />
+            {labsUnlocked && (blocked || failed) && (
+                <DiagnosticLogButton onPress={copyDiagnosticLog} />
             )}
             {/* `error` is the transport channel. When the phase is already a
                 failure it is restating it, which is how one refusal came to be

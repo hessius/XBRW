@@ -59,12 +59,7 @@ Do not leave completed worktrees as an unexplained backlog.
   build/submit a production artifact, deploy, force-push or delete remote refs.
 - Integrate completed work serially using merge commits. Never squash
   `develop` into `main`, or rebase/force-push shared integration/release history.
-- Use at most one automated Copilot review round per PR. Count automatic
-  ruleset reviews too; a new push or migration is not a reason to request another.
-- Whenever a PR is opened, run an independent code review using the
-  `vercel-labs/open-agents` `code-review` skill (`npx skills use "https://github.com/vercel-labs/open-agents" --skill "code-review"`),
-  fix any concrete findings on the PR branch, and post the review findings and
-  fixes as a comment on the GitHub PR (`gh pr comment`).
+- Use the `code-review` skill for PR reviews.
 - A merge requires relevant checks and the existing CI gates. Release promotion
   also requires the release ledger's physical-device and external-app gates.
   Simulators/scripted transports do not prove NFC or BLE hardware safety.

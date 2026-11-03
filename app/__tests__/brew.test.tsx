@@ -200,10 +200,13 @@ jest.mock("@/hooks/useMachine", () => ({
     })
 }));
 
+let mockLabsUnlocked = false;
+
 jest.mock("@/hooks/useSetting", () => {
     const useSetting = (key: string) => {
         if (key === "firstBrewDone") return [mockFirstBrewDone, jest.fn()];
         if (key === "beanconquerorHandoff") return [mockHandoffEnabled, jest.fn()];
+        if (key === "labsUnlocked") return [mockLabsUnlocked, jest.fn()];
         return [undefined, jest.fn()];
     };
     return {__esModule: true, default: useSetting, useSetting};
@@ -876,6 +879,7 @@ describe("brew route", () => {
     });
 
     it("offers the diagnostic log on a blocked failure", async () => {
+        mockLabsUnlocked = true;
         mockPhase = {name: "failed", reason: "blocked", detail: "The tank is low."} as BrewPhase;
         const {getByLabelText} = await renderWithProviders(<Brew />);
         expect(getByLabelText("Copy diagnostic log")).toBeTruthy();
@@ -885,12 +889,14 @@ describe("brew route", () => {
         // The dose is spent and there is no TRY AGAIN button here, but a
         // report of a brew that stopped mid-pour is exactly the case where
         // diagnostics matter most.
+        mockLabsUnlocked = true;
         mockPhase = {name: "failed", reason: "noWater"} as BrewPhase;
         const {getByLabelText} = await renderWithProviders(<Brew />);
         expect(getByLabelText("Copy diagnostic log")).toBeTruthy();
     });
 
     it("does not offer the diagnostic log while a brew is running", async () => {
+        mockLabsUnlocked = true;
         mockPhase = {name: "pouring", pour: 1, pours: 1} as BrewPhase;
         const {queryByLabelText} = await renderWithProviders(<Brew />);
         expect(queryByLabelText("Copy diagnostic log")).toBeNull();

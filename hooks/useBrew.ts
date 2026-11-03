@@ -1,9 +1,10 @@
-import {useEffect, useState} from "react";
+import {useEffect, useRef, useState} from "react";
 
 import {useMachine} from "@/hooks/useMachine";
 import {useSetting} from "@/hooks/useSetting";
 import type Machine from "@/library/machine/Machine";
 import {isActiveBrewPhase, type BrewPhase} from "@/library/machine/Machine";
+import {MACHINE_STATE} from "@/library/machine/protocol";
 import {
     BluetoothPermissionError,
     BrewOwnershipError,
@@ -29,6 +30,34 @@ import type Recipe from "@/library/Recipe";
  * a fresh link does fix.
  */
 const RELINK_BLOCKS: ReadonlySet<string> = new Set(["notConnected", "noVitals"]);
+
+/**
+ * Machine states that are temporarily non-startable but will become startable
+ * on their own within a short time. These should be auto-retried.
+ *
+ * LOADING (0x1D): Machine is booting/processing handshake after connect
+ * SAVING_SLOTS (0x43): Machine is writing Easy Mode slots
+ * AWAITING_CONFIRM (0x1E): Machine is waiting for user confirmation on the device
+ * PRE_BREW (0x20): Transient state between ARMED and BREWING
+ * STARTING (0x22): Machine is starting up
+ */
+const TRANSIENT_BUSY_STATES: ReadonlySet<number> = new Set([
+    MACHINE_STATE.LOADING,
+    MACHINE_STATE.SAVING_SLOTS,
+    MACHINE_STATE.AWAITING_CONFIRM,
+    MACHINE_STATE.PRE_BREW,
+    MACHINE_STATE.STARTING
+]);
+
+/**
+ * Maximum number of auto-retry attempts for transient busy states.
+ */
+const MAX_AUTO_RETRIES = 3;
+
+/**
+ * Delay between auto-retry attempts (ms).
+ */
+const AUTO_RETRY_DELAY_MS = 500;
 
 export type Brewer = {
     phase: BrewPhase;
@@ -70,6 +99,58 @@ export function useBrew(injected?: Machine): Brewer {
     const [autoStart] = useSetting("machineAutoStart");
     const [phase, setPhase] = useState<BrewPhase>(machine.phase);
     const [error, setError] = useState<string | null>(null);
+
+    // Track timeout for auto-dismissing "connection changed" errors
+    const errorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    /**
+     * Check if an error message is a "connection changed" error that should
+     * auto-dismiss after a timeout or when the machine reconnects.
+     */
+    function isConnectionChangedError(message: string): boolean {
+        return message.startsWith("The machine connection changed");
+    }
+
+    /**
+     * Clear any pending error timeout.
+     */
+    function clearErrorTimeout(): void {
+        if (errorTimeoutRef.current !== null) {
+            clearTimeout(errorTimeoutRef.current);
+            errorTimeoutRef.current = null;
+        }
+    }
+
+    /**
+     * Set error with auto-dismiss for connection changed errors.
+     */
+    function setErrorWithAutoDismiss(message: string): void {
+        clearErrorTimeout();
+        setError(message);
+        if (isConnectionChangedError(message)) {
+            // Auto-dismiss after 8 seconds
+            errorTimeoutRef.current = setTimeout(() => {
+                setError(null);
+                errorTimeoutRef.current = null;
+            }, 8000);
+        }
+    }
+
+    // Clean up timeout on unmount
+    useEffect(() => {
+        return () => clearErrorTimeout();
+    }, []);
+
+    // Auto-clear "connection changed" error when machine reconnects and is ready
+    useEffect(() => {
+        const offLink = machine.onLink(() => {
+            if (error !== null && isConnectionChangedError(error) && machine.isConnected() && machine.info !== null) {
+                clearErrorTimeout();
+                setError(null);
+            }
+        });
+        return () => offLink();
+    }, [machine, error]);
 
     useEffect(() => machine.onPhase(setPhase), [machine]);
     useEffect(() => {
@@ -176,31 +257,76 @@ export function useBrew(injected?: Machine): Brewer {
         return !isActiveBrewPhase(phase);
     }
 
+    /**
+     * Check if the machine is currently in a transient busy state that
+     * should be auto-retried.
+     */
+    function isTransientBusyState(): boolean {
+        const state = machine.freshState();
+        return state !== null && TRANSIENT_BUSY_STATES.has(state);
+    }
+
+    /**
+     * Wait for a brief delay.
+     */
+    function wait(ms: number): Promise<void> {
+        return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
     async function brew(recipe: Recipe, onPreflightRetry?: () => void,
                         onRefusal?: (error: BrewRefusal) => void): Promise<void> {
         setError(null);
         // What the screen named when BREW was pressed. See `attempt`.
         const shown = remembered;
         const saved = machines;
+
+        // First attempt
         try {
             await attempt(recipe, shown, saved);
             return;
         } catch (e) {
             if (!worthRelinking(e)) {
-                setError((e as Error).message);
+                setErrorWithAutoDismiss((e as Error).message);
                 if (isBrewRefusal(e)) onRefusal?.(e);
                 return;
             }
         }
+
+        // Relink attempt (existing behavior for connection issues)
         try {
-            // A fresh link, not the same one asked twice. `connect` is a
-            // no-op while the transport still believes it is up, which is the
-            // state this exists to escape.
             await machine.disconnect();
             onPreflightRetry?.();
             await attempt(recipe, shown, saved);
+            return;
         } catch (e) {
-            setError((e as Error).message);
+            // Check if this is a "busy" error due to a transient state
+            const errorMessage = (e as Error).message;
+            if (errorMessage.includes("The machine is busy") && isTransientBusyState()) {
+                // Auto-retry for transient states
+                for (let attempt = 1; attempt <= MAX_AUTO_RETRIES; attempt++) {
+                    await wait(AUTO_RETRY_DELAY_MS);
+                    try {
+                        await attempt(recipe, shown, saved);
+                        return; // Success!
+                    } catch (retryError) {
+                        const retryMessage = (retryError as Error).message;
+                        // If it's still a transient busy state, continue retrying
+                        if (retryMessage.includes("The machine is busy") && isTransientBusyState()) {
+                            if (attempt === MAX_AUTO_RETRIES) {
+                                // Last attempt failed, fall through to set error
+                                break;
+                            }
+                            continue;
+                        }
+                        // Not a transient busy state anymore, don't auto-retry
+                        setErrorWithAutoDismiss(retryMessage);
+                        if (isBrewRefusal(retryError)) onRefusal?.(retryError);
+                        return;
+                    }
+                }
+            }
+            // Either not a transient busy state, or all retries exhausted
+            setErrorWithAutoDismiss(errorMessage);
             if (isBrewRefusal(e)) onRefusal?.(e);
         }
     }
@@ -211,7 +337,7 @@ export function useBrew(injected?: Machine): Brewer {
         try {
             await machine.startBrew();
         } catch (e) {
-            setError((e as Error).message);
+            setErrorWithAutoDismiss((e as Error).message);
         }
     }
 
@@ -220,7 +346,7 @@ export function useBrew(injected?: Machine): Brewer {
         try {
             await machine.pauseBrew();
         } catch (e) {
-            setError((e as Error).message);
+            setErrorWithAutoDismiss((e as Error).message);
             onFailure?.();
         }
     }
@@ -230,7 +356,7 @@ export function useBrew(injected?: Machine): Brewer {
         try {
             await machine.resumeBrew();
         } catch (e) {
-            setError((e as Error).message);
+            setErrorWithAutoDismiss((e as Error).message);
         }
     }
 
@@ -238,7 +364,7 @@ export function useBrew(injected?: Machine): Brewer {
         try {
             await machine.cancelBrew();
         } catch (e) {
-            setError((e as Error).message);
+            setErrorWithAutoDismiss((e as Error).message);
         }
     }
 
@@ -261,7 +387,7 @@ export function useBrew(injected?: Machine): Brewer {
             machine.setAutoStart(autoStart);
             await machine.switchToProAndRetry(recipe, () => checkMachine(shown, saved));
         } catch (e) {
-            setError((e as Error).message);
+            setErrorWithAutoDismiss((e as Error).message);
             if (isBrewRefusal(e)) onRefusal?.(e);
         }
     }
