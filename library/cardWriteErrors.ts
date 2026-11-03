@@ -93,3 +93,13 @@ export class CardCapacityError extends CardWriteError {
 export const CARD_OVERHEAD_BYTES = 12;
 /** Volume, temperature, pattern, agitation, pause, combined, RPM, flow rate. */
 export const CARD_BYTES_PER_STAGE = 8;
+
+/**
+ * The largest volume one 8-byte card pour record can carry before the machine
+ * treats the byte as signed (`int8_t`) and rejects the card (`#289`).
+ *
+ * Matches `MAX_SEGMENT_VOLUME` (127) in `library/machine/protocol.ts`. A stage
+ * above 127 ml (up to `COFFEE_POUR_VOLUME.max = 240`) is split on the card into
+ * consecutive 8-byte pour records of at most 127 ml each.
+ */
+export const MAX_CARD_POUR_VOLUME = 127;

@@ -60,7 +60,7 @@ import {resolveAccent} from "@/library/accent";
 import {CARD_GRIND_MIN, grindBand} from "@/library/grindBands";
 import {BLE_GRIND_SIZE} from "@/library/cardLimits";
 import {parseCapture} from "@/library/cardDiagnostics";
-import {maxStagesForBytes, SIGNATURE_BYTES} from "@/library/cardWriteErrors";
+import {MAX_CARD_POUR_VOLUME, maxStagesForBytes, SIGNATURE_BYTES} from "@/library/cardWriteErrors";
 import type Pour from "@/library/Pour";
 import {
     applyQuickEdit,
@@ -532,7 +532,7 @@ function StagesDeck({
                 a card could not hold it would be the app inventing a limit the
                 machine does not have. `warn`, not `danger`: nothing is wrong
                 yet. */}
-            {recipe.pours.length > maxStages && (
+            {recipe.getCardPourCount() > maxStages && (
                 <XStack testID="stage-ceiling" alignItems="center" gap="$2.5"
                         marginTop="$2.5" padding="$3" borderRadius="$4"
                         backgroundColor={palette.raised}
@@ -540,10 +540,14 @@ function StagesDeck({
                     <YStack flex={1} gap={2}>
                         <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.6}
                                        color={palette.warn}>
-                            {`${recipe.pours.length} STAGES`}
+                            {recipe.pours.length > maxStages
+                                ? `${recipe.pours.length} STAGES`
+                                : `${recipe.getCardPourCount()} CARD STAGES`}
                         </DotMatrixText>
                         <Text fontSize={12} lineHeight={16} color={palette.dim}>
-                            {`A card holds ${maxStages} stages. This recipe can still be saved and brewed over Bluetooth, but it cannot be written to a card.`}
+                            {recipe.pours.length > maxStages
+                                ? `A card holds ${maxStages} stages. This recipe can still be saved and brewed over Bluetooth, but it cannot be written to a card.`
+                                : `Stages above ${MAX_CARD_POUR_VOLUME} ml take two card stages, so this recipe needs ${recipe.getCardPourCount()} stages on a card that holds ${maxStages}. It can still be saved and brewed over Bluetooth, but it cannot be written to a card.`}
                         </Text>
                     </YStack>
                 </XStack>

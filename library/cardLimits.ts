@@ -1,4 +1,4 @@
-import {MACHINE_CARD_MAX_STAGES} from "./cardWriteErrors";
+import {MACHINE_CARD_MAX_STAGES, MAX_CARD_POUR_VOLUME} from "./cardWriteErrors";
 import {AGITATION, POUR_PATTERN} from "./Pour";
 import type Recipe from "./Recipe";
 import {CELSIUS_RANGE, displayRange, toDisplay, type TemperatureUnit} from "./units";
@@ -100,6 +100,9 @@ const FRACTIONAL_RATIO = (ratio: number): string =>
 const STAGE_COUNT = (count: number, maximum: number): string =>
     `The recipe has ${count} stages. The most is ${maximum}.`;
 
+const CARD_STAGE_COUNT = (cardStages: number, maximum: number): string =>
+    `Stages above ${MAX_CARD_POUR_VOLUME} ml take two card stages, so this recipe needs ${cardStages} stages on the card. The most is ${maximum}.`;
+
 /**
  * The one problem the editor draws its own banner for.
  *
@@ -164,6 +167,8 @@ function recipeProblems(
         problems.push("The recipe has no stages.");
     } else if (recipe.pours.length > maxPours) {
         problems.push(STAGE_COUNT(recipe.pours.length, maxPours));
+    } else if (!tea && recipe.getCardPourCount() > maxPours) {
+        problems.push(CARD_STAGE_COUNT(recipe.getCardPourCount(), maxPours));
     }
 
     const volumeRange = tea ? TEA_POUR_VOLUME : COFFEE_POUR_VOLUME;
@@ -286,8 +291,14 @@ export function brewProblems(
 ): string[] {
     const cardOnlyRatio = FRACTIONAL_RATIO(recipe.ratio);
     const cardOnlyStages = recipe.isTea() ? null : STAGE_COUNT(recipe.pours.length, MAX_POURS);
+    const cardOnlySplitStages = recipe.isTea() ? null : CARD_STAGE_COUNT(recipe.getCardPourCount(), MAX_POURS);
     const problems = recipeProblems(recipe, temperatureUnit, BLE_GRIND_SIZE)
-        .filter((problem) => problem !== cardOnlyRatio && problem !== cardOnlyStages);
+        .filter(
+            (problem) =>
+                problem !== cardOnlyRatio &&
+                problem !== cardOnlyStages &&
+                problem !== cardOnlySplitStages
+        );
     if (problems.length === 0 && encodedSegmentsLength(recipe) > MAX_BLOB_SEGMENT_BYTES) {
         problems.push("The recipe is too large to send over Bluetooth. Reduce the number or volume of stages.");
     }

@@ -178,6 +178,21 @@ describe("useCardWriter", () => {
         });
     });
 
+    it("reports the expanded card stage count when a split pour overflows a smaller card", async () => {
+        const {result} = await renderHook(() => useCardWriter(jest.fn()));
+
+        const valid = validRecipe();
+        // `validRecipe()` has 1 editor stage of 225 ml, which expands to 2 card stages (127 ml + 98 ml).
+        jest.spyOn(valid, "writeCard").mockRejectedValue(new CardCapacityError(28, 20));
+
+        await act(async () => result.current.writeCard(valid));
+
+        expect(notify).toHaveBeenCalledWith({
+            tone:    "error",
+            message: expect.stringContaining("This recipe has 2 stages, but this card has room for 1.")
+        });
+    });
+
     it("says nothing was written when the card would not report its size", async () => {
         const {result} = await renderHook(() => useCardWriter(jest.fn()));
 
