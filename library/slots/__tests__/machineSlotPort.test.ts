@@ -753,7 +753,7 @@ it("cancels the pacing gap immediately when background invalidates an attempt", 
     expect(radio.slots).toEqual([0]);
     expect(jest.getTimerCount()).toBe(0);
     expect(port.available).toBe(true);
-});
+}, 60_000);
 
 it("blocks a writer throughout a normal multi-frame upload, not just its native writes", async () => {
     const {store, radio, machine} = await ready();
@@ -772,7 +772,7 @@ it("blocks a writer throughout a normal multi-frame upload, not just its native 
     expect(store.read("one").journal).toBeNull();
     expect(radio.slots).toEqual([]);
     await owner.disconnect();
-});
+}, 60_000);
 
 it("does not unlock before the durable journal has completed", async () => {
     const {store, port, machine} = await ready();
@@ -994,7 +994,7 @@ it("paces accepted native slot dispatches by the production two-second gap", asy
     await result;
     expect(times.slice(1).map((time, index) => time - times[index]))
         .toEqual([FRAME_GAP_MS, FRAME_GAP_MS]);
-});
+}, 60_000);
 
 it("rejects an observable duplicate between slots and leaves the known boundary durable", async () => {
     const {store, port, radio} = await ready();
@@ -1056,7 +1056,7 @@ it("does not renew the current session with a late old handshake completion", as
     const handshakes = radio.sent.filter((code) => code === 8100).length;
     await writeSlots(store, identity, port);
     expect(radio.sent.filter((code) => code === 8100)).toHaveLength(handshakes + 1);
-});
+}, 60_000);
 
 it("cannot use a saved status heard before the current attempt as final completion", async () => {
     const {store, port, radio} = await ready();

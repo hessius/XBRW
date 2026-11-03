@@ -22,6 +22,8 @@ type Props = {
      * see `WIDE_OPTIONS_CHARS`. Pass it explicitly to overrule that.
      */
     stacked?: boolean;
+    /** Disable the control and dim its appearance. */
+    disabled?: boolean;
 };
 
 /**
@@ -39,7 +41,7 @@ const WIDE_OPTIONS_CHARS = 20;
 
 /** A setting that is one of a short list. */
 export default function SettingsChoiceRow({
-    label, description, value, options, onChange, stacked
+    label, description, value, options, onChange, stacked, disabled = false
 }: Props) {
     const appearance = useAppearance();
     const {palette} = appearance;
@@ -47,13 +49,14 @@ export default function SettingsChoiceRow({
     if (stacked ?? width > WIDE_OPTIONS_CHARS) {
         return (
             <YStack testID="settings-choice-stacked" gap="$2.5"
-                    paddingVertical="$3" paddingHorizontal="$4">
+                    paddingVertical="$3" paddingHorizontal="$4"
+                    opacity={disabled ? 0.5 : 1}>
                 <YStack gap="$1">
-                    <Text fontSize={16} color={palette.text}>{label}</Text>
+                    <Text fontSize={16} color={disabled ? palette.dim : palette.text}>{label}</Text>
                     <Text fontSize={13} color={palette.dim}>{description}</Text>
                 </YStack>
                 <SegmentedControl value={value} options={options} onChange={onChange}
-                                  accessibilityLabel={label}/>
+                                  accessibilityLabel={label} disabled={disabled}/>
             </YStack>
         );
     }
@@ -66,13 +69,14 @@ export default function SettingsChoiceRow({
         // control sitting on the card rather than merging into it — which is the
         // whole reason the section is `surface` and not `raised`.
         <XStack alignItems="center" justifyContent="space-between" gap="$4"
-                minHeight={44} paddingVertical="$3" paddingHorizontal="$4">
+                minHeight={44} paddingVertical="$3" paddingHorizontal="$4"
+                opacity={disabled ? 0.5 : 1}>
             <YStack flex={1} gap="$1">
-                <Text fontSize={16} color={palette.text}>{label}</Text>
+                <Text fontSize={16} color={disabled ? palette.dim : palette.text}>{label}</Text>
                 <Text fontSize={13} color={palette.dim}>{description}</Text>
             </YStack>
             <SegmentedControl value={value} options={options} onChange={onChange}
-                              accessibilityLabel={label}/>
+                              accessibilityLabel={label} disabled={disabled}/>
         </XStack>
     );
 }

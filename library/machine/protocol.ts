@@ -282,6 +282,7 @@ export type MachineInfo = {
     waterFeed: "tank" | "tap";
     grindSize: number;
     mode: "PRO" | "EASY";
+    // Settings readback (confirmed V12.0D.500 2026-11-02)
     settingsRaw?: MachineSettingsRaw;
 };
 
@@ -315,6 +316,9 @@ function optionalUint32(payload: Uint8Array, offset: number): number | null {
 
 function readInfo(payload: Uint8Array): MachineInfo {
     const modeHex = text(payload, 51, 58);
+    const n = payload.length;
+    const u8 = (i: number): number | undefined => (i < n ? payload[i] : undefined);
+    const u32 = (i: number): number | undefined => (i + 4 <= n ? payload[i] | (payload[i + 1] << 8) | (payload[i + 2] << 16) | (payload[i + 3] << 24) : undefined);
     return {
         kind: "info",
         serial:      text(payload, 0, 12),
@@ -325,12 +329,13 @@ function readInfo(payload: Uint8Array): MachineInfo {
         // The raw byte is offset by 30, and the machine never reports below 1.
         grindSize:   Math.max((payload[37] ?? 30) - 30, 1),
         mode:        modeHex === "91327856" ? "EASY" : "PRO",
+        // Settings readback (confirmed V12.0D.500 2026-11-02)
         settingsRaw: {
-            temperatureUnit: payload[40],
-            weightUnit: payload[41],
-            brightness: payload[38],
-            pourRadius: optionalUint32(payload, 55),
-            vibrationAmplitude: optionalUint32(payload, 59)
+            temperatureUnit: payload[40],           // 0 = Fahrenheit, 1 = Celsius (from tempUnit_40)
+            weightUnit: payload[41],                // 0 = ml, 1 = g, 2 = oz (from weightUnit_41)
+            brightness: payload[38],                // 0-15 (from ledType_38)
+            pourRadius: optionalUint32(payload, 55), // from pouringRadius_55_u32
+            vibrationAmplitude: optionalUint32(payload, 59) // from vibrationInit_59_u32
         }
     };
 }

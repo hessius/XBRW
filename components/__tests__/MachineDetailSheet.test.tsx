@@ -29,7 +29,8 @@ jest.mock("@/hooks/useMachine", () => ({
         status: "connected",
         changeBlocker: mockBlocker,
         choose: mockChoose,
-        forgetMachine: mockForget
+        forgetMachine: mockForget,
+        machine: { linkedDeviceId: "HOME" }
     })
 }));
 
