@@ -25,9 +25,9 @@ line; preserve its history rather than rewinding it to a guessed baseline.
 
 PR creation, PR merging, release promotion, production builds/submissions,
 deployments, force pushes and destructive local/remote cleanup require explicit
-user permission. Allow at most one automated Copilot review round per PR,
-including automatic ruleset reviews. Keep physical-device release gates and
-manual deployment boundaries; branch names do not select EAS channels.
+user permission. Use the `code-review` skill for PR reviews. Keep physical-device
+release gates and manual deployment boundaries; branch names do not select EAS
+channels.
 
 Cleanup needs a verified restorable backup including valuable loose/ignored
 work, content/PR evidence, and approval of exact names/full tip SHAs/worktree

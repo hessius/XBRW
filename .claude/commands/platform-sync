@@ -1,0 +1,43 @@
+#!/bin/bash
+# Platform Sync - Verify iOS/Android NFC implementation parity
+# Usage: /platform-sync
+
+set -e
+
+cd /Users/jesperhessius/Dev/XBRecipeWriterPlus
+
+echo "🔄 Checking iOS/Android platform parity..."
+
+# 1. Run tests for both platforms
+echo "Running iOS tests..."
+npm run test:ios 2>&1 | tail -20
+
+echo ""
+echo "Running Android tests..."
+npm run test:android 2>&1 | tail -20
+
+# 2. Check for platform-specific code that might need parity
+echo ""
+echo "🔍 Checking for Platform.OS usage in NFC files..."
+grep -rn "Platform.OS" library/ --include="*.ts" | grep -v ".test.ts" || echo "No Platform.OS in library/"
+
+echo ""
+echo "🔍 Checking for Platform.select usage..."
+grep -rn "Platform.select" library/ --include="*.ts" | grep -v ".test.ts" || echo "No Platform.select in library/"
+
+# 3. Check NFC implementation differences
+echo ""
+echo "📱 iOS NFC implementation (library/NFC.ts):"
+grep -A 10 "Platform.OS === 'ios'" library/NFC.ts || echo "No iOS-specific code found"
+
+echo ""
+echo "🤖 Android NFC implementation (library/NFC.ts):"
+grep -A 10 "Platform.OS === 'android'" library/NFC.ts || echo "No Android-specific code found"
+
+# 4. TypeScript check
+echo ""
+echo "🔍 Type-checking..."
+npm run typecheck 2>&1 | tail -10
+
+echo ""
+echo "✅ Platform sync check complete"

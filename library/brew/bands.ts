@@ -110,6 +110,16 @@ export function allocateBands(flexHeight: number, stages: number): Bands {
         };
     }
 
+    // For 3 stages, the trace tends to dominate the allocation because it has
+    // the highest priority and a large cap (TRACE_CAP=200). This leaves the
+    // ladder compressed. We give the ladder a better share by reducing the
+    // trace's soft cap and increasing the ladder's caps when there are few
+    // stages.
+    const isThreeStages = stages === 3;
+    const traceSoftCap = isThreeStages ? TRACE_FLOOR + 60 : TRACE_CAP; // 180 instead of 200
+    const barSoftCap = isThreeStages ? BAR_CAP + 4 : BAR_CAP; // 32 instead of 28
+    const gapSoftCap = isThreeStages ? GAP_CAP + 4 : GAP_CAP; // 24 instead of 20
+
     const floors = TRACE_FLOOR + stages * (BAR_FLOOR + GAP_FLOOR);
     let slack = flexHeight - floors;
     if (slack < 0) {
@@ -121,13 +131,13 @@ export function allocateBands(flexHeight: number, stages: number): Bands {
 
     // Pass one, in priority order, up to each band's soft cap. The caps are
     // what stop the first band in the queue from taking everything.
-    let traceHeight = Math.min(TRACE_CAP, TRACE_FLOOR + slack);
+    let traceHeight = Math.min(traceSoftCap, TRACE_FLOOR + slack);
     slack -= traceHeight - TRACE_FLOOR;
 
-    let barHeight = Math.min(BAR_CAP, BAR_FLOOR + Math.floor(slack / stages));
+    let barHeight = Math.min(barSoftCap, BAR_FLOOR + Math.floor(slack / stages));
     slack -= (barHeight - BAR_FLOOR) * stages;
 
-    let rungGap = Math.min(GAP_CAP, GAP_FLOOR + Math.floor(slack / stages));
+    let rungGap = Math.min(gapSoftCap, GAP_FLOOR + Math.floor(slack / stages));
     slack -= (rungGap - GAP_FLOOR) * stages;
 
     // Pass two, same order, against hard ceilings. Without it every point the

@@ -1,0 +1,37 @@
+#!/bin/bash
+# SQLite Migration - Generate migration for expo-sqlite schema changes
+# Usage: /sqlite-migration [description]
+
+set -e
+
+cd /Users/jesperhessius/Dev/XBRecipeWriterPlus
+
+DESCRIPTION="${1:-schema change}"
+
+echo "🗄️  SQLite Migration Helper"
+echo "Description: $DESCRIPTION"
+echo ""
+
+# Check current schema
+echo "Current database schema (from library/RecipeDatabase.ts):"
+grep -A 30 "CREATE TABLE" library/RecipeDatabase.ts || echo "No CREATE TABLE found"
+
+echo ""
+echo "Settings table schema:"
+grep -A 10 "settings" library/Settings.ts | head -20
+
+echo ""
+echo "Brew database schema (from library/brew/BrewDatabase.ts):"
+grep -A 30 "CREATE TABLE" library/brew/BrewDatabase.ts || echo "No CREATE TABLE found"
+
+echo ""
+echo "📝 To create a migration:"
+echo "1. Update the schema in the relevant database file"
+echo "2. Add migration logic in the database's initialization/migration function"
+echo "3. Test with: npm run test:ios && npm run test:android"
+echo "4. Bump database version if needed"
+
+# Check for version constants
+echo ""
+echo "Database versions:"
+grep -rn "VERSION\|version" library/RecipeDatabase.ts library/Settings.ts library/brew/BrewDatabase.ts | grep -i "const\|let\|var" | head -10

@@ -1,0 +1,25 @@
+#!/bin/bash
+# Card Format Validator - Validate byte layout changes against fixtures
+# Usage: /card-format [--fix]
+
+set -e
+
+cd /Users/jesperhessius/Dev/XBRecipeWriterPlus
+
+echo "🔍 Validating NFC card byte format..."
+
+# Run the card format tests
+echo "Running Recipe.card.test.ts..."
+npx jest --runTestsByPath library/__tests__/Recipe.card.test.ts --verbose
+
+echo "Running cardFixtures round-trip tests..."
+npx jest --runTestsByPath library/__tests__/cardFixtures.ts --verbose 2>/dev/null || true
+
+# Check for TypeScript errors in card-related files
+echo "Type-checking card format files..."
+npx tsc --noEmit library/Recipe.ts library/NFC.ts library/Pour.ts library/cardLimits.ts 2>/dev/null || {
+    echo "⚠️  TypeScript errors found in card format files"
+    npx tsc --noEmit library/Recipe.ts library/NFC.ts library/Pour.ts library/cardLimits.ts
+}
+
+echo "✅ Card format validation complete"

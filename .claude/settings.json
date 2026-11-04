@@ -1,0 +1,78 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "agent",
+            "prompt": "Check if changes touch NFC/card format files (library/Recipe.ts, library/NFC.ts, library/Pour.ts, library/cardLimits.ts, library/coffeeDetails.ts, library/duplicates.ts, library/units.ts, library/importInput.ts). If so, run relevant tests and validate byte format consistency. For Recipe.ts changes, run: npx jest --runTestsByPath library/__tests__/Recipe.card.test.ts. For NFC.ts changes, run platform-specific tests.",
+            "model": "haiku",
+            "timeout": 120,
+            "statusMessage": "Validating NFC changes..."
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "agent",
+            "prompt": "Check if changes touch platform-specific files (library/NFC.ts, components/NfcOverlay.tsx, hooks/useMachine.ts, library/machine/). If so, verify both iOS and Android implementations are updated. Run: npm run test:ios && npm run test:android. Check for Platform.OS usage that might need parity.",
+            "model": "haiku",
+            "timeout": 180,
+            "statusMessage": "Checking platform parity..."
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "Analyze the user's prompt. If they mention NFC, card format, byte layout, ISO 15693, NfcV, xBloom protocol, CRC-8, pour volumes, grind size, ratio, or card read/write, output JSON with 'useNfcExpert': true and 'reason': 'brief explanation'. Otherwise output {'useNfcExpert': false}.",
+            "model": "haiku",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "Analyze the user's prompt. If they mention iOS vs Android differences, Platform.OS, Platform.select, native modules, Expo prebuild, native build, Core NFC, NfcV, or cross-platform testing, output JSON with 'usePlatformExpert': true and 'reason': 'brief explanation'. Otherwise output {'usePlatformExpert': false}.",
+            "model": "haiku",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "If the file being modified is library/Recipe.ts, library/NFC.ts, library/Pour.ts, or library/cardLimits.ts, remind the user: 'Changes to card format files require running card format tests (npm run card-format or npx jest --runTestsByPath library/__tests__/Recipe.card.test.ts) and testing on physical NFC hardware. Simulators cannot test NFC.'",
+            "model": "haiku",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "agent",
+            "prompt": "This XBRW++ session is ending. Use the revise-claude-md skill to capture any important learnings about: NFC protocol changes, byte format modifications, iOS/Android platform differences discovered, SQLite migration patterns, React Native/Expo SDK 57 patterns, Tamagui component patterns, or testing strategies. Update CLAUDE.md or AGENTS.md with actionable insights. Do not create duplicate content.",
+            "model": "haiku",
+            "timeout": 60,
+            "statusMessage": "Updating XBRW++ project memory..."
+          }
+        ]
+      }
+    ]
+  }
+}

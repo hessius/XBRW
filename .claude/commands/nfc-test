@@ -1,0 +1,29 @@
+#!/bin/bash
+# NFC Test - Run card read/write on physical device
+# Usage: /nfc-test [read|write] [recipe.json]
+
+set -e
+
+cd /Users/jesperhessius/Dev/XBRecipeWriterPlus
+
+echo "🔧 NFC Test - Building and running on physical device..."
+echo "⚠️  NFC requires a physical device (simulator/emulator cannot test NFC)"
+
+# Check if device is connected
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    # iOS
+    xcrun devicectl list devices 2>/dev/null | grep -q "iPhone" || {
+        echo "❌ No iOS device connected. Connect your iPhone via USB."
+        exit 1
+    }
+    echo "📱 Building for iOS device..."
+    npx expo run:ios --device
+else
+    # Android
+    adb devices | grep -q "device$" || {
+        echo "❌ No Android device connected. Connect via USB with USB debugging enabled."
+        exit 1
+    }
+    echo "📱 Building for Android device..."
+    npx expo run:android --device
+fi
