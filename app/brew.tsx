@@ -116,7 +116,9 @@ function parseQuickEditParam(value: string | undefined): QuickEditAdjustments | 
     for (const key of QUICK_EDIT_KEYS) {
         const entry = source[key];
         if (entry === undefined) continue;
-        if (typeof entry !== "number" || !Number.isFinite(entry) || !Number.isInteger(entry)) {
+        // Whole numbers, but for the half points a ratio can carry (1:14.5).
+        const fine = key === "ratio" && typeof entry === "number" ? entry * 2 : entry;
+        if (typeof entry !== "number" || !Number.isFinite(entry) || !Number.isInteger(fine)) {
             return undefined;
         }
         adjustments[key] = entry;

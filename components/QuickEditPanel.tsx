@@ -206,7 +206,8 @@ export default function QuickEditPanel({
                                       recipe, "ratio", adjustments.ratio !== undefined, fontScale, palette.dim
                                   )}>
                         <Stepper label="Quick edit ratio" value={ratio}
-                                 min={bounds.ratio.min} max={bounds.ratio.max} step={1}
+                                 min={bounds.ratio.min} max={bounds.ratio.max}
+                                 step={Number.isInteger(savedRatio) ? 1 : 0.5}
                                  accent={accent}
                                  onChange={(value) => onChange(updateAdjustment(
                                      adjustments, "ratio", value, savedRatio

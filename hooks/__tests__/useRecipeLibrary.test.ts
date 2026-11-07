@@ -6,6 +6,7 @@ import {
     resolveLibraryFilter, resolveStockFilter, STOCK_FILTER_ORDER
 } from "@/library/libraryFilters";
 import type {LibraryQuery, RecipeEvidence} from "@/library/libraryQuery";
+import Pour from "@/library/Pour";
 import Recipe from "@/library/Recipe";
 import {MARK_MEMBERS} from "@/components/ShelfMark";
 import {COVER_MEMBERS} from "@/library/shelfCover";
@@ -429,6 +430,25 @@ describe("useRecipeLibrary", () => {
         expect(db.replaceAllRecipes).toHaveBeenCalledTimes(1);
         expect(db.replaceAllRecipes.mock.calls[0][0].map((r: Recipe) => r.name)).toEqual(["Kenya"]);
         expect(db.insertRecipes).not.toHaveBeenCalled();
+    });
+
+    it("repairs a rounded half-point import arriving from an old backup", async () => {
+        const db = stubDb([]);
+        const {result} = await renderHook(() => useRecipeLibrary(db));
+
+        const incoming = named("Uganda");
+        incoming.source = "import";
+        incoming.shareId = "share-1";
+        incoming.dosage = 18;
+        incoming.ratio = 15;
+        incoming.grindSize = 65;
+        incoming.pours = [new Pour(1, 70, 92, 35, 0, 0, 20), new Pour(2, 191, 92, 35, 0, 0, 0)];
+        incoming.offline_backup = incoming.getData();
+        await act(async () => {
+            result.current.applyRestore(payloadOf([incoming]), {replace: true});
+        });
+
+        expect(db.replaceAllRecipes.mock.calls[0][0][0].ratio).toBe(14.5);
     });
 
     it("reports a failed restore rather than throwing when the store rejects", async () => {

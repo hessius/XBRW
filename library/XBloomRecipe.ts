@@ -107,7 +107,6 @@ export class XBloomRecipe {
                     );
                 }
             }
-            recipe.fixRatio();
             recipe.offline_backup = recipe.getData();
             return recipe;
         } catch (e) {
