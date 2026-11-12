@@ -83,6 +83,18 @@ describe("QuickEditPanel", () => {
         expect(screen.queryByText(/SAVE AS/)).toBeNull();
     });
 
+    it("walks a half-point ratio in halves, so it can come back to the recipe's", async () => {
+        const {onChange} = await draw({}, coffeeRecipe({ratio: 14.5}));
+        await fireEvent.press(screen.getByLabelText("Increase Quick edit ratio"));
+        expect(onChange).toHaveBeenLastCalledWith({ratio: 15});
+    });
+
+    it("keeps whole steps on a whole-number ratio", async () => {
+        const {onChange} = await draw({}, coffeeRecipe({ratio: 16}));
+        await fireEvent.press(screen.getByLabelText("Increase Quick edit ratio"));
+        expect(onChange).toHaveBeenLastCalledWith({ratio: 17});
+    });
+
     it("preserves other knobs and removes dose when its own shortcut is selected", async () => {
         const {onChange} = await draw({dose: 18, grind: 60}, coffeeRecipe({dosage: 17}));
         await fireEvent.press(screen.getByLabelText("Quick edit dose 20 grams"));

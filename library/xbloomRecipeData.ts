@@ -1,5 +1,5 @@
 import Pour, {POUR_PATTERN} from "./Pour";
-import {CUP_TYPE, GRINDER_OFF_VALUE, ratioForVolumes, type RecipeSource} from "./recipeIdentity";
+import {CUP_TYPE, GRINDER_OFF_VALUE, ratioForImport, ratioForVolumes, type RecipeSource} from "./recipeIdentity";
 import {podCoffeeFromPodsVo, podImageUrl, type PodCoffee} from "./podCoffee";
 import {clampCelsius, normaliseCelsius} from "./units";
 import {BYPASS_DEFAULT_TEMPERATURE, BYPASS_TEMPERATURE, BYPASS_VOLUME} from "./bypassLimits";
@@ -88,8 +88,10 @@ export function normaliseXBloomRecipe(detail: unknown, titleOverride?: string): 
     const coffee = podCoffeeFromPodsVo(row.podsVo) ?? undefined;
     const artwork = coffee?.imageUrl ?? podImageUrl(pods?.imagePath);
     const avatar = podImageUrl(root.shareMemberHead);
+    const volumes = pours.map(pour => pour.volume);
     return {
-        dosage, ratio: ratioForVolumes(pours.map(pour => pour.volume), dosage), grindSize,
+        dosage, ratio: tea ? ratioForVolumes(volumes, dosage) : ratioForImport(volumes, dosage, row.grandWater),
+        grindSize,
         grindRPM: typeof row.rpm === "number" && row.rpm >= 60 && row.rpm <= 120 ? row.rpm : 120,
         grinder: grinderFlag !== 2 && grindSize !== GRINDER_OFF_VALUE,
         cupType, defaultCups: tea ? count : 0, pours,

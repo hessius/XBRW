@@ -665,8 +665,9 @@ const OPTIONAL_BREW_FIELDS: Record<string, (value: unknown) => boolean> = {
     // refused at the boundary.
     adjustedFromDose:  (v) =>
         isIntegerIn(v, BREW_BASELINE_DOSE.min, BREW_BASELINE_DOSE.max),
+    // Not whole: the saved recipe can be 1:14.5, as xBloom's own recipes are.
     adjustedFromRatio: (v) =>
-        isIntegerIn(v, BREW_BASELINE_RATIO.min, BREW_BASELINE_RATIO.max),
+        isNumber(v) && v >= BREW_BASELINE_RATIO.min && v <= BREW_BASELINE_RATIO.max,
     adjustedFromGrind: (v) =>
         isIntegerIn(v, BREW_BASELINE_GRIND.min, BREW_BASELINE_GRIND.max),
     adjustedTempOffset: (v) =>

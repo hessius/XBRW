@@ -15,6 +15,7 @@ import type {FilterResolver, LibraryQuery,
               RecipeEvidence} from "@/library/libraryQuery";
 import Recipe from "@/library/Recipe";
 import RecipeDatabase from "@/library/RecipeDatabase";
+import {repairHalfPointImport} from "@/library/halfPointRepair";
 import {canonicalShelfId} from "@/library/hiddenShelves";
 import {tagKey} from "@/library/tagKey";
 
@@ -545,6 +546,10 @@ export function useRecipeLibrary(
         // not `recipes`: that list is the answer to a query, and deduping a
         // restore against a filtered view would re-insert every recipe the view
         // happened to hide.
+        //
+        // Repaired first: the one-time library repair has already run, and a
+        // backup taken before it still holds half-point recipes at 1:15.
+        payload.recipes.forEach(repairHalfPointImport);
         const {toAdd} = mergeRecipes(choice.replace ? [] : allRecipes(), payload.recipes);
 
         // Plain try/catch rather than try/finally: a finally in a React file

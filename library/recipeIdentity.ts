@@ -118,6 +118,41 @@ export function normaliseRecipeTags(tags: unknown): string[] {
     return kept;
 }
 
+function stageTotal(volumes: readonly number[]): number {
+    return volumes.reduce((total, volume) => total + (volume > 0 ? volume : 0), 0);
+}
+
 export function ratioForVolumes(volumes: readonly number[], dose: number): number {
-    return Math.round(volumes.reduce((total, volume) => total + (volume > 0 ? volume : 0), 0) / dose);
+    return Math.round(stageTotal(volumes) / dose);
+}
+
+/**
+ * Whether the stages add up to what the dose and ratio ask for.
+ *
+ * The one rule, shared by `Recipe.isPourVolumeValid` and the importer. Within
+ * the rounding of a millilitre because stage volumes are whole and a half-point
+ * ratio can ask for 232.5 ml; for a whole-number ratio and dose both sides are
+ * integers, so this is exact equality.
+ */
+export function stagesAddUpTo(total: number, target: number): boolean {
+    return Math.abs(total - target) < 1;
+}
+
+/**
+ * The ratio of a coffee recipe arriving from xBloom.
+ *
+ * `grandWater` is xBloom's own ratio and it need not be whole: 18 g pouring
+ * 261 ml is 1:14.5. Rounding it to 15 asks for 270 ml, which the stages do not
+ * pour, and the recipe is then refused at the machine. So the stated ratio is
+ * kept when the stages agree with it. When they do not, it says nothing about
+ * this recipe and the ratio comes from the volumes, as it always has.
+ *
+ * Tea does not come through here: its volumes are clamped on the way in, so its
+ * ratio has to be derived from what is left.
+ */
+export function ratioForImport(volumes: readonly number[], dose: number, stated: unknown): number {
+    return typeof stated === "number" && Number.isFinite(stated) && stated > 0
+        && stagesAddUpTo(stageTotal(volumes), dose * stated)
+        ? stated
+        : ratioForVolumes(volumes, dose);
 }

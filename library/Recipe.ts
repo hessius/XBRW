@@ -6,7 +6,7 @@ import Pour, {AGITATION, POUR_PATTERN} from "./Pour";
 import {BYPASS_DEFAULT_TEMPERATURE, isUsableBypassTemp} from "./bypassLimits";
 import {
     CUP_TYPE, GRINDER_OFF, GRIND_SIZE_OFFSET, GRINDER_OFF_VALUE, XID_LENGTH, normaliseRecipeTags,
-    ratioForVolumes, type RecipeSource,
+    ratioForVolumes, stagesAddUpTo, type RecipeSource,
 } from "./recipeIdentity";
 import {isOverflowProtection, type OverflowProtection} from "./brew/overflowConfig";
 import {normaliseCelsius} from "@/library/units";
@@ -654,7 +654,7 @@ class Recipe {
      * that a fractional target has an answer at all.
      */
     public isPourVolumeValid(): boolean {
-        return Math.abs(this.getPourTotalVolume() - this.getTotalVolume()) < 1;
+        return stagesAddUpTo(this.getPourTotalVolume(), this.getTotalVolume());
     }
 
     public isTea(): boolean {
