@@ -672,7 +672,8 @@ describe("brew route", () => {
         ["malformed JSON", "{"],
         ["a non-object payload", "1"],
         ["an array", "[1]"],
-        ["a non-integer value", JSON.stringify({dose: 20, ratio: 18.5})],
+        ["a non-integer dose", JSON.stringify({dose: 20.5, ratio: 18})],
+        ["a ratio that is not a half point", JSON.stringify({dose: 20, ratio: 18.25})],
         ["an unknown key", JSON.stringify({dose: 20, futureKnob: 1})],
     ])("starts the adjusted recipe without record metadata for %s", async (_name, payload) => {
         const saved = new Recipe();
@@ -720,6 +721,25 @@ describe("brew route", () => {
         expect(started.name).toBe("Quick Ethiopia");
         expect(started.dosage).toBe(20);
         expect(recordAdjustments).toBeUndefined();
+    });
+
+    it("records a quick edit that lands on a half-point ratio, or leaves one", async () => {
+        const saved = new Recipe();
+        saved.uuid = "saved-half";
+        saved.dosage = 18;
+        saved.ratio = 14.5;
+        saved.grindSize = 62;
+        saved.autoFixPourVolumes();
+        const adjusted = new Recipe(undefined, JSON.stringify(saved));
+        adjusted.ratio = 15.5;
+        adjusted.autoFixPourVolumes();
+        mockRecipeJSON = JSON.stringify(adjusted);
+        mockQuickEditAdjustments = JSON.stringify({ratio: 15.5});
+        mockSavedRecipe = saved;
+
+        await renderWithProviders(<Brew />);
+
+        expect(mockStart.mock.calls[0][1]).toEqual({adjustedFromRatio: 14.5});
     });
 
     it("starts a valid quick edit with record metadata from the saved recipe", async () => {

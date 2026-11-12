@@ -13,6 +13,7 @@ import {columnDefinitions, indexStatements, INDEX_COLUMNS, type IndexValue,
         projectRecipe, schemaHash} from './recipeIndex';
 import {COVER_MEMBERS, hasMixedPhotoCover, hasStockPhotoCover} from './shelfCover';
 import {bagTablesExist, publishBagChanges} from './CoffeeBagDatabase';
+import {repairHalfPointBlob} from './halfPointRepair';
 
 /**
  * Turn one stored row into a `Recipe`, or `null` if its blob cannot be read.
@@ -194,6 +195,7 @@ class RecipeDatabase {
         // DDL is shared, not copied, so the two openers cannot drift.
         ensureBrewTables(this.db);
         this.migrateIndex();
+        this.repairHalfPointImports();
     }
 
 
@@ -365,6 +367,40 @@ class RecipeDatabase {
                 `INSERT INTO schema_meta (key, value) VALUES ('indexHash', ?)
                  ON CONFLICT(key) DO UPDATE SET value = excluded.value;`,
                 [current]
+            );
+        });
+    }
+
+    /**
+     * Give saved copies of half-point xBloom recipes their ratio back, once.
+     *
+     * Once, recorded in `schema_meta`, so a state somebody later saves on
+     * purpose is never revisited. `repairHalfPointBlob` decides which rows
+     * qualify and changes only the ratio; the update touches only the blob and
+     * the ratio column, so nothing else about the row moves. An unreadable row
+     * is left as it is, and the transaction means a SQL failure retries on the
+     * next open, the same two rules as `migrateIndex`.
+     */
+    private repairHalfPointImports(): void {
+        const done = this.db.getFirstSync(
+            "SELECT value FROM schema_meta WHERE key = 'halfPointRepair';"
+        ) as {value: string} | null;
+        if (done) return;
+
+        this.atomically(() => {
+            const rows = this.db.getAllSync(
+                "SELECT uuid, recipeJSON FROM recipes;"
+            ) as {uuid: string; recipeJSON: string}[];
+            for (const row of rows) {
+                const repaired = repairHalfPointBlob(row.recipeJSON);
+                if (repaired === null) continue;
+                this.db.runSync(
+                    "UPDATE recipes SET recipeJSON = ?, ratio = ? WHERE uuid = ?;",
+                    [repaired.json, repaired.ratio, row.uuid]
+                );
+            }
+            this.db.runSync(
+                "INSERT OR REPLACE INTO schema_meta (key, value) VALUES ('halfPointRepair', '1');"
             );
         });
     }

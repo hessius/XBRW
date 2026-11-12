@@ -1262,6 +1262,11 @@ describe("brew history through a backup", () => {
         });
     });
 
+    it("keeps a brew quick-edited away from a half-point ratio", () => {
+        const brew = reviveBrew(JSON.parse(JSON.stringify(brewNamed("b1", {adjustedFromRatio: 14.5}))));
+        expect(brew?.adjustedFromRatio).toBe(14.5);
+    });
+
     it("accepts a grinder-off baseline and a zero temperature offset", () => {
         const brew = reviveBrew(JSON.parse(JSON.stringify(brewNamed("b1", {
             adjustedFromGrind: 81,
