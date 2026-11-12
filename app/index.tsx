@@ -350,10 +350,9 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
     const [showRecipeCardDetails] = useSetting("showRecipeCardDetails", settings);
     const [bagExperimentEnabled] = useSetting("bagExperimentEnabled", settings);
     const [bagTracker] = useSetting("bagTracker", settings);
-    const [beanconquerorHandoff] = useSetting("beanconquerorHandoff", settings);
     const [readyDismissedOn, setReadyDismissedOn] = useSetting("readyToBrewDismissedOn", settings);
     const bagSuggestions = useBagSuggestions(bagExperimentEnabled,
-        resolveBagTracker(bagTracker, beanconquerorHandoff), library.revision);
+        resolveBagTracker(bagTracker), library.revision);
     const ready = bagSuggestions.entry;
     const [showShelfPhotoPreviews] = useSetting("showShelfPhotoPreviews", settings);
     const [invertAutoShelves] = useSetting("invertAutoShelves", settings);
@@ -413,7 +412,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
     const [overflowRecipe, setOverflowRecipe] = useState<Recipe | null>(null);
     const [quickEdit, setQuickEdit] = useState<HomeQuickEditState | null>(null);
     const bagManager = useBagManager(quickEdit?.recipe ?? null, bagExperimentEnabled,
-        resolveBagTracker(bagTracker, beanconquerorHandoff));
+        resolveBagTracker(bagTracker));
 
     // Advance the displayed age while the popover is open.
     //

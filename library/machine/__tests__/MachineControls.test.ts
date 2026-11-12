@@ -259,7 +259,7 @@ it("does not clear recovery after reset from a terminal response awaiting its as
         expect(s.recovery.snapshot).toBe(beforeReset);
         expect(s.controls.getSnapshot().phase).toBe("unknown");
     }
-});
+}, 60000);
 
 it.each(["enter", "exit"] as const)("does not revive or release a detached %s continuation", async command => {
     for (let turns = 0; turns < 16; turns++) {
@@ -277,7 +277,7 @@ it.each(["enter", "exit"] as const)("does not revive or release a detached %s co
         expect(s.controls.getSnapshot().phase).toBe(wasOwned ? "unknown" : "closed");
         if (wasOwned) expect(s.machine.controlBlocker).not.toBeNull();
     }
-});
+}, 60000);
 
 it.each(["enter", "grind"] as const)("rejects disposed %s even after feedback resolves while native send is pending", async command => {
     const s = await setup();

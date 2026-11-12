@@ -181,9 +181,7 @@ export function LiveBrewProvider({children, store, bagStore}: {
             const enabled = settings.get("bagExperimentEnabled") === true;
             const captured = captureBagRun(recipe, requestedBag, {
                 enabled, acceptedAt: startedAt, runId: enabled ? newBrewId() : "",
-                tracker: enabled ? resolveBagTracker(
-                    settings.get("bagTracker"), settings.get("beanconquerorHandoff") === true
-                ) : "xbrw",
+                tracker: enabled ? resolveBagTracker(settings.get("bagTracker")) : "xbrw",
                 store: () => bagStore ?? sharedBagDatabase()
             });
             if (captured.kind === "tracked") {

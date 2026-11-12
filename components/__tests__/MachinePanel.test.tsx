@@ -1,6 +1,6 @@
 import React from "react";
 import {StyleSheet} from "react-native";
-import {fireEvent} from "@testing-library/react-native";
+import {fireEvent, within} from "@testing-library/react-native";
 
 import MachinePanel from "@/components/MachinePanel";
 import {machineColours, palette} from "@/constants/colors";
@@ -209,6 +209,59 @@ describe("MachinePanel", () => {
         await fireEvent.press(r.getByRole("button", {name: "Machine settings and tools"}));
         expect(onEasyMode).toHaveBeenCalledTimes(1);
         expect(onOpenMachine).toHaveBeenCalledTimes(1);
+    });
+
+    it("styles tool launchers and machine settings to match the panel button design", async () => {
+        const onOpenMachine = jest.fn();
+        const r = await draw({machineId: "HOME", onOpenMachine, accent: "#2ECC71"});
+
+        // Tools row
+        const grind = r.getByRole("button", {name: "Grind"});
+        const scale = r.getByRole("button", {name: "Scale"});
+        const pour = r.getByRole("button", {name: "Pour"});
+        expect(grind).toBeTruthy();
+        expect(scale).toBeTruthy();
+        expect(pour).toBeTruthy();
+
+        expect(r.getByTestId("machine-tool-grind")).toHaveStyle({
+            borderTopWidth: 1, borderBottomWidth: 1, borderLeftWidth: 1, borderRightWidth: 1,
+            borderTopColor: "#2ECC71", borderBottomColor: "#2ECC71",
+            borderLeftColor: "#2ECC71", borderRightColor: "#2ECC71",
+            minHeight: 44
+        });
+
+        // Check DotMatrixText content
+        expect(within(grind).getByText("GRIND")).toBeTruthy();
+        expect(within(scale).getByText("SCALE")).toBeTruthy();
+        expect(within(pour).getByText("POUR")).toBeTruthy();
+
+        // Machine settings and tools button
+        const settingsBtn = r.getByTestId("machine-settings-entry");
+        expect(settingsBtn).toBeTruthy();
+        expect(r.getByText("MACHINE SETTINGS AND TOOLS")).toBeTruthy();
+
+        // Check minHeight and border styling on the settings button
+        expect(settingsBtn).toHaveStyle({
+            borderTopWidth: 1, borderBottomWidth: 1, borderLeftWidth: 1, borderRightWidth: 1,
+            borderTopColor: "#2ECC71", borderBottomColor: "#2ECC71",
+            borderLeftColor: "#2ECC71", borderRightColor: "#2ECC71",
+            minHeight: 44
+        });
+
+        await fireEvent.press(r.getByRole("button", {name: "Machine settings and tools"}));
+        expect(onOpenMachine).toHaveBeenCalledTimes(1);
+    });
+
+    it("disables Grind, Scale and Pour tools when disconnected", async () => {
+        const disconnected = await draw({machineId: "HOME", status: "disconnected", vitals: null});
+        expect(disconnected.getByRole("button", {name: "Grind"})).toBeDisabled();
+        expect(disconnected.getByRole("button", {name: "Scale"})).toBeDisabled();
+        expect(disconnected.getByRole("button", {name: "Pour"})).toBeDisabled();
+
+        const connected = await draw({machineId: "HOME", status: "connected"});
+        expect(connected.getByRole("button", {name: "Grind"})).toBeEnabled();
+        expect(connected.getByRole("button", {name: "Scale"})).toBeEnabled();
+        expect(connected.getByRole("button", {name: "Pour"})).toBeEnabled();
     });
 
     it("reads the water level large enough to glance at", async () => {

@@ -377,13 +377,12 @@ describe("brew history batch selection", () => {
         expect(screen.getByLabelText("Delete selected brews")).toBeDisabled();
     });
 
-    it("offers selection and delete with the handoff switched off", async () => {
-        sharedSettings().set("beanconquerorHandoff", false);
+    it("offers selection, sending and delete when entering edit mode", async () => {
         await renderWithProviders(<BrewHistory />);
 
         await fireEvent.press(screen.getByLabelText("Edit brews"));
 
-        expect(screen.queryByLabelText("Send selected brews to Beanconqueror")).toBeNull();
+        expect(screen.getByLabelText("Send selected brews to Beanconqueror")).toBeTruthy();
         expect(screen.getByLabelText("Delete selected brews")).toBeTruthy();
     });
 

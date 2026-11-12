@@ -1845,23 +1845,12 @@ describe("Beanconqueror handoff on the finished brew", () => {
         expect(history.markSent).not.toHaveBeenCalled();
     });
 
-    it("offers the handoff when the gate is on", async () => {
+    it("offers the handoff on a default install without needing a gate", async () => {
         const {getByLabelText} = await renderWithProviders(
             <Brew historyStore={store()} />
         );
 
         expect(getByLabelText(handoffTarget.buttonLabel)).toBeTruthy();
-    });
-
-    it("keeps the handoff out of a default install", async () => {
-        mockHandoffEnabled = false;
-
-        const {queryByLabelText, getByLabelText} = await renderWithProviders(
-            <Brew historyStore={store()} />
-        );
-
-        expect(getByLabelText("Export the data")).toBeTruthy();
-        expect(queryByLabelText(handoffTarget.buttonLabel)).toBeNull();
     });
 
     it("asks what the coffee was before handing over a brew from beans", async () => {

@@ -128,8 +128,6 @@ export default function SettingsScreen({settings}: Props) {
     const {ratingNoteOpen} = useLiveBrew();
     const [labsUnlocked, setLabsUnlocked] = useSetting("labsUnlocked", settings);
     const [easyModeOneTapWrite, setEasyModeOneTapWrite] = useSetting("easyModeOneTapWrite", settings);
-    const [beanconquerorHandoff, setBeanconquerorHandoff] =
-        useSetting("beanconquerorHandoff", settings);
     const [bagExperimentEnabled, setBagExperimentEnabled] = useSetting("bagExperimentEnabled", settings);
     const [bagTracker, setBagTracker] = useSetting("bagTracker", settings);
 
@@ -159,28 +157,14 @@ export default function SettingsScreen({settings}: Props) {
         }
         try {
             if (bagExperimentEnabled
-                && resolveBagTracker(next, beanconquerorHandoff) === "xbrw"
-                && resolveBagTracker(bagTracker, beanconquerorHandoff) !== "xbrw") {
+                && resolveBagTracker(next) === "xbrw"
+                && resolveBagTracker(bagTracker) !== "xbrw") {
                 new CoffeeBagDatabase().markAllNeedsCheck();
             }
             setBagTracker(next);
         } catch (error) {
             console.warn("Could not change the coffee bag tracker.", error);
             notify({tone: "error", message: "Could not change the bag tracker. Your setting has not changed."});
-        }
-    }
-
-    function changeHandoff(enabled: boolean) {
-        try {
-            if (bagExperimentEnabled
-                && resolveBagTracker(bagTracker, enabled) === "xbrw"
-                && resolveBagTracker(bagTracker, beanconquerorHandoff) !== "xbrw") {
-                new CoffeeBagDatabase().markAllNeedsCheck();
-            }
-            setBeanconquerorHandoff(enabled);
-        } catch (error) {
-            console.warn("Could not change the Beanconqueror handoff.", error);
-            notify({tone: "error", message: "Could not change the handoff. Check your coffee bags first."});
         }
     }
     const cloud = useCloudSession();
@@ -833,15 +817,11 @@ export default function SettingsScreen({settings}: Props) {
                     <SettingsActionRow label="Machine console"
                                        detail="Connection logs and diagnostic commands."
                                        onPress={() => router.push("/machine")}/>
-                    <SettingsToggleRow
-                        label="Send brews to Beanconqueror"
-                        description="Needs a version of Beanconqueror that can read the link. Older ones will say they do not recognise it."
-                        value={beanconquerorHandoff} onChange={changeHandoff}/>
                     <SettingsToggleRow label="Coffee bags"
                         description="Experimental bag tracking, freshness estimates and brew suggestions. Off by default and may not stay in the app."
                         value={bagExperimentEnabled} onChange={changeBagExperiment}/>
                     {bagExperimentEnabled && <SettingsChoiceRow label="Coffee bag tracker"
-                        description="Auto follows the Beanconqueror handoff preference. There is no live synchronisation."
+                        description="Auto tracks in Beanconqueror. There is no live synchronisation."
                         value={bagTracker} onChange={changeTracker} stacked options={[
                             {value: "auto", label: "AUTO"},
                             {value: "xbrw", label: "XBRW++"},

@@ -183,7 +183,22 @@ describe("a machine's colour", () => {
     it("says where a machine sits in the order without calling it a default", async () => {
         await renderWithProviders(<MachineDetailSheet machineId="WORK" onClose={jest.fn()}/>);
 
-        expect(screen.getByText("Tried after 1 other.")).toBeTruthy();
+        expect(screen.getByText("Tried after 1 other machine when connecting automatically.")).toBeTruthy();
         expect(screen.queryByText(/default/i)).toBeNull();
+    });
+
+    it("remains closed when machineId is null", async () => {
+        await renderWithProviders(<MachineDetailSheet machineId={null} onClose={jest.fn()}/>);
+
+        expect(screen.queryByTestId("machine-name-field")).toBeNull();
+        expect(screen.queryByText(/Tried after/)).toBeNull();
+        expect(screen.queryByText(/Serial/)).toBeNull();
+    });
+
+    it("describes identification clearly without serial undefined", async () => {
+        await renderWithProviders(<MachineDetailSheet machineId="HOME" onClose={jest.fn()}/>);
+
+        expect(screen.getByText(/Printed on the machine to identify which one this is\./)).toBeTruthy();
+        expect(screen.queryByText(/undefined/)).toBeNull();
     });
 });

@@ -285,17 +285,9 @@ export const DEFAULTS = {
     /**
      * Offer to send a finished brew to Beanconqueror.
      *
-     * Off until the reader is in Beanconqueror's own release. Before then the
-     * link opens their app only for it to say it does not recognise the URL,
-     * which reads as our bug in their app, so the action stays out of the way
-     * of anyone not deliberately testing it.
-     *
-     * A setting rather than the build-time constant this replaces, because
-     * that constant meant a tester needed a build of their own. Reached
-     * through LABS, so the switch is no easier to find by accident than the
-     * feature deserves, and it survives a relaunch like any other preference.
+     * Enabled by default as the integration is live.
      */
-    beanconquerorHandoff: false,
+    beanconquerorHandoff: true,
     /** Device-local experiment: only the editor's WRITE flow may place and write. */
     easyModeOneTapWrite: false,
     /** Device-local opt-in; inventory survives when this is off. */

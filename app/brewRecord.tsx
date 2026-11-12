@@ -209,7 +209,6 @@ export default function BrewRecord({recipeLookup}: Props) {
     const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
     const [recordHeight, setRecordHeight] = useState(0);
 
-    const [handoffEnabled] = useSetting("beanconquerorHandoff");
     const [storyCardHidden, setStoryCardHidden] = useSetting("storyCardHidden");
     const {ratingNoteOpen} = useLiveBrew();
 
@@ -272,7 +271,7 @@ export default function BrewRecord({recipeLookup}: Props) {
     // The record screen renders the first target only; adding a second target
     // means revisiting this selection rather than assuming it appears here.
     const [handoffTarget] = HANDOFF_TARGETS;
-    const showHandoff = handoffEnabled && canHandOff(record);
+    const showHandoff = canHandOff(record);
     const accent = historicalAccent(record.accent);
 
     // Measured from the first drop, because that is where the sample stream is

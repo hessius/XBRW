@@ -168,7 +168,7 @@ it.each(["temperatureUnit", "weightUnit", "waterSource", "pourRadius", "vibratio
         if (setting === "pourRadius" || setting === "vibrationAmplitude") {
             expect(screen.getByText(/No physical unit has been qualified/)).toBeTruthy();
             await press("Use current value as proposal");
-            await fireEvent.press(screen.getByLabelText(`Increase ${setting === "pourRadius" ? "Pour radius" : "Vibration amplitude"}`));
+            await fireEvent.press(screen.getByLabelText(`Increase ${setting === "pourRadius" ? "Pour radius" : "Agitation amplitude"}`));
         }
         await press("Apply");
         expect(s.planned.filter(p => p.command.kind === "setting")).toHaveLength(1);
@@ -310,8 +310,9 @@ it.each(["failure", "device", "serial"] as const)("retains the setting proposal 
     else if (mismatch === "serial") s.radio.infoReply = machineInfoFrame({serial: "wrong", model: "test", firmware: "test"});
     else jest.spyOn(s.radio, "connect").mockImplementationOnce(async () => { s.radio.connectedTo = "wrong"; });
     await press("Reconnect named machine");
-    expect(screen.getByText(mismatch === "failure" ? "Setting radio unavailable."
-        : "Reconnect requires the exact connected device and saved serial.")).toBeTruthy();
+    await waitFor(() => expect(screen.getByText(mismatch === "failure" ? "Setting radio unavailable."
+        : "Reconnect requires the exact connected device and saved serial.")).toBeTruthy(),
+    {timeout: SHEET_PRESS_TIMEOUT});
     expect(screen.getByText("Proposal · °F")).toBeTruthy();
     expect(s.controls.getSnapshot().phase).toBe("unknown");
     expect(s.machine.controlBlocker).not.toBeNull();

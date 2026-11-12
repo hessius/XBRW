@@ -969,7 +969,7 @@ is outside the screen-covered accessibility subtree.
 | `brewHistory.selection.count.one` | `app/brewHistory.tsx` | Selection-mode count with one selected brew. | `1 brew selected` |
 | `brewHistory.selection.count.many` | `app/brewHistory.tsx` | Selection-mode count. `${count}` is the number of selected brews. | `${count} brews selected` |
 | `brewHistory.selection.send.a11y` | `app/brewHistory.tsx` (a11y) | (a11y) Sends only eligible selected brews to Beanconqueror; the eligible count is shown below the actions. | `Send selected brews to Beanconqueror` |
-| `brewHistory.selection.send` | `app/brewHistory.tsx` | Doto action-row label. Hidden while the `beanconquerorHandoff` Labs setting is off or a nonempty selection contains no eligible brews. Tea and unfinished brews remain selectable for delete and compare. | `SEND` |
+| `brewHistory.selection.send` | `app/brewHistory.tsx` | Doto action-row label. Hidden when a nonempty selection contains no eligible brews. Tea and unfinished brews remain selectable for delete and compare. | `SEND` |
 | `brewHistory.selection.sendable` | `app/brewHistory.tsx` | Explicit sendable count for a nonempty selection with handoff enabled. `${sendableCount}` excludes known tea and unfinished records; `${count}` includes every selected record. Unknown legacy beverage kind retains outcome-based eligibility. | `${sendableCount} of ${count} selected brews can be sent to Beanconqueror.` |
 | `brewHistory.selection.delete.a11y` | `app/brewHistory.tsx` (a11y) | (a11y) Opens the confirmation for deleting every selected brew. | `Delete selected brews` |
 | `brewHistory.selection.delete` | `app/brewHistory.tsx` | Doto action-row label, beside SEND. | `DELETE` |
@@ -1022,7 +1022,7 @@ is outside the screen-covered accessibility subtree.
 | `brewRecord.story.open` | `components/ExportButton.tsx` (`label`, passed from `app/brewRecord.tsx:372`) | Button that opens the story-card preview sheet. | `Share story` |
 | `brewRecord.story.open.a11y` | `components/ExportButton.tsx` (`accessibilityLabel`, passed from `app/brewRecord.tsx:374`) | (a11y) Story-card preview button. | `Share this brew as a story card` |
 | `brewRecord.export.busy` | `components/ExportButton.tsx:34` | Replaces either label while the capture and share sheet are in flight, so a press is visibly acknowledged. | `WORKING…` |
-| `brewRecord.handoff.beanconqueror.label` | `library/brew/handoff/targets.ts` (`HANDOFF_TARGETS[0].buttonLabel`, passed from `app/brewRecord.tsx` and `app/brew.tsx`) | Button to hand an eligible finished brew to Beanconqueror. Hidden behind the `beanconquerorHandoff` Labs setting, for known tea, and for cancelled, failed, or lost-contact outcomes. Legacy records keep outcome-based eligibility. Tea never opens send prerequisites; neutral JSON/image export and ordinary judgement remain available. | `Send to Beanconqueror` |
+| `brewRecord.handoff.beanconqueror.label` | `library/brew/handoff/targets.ts` (`HANDOFF_TARGETS[0].buttonLabel`, passed from `app/brewRecord.tsx` and `app/brew.tsx`) | Button to hand an eligible finished brew to Beanconqueror. Offered by default for coffee brews; hidden for known tea and for cancelled, failed, or lost-contact outcomes. Legacy records keep outcome-based eligibility. Tea never opens send prerequisites; neutral JSON/image export and ordinary judgement remain available. | `Send to Beanconqueror` |
 | `brewRecord.handoff.bean.title` | `components/BeanNameSheet.tsx` | Sheet heading asked before a brew from beans is handed over, since the machine only knows the coffee for a pod. | `What was the coffee?` |
 | `brewRecord.handoff.bean.hint` | `components/BeanNameSheet.tsx` | Says what Beanconqueror will try if the field is left empty, naming the guess taken from the recipe. | `Beanconqueror will look for a bean by this name. Skip and it will try "<name>".` |
 | `brewRecord.handoff.bean.hintNone` | `components/BeanNameSheet.tsx` | The same, for a recipe whose name yields no guess at all. | `Beanconqueror will look for a bean by this name. Skip to let it pick one.` |
@@ -1219,8 +1219,8 @@ machine commands; the console retains its own acknowledgement gate.
 | ID | Source | Context — when the user sees this | Current text |
 |----|--------|-----------------------------------|--------------|
 | `machine.order.word` | `library/machine/savedMachines.ts` (`machineOrderWord`) | A machine's place in the connect order, on its Settings row and picker row, only with two or more saved. Replaces `Default` / `Choice N`: the first machine is only first in the order, and could be away while another is the one connected. `${n}` is 1st, 2nd, 3rd and so on. | `Tried ${n}` |
-| `machine.detail.order.first` | `components/MachineDetailSheet.tsx` | A machine's sheet, for the first in the order when it is not the one in use. Was `Your default. Tried first.` | `Tried first.` |
-| `machine.detail.order.later` | `components/MachineDetailSheet.tsx` | A machine's sheet, for any other machine not in use. | `Tried after ${index} other(s).` |
+| `machine.detail.order.first` | `components/MachineDetailSheet.tsx` | A machine's sheet, for the first in the order when it is not the one in use. Was `Your default. Tried first.` | `Tried first when connecting automatically.` |
+| `machine.detail.order.later` | `components/MachineDetailSheet.tsx` | A machine's sheet, for any other machine not in use. | `Tried after ${index} other machine(s) when connecting automatically.` |
 | `machine.detail.makeFirst.label` | `components/MachineDetailSheet.tsx` | Action row that moves a machine to the top of the order. Was `Make default`. | `Try this one first` |
 | `machine.detail.makeFirst.detail` | `components/MachineDetailSheet.tsx` | Its detail. | `Moves it to the top. When the app connects by itself, it takes the highest machine nearby.` |
 | `machine.detail.colour.desc` | `components/MachineDetailSheet.tsx` | Above the colour swatches, under the name field, only with two or more saved. | `Colour. The link glyph on the home screen takes it while this machine is connected.` |
@@ -1600,8 +1600,8 @@ the app.
 | `console.cmd.sendRecipeCount.note` | `library/machine/commands.ts:129` | note | `Sends the count of recipes being synced.` |
 | `console.cmd.readPourRadius.name` | `library/machine/commands.ts:130` | name | `Read pour radius` |
 | `console.cmd.readPourRadius.note` | `library/machine/commands.ts:131` | note | `Read current mechanical pour radius. Response format is not documented.` |
-| `console.cmd.readVibration.name` | `library/machine/commands.ts:132` | name | `Read vibration amplitude` |
-| `console.cmd.readVibration.note` | `library/machine/commands.ts:133` | note | `Read current vibration amplitude setting. Response format is not documented.` |
+| `console.cmd.readVibration.name` | `library/machine/commands.ts:132` | name | `Read agitation amplitude` |
+| `console.cmd.readVibration.note` | `library/machine/commands.ts:133` | note | `Read current agitation amplitude setting. Response format is not documented.` |
 | `console.cmd.brightness.name` | `library/machine/commands.ts:134` | name | `Display brightness` |
 | `console.cmd.waterSource.name` | `library/machine/commands.ts:135` | name | `Water source` |
 | `console.cmd.easyModeBegin.name` | `library/machine/commands.ts:136` | name | `Easy mode begin` |
@@ -1618,7 +1618,7 @@ the app.
 | `console.cmd.tempUnit.contradiction` | `library/machine/commands.ts:158` | contradiction | `brAzzi64 reads the values as 0 Celsius, 1 Fahrenheit. HomoLand reads them the other way round. Unverified either way.` |
 | `console.cmd.writePourRadius.name` | `library/machine/commands.ts:161` | name | `Write pour radius` |
 | `console.cmd.writePourRadius.contradiction` | `library/machine/commands.ts:162` | contradiction | `Mechanical calibration, single-source (HomoLand), range 400-1000 in steps of 80. Nobody has confirmed what a wrong value does to the arm.` |
-| `console.cmd.writeVibration.name` | `library/machine/commands.ts:165` | name | `Write vibration amplitude` |
+| `console.cmd.writeVibration.name` | `library/machine/commands.ts:165` | name | `Write agitation amplitude` |
 | `console.cmd.writeVibration.contradiction` | `library/machine/commands.ts:166` | contradiction | `Mechanical calibration, single-source (HomoLand), range 1000-1500 in steps of 100. Unverified.` |
 
 ---

@@ -19,7 +19,6 @@ import {useBrewBatchHandoff} from "@/hooks/useBrewBatchHandoff";
 import {useBrewHistory} from "@/hooks/useBrewHistory";
 import {useBrewHistoryQuery} from "@/hooks/useBrewHistoryQuery";
 import {useLiveBrew} from "@/hooks/useLiveBrew";
-import {useSetting} from "@/hooks/useSetting";
 import type {StoredBrew} from "@/library/BrewDatabase";
 import {canHandOff} from "@/library/brew/handoff/targets";
 import {queryBrewHistory, type HistorySort, type HistorySortDirection} from "@/library/brew/historyQuery";
@@ -121,7 +120,7 @@ function SelectionActionRow({
     blocked,
     fits,
     busy,
-    canSend,
+    canSend = true,
     comparable,
     onSend,
     onCompare,
@@ -134,7 +133,7 @@ function SelectionActionRow({
     blocked: number;
     fits: boolean;
     busy: boolean;
-    canSend: boolean;
+    canSend?: boolean;
     comparable: boolean;
     onSend: () => void;
     onCompare: () => void;
@@ -299,7 +298,6 @@ export default function BrewHistory() {
     const {brews, open, remove, refresh} = useBrewHistory();
     const historyQuery = useBrewHistoryQuery(recipeUuid);
     const [sortOpen, setSortOpen] = useState(false);
-    const [handoffEnabled] = useSetting("beanconquerorHandoff");
     const handoff = useBrewBatchHandoff((id) => {
         const opened = open(id);
         return opened === null ? null : {record: opened.record, samples: opened.samples};
@@ -473,7 +471,7 @@ export default function BrewHistory() {
                     blocked={blockedCount}
                     fits={visibleSelectionFits}
                     busy={handoff.busy}
-                    canSend={handoffEnabled}
+                    canSend
                     comparable={comparable}
                     onSend={() => void handleSelectionSend()}
                     onCompare={handleSelectionCompare}

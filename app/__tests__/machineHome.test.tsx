@@ -124,25 +124,53 @@ it.each(["unknown", [kitchen.id]])(
     }
 );
 
-it("uses identical explicit destinations from the home panel and machine page, even offline and unsupported", async () => {
+it("disables tools when disconnected, and uses identical destinations when connected", async () => {
     const s = await prepare();
     mockStatus = "disconnected";
     const panel = await renderWithProviders(<MachinePanel open status="disconnected" accent={palette.success}
         vitals={null} now={0} onRefreshWater={async () => false} onConnect={jest.fn()}
         machineId={kitchen.id}/>);
-    for (const tool of ["Grind", "Scale", "Pour"]) await press(tool);
-    const destinations = mockPush.mock.calls.map(args => args[0]);
-    expect(destinations).toEqual(["grind", "scale", "pour"].map(tool => ({
-        pathname: "/machineTool", params: {machineId: kitchen.id, tool}
-    })));
+    for (const tool of ["Grind", "Scale", "Pour"]) {
+        expect(screen.getByRole("button", {name: tool})).toBeDisabled();
+        await press(tool);
+    }
+    expect(mockPush).not.toHaveBeenCalled();
     await panel.unmount();
     mockPush.mockClear();
-    await renderWithProviders(<MachineHomeScreen controls={s.controls}/>);
-    for (const tool of ["Grind", "Scale", "Pour"]) await press(tool);
-    expect(mockPush.mock.calls.map(args => args[0])).toEqual(destinations);
+
+    const home = await renderWithProviders(<MachineHomeScreen controls={s.controls}/>);
+    for (const tool of ["Grind", "Scale", "Pour"]) {
+        expect(screen.getByRole("button", {name: tool})).toBeDisabled();
+        await press(tool);
+    }
+    expect(mockPush).not.toHaveBeenCalled();
     expect(screen.getAllByText("Unavailable · missing qualified readback")).toHaveLength(6);
     expect(mockChoose).not.toHaveBeenCalled();
     expect(s.radio.sent).toEqual([]);
+    await home.unmount();
+
+    // When connected, tools are enabled and navigate identically from panel and home page
+    mockStatus = "connected";
+    const connectedPanel = await renderWithProviders(<MachinePanel open status="connected" accent={palette.success}
+        vitals={null} now={0} onRefreshWater={async () => false} onConnect={jest.fn()}
+        machineId={kitchen.id}/>);
+    for (const tool of ["Grind", "Scale", "Pour"]) {
+        expect(screen.getByRole("button", {name: tool})).toBeEnabled();
+        await press(tool);
+    }
+    const destinations = ["grind", "scale", "pour"].map(tool => ({
+        pathname: "/machineTool", params: {machineId: kitchen.id, tool}
+    }));
+    expect(mockPush.mock.calls.map(args => args[0])).toEqual(destinations);
+    await connectedPanel.unmount();
+    mockPush.mockClear();
+
+    await renderWithProviders(<MachineHomeScreen controls={s.controls}/>);
+    for (const tool of ["Grind", "Scale", "Pour"]) {
+        expect(screen.getByRole("button", {name: tool})).toBeEnabled();
+        await press(tool);
+    }
+    expect(mockPush.mock.calls.map(args => args[0])).toEqual(destinations);
 });
 
 it("shows the named saved machine, never a different connected machine's identity, and routes all settings explicitly", async () => {
@@ -159,7 +187,7 @@ it("shows the named saved machine, never a different connected machine's identit
     for (const [label, setting] of [
         ["Temperature unit", "temperatureUnit"], ["Weight unit", "weightUnit"],
         ["Brightness", "brightness"], ["Water source", "waterSource"],
-        ["Pour radius", "pourRadius"], ["Vibration amplitude", "vibrationAmplitude"]
+        ["Pour radius", "pourRadius"], ["Agitation amplitude", "vibrationAmplitude"]
     ]) {
         await press(new RegExp(`^${label}:`));
         expect(mockPush).toHaveBeenLastCalledWith({

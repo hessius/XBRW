@@ -73,6 +73,7 @@ describe("bag quantities and ownership", () => {
     });
 
     it("follows the explicit tracker before the handoff preference", () => {
+        expect(resolveBagTracker("auto")).toBe("beanconqueror");
         expect(resolveBagTracker("auto", true)).toBe("beanconqueror");
         expect(resolveBagTracker("auto", false)).toBe("xbrw");
         expect(resolveBagTracker("xbrw", true)).toBe("xbrw");
