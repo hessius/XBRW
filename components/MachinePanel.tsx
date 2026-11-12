@@ -333,7 +333,7 @@ export default function MachinePanel({
                 )}
                 {body}
                 {machineId !== undefined && <YStack marginTop="$2">
-                    <MachineTools machineId={machineId} accent={accent}/>
+                    <MachineTools machineId={machineId} accent={accent} disabled={status !== "connected"}/>
                 </YStack>}
                 {onEasyMode !== undefined && (
                     <Pressable accessibilityRole="button" accessibilityLabel="Easy Mode slots"

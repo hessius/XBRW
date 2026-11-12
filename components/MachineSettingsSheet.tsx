@@ -170,9 +170,9 @@ export default function MachineSettingsSheet({machineId, onClose, settings}: Pro
         readSetting("Pour radius", () => machine.readPourRadius());
     }
 
-    // Vibration (read only)
+    // Agitation (read only)
     function onReadVibration() {
-        readSetting("Vibration amplitude", () => machine.readVibrationAmplitude());
+        readSetting("Agitation amplitude", () => machine.readVibrationAmplitude());
     }
 
     // Refresh all
@@ -254,7 +254,7 @@ export default function MachineSettingsSheet({machineId, onClose, settings}: Pro
                             disabled={!linked || sending !== null}
                         />
                         <SettingsActionRow
-                            label="Read vibration amplitude"
+                            label="Read agitation amplitude"
                             detail={info?.settingsRaw?.vibrationAmplitude !== undefined ? `${info.settingsRaw.vibrationAmplitude}` : "Not read yet"}
                             onPress={onReadVibration}
                             disabled={!linked || sending !== null}
@@ -262,7 +262,7 @@ export default function MachineSettingsSheet({machineId, onClose, settings}: Pro
                         <Text fontSize={12} color={palette.dim}>
                             Write commands (11507, 11509) are unconfirmed and not offered.
                             <Text>&nbsp;</Text>
-                            {"Range: radius 400–1000 (step 80), vibration 1000–1500 (step 100)."}
+                            {"Range: radius 400–1000 (step 80), agitation 1000–1500 (step 100)."}
                         </Text>
                     </SettingsSection>
 
@@ -303,7 +303,7 @@ export default function MachineSettingsSheet({machineId, onClose, settings}: Pro
                             Brightness: 0/1=dim, 8=mid, 15=bright · Water: 0=tank, 1=tap
                         </Text>
                         <Text fontSize={12} color={palette.dim}>
-                            Pour radius & vibration: readback only (11506, 11508 confirmed).
+                            Pour radius & agitation: readback only (11506, 11508 confirmed).
                         </Text>
                     </SettingsSection>
                 </YStack>

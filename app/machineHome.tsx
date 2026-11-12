@@ -64,7 +64,7 @@ function MachinePage({entry, index, controls}: {
                 padding: 16, paddingBottom: Math.max(insets.bottom, 16), gap: 20
             }}>
                 <SettingsSection title="Use">
-                    <YStack padding="$3"><MachineTools machineId={entry.id}/></YStack>
+                    <YStack padding="$3"><MachineTools machineId={entry.id} disabled={!linked}/></YStack>
                     <SettingsActionRow label="Easy Mode slots"
                         disabled={!easyModeAllowed}
                         detail={easyModeAllowed ? "A, B and C recipes for this machine."

@@ -8,6 +8,7 @@ import {
     validateGrindRequest, validatePourRequest, validateSetting
 } from "./controlModel";
 import type {ControlCommand, ControlFeedback, ControlQualification, ControlTokens} from "./controlProtocol";
+import {productionQualifications} from "./productionQualifications";
 
 export type MachineControlsOptions = {
     qualifications?: readonly ControlQualification[];
@@ -114,7 +115,7 @@ export default class MachineControls {
     private settingsInfo: Machine["info"] = null;
 
     constructor(private readonly machine: Machine, private readonly options: MachineControlsOptions = {}) {
-        this.qualifications = Object.freeze((options.qualifications ?? []).map(capture));
+        this.qualifications = Object.freeze((options.qualifications ?? productionQualifications).map(capture));
     }
 
     getSnapshot = (): ControlSnapshot => this.snapshot;

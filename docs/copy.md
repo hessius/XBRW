@@ -1600,8 +1600,8 @@ the app.
 | `console.cmd.sendRecipeCount.note` | `library/machine/commands.ts:129` | note | `Sends the count of recipes being synced.` |
 | `console.cmd.readPourRadius.name` | `library/machine/commands.ts:130` | name | `Read pour radius` |
 | `console.cmd.readPourRadius.note` | `library/machine/commands.ts:131` | note | `Read current mechanical pour radius. Response format is not documented.` |
-| `console.cmd.readVibration.name` | `library/machine/commands.ts:132` | name | `Read vibration amplitude` |
-| `console.cmd.readVibration.note` | `library/machine/commands.ts:133` | note | `Read current vibration amplitude setting. Response format is not documented.` |
+| `console.cmd.readVibration.name` | `library/machine/commands.ts:132` | name | `Read agitation amplitude` |
+| `console.cmd.readVibration.note` | `library/machine/commands.ts:133` | note | `Read current agitation amplitude setting. Response format is not documented.` |
 | `console.cmd.brightness.name` | `library/machine/commands.ts:134` | name | `Display brightness` |
 | `console.cmd.waterSource.name` | `library/machine/commands.ts:135` | name | `Water source` |
 | `console.cmd.easyModeBegin.name` | `library/machine/commands.ts:136` | name | `Easy mode begin` |
@@ -1618,7 +1618,7 @@ the app.
 | `console.cmd.tempUnit.contradiction` | `library/machine/commands.ts:158` | contradiction | `brAzzi64 reads the values as 0 Celsius, 1 Fahrenheit. HomoLand reads them the other way round. Unverified either way.` |
 | `console.cmd.writePourRadius.name` | `library/machine/commands.ts:161` | name | `Write pour radius` |
 | `console.cmd.writePourRadius.contradiction` | `library/machine/commands.ts:162` | contradiction | `Mechanical calibration, single-source (HomoLand), range 400-1000 in steps of 80. Nobody has confirmed what a wrong value does to the arm.` |
-| `console.cmd.writeVibration.name` | `library/machine/commands.ts:165` | name | `Write vibration amplitude` |
+| `console.cmd.writeVibration.name` | `library/machine/commands.ts:165` | name | `Write agitation amplitude` |
 | `console.cmd.writeVibration.contradiction` | `library/machine/commands.ts:166` | contradiction | `Mechanical calibration, single-source (HomoLand), range 1000-1500 in steps of 100. Unverified.` |
 
 ---

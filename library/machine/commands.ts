@@ -144,8 +144,8 @@ export const COMMANDS: Command[] = [
      note: "Sends the count of recipes being synced."},
     {code: 11506, name: "Read pour radius", packet: "type2", args: [], tier: "inert",
      note: "Read current mechanical pour radius. Confirmed on V12.0D.500 (2026-11-02). Response is 40521 info blob with pouringRadius_55 updated."},
-    {code: 11508, name: "Read vibration amplitude", packet: "type2", args: [], tier: "inert",
-     note: "Read current vibration amplitude setting. Confirmed on V12.0D.500 (2026-11-02). Response is 40521 info blob with vibrationInit_59 updated."},
+    {code: 11508, name: "Read agitation amplitude", packet: "type2", args: [], tier: "inert",
+     note: "Read current agitation amplitude setting. Confirmed on V12.0D.500 (2026-11-02). Response is 40521 info blob with vibrationInit_59 updated."},
     {code: 8103, name: "Display brightness", packet: "type1", args: [int("0, 1, 8, 15")], tier: "moves",
      note: "Set display brightness. Readback via 40521 info blob (ledType_38). Confirmed on V12.0D.500 (2026-11-02). Levels: 0=off/dim, 1=dim, 8=mid, 15=bright."},
     {code: 4508, name: "Water source", packet: "type1", args: [int("0 tank, 1 tap")], tier: "moves",
@@ -166,7 +166,7 @@ export const COMMANDS: Command[] = [
      contradiction:
         "Mechanical calibration, single-source (HomoLand), range 400-1000 in steps of 80. " +
         "Nobody has confirmed what a wrong value does to the arm. Readback via 11506 confirmed."},
-    {code: 11509, name: "Write vibration amplitude", packet: "type2", args: [int("value")], tier: "unresolved",
+    {code: 11509, name: "Write agitation amplitude", packet: "type2", args: [int("value")], tier: "unresolved",
      contradiction:
         "Mechanical calibration, single-source (HomoLand), range 1000-1500 in steps of 100. Unverified. Readback via 11508 confirmed."},
 

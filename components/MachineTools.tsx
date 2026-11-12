@@ -17,9 +17,15 @@ const TOOLS: readonly {id: ToolId; label: string; display: string}[] = [
 ];
 
 /** Navigation only. Availability and connection belong to the destination. */
-export default function MachineTools({machineId, accent}: {machineId: string; accent?: string}) {
+export default function MachineTools({
+    machineId, accent, disabled = false
+}: {
+    machineId: string;
+    accent?: string;
+    disabled?: boolean;
+}) {
     const {palette} = useAppearance();
-    const colour = accent ?? palette.text;
+    const colour = disabled ? palette.dim : (accent ?? palette.text);
     return (
         <XStack gap="$2" flexWrap="wrap">
             {TOOLS.map(({id, label, display}) => (
@@ -27,8 +33,10 @@ export default function MachineTools({machineId, accent}: {machineId: string; ac
                     key={id}
                     accessibilityRole="button"
                     accessibilityLabel={label}
-                    onPress={() => router.push(machineToolRoute(machineId, id))}
-                    style={({pressed}) => ({flex: 1, opacity: pressed ? 0.6 : 1})}>
+                    accessibilityState={{disabled}}
+                    disabled={disabled}
+                    onPress={disabled ? undefined : () => router.push(machineToolRoute(machineId, id))}
+                    style={({pressed}) => ({flex: 1, opacity: disabled ? 0.4 : pressed ? 0.6 : 1})}>
                     <XStack
                         testID={`machine-tool-${id}`}
                         minHeight={44}
@@ -38,7 +46,7 @@ export default function MachineTools({machineId, accent}: {machineId: string; ac
                         borderRadius="$4"
                         borderWidth={1}
                         borderColor={colour}
-                        pressStyle={{opacity: 0.6, backgroundColor: palette.raised}}>
+                        pressStyle={disabled ? undefined : {opacity: 0.6, backgroundColor: palette.raised}}>
                         <DotMatrixText
                             fontSize={11}
                             weight="bold"

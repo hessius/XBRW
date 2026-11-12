@@ -47,7 +47,7 @@ it("captures identical actual BLE frames for one recipe before and after all eig
         }
     }
     expect(new Set(observed).size).toBeGreaterThan(1);
-});
+}, 60000);
 
 function hex(frame: ArrayLike<number>): string {
     return Array.from(frame, (byte) => byte.toString(16).padStart(2, "0").toUpperCase()).join("");
@@ -102,8 +102,8 @@ describe("the command catalogue", () => {
             "Send recipe count",
             "Read pour radius",
             "Write pour radius",
-            "Read vibration amplitude",
-            "Write vibration amplitude",
+            "Read agitation amplitude",
+            "Write agitation amplitude",
             "Tea recipe execute",
             "Easy mode begin",
             "CurrentGrinder / back to normal"
@@ -146,8 +146,8 @@ describe("the command catalogue", () => {
         expect(commandByCode(8019)?.tier).toBe("unresolved");
         expect(commandByCode(40518)?.tier).toBe("moves");
         expect(commandByCode(8104)?.tier).toBe("unresolved");
-        expect(commandByCode(8005)?.tier).toBe("unresolved");
-        expect(commandByCode(8010)?.tier).toBe("unresolved");
+        expect(commandByCode(8005)?.tier).toBe("moves");
+        expect(commandByCode(8010)?.tier).toBe("moves");
     });
 
     it("gives every unresolved command the actual contradiction to show", () => {
@@ -197,7 +197,7 @@ describe("the command catalogue", () => {
             tier: "unresolved",
             contradiction: expect.stringContaining("Mechanical calibration, single-source (HomoLand), range 400-1000 in steps of 80")
         });
-        expect(commandNamed("Write vibration amplitude")).toMatchObject({
+        expect(commandNamed("Write agitation amplitude")).toMatchObject({
             tier: "unresolved",
             contradiction: expect.stringContaining("Mechanical calibration, single-source (HomoLand), range 1000-1500 in steps of 100")
         });

@@ -252,6 +252,18 @@ describe("MachinePanel", () => {
         expect(onOpenMachine).toHaveBeenCalledTimes(1);
     });
 
+    it("disables Grind, Scale and Pour tools when disconnected", async () => {
+        const disconnected = await draw({machineId: "HOME", status: "disconnected", vitals: null});
+        expect(disconnected.getByRole("button", {name: "Grind"})).toBeDisabled();
+        expect(disconnected.getByRole("button", {name: "Scale"})).toBeDisabled();
+        expect(disconnected.getByRole("button", {name: "Pour"})).toBeDisabled();
+
+        const connected = await draw({machineId: "HOME", status: "connected"});
+        expect(connected.getByRole("button", {name: "Grind"})).toBeEnabled();
+        expect(connected.getByRole("button", {name: "Scale"})).toBeEnabled();
+        expect(connected.getByRole("button", {name: "Pour"})).toBeEnabled();
+    });
+
     it("reads the water level large enough to glance at", async () => {
         const r = await draw({status: "connected", vitals: someVitals});
 

@@ -8,7 +8,7 @@ export const MACHINE_SETTING_GROUPS = [
 
 export const MACHINE_SETTING_TITLES: Record<SettingId, string> = {
     temperatureUnit: "Temperature unit", weightUnit: "Weight unit", brightness: "Brightness",
-    waterSource: "Water source", pourRadius: "Pour radius", vibrationAmplitude: "Vibration amplitude"
+    waterSource: "Water source", pourRadius: "Pour radius", vibrationAmplitude: "Agitation amplitude"
 };
 
 export function isSettingId(value: unknown): value is SettingId {
