@@ -8,7 +8,6 @@ import DotIcon from "@/components/DotIcon";
 import Collapsible from "@/components/Collapsible";
 import MachineColourDot from "@/components/MachineColourDot";
 import MachineTools from "@/components/MachineTools";
-import SettingsActionRow from "@/components/SettingsActionRow";
 
 import {useRefreshRequest} from "@/hooks/useRefreshRequest";
 import type {LinkStatus} from "@/hooks/useMachine";
@@ -333,12 +332,13 @@ export default function MachinePanel({
                                       onPress={onChooseMachine}/>
                 )}
                 {body}
-                {machineId !== undefined && <YStack marginTop="$3">
-                    <MachineTools machineId={machineId}/>
+                {machineId !== undefined && <YStack marginTop="$2">
+                    <MachineTools machineId={machineId} accent={accent}/>
                 </YStack>}
                 {onEasyMode !== undefined && (
                     <Pressable accessibilityRole="button" accessibilityLabel="Easy Mode slots"
-                               onPress={onEasyMode}>
+                               onPress={onEasyMode}
+                               style={({pressed}) => ({opacity: pressed ? 0.6 : 1})}>
                         <XStack testID="easy-mode-entry" minHeight={44} alignItems="center"
                                 justifyContent="center" marginTop="$2"
                                 paddingVertical="$2.5" borderRadius="$4"
@@ -351,8 +351,23 @@ export default function MachinePanel({
                         </XStack>
                     </Pressable>
                 )}
-                {onOpenMachine !== undefined && <SettingsActionRow
-                    label="Machine settings and tools" onPress={onOpenMachine}/>}
+                {onOpenMachine !== undefined && (
+                    <Pressable accessibilityRole="button"
+                               accessibilityLabel="Machine settings and tools"
+                               onPress={onOpenMachine}
+                               style={({pressed}) => ({opacity: pressed ? 0.6 : 1})}>
+                        <XStack testID="machine-settings-entry" minHeight={44} alignItems="center"
+                                justifyContent="center" marginTop="$2"
+                                paddingVertical="$2.5" borderRadius="$4"
+                                borderWidth={1} borderColor={accent}
+                                pressStyle={{opacity: 0.6, backgroundColor: palette.raised}}>
+                            <DotMatrixText fontSize={11} weight="bold" letterSpacing={2}
+                                           color={accent}>
+                                MACHINE SETTINGS AND TOOLS
+                            </DotMatrixText>
+                        </XStack>
+                    </Pressable>
+                )}
             </YStack>
         </Collapsible>
     );
