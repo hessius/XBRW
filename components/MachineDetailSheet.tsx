@@ -113,14 +113,14 @@ export default function MachineDetailSheet({machineId, onClose, onForget, settin
 
     return (
         <Fragment>
-            <XbrwSheet open={machine !== null}
+            <XbrwSheet open={machineId !== null && machineEntry !== null}
                        onOpenChange={(next) => {
                            if (next) return;
                            commitName();
                            onClose();
                        }}
                        title={title} heightPercent={80}>
-            {machine !== null && (
+            {machineEntry !== null && (
                 // Scrolls: with the keyboard up on a small screen, or on a
                 // folded phone's cover screen, the rows below the name field
                 // would otherwise be out of reach.
@@ -131,11 +131,15 @@ export default function MachineDetailSheet({machineId, onClose, onForget, settin
                     <Text fontSize={13} color={palette.dim}>
                         {active
                             ? status === "connected" ? "Selected and connected." : "Selected. Not connected."
-                            : index === 0 ? "Tried first." : `Tried after ${index} other${index === 1 ? "" : "s"}.`}
+                            : machines.length > 1
+                                ? index === 0
+                                    ? "Tried first when connecting automatically."
+                                    : `Tried after ${index} other machine${index === 1 ? "" : "s"} when connecting automatically.`
+                                : "Not selected."}
                     </Text>
                     <Text testID="machine-detail-id" fontSize={13} color={palette.dim}>
-                        {machineEntry?.serial !== ""
-                            ? `Serial ${machineEntry?.serial}. Printed on the machine, so you can check which one this is.`
+                        {machineEntry.serial.trim() !== ""
+                            ? `Serial ${machineEntry.serial}. Printed on the machine to identify which one this is.`
                             : `${machineTag(machineEntry)}. The serial shows here once it has connected.`}
                     </Text>
 

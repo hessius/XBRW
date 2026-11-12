@@ -1219,8 +1219,8 @@ machine commands; the console retains its own acknowledgement gate.
 | ID | Source | Context — when the user sees this | Current text |
 |----|--------|-----------------------------------|--------------|
 | `machine.order.word` | `library/machine/savedMachines.ts` (`machineOrderWord`) | A machine's place in the connect order, on its Settings row and picker row, only with two or more saved. Replaces `Default` / `Choice N`: the first machine is only first in the order, and could be away while another is the one connected. `${n}` is 1st, 2nd, 3rd and so on. | `Tried ${n}` |
-| `machine.detail.order.first` | `components/MachineDetailSheet.tsx` | A machine's sheet, for the first in the order when it is not the one in use. Was `Your default. Tried first.` | `Tried first.` |
-| `machine.detail.order.later` | `components/MachineDetailSheet.tsx` | A machine's sheet, for any other machine not in use. | `Tried after ${index} other(s).` |
+| `machine.detail.order.first` | `components/MachineDetailSheet.tsx` | A machine's sheet, for the first in the order when it is not the one in use. Was `Your default. Tried first.` | `Tried first when connecting automatically.` |
+| `machine.detail.order.later` | `components/MachineDetailSheet.tsx` | A machine's sheet, for any other machine not in use. | `Tried after ${index} other machine(s) when connecting automatically.` |
 | `machine.detail.makeFirst.label` | `components/MachineDetailSheet.tsx` | Action row that moves a machine to the top of the order. Was `Make default`. | `Try this one first` |
 | `machine.detail.makeFirst.detail` | `components/MachineDetailSheet.tsx` | Its detail. | `Moves it to the top. When the app connects by itself, it takes the highest machine nearby.` |
 | `machine.detail.colour.desc` | `components/MachineDetailSheet.tsx` | Above the colour swatches, under the name field, only with two or more saved. | `Colour. The link glyph on the home screen takes it while this machine is connected.` |
