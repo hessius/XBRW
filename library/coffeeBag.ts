@@ -12,7 +12,7 @@ export function isBagTrackerSetting(value: unknown): value is BagTrackerSetting 
     return value === "auto" || value === "xbrw" || value === "beanconqueror";
 }
 
-export function resolveBagTracker(setting: unknown, beanconquerorHandoff: boolean): BagTracker {
+export function resolveBagTracker(setting: unknown, beanconquerorHandoff = true): BagTracker {
     if (setting === "xbrw" || setting === "beanconqueror") return setting;
     return beanconquerorHandoff ? "beanconqueror" : "xbrw";
 }

@@ -483,7 +483,6 @@ export default function Brew({historyStore}: {historyStore?: ExportStore} = {}) 
     //
     // Its own busy flag, like the record screen's: a share sheet that is open
     // should not grey out a handoff that could still run.
-    const [handoffEnabled] = useSetting("beanconquerorHandoff");
     const handoffStore = historyStore?.markSent === undefined
         ? undefined
         : {markSent: historyStore.markSent};
@@ -883,7 +882,7 @@ export default function Brew({historyStore}: {historyStore?: ExportStore} = {}) 
                                           onPress={() => void shareData()} />
                         </XStack>
                     )}
-                    {phase.name === "done" && handoffEnabled
+                    {phase.name === "done"
                         && canHandOffCurrentBrew() && (
                         // Read through `canHandOff` rather than assumed from
                         // the phase. Reaching "done" today means one of the two

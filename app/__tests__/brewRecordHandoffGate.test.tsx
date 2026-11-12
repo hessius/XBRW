@@ -16,7 +16,6 @@ import {
     type BrewRecordOpenResult
 } from "@/test-utils/brewRecordMocks";
 import {HANDOFF_TARGETS} from "@/library/brew/handoff/targets";
-import {sharedSettings} from "@/hooks/useSetting";
 
 const mockPush = jest.fn();
 const mockSetOptions = jest.fn();
@@ -57,15 +56,13 @@ jest.mock("@/hooks/useBrewHistory", () => {
 
 describe("brew record handoff gate", () => {
     beforeEach(() => {
-        sharedSettings().set("beanconquerorHandoff", false);
         mockOpened = {
             record,
             samples: brewRecordSamples
         };
     });
 
-    it("never offers tea handoff with Labs enabled, but keeps neutral exports", async () => {
-        sharedSettings().set("beanconquerorHandoff", true);
+    it("never offers tea handoff, but keeps neutral exports", async () => {
         mockOpened = {record: {...record, beverageKind: "tea"}, samples: brewRecordSamples};
         const mockLookup: RecipeLookup = {getRecipe: jest.fn(() => null)};
         await renderWithProviders(<BrewRecord recipeLookup={mockLookup} />);
@@ -77,7 +74,6 @@ describe("brew record handoff gate", () => {
     });
 
     it("does not infer a legacy brew's kind from a recipe now marked as tea", async () => {
-        sharedSettings().set("beanconquerorHandoff", true);
         const mockLookup: RecipeLookup = {
             getRecipe: jest.fn(() => ({pours: [], isTea: () => true}) as unknown as Recipe)
         };
@@ -85,7 +81,7 @@ describe("brew record handoff gate", () => {
         expect(screen.getByLabelText(HANDOFF_TARGETS[0].buttonLabel)).toBeTruthy();
     });
 
-    it("does not offer Beanconqueror handoff while the Labs setting is off", async () => {
+    it("offers Beanconqueror handoff on a default install without needing a Labs setting", async () => {
         const mockLookup: RecipeLookup = {
             getRecipe: jest.fn(() => ({pours: []}) as unknown as Recipe)
         };
@@ -94,6 +90,6 @@ describe("brew record handoff gate", () => {
         await renderWithProviders(<BrewRecord recipeLookup={mockLookup} />);
 
         expect(screen.getByLabelText("Export the data")).toBeTruthy();
-        expect(screen.queryByLabelText(handoffTarget.buttonLabel)).toBeNull();
+        expect(screen.getByLabelText(handoffTarget.buttonLabel)).toBeTruthy();
     });
 });

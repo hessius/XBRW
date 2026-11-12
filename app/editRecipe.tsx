@@ -897,7 +897,6 @@ export default function EditRecipe(
     const [showRecipeAvatars] = useSetting("showRecipeAvatars");
     const [bagExperimentEnabled] = useSetting("bagExperimentEnabled");
     const [bagTracker] = useSetting("bagTracker");
-    const [beanconquerorHandoff] = useSetting("beanconquerorHandoff");
     const [easyModeOneTapWrite] = useSetting("easyModeOneTapWrite");
     const [rememberedMachine] = useSetting("machineDeviceId");
     const [rawTemperatureUnit] = useSetting("temperatureUnit");
@@ -1093,7 +1092,7 @@ export default function EditRecipe(
     );
 
     const bagManager = useBagManager(recipe ?? null, bagExperimentEnabled,
-        resolveBagTracker(bagTracker, beanconquerorHandoff));
+        resolveBagTracker(bagTracker));
 
     if (!recipe) return null;
 

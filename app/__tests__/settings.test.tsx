@@ -1786,20 +1786,14 @@ describe("SettingsScreen", () => {
             }
         });
 
-        it("switches the Beanconqueror handoff on from Labs", async () => {
+        it("no longer offers a Beanconqueror toggle in Labs as it is enabled by default", async () => {
             const settings = new Settings(memoryStorage());
             settings.set("labsUnlocked", true);
 
             await renderWithProviders(<SettingsScreen settings={settings}/>);
 
-            // Named in terms of what goes wrong, because the failure lands in
-            // somebody else's app where it reads as our bug.
-            expect(screen.getByText(/can read the link/)).toBeTruthy();
-
-            await fireEvent.press(screen.getByRole("switch",
-                {name: "Send brews to Beanconqueror"}));
-
-            expect(settings.get("beanconquerorHandoff")).toBe(true);
+            expect(screen.queryByRole("switch", {name: "Send brews to Beanconqueror"})).toBeNull();
+            expect(screen.queryByText(/can read the link/)).toBeNull();
         });
 
         it("offers one default-off coffee bag experiment and marks old estimates before enabling", async () => {
@@ -1846,15 +1840,12 @@ describe("SettingsScreen", () => {
             settings.set("labsUnlocked", true);
             settings.set("bagExperimentEnabled", true);
             settings.set("bagTracker", mode === "explicit" ? "beanconqueror" : "auto");
-            settings.set("beanconquerorHandoff", true);
             const bags = new CoffeeBagDatabase();
             bags.create(bagFixture());
             await renderWithProviders(<SettingsScreen settings={settings}/>);
-            await fireEvent.press(mode === "explicit" ? screen.getByText("XBRW++")
-                : screen.getByRole("switch", {name: "Send brews to Beanconqueror"}));
+            await fireEvent.press(screen.getByText("XBRW++"));
             expect(bags.balance("bag-a", 18, "xbrw")).toEqual({kind: "needsCheck"});
-            if (mode === "explicit") expect(settings.get("bagTracker")).toBe("xbrw");
-            else expect(settings.get("beanconquerorHandoff")).toBe(false);
+            expect(settings.get("bagTracker")).toBe("xbrw");
         });
 
         it.each(["explicit", "auto"] as const)("retains %s ownership if its required check cannot be saved", async (mode) => {
@@ -1866,12 +1857,9 @@ describe("SettingsScreen", () => {
             settings.set("labsUnlocked", true);
             settings.set("bagExperimentEnabled", true);
             settings.set("bagTracker", mode === "explicit" ? "beanconqueror" : "auto");
-            settings.set("beanconquerorHandoff", true);
             await renderWithProviders(<SettingsScreen settings={settings}/>);
-            await fireEvent.press(mode === "explicit" ? screen.getByText("XBRW++")
-                : screen.getByRole("switch", {name: "Send brews to Beanconqueror"}));
+            await fireEvent.press(screen.getByText("XBRW++"));
             expect(settings.get("bagTracker")).toBe(mode === "explicit" ? "beanconqueror" : "auto");
-            expect(settings.get("beanconquerorHandoff")).toBe(true);
             expect(mockNotify).toHaveBeenCalledWith(expect.objectContaining({tone: "error"}));
         });
 
@@ -1919,7 +1907,7 @@ describe("SettingsScreen", () => {
 
             const restored = new Settings(storage);
             expect(restored.get("labsUnlocked")).toBe(false);
-            expect(restored.get("beanconquerorHandoff")).toBe(false);
+            expect(restored.get("beanconquerorHandoff")).toBe(true);
             expect(restored.get("easyModeOneTapWrite")).toBe(false);
             expect(restored.get("bagExperimentEnabled")).toBe(false);
             expect(restored.get("bagTracker")).toBe("auto");

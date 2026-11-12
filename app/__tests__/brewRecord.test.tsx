@@ -712,8 +712,9 @@ describe("brew record", () => {
 
     it("keeps export and story paired when handoff is absent", async () => {
         const other = {...record, id: "brew-2", startedAt: 900_000};
-        mockBrews = [other, record];
-        sharedSettings().set("beanconquerorHandoff", false);
+        const teaRecord = {...record, beverageKind: "tea" as const};
+        mockBrews = [other, teaRecord];
+        mockOpened = {record: teaRecord, samples: []};
 
         await renderWithProviders(<BrewRecord recipeLookup={mockLookup} />);
 
@@ -724,8 +725,9 @@ describe("brew record", () => {
     });
 
     it("pairs export and story when they are the only actions", async () => {
-        mockBrews = [record];
-        sharedSettings().set("beanconquerorHandoff", false);
+        const teaRecord = {...record, beverageKind: "tea" as const};
+        mockBrews = [teaRecord];
+        mockOpened = {record: teaRecord, samples: []};
 
         await renderWithProviders(<BrewRecord recipeLookup={mockLookup} />);
 

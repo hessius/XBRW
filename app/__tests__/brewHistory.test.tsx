@@ -265,13 +265,11 @@ describe("brew history", () => {
         expect(queryByTestId("history-header-recipe")).toBeNull();
     });
 
-    it("offers selection but not sending while Beanconqueror handoff is disabled", async () => {
-        // Selecting several brews to delete them stands on its own, so the
-        // Labs gate hides the Send button rather than the whole row.
-        const {queryByLabelText, getByLabelText} = await renderWithProviders(<BrewHistory />);
+    it("offers selection and sending on a default install", async () => {
+        const {getByLabelText} = await renderWithProviders(<BrewHistory />);
         expect(getByLabelText("Edit brews")).toBeTruthy();
         await fireEvent.press(getByLabelText("Edit brews"));
-        expect(queryByLabelText("Send selected brews to Beanconqueror")).toBeNull();
+        expect(getByLabelText("Send selected brews to Beanconqueror")).toBeTruthy();
     });
 
     it("shows a delete tile that opens a confirmation before removing", async () => {
