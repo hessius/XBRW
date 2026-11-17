@@ -1024,3 +1024,32 @@ it("streams correlated grams after synthetic refresh-only Scale entry and ignore
     expect(s.controls.getSnapshot().cupGrams).toBe(44);
     await s.controls.close();
 });
+
+it("invalidates a live session when an incoming 40521 frame switches model while keeping serial and firmware", async () => {
+    const s = await setup();
+    s.respond((item) => accept(s.radio, item));
+    await s.controls.open(identity, "grind");
+    expect(s.controls.getSnapshot().phase).toBe("ready");
+    s.radio.emit(machineInfoFrame({serial: identity.serial, model: "Original", firmware: "test"}));
+    expect(s.controls.getSnapshot()).toMatchObject({
+        phase: "unknown",
+        error: "The qualified machine identity changed."
+    });
+    s.controls.dispose();
+});
+
+it("ignores unverified DIS modelNumber when 40521 model bytes are empty on J15 Studio", async () => {
+    const studioIdentity = {deviceId: "studio-device", serial: "J15A01B5AF231"};
+    const radio = new Radio();
+    radio.modelNumber = "UNVERIFIED-DIS-STRING";
+    radio.infoReply = machineInfoFrame({serial: studioIdentity.serial, model: "", firmware: "V12.0D.500"});
+    const recovery = new ControlRecoveryStore({read: () => "", write: () => {}});
+    const machine = new Machine(radio, {frameGapMs: 0});
+    machine.installControlRecovery(recovery);
+    await machine.connect(studioIdentity.deviceId);
+    radio.emit(status(MACHINE_STATE.IDLE));
+    const controls = new MachineControls(machine);
+    expect(controls.describeSettings(studioIdentity, "temperatureUnit").unavailable).toBeNull();
+    expect(controls.describeSettings(studioIdentity, "temperatureUnit").reason).toBeNull();
+    controls.dispose();
+});

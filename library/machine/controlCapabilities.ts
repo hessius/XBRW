@@ -8,7 +8,7 @@ export type ControlReportedIdentity = {
     serial: string | null;
 };
 
-/** Exact observed scopes only; no serial-prefix or firmware-family inference. */
+/** Exact observed scopes only; no unverified serial-prefix or firmware-family inference. */
 export type ControlCapabilityProfile = {
     id: string;
     models: readonly string[];
@@ -35,7 +35,7 @@ export type ControlCapabilitySelection =
  */
 export const studioQualifiedProfile: ControlCapabilityProfile = {
     id: "studio-v12.0d.500",
-    models: ["Studio", "studio", "J15", "X15"],
+    models: ["Studio", "J15", "X15"],
     firmwares: ["V12.0D.500"],
     serials: ["*"],
     scale: false,
@@ -53,13 +53,23 @@ export const studioQualifiedProfile: ControlCapabilityProfile = {
 
 const qualifiedProfiles: readonly ControlCapabilityProfile[] = [studioQualifiedProfile];
 
+/**
+ * Resolves the reported model from the 40521 info frame, falling back to
+ * documented catalogue serial codes (`J15`/`J20`) when 40521 model bytes are empty.
+ */
+export function resolveControlModel(
+    model: string | null | undefined,
+    serial: string | null | undefined
+): string | null {
+    return (model?.trim() || null) ?? (serial ? modelFromSerial(serial) : null);
+}
+
 export function lookupControlCapabilities(
     reported: ControlReportedIdentity,
     profiles: readonly ControlCapabilityProfile[] = qualifiedProfiles
 ): ControlCapabilitySelection {
     const {model, firmware, serial} = reported;
-    const resolvedModel = (model?.trim() || null)
-        ?? (serial ? modelFromSerial(serial) : null);
+    const resolvedModel = resolveControlModel(model, serial);
     if (!resolvedModel || !firmware?.trim() || !serial?.trim()) {
         return {available: false, reason: "identity-unavailable"};
     }

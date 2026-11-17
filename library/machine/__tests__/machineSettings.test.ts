@@ -115,7 +115,8 @@ it("qualifies real Studio hardware with empty model in info blob under productio
         for (let i = 0; i < textValue.length; i++) payload[at + i] = textValue.charCodeAt(i);
     };
     put(0, studioIdentity.serial);
-    // model is left blank (bytes 13-18 are 0 / empty string)
+    // model is 0xFF padded on real Studio hardware (bytes 13-18)
+    payload.fill(0xff, 13, 19);
     put(19, "V12.0D.500");
     payload[33] = 1; // waterEnough
     payload[36] = 0; // waterFeed = tank
@@ -138,9 +139,12 @@ it("qualifies real Studio hardware with empty model in info blob under productio
     expect(tempSupport.readingReason).toBe("missing-readback");
     expect(tempSupport.policy.temperatureUnit).toEqual(["C", "F"]);
 
-    // describeTool has qualified rejection, NOT identity-unavailable
-    const grindSupport = s.controls.describeTool(studioIdentity, "grind");
-    expect(grindSupport.unavailable).toBe("This tool is not qualified for this machine and firmware.");
+    // describeTool has qualified rejection for all standalone tools, NOT identity-unavailable
+    for (const tool of ["grind", "pour", "scale"] as const) {
+        expect(s.controls.describeTool(studioIdentity, tool).unavailable).toBe(
+            "This tool is not qualified for this machine and firmware."
+        );
+    }
 
     // Reading settings explicitly succeeds and decodes from info refresh
     await s.controls.readSettings(studioIdentity, "temperatureUnit");

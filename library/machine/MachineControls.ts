@@ -1,8 +1,7 @@
 import type Machine from "./Machine";
 import {isActiveBrewPhase} from "./Machine";
 import type {ControlSession} from "./Machine";
-import {modelFromSerial} from "./machineModel";
-import {lookupControlCapabilities} from "./controlCapabilities";
+import {lookupControlCapabilities, resolveControlModel} from "./controlCapabilities";
 import {
     type ControlIdentity, type ControlSnapshot, type GrindRequest, type PourRequest, type ToolId,
     type Pattern, type SettingId, type SettingValues, type GrindPolicy, type PourPolicy, type SettingPolicy,
@@ -280,19 +279,13 @@ export default class MachineControls {
         this.listeners.forEach((listener) => listener());
     }
 
-    private reportedModel(model: string | null | undefined, serial: string | null | undefined): string | null {
-        return (model?.trim() || null)
-            ?? (this.machine.modelNumber?.trim() || null)
-            ?? (serial ? modelFromSerial(serial) : null);
-    }
-
     private select(): ControlQualification {
         if (this.disposed) throw new Error("The shared control owner was reset.");
         const info = this.machine.info;
         const selected = lookupControlCapabilities({
-            model: this.reportedModel(info?.model, info?.serial),
-            firmware: info?.firmware?.trim() || null,
-            serial: info?.serial?.trim() || null
+            model: info?.model ?? null,
+            firmware: info?.firmware ?? null,
+            serial: info?.serial ?? null
         }, this.qualifications.map((q) => q.profile));
         if (!selected.available) throw new Error(`Controls unavailable: ${selected.reason}`);
         const qualification = this.qualifications.find((q) => q.profile === selected.profile)!;
@@ -333,7 +326,7 @@ export default class MachineControls {
                 // Frame logging precedes Machine's info update. Reject an
                 // identity-changing info frame before decoding its proof.
                 if (parsed.kind === "info") {
-                    const parsedModel = this.reportedModel(parsed.model, parsed.serial);
+                    const parsedModel = resolveControlModel(parsed.model, parsed.serial);
                     const modelMatches = parsedModel !== null && this.qualification!.profile.models.some(
                         (m) => m.trim().toLowerCase() === parsedModel.toLowerCase()
                     );
