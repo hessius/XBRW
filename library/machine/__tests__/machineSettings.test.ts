@@ -2,7 +2,7 @@ import {machineSettingsFixture, settingIdentity, settingProfile, settingReadings
 import {machineInfoFrame} from "@/library/machine/__tests__/FakeTransport";
 import {applySettingProposal} from "@/library/machine/settingEditor";
 import {MACHINE_STATE} from "@/library/machine/protocol";
-import {status} from "@/library/machine/__tests__/protocolFixtures";
+import {notification, status} from "@/library/machine/__tests__/protocolFixtures";
 
 it("reads qualified settings explicitly with leased info only, never Apply or a recovery marker", async () => {
     const s = await machineSettingsFixture();
@@ -105,5 +105,55 @@ it("fails closed for production, unsupported settings and mismatched identities 
     await expect(s.controls.readSettings({...settingIdentity, serial: "wrong"}, "brightness")).rejects.toThrow("serial");
     expect(s.planned).toEqual([]);
     expect(s.machine.controlBlocker).toBeNull();
+    s.controls.dispose();
+});
+
+it("qualifies real Studio hardware with empty model in info blob under production qualifications", async () => {
+    const studioIdentity = {deviceId: "setting-test", serial: "J15A01B5AF231"};
+    const payload = new Array(63).fill(0);
+    const put = (at: number, textValue: string) => {
+        for (let i = 0; i < textValue.length; i++) payload[at + i] = textValue.charCodeAt(i);
+    };
+    put(0, studioIdentity.serial);
+    // model is left blank (bytes 13-18 are 0 / empty string)
+    put(19, "V12.0D.500");
+    payload[33] = 1; // waterEnough
+    payload[36] = 0; // waterFeed = tank
+    payload[37] = 30 + 62;
+    payload[38] = 8; // brightness = 8 (Mid)
+    payload[40] = 1; // tempUnit = 1 (C)
+    payload[41] = 1; // weightUnit = 1 (g)
+    put(51, "00000000");
+    const realStudioBlob = notification(0x49, 0x9E, payload);
+
+    const s = await machineSettingsFixture({production: true});
+    s.radio.infoReply = realStudioBlob;
+    s.radio.emit(realStudioBlob);
+
+    // describeSettings has no identity-unavailable error
+    const tempSupport = s.controls.describeSettings(studioIdentity, "temperatureUnit");
+    expect(tempSupport.unavailable).toBeNull();
+    expect(tempSupport.reason).toBeNull();
+    expect(tempSupport.reading).toBe("unavailable");
+    expect(tempSupport.readingReason).toBe("missing-readback");
+    expect(tempSupport.policy.temperatureUnit).toEqual(["C", "F"]);
+
+    // describeTool has qualified rejection, NOT identity-unavailable
+    const grindSupport = s.controls.describeTool(studioIdentity, "grind");
+    expect(grindSupport.unavailable).toBe("This tool is not qualified for this machine and firmware.");
+
+    // Reading settings explicitly succeeds and decodes from info refresh
+    await s.controls.readSettings(studioIdentity, "temperatureUnit");
+    expect(s.controls.getSnapshot()).toMatchObject({
+        phase: "closed",
+        identity: studioIdentity,
+        settings: expect.objectContaining({
+            temperatureUnit: "C",
+            weightUnit: "g",
+            brightness: 8,
+            waterSource: "tank"
+        })
+    });
+    expect(s.controls.describeSettings(studioIdentity, "temperatureUnit").reading).toBe("current");
     s.controls.dispose();
 });

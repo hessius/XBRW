@@ -1,4 +1,5 @@
 import {GrindPolicy, PourPolicy, SettingPolicy} from "@/library/machine/controlModel";
+import {modelFromSerial} from "@/library/machine/machineModel";
 
 /** Read from the connected machine, never a saved model preference. */
 export type ControlReportedIdentity = {
@@ -34,7 +35,7 @@ export type ControlCapabilitySelection =
  */
 export const studioQualifiedProfile: ControlCapabilityProfile = {
     id: "studio-v12.0d.500",
-    models: ["Studio", "J15", "X15"],
+    models: ["Studio", "studio", "J15", "X15"],
     firmwares: ["V12.0D.500"],
     serials: ["*"],
     scale: false,
@@ -57,13 +58,18 @@ export function lookupControlCapabilities(
     profiles: readonly ControlCapabilityProfile[] = qualifiedProfiles
 ): ControlCapabilitySelection {
     const {model, firmware, serial} = reported;
-    if (!model?.trim() || !firmware?.trim() || !serial?.trim()) {
+    const resolvedModel = (model?.trim() || null)
+        ?? (serial ? modelFromSerial(serial) : null);
+    if (!resolvedModel || !firmware?.trim() || !serial?.trim()) {
         return {available: false, reason: "identity-unavailable"};
     }
+    const normalizedModel = resolvedModel.trim().toLowerCase();
+    const cleanFirmware = firmware.trim();
+    const cleanSerial = serial.trim();
     const matches = profiles.filter((profile) =>
-        profile.models.includes(model)
-        && profile.firmwares.includes(firmware)
-        && (profile.serials.includes("*") || profile.serials.includes(serial))
+        profile.models.some((m) => m.trim().toLowerCase() === normalizedModel)
+        && profile.firmwares.includes(cleanFirmware)
+        && (profile.serials.includes("*") || profile.serials.includes(cleanSerial))
     );
     if (matches.length === 0) return {available: false, reason: "unqualified"};
     if (matches.length !== 1) return {available: false, reason: "ambiguous-profile"};
