@@ -70,6 +70,7 @@ export class StudioControlProtocol implements ControlProtocol {
     private enterTokens: ControlTokens | null = null;
     private runTokens: ControlTokens | null = null;
     private activeTool: ToolId | null = null;
+    private enterPrepared = false;
     private movingStarted = false;
     private waterDispensedObserved = false;
 
@@ -103,6 +104,7 @@ export class StudioControlProtocol implements ControlProtocol {
     prepare(command: ControlCommand, tokens: ControlTokens): ControlExchange {
         if (command.kind === "enter") {
             const frame = this.encodeEnter(command.tool);
+            this.enterPrepared = true;
             return {
                 frame,
                 deadlineMs: 10000,
@@ -123,6 +125,7 @@ export class StudioControlProtocol implements ControlProtocol {
                 deadlineMs: 10000,
                 arm: () => {
                     this.pending = {command, tokens};
+                    this.enterPrepared = false;
                     this.enterTokens = null;
                     this.runTokens = null;
                     this.movingStarted = false;
@@ -363,6 +366,7 @@ export class StudioControlProtocol implements ControlProtocol {
                 if ((parsed.kind === "event" && parsed.code === exitCode)
                     || (parsed.kind === "status" && (parsed.state === 0x01 || parsed.state === 0x41))) {
                     this.activeTool = null;
+                    this.enterPrepared = false;
                     this.enterTokens = null;
                     this.runTokens = null;
                     this.movingStarted = false;
@@ -445,6 +449,7 @@ export class StudioControlProtocol implements ControlProtocol {
                             this.runTokens = null;
                             this.enterTokens = null;
                             this.activeTool = null;
+                            this.enterPrepared = false;
                             this.movingStarted = false;
                             return {
                                 ...tokens,
@@ -457,9 +462,11 @@ export class StudioControlProtocol implements ControlProtocol {
                             return {...tokens, value: {kind: "active"}};
                         }
                     }
-                    if (parsed.kind === "info" && this.activeTool !== null && !this.movingStarted && this.runTokens === null) {
+                    if (parsed.kind === "info" && (this.activeTool !== null || this.enterPrepared)
+                        && !this.movingStarted && this.runTokens === null) {
                         this.enterTokens = null;
                         this.activeTool = null;
+                        this.enterPrepared = false;
                         return {...tokens, value: {kind: "closed"}};
                     }
                     return null;

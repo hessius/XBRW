@@ -3,7 +3,7 @@ import MachineControls from "@/library/machine/MachineControls";
 import {ControlRecoveryStore} from "@/library/machine/controlRecovery";
 import {StudioControlProtocol} from "@/library/machine/productionQualifications";
 import {MACHINE_STATE, buildType1, buildType2} from "@/library/machine/protocol";
-import {FakeTransport} from "@/library/machine/__tests__/FakeTransport";
+import {FakeTransport, machineInfoFrame} from "@/library/machine/__tests__/FakeTransport";
 import {event, notification, status} from "@/library/machine/__tests__/protocolFixtures";
 
 function hexBytes(hex: string): number[] {
@@ -500,6 +500,93 @@ describe("Studio production qualifications", () => {
             await Promise.resolve();
             await s.controls.close();
             s.controls.dispose();
+        } finally {
+            jest.useRealTimers();
+        }
+    });
+
+    it("recovers nonmoving open() failure via 40521 info even when enter aborted during FRAME_GAP_MS before dispatch", async () => {
+        jest.useFakeTimers();
+        try {
+            const radio = new Radio();
+            radio.infoReply = j15F231Frame;
+            let raw = "";
+            const recovery = new ControlRecoveryStore({read: () => raw, write: (next) => { raw = next; }});
+            const machine = new Machine(radio, {frameGapMs: 2000});
+            machine.installControlRecovery(recovery);
+            await machine.connect(studioIdentity.deviceId);
+            radio.emit(status(0x05));
+            const controls = new MachineControls(machine);
+
+            // Force ensureFreshControlState() to write 8022 right before attach so open()'s enter sleeps FRAME_GAP_MS.
+            radio.homeReply = status(0x41);
+            const opening = controls.open(studioIdentity, "grind").catch(() => {});
+            await jest.advanceTimersByTimeAsync(100);
+            expect(controls.getSnapshot().phase).toBe("entering");
+
+            // Drop link while 8006 is still waiting in FRAME_GAP_MS before dispatch.
+            radio.drop();
+            await opening;
+            expect(controls.getSnapshot().phase).toBe("unknown");
+            expect(recovery.snapshot.marker).toBeNull();
+
+            // Reconnect cleanly and reconcile with info-only 8100 reply (no 0x57 status frame).
+            await machine.connect(studioIdentity.deviceId);
+            radio.emit(status(MACHINE_STATE.IDLE));
+            const recovering = controls.recover();
+            await jest.advanceTimersByTimeAsync(2000);
+            await recovering;
+            expect(controls.getSnapshot().phase).toBe("closed");
+
+            controls.dispose();
+            await machine.disconnect();
+        } finally {
+            jest.useRealTimers();
+        }
+    });
+
+    it("keeps Studio setting pending armed across early 40521 info frames emitted before 8100 refreshInfo dispatches", async () => {
+        jest.useFakeTimers();
+        try {
+            const radio = new Radio();
+            radio.infoReply = j15F231Frame;
+            let raw = "";
+            const recovery = new ControlRecoveryStore({read: () => raw, write: (next) => { raw = next; }});
+            const machine = new Machine(radio, {frameGapMs: 2000});
+            machine.installControlRecovery(recovery);
+            await machine.connect(studioIdentity.deviceId);
+            radio.emit(status(MACHINE_STATE.IDLE));
+            const controls = new MachineControls(machine);
+
+            const tapInfo = machineInfoFrame({
+                serial: studioIdentity.serial, model: "", firmware: "V12.0D.500", waterFeed: 1
+            });
+            let saw4508 = false;
+            radio.syntheticWrite = (frame) => {
+                const code = frame[3] | (frame[4] << 8);
+                if (code === 4508) {
+                    saw4508 = true;
+                } else if (code === 8100 && saw4508) {
+                    radio.infoReply = tapInfo;
+                }
+            };
+
+            const applying = controls.applySetting(studioIdentity, "waterSource", "tap");
+            // First 8100 (inspect) runs immediately -> 4508 runs after 2000 ms.
+            await jest.advanceTimersByTimeAsync(2000);
+            expect(saw4508).toBe(true);
+            // Emit an early stale 40521 frame while 8100 refreshInfo is still sleeping in FRAME_GAP_MS.
+            await jest.advanceTimersByTimeAsync(100);
+            radio.emit(j15F231Frame);
+            await Promise.resolve();
+            // Advance remaining gap so refreshInfo sends 8100 and receives tapInfo.
+            await jest.advanceTimersByTimeAsync(2000);
+            await applying;
+            expect(controls.getSnapshot().phase).toBe("closed");
+            expect(controls.getSnapshot().settings?.waterSource).toBe("tap");
+
+            controls.dispose();
+            await machine.disconnect();
         } finally {
             jest.useRealTimers();
         }

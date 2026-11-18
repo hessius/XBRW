@@ -655,6 +655,12 @@ export default class MachineControls {
                     if (cancelled || epoch !== this.epoch || this.contextInvalid) throw new Error("Control transaction cancelled.");
                 };
                 checkCurrent();
+                let armedProtocol = false;
+                const armOnce = () => {
+                    if (armedProtocol) return;
+                    armedProtocol = true;
+                    plan.arm?.();
+                };
                 const dispatch = () => {
                     checkCurrent();
                     if (command.kind === "pour") {
@@ -665,11 +671,12 @@ export default class MachineControls {
                         lease.assertPourPreflight(this.qualification!.protocol.actualWaterSource(this.machine.info, this.machine.infoAt));
                     }
                     checkCurrent();
-                    if (!dispatched) plan.arm?.();
+                    const nextArmed = !plan.refreshInfo || Boolean(plan.inertRead);
+                    if (nextArmed) armOnce();
                     if (command.kind === "grind" || command.kind === "pour") this.run = tokens;
                     if (command.kind === "enter") this.telemetry = tokens;
                     dispatched = true;
-                    armed = !plan.refreshInfo || Boolean(plan.inertRead);
+                    armed = nextArmed;
                 };
                 if (plan.frame !== null) {
                     if (command.kind === "stop") await lease.sendStop(plan.frame, dispatch, checkCurrent);
@@ -679,10 +686,8 @@ export default class MachineControls {
                 if (plan.refreshInfo) {
                     const answered = await lease.refreshInfo(() => {
                         checkCurrent();
-                        if (!dispatched) {
-                            plan.arm?.();
-                            if (command.kind === "enter") this.telemetry = tokens;
-                        }
+                        armOnce();
+                        if (!dispatched && command.kind === "enter") this.telemetry = tokens;
                         dispatched = true;
                         armed = true;
                     }, checkCurrent);

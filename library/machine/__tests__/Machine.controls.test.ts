@@ -850,6 +850,22 @@ it("aborts ensureFreshControlState waitGap immediately when console send() or br
         await cancelling;
         await jest.advanceTimersByTimeAsync(FRAME_GAP_MS * 10);
         await brewing;
+
+        await machine.disconnect();
+        await machine.connect("one");
+        radio.emit(status(0x41));
+        const l3 = machine.acquireControlSession(identity, "scale");
+        await l3.send(buildType1(8003));
+        radio.emit(status(0x05));
+        l3.release();
+
+        radio.written = [];
+        const abortForBackground = machine.ensureFreshControlState();
+        await jest.advanceTimersByTimeAsync(100);
+        machine.setAppState("background");
+        await abortForBackground;
+        expect(radio.sent).toEqual([]);
+        machine.setAppState("active");
     } finally {
         jest.useRealTimers();
         await machine.disconnect();

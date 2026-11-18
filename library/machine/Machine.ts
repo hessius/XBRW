@@ -806,12 +806,15 @@ export default class Machine {
 
     setAppState(state: string | null): void {
         this.backgrounded = state !== "active";
-        if (this.backgrounded) this.slotSession?.invalidate(
-            new Error("Easy Mode writing stopped because the app entered the background.")
-        );
-        if (this.backgrounded) this.controlSession?.invalidate(
-            new ControlOperationError("Machine controls stopped because the app entered the background.")
-        );
+        if (this.backgrounded) {
+            this.controlStateAbort?.();
+            this.slotSession?.invalidate(
+                new Error("Easy Mode writing stopped because the app entered the background.")
+            );
+            this.controlSession?.invalidate(
+                new ControlOperationError("Machine controls stopped because the app entered the background.")
+            );
+        }
     }
 
     assertCanForgetDevice(deviceId: string): void {
