@@ -462,7 +462,7 @@ export default class Machine {
                 return;
             }
             if (this.state === null || !STARTABLE.has(this.state)
-                || Date.now() - this.stateAt > STATE_FRESH_MS) {
+                || (atAcquisition && Date.now() - this.stateAt > STATE_FRESH_MS)) {
                 refuse("Controls require a fresh known normal machine state.");
             }
         };

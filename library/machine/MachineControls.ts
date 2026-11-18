@@ -256,9 +256,9 @@ export default class MachineControls {
             bound,
             unavailable,
             // Stop does not use Start's normal-state or water preflight.
-            stopUnavailable: !bound ? "Reconnect and reconcile the exact named machine before stopping."
-                : this.snapshot.phase === "unknown" && marker == null
-                    ? "No moving operation is reserved. Reconcile this machine before continuing." : null,
+            stopUnavailable: this.snapshot.phase === "unknown" && marker == null
+                ? "No moving operation is reserved. Reconcile this machine before continuing."
+                : !bound ? "Reconnect and reconcile the exact named machine before stopping." : null,
             recoverable: !this.disposed && toolQualified && recoveryMatches
                 && actual?.deviceId === identity.deviceId && actual.serial === identity.serial
                 && ["closed", "unknown"].includes(this.snapshot.phase),

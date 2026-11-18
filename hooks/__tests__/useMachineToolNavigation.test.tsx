@@ -295,6 +295,7 @@ it.each(["entry", "apply"] as const)("fails visibly safe after %s uncertainty wi
     else await expect(s.controls.applySetting(identity, "brightness", 3)).rejects.toThrow(/missing/i);
     const hook = await renderHook(() => useMachineToolNavigation(identity, s.controls));
     await act(async () => { back(); });
+    expect(hook.result.current.prompt?.requiresStop).toBe(false);
     await act(async () => { await hook.result.current.prompt!.stopAndLeave(); });
     expect(hook.result.current.prompt?.error).toMatch(/cannot close|no owned moving/i);
     expect(s.machine.controlBlocker).not.toBeNull();

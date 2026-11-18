@@ -69,7 +69,7 @@ function ToolScreen({identity, tool, name, injected}: {
                         error={owns ? snapshot.error : null} animationEnabled={animationEnabled}
                         onRequestChange={state.setGrind} onStart={state.start} onStop={state.stop}/>}
                     {tool === "scale" && <ScaleTool grams={bound ? snapshot.cupGrams : null}
-                        unavailable={unavailable}
+                        unavailable={unavailable} disabled={phase !== "ready"}
                         tarePending={phase === "applying"} onTare={state.tare}/>}
                     {tool === "pour" && <PourTool phase={phase} request={pour}
                         policy={support.pour} dispensedMl={bound ? snapshot.dispensedMl : null}

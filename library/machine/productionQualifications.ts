@@ -69,6 +69,7 @@ export class StudioControlProtocol implements ControlProtocol {
     private enterTokens: ControlTokens | null = null;
     private runTokens: ControlTokens | null = null;
     private activeTool: ToolId | null = null;
+    private movingStarted = false;
 
     actualWaterSource(info: MachineInfo | null): "tank" | "tap" | null {
         if (!info) return null;
@@ -98,6 +99,7 @@ export class StudioControlProtocol implements ControlProtocol {
             this.activeTool = command.tool;
             this.enterTokens = tokens;
             this.runTokens = null;
+            this.movingStarted = false;
             return {frame, deadlineMs: 10000};
         }
         if (command.kind === "exit") {
@@ -105,6 +107,7 @@ export class StudioControlProtocol implements ControlProtocol {
             this.pending = {command, tokens};
             this.enterTokens = null;
             this.runTokens = null;
+            this.movingStarted = false;
             return {frame, deadlineMs: 10000};
         }
         if (command.kind === "stop") {
@@ -119,6 +122,7 @@ export class StudioControlProtocol implements ControlProtocol {
         }
         if (command.kind === "grind") {
             this.pending = {command, tokens};
+            this.movingStarted = true;
             return {
                 frame: buildType1(3500, [
                     1000,
@@ -132,6 +136,7 @@ export class StudioControlProtocol implements ControlProtocol {
             const {request} = command;
             const volumeMl = request.mode === "target" ? Math.round(request.volumeMl) : 0;
             this.pending = {command, tokens};
+            this.movingStarted = true;
             return {
                 frame: buildType1(4506, [
                     Math.round(request.temperatureC * 10),
@@ -277,11 +282,13 @@ export class StudioControlProtocol implements ControlProtocol {
             if (this.activeTool === "grind" && parsed.kind === "event" && parsed.code === 40507) {
                 const tokens = this.runTokens;
                 this.runTokens = null;
+                this.movingStarted = false;
                 return {...tokens, value: {kind: "terminal"}};
             }
             if (this.activeTool === "pour" && parsed.kind === "event" && (parsed.code === 40511 || parsed.code === 9006)) {
                 const tokens = this.runTokens;
                 this.runTokens = null;
+                this.movingStarted = false;
                 return {...tokens, value: {kind: "terminal"}};
             }
         }
@@ -320,6 +327,7 @@ export class StudioControlProtocol implements ControlProtocol {
                     this.activeTool = null;
                     this.enterTokens = null;
                     this.runTokens = null;
+                    this.movingStarted = false;
                     return {...tokens, value: {kind: "closed"}};
                 }
                 return null;
@@ -386,6 +394,7 @@ export class StudioControlProtocol implements ControlProtocol {
                 );
                 if (terminalEvent || terminalStatus) {
                     this.runTokens = null;
+                    this.movingStarted = false;
                     return {...tokens, value: {kind: "terminal"}};
                 }
                 return null;
@@ -397,6 +406,7 @@ export class StudioControlProtocol implements ControlProtocol {
                             this.runTokens = null;
                             this.enterTokens = null;
                             this.activeTool = null;
+                            this.movingStarted = false;
                             return {
                                 ...tokens,
                                 value: {kind: command.tool === "scale" ? "closed" : "terminal"}
@@ -408,13 +418,10 @@ export class StudioControlProtocol implements ControlProtocol {
                             return {...tokens, value: {kind: "active"}};
                         }
                     }
-                    if (parsed.kind === "info" && this.runTokens === null) {
+                    if (parsed.kind === "info" && this.activeTool !== null && !this.movingStarted && this.runTokens === null) {
                         this.enterTokens = null;
                         this.activeTool = null;
-                        return {
-                            ...tokens,
-                            value: {kind: command.tool === "scale" ? "closed" : "terminal"}
-                        };
+                        return {...tokens, value: {kind: "closed"}};
                     }
                     return null;
                 }

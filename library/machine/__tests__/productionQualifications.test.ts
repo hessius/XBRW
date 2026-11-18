@@ -1,6 +1,7 @@
 import Machine from "@/library/machine/Machine";
 import MachineControls from "@/library/machine/MachineControls";
 import {ControlRecoveryStore} from "@/library/machine/controlRecovery";
+import {StudioControlProtocol} from "@/library/machine/productionQualifications";
 import {MACHINE_STATE, buildType1, buildType2} from "@/library/machine/protocol";
 import {FakeTransport} from "@/library/machine/__tests__/FakeTransport";
 import {event, notification, status} from "@/library/machine/__tests__/protocolFixtures";
@@ -261,5 +262,39 @@ describe("Studio production qualifications", () => {
         expect(s.controls.describeSettings(studioIdentity, "pourRadius").reading).toBe("unavailable");
         expect(s.controls.describeSettings(studioIdentity, "vibrationAmplitude").reading).toBe("unavailable");
         s.controls.dispose();
+    });
+
+    it("requires status proof for moving or cold-start recovery inspect while closing nonmoving sessions on 40521 info", async () => {
+        const protocol = new StudioControlProtocol();
+        const tokens = {session: 1, transaction: 1};
+
+        // Cold-start recovery (activeTool === null): info frame must not clear a moving marker
+        protocol.plan({kind: "inspect", tool: "grind", recovery: true}, tokens);
+        expect(protocol.decode(Uint8Array.from(j15F231Frame))).toBeNull();
+        expect(protocol.decode(Uint8Array.from(status(MACHINE_STATE.IDLE)))).toEqual({
+            ...tokens,
+            value: {kind: "terminal"}
+        });
+
+        // Planned moving operation (movingStarted === true, even before start ACK): info frame must be ignored
+        protocol.plan({kind: "enter", tool: "grind"}, tokens);
+        expect(protocol.decode(Uint8Array.from(event(8006)))).toEqual({...tokens, value: {kind: "ready"}});
+        protocol.plan({kind: "grind", request: {grindSize: 60, rpm: 80}}, {session: 1, transaction: 2});
+        protocol.plan({kind: "inspect", tool: "grind", recovery: true}, {session: 1, transaction: 3});
+        expect(protocol.decode(Uint8Array.from(j15F231Frame))).toBeNull();
+        expect(protocol.decode(Uint8Array.from(status(MACHINE_STATE.IDLE)))).toEqual({
+            session: 1,
+            transaction: 3,
+            value: {kind: "terminal"}
+        });
+
+        // Nonmoving active tool session (enter uncertainty, movingStarted === false): info closes cleanly
+        protocol.plan({kind: "enter", tool: "grind"}, {session: 2, transaction: 1});
+        protocol.plan({kind: "inspect", tool: "grind", recovery: true}, {session: 2, transaction: 2});
+        expect(protocol.decode(Uint8Array.from(j15F231Frame))).toEqual({
+            session: 2,
+            transaction: 2,
+            value: {kind: "closed"}
+        });
     });
 });

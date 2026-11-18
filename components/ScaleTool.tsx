@@ -7,10 +7,11 @@ export type ScaleToolProps = {
     grams: number | null;
     unavailable: string | null;
     tarePending: boolean;
+    disabled?: boolean;
     onTare: () => void;
 };
 
-export default function ScaleTool({grams, unavailable, tarePending, onTare}: ScaleToolProps) {
+export default function ScaleTool({grams, unavailable, tarePending, disabled = false, onTare}: ScaleToolProps) {
     const {palette, primary} = useAppearance();
     return (
         <YStack gap="$5" flex={1} minHeight={0}>
@@ -20,7 +21,7 @@ export default function ScaleTool({grams, unavailable, tarePending, onTare}: Sca
                     {unavailable !== null && <Text color={palette.muted}>{unavailable}</Text>}
                 </YStack>
             </ScrollView>
-            <Button accessibilityRole="button" disabled={unavailable !== null || tarePending}
+            <Button accessibilityRole="button" disabled={disabled || unavailable !== null || tarePending}
                 accessibilityState={{busy: tarePending}} onPress={onTare}
                 backgroundColor={primary.fill} color={primary.ink}
                 minHeight={48} height="auto" padding="$3" marginTop="auto">

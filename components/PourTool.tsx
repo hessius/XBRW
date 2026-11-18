@@ -98,12 +98,8 @@ export default function PourTool({
                         policy={policy?.flowMlPerSecond ?? null} editable={editable}
                         onChange={(flowMlPerSecond) => { if (request) onRequestChange({...request, flowMlPerSecond}); }}/>
                     <YStack gap="$2">
-                        {!(editable || temperatureEditable) ? (
+                        {!(editable || temperatureEditable) && (
                             <MachineControlReadout label="SETPOINT" value={shownTemperature} unit="°C" prominent={false}/>
-                        ) : (
-                            <YStack accessible accessibilityRole="text"
-                                accessibilityLabel={`SETPOINT: ${shownTemperature !== null ? `${shownTemperature} °C` : "Unavailable"}`}
-                                height={0} overflow="hidden"/>
                         )}
                         {(editable || temperatureEditable) && <MachineNumericControl label="Setpoint"
                             value={shownTemperature} unit="°C" policy={policy?.temperatureC ?? null} editable

@@ -513,7 +513,7 @@ it.each(["grind", "scale", "pour"] as const)("selects the qualified %s instrumen
     await waitFor(() => expect(s.controls.getSnapshot()).toMatchObject({phase: "ready", tool, identity}));
     expect(s.sent.map(item => item.command.kind)).toEqual(["enter"]);
     if (tool === "grind") expect(screen.getByLabelText("SELECTED SIZE: 1")).toBeTruthy();
-    if (tool === "pour") expect(screen.getByLabelText("SETPOINT: 40 °C")).toBeTruthy();
+    if (tool === "pour") expect(screen.getByLabelText("TARGET VOLUME: 10 ml")).toBeTruthy();
     if (tool === "scale") expect(screen.getByLabelText("WEIGHT: Unavailable")).toBeTruthy();
     await view.unmount();
     view = await renderWithProviders(<MachineToolScreen controls={s.controls}/>);

@@ -19,7 +19,8 @@ function moving(snapshot: ControlSnapshot, controls: MachineControls): boolean {
     if (snapshot.phase === "starting" || snapshot.phase === "running" || snapshot.phase === "stopping") return true;
     return snapshot.phase === "unknown"
         && snapshot.identity !== null
-        && controls.describeTool(snapshot.identity, snapshot.tool).stopUnavailable !== "No owned moving operation to stop.";
+        && controls.describeTool(snapshot.identity, snapshot.tool).stopUnavailable
+            !== "No moving operation is reserved. Reconcile this machine before continuing.";
 }
 
 /**
