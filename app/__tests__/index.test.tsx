@@ -1779,7 +1779,7 @@ describe("HomeScreen, opening one editor at a time", () => {
         // Vitals seeded from machine.info, not waiting for an onLink event.
         expect(screen.getByText("WATER")).toBeTruthy();
         expect(screen.getByText("PRO")).toBeTruthy();
-        expect(screen.getByText("62")).toBeTruthy();
+        expect(screen.queryByText("GRIND")).toBeNull();
     });
 
     it("keeps the reading's age fixed on refresh until the machine answers (task 8)", async () => {
@@ -3643,8 +3643,7 @@ describe("switching machines from the home screen", () => {
         expect(mockPush).toHaveBeenLastCalledWith({
             pathname: "/machineTool", params: {machineId: "HOME", tool: "grind"}
         });
-        await fireEvent.press(screen.getByRole("button", {name: "Machine settings and tools"}));
-        expect(mockPush).toHaveBeenLastCalledWith({pathname: "/machineHome", params: {machineId: "HOME"}});
+        expect(screen.queryByRole("button", {name: "Machine settings and tools"})).toBeNull();
         expect(mockChooseMachine).not.toHaveBeenCalled();
     });
 
@@ -3653,8 +3652,7 @@ describe("switching machines from the home screen", () => {
         await renderWithProviders(<HomeScreen db={store([])} settings={new Settings(memoryStorage())}/>);
         await fireEvent.press(screen.getByLabelText("Machine not connected"));
         expect(screen.queryByRole("button", {name: "Grind"})).toBeNull();
-        await fireEvent.press(screen.getByRole("button", {name: "Machine settings and tools"}));
-        expect(mockPush).toHaveBeenLastCalledWith("/settings");
+        expect(screen.queryByRole("button", {name: "Machine settings and tools"})).toBeNull();
         await fireEvent.press(screen.getByLabelText("Easy Mode slots"));
         expect(mockPush).toHaveBeenLastCalledWith("/settings");
         expect(mockChooseMachine).not.toHaveBeenCalled();

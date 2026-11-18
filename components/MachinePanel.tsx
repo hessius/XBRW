@@ -36,7 +36,6 @@ type Props = {
     onEasyMode?: () => void;
     /** A known saved machine in use, never the ambient Bluetooth peer. */
     machineId?: string;
-    onOpenMachine?: () => void;
     /**
      * The active machine's name, with two or more saved. Absent with one or
      * none, and the panel then looks exactly as it did before the list.
@@ -199,7 +198,7 @@ function RefreshButton({accent, onRefresh}: {
  */
 export default function MachinePanel({
     open, status, accent, vitals, now, onRefreshWater, onConnect, onEasyMode,
-    machineLabel, machineModel, machineColour, onChooseMachine, machineId, onOpenMachine
+    machineLabel, machineModel, machineColour, onChooseMachine, machineId
 }: Props) {
     const appearance = useAppearance();
     const {palette} = appearance;
@@ -230,11 +229,6 @@ export default function MachinePanel({
                     <DotMatrixText fontSize={18} weight="bold"
                                    color={vitals.mode === "EASY" ? palette.warn : palette.text}>
                         {vitals.mode}
-                    </DotMatrixText>
-                </Row>
-                <Row label="GRIND">
-                    <DotMatrixText fontSize={18} weight="bold" color={palette.text}>
-                        {String(vitals.grindSize)}
                     </DotMatrixText>
                 </Row>
                 <RefreshButton accent={accent} onRefresh={onRefreshWater} />
@@ -347,23 +341,6 @@ export default function MachinePanel({
                             <DotMatrixText fontSize={11} weight="bold" letterSpacing={2}
                                            color={accent}>
                                 A B C · EASY MODE
-                            </DotMatrixText>
-                        </XStack>
-                    </Pressable>
-                )}
-                {onOpenMachine !== undefined && (
-                    <Pressable accessibilityRole="button"
-                               accessibilityLabel="Machine settings and tools"
-                               onPress={onOpenMachine}
-                               style={({pressed}) => ({opacity: pressed ? 0.6 : 1})}>
-                        <XStack testID="machine-settings-entry" minHeight={44} alignItems="center"
-                                justifyContent="center" marginTop="$2"
-                                paddingVertical="$2.5" borderRadius="$4"
-                                borderWidth={1} borderColor={accent}
-                                pressStyle={{opacity: 0.6, backgroundColor: palette.raised}}>
-                            <DotMatrixText fontSize={11} weight="bold" letterSpacing={2}
-                                           color={accent}>
-                                MACHINE SETTINGS AND TOOLS
                             </DotMatrixText>
                         </XStack>
                     </Pressable>

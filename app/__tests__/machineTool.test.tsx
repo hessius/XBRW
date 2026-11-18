@@ -541,7 +541,7 @@ it("keeps the production registry unavailable and never infers scale from other 
 
 it("pre-seeds an editable proposal and starts deliberately, preserving the request after Stop without restarting", async () => {
     const s = await prepare();
-    expect(screen.getByText(/editable proposal, not the machine/)).toBeTruthy();
+    expect(screen.queryByText("READY")).toBeNull();
     await press("Start");
     expect(s.controls.getSnapshot()).toMatchObject({phase: "running", grindRequest: {grindSize: 1, rpm: 100}});
     await press("Stop");
@@ -697,18 +697,26 @@ it("seeds Studio Grind size from 40521 dial and closes idle tool cleanly without
     let exitSent = false;
     s.radio.syntheticWrite = frame => {
         const code = frame[3] | (frame[4] << 8);
-        if (code === 8006) s.radio.emit(event(8006));
+        if (code === 8006) {
+            s.radio.emit(status(0x02));
+            s.radio.emit(event(8006));
+        }
+        if (code === 3500 || code === 3505) s.radio.emit(event(code));
         if (code === 8012) exitSent = true;
     };
     await renderWithProviders(<MachineToolScreen controls={s.controls}/>);
     await waitFor(() => expect(s.controls.getSnapshot().phase).toBe("ready"));
     expect(screen.getByLabelText("SELECTED SIZE: 62")).toBeTruthy();
+    await press("Start");
+    await waitFor(() => expect(s.controls.getSnapshot().phase).toBe("running"));
+    await press("Stop");
+    await waitFor(() => expect(s.controls.getSnapshot().phase).toBe("ready"));
     await press("Back");
     expect(exitSent).toBe(true);
     expect(screen.queryByText("Leave tool?")).toBeNull();
     expect(screen.queryByText("Waiting for confirmation…")).toBeNull();
     await act(async () => {
-        s.radio.emit(event(8012));
+        s.radio.emit(status(0x41));
         await flushControls();
     });
     expect(mockBack).toHaveBeenCalledTimes(1);

@@ -63,18 +63,13 @@ function ToolScreen({identity, tool, name, injected}: {
                             <Button accessibilityRole="button" disabled={busy}
                                 onPress={state.reconnect}>Reconnect named machine</Button>
                         </>}
-                        {bound && phase === "ready" && tool !== "scale" && (
-                            <Text color={palette.muted}>
-                                Selected values are an editable proposal, not the machine’s current settings. Start is always deliberate.
-                            </Text>
-                        )}
                     </ScrollView>
                     {tool === "grind" && <GrindTool phase={phase} request={grind}
                         policy={support.grind} unavailable={unavailable} stopUnavailable={support.stopUnavailable}
                         error={owns ? snapshot.error : null} animationEnabled={animationEnabled}
                         onRequestChange={state.setGrind} onStart={state.start} onStop={state.stop}/>}
                     {tool === "scale" && <ScaleTool grams={bound ? snapshot.cupGrams : null}
-                        unavailable={unavailable ?? (phase !== "ready" ? "Scale is not ready." : null)}
+                        unavailable={unavailable}
                         tarePending={phase === "applying"} onTare={state.tare}/>}
                     {tool === "pour" && <PourTool phase={phase} request={pour}
                         policy={support.pour} dispensedMl={bound ? snapshot.dispensedMl : null}

@@ -98,24 +98,24 @@ export class StudioControlProtocol implements ControlProtocol {
             this.activeTool = command.tool;
             this.enterTokens = tokens;
             this.runTokens = null;
-            return {frame, deadlineMs: 4000};
+            return {frame, deadlineMs: 10000};
         }
         if (command.kind === "exit") {
             const frame = this.encodeExit(command.tool);
             this.pending = {command, tokens};
             this.enterTokens = null;
             this.runTokens = null;
-            return {frame, deadlineMs: 4000};
+            return {frame, deadlineMs: 10000};
         }
         if (command.kind === "stop") {
             const tool = command.tool ?? this.activeTool;
             if (tool !== "grind" && tool !== "pour") throw new Error("Unsupported stop target.");
             this.pending = {command, tokens};
-            return {frame: buildType1(tool === "grind" ? 3505 : 4507), deadlineMs: 4000};
+            return {frame: buildType1(tool === "grind" ? 3505 : 4507), deadlineMs: 10000};
         }
         if (command.kind === "tare") {
             this.pending = {command, tokens};
-            return {frame: buildType1(8500), deadlineMs: 4000};
+            return {frame: buildType1(8500), deadlineMs: 10000};
         }
         if (command.kind === "grind") {
             this.pending = {command, tokens};
@@ -125,7 +125,7 @@ export class StudioControlProtocol implements ControlProtocol {
                     Math.round(command.request.grindSize),
                     Math.round(command.request.rpm)
                 ]),
-                deadlineMs: 4000
+                deadlineMs: 10000
             };
         }
         if (command.kind === "pour") {
@@ -139,21 +139,21 @@ export class StudioControlProtocol implements ControlProtocol {
                     volumeMl,
                     floatBitsToInt32(request.flowMlPerSecond * 10)
                 ]),
-                deadlineMs: 4000
+                deadlineMs: 10000
             };
         }
         if (command.kind === "temperature") {
             this.pending = {command, tokens};
             return {
                 frame: buildType1(4510, [Math.round(command.celsius * 10)]),
-                deadlineMs: 4000
+                deadlineMs: 10000
             };
         }
         if (command.kind === "pattern") {
             this.pending = {command, tokens};
             return {
                 frame: buildType1(8016, [PATTERN_CODE[command.pattern]]),
-                deadlineMs: 4000
+                deadlineMs: 10000
             };
         }
         if (command.kind === "inspect") {
@@ -164,7 +164,7 @@ export class StudioControlProtocol implements ControlProtocol {
                         frame: buildType2(11508, new Uint8Array(0)),
                         refreshInfo: false,
                         inertRead: true,
-                        deadlineMs: 4000
+                        deadlineMs: 10000
                     };
                 }
                 if (command.settingId === "pourRadius") {
@@ -173,7 +173,7 @@ export class StudioControlProtocol implements ControlProtocol {
                         frame: buildType2(11506, new Uint8Array(0)),
                         refreshInfo: true,
                         inertRead: true,
-                        deadlineMs: 4000
+                        deadlineMs: 12000
                     };
                 }
             }
@@ -181,7 +181,7 @@ export class StudioControlProtocol implements ControlProtocol {
             return {
                 frame: null,
                 refreshInfo: true,
-                deadlineMs: 4000
+                deadlineMs: 12000
             };
         }
         if (command.kind === "setting") {
@@ -191,7 +191,7 @@ export class StudioControlProtocol implements ControlProtocol {
             return {
                 frame,
                 refreshInfo: !tuning,
-                deadlineMs: 4000
+                deadlineMs: tuning ? 10000 : 12000
             };
         }
         throw new Error(`Unsupported control command: ${String((command as {kind: unknown}).kind)}`);
@@ -315,7 +315,8 @@ export class StudioControlProtocol implements ControlProtocol {
             }
             case "exit": {
                 const exitCode = command.tool === "scale" ? 8014 : command.tool === "grind" ? 8012 : 8013;
-                if (parsed.kind === "event" && parsed.code === exitCode) {
+                if ((parsed.kind === "event" && parsed.code === exitCode)
+                    || (parsed.kind === "status" && (parsed.state === 0x01 || parsed.state === 0x41))) {
                     this.activeTool = null;
                     this.enterTokens = null;
                     this.runTokens = null;
@@ -378,7 +379,11 @@ export class StudioControlProtocol implements ControlProtocol {
                         : tool === "pour" ? (parsed.code === 4507 || parsed.code === 40511 || parsed.code === 9006)
                             : false
                 );
-                const terminalStatus = parsed.kind === "status" && (parsed.state === 0x01 || parsed.state === 0x41);
+                const terminalStatus = parsed.kind === "status" && (
+                    parsed.state === 0x01 || parsed.state === 0x41
+                    || (tool === "grind" && parsed.state === 0x02)
+                    || (tool === "pour" && parsed.state === 0x03)
+                );
                 if (terminalEvent || terminalStatus) {
                     this.runTokens = null;
                     return {...tokens, value: {kind: "terminal"}};
@@ -402,6 +407,14 @@ export class StudioControlProtocol implements ControlProtocol {
                             || parsed.state === 0x04 || parsed.state === 0x05) {
                             return {...tokens, value: {kind: "active"}};
                         }
+                    }
+                    if (parsed.kind === "info" && this.runTokens === null) {
+                        this.enterTokens = null;
+                        this.activeTool = null;
+                        return {
+                            ...tokens,
+                            value: {kind: command.tool === "scale" ? "closed" : "terminal"}
+                        };
                     }
                     return null;
                 }

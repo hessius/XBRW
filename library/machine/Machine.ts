@@ -445,7 +445,7 @@ export default class Machine {
             listeners.forEach((listener) => listener(error));
             this.announceLink();
         };
-        const assertAvailable = (requireNormal: boolean) => {
+        const assertAvailable = (requireNormal: boolean, atAcquisition = true) => {
             if (this.backgrounded || this.slotSession !== null
                 || this.slotStore?.read(pinned.deviceId).journal != null
                 || this.unsettledCommand
@@ -453,12 +453,20 @@ export default class Machine {
                 || isActiveBrewPhase(this.phase) || this.phase.name === "lostContact") {
                 refuse("The machine is busy or unavailable for controls.");
             }
-            if (requireNormal && (this.state === null || !STARTABLE.has(this.state)
-                || Date.now() - this.stateAt > STATE_FRESH_MS)) {
+            if (!requireNormal) return;
+            if (!atAcquisition && (purpose === "grind" || purpose === "pour")) {
+                const toolReadyState = purpose === "grind" ? 0x02 : 0x03;
+                if (this.state === null || (!STARTABLE.has(this.state) && this.state !== toolReadyState)) {
+                    refuse("Controls require a fresh known normal machine state.");
+                }
+                return;
+            }
+            if (this.state === null || !STARTABLE.has(this.state)
+                || Date.now() - this.stateAt > STATE_FRESH_MS) {
                 refuse("Controls require a fresh known normal machine state.");
             }
         };
-        assertAvailable(purpose !== "recovery" && !inspectionOnly);
+        assertAvailable(purpose !== "recovery" && !inspectionOnly, true);
         const check = () => {
             if (failure !== null) throw failure;
             const current = this.slotIdentity;
@@ -542,7 +550,7 @@ export default class Machine {
                     if (inspectionOnly) refuse("Nonmoving recovery permits inspection only.");
                     if (purpose === "recovery") refuse("Recovery cannot start tools or change settings.");
                     if (store.snapshot.error !== null) throw store.snapshot.error;
-                    if (purpose === "setting") assertAvailable(true);
+                    if (purpose === "setting") assertAvailable(true, false);
                 };
                 await sendFrame(frame, guard, beforeDispatch);
             }),
@@ -566,7 +574,7 @@ export default class Machine {
                 if (inspectionOnly) refuse("Nonmoving recovery permits inspection only.");
                 if (purpose !== "pour") refuse("Only a fresh pour session can prepare a pour.");
                 if (store.snapshot.error !== null) throw store.snapshot.error;
-                assertAvailable(true);
+                assertAvailable(true, false);
                 // The caller supplies a qualified actual-source reading. The
                 // info frame's waterFeed field is not that qualification.
                 if (source !== "tap" && (source !== "tank" || !this.infoIsFresh()
@@ -578,7 +586,7 @@ export default class Machine {
                 check();
                 if (inspectionOnly) refuse("Nonmoving recovery permits inspection only.");
                 if (purpose !== "grind" && purpose !== "pour") refuse("Only grind or pour can reserve a possible start.");
-                assertAvailable(true);
+                assertAvailable(true, false);
                 store.reserve({version: 1, ...pinned, tool: purpose as "grind" | "pour"});
                 check();
             },

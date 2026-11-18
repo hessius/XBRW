@@ -1,5 +1,6 @@
 import React from "react";
 import {Button, ScrollView, Text, XStack, YStack} from "tamagui";
+import DotMatrixText from "@/components/DotMatrixText";
 import MachineControlReadout, {MachineNumericControl, MachineToolActions} from "@/components/MachineControlReadout";
 import PourGlyph from "@/components/PourGlyph";
 import {useAppearance} from "@/hooks/useAppearance";
@@ -64,17 +65,22 @@ export default function PourTool({
             : !valid ? "The selected pour is outside the qualified policy." : null);
     const shownTemperature = active ? temperatureC : request?.temperatureC ?? null;
     const shownPattern = active ? pattern : request?.pattern ?? null;
+    const showPhase = ["starting", "running", "stopping", "unknown"].includes(phase);
     return (
         <YStack gap="$4" flex={1} minHeight={0}>
-            <Text color={palette.muted}>{phase === "running" ? "POURING" : phase.toUpperCase()}</Text>
+            {showPhase && <DotMatrixText fontSize={12} weight="bold" letterSpacing={1.6} color={palette.muted}>
+                {phase === "running" ? "POURING" : phase.toUpperCase()}
+            </DotMatrixText>}
             <ScrollView testID="pour-tool-fields" flex={1} minHeight={0}>
-                <YStack gap="$5" paddingBottom="$4">
+                <YStack gap="$3" paddingBottom="$4">
                     {request?.mode === "target" && <MachineControlReadout
                         label={active ? "DISPENSED" : "TARGET VOLUME"}
                         value={active ? dispensedMl : request.volumeMl} unit="ml"/>}
-                    <YStack gap="$2">
-                        <Text color={palette.muted}>MODE</Text>
-                        <Text color={palette.text}>{request?.mode === "target" ? "Target" : request?.mode === "continuous" ? "Continuous" : "Unavailable"}</Text>
+                    <YStack gap="$2" paddingVertical="$2" borderBottomWidth={1} borderBottomColor={palette.line}>
+                        <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.6} color={palette.muted}>MODE</DotMatrixText>
+                        {!editable && <Text color={palette.text}>
+                            {request?.mode === "target" ? "Target" : request?.mode === "continuous" ? "Continuous" : "Unavailable"}
+                        </Text>}
                         {editable && <XStack flexWrap="wrap" gap="$2">
                             {policy?.modes.map((mode) => <Button key={mode} accessibilityRole="button"
                                 accessibilityState={{selected: request?.mode === mode}} onPress={() => onModeChange(mode)}
@@ -92,7 +98,13 @@ export default function PourTool({
                         policy={policy?.flowMlPerSecond ?? null} editable={editable}
                         onChange={(flowMlPerSecond) => { if (request) onRequestChange({...request, flowMlPerSecond}); }}/>
                     <YStack gap="$2">
-                        <MachineControlReadout label="SETPOINT" value={shownTemperature} unit="°C" prominent={false}/>
+                        {!(editable || temperatureEditable) ? (
+                            <MachineControlReadout label="SETPOINT" value={shownTemperature} unit="°C" prominent={false}/>
+                        ) : (
+                            <YStack accessible accessibilityRole="text"
+                                accessibilityLabel={`SETPOINT: ${shownTemperature !== null ? `${shownTemperature} °C` : "Unavailable"}`}
+                                height={0} overflow="hidden"/>
+                        )}
                         {(editable || temperatureEditable) && <MachineNumericControl label="Setpoint"
                             value={shownTemperature} unit="°C" policy={policy?.temperatureC ?? null} editable
                             onChange={(value) => {
@@ -105,12 +117,12 @@ export default function PourTool({
                         {pendingTemperatureC !== null && <Text color={palette.muted}>Pending setpoint: {pendingTemperatureC} °C</Text>}
                         {liveTemperature?.qualified && liveTemperature.error !== null && <Text color={palette.danger}>{liveTemperature.error}</Text>}
                     </YStack>
-                    <YStack gap="$2">
-                        <Text color={palette.muted}>PATTERN</Text>
-                        {shownPattern === null ? <Text color={palette.muted}>Unavailable</Text> : <XStack alignItems="center" gap="$2">
+                    <YStack gap="$2" paddingTop="$2">
+                        <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.6} color={palette.muted}>PATTERN</DotMatrixText>
+                        {!(editable || patternEditable) && (shownPattern === null ? <Text color={palette.muted}>Unavailable</Text> : <XStack alignItems="center" gap="$2">
                             <PourGlyph kind={shownPattern} accent={palette.text}/>
                             <Text color={palette.text}>{PATTERN_LABELS[shownPattern]}</Text>
-                        </XStack>}
+                        </XStack>)}
                         {(editable || patternEditable) && <XStack flexWrap="wrap" gap="$2">
                             {policy?.patterns.map((choice) => <Button key={choice} accessibilityRole="button"
                                 accessibilityLabel={PATTERN_LABELS[choice]} accessibilityState={{selected: choice === shownPattern}}

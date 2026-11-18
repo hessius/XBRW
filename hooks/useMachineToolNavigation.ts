@@ -14,9 +14,12 @@ type Departure = {
     exit: () => void;
 };
 type Prompt = {request: Departure; busy: boolean; error: string | null};
-function moving(snapshot: ControlSnapshot): boolean {
-    return (snapshot.tool === "grind" || snapshot.tool === "pour")
-        && ["starting", "running", "stopping", "unknown"].includes(snapshot.phase);
+function moving(snapshot: ControlSnapshot, controls: MachineControls): boolean {
+    if (snapshot.tool !== "grind" && snapshot.tool !== "pour") return false;
+    if (snapshot.phase === "starting" || snapshot.phase === "running" || snapshot.phase === "stopping") return true;
+    return snapshot.phase === "unknown"
+        && snapshot.identity !== null
+        && controls.describeTool(snapshot.identity, snapshot.tool).stopUnavailable !== "No owned moving operation to stop.";
 }
 
 /**
@@ -86,7 +89,7 @@ export function useMachineToolNavigation(
             if (mode === "setting" && controls.getSnapshot().phase === "unknown") {
                 await controls.recover();
             }
-            if (moving(controls.getSnapshot())) await controls.stop();
+            if (moving(controls.getSnapshot(), controls)) await controls.stop();
             // A recovery-only Stop closes its lease on terminal proof; an
             // ordinary tool still requires its separate qualified exit.
             if (!current(request, true)) return;
@@ -145,7 +148,7 @@ export function useMachineToolNavigation(
         busy: state.busy || snapshot.phase === "applying",
         error: state.error ?? snapshot.error,
         requiresReconciliation: mode === "setting" && snapshot.tool === null && snapshot.phase === "unknown",
-        requiresStop: moving(snapshot),
+        requiresStop: moving(snapshot, controls),
         stopAndLeave: () => leave(state.request),
         stay: () => stay(state.request),
         onOpenChange: (open: boolean) => { if (!open) stay(state.request); }

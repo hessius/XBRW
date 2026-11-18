@@ -1,5 +1,6 @@
 import React from "react";
 import {ScrollView, Text, YStack} from "tamagui";
+import DotMatrixText from "@/components/DotMatrixText";
 import GrindActivityBand from "@/components/GrindActivityBand";
 import MachineControlReadout, {MachineNumericControl, MachineToolActions} from "@/components/MachineControlReadout";
 import {useAppearance} from "@/hooks/useAppearance";
@@ -35,11 +36,14 @@ export default function GrindTool({
     const explanation = unavailable ?? (policy === null ? "Grind is not qualified for this machine."
         : request === null ? "Select a qualified grind size and RPM before starting."
             : !valid ? "The selected grind size or RPM is outside the qualified policy." : null);
+    const showPhase = ["starting", "running", "stopping", "unknown"].includes(phase);
     return (
         <YStack gap="$4" flex={1} minHeight={0}>
-            <Text color={palette.muted}>{phase === "running" ? "GRINDING" : phase.toUpperCase()}</Text>
+            {showPhase && <DotMatrixText fontSize={12} weight="bold" letterSpacing={1.6} color={palette.muted}>
+                {phase === "running" ? "GRINDING" : phase.toUpperCase()}
+            </DotMatrixText>}
             <ScrollView testID="grind-tool-fields" flex={1} minHeight={0}>
-                <YStack gap="$5" paddingBottom="$4">
+                <YStack gap="$3" paddingBottom="$4">
                     <MachineControlReadout label="SELECTED SIZE" value={request?.grindSize ?? null}/>
                     <GrindActivityBand running={phase === "running"} rpm={request?.rpm ?? null} animationEnabled={animationEnabled}/>
                     <MachineNumericControl label="Grind size" value={request?.grindSize ?? null}
