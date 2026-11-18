@@ -11,7 +11,7 @@ import type {ControlCommand, ControlFeedback, ControlTokens} from "@/library/mac
 import type {SavedMachine} from "@/library/machine/savedMachines";
 import {buildType1, MACHINE_STATE} from "@/library/machine/protocol";
 import {FakeTransport, machineInfoFrame} from "@/library/machine/__tests__/FakeTransport";
-import {event, notification, status} from "@/library/machine/__tests__/protocolFixtures";
+import {event, float32, notification, status} from "@/library/machine/__tests__/protocolFixtures";
 import {flushControls} from "@/hooks/__tests__/machineControlFixture";
 import {openLink} from "@/hooks/useMachine";
 import {performLiveBrewBarAction, requestLiveBrewBarNavigation, useLiveBrewBarCovered} from "@/hooks/useLiveBrewBarGuard";
@@ -558,9 +558,9 @@ it("binds Tare to the owner without optimistically replacing its last observed w
     await act(async () => s.feedback(s.sent[0], {kind: "cup", grams: 12}));
     await press("Tare");
     expect(s.sent.map(item => item.command.kind)).toEqual(["enter", "tare"]);
-    expect(screen.getByLabelText("WEIGHT: 12 g")).toBeTruthy();
+    expect(screen.getByLabelText("WEIGHT: 12.0 g")).toBeTruthy();
     await act(async () => s.feedback(s.sent[0], {kind: "cup", grams: 0}));
-    expect(screen.getByLabelText("WEIGHT: 0 g")).toBeTruthy();
+    expect(screen.getByLabelText("WEIGHT: 0.0 g")).toBeTruthy();
 });
 
 it("starts Pour only deliberately and never exposes live mutations from its ordinary pour policy", async () => {
@@ -603,7 +603,7 @@ it("does not reserve, switch or connect to a different target or serial", async 
 it.each(["device", "serial", "generation"] as const)("hides stale scale telemetry and prevents Tare after a %s change", async change => {
     const s = await prepare("scale");
     await act(async () => s.feedback(s.sent[0], {kind: "cup", grams: 123}));
-    expect(screen.getByLabelText("WEIGHT: 123 g")).toBeTruthy();
+    expect(screen.getByLabelText("WEIGHT: 123.0 g")).toBeTruthy();
     const before = s.sent.length;
     await act(async () => {
         if (change === "serial") {
@@ -614,7 +614,7 @@ it.each(["device", "serial", "generation"] as const)("hides stale scale telemetr
             s.radio.emit(status(MACHINE_STATE.IDLE));
         }
     });
-    expect(screen.queryByLabelText("WEIGHT: 123 g")).toBeNull();
+    expect(screen.queryByLabelText("WEIGHT: 123.0 g")).toBeNull();
     expect(screen.getByLabelText("WEIGHT: Unavailable")).toBeTruthy();
     expect(screen.getByRole("button", {name: "Tare"})).toBeDisabled();
     expect(s.sent).toHaveLength(before);
@@ -684,6 +684,77 @@ it("exposes live temperature and pattern mutations on PourTool when qualified in
     await act(flushControls);
     await waitFor(() => expect(s.controls.getSnapshot().temperatureC).toBe(21));
     await press("Stop");
+});
+
+it("shows Studio cup weight beside dispensed telemetry and seamlessly opens Grind after closing Pour", async () => {
+    const captured8022AtHome = Array.from(
+        Buffer.from("580207561f1c000000c1000000000000000000000000001000410373", "hex")
+    );
+    const studioIdentity = {deviceId: identity.deviceId, serial: "J15A01B5AF231"};
+    mockMachines = [{...saved, id: studioIdentity.deviceId, serial: studioIdentity.serial, label: "Studio"}];
+    mockParams = {machineId: studioIdentity.deviceId, tool: "pour"};
+    jest.useFakeTimers();
+    try {
+        const s = await fixture({production: true});
+        s.radio.homeReply = null;
+        const studioBlob = machineInfoFrame({serial: studioIdentity.serial, model: "", firmware: "V12.0D.500"});
+        s.radio.infoReply = studioBlob;
+        s.radio.emit(studioBlob);
+        s.radio.syntheticWrite = frame => {
+            const code = frame[3] | (frame[4] << 8);
+            if (code === 8100) s.radio.emit(event(8100));
+            if (code === 8022) s.radio.emit(captured8022AtHome);
+            if (code === 8007 || code === 4506 || code === 8013 || code === 8006 || code === 8012) {
+                s.radio.emit(event(code));
+            }
+            if (code === 4507) {
+                s.radio.emit(status(MACHINE_STATE.DISPENSING));
+                s.radio.emit(event(4507));
+            }
+        };
+        const view = await renderWithProviders(<MachineToolScreen controls={s.controls}/>);
+        await act(async () => {
+            await jest.advanceTimersByTimeAsync(0);
+            await flushControls();
+        });
+        expect(s.controls.getSnapshot().phase).toBe("ready");
+        await press("Start");
+        await act(async () => {
+            s.radio.emit(notification(0x4B, 0x00, float32(0)));
+            s.radio.emit(notification(0x15, 0x00, float32(18.249)));
+            await flushControls();
+        });
+        expect(screen.getByLabelText("DISPENSED: Unavailable")).toBeTruthy();
+        expect(screen.getByLabelText("CUP WEIGHT: 18.2 g")).toBeTruthy();
+        await act(async () => {
+            s.radio.emit(notification(0x4B, 0x00, float32(5000)));
+            await flushControls();
+        });
+        expect(screen.getByLabelText("DISPENSED: 5 ml")).toBeTruthy();
+        expect(screen.getByLabelText("CUP WEIGHT: 18.2 g")).toBeTruthy();
+        await press("Stop");
+        expect(s.controls.getSnapshot().phase).toBe("ready");
+        await press("Back");
+        expect(mockBack).toHaveBeenCalledTimes(1);
+        view.unmount();
+
+        // Closing Pour on event(8013) left machine state at 0x03 (DISPENSING); jumping >25s also expires 8100.
+        await jest.advanceTimersByTimeAsync(26_000);
+        s.radio.written = [];
+        mockParams = {machineId: studioIdentity.deviceId, tool: "grind"};
+        const grindView = await renderWithProviders(<MachineToolScreen controls={s.controls}/>);
+        await act(async () => {
+            await jest.advanceTimersByTimeAsync(900);
+            await flushControls();
+        });
+        expect(s.controls.getSnapshot().phase).toBe("ready");
+        expect(s.radio.sent).toEqual([8100, 8022, 8006]);
+        expect(screen.queryByRole("button", {name: "Retry opening tool"})).toBeNull();
+        await press("Back");
+        grindView.unmount();
+    } finally {
+        jest.useRealTimers();
+    }
 });
 
 it("seeds Studio Grind size from 40521 dial and closes idle tool cleanly without Leave tool popover", async () => {

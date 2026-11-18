@@ -65,11 +65,13 @@ function readFloat32(payload: Uint8Array): number | null {
 
 export class StudioControlProtocol implements ControlProtocol {
     readonly telemetryFreshMs = 3000;
+    readonly confirmTargetStopFromCupPlateau = true;
     private pending: {command: ControlCommand; tokens: ControlTokens} | null = null;
     private enterTokens: ControlTokens | null = null;
     private runTokens: ControlTokens | null = null;
     private activeTool: ToolId | null = null;
     private movingStarted = false;
+    private waterDispensedObserved = false;
 
     actualWaterSource(info: MachineInfo | null): "tank" | "tap" | null {
         if (!info) return null;
@@ -100,6 +102,7 @@ export class StudioControlProtocol implements ControlProtocol {
             this.enterTokens = tokens;
             this.runTokens = null;
             this.movingStarted = false;
+            this.waterDispensedObserved = false;
             return {frame, deadlineMs: 10000};
         }
         if (command.kind === "exit") {
@@ -108,6 +111,7 @@ export class StudioControlProtocol implements ControlProtocol {
             this.enterTokens = null;
             this.runTokens = null;
             this.movingStarted = false;
+            this.waterDispensedObserved = false;
             return {frame, deadlineMs: 10000};
         }
         if (command.kind === "stop") {
@@ -137,6 +141,7 @@ export class StudioControlProtocol implements ControlProtocol {
             const volumeMl = request.mode === "target" ? Math.round(request.volumeMl) : 0;
             this.pending = {command, tokens};
             this.movingStarted = true;
+            this.waterDispensedObserved = false;
             return {
                 frame: buildType1(4506, [
                     Math.round(request.temperatureC * 10),
@@ -263,7 +268,10 @@ export class StudioControlProtocol implements ControlProtocol {
         }
         if (parsed.kind === "waterWeight") {
             if (this.runTokens && this.activeTool === "pour") {
-                return {...this.runTokens, value: {kind: "dispensed", ml: parsed.grams}};
+                if (parsed.grams > 0) this.waterDispensedObserved = true;
+                if (this.waterDispensedObserved) {
+                    return {...this.runTokens, value: {kind: "dispensed", ml: parsed.grams}};
+                }
             }
             return null;
         }
@@ -278,17 +286,20 @@ export class StudioControlProtocol implements ControlProtocol {
         }
 
         // Unsolicited natural completion while a moving tool is active.
-        if (this.runTokens) {
-            if (this.activeTool === "grind" && parsed.kind === "event" && parsed.code === 40507) {
+        if (this.runTokens && this.pending?.command.kind !== "grind" && this.pending?.command.kind !== "pour") {
+            const grindDone = this.activeTool === "grind" && (
+                (parsed.kind === "event" && (parsed.code === 40507 || parsed.code === 3505 || parsed.code === 9004))
+                || (parsed.kind === "status" && (parsed.state === 0x02 || parsed.state === 0x01 || parsed.state === 0x41))
+            );
+            const pourDone = this.activeTool === "pour" && (
+                (parsed.kind === "event" && (parsed.code === 4507 || parsed.code === 40511 || parsed.code === 9006))
+                || (parsed.kind === "status" && (parsed.state === 0x03 || parsed.state === 0x01 || parsed.state === 0x41))
+            );
+            if (grindDone || pourDone) {
                 const tokens = this.runTokens;
                 this.runTokens = null;
                 this.movingStarted = false;
-                return {...tokens, value: {kind: "terminal"}};
-            }
-            if (this.activeTool === "pour" && parsed.kind === "event" && (parsed.code === 40511 || parsed.code === 9006)) {
-                const tokens = this.runTokens;
-                this.runTokens = null;
-                this.movingStarted = false;
+                this.waterDispensedObserved = false;
                 return {...tokens, value: {kind: "terminal"}};
             }
         }
@@ -395,6 +406,7 @@ export class StudioControlProtocol implements ControlProtocol {
                 if (terminalEvent || terminalStatus) {
                     this.runTokens = null;
                     this.movingStarted = false;
+                    this.waterDispensedObserved = false;
                     return {...tokens, value: {kind: "terminal"}};
                 }
                 return null;

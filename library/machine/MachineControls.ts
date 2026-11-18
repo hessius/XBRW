@@ -82,7 +82,9 @@ function capture({profile: p, protocol}: ControlQualification): ControlQualifica
         protocol: Object.freeze({
             plan: protocol.plan.bind(protocol), decode: protocol.decode.bind(protocol),
             decodeInfoSettings: protocol.decodeInfoSettings?.bind(protocol),
-            actualWaterSource: protocol.actualWaterSource.bind(protocol), telemetryFreshMs: protocol.telemetryFreshMs
+            actualWaterSource: protocol.actualWaterSource.bind(protocol),
+            telemetryFreshMs: protocol.telemetryFreshMs,
+            confirmTargetStopFromCupPlateau: protocol.confirmTargetStopFromCupPlateau
         })
     });
 }
@@ -112,6 +114,14 @@ export default class MachineControls {
     private liveTail: Promise<void> = Promise.resolve();
     private telemetry: ControlTokens | null = null;
     private freshness = new Map<"cupGrams" | "dispensedMl", ReturnType<typeof setTimeout>>();
+    private pourCupTracker: {
+        targetMl: number;
+        lastGrams: number | null;
+        lastAt: number;
+        gainedGrams: number;
+        peakGain: number;
+        timer: ReturnType<typeof setTimeout> | null;
+    } | null = null;
     private readonly qualifications: readonly ControlQualification[];
     private disposed = false;
     private deadlines = new Set<ReturnType<typeof setTimeout>>();
@@ -356,6 +366,7 @@ export default class MachineControls {
         this.waiter?.reject(new Error("The shared control owner was reset."));
         this.deadlines.forEach(clearTimeout);
         this.deadlines.clear();
+        this.clearPourPlateau();
         this.clearFreshness();
         this.linkOff?.();
         this.linkOff = null;
@@ -455,12 +466,14 @@ export default class MachineControls {
 
     private uncertain(error: Error): void {
         this.waiter?.reject(error);
+        this.clearPourPlateau();
         this.clearFreshness();
         this.update({phase: "unknown", error: error.message, cupGrams: null, dispensedMl: null});
     }
 
     private release(): void {
         if (this.disposed) return;
+        this.clearPourPlateau();
         this.clearFreshness();
         this.off.splice(0).forEach((off) => off());
         const lease = this.lease;
@@ -472,6 +485,7 @@ export default class MachineControls {
         if (this.disposed) return;
         const {identity, tool} = this.snapshot;
         if (!identity || (tool !== "grind" && tool !== "pour")) throw new Error("No matching moving operation.");
+        this.clearPourPlateau();
         this.clearing = true;
         try {
             this.lease!.clearRecovery({version: 1, ...identity, tool, qualifiedTerminal: true});
@@ -487,6 +501,58 @@ export default class MachineControls {
         } else this.update({phase: "ready", error: null, pendingTemperatureC: null, pendingPattern: null});
     }
 
+    private clearPourPlateau(): void {
+        if (this.pourCupTracker?.timer) clearTimeout(this.pourCupTracker.timer);
+        this.pourCupTracker = null;
+    }
+
+    private armPourPlateauTimer(): void {
+        const tracker = this.pourCupTracker;
+        if (!tracker) return;
+        if (tracker.timer) clearTimeout(tracker.timer);
+        tracker.timer = setTimeout(() => {
+            if (this.pourCupTracker !== tracker) return;
+            tracker.timer = null;
+            if (this.disposed || this.stopping || this.snapshot.phase !== "running"
+                || this.snapshot.tool !== "pour" || this.snapshot.pourRequest?.mode !== "target") {
+                return;
+            }
+            void this.stop().catch(() => {});
+        }, 2500);
+        tracker.timer.unref?.();
+    }
+
+    private trackPourCup(grams: number): void {
+        const tracker = this.pourCupTracker;
+        if (!tracker || this.snapshot.phase !== "running" || this.snapshot.tool !== "pour") return;
+        const now = Date.now();
+        if (tracker.lastGrams === null) {
+            tracker.lastGrams = grams;
+            tracker.lastAt = now;
+            return;
+        }
+        const delta = grams - tracker.lastGrams;
+        const dtSec = Math.max(0.05, (now - tracker.lastAt) / 1000);
+        tracker.lastGrams = grams;
+        tracker.lastAt = now;
+        // Sudden large steps reflect cup placement or removal on the scale, not spout flow.
+        if (Math.abs(delta) > Math.max(10, dtSec * 8)) {
+            if (delta < -10 && tracker.timer) {
+                clearTimeout(tracker.timer);
+                tracker.timer = null;
+            }
+            return;
+        }
+        tracker.gainedGrams = Math.max(0, tracker.gainedGrams + delta);
+        const threshold = Math.max(1, tracker.targetMl - 2);
+        if (tracker.gainedGrams > tracker.peakGain + 0.35) {
+            tracker.peakGain = tracker.gainedGrams;
+            if (tracker.gainedGrams >= threshold) this.armPourPlateauTimer();
+        } else if (tracker.gainedGrams >= threshold && tracker.timer === null) {
+            this.armPourPlateauTimer();
+        }
+    }
+
     private sample(event: ControlFeedback): void {
         const {value} = event;
         if (value.kind === "cup") {
@@ -494,6 +560,7 @@ export default class MachineControls {
                 || !Number.isFinite(value.grams)) return;
             this.update({cupGrams: value.grams});
             this.expire("cupGrams");
+            if (event.transaction === this.run?.transaction) this.trackPourCup(value.grams);
         } else if (value.kind === "dispensed") {
             if (event.transaction !== this.run?.transaction || !Number.isFinite(value.ml) || value.ml < 0) return;
             this.update({dispensedMl: value.ml});
@@ -697,6 +764,12 @@ export default class MachineControls {
         const captured = Object.freeze({...request});
         validatePourRequest(captured, this.qualification!.profile.pour);
         const epoch = this.epoch;
+        this.clearPourPlateau();
+        if (this.qualification!.protocol.confirmTargetStopFromCupPlateau && captured.mode === "target") {
+            this.pourCupTracker = {
+                targetMl: captured.volumeMl, lastGrams: null, lastAt: 0, gainedGrams: 0, peakGain: 0, timer: null
+            };
+        }
         this.update({phase: "starting", pourRequest: captured, dispensedMl: null});
         try {
             if (epoch !== this.epoch) throw new Error("Control transaction cancelled.");
@@ -712,6 +785,7 @@ export default class MachineControls {
     }
 
     private startFailed(error: Error): void {
+        this.clearPourPlateau();
         if (this.contextInvalid || this.machine.controlRecovery?.marker) this.uncertain(error);
         else {
             this.run = null;
@@ -726,6 +800,7 @@ export default class MachineControls {
             || !["starting", "running", "unknown"].includes(this.snapshot.phase)) {
             return Promise.reject(new Error("No owned moving operation to stop."));
         }
+        this.clearPourPlateau();
         ++this.epoch;
         this.waiter?.reject(new Error("Control transaction cancelled by Stop."));
         const operation = async () => {

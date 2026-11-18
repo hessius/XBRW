@@ -3,6 +3,7 @@ import {Button, ScrollView, Text, XStack, YStack} from "tamagui";
 import DotMatrixText from "@/components/DotMatrixText";
 import MachineControlReadout, {MachineNumericControl, MachineToolActions} from "@/components/MachineControlReadout";
 import PourGlyph from "@/components/PourGlyph";
+import {formatScaleGrams} from "@/components/ScaleTool";
 import {useAppearance} from "@/hooks/useAppearance";
 import {
     validatePourRequest, type ControlPhase, type Pattern, type PourPolicy, type PourRequest
@@ -17,6 +18,7 @@ export type PourToolProps = {
     request: PourRequest | null;
     policy: PourPolicy | null;
     dispensedMl: number | null;
+    cupGrams?: number | null;
     /** Confirmed observations, not the request or an optimistic local edit. */
     temperatureC: number | null;
     pattern: Pattern | null;
@@ -41,7 +43,7 @@ const PATTERN_LABELS: Record<Pattern, string> = {
 
 /** Mount in a bounded flex body: parameters scroll independently of Stop. */
 export default function PourTool({
-    phase, request, policy, dispensedMl, temperatureC, pattern,
+    phase, request, policy, dispensedMl, cupGrams, temperatureC, pattern,
     pendingTemperatureC = null, pendingPattern = null, liveTemperature, livePattern,
     unavailable, stopUnavailable, error, onRequestChange, onModeChange, onStart, onStop
 }: PourToolProps) {
@@ -76,6 +78,8 @@ export default function PourTool({
                     {request?.mode === "target" && <MachineControlReadout
                         label={active ? "DISPENSED" : "TARGET VOLUME"}
                         value={active ? dispensedMl : request.volumeMl} unit="ml"/>}
+                    {active && cupGrams !== undefined && <MachineControlReadout
+                        label="CUP WEIGHT" value={formatScaleGrams(cupGrams)} unit="g" prominent={false}/>}
                     <YStack gap="$2" paddingVertical="$2" borderBottomWidth={1} borderBottomColor={palette.line}>
                         <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.6} color={palette.muted}>MODE</DotMatrixText>
                         {!editable && <Text color={palette.text}>

@@ -297,4 +297,126 @@ describe("Studio production qualifications", () => {
             value: {kind: "closed"}
         });
     });
+
+    it("keeps Studio Pour DISPENSED unavailable while 0x4B only streams 0, and surfaces non-zero 0x4B readings", async () => {
+        const s = await studioSetup();
+        s.radio.syntheticWrite = (frame) => {
+            const code = frame[3] | (frame[4] << 8);
+            if (code === 8007 || code === 4506 || code === 4507 || code === 8013) {
+                s.radio.emit(event(code));
+            }
+        };
+        await s.controls.open(studioIdentity, "pour");
+        await s.controls.startPour({
+            mode: "target", temperatureC: 90, pattern: "spiral", volumeMl: 60, flowMlPerSecond: 3
+        });
+        s.radio.emit(float32WeightFrame(0x4B, 0));
+        s.radio.emit(float32WeightFrame(0x4B, 0));
+        expect(s.controls.getSnapshot().dispensedMl).toBeNull();
+        s.radio.emit(float32WeightFrame(0x4B, 12500));
+        expect(s.controls.getSnapshot().dispensedMl).toBe(12.5);
+        await s.controls.stop();
+        await s.controls.close();
+        s.controls.dispose();
+    });
+
+    it("returns running Studio Pour to ready and clears recovery on unsolicited event 4507 or status 0x03", async () => {
+        const s = await studioSetup();
+        s.radio.syntheticWrite = (frame) => {
+            const code = frame[3] | (frame[4] << 8);
+            if (code === 8007 || code === 4506 || code === 8013) {
+                s.radio.emit(event(code));
+            }
+        };
+        await s.controls.open(studioIdentity, "pour");
+        await s.controls.startPour({
+            mode: "target", temperatureC: 90, pattern: "spiral", volumeMl: 60, flowMlPerSecond: 3
+        });
+        expect(s.controls.getSnapshot().phase).toBe("running");
+        expect(s.recovery.snapshot.marker).not.toBeNull();
+
+        s.radio.emit(event(4507));
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(s.controls.getSnapshot().phase).toBe("ready");
+        expect(s.recovery.snapshot.marker).toBeNull();
+
+        await s.controls.startPour({
+            mode: "target", temperatureC: 90, pattern: "spiral", volumeMl: 60, flowMlPerSecond: 3
+        });
+        expect(s.controls.getSnapshot().phase).toBe("running");
+        expect(s.recovery.snapshot.marker).not.toBeNull();
+
+        s.radio.emit(status(MACHINE_STATE.DISPENSING));
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(s.controls.getSnapshot().phase).toBe("ready");
+        expect(s.recovery.snapshot.marker).toBeNull();
+
+        await s.controls.close();
+        s.controls.dispose();
+    });
+
+    it("confirms target Pour completion via 4507 after near-target cup plateau while ignoring jitter, placement jumps, and continuous mode", async () => {
+        jest.useFakeTimers();
+        try {
+            const s = await studioSetup();
+            s.radio.syntheticWrite = (frame) => {
+                const code = frame[3] | (frame[4] << 8);
+                if (code === 8007 || code === 4506 || code === 4507 || code === 8013) {
+                    s.radio.emit(event(code));
+                }
+            };
+            await s.controls.open(studioIdentity, "pour");
+            await s.controls.startPour({
+                mode: "target", temperatureC: 90, pattern: "spiral", volumeMl: 30, flowMlPerSecond: 3
+            });
+
+            // Small +/-0.2 g jitter around baseline stays unbiased and cup placement jump (+150 g in 150 ms) is ignored.
+            s.radio.emit(float32WeightFrame(0x15, 0));
+            for (const g of [0.2, -0.2, 0.2, -0.2, 0]) {
+                await jest.advanceTimersByTimeAsync(100);
+                s.radio.emit(float32WeightFrame(0x15, g));
+            }
+            await jest.advanceTimersByTimeAsync(150);
+            s.radio.emit(float32WeightFrame(0x15, 150));
+
+            for (const g of [155, 160, 165, 170, 175, 178.4]) {
+                await jest.advanceTimersByTimeAsync(1000);
+                s.radio.emit(float32WeightFrame(0x15, g));
+            }
+            // Small plateau noise stays inside +0.35 g peak tolerance without sending 4507 early.
+            await jest.advanceTimersByTimeAsync(500);
+            s.radio.emit(float32WeightFrame(0x15, 178.2));
+            await jest.advanceTimersByTimeAsync(500);
+            s.radio.emit(float32WeightFrame(0x15, 178.6));
+            await jest.advanceTimersByTimeAsync(1300);
+            expect(s.radio.sent).not.toContain(4507);
+
+            await jest.advanceTimersByTimeAsync(300);
+            expect(s.radio.sent).toContain(4507);
+            expect(s.controls.getSnapshot().phase).toBe("ready");
+            expect(s.recovery.snapshot.marker).toBeNull();
+
+            // Continuous mode never auto-stops from cup weight plateau.
+            s.radio.written = [];
+            await s.controls.startPour({
+                mode: "continuous", temperatureC: 90, pattern: "spiral", flowMlPerSecond: 3
+            });
+            for (const g of [184, 192, 200, 210, 215]) {
+                await jest.advanceTimersByTimeAsync(1000);
+                s.radio.emit(float32WeightFrame(0x15, g));
+            }
+            await jest.advanceTimersByTimeAsync(3500);
+            expect(s.radio.sent).not.toContain(4507);
+
+            s.radio.emit(event(4507));
+            await Promise.resolve();
+            await Promise.resolve();
+            await s.controls.close();
+            s.controls.dispose();
+        } finally {
+            jest.useRealTimers();
+        }
+    });
 });

@@ -659,3 +659,86 @@ it("ensureFreshControlState suppresses 8022 during active brews, fresh faults, D
         await machine.disconnect();
     }
 });
+
+it("probes control-session 0x03, refreshes stale 0x41 on 28-byte event 8022, renews 8100, and spaces FRAME_GAP_MS across sessions", async () => {
+    const probe8022AtHome = Array.from(
+        Buffer.from("580207561f1c000000c1000000000000000000000000001000410373", "hex")
+    );
+    jest.useFakeTimers();
+    const {machine, radio} = await setup("", FRAME_GAP_MS);
+    try {
+        radio.homeReply = null;
+        radio.infoReply = null;
+        radio.syntheticWrite = (frame) => {
+            const code = frame[3] | (frame[4] << 8);
+            if (code === 8100) radio.emit(event(8100));
+            if (code === 8022) radio.emit(probe8022AtHome);
+        };
+
+        // Control session receives 0x03 (DISPENSING), then closes without a trailing 0x57.
+        const pourLease = machine.acquireControlSession(identity, "pour");
+        await pourLease.send(buildType1(8007));
+        radio.emit(status(MACHINE_STATE.DISPENSING));
+        pourLease.release();
+
+        // Next ensureFreshControlState waits FRAME_GAP_MS from last control write, probes 0x03, and settles on 28-byte event 8022.
+        radio.written = [];
+        const probe = machine.ensureFreshControlState();
+        await jest.advanceTimersByTimeAsync(FRAME_GAP_MS - 100);
+        expect(radio.sent).toEqual([]);
+        await jest.advanceTimersByTimeAsync(100);
+        expect(radio.sent).toEqual([8022]);
+        await jest.advanceTimersByTimeAsync(900);
+        await probe;
+        expect(machine.slotStateIsNormal).toBe(true);
+
+        // Non-control 0x03 after clearing controlStateSeen stays passive with zero 8022 writes.
+        radio.written = [];
+        radio.emit(status(MACHINE_STATE.DISPENSING));
+        const passive = machine.ensureFreshControlState();
+        await Promise.resolve();
+        expect(radio.sent).toEqual([]);
+        radio.emit(status(0x41));
+        await passive;
+
+        // Cross-session writes obey FRAME_GAP_MS between closed lease and newly acquired session.
+        await jest.advanceTimersByTimeAsync(FRAME_GAP_MS);
+        const scaleLease = machine.acquireControlSession(identity, "scale");
+        await scaleLease.send(buildType1(8003));
+        scaleLease.release();
+
+        radio.written = [];
+        const grindLease = machine.acquireControlSession(identity, "grind");
+        const nextSend = grindLease.send(buildType1(8006));
+        await jest.advanceTimersByTimeAsync(FRAME_GAP_MS - 100);
+        expect(radio.sent).toEqual([]);
+        await jest.advanceTimersByTimeAsync(100);
+        await nextSend;
+        expect(radio.sent).toEqual([8006]);
+        grindLease.release();
+
+        // When both session (>20s) and state (>15s) expire in 0x41, renews 8100 then probes 8022 spaced by FRAME_GAP_MS,
+        // and immediately refreshes stateAt on the 28-byte event 8022 without needing a separate 0x57 status frame.
+        await jest.advanceTimersByTimeAsync(HANDSHAKE_FRESH_MS + 1000);
+        radio.written = [];
+        const txTimes: number[] = [];
+        const origWrite = radio.write.bind(radio);
+        radio.write = async (frame) => {
+            txTimes.push(Date.now());
+            return origWrite(frame);
+        };
+        const renew = machine.ensureFreshControlState();
+        await jest.advanceTimersByTimeAsync(FRAME_GAP_MS * 2);
+        await renew;
+        expect(radio.sent).toEqual([8100, 8022]);
+        expect(txTimes[1] - txTimes[0]).toBeGreaterThanOrEqual(FRAME_GAP_MS);
+        expect(machine.slotStateIsNormal).toBe(true);
+
+        radio.written = [];
+        await machine.ensureFreshControlState();
+        expect(radio.sent).toEqual([]);
+    } finally {
+        jest.useRealTimers();
+        await machine.disconnect();
+    }
+});

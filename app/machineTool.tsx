@@ -73,6 +73,7 @@ function ToolScreen({identity, tool, name, injected}: {
                         tarePending={phase === "applying"} onTare={state.tare}/>}
                     {tool === "pour" && <PourTool phase={phase} request={pour}
                         policy={support.pour} dispensedMl={bound ? snapshot.dispensedMl : null}
+                        cupGrams={bound ? snapshot.cupGrams : null}
                         temperatureC={bound ? snapshot.temperatureC : null} pattern={bound ? snapshot.pattern : null}
                         pendingTemperatureC={bound ? snapshot.pendingTemperatureC : null}
                         pendingPattern={bound ? snapshot.pendingPattern : null}
@@ -90,7 +91,7 @@ function ToolScreen({identity, tool, name, injected}: {
             {prompt && <XbrwSheet open={prompt.open} onOpenChange={prompt.onOpenChange} title="Leave tool?">
                 <YStack gap="$4">
                     <Text color={palette.text}>{prompt.requiresStop
-                        ? "Stop must be confirmed before leaving." : "Close the tool before leaving."}</Text>
+                        ? "Stop the machine before leaving." : "Close the tool before leaving."}</Text>
                     {prompt.error !== null && <Text selectable color={palette.danger}>{prompt.error}</Text>}
                     <Button accessibilityRole="button" disabled={prompt.busy}
                         accessibilityState={{busy: prompt.busy}} backgroundColor={primary.fill} color={primary.ink}

@@ -176,6 +176,10 @@ export function useMachineTool(identity: ControlIdentity, tool: ToolId, controls
                 throw new Error("Reconciliation requires this exact connected machine and tool.");
             }
             await controls.recover();
+            if (mounted.current && controls.getSnapshot().phase === "closed"
+                && controls.describeTool(identity, tool).unavailable === null) {
+                await controls.open(identity, tool, mountAbort.current?.signal);
+            }
         });
     }
 

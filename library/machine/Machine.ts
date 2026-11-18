@@ -321,6 +321,8 @@ export default class Machine {
     private backgrounded = false;
     private connectedId: string | null = null;
     private unsettledCommand = false;
+    private lastControlTxAt = 0;
+    private controlStateSeen = false;
     private controlStore: ControlRecoveryStore | undefined;
     private controlSession: {token: symbol; invalidate: (error: Error) => void} | null = null;
 
@@ -375,10 +377,15 @@ export default class Machine {
         }
         const expiredFault = this.state !== null && FAULT_BLOCKS[this.state] !== undefined
             && Date.now() - this.stateAt > STATE_FRESH_MS;
-        const passiveWaitOnly = this.state === MACHINE_STATE.DISPENSING;
+        const passiveWaitOnly = this.state === MACHINE_STATE.DISPENSING && !this.controlStateSeen;
         const canProbe = this.state === null
             || STARTABLE.has(this.state)
             || Machine.TOOL_IDLE_OR_BOOT_STATES.has(this.state)
+            || (this.controlStateSeen && (
+                this.state === MACHINE_STATE.DISPENSING
+                || this.state === MACHINE_STATE.STARTING
+                || this.state === MACHINE_STATE.BREWING_SUB
+            ))
             || expiredFault;
         if (!canProbe && !passiveWaitOnly) return;
 
@@ -389,13 +396,111 @@ export default class Machine {
                 throw new ControlOperationError("The machine state probe was superseded.");
             }
         };
+        const isFresh = () => this.state !== null && STARTABLE.has(this.state)
+            && Date.now() - this.stateAt <= STATE_FRESH_MS;
+        const waitGap = async (signal: AbortSignal) => {
+            if (this.frameGapMs <= 0 || this.lastControlTxAt <= 0) return;
+            const remaining = this.frameGapMs - (Date.now() - this.lastControlTxAt);
+            if (remaining <= 0) return;
+            await new Promise<void>((resolve, reject) => {
+                const cleanup = () => {
+                    clearTimeout(timer);
+                    offState();
+                    offLink();
+                    signal.removeEventListener("abort", onStop);
+                };
+                const onStop = () => { cleanup(); resolve(); };
+                const checkInterrupted = () => {
+                    if (generation !== this.generation || this.backgrounded || this.controlSession !== null) {
+                        cleanup();
+                        reject(new ControlOperationError("The machine state probe was superseded."));
+                    }
+                };
+                const offState = this.onNotification((parsed) => {
+                    if (parsed.kind === "status" && STARTABLE.has(parsed.state)) {
+                        cleanup();
+                        resolve();
+                    }
+                });
+                const offLink = this.onLink(checkInterrupted);
+                signal.addEventListener("abort", onStop, {once: true});
+                const timer = setTimeout(() => { cleanup(); resolve(); }, remaining);
+                timer.unref?.();
+            });
+            check();
+        };
         let probe!: Promise<void>;
         probe = (async () => {
             const abort = new AbortController();
+            let sent8022 = false;
+            const waitUntilReady = new Promise<void>((resolve) => {
+                let done = false;
+                let homeTimer: ReturnType<typeof setTimeout> | null = null;
+                const finishWait = () => {
+                    if (done) return;
+                    done = true;
+                    if (homeTimer !== null) clearTimeout(homeTimer);
+                    clearTimeout(timer);
+                    offFrame();
+                    offLink();
+                    abort.signal.removeEventListener("abort", finishWait);
+                    resolve();
+                };
+                const offFrame = this.onFrame((direction, frame, parsed) => {
+                    if (direction !== "received" || generation !== this.generation) return;
+                    if (parsed.kind === "status" && STARTABLE.has(parsed.state)) {
+                        finishWait();
+                        return;
+                    }
+                    if (!sent8022 || parsed.kind !== "event" || parsed.code !== 8022) return;
+                    if (this.state !== null && STARTABLE.has(this.state)) {
+                        // Studio V12.0D.500 replies to 8022 with event 8022 (and no 0x57) when already at home.
+                        this.stateAt = Date.now();
+                        finishWait();
+                        return;
+                    }
+                    const carriedHome = frame.length === 28 && STARTABLE.has(frame[25]);
+                    if (this.controlStateSeen && carriedHome && (this.state === null || !FAULT_BLOCKS[this.state])
+                        && homeTimer === null) {
+                        homeTimer = setTimeout(() => {
+                            if (generation === this.generation && !done && this.controlStateSeen
+                                && (this.state === null || !FAULT_BLOCKS[this.state])) {
+                                this.state = frame[25];
+                                this.stateAt = Date.now();
+                                this.controlStateSeen = false;
+                            }
+                            finishWait();
+                        }, Math.min(800, this.stateReplyMs));
+                        homeTimer.unref?.();
+                    }
+                });
+                const offLink = this.onLink(() => {
+                    if (generation !== this.generation) finishWait();
+                });
+                abort.signal.addEventListener("abort", finishWait, {once: true});
+                const gapBudget = (!passiveWaitOnly && this.frameGapMs > 0 && this.lastControlTxAt > 0
+                    ? Math.max(0, this.frameGapMs - (Date.now() - this.lastControlTxAt))
+                    : 0)
+                    + (!passiveWaitOnly && !this.sessionIsFresh() ? this.frameGapMs : 0);
+                const timer = setTimeout(finishWait, this.stateReplyMs + gapBudget);
+                timer.unref?.();
+            });
             try {
-                const answered = this.waitForState((state) => STARTABLE.has(state), abort.signal);
-                if (!passiveWaitOnly) await this.writeFrame(buildType1(8022), check);
-                await answered;
+                if (!passiveWaitOnly) {
+                    await waitGap(abort.signal);
+                    if (isFresh()) { abort.abort(); await waitUntilReady; return; }
+                    if (!this.sessionIsFresh()) {
+                        await this.writeFrame(buildType1(8100, [185, 1]), check);
+                        this.lastHandshakeAt = Date.now();
+                        this.lastControlTxAt = Date.now();
+                        if (this.frameGapMs > 0) await waitGap(abort.signal);
+                        if (isFresh()) { abort.abort(); await waitUntilReady; return; }
+                    }
+                    sent8022 = true;
+                    await this.writeFrame(buildType1(8022), check);
+                    this.lastControlTxAt = Date.now();
+                }
+                await waitUntilReady;
             } catch {
                 abort.abort();
                 // Caller falls through to acquireControlSession, which surfaces any refusal.
@@ -511,7 +616,10 @@ export default class Machine {
         let sent = false;
         const write = async (frame: Uint8Array, guard = check, beforeDispatch?: () => void) => {
             guard();
-            if (sent && this.frameGapMs > 0) {
+            const waitMs = !this.frameGapMs ? 0
+                : sent ? this.frameGapMs
+                    : this.lastControlTxAt > 0 ? Math.max(0, this.frameGapMs - (Date.now() - this.lastControlTxAt)) : 0;
+            if (waitMs > 0) {
                 await new Promise<void>((resolve, reject) => {
                     const onFailure = (error: Error) => {
                         clearTimeout(timer);
@@ -521,7 +629,7 @@ export default class Machine {
                     const timer = setTimeout(() => {
                         listeners.delete(onFailure);
                         resolve();
-                    }, this.frameGapMs);
+                    }, waitMs);
                     timer.unref?.();
                     listeners.add(onFailure);
                 });
@@ -529,6 +637,7 @@ export default class Machine {
             }
             sent = true;
             await this.writeFrame(frame, guard, beforeDispatch);
+            this.lastControlTxAt = Date.now();
             guard();
         };
         const sendFrame = async (frame: Uint8Array, guard = check, beforeDispatch?: () => void) => {
@@ -1371,7 +1480,10 @@ export default class Machine {
         this.assertOrdinaryOperation();
         // Native acceptance is not completion of a standalone console action.
         // Keep slots out until a fresh terminal state or a new connection.
-        if (!isActiveBrewPhase(this.phase)) this.unsettledCommand = true;
+        if (!isActiveBrewPhase(this.phase)) {
+            this.unsettledCommand = true;
+            this.controlStateSeen = false;
+        }
         const finish = this.beginOrdinaryOperation();
         try {
             await this.writeFrame(frame);
@@ -1464,7 +1576,12 @@ export default class Machine {
         if (parsed.kind === "status") {
             this.state = parsed.state;
             this.stateAt = Date.now();
-            if (STARTABLE.has(parsed.state)) this.unsettledCommand = false;
+            if (STARTABLE.has(parsed.state)) {
+                this.unsettledCommand = false;
+                this.controlStateSeen = false;
+            } else if (this.controlSession !== null) {
+                this.controlStateSeen = true;
+            }
             this.onState(parsed.state);
         }
         if (parsed.kind === "info") {
@@ -2604,6 +2721,8 @@ export default class Machine {
         this.cancelling = null;
         this.userCancel = null;
         this.controlStateProbe = null;
+        this.lastControlTxAt = 0;
+        this.controlStateSeen = false;
         this.state = null;
         this.stateAt = 0;
         // Last, so a listener reading `isConnected()` or `info` sees the link

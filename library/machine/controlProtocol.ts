@@ -45,6 +45,8 @@ export interface ControlProtocol {
     decodeInfoSettings?(info: MachineInfo): SettingReadings | null;
     actualWaterSource(info: MachineInfo | null, infoAt: number): "tank" | "tap" | null;
     readonly telemetryFreshMs?: number;
+    /** FreeSolo target pour stops silently on some firmware; allow scale plateau to trigger qualified Stop verification. */
+    readonly confirmTargetStopFromCupPlateau?: boolean;
 }
 export type ControlQualification = Readonly<{
     profile: ControlCapabilityProfile;
