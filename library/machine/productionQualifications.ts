@@ -31,6 +31,10 @@ const EMPTY_SETTINGS: SettingReadings = {
     vibrationAmplitude: null
 };
 
+function settingsWith(patch: Partial<SettingReadings>): SettingReadings {
+    return {...EMPTY_SETTINGS, ...patch};
+}
+
 function floatBitsToInt32(value: number): number {
     const buffer = new ArrayBuffer(4);
     const view = new DataView(buffer);
@@ -59,17 +63,12 @@ function readFloat32(payload: Uint8Array): number | null {
     return Number.isFinite(value) ? value : null;
 }
 
-function hasTextPayload(payload: Uint8Array): boolean {
-    return payload.byteLength >= 4;
-}
-
 export class StudioControlProtocol implements ControlProtocol {
     readonly telemetryFreshMs = 3000;
     private pending: {command: ControlCommand; tokens: ControlTokens} | null = null;
     private enterTokens: ControlTokens | null = null;
     private runTokens: ControlTokens | null = null;
     private activeTool: ToolId | null = null;
-    private lastSettings: SettingReadings = {...EMPTY_SETTINGS};
 
     actualWaterSource(info: MachineInfo | null): "tank" | "tap" | null {
         if (!info) return null;
@@ -93,29 +92,33 @@ export class StudioControlProtocol implements ControlProtocol {
     }
 
     plan(command: ControlCommand, tokens: ControlTokens): ControlExchange {
-        this.pending = {command, tokens};
         if (command.kind === "enter") {
+            const frame = this.encodeEnter(command.tool);
+            this.pending = {command, tokens};
             this.activeTool = command.tool;
             this.enterTokens = tokens;
             this.runTokens = null;
-            return {
-                frame: this.encodeEnter(command.tool),
-                deadlineMs: 4000
-            };
+            return {frame, deadlineMs: 4000};
         }
         if (command.kind === "exit") {
+            const frame = this.encodeExit(command.tool);
+            this.pending = {command, tokens};
             this.enterTokens = null;
             this.runTokens = null;
-            return {
-                frame: this.encodeExit(command.tool),
-                deadlineMs: 4000
-            };
+            return {frame, deadlineMs: 4000};
+        }
+        if (command.kind === "stop") {
+            const tool = command.tool ?? this.activeTool;
+            if (tool !== "grind" && tool !== "pour") throw new Error("Unsupported stop target.");
+            this.pending = {command, tokens};
+            return {frame: buildType1(tool === "grind" ? 3505 : 4507), deadlineMs: 4000};
         }
         if (command.kind === "tare") {
+            this.pending = {command, tokens};
             return {frame: buildType1(8500), deadlineMs: 4000};
         }
         if (command.kind === "grind") {
-            this.runTokens = tokens;
+            this.pending = {command, tokens};
             return {
                 frame: buildType1(3500, [
                     1000,
@@ -126,9 +129,9 @@ export class StudioControlProtocol implements ControlProtocol {
             };
         }
         if (command.kind === "pour") {
-            this.runTokens = tokens;
             const {request} = command;
             const volumeMl = request.mode === "target" ? Math.round(request.volumeMl) : 0;
+            this.pending = {command, tokens};
             return {
                 frame: buildType1(4506, [
                     Math.round(request.temperatureC * 10),
@@ -140,26 +143,23 @@ export class StudioControlProtocol implements ControlProtocol {
             };
         }
         if (command.kind === "temperature") {
+            this.pending = {command, tokens};
             return {
                 frame: buildType1(4510, [Math.round(command.celsius * 10)]),
                 deadlineMs: 4000
             };
         }
         if (command.kind === "pattern") {
+            this.pending = {command, tokens};
             return {
                 frame: buildType1(8016, [PATTERN_CODE[command.pattern]]),
                 deadlineMs: 4000
             };
         }
-        if (command.kind === "stop") {
-            const tool = command.tool ?? this.activeTool;
-            if (tool === "grind") return {frame: buildType1(3505), deadlineMs: 4000};
-            if (tool === "pour") return {frame: buildType1(4507), deadlineMs: 4000};
-            throw new Error("Unsupported stop target.");
-        }
         if (command.kind === "inspect") {
             if (!command.recovery && command.tool === null) {
                 if (command.settingId === "vibrationAmplitude") {
+                    this.pending = {command, tokens};
                     return {
                         frame: buildType2(11508, new Uint8Array(0)),
                         refreshInfo: false,
@@ -168,6 +168,7 @@ export class StudioControlProtocol implements ControlProtocol {
                     };
                 }
                 if (command.settingId === "pourRadius") {
+                    this.pending = {command, tokens};
                     return {
                         frame: buildType2(11506, new Uint8Array(0)),
                         refreshInfo: true,
@@ -176,6 +177,7 @@ export class StudioControlProtocol implements ControlProtocol {
                     };
                 }
             }
+            this.pending = {command, tokens};
             return {
                 frame: null,
                 refreshInfo: true,
@@ -183,9 +185,11 @@ export class StudioControlProtocol implements ControlProtocol {
             };
         }
         if (command.kind === "setting") {
+            const frame = this.encodeSetting(command.id, command.value);
             const tuning = command.id === "pourRadius" || command.id === "vibrationAmplitude";
+            this.pending = {command, tokens};
             return {
-                frame: this.encodeSetting(command.id, command.value),
+                frame,
                 refreshInfo: !tuning,
                 deadlineMs: 4000
             };
@@ -237,20 +241,6 @@ export class StudioControlProtocol implements ControlProtocol {
             case "vibrationAmplitude":
                 return buildType2(11509, uint32Bytes(value as number));
         }
-    }
-
-    private mergeInfo(info: MachineInfo): SettingReadings {
-        const decoded = this.decodeInfoSettings(info);
-        this.lastSettings = {
-            ...this.lastSettings,
-            temperatureUnit: decoded.temperatureUnit,
-            weightUnit: decoded.weightUnit,
-            brightness: decoded.brightness,
-            waterSource: decoded.waterSource,
-            pourRadius: decoded.pourRadius ?? this.lastSettings.pourRadius,
-            vibrationAmplitude: decoded.vibrationAmplitude ?? this.lastSettings.vibrationAmplitude
-        };
-        return {...this.lastSettings};
     }
 
     decode(frame: Uint8Array): ControlFeedback | null {
@@ -338,20 +328,25 @@ export class StudioControlProtocol implements ControlProtocol {
                     ? {...tokens, value: {kind: "tared"}}
                     : null;
             case "grind":
-                return (parsed.kind === "event" && parsed.code === 3500)
-                    || (parsed.kind === "status" && parsed.state === 0x22)
-                    ? {...tokens, value: {kind: "running"}}
-                    : null;
+                if ((parsed.kind === "event" && parsed.code === 3500)
+                    || (parsed.kind === "status" && parsed.state === 0x22)) {
+                    this.runTokens = tokens;
+                    return {...tokens, value: {kind: "running"}};
+                }
+                return null;
             case "pour":
-                return (parsed.kind === "event" && parsed.code === 4506)
-                    || (parsed.kind === "status" && parsed.state === 0x23)
-                    ? {...tokens, value: {kind: "running"}}
-                    : null;
+                if ((parsed.kind === "event" && parsed.code === 4506)
+                    || (parsed.kind === "status" && parsed.state === 0x23)) {
+                    this.runTokens = tokens;
+                    return {...tokens, value: {kind: "running"}};
+                }
+                return null;
             case "temperature": {
                 if (parsed.kind !== "event" || parsed.code !== 4510) return null;
-                if (!hasTextPayload(payload)) {
+                if (payload.byteLength === 0) {
                     return {...tokens, value: {kind: "temperature", celsius: command.celsius}};
                 }
+                if (payload.byteLength < 4) return null;
                 const targetTenths = Math.round(command.celsius * 10);
                 const f32 = readFloat32(payload);
                 const u32 = readUint32(payload);
@@ -368,12 +363,13 @@ export class StudioControlProtocol implements ControlProtocol {
             }
             case "pattern": {
                 if (parsed.kind !== "event" || parsed.code !== 8016) return null;
-                const u32 = readUint32(payload);
-                if (u32 !== null) {
-                    const decoded = CODE_PATTERN[u32];
-                    return decoded ? {...tokens, value: {kind: "pattern", pattern: decoded}} : null;
+                if (payload.byteLength === 0) {
+                    return {...tokens, value: {kind: "pattern", pattern: command.pattern}};
                 }
-                return {...tokens, value: {kind: "pattern", pattern: command.pattern}};
+                if (payload.byteLength < 4) return null;
+                const u32 = readUint32(payload)!;
+                const decoded = CODE_PATTERN[u32];
+                return decoded ? {...tokens, value: {kind: "pattern", pattern: decoded}} : null;
             }
             case "stop": {
                 const tool = command.tool ?? this.activeTool;
@@ -394,7 +390,8 @@ export class StudioControlProtocol implements ControlProtocol {
                     if (parsed.kind === "status") {
                         if (parsed.state === 0x01 || parsed.state === 0x41) {
                             this.runTokens = null;
-                            if (command.tool === "scale") this.enterTokens = null;
+                            this.enterTokens = null;
+                            this.activeTool = null;
                             return {
                                 ...tokens,
                                 value: {kind: command.tool === "scale" ? "closed" : "terminal"}
@@ -413,37 +410,35 @@ export class StudioControlProtocol implements ControlProtocol {
                         && parsed.kind === "event" && parsed.code === 11508) {
                         const raw = readUint32(payload);
                         if (raw === null) return null;
-                        this.lastSettings = {...this.lastSettings, vibrationAmplitude: raw};
-                        return {...tokens, value: {kind: "settings", readings: {...this.lastSettings}}};
+                        return {...tokens, value: {kind: "settings", readings: settingsWith({vibrationAmplitude: raw})}};
                     }
                     if (command.settingId === "pourRadius"
                         && parsed.kind === "event" && parsed.code === 11506) {
                         const raw = readUint32(payload);
                         if (raw === null || raw <= 0) return null;
-                        this.lastSettings = {...this.lastSettings, pourRadius: raw};
-                        return {...tokens, value: {kind: "settings", readings: {...this.lastSettings}}};
+                        return {...tokens, value: {kind: "settings", readings: settingsWith({pourRadius: raw})}};
                     }
                     if (parsed.kind === "info") {
-                        return {...tokens, value: {kind: "settings", readings: this.mergeInfo(parsed)}};
+                        return {...tokens, value: {kind: "settings", readings: this.decodeInfoSettings(parsed)}};
                     }
                 }
                 return null;
             }
             case "setting": {
                 if (command.id === "pourRadius" && parsed.kind === "event" && parsed.code === 11507) {
+                    if (payload.byteLength !== 0 && payload.byteLength < 4) return null;
                     const raw = readUint32(payload);
                     const value = raw !== null ? raw : command.value;
-                    this.lastSettings = {...this.lastSettings, pourRadius: value};
-                    return {...tokens, value: {kind: "settings", readings: {...this.lastSettings}}};
+                    return {...tokens, value: {kind: "settings", readings: settingsWith({pourRadius: value})}};
                 }
                 if (command.id === "vibrationAmplitude" && parsed.kind === "event" && parsed.code === 11509) {
+                    if (payload.byteLength !== 0 && payload.byteLength < 4) return null;
                     const raw = readUint32(payload);
                     const value = raw !== null ? raw : command.value;
-                    this.lastSettings = {...this.lastSettings, vibrationAmplitude: value};
-                    return {...tokens, value: {kind: "settings", readings: {...this.lastSettings}}};
+                    return {...tokens, value: {kind: "settings", readings: settingsWith({vibrationAmplitude: value})}};
                 }
                 if (parsed.kind === "info") {
-                    return {...tokens, value: {kind: "settings", readings: this.mergeInfo(parsed)}};
+                    return {...tokens, value: {kind: "settings", readings: this.decodeInfoSettings(parsed)}};
                 }
                 return null;
             }

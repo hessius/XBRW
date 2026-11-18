@@ -240,8 +240,8 @@ export default class MachineControls {
             grind: qualification?.profile.grind ?? null,
             pour: qualification?.profile.pour ?? null,
             scale: qualification?.profile.scale === true,
-            liveTemperature: qualification?.profile.liveTemperature === true,
-            livePattern: qualification?.profile.livePattern === true,
+            liveTemperature: toolQualified && tool === "pour" && qualification?.profile.liveTemperature === true,
+            livePattern: toolQualified && tool === "pour" && qualification?.profile.livePattern === true,
             bound,
             unavailable,
             // Stop does not use Start's normal-state or water preflight.
@@ -290,36 +290,47 @@ export default class MachineControls {
     }
 
     /** Passively populates settings already carried in the connected 40521 info frame without dispatching BLE commands. */
+    private buildPassiveInfoPatch(): Partial<ControlSnapshot> | null {
+        if (this.disposed) return null;
+        const actual = this.machine.slotIdentity;
+        const info = this.machine.info;
+        if (!actual || !actual.serial || !info) return null;
+        let qualification: ControlQualification;
+        try {
+            qualification = this.select();
+        } catch {
+            return null;
+        }
+        const decodeInfo = qualification.protocol.decodeInfoSettings;
+        if (!decodeInfo) return null;
+        const raw = decodeInfo(info);
+        if (!raw) return null;
+        const identity = Object.freeze({deviceId: actual.deviceId, serial: actual.serial});
+        const clean = this.sanitizeReadings(raw, qualification, identity, true);
+        this.qualification = qualification;
+        this.settingsInfo = info;
+        return {identity, settings: clean};
+    }
+
     private syncInfoSettings(): void {
         if (this.disposed || this.snapshot.phase !== "closed") return;
         const actual = this.machine.slotIdentity;
         const info = this.machine.info;
         if (!actual || !actual.serial || !info) return;
-        let qualification: ControlQualification;
-        try {
-            qualification = this.select();
-        } catch {
-            return;
-        }
-        const decodeInfo = qualification.protocol.decodeInfoSettings;
-        if (!decodeInfo) return;
         if (this.settingsInfo === info
             && this.snapshot.identity?.deviceId === actual.deviceId
             && this.snapshot.identity.serial === actual.serial
             && this.snapshot.settings !== null) {
             return;
         }
-        const raw = decodeInfo(info);
-        if (!raw) return;
-        const identity = Object.freeze({deviceId: actual.deviceId, serial: actual.serial});
-        const clean = this.sanitizeReadings(raw, qualification, identity, true);
-        this.qualification = qualification;
-        this.settingsInfo = info;
-        this.update({
-            ...initial,
-            identity,
-            settings: clean
-        });
+        const patch = this.buildPassiveInfoPatch();
+        if (!patch) return;
+        this.update({...initial, ...patch});
+    }
+
+    private closeSessionToRestoredSettings(): void {
+        const patch = this.buildPassiveInfoPatch();
+        this.update(patch ? {...initial, ...patch} : {...initial});
     }
 
     /**
@@ -461,8 +472,7 @@ export default class MachineControls {
         this.run = null;
         if (this.recoveryOnly) {
             this.release();
-            this.update({...initial});
-            this.syncInfoSettings();
+            this.closeSessionToRestoredSettings();
         } else this.update({phase: "ready", error: null, pendingTemperatureC: null, pendingPattern: null});
     }
 
@@ -796,6 +806,7 @@ export default class MachineControls {
         try {
             const current = await this.exchange({kind: "inspect", tool: null, settingId: id}, "settings");
             if (current.kind !== "settings" || current.readings[id] === null) throw new Error("Qualified current setting unavailable.");
+            validateSetting(id, current.readings[id], this.qualification!.profile.settings);
             this.update({settings: this.sanitizeReadings(current.readings, this.qualification!, identity, true)});
             // TS cannot retain the correlation between a generic key and its
             // value when constructing the mapped command union.
@@ -920,10 +931,15 @@ export default class MachineControls {
                     this.settingsInfo = this.machine.info;
                 }
                 const settingsIdentity = settings ? this.snapshot.identity : null;
+                const nextSettings = result.kind === "settings" && settingsIdentity
+                    ? this.sanitizeReadings(result.readings, this.qualification!, settingsIdentity, true)
+                    : null;
                 this.release();
-                this.update({...initial, identity: settingsIdentity,
-                    settings: result.kind === "settings" ? Object.freeze({...result.readings}) : null});
-                if (!settings) this.syncInfoSettings();
+                if (settings) {
+                    this.update({...initial, identity: settingsIdentity, settings: nextSettings});
+                } else {
+                    this.closeSessionToRestoredSettings();
+                }
             }
         } catch (error) {
             this.uncertain(failure(error));
@@ -940,8 +956,7 @@ export default class MachineControls {
         try {
             await this.exchange({kind: "exit", tool: this.snapshot.tool}, "closed");
             this.release();
-            this.update({...initial});
-            this.syncInfoSettings();
+            this.closeSessionToRestoredSettings();
         } catch (error) {
             this.uncertain(failure(error));
             throw error;

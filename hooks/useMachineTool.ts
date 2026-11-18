@@ -1,4 +1,4 @@
-import {useState} from "react";
+import {useEffect, useRef, useState} from "react";
 import {useMachineToolSupport} from "@/hooks/useMachineToolSupport";
 import type MachineControls from "@/library/machine/MachineControls";
 import {
@@ -15,6 +15,12 @@ export function useMachineTool(identity: ControlIdentity, tool: ToolId, controls
     const [liveTempError, setLiveTempError] = useState<string | null>(null);
     const [livePatternError, setLivePatternError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
+    const liveTempEpoch = useRef(0);
+    const livePatternEpoch = useRef(0);
+    useEffect(() => () => {
+        liveTempEpoch.current++;
+        livePatternEpoch.current++;
+    }, []);
     const bound = support.bound;
     const owns = snapshot.identity?.deviceId === identity.deviceId
         && snapshot.identity.serial === identity.serial && snapshot.tool === tool;
@@ -84,6 +90,8 @@ export function useMachineTool(identity: ControlIdentity, tool: ToolId, controls
     }
 
     function start(): void {
+        liveTempEpoch.current++;
+        livePatternEpoch.current++;
         setLiveTempError(null);
         setLivePatternError(null);
         void perform(async () => {
@@ -101,6 +109,8 @@ export function useMachineTool(identity: ControlIdentity, tool: ToolId, controls
     }
 
     function open(): void {
+        liveTempEpoch.current++;
+        livePatternEpoch.current++;
         setLiveTempError(null);
         setLivePatternError(null);
         void perform(async () => {
@@ -120,16 +130,22 @@ export function useMachineTool(identity: ControlIdentity, tool: ToolId, controls
     }
 
     function setLiveTemperature(celsius: number): void {
+        const epoch = ++liveTempEpoch.current;
         setLiveTempError(null);
         void controls.setTemperature(celsius).catch((cause) => {
-            setLiveTempError(cause instanceof Error ? cause.message : "Failed to update temperature.");
+            if (liveTempEpoch.current === epoch) {
+                setLiveTempError(cause instanceof Error ? cause.message : "Failed to update temperature.");
+            }
         });
     }
 
     function setLivePattern(pattern: Pattern): void {
+        const epoch = ++livePatternEpoch.current;
         setLivePatternError(null);
         void controls.setPattern(pattern).catch((cause) => {
-            setLivePatternError(cause instanceof Error ? cause.message : "Failed to update pattern.");
+            if (livePatternEpoch.current === epoch) {
+                setLivePatternError(cause instanceof Error ? cause.message : "Failed to update pattern.");
+            }
         });
     }
 

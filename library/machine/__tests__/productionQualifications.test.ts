@@ -232,4 +232,34 @@ describe("Studio production qualifications", () => {
         expect(s.controls.getSnapshot().phase).toBe("closed");
         s.controls.dispose();
     });
+
+    it("never leaks tuning readings across machine switches or disconnect/reconnect", async () => {
+        const s = await studioSetup(j15H038Captured);
+        const h038Identity = {deviceId: "studio-5af231", serial: "J15A02A45H038"};
+        const captured11508 = hexBytes("580207f42c10000000c214050000063e");
+        s.radio.syntheticWrite = (frame) => {
+            const code = frame[3] | (frame[4] << 8);
+            if (code === 11508) s.radio.emit(captured11508);
+        };
+        await s.controls.readSettings(h038Identity, "vibrationAmplitude");
+        expect(s.controls.getSnapshot().settings).toMatchObject({
+            pourRadius: 700,
+            vibrationAmplitude: 1300
+        });
+
+        s.radio.drop();
+        s.radio.infoReply = j15F231Frame;
+        await s.machine.connect(studioIdentity.deviceId);
+        s.radio.emit(status(MACHINE_STATE.IDLE));
+        await s.controls.readSettings(studioIdentity, "temperatureUnit");
+        expect(s.controls.getSnapshot().settings).toMatchObject({
+            temperatureUnit: "C",
+            waterSource: "tank",
+            pourRadius: null,
+            vibrationAmplitude: null
+        });
+        expect(s.controls.describeSettings(studioIdentity, "pourRadius").reading).toBe("unavailable");
+        expect(s.controls.describeSettings(studioIdentity, "vibrationAmplitude").reading).toBe("unavailable");
+        s.controls.dispose();
+    });
 });
