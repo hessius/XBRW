@@ -714,3 +714,40 @@ it("seeds Studio Grind size from 40521 dial and closes idle tool cleanly without
     expect(mockBack).toHaveBeenCalledTimes(1);
     expect(s.controls.getSnapshot().phase).toBe("closed");
 });
+
+it("cancels auto-open cleanly on unmount during preflight and offers one-shot Retry when closed entry fails", async () => {
+    jest.useFakeTimers();
+    try {
+        const s = await fixture();
+        await jest.advanceTimersByTimeAsync(16_000);
+        let release8022!: () => void;
+        const gate8022 = new Promise<void>(resolve => { release8022 = resolve; });
+        const originalWrite = s.radio.write.bind(s.radio);
+        s.radio.write = async frame => {
+            if ((frame[3] | (frame[4] << 8)) === 8022) await gate8022;
+            await originalWrite(frame);
+        };
+        const view = await renderWithProviders(<MachineToolScreen controls={s.controls}/>);
+        await act(flushControls);
+        await view.unmount();
+        s.radio.homeReply = status(0x41);
+        release8022();
+        await act(flushControls);
+        expect(s.sent).toEqual([]);
+        expect(s.controls.getSnapshot().phase).toBe("closed");
+
+        // Now simulate failed state refresh while closed: surface error + manual retry without looping
+        s.radio.homeReply = null;
+        await jest.advanceTimersByTimeAsync(16_000);
+        await renderWithProviders(<MachineToolScreen controls={s.controls}/>);
+        await act(async () => {
+            await jest.advanceTimersByTimeAsync(3_500);
+            await flushControls();
+        });
+        expect(screen.getByText(/fresh known normal/i)).toBeTruthy();
+        expect(screen.getByRole("button", {name: "Retry opening tool"})).toBeEnabled();
+        expect(s.sent).toEqual([]);
+    } finally {
+        jest.useRealTimers();
+    }
+});

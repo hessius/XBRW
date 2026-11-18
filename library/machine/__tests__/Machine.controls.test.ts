@@ -586,3 +586,76 @@ it("waits for every released operation to settle, including a rejected native wr
         await machine.disconnect();
     }
 });
+
+it("ensureFreshControlState suppresses 8022 during active brews, fresh faults, DISPENSING, and unsettled writes while probing expired/idle-tool states", async () => {
+    const first = await setup();
+    try {
+        // Fresh NO_WATER fault: never send 8022
+        first.radio.emit(status(MACHINE_STATE.NO_WATER));
+        await first.machine.ensureFreshControlState();
+        expect(first.radio.sent).toEqual([]);
+
+        // Active BREWING state: never send 8022
+        first.radio.emit(status(MACHINE_STATE.BREWING));
+        await first.machine.ensureFreshControlState();
+        expect(first.radio.sent).toEqual([]);
+
+        // Active brew phase / lostContact: never send 8022
+        first.radio.emit(status(MACHINE_STATE.IDLE));
+        first.machine.phase = {name: "pouring", pour: 1, pours: 1};
+        await first.machine.ensureFreshControlState();
+        expect(first.radio.sent).toEqual([]);
+        first.machine.phase = {name: "lostContact"};
+        await first.machine.ensureFreshControlState();
+        expect(first.radio.sent).toEqual([]);
+        first.machine.phase = {name: "idle"};
+
+        // Backgrounded: never send 8022
+        first.machine.setAppState("background");
+        await first.machine.ensureFreshControlState();
+        expect(first.radio.sent).toEqual([]);
+        first.machine.setAppState("active");
+
+        // Slot journal: never send 8022
+        const item = snapshotRecipe(coffee("test"));
+        const items = [item, item, item] as const;
+        first.slots.begin("one", {
+            id: "slot", serial: identity.serial, slots: [...items], frames: prepareSet([...items]),
+            acknowledged: 0, inFlight: null, error: null
+        });
+        first.radio.emit(status(0x05));
+        await first.machine.ensureFreshControlState();
+        expect(first.radio.sent).toEqual([]);
+    } finally {
+        await first.machine.disconnect();
+    }
+
+    const {machine, radio} = await setup();
+    try {
+        // Unsettled standalone command: never send 8022 until a startable state settles it
+        await machine.send(buildType1(40521));
+        await machine.ensureFreshControlState();
+        expect(radio.sent).toEqual([40521]);
+        radio.emit(status(MACHINE_STATE.IDLE));
+        radio.written = [];
+        radio.emit(status(0x05));
+
+        // Tool screen 0x05: coalesces concurrent probes and sends one 8022
+        radio.homeReply = status(0x41);
+        await Promise.all([machine.ensureFreshControlState(), machine.ensureFreshControlState()]);
+        expect(radio.sent).toEqual([8022]);
+        expect(machine.slotStateIsNormal).toBe(true);
+
+        // DISPENSING (0x03): waits passively without sending 8022
+        radio.written = [];
+        radio.emit(status(MACHINE_STATE.DISPENSING));
+        const passive = machine.ensureFreshControlState();
+        await Promise.resolve();
+        expect(radio.sent).toEqual([]);
+        radio.emit(status(0x41));
+        await passive;
+        expect(machine.slotStateIsNormal).toBe(true);
+    } finally {
+        await machine.disconnect();
+    }
+});

@@ -55,12 +55,16 @@ export function useMachineTool(identity: ControlIdentity, tool: ToolId, controls
     const livePatternEpoch = useRef(0);
     const autoOpenedFor = useRef<string | null>(null);
     const mounted = useRef(true);
+    const mountAbort = useRef<AbortController | null>(null);
     useEffect(() => {
         mounted.current = true;
+        mountAbort.current = new AbortController();
         const tempEpoch = liveTempEpoch;
         const patternEpoch = livePatternEpoch;
+        const abortController = mountAbort.current;
         return () => {
             mounted.current = false;
+            abortController.abort();
             tempEpoch.current++;
             patternEpoch.current++;
         };
@@ -101,7 +105,7 @@ export function useMachineTool(identity: ControlIdentity, tool: ToolId, controls
         void perform(async () => {
             const current = controls.describeTool(identity, tool);
             if (current.unavailable) throw new Error(current.unavailable);
-            await controls.open(identity, tool);
+            await controls.open(identity, tool, mountAbort.current?.signal);
         });
     }
 
@@ -111,13 +115,14 @@ export function useMachineTool(identity: ControlIdentity, tool: ToolId, controls
         if (phase !== "closed" || owns || support.unavailable !== null) return;
         autoOpenedFor.current = routeKey;
         const target = {deviceId: identity.deviceId, serial: identity.serial};
+        const signal = mountAbort.current?.signal;
         void (async () => {
             try {
                 const current = controls.describeTool(target, tool);
                 if (current.unavailable) throw new Error(current.unavailable);
-                await controls.open(target, tool);
+                await controls.open(target, tool, signal);
             } catch (cause) {
-                if (mounted.current) {
+                if (mounted.current && !signal?.aborted) {
                     setError(cause instanceof Error ? cause.message : "The machine control failed.");
                 }
             }
@@ -128,24 +133,6 @@ export function useMachineTool(identity: ControlIdentity, tool: ToolId, controls
         if (!controls.describeTool(identity, tool).bound) {
             throw new Error("This tool no longer owns the exact named machine. No command was sent.");
         }
-    }
-
-    function chooseProposal(): void {
-        void perform(async () => {
-            const current = controls.describeTool(identity, tool);
-            if (current.unavailable !== null || !current.bound) {
-                throw new Error(current.unavailable ?? "The tool is not ready.");
-            }
-            if (tool === "grind" && current.grind) {
-                const request = seedGrindRequest(current.grind, controls.dialGrindSizeFor(identity));
-                if (!request) throw new Error("No qualified grind proposal is available.");
-                setGrind(request);
-            } else if (tool === "pour" && current.pour) {
-                const request = seedPourRequest(current.pour);
-                if (!request) throw new Error("No qualified pour proposal is available.");
-                setPour(request);
-            }
-        });
     }
 
     function changeMode(mode: PourRequest["mode"]): void {
@@ -214,7 +201,7 @@ export function useMachineTool(identity: ControlIdentity, tool: ToolId, controls
 
     return {
         support, owns, phase, bound, unavailable, error, liveTempError, livePatternError, busy, grind, pour,
-        setGrind, setPour, chooseProposal, changeMode, start, open, recover,
+        setGrind, setPour, changeMode, start, open, recover,
         setLiveTemperature, setLivePattern,
         reconnect: () => { void perform(() => controls.reconnectTool(identity, tool)); },
         stop: () => { void perform(async () => { requireBound(); await controls.stop(); }); },

@@ -217,3 +217,38 @@ it("automatically refreshes stale or exited-tool state via 8022 before reopening
         jest.useRealTimers();
     }
 });
+
+it("refreshes state for readSettings, blocks recover during preflight, and cancels open before attachment on signal abort", async () => {
+    const s = await controlFixture();
+    let release8022!: () => void;
+    const waiting8022 = new Promise<void>(resolve => { release8022 = resolve; });
+    const originalWrite = s.radio.write.bind(s.radio);
+    s.radio.write = async frame => {
+        if ((frame[3] | (frame[4] << 8)) === 8022) {
+            await waiting8022;
+        }
+        await originalWrite(frame);
+    };
+    jest.useFakeTimers();
+    try {
+        await jest.advanceTimersByTimeAsync(16_000);
+        const abort = new AbortController();
+        const openPromise = s.controls.open(identity, "grind", abort.signal);
+        await flushControls();
+        await expect(s.controls.recover()).rejects.toThrow("Control reconciliation is unavailable.");
+        abort.abort();
+        s.radio.homeReply = status(0x41);
+        release8022();
+        await expect(openPromise).rejects.toThrow("Control open cancelled before attachment.");
+        expect(s.controls.getSnapshot().phase).toBe("closed");
+        expect(s.machine.controlBlocker).toBeNull();
+        expect(s.planned).toEqual([]);
+
+        await jest.advanceTimersByTimeAsync(16_000);
+        await s.controls.applySetting(identity, "brightness", 3);
+        expect(s.controls.getSnapshot()).toMatchObject({phase: "closed", settings: {brightness: 3}});
+    } finally {
+        s.controls.dispose();
+        jest.useRealTimers();
+    }
+});

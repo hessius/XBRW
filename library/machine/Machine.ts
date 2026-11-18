@@ -288,7 +288,7 @@ export default class Machine {
     private stateAt = 0;
     private controlStateProbe: Promise<void> | null = null;
     private static readonly TOOL_IDLE_OR_BOOT_STATES: ReadonlySet<number> = new Set([
-        0x02, MACHINE_STATE.DISPENSING, 0x04, 0x05, MACHINE_STATE.LOADING
+        0x02, 0x04, 0x05, MACHINE_STATE.LOADING
     ]);
 
     /**
@@ -375,11 +375,12 @@ export default class Machine {
         }
         const expiredFault = this.state !== null && FAULT_BLOCKS[this.state] !== undefined
             && Date.now() - this.stateAt > STATE_FRESH_MS;
+        const passiveWaitOnly = this.state === MACHINE_STATE.DISPENSING;
         const canProbe = this.state === null
             || STARTABLE.has(this.state)
             || Machine.TOOL_IDLE_OR_BOOT_STATES.has(this.state)
             || expiredFault;
-        if (!canProbe) return;
+        if (!canProbe && !passiveWaitOnly) return;
 
         const generation = this.generation;
         const finish = this.beginOrdinaryOperation();
@@ -390,11 +391,13 @@ export default class Machine {
         };
         let probe!: Promise<void>;
         probe = (async () => {
+            const abort = new AbortController();
             try {
-                const answered = this.waitForState((state) => STARTABLE.has(state));
-                await this.writeFrame(buildType1(8022), check);
+                const answered = this.waitForState((state) => STARTABLE.has(state), abort.signal);
+                if (!passiveWaitOnly) await this.writeFrame(buildType1(8022), check);
                 await answered;
             } catch {
+                abort.abort();
                 // Caller falls through to acquireControlSession, which surfaces any refusal.
             } finally {
                 finish();
@@ -1111,10 +1114,12 @@ export default class Machine {
         // has to land, so its failure is worth a line of its own.
         // Listening before the handshake: the machine sends its vitals by
         // itself right after acknowledging it, and nothing else asks for them.
-        const answered = this.waitForAnyInfo();
+        const abort = new AbortController();
+        const answered = this.waitForAnyInfo(abort.signal);
         try {
             await this.shakeHands();
         } catch (e) {
+            abort.abort();
             this.note(`handshake not sent — ${(e as Error).message}`);
             throw e;
         }
@@ -1166,6 +1171,44 @@ export default class Machine {
         return this.info !== null;
     }
 
+    /** Wait until a matching notification arrives, the connection generation changes, or timeout/abort elapses. */
+    private waitForNotification<T>(
+        timeoutMs: number,
+        fallback: T,
+        match: (parsed: Notification) => T | undefined,
+        signal?: AbortSignal
+    ): Promise<T> {
+        if (signal?.aborted) return Promise.resolve(fallback);
+        const generation = this.generation;
+        return new Promise((resolve) => {
+            let done = false;
+            const finish = (value: T): void => {
+                if (done) return;
+                done = true;
+                clearTimeout(timer);
+                offNotify();
+                offLink();
+                signal?.removeEventListener("abort", onAbort);
+                resolve(value);
+            };
+            const onAbort = () => finish(fallback);
+            const offNotify = this.onNotification((parsed) => {
+                if (generation !== this.generation) {
+                    finish(fallback);
+                    return;
+                }
+                const matched = match(parsed);
+                if (matched !== undefined) finish(matched);
+            });
+            const offLink = this.onLink(() => {
+                if (generation !== this.generation) finish(fallback);
+            });
+            signal?.addEventListener("abort", onAbort, {once: true});
+            const timer = setTimeout(() => finish(fallback), timeoutMs);
+            timer.unref?.();
+        });
+    }
+
     /**
      * Wait for the next info frame (any info frame).
      *
@@ -1177,19 +1220,9 @@ export default class Machine {
      *
      * @returns whether the machine answered before the window closed.
      */
-    private waitForAnyInfo(): Promise<boolean> {
-        return new Promise((resolve) => {
-            const finish = (answered: boolean): void => {
-                clearTimeout(timer);
-                off();
-                resolve(answered);
-            };
-            const off = this.onNotification((parsed) => {
-                if (parsed.kind === "info") finish(true);
-            });
-            const timer = setTimeout(() => finish(false), this.infoWaitMs);
-            timer.unref?.();
-        });
+    private waitForAnyInfo(signal?: AbortSignal): Promise<boolean> {
+        return this.waitForNotification(this.infoWaitMs, false,
+            (parsed) => (parsed.kind === "info" ? true : undefined), signal);
     }
 
     /**
@@ -1255,7 +1288,8 @@ export default class Machine {
         const infoBeforeRequest = this.info;
         // Listening before the handshake, not after: the info can arrive
         // inside the write, since the radio delivers on its own thread.
-        const answered = this.waitForAnyInfo();
+        const abort = new AbortController();
+        const answered = this.waitForAnyInfo(abort.signal);
         try {
             if (write === undefined) await this.shakeHands();
             else {
@@ -1264,6 +1298,7 @@ export default class Machine {
                 this.lastHandshakeAt = Date.now();
             }
         } catch (error) {
+            abort.abort();
             if (check !== undefined) throw error;
             if (generation !== this.generation) throw error;
             // A handshake the radio would not carry is not a reason to abandon
@@ -1964,24 +1999,9 @@ export default class Machine {
      *
      * @returns the state reported, or null when none came in time.
      */
-    private waitForState(accept: (state: number) => boolean): Promise<number | null> {
-        const generation = this.generation;
-        return new Promise((resolve) => {
-            const finish = (state: number | null): void => {
-                clearTimeout(timer);
-                off();
-                resolve(state);
-            };
-            const off = this.onNotification((parsed) => {
-                if (generation !== this.generation) {
-                    finish(null);
-                    return;
-                }
-                if (parsed.kind === "status" && accept(parsed.state)) finish(parsed.state);
-            });
-            const timer = setTimeout(() => finish(null), this.stateReplyMs);
-            timer.unref?.();
-        });
+    private waitForState(accept: (state: number) => boolean, signal?: AbortSignal): Promise<number | null> {
+        return this.waitForNotification(this.stateReplyMs, null,
+            (parsed) => (parsed.kind === "status" && accept(parsed.state) ? parsed.state : undefined), signal);
     }
 
     /**
