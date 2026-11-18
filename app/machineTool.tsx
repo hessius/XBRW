@@ -87,6 +87,12 @@ function ToolScreen({identity, tool, name, injected}: {
                         temperatureC={bound ? snapshot.temperatureC : null} pattern={bound ? snapshot.pattern : null}
                         pendingTemperatureC={bound ? snapshot.pendingTemperatureC : null}
                         pendingPattern={bound ? snapshot.pendingPattern : null}
+                        liveTemperature={support.liveTemperature
+                            ? {qualified: true, onChange: state.setLiveTemperature, error: state.liveTempError}
+                            : undefined}
+                        livePattern={support.livePattern
+                            ? {qualified: true, onChange: state.setLivePattern, error: state.livePatternError}
+                            : undefined}
                         unavailable={unavailable} stopUnavailable={support.stopUnavailable}
                         error={owns ? snapshot.error : null} onRequestChange={state.setPour}
                         onModeChange={state.changeMode} onStart={state.start} onStop={state.stop}/>}

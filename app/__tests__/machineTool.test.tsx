@@ -11,7 +11,7 @@ import type {ControlCommand, ControlFeedback, ControlTokens} from "@/library/mac
 import type {SavedMachine} from "@/library/machine/savedMachines";
 import {buildType1, MACHINE_STATE} from "@/library/machine/protocol";
 import {FakeTransport, machineInfoFrame} from "@/library/machine/__tests__/FakeTransport";
-import {notification, status} from "@/library/machine/__tests__/protocolFixtures";
+import {event, notification, status} from "@/library/machine/__tests__/protocolFixtures";
 import {flushControls} from "@/hooks/__tests__/machineControlFixture";
 import {openLink} from "@/hooks/useMachine";
 import {performLiveBrewBarAction, requestLiveBrewBarNavigation, useLiveBrewBarCovered} from "@/hooks/useLiveBrewBarGuard";
@@ -670,4 +670,35 @@ it("covers the underlying content on both accessibility platforms while Stop and
     expect(s.sent.filter(item => item.command.kind === "stop")).toHaveLength(1);
     expect(s.sent.filter(item => item.command.kind === "exit")).toHaveLength(0);
     expect(mockPrevention.prevent).toBe(true);
+});
+
+it("exposes live temperature and pattern mutations on PourTool when qualified in production", async () => {
+    const studioIdentity = {deviceId: identity.deviceId, serial: "J15A01B5AF231"};
+    mockMachines = [{...saved, id: studioIdentity.deviceId, serial: studioIdentity.serial, label: "Studio"}];
+    mockParams = {machineId: studioIdentity.deviceId, tool: "pour"};
+    const s = await fixture({production: true});
+    const studioBlob = machineInfoFrame({serial: studioIdentity.serial, model: "", firmware: "V12.0D.500"});
+    s.radio.infoReply = studioBlob;
+    s.radio.emit(studioBlob);
+    s.radio.syntheticWrite = frame => {
+        const code = frame[3] | (frame[4] << 8);
+        if (code === 8007) s.radio.emit(event(8007));
+        if (code === 4506) s.radio.emit(event(4506));
+        if (code === 4510) s.radio.emit(event(4510));
+        if (code === 8016) s.radio.emit(event(8016));
+        if (code === 4507) s.radio.emit(event(4507));
+        if (code === 8013) s.radio.emit(event(8013));
+    };
+    await renderWithProviders(<MachineToolScreen controls={s.controls}/>);
+    await press("Open tool");
+    await press("Choose editable proposal");
+    await press("Start");
+    expect(screen.getByLabelText("Increase Setpoint")).toBeEnabled();
+    expect(screen.getByRole("button", {name: "Circular"})).toBeEnabled();
+    await press("Circular");
+    await waitFor(() => expect(s.controls.getSnapshot().pattern).toBe("circular"));
+    await fireEvent.press(screen.getByLabelText("Increase Setpoint"));
+    await act(flushControls);
+    await waitFor(() => expect(s.controls.getSnapshot().temperatureC).toBe(21));
+    await press("Stop");
 });

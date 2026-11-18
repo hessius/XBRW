@@ -11,7 +11,7 @@ it("reads qualified settings explicitly with leased info only, never Apply or a 
     expect(support).toMatchObject({reading: "unavailable", reason: null, readingReason: "missing-readback"});
     expect(s.radio.sent).toEqual([]);
     await s.controls.readSettings(settingIdentity, "brightness");
-    expect(s.planned.map(p => p.command)).toEqual([{kind: "inspect", tool: null, readOnly: true}]);
+    expect(s.planned.map(p => p.command)).toEqual([{kind: "inspect", tool: null, settingId: "brightness", readOnly: true}]);
     expect(s.radio.sent).toEqual([8100]);
     expect(s.controls.getSnapshot()).toMatchObject({phase: "closed", identity: settingIdentity, settings: settingReadings});
     expect(s.controls.describeSettings(settingIdentity, "brightness").reading).toBe("current");
@@ -124,27 +124,35 @@ it("qualifies real Studio hardware with empty model in info blob under productio
     payload[38] = 8; // brightness = 8 (Mid)
     payload[40] = 1; // tempUnit = 1 (C)
     payload[41] = 1; // weightUnit = 1 (g)
-    put(51, "00000000");
+    put(51, "0000");
     const realStudioBlob = notification(0x49, 0x9E, payload);
 
     const s = await machineSettingsFixture({production: true});
     s.radio.infoReply = realStudioBlob;
     s.radio.emit(realStudioBlob);
 
-    // describeSettings has no identity-unavailable error
+    // describeSettings hydrates 40521 settings immediately without identity-unavailable error
     const tempSupport = s.controls.describeSettings(studioIdentity, "temperatureUnit");
     expect(tempSupport.unavailable).toBeNull();
     expect(tempSupport.reason).toBeNull();
-    expect(tempSupport.reading).toBe("unavailable");
-    expect(tempSupport.readingReason).toBe("missing-readback");
+    expect(tempSupport.reading).toBe("current");
+    expect(tempSupport.readingReason).toBeNull();
     expect(tempSupport.policy.temperatureUnit).toEqual(["C", "F"]);
 
-    // describeTool has qualified rejection for all standalone tools, NOT identity-unavailable
+    // 40521 reports 0 for tuning on J15A01B5AF231, which stays unavailable until read via 11508/11506
+    const vibSupport = s.controls.describeSettings(studioIdentity, "vibrationAmplitude");
+    expect(vibSupport.unavailable).toBeNull();
+    expect(vibSupport.reading).toBe("unavailable");
+    expect(vibSupport.readingReason).toBe("missing-readback");
+
+    // Standalone tools are now qualified on Studio V12.0D.500
     for (const tool of ["grind", "pour", "scale"] as const) {
-        expect(s.controls.describeTool(studioIdentity, tool).unavailable).toBe(
-            "This tool is not qualified for this machine and firmware."
-        );
+        expect(s.controls.describeTool(studioIdentity, tool).unavailable).toBeNull();
     }
+    expect(s.controls.describeTool(studioIdentity, "pour")).toMatchObject({
+        liveTemperature: true,
+        livePattern: true
+    });
 
     // Reading settings explicitly succeeds and decodes from info refresh
     await s.controls.readSettings(studioIdentity, "temperatureUnit");
@@ -155,7 +163,9 @@ it("qualifies real Studio hardware with empty model in info blob under productio
             temperatureUnit: "C",
             weightUnit: "g",
             brightness: 8,
-            waterSource: "tank"
+            waterSource: "tank",
+            pourRadius: null,
+            vibrationAmplitude: null
         })
     });
     expect(s.controls.describeSettings(studioIdentity, "temperatureUnit").reading).toBe("current");

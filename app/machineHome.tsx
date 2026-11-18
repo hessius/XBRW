@@ -16,6 +16,7 @@ import {useMachine} from "@/hooks/useMachine";
 import {useSavedMachines} from "@/hooks/useSavedMachines";
 import router from "@/hooks/steadyRouter";
 import type MachineControls from "@/library/machine/MachineControls";
+import {resolveControlModel} from "@/library/machine/controlCapabilities";
 import {machineLabel, type SavedMachine} from "@/library/machine/savedMachines";
 
 function MachinePage({entry, index, controls}: {
@@ -82,7 +83,7 @@ function MachinePage({entry, index, controls}: {
                                 : "Not selected. Opening this page does not switch machines."}
                         </Text>
                         <Text selectable color={palette.text}>
-                            {`Reported model: ${info === null ? "Unavailable" : info.model || machine.modelNumber || "Unavailable"}`}
+                            {`Reported model: ${info === null ? "Unavailable" : resolveControlModel(info.model, info.serial) ?? (machine.modelNumber || "Unavailable")}`}
                         </Text>
                         <Text selectable color={palette.text}>
                             {`Firmware: ${info?.firmware || "Unavailable"}`}

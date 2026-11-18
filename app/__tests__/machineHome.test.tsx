@@ -321,3 +321,16 @@ it("does not turn a no-saved-machine link into a nearby-machine lookup", async (
     expect(mockChoose).not.toHaveBeenCalled();
     expect(s.radio.sent).toEqual([]);
 });
+
+it("displays resolved studio model when 40521 model bytes are empty on J15 hardware", async () => {
+    const s = await prepare();
+    const studio: SavedMachine = {
+        id: settingIdentity.deviceId, serial: "J15A01B5AF231", label: "Studio", model: "studio",
+        modelString: "", advertisedName: "XBLOOM 5AF231"
+    };
+    save([studio], studio.id);
+    await act(async () => s.radio.emit(machineInfoFrame({serial: studio.serial, model: "", firmware: "V12.0D.500"})));
+    await renderWithProviders(<MachineHomeScreen controls={s.controls}/>);
+    expect(screen.getByText("Reported model: studio")).toBeTruthy();
+    expect(screen.getByText("Firmware: V12.0D.500")).toBeTruthy();
+});

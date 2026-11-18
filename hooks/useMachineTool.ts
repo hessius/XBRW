@@ -3,7 +3,7 @@ import {useMachineToolSupport} from "@/hooks/useMachineToolSupport";
 import type MachineControls from "@/library/machine/MachineControls";
 import {
     validateGrindRequest, validatePourRequest,
-    type ControlIdentity, type ControlSnapshot, type GrindRequest, type PourRequest, type ToolId
+    type ControlIdentity, type ControlSnapshot, type GrindRequest, type Pattern, type PourRequest, type ToolId
 } from "@/library/machine/controlModel";
 
 /** Draft lifetime is the identity/tool-keyed route, never the shared owner. */
@@ -12,6 +12,8 @@ export function useMachineTool(identity: ControlIdentity, tool: ToolId, controls
     const [grindDraft, setGrind] = useState<GrindRequest | null>(null);
     const [pourDraft, setPour] = useState<PourRequest | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [liveTempError, setLiveTempError] = useState<string | null>(null);
+    const [livePatternError, setLivePatternError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
     const bound = support.bound;
     const owns = snapshot.identity?.deviceId === identity.deviceId
@@ -82,6 +84,8 @@ export function useMachineTool(identity: ControlIdentity, tool: ToolId, controls
     }
 
     function start(): void {
+        setLiveTempError(null);
+        setLivePatternError(null);
         void perform(async () => {
             requireBound();
             if (tool === "grind") {
@@ -97,6 +101,8 @@ export function useMachineTool(identity: ControlIdentity, tool: ToolId, controls
     }
 
     function open(): void {
+        setLiveTempError(null);
+        setLivePatternError(null);
         void perform(async () => {
             const current = controls.describeTool(identity, tool);
             if (current.unavailable) throw new Error(current.unavailable);
@@ -113,9 +119,24 @@ export function useMachineTool(identity: ControlIdentity, tool: ToolId, controls
         });
     }
 
+    function setLiveTemperature(celsius: number): void {
+        setLiveTempError(null);
+        void controls.setTemperature(celsius).catch((cause) => {
+            setLiveTempError(cause instanceof Error ? cause.message : "Failed to update temperature.");
+        });
+    }
+
+    function setLivePattern(pattern: Pattern): void {
+        setLivePatternError(null);
+        void controls.setPattern(pattern).catch((cause) => {
+            setLivePatternError(cause instanceof Error ? cause.message : "Failed to update pattern.");
+        });
+    }
+
     return {
-        support, owns, phase, bound, unavailable, error, busy, grind, pour,
+        support, owns, phase, bound, unavailable, error, liveTempError, livePatternError, busy, grind, pour,
         setGrind, setPour, chooseProposal, changeMode, start, open, recover,
+        setLiveTemperature, setLivePattern,
         reconnect: () => { void perform(() => controls.reconnectTool(identity, tool)); },
         stop: () => { void perform(async () => { requireBound(); await controls.stop(); }); },
         tare: () => { void perform(async () => { requireBound(); await controls.tare(); }); }

@@ -9,7 +9,7 @@ type SettingCommand = {
 }[SettingId];
 export type ControlCommand =
     | {kind: "enter" | "exit" | "stop"; tool: ToolId | null}
-    | {kind: "inspect"; tool: ToolId | null; recovery?: boolean; readOnly?: boolean}
+    | {kind: "inspect"; tool: ToolId | null; settingId?: SettingId; recovery?: boolean; readOnly?: boolean}
     | {kind: "grind"; request: Readonly<GrindRequest>}
     | {kind: "pour"; request: Readonly<PourRequest>}
     | {kind: "tare"}
@@ -30,16 +30,19 @@ export type ControlExchange = Readonly<{
     deadlineMs: number;
     /** The setting readback needs the lease's 8100, after sending its proposal. */
     refreshInfo?: boolean;
+    /** Explicitly marks a pure inert setting-read query frame (e.g., 11506/11508). */
+    inertRead?: boolean;
 }>;
 /**
- * No production implementation is qualified. Every encoding, correlation,
- * deadline, unit conversion and optional freshness policy needs device evidence.
+ * Qualification protocol adapter contract. Every encoding, correlation,
+ * deadline, unit conversion and optional freshness policy requires capture evidence.
  * Entry/exit/inspection frames must never start motion. Terminal is proof of
  * stopped hardware, not an ACK. Dispensed telemetry is run-scoped, not cup mass.
  */
 export interface ControlProtocol {
     plan(command: ControlCommand, tokens: ControlTokens): ControlExchange;
     decode(frame: Uint8Array): ControlFeedback | null;
+    decodeInfoSettings?(info: MachineInfo): SettingReadings | null;
     actualWaterSource(info: MachineInfo | null, infoAt: number): "tank" | "tap" | null;
     readonly telemetryFreshMs?: number;
 }

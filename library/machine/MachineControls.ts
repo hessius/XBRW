@@ -4,11 +4,11 @@ import type {ControlSession} from "./Machine";
 import {lookupControlCapabilities, resolveControlModel} from "./controlCapabilities";
 import {
     type ControlIdentity, type ControlSnapshot, type GrindRequest, type PourRequest, type ToolId,
-    type Pattern, type SettingId, type SettingValues, type GrindPolicy, type PourPolicy, type SettingPolicy,
+    type Pattern, type SettingId, type SettingReadings, type SettingValues, type GrindPolicy, type PourPolicy, type SettingPolicy,
     validateGrindRequest, validatePourRequest, validateSetting
 } from "./controlModel";
 import type {ControlCommand, ControlFeedback, ControlQualification, ControlTokens} from "./controlProtocol";
-import {productionQualifications} from "./productionQualifications";
+import {createProductionQualifications} from "./productionQualifications";
 
 export type MachineControlsOptions = {
     qualifications?: readonly ControlQualification[];
@@ -18,6 +18,8 @@ export type MachineToolSupport = Readonly<{
     grind: GrindPolicy | null;
     pour: PourPolicy | null;
     scale: boolean;
+    liveTemperature: boolean;
+    livePattern: boolean;
     bound: boolean;
     unavailable: string | null;
     stopUnavailable: string | null;
@@ -79,6 +81,7 @@ function capture({profile: p, protocol}: ControlQualification): ControlQualifica
         }),
         protocol: Object.freeze({
             plan: protocol.plan.bind(protocol), decode: protocol.decode.bind(protocol),
+            decodeInfoSettings: protocol.decodeInfoSettings?.bind(protocol),
             actualWaterSource: protocol.actualWaterSource.bind(protocol), telemetryFreshMs: protocol.telemetryFreshMs
         })
     });
@@ -95,6 +98,7 @@ export default class MachineControls {
     private waiter: Waiter | null = null;
     private run: ControlTokens | null = null;
     private off: (() => void)[] = [];
+    private linkOff: (() => void) | null = null;
     private writeTail: Promise<void> = Promise.resolve();
     private epoch = 0;
     private stopping: Promise<void> | null = null;
@@ -115,7 +119,9 @@ export default class MachineControls {
     private settingsInfo: Machine["info"] = null;
 
     constructor(private readonly machine: Machine, private readonly options: MachineControlsOptions = {}) {
-        this.qualifications = Object.freeze((options.qualifications ?? productionQualifications).map(capture));
+        this.qualifications = Object.freeze((options.qualifications ?? createProductionQualifications()).map(capture));
+        this.linkOff = this.machine.onLink(() => { this.syncInfoSettings(); });
+        this.syncInfoSettings();
     }
 
     getSnapshot = (): ControlSnapshot => this.snapshot;
@@ -234,6 +240,8 @@ export default class MachineControls {
             grind: qualification?.profile.grind ?? null,
             pour: qualification?.profile.pour ?? null,
             scale: qualification?.profile.scale === true,
+            liveTemperature: qualification?.profile.liveTemperature === true,
+            livePattern: qualification?.profile.livePattern === true,
             bound,
             unavailable,
             // Stop does not use Start's normal-state or water preflight.
@@ -252,6 +260,68 @@ export default class MachineControls {
         return support;
     }
 
+    private sanitizeReadings(
+        readings: Readonly<SettingReadings>,
+        qualification: ControlQualification,
+        identity: ControlIdentity,
+        mergeWithCurrent: boolean
+    ): SettingReadings {
+        const clean: SettingReadings = {
+            temperatureUnit: null,
+            weightUnit: null,
+            brightness: null,
+            waterSource: null,
+            pourRadius: null,
+            vibrationAmplitude: null
+        };
+        const sameLink = mergeWithCurrent
+            && this.settingsInfo !== null
+            && this.snapshot.identity?.deviceId === identity.deviceId
+            && this.snapshot.identity.serial === identity.serial;
+        for (const id of Object.keys(clean) as SettingId[]) {
+            const candidate = readings[id] ?? (sameLink ? this.snapshot.settings?.[id] ?? null : null);
+            if (candidate == null) continue;
+            try {
+                validateSetting(id, candidate, qualification.profile.settings);
+                (clean as Record<SettingId, SettingValues[SettingId] | null>)[id] = candidate;
+            } catch { /* Reject out-of-policy fields rather than exposing invalid readings. */ }
+        }
+        return Object.freeze(clean);
+    }
+
+    /** Passively populates settings already carried in the connected 40521 info frame without dispatching BLE commands. */
+    private syncInfoSettings(): void {
+        if (this.disposed || this.snapshot.phase !== "closed") return;
+        const actual = this.machine.slotIdentity;
+        const info = this.machine.info;
+        if (!actual || !actual.serial || !info) return;
+        let qualification: ControlQualification;
+        try {
+            qualification = this.select();
+        } catch {
+            return;
+        }
+        const decodeInfo = qualification.protocol.decodeInfoSettings;
+        if (!decodeInfo) return;
+        if (this.settingsInfo === info
+            && this.snapshot.identity?.deviceId === actual.deviceId
+            && this.snapshot.identity.serial === actual.serial
+            && this.snapshot.settings !== null) {
+            return;
+        }
+        const raw = decodeInfo(info);
+        if (!raw) return;
+        const identity = Object.freeze({deviceId: actual.deviceId, serial: actual.serial});
+        const clean = this.sanitizeReadings(raw, qualification, identity, true);
+        this.qualification = qualification;
+        this.settingsInfo = info;
+        this.update({
+            ...initial,
+            identity,
+            settings: clean
+        });
+    }
+
     /**
      * Permanent shared-owner teardown, never route cleanup. Detaching cannot
      * prove a motor stopped: keep the lease and durable recovery reservation.
@@ -265,6 +335,8 @@ export default class MachineControls {
         this.deadlines.forEach(clearTimeout);
         this.deadlines.clear();
         this.clearFreshness();
+        this.linkOff?.();
+        this.linkOff = null;
         this.off.splice(0).forEach(off => off());
         this.listeners.clear();
         if (this.snapshot.phase !== "closed") {
@@ -390,6 +462,7 @@ export default class MachineControls {
         if (this.recoveryOnly) {
             this.release();
             this.update({...initial});
+            this.syncInfoSettings();
         } else this.update({phase: "ready", error: null, pendingTemperatureC: null, pendingPattern: null});
     }
 
@@ -432,7 +505,10 @@ export default class MachineControls {
         const tokens = Object.freeze({session: this.session, transaction: ++this.transaction});
         const plan = this.qualification.protocol.plan(command, tokens);
         if (!Number.isFinite(plan.deadlineMs) || plan.deadlineMs <= 0) throw new Error("A qualified deadline is required.");
-        if (command.kind === "inspect" && (command.recovery || command.readOnly) && (plan.frame !== null || !plan.refreshInfo)) {
+        if (command.kind === "inspect" && command.recovery && (plan.frame !== null || !plan.refreshInfo)) {
+            throw new Error("Read-only or recovery inspection must use leased info only.");
+        }
+        if (command.kind === "inspect" && command.readOnly && !plan.inertRead && (plan.frame !== null || !plan.refreshInfo)) {
             throw new Error("Read-only or recovery inspection must use leased info only.");
         }
         let timer: ReturnType<typeof setTimeout>;
@@ -492,7 +568,7 @@ export default class MachineControls {
                     if (command.kind === "grind" || command.kind === "pour") this.run = tokens;
                     if (command.kind === "enter") this.telemetry = tokens;
                     dispatched = true;
-                    armed = !plan.refreshInfo;
+                    armed = !plan.refreshInfo || Boolean(plan.inertRead);
                 };
                 if (plan.frame !== null) {
                     if (command.kind === "stop") await lease.sendStop(plan.frame, dispatch, checkCurrent);
@@ -678,21 +754,27 @@ export default class MachineControls {
         return operation;
     }
 
-    /** Explicit info-only read under the shared exclusive lease, never an Apply. */
+    /** Explicit setting read under the shared exclusive lease, never an Apply. */
     async readSettings(identity: ControlIdentity, id: SettingId): Promise<void> {
         if (this.snapshot.phase !== "closed") throw new Error("Settings require a closed control session.");
         const support = this.describeSettings(identity, id);
         if (support.unavailable) throw new Error(support.unavailable);
+        const priorSettings = this.settingsInfo === this.machine.info
+            && this.snapshot.identity?.deviceId === identity.deviceId
+            && this.snapshot.identity.serial === identity.serial
+            ? this.snapshot.settings : null;
         this.attach(identity, "setting");
         this.recoveryOnly = false;
-        this.update({...initial, identity: Object.freeze({...identity}), phase: "applying", applyingSetting: id});
+        this.update({...initial, identity: Object.freeze({...identity}), phase: "applying", applyingSetting: id,
+            settings: priorSettings});
         try {
-            const result = await this.exchange({kind: "inspect", tool: null, readOnly: true}, "settings");
+            const result = await this.exchange({kind: "inspect", tool: null, settingId: id, readOnly: true}, "settings");
             if (result.kind !== "settings" || result.readings[id] === null) throw new Error("Qualified current setting unavailable.");
             validateSetting(id, result.readings[id], this.qualification!.profile.settings);
+            const clean = this.sanitizeReadings(result.readings, this.qualification!, identity, true);
             this.settingsInfo = this.machine.info;
             this.release();
-            this.update({phase: "closed", applyingSetting: null, error: null, settings: Object.freeze({...result.readings})});
+            this.update({phase: "closed", applyingSetting: null, error: null, settings: clean});
         } catch (error) {
             this.uncertain(failure(error));
             throw error;
@@ -703,21 +785,27 @@ export default class MachineControls {
         if (this.snapshot.phase !== "closed") throw new Error("Settings require a closed control session.");
         const qualification = this.select();
         validateSetting(id, value, qualification.profile.settings);
+        const priorSettings = this.settingsInfo === this.machine.info
+            && this.snapshot.identity?.deviceId === identity.deviceId
+            && this.snapshot.identity.serial === identity.serial
+            ? this.snapshot.settings : null;
         this.attach(identity, "setting");
         this.recoveryOnly = false;
-        this.update({...initial, identity: Object.freeze({...identity}), phase: "applying", applyingSetting: id});
+        this.update({...initial, identity: Object.freeze({...identity}), phase: "applying", applyingSetting: id,
+            settings: priorSettings});
         try {
-            const current = await this.exchange({kind: "inspect", tool: null}, "settings");
+            const current = await this.exchange({kind: "inspect", tool: null, settingId: id}, "settings");
             if (current.kind !== "settings" || current.readings[id] === null) throw new Error("Qualified current setting unavailable.");
-            this.update({settings: Object.freeze({...current.readings})});
+            this.update({settings: this.sanitizeReadings(current.readings, this.qualification!, identity, true)});
             // TS cannot retain the correlation between a generic key and its
             // value when constructing the mapped command union.
             const command = {kind: "setting", id, value} as Extract<ControlCommand, {kind: "setting"}>;
             const result = await this.exchange(command, "settings");
             if (result.kind !== "settings" || result.readings[id] !== value) throw new Error("Setting readback does not match the proposal.");
+            const clean = this.sanitizeReadings(result.readings, this.qualification!, identity, true);
             this.settingsInfo = this.machine.info;
             this.release();
-            this.update({phase: "closed", applyingSetting: null, error: null, settings: Object.freeze({...result.readings})});
+            this.update({phase: "closed", applyingSetting: null, error: null, settings: clean});
         } catch (error) {
             this.uncertain(failure(error));
             throw error;
@@ -835,6 +923,7 @@ export default class MachineControls {
                 this.release();
                 this.update({...initial, identity: settingsIdentity,
                     settings: result.kind === "settings" ? Object.freeze({...result.readings}) : null});
+                if (!settings) this.syncInfoSettings();
             }
         } catch (error) {
             this.uncertain(failure(error));
@@ -852,6 +941,7 @@ export default class MachineControls {
             await this.exchange({kind: "exit", tool: this.snapshot.tool}, "closed");
             this.release();
             this.update({...initial});
+            this.syncInfoSettings();
         } catch (error) {
             this.uncertain(failure(error));
             throw error;
