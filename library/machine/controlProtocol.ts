@@ -32,6 +32,8 @@ export type ControlExchange = Readonly<{
     refreshInfo?: boolean;
     /** Explicitly marks a pure inert setting-read query frame (e.g., 11506/11508). */
     inertRead?: boolean;
+    /** Invoked synchronously right before transmission so queued commands do not arm early. */
+    arm?: () => void;
 }>;
 /**
  * Qualification protocol adapter contract. Every encoding, correlation,
@@ -41,6 +43,7 @@ export type ControlExchange = Readonly<{
  */
 export interface ControlProtocol {
     plan(command: ControlCommand, tokens: ControlTokens): ControlExchange;
+    prepare?(command: ControlCommand, tokens: ControlTokens): ControlExchange;
     decode(frame: Uint8Array): ControlFeedback | null;
     decodeInfoSettings?(info: MachineInfo): SettingReadings | null;
     actualWaterSource(info: MachineInfo | null, infoAt: number): "tank" | "tap" | null;

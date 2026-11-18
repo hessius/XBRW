@@ -80,7 +80,9 @@ function capture({profile: p, protocol}: ControlQualification): ControlQualifica
             })
         }),
         protocol: Object.freeze({
-            plan: protocol.plan.bind(protocol), decode: protocol.decode.bind(protocol),
+            plan: protocol.plan.bind(protocol),
+            prepare: protocol.prepare?.bind(protocol),
+            decode: protocol.decode.bind(protocol),
             decodeInfoSettings: protocol.decodeInfoSettings?.bind(protocol),
             actualWaterSource: protocol.actualWaterSource.bind(protocol),
             telemetryFreshMs: protocol.telemetryFreshMs,
@@ -120,6 +122,7 @@ export default class MachineControls {
         lastAt: number;
         gainedGrams: number;
         peakGain: number;
+        cupRemoved: boolean;
         timer: ReturnType<typeof setTimeout> | null;
     } | null = null;
     private readonly qualifications: readonly ControlQualification[];
@@ -537,18 +540,26 @@ export default class MachineControls {
         tracker.lastAt = now;
         // Sudden large steps reflect cup placement or removal on the scale, not spout flow.
         if (Math.abs(delta) > Math.max(10, dtSec * 8)) {
-            if (delta < -10 && tracker.timer) {
-                clearTimeout(tracker.timer);
-                tracker.timer = null;
+            if (delta < -10) {
+                if (tracker.timer) {
+                    clearTimeout(tracker.timer);
+                    tracker.timer = null;
+                }
+                tracker.cupRemoved = true;
+            } else if (delta > 10 && tracker.cupRemoved) {
+                tracker.cupRemoved = false;
+                if (tracker.gainedGrams >= Math.max(1, tracker.targetMl - 2)) this.armPourPlateauTimer();
             }
             return;
         }
+        if (tracker.cupRemoved) return;
         tracker.gainedGrams = Math.max(0, tracker.gainedGrams + delta);
         const threshold = Math.max(1, tracker.targetMl - 2);
         if (tracker.gainedGrams > tracker.peakGain + 0.35) {
             tracker.peakGain = tracker.gainedGrams;
+            tracker.cupRemoved = false;
             if (tracker.gainedGrams >= threshold) this.armPourPlateauTimer();
-        } else if (tracker.gainedGrams >= threshold && tracker.timer === null) {
+        } else if (!tracker.cupRemoved && tracker.gainedGrams >= threshold && tracker.timer === null) {
             this.armPourPlateauTimer();
         }
     }
@@ -591,7 +602,8 @@ export default class MachineControls {
         if (this.contextInvalid) throw new Error("The control context needs reconciliation.");
         this.lease.check();
         const tokens = Object.freeze({session: this.session, transaction: ++this.transaction});
-        const plan = this.qualification.protocol.plan(command, tokens);
+        const protocol = this.qualification.protocol;
+        const plan = (protocol.prepare ?? protocol.plan).call(protocol, command, tokens);
         if (!Number.isFinite(plan.deadlineMs) || plan.deadlineMs <= 0) throw new Error("A qualified deadline is required.");
         if (command.kind === "inspect" && command.recovery && (plan.frame !== null || !plan.refreshInfo)) {
             throw new Error("Read-only or recovery inspection must use leased info only.");
@@ -653,6 +665,7 @@ export default class MachineControls {
                         lease.assertPourPreflight(this.qualification!.protocol.actualWaterSource(this.machine.info, this.machine.infoAt));
                     }
                     checkCurrent();
+                    if (!dispatched) plan.arm?.();
                     if (command.kind === "grind" || command.kind === "pour") this.run = tokens;
                     if (command.kind === "enter") this.telemetry = tokens;
                     dispatched = true;
@@ -666,7 +679,10 @@ export default class MachineControls {
                 if (plan.refreshInfo) {
                     const answered = await lease.refreshInfo(() => {
                         checkCurrent();
-                        if (!dispatched && command.kind === "enter") this.telemetry = tokens;
+                        if (!dispatched) {
+                            plan.arm?.();
+                            if (command.kind === "enter") this.telemetry = tokens;
+                        }
                         dispatched = true;
                         armed = true;
                     }, checkCurrent);
@@ -767,7 +783,8 @@ export default class MachineControls {
         this.clearPourPlateau();
         if (this.qualification!.protocol.confirmTargetStopFromCupPlateau && captured.mode === "target") {
             this.pourCupTracker = {
-                targetMl: captured.volumeMl, lastGrams: null, lastAt: 0, gainedGrams: 0, peakGain: 0, timer: null
+                targetMl: captured.volumeMl, lastGrams: null, lastAt: 0, gainedGrams: 0, peakGain: 0,
+                cupRemoved: false, timer: null
             };
         }
         this.update({phase: "starting", pourRequest: captured, dispensedMl: null});

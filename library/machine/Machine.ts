@@ -287,6 +287,7 @@ export default class Machine {
     /** When `state` was last heard, as a wall clock. 0 means never. */
     private stateAt = 0;
     private controlStateProbe: Promise<void> | null = null;
+    private controlStateAbort: (() => void) | null = null;
     private static readonly TOOL_IDLE_OR_BOOT_STATES: ReadonlySet<number> = new Set([
         0x02, 0x04, 0x05, MACHINE_STATE.LOADING
     ]);
@@ -357,6 +358,21 @@ export default class Machine {
         return snapshot?.marker?.deviceId ?? null;
     }
 
+    private controlProbeBlocked(generation: number, ignoreOp?: {generation: number}): boolean {
+        if (generation !== this.generation || !this.isConnected() || this.backgrounded
+            || this.controlSession !== null || this.slotSession !== null
+            || this.controlStore?.blocker != null
+            || (this.connectedId !== null && this.slotStore?.read(this.connectedId).journal != null)
+            || this.unsettledCommand || isActiveBrewPhase(this.phase)
+            || this.phase.name === "lostContact") {
+            return true;
+        }
+        for (const operation of this.ordinaryOperations) {
+            if (operation !== ignoreOp && operation.generation === generation) return true;
+        }
+        return false;
+    }
+
     /**
      * Queries the machine for a current status frame when control state is missing,
      * stale, or still sitting in an exited tool/boot screen so switching tools does
@@ -367,14 +383,7 @@ export default class Machine {
         const fresh = this.state !== null && STARTABLE.has(this.state)
             && Date.now() - this.stateAt <= STATE_FRESH_MS;
         if (fresh) return;
-        if (!this.isConnected() || this.backgrounded || this.controlSession !== null
-            || this.slotSession !== null || this.controlStore?.blocker != null
-            || (this.connectedId !== null && this.slotStore?.read(this.connectedId).journal != null)
-            || this.unsettledCommand || isActiveBrewPhase(this.phase)
-            || this.phase.name === "lostContact"
-            || Array.from(this.ordinaryOperations).some((operation) => operation.generation === this.generation)) {
-            return;
-        }
+        if (this.controlProbeBlocked(this.generation)) return;
         const expiredFault = this.state !== null && FAULT_BLOCKS[this.state] !== undefined
             && Date.now() - this.stateAt > STATE_FRESH_MS;
         const passiveWaitOnly = this.state === MACHINE_STATE.DISPENSING && !this.controlStateSeen;
@@ -390,15 +399,17 @@ export default class Machine {
         if (!canProbe && !passiveWaitOnly) return;
 
         const generation = this.generation;
-        const finish = this.beginOrdinaryOperation();
+        const probeOp = {generation};
+        const finish = this.beginOrdinaryOperation(probeOp);
         const check = () => {
-            if (generation !== this.generation || this.backgrounded || this.controlSession !== null) {
+            if (this.controlProbeBlocked(generation, probeOp)) {
                 throw new ControlOperationError("The machine state probe was superseded.");
             }
         };
         const isFresh = () => this.state !== null && STARTABLE.has(this.state)
             && Date.now() - this.stateAt <= STATE_FRESH_MS;
         const waitGap = async (signal: AbortSignal) => {
+            check();
             if (this.frameGapMs <= 0 || this.lastControlTxAt <= 0) return;
             const remaining = this.frameGapMs - (Date.now() - this.lastControlTxAt);
             if (remaining <= 0) return;
@@ -407,11 +418,13 @@ export default class Machine {
                     clearTimeout(timer);
                     offState();
                     offLink();
+                    offPhase();
                     signal.removeEventListener("abort", onStop);
+                    if (this.controlStateAbort === checkInterrupted) this.controlStateAbort = null;
                 };
                 const onStop = () => { cleanup(); resolve(); };
                 const checkInterrupted = () => {
-                    if (generation !== this.generation || this.backgrounded || this.controlSession !== null) {
+                    if (this.controlProbeBlocked(generation, probeOp)) {
                         cleanup();
                         reject(new ControlOperationError("The machine state probe was superseded."));
                     }
@@ -423,6 +436,8 @@ export default class Machine {
                     }
                 });
                 const offLink = this.onLink(checkInterrupted);
+                const offPhase = this.onPhase(checkInterrupted);
+                this.controlStateAbort = checkInterrupted;
                 signal.addEventListener("abort", onStop, {once: true});
                 const timer = setTimeout(() => { cleanup(); resolve(); }, remaining);
                 timer.unref?.();
@@ -433,23 +448,41 @@ export default class Machine {
         probe = (async () => {
             const abort = new AbortController();
             let sent8022 = false;
+            let armReplyTimer!: () => void;
             const waitUntilReady = new Promise<void>((resolve) => {
                 let done = false;
+                let sawNonStartableAfter8022 = false;
                 let homeTimer: ReturnType<typeof setTimeout> | null = null;
+                let timer: ReturnType<typeof setTimeout> | null = null;
                 const finishWait = () => {
                     if (done) return;
                     done = true;
                     if (homeTimer !== null) clearTimeout(homeTimer);
-                    clearTimeout(timer);
+                    if (timer !== null) clearTimeout(timer);
                     offFrame();
                     offLink();
+                    offPhase();
                     abort.signal.removeEventListener("abort", finishWait);
                     resolve();
+                };
+                armReplyTimer = () => {
+                    if (done || timer !== null) return;
+                    timer = setTimeout(finishWait, this.stateReplyMs);
+                    timer.unref?.();
                 };
                 const offFrame = this.onFrame((direction, frame, parsed) => {
                     if (direction !== "received" || generation !== this.generation) return;
                     if (parsed.kind === "status" && STARTABLE.has(parsed.state)) {
                         finishWait();
+                        return;
+                    }
+                    if (parsed.kind === "status" && !STARTABLE.has(parsed.state)) {
+                        if (sent8022) sawNonStartableAfter8022 = true;
+                        if (homeTimer !== null) {
+                            clearTimeout(homeTimer);
+                            homeTimer = null;
+                            finishWait();
+                        }
                         return;
                     }
                     if (!sent8022 || parsed.kind !== "event" || parsed.code !== 8022) return;
@@ -460,11 +493,12 @@ export default class Machine {
                         return;
                     }
                     const carriedHome = frame.length === 28 && STARTABLE.has(frame[25]);
-                    if (this.controlStateSeen && carriedHome && (this.state === null || !FAULT_BLOCKS[this.state])
-                        && homeTimer === null) {
+                    if (!sawNonStartableAfter8022 && this.controlStateSeen && carriedHome
+                        && (this.state === null || !FAULT_BLOCKS[this.state]) && homeTimer === null) {
                         homeTimer = setTimeout(() => {
-                            if (generation === this.generation && !done && this.controlStateSeen
-                                && (this.state === null || !FAULT_BLOCKS[this.state])) {
+                            if (generation === this.generation && !done && !sawNonStartableAfter8022
+                                && this.controlStateSeen && (this.state === null || !FAULT_BLOCKS[this.state])
+                                && !this.controlProbeBlocked(generation, probeOp)) {
                                 this.state = frame[25];
                                 this.stateAt = Date.now();
                                 this.controlStateSeen = false;
@@ -474,29 +508,33 @@ export default class Machine {
                         homeTimer.unref?.();
                     }
                 });
-                const offLink = this.onLink(() => {
-                    if (generation !== this.generation) finishWait();
-                });
+                const abortIfSuperseded = () => {
+                    if (this.controlProbeBlocked(generation, probeOp)) finishWait();
+                };
+                const offLink = this.onLink(abortIfSuperseded);
+                const offPhase = this.onPhase(abortIfSuperseded);
                 abort.signal.addEventListener("abort", finishWait, {once: true});
-                const gapBudget = (!passiveWaitOnly && this.frameGapMs > 0 && this.lastControlTxAt > 0
-                    ? Math.max(0, this.frameGapMs - (Date.now() - this.lastControlTxAt))
-                    : 0)
-                    + (!passiveWaitOnly && !this.sessionIsFresh() ? this.frameGapMs : 0);
-                const timer = setTimeout(finishWait, this.stateReplyMs + gapBudget);
-                timer.unref?.();
             });
+            const onAbort = () => abort.abort();
             try {
-                if (!passiveWaitOnly) {
+                if (passiveWaitOnly) {
+                    this.controlStateAbort = onAbort;
+                    armReplyTimer();
+                } else {
                     await waitGap(abort.signal);
                     if (isFresh()) { abort.abort(); await waitUntilReady; return; }
                     if (!this.sessionIsFresh()) {
                         await this.writeFrame(buildType1(8100, [185, 1]), check);
                         this.lastHandshakeAt = Date.now();
                         this.lastControlTxAt = Date.now();
+                        check();
                         if (this.frameGapMs > 0) await waitGap(abort.signal);
                         if (isFresh()) { abort.abort(); await waitUntilReady; return; }
                     }
+                    check();
+                    this.controlStateAbort = onAbort;
                     sent8022 = true;
+                    armReplyTimer();
                     await this.writeFrame(buildType1(8022), check);
                     this.lastControlTxAt = Date.now();
                 }
@@ -505,6 +543,7 @@ export default class Machine {
                 abort.abort();
                 // Caller falls through to acquireControlSession, which surfaces any refusal.
             } finally {
+                if (this.controlStateAbort === onAbort) this.controlStateAbort = null;
                 finish();
                 if (this.controlStateProbe === probe) this.controlStateProbe = null;
             }
@@ -784,8 +823,7 @@ export default class Machine {
         }
     }
 
-    private beginOrdinaryOperation(): () => void {
-        const operation = {generation: this.generation};
+    private beginOrdinaryOperation(operation: {generation: number} = {generation: this.generation}): () => void {
         this.ordinaryOperations.add(operation);
         return () => { this.ordinaryOperations.delete(operation); };
     }
@@ -1483,6 +1521,7 @@ export default class Machine {
         if (!isActiveBrewPhase(this.phase)) {
             this.unsettledCommand = true;
             this.controlStateSeen = false;
+            this.controlStateAbort?.();
         }
         const finish = this.beginOrdinaryOperation();
         try {
@@ -1650,6 +1689,7 @@ export default class Machine {
     }
 
     private setPhase(phase: BrewPhase): void {
+        if (isActiveBrewPhase(phase) || phase.name === "lostContact") this.controlStateAbort?.();
         if (phase.name === "sending") this.startupGrinderPosition = undefined;
         // The acknowledgement timer only asks one question — did the recipe
         // reach the machine? — and any phase other than `sending` has already
@@ -2720,6 +2760,8 @@ export default class Machine {
         // share.
         this.cancelling = null;
         this.userCancel = null;
+        this.controlStateAbort?.();
+        this.controlStateAbort = null;
         this.controlStateProbe = null;
         this.lastControlTxAt = 0;
         this.controlStateSeen = false;

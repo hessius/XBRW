@@ -320,11 +320,11 @@ describe("Studio production qualifications", () => {
         s.controls.dispose();
     });
 
-    it("returns running Studio Pour to ready and clears recovery on unsolicited event 4507 or status 0x03", async () => {
+    it("keeps running Studio Pour/Grind active across status 0x02/0x03 and clears recovery on unsolicited terminal events or home status", async () => {
         const s = await studioSetup();
         s.radio.syntheticWrite = (frame) => {
             const code = frame[3] | (frame[4] << 8);
-            if (code === 8007 || code === 4506 || code === 8013) {
+            if (code === 8006 || code === 3500 || code === 8012 || code === 8007 || code === 4506 || code === 8013) {
                 s.radio.emit(event(code));
             }
         };
@@ -332,6 +332,13 @@ describe("Studio production qualifications", () => {
         await s.controls.startPour({
             mode: "target", temperatureC: 90, pattern: "spiral", volumeMl: 60, flowMlPerSecond: 3
         });
+        expect(s.controls.getSnapshot().phase).toBe("running");
+        expect(s.recovery.snapshot.marker).not.toBeNull();
+
+        // Active/delayed 0x03 status must never terminate running Pour or clear recovery.
+        s.radio.emit(status(MACHINE_STATE.DISPENSING));
+        await Promise.resolve();
+        await Promise.resolve();
         expect(s.controls.getSnapshot().phase).toBe("running");
         expect(s.recovery.snapshot.marker).not.toBeNull();
 
@@ -347,17 +354,84 @@ describe("Studio production qualifications", () => {
         expect(s.controls.getSnapshot().phase).toBe("running");
         expect(s.recovery.snapshot.marker).not.toBeNull();
 
-        s.radio.emit(status(MACHINE_STATE.DISPENSING));
+        s.radio.emit(status(0x41));
         await Promise.resolve();
         await Promise.resolve();
         expect(s.controls.getSnapshot().phase).toBe("ready");
         expect(s.recovery.snapshot.marker).toBeNull();
+        await s.controls.close();
 
+        await s.controls.open(studioIdentity, "grind");
+        await s.controls.startGrind({grindSize: 60, rpm: 80});
+        s.radio.emit(status(0x02));
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(s.controls.getSnapshot().phase).toBe("running");
+        expect(s.recovery.snapshot.marker).not.toBeNull();
+
+        s.radio.emit(event(3505));
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(s.controls.getSnapshot().phase).toBe("ready");
+        expect(s.recovery.snapshot.marker).toBeNull();
         await s.controls.close();
         s.controls.dispose();
     });
 
-    it("confirms target Pour completion via 4507 after near-target cup plateau while ignoring jitter, placement jumps, and continuous mode", async () => {
+    it("does not drop natural Pour completion or emit stale 4507 when stop() waits across FRAME_GAP_MS pacing", async () => {
+        jest.useFakeTimers();
+        try {
+            const radio = new Radio();
+            radio.infoReply = j15F231Frame;
+            let raw = "";
+            const recovery = new ControlRecoveryStore({read: () => raw, write: (next) => { raw = next; }});
+            const machine = new Machine(radio, {frameGapMs: 2000});
+            machine.installControlRecovery(recovery);
+            await machine.connect(studioIdentity.deviceId);
+            radio.emit(status(MACHINE_STATE.IDLE));
+            const controls = new MachineControls(machine);
+            radio.syntheticWrite = (frame) => {
+                const code = frame[3] | (frame[4] << 8);
+                if (code === 8007 || code === 4506 || code === 4507 || code === 8013) {
+                    radio.emit(event(code));
+                }
+            };
+
+            await controls.open(studioIdentity, "pour");
+            const starting = controls.startPour({
+                mode: "target", temperatureC: 90, pattern: "spiral", volumeMl: 60, flowMlPerSecond: 3
+            });
+            await jest.advanceTimersByTimeAsync(2000);
+            await starting;
+
+            // stop() immediately enters the 2000 ms FRAME_GAP_MS sleep before sending 4507.
+            radio.written = [];
+            const stopping = controls.stop();
+            await jest.advanceTimersByTimeAsync(500);
+            expect(radio.sent).toEqual([]);
+
+            // Delayed 0x03 must not cancel stop() prematurely, while genuine 9006 settles it without sending 4507.
+            radio.emit(status(MACHINE_STATE.DISPENSING));
+            await Promise.resolve();
+            expect(controls.getSnapshot().phase).toBe("stopping");
+
+            radio.emit(event(9006));
+            await stopping;
+            expect(controls.getSnapshot().phase).toBe("ready");
+            expect(recovery.snapshot.marker).toBeNull();
+            expect(radio.sent).toEqual([]);
+
+            const closing = controls.close();
+            await jest.advanceTimersByTimeAsync(4000);
+            await closing;
+            controls.dispose();
+            await machine.disconnect();
+        } finally {
+            jest.useRealTimers();
+        }
+    });
+
+    it("confirms target Pour completion via 4507 after near-target cup plateau while ignoring jitter, cup removal, and continuous mode", async () => {
         jest.useFakeTimers();
         try {
             const s = await studioSetup();
@@ -385,6 +459,17 @@ describe("Studio production qualifications", () => {
                 await jest.advanceTimersByTimeAsync(1000);
                 s.radio.emit(float32WeightFrame(0x15, g));
             }
+            // Removing the cup near target cancels the plateau timer and keeps it off across empty-pan noise.
+            await jest.advanceTimersByTimeAsync(500);
+            s.radio.emit(float32WeightFrame(0x15, 0));
+            await jest.advanceTimersByTimeAsync(100);
+            s.radio.emit(float32WeightFrame(0x15, 0.2));
+            await jest.advanceTimersByTimeAsync(3000);
+            expect(s.radio.sent).not.toContain(4507);
+
+            // Placing the cup back resumes plateau detection.
+            await jest.advanceTimersByTimeAsync(200);
+            s.radio.emit(float32WeightFrame(0x15, 178.4));
             // Small plateau noise stays inside +0.35 g peak tolerance without sending 4507 early.
             await jest.advanceTimersByTimeAsync(500);
             s.radio.emit(float32WeightFrame(0x15, 178.2));

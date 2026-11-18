@@ -95,53 +95,74 @@ export class StudioControlProtocol implements ControlProtocol {
     }
 
     plan(command: ControlCommand, tokens: ControlTokens): ControlExchange {
+        const exchange = this.prepare(command, tokens);
+        exchange.arm?.();
+        return exchange;
+    }
+
+    prepare(command: ControlCommand, tokens: ControlTokens): ControlExchange {
         if (command.kind === "enter") {
             const frame = this.encodeEnter(command.tool);
-            this.pending = {command, tokens};
-            this.activeTool = command.tool;
-            this.enterTokens = tokens;
-            this.runTokens = null;
-            this.movingStarted = false;
-            this.waterDispensedObserved = false;
-            return {frame, deadlineMs: 10000};
+            return {
+                frame,
+                deadlineMs: 10000,
+                arm: () => {
+                    this.pending = {command, tokens};
+                    this.activeTool = command.tool;
+                    this.enterTokens = tokens;
+                    this.runTokens = null;
+                    this.movingStarted = false;
+                    this.waterDispensedObserved = false;
+                }
+            };
         }
         if (command.kind === "exit") {
             const frame = this.encodeExit(command.tool);
-            this.pending = {command, tokens};
-            this.enterTokens = null;
-            this.runTokens = null;
-            this.movingStarted = false;
-            this.waterDispensedObserved = false;
-            return {frame, deadlineMs: 10000};
+            return {
+                frame,
+                deadlineMs: 10000,
+                arm: () => {
+                    this.pending = {command, tokens};
+                    this.enterTokens = null;
+                    this.runTokens = null;
+                    this.movingStarted = false;
+                    this.waterDispensedObserved = false;
+                }
+            };
         }
         if (command.kind === "stop") {
             const tool = command.tool ?? this.activeTool;
             if (tool !== "grind" && tool !== "pour") throw new Error("Unsupported stop target.");
-            this.pending = {command, tokens};
-            return {frame: buildType1(tool === "grind" ? 3505 : 4507), deadlineMs: 10000};
+            return {
+                frame: buildType1(tool === "grind" ? 3505 : 4507),
+                deadlineMs: 10000,
+                arm: () => { this.pending = {command, tokens}; }
+            };
         }
         if (command.kind === "tare") {
-            this.pending = {command, tokens};
-            return {frame: buildType1(8500), deadlineMs: 10000};
+            return {
+                frame: buildType1(8500),
+                deadlineMs: 10000,
+                arm: () => { this.pending = {command, tokens}; }
+            };
         }
         if (command.kind === "grind") {
-            this.pending = {command, tokens};
-            this.movingStarted = true;
             return {
                 frame: buildType1(3500, [
                     1000,
                     Math.round(command.request.grindSize),
                     Math.round(command.request.rpm)
                 ]),
-                deadlineMs: 10000
+                deadlineMs: 10000,
+                arm: () => {
+                    this.pending = {command, tokens};
+                    this.movingStarted = true;
+                }
             };
         }
         if (command.kind === "pour") {
             const {request} = command;
             const volumeMl = request.mode === "target" ? Math.round(request.volumeMl) : 0;
-            this.pending = {command, tokens};
-            this.movingStarted = true;
-            this.waterDispensedObserved = false;
             return {
                 frame: buildType1(4506, [
                     Math.round(request.temperatureC * 10),
@@ -149,59 +170,64 @@ export class StudioControlProtocol implements ControlProtocol {
                     volumeMl,
                     floatBitsToInt32(request.flowMlPerSecond * 10)
                 ]),
-                deadlineMs: 10000
+                deadlineMs: 10000,
+                arm: () => {
+                    this.pending = {command, tokens};
+                    this.movingStarted = true;
+                    this.waterDispensedObserved = false;
+                }
             };
         }
         if (command.kind === "temperature") {
-            this.pending = {command, tokens};
             return {
                 frame: buildType1(4510, [Math.round(command.celsius * 10)]),
-                deadlineMs: 10000
+                deadlineMs: 10000,
+                arm: () => { this.pending = {command, tokens}; }
             };
         }
         if (command.kind === "pattern") {
-            this.pending = {command, tokens};
             return {
                 frame: buildType1(8016, [PATTERN_CODE[command.pattern]]),
-                deadlineMs: 10000
+                deadlineMs: 10000,
+                arm: () => { this.pending = {command, tokens}; }
             };
         }
         if (command.kind === "inspect") {
             if (!command.recovery && command.tool === null) {
                 if (command.settingId === "vibrationAmplitude") {
-                    this.pending = {command, tokens};
                     return {
                         frame: buildType2(11508, new Uint8Array(0)),
                         refreshInfo: false,
                         inertRead: true,
-                        deadlineMs: 10000
+                        deadlineMs: 10000,
+                        arm: () => { this.pending = {command, tokens}; }
                     };
                 }
                 if (command.settingId === "pourRadius") {
-                    this.pending = {command, tokens};
                     return {
                         frame: buildType2(11506, new Uint8Array(0)),
                         refreshInfo: true,
                         inertRead: true,
-                        deadlineMs: 12000
+                        deadlineMs: 12000,
+                        arm: () => { this.pending = {command, tokens}; }
                     };
                 }
             }
-            this.pending = {command, tokens};
             return {
                 frame: null,
                 refreshInfo: true,
-                deadlineMs: 12000
+                deadlineMs: 12000,
+                arm: () => { this.pending = {command, tokens}; }
             };
         }
         if (command.kind === "setting") {
             const frame = this.encodeSetting(command.id, command.value);
             const tuning = command.id === "pourRadius" || command.id === "vibrationAmplitude";
-            this.pending = {command, tokens};
             return {
                 frame,
                 refreshInfo: !tuning,
-                deadlineMs: tuning ? 10000 : 12000
+                deadlineMs: tuning ? 10000 : 12000,
+                arm: () => { this.pending = {command, tokens}; }
             };
         }
         throw new Error(`Unsupported control command: ${String((command as {kind: unknown}).kind)}`);
@@ -286,14 +312,15 @@ export class StudioControlProtocol implements ControlProtocol {
         }
 
         // Unsolicited natural completion while a moving tool is active.
+        // Active tool states 0x02/0x03 are excluded here: they arrive after enter and during active dispensing.
         if (this.runTokens && this.pending?.command.kind !== "grind" && this.pending?.command.kind !== "pour") {
             const grindDone = this.activeTool === "grind" && (
                 (parsed.kind === "event" && (parsed.code === 40507 || parsed.code === 3505 || parsed.code === 9004))
-                || (parsed.kind === "status" && (parsed.state === 0x02 || parsed.state === 0x01 || parsed.state === 0x41))
+                || (parsed.kind === "status" && (parsed.state === 0x01 || parsed.state === 0x41))
             );
             const pourDone = this.activeTool === "pour" && (
                 (parsed.kind === "event" && (parsed.code === 4507 || parsed.code === 40511 || parsed.code === 9006))
-                || (parsed.kind === "status" && (parsed.state === 0x03 || parsed.state === 0x01 || parsed.state === 0x41))
+                || (parsed.kind === "status" && (parsed.state === 0x01 || parsed.state === 0x41))
             );
             if (grindDone || pourDone) {
                 const tokens = this.runTokens;

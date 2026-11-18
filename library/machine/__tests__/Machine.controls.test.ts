@@ -742,3 +742,116 @@ it("probes control-session 0x03, refreshes stale 0x41 on 28-byte event 8022, ren
         await machine.disconnect();
     }
 });
+
+it("cancels 28-byte event 8022 homeTimer when a non-startable 0x57 status follows", async () => {
+    const probe8022AtHome = Array.from(
+        Buffer.from("580207561f1c000000c1000000000000000000000000001000410373", "hex")
+    );
+    jest.useFakeTimers();
+    const {machine, radio} = await setup("", FRAME_GAP_MS);
+    try {
+        radio.homeReply = null;
+        radio.infoReply = null;
+        radio.syntheticWrite = (frame) => {
+            if ((frame[3] | (frame[4] << 8)) === 8022) radio.emit(probe8022AtHome);
+        };
+
+        const pourLease = machine.acquireControlSession(identity, "pour");
+        await pourLease.send(buildType1(8007));
+        radio.emit(status(MACHINE_STATE.DISPENSING));
+        pourLease.release();
+
+        radio.written = [];
+        const probe = machine.ensureFreshControlState();
+        await jest.advanceTimersByTimeAsync(FRAME_GAP_MS);
+        expect(radio.sent).toEqual([8022]);
+        await jest.advanceTimersByTimeAsync(100);
+        radio.emit(status(MACHINE_STATE.BREWING));
+        await probe;
+        await jest.advanceTimersByTimeAsync(900);
+        expect(machine.state).toBe(MACHINE_STATE.BREWING);
+        expect(machine.slotStateIsNormal).toBe(false);
+    } finally {
+        jest.useRealTimers();
+        await machine.disconnect();
+    }
+});
+
+it("keeps full stateReplyMs after renewing 8100 when sessionIsFresh expires during first waitGap", async () => {
+    jest.useFakeTimers();
+    const {machine, radio} = await setup("", FRAME_GAP_MS);
+    try {
+        radio.homeReply = null;
+        radio.infoReply = null;
+        radio.syntheticWrite = (frame) => {
+            if ((frame[3] | (frame[4] << 8)) === 8100) radio.emit(event(8100));
+        };
+
+        await jest.advanceTimersByTimeAsync(HANDSHAKE_FRESH_MS - 1000);
+        radio.emit(status(0x41));
+        const lease = machine.acquireControlSession(identity, "scale");
+        await lease.send(buildType1(8003));
+        radio.emit(status(MACHINE_STATE.DISPENSING));
+        lease.release();
+
+        radio.written = [];
+        const probe = machine.ensureFreshControlState();
+        await jest.advanceTimersByTimeAsync(FRAME_GAP_MS);
+        expect(radio.sent).toEqual([8100]);
+        await jest.advanceTimersByTimeAsync(FRAME_GAP_MS);
+        expect(radio.sent).toEqual([8100, 8022]);
+
+        // 2500 ms after 8022 (< STATE_REPLY_MS = 3000 ms), even though 6500 ms passed since probe entry.
+        await jest.advanceTimersByTimeAsync(2500);
+        radio.emit(status(0x41));
+        await probe;
+        expect(machine.slotStateIsNormal).toBe(true);
+    } finally {
+        jest.useRealTimers();
+        await machine.disconnect();
+    }
+});
+
+it("aborts ensureFreshControlState waitGap immediately when console send() or brew() begins", async () => {
+    jest.useFakeTimers();
+    const {machine, radio} = await setup("", FRAME_GAP_MS);
+    try {
+        radio.homeReply = null;
+        const l1 = machine.acquireControlSession(identity, "scale");
+        await l1.send(buildType1(8003));
+        radio.emit(status(0x05));
+        l1.release();
+
+        radio.written = [];
+        const abortForSend = machine.ensureFreshControlState();
+        await jest.advanceTimersByTimeAsync(100);
+        await machine.send(buildType1(40521));
+        await abortForSend;
+        expect(radio.sent).toEqual([40521]);
+
+        radio.emit(status(0x41));
+        await jest.advanceTimersByTimeAsync(FRAME_GAP_MS);
+        const l2 = machine.acquireControlSession(identity, "scale");
+        await l2.send(buildType1(8003));
+        radio.emit(status(0x05));
+        l2.release();
+
+        radio.written = [];
+        const abortForBrew = machine.ensureFreshControlState();
+        await jest.advanceTimersByTimeAsync(100);
+        const brewing = machine.brew(coffee("mid-probe")).catch(() => {});
+        await Promise.resolve();
+        await abortForBrew;
+        expect(radio.sent).not.toContain(8022);
+
+        const cancelling = machine.cancelBrew().catch(() => {});
+        await jest.advanceTimersByTimeAsync(FRAME_GAP_MS * 10);
+        radio.emit(status(0x41));
+        await cancelling;
+        await jest.advanceTimersByTimeAsync(FRAME_GAP_MS * 10);
+        await brewing;
+    } finally {
+        jest.useRealTimers();
+        await machine.disconnect();
+    }
+});

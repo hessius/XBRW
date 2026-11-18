@@ -826,7 +826,38 @@ it("cancels auto-open cleanly on unmount during preflight and offers one-shot Re
         expect(screen.getByText(/fresh known normal/i)).toBeTruthy();
         expect(screen.getByRole("button", {name: "Retry opening tool"})).toBeEnabled();
         expect(s.sent).toEqual([]);
+
+        s.radio.homeReply = status(0x41);
+        await press("Retry opening tool");
+        await act(async () => {
+            await jest.advanceTimersByTimeAsync(0);
+            await flushControls();
+        });
+        expect(s.controls.getSnapshot().phase).toBe("ready");
+        expect(s.sent.map(item => item.command.kind)).toEqual(["enter"]);
     } finally {
         jest.useRealTimers();
     }
+});
+
+it("auto-reopens a tool after Reconcile connected machine clears a recovered reservation", async () => {
+    const s = await prepare("grind");
+    await press("Start");
+    await act(async () => {
+        s.radio.drop();
+        await s.machine.connect(identity.deviceId);
+        s.radio.emit(status(MACHINE_STATE.IDLE));
+        await flushControls();
+    });
+    expect(s.controls.getSnapshot().phase).toBe("unknown");
+    const reconcileButton = screen.getByRole("button", {name: "Reconcile connected machine"});
+    expect(reconcileButton).toBeEnabled();
+    s.respond(item => {
+        if (item.command.kind === "inspect") s.feedback(item, {kind: "terminal"});
+        else s.accept(item);
+    });
+    await press("Reconcile connected machine");
+    await waitFor(() => expect(s.controls.getSnapshot().phase).toBe("ready"));
+    expect(s.recovery.snapshot.marker).toBeNull();
+    expect(s.sent.map(item => item.command.kind)).toEqual(["enter", "grind", "inspect", "enter"]);
 });
