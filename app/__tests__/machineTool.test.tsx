@@ -139,7 +139,6 @@ async function prepare(tool: "grind" | "scale" | "pour" = "grind") {
     const s = await fixture();
     mockParams.tool = tool;
     const view = await renderWithProviders(<MachineToolScreen controls={s.controls}/>);
-    await press("Open tool");
     await waitFor(() => expect(s.controls.getSnapshot().phase).toBe("ready"));
     return {...s, view};
 }
@@ -173,7 +172,6 @@ it.each([true, false])("covers the %s-valid host for a global rating sheet, with
 
 it.each(["grind", "pour"] as const)("reconnects a foreground-dropped %s only to inspect and Stop, without AppState changes", async tool => {
     const s = await prepare(tool);
-    await press("Choose editable proposal");
     await press("Start");
     const marker = s.recovery.snapshot.marker;
     const connect = jest.spyOn(s.machine, "connect");
@@ -206,7 +204,6 @@ it.each(["grind", "pour"] as const)("reconnects a foreground-dropped %s only to 
 
 it("closes foreground recovery only on qualified terminal inspection, not on the reconnected link", async () => {
     const s = await prepare();
-    await press("Choose editable proposal");
     await press("Start");
     await act(async () => s.radio.drop());
     s.respond(item => {
@@ -225,8 +222,7 @@ it.each(["grind", "pour"] as const)("reconnects marker-free %s entry only for qu
     mockParams.tool = tool;
     s.respond(() => {});
     await renderWithProviders(<MachineToolScreen controls={s.controls}/>);
-    await press("Open tool");
-    expect(s.controls.getSnapshot().phase).toBe("entering");
+    await waitFor(() => expect(s.controls.getSnapshot().phase).toBe("entering"));
     await act(async () => s.radio.drop());
     expect(s.controls.getSnapshot().phase).toBe("unknown");
     expect(s.recovery.snapshot.marker).toBeNull();
@@ -253,16 +249,15 @@ it.each(["grind", "pour"] as const)("reconnects marker-free %s entry only for qu
 it.each(["enter", "ready", "tare"] as const)("reconnects a foreground-dropped Scale during %s without replay or motor markers", async operation => {
     const s = await fixture();
     mockParams.tool = "scale";
-    s.respond(() => {});
+    if (operation === "enter") s.respond(() => {});
     await renderWithProviders(<><MachineToolScreen controls={s.controls}/><BarCoverage/></>);
     if (operation !== "enter") {
-        s.respond(s.accept);
-        await press("Open tool");
+        await waitFor(() => expect(s.controls.getSnapshot().phase).toBe("ready"));
         if (operation === "tare") {
             s.respond(() => {});
             await press("Tare");
         }
-    } else await press("Open tool");
+    } else await waitFor(() => expect(s.controls.getSnapshot().phase).toBe("entering"));
     expect(screen.getByRole("button", {name: "Back"})).toBeVisible();
     expect(screen.getByTestId("machine-tool-content")).toHaveProp("accessibilityElementsHidden", false);
     expect(screen.getByTestId("machine-tool-content")).toHaveProp("importantForAccessibility", "auto");
@@ -311,7 +306,6 @@ it.each(["failure", "device", "serial"] as const)("keeps a nonmoving Scale lease
 
 it("keeps a failed reconnect guarded and retryable on the owning route", async () => {
     const s = await prepare();
-    await press("Choose editable proposal");
     await press("Start");
     await act(async () => s.radio.drop());
     const marker = s.recovery.snapshot.marker;
@@ -339,7 +333,6 @@ it("keeps a failed reconnect guarded and retryable on the owning route", async (
 
 it.each(["device", "serial", "tool"] as const)("rejects an owned reconnect for the wrong %s without connecting or sending", async mismatch => {
     const s = await prepare();
-    await press("Choose editable proposal");
     await press("Start");
     await act(async () => s.radio.drop());
     const connect = jest.spyOn(s.machine, "connect");
@@ -355,7 +348,6 @@ it.each(["device", "serial", "tool"] as const)("rejects an owned reconnect for t
 
 it.each(["device", "serial"] as const)("never inspects or stops a reconnect reporting the wrong %s", async mismatch => {
     const s = await prepare();
-    await press("Choose editable proposal");
     await press("Start");
     await act(async () => s.radio.drop());
     const marker = s.recovery.snapshot.marker;
@@ -376,7 +368,6 @@ it.each(["device", "serial"] as const)("never inspects or stops a reconnect repo
 
 it("coalesces repeated reconnects and waits for a cancelled native Start write before connecting", async () => {
     const s = await prepare();
-    await press("Choose editable proposal");
     let settle!: () => void;
     const nativeWrite = new Promise<void>(resolve => { settle = resolve; });
     s.radio.syntheticWrite = async frame => {
@@ -437,7 +428,6 @@ it("waits for a cancelled native Tare before nonmoving reconnect and rejects sta
 
 it("rejects a superseding connection generation without inspecting or clearing recovery", async () => {
     const s = await prepare();
-    await press("Choose editable proposal");
     await press("Start");
     await act(async () => s.radio.drop());
     const marker = s.recovery.snapshot.marker;
@@ -462,7 +452,6 @@ it("rejects a superseding connection generation without inspecting or clearing r
 
 it.each(["permission", "connection"] as const)("rejects disposal during reconnect %s without qualified control sends", async stage => {
     const s = await prepare();
-    await press("Choose editable proposal");
     await press("Start");
     await act(async () => s.radio.drop());
     const marker = s.recovery.snapshot.marker;
@@ -521,11 +510,10 @@ it.each(["grind", "scale", "pour"] as const)("selects the qualified %s instrumen
     const s = await fixture();
     mockParams.tool = tool;
     let view = await renderWithProviders(<MachineToolScreen controls={s.controls}/>);
-    expect(s.sent).toEqual([]);
-    await press("Open tool");
-    expect(s.controls.getSnapshot()).toMatchObject({phase: "ready", tool, identity});
-    if (tool === "grind") expect(screen.getByLabelText("SELECTED SIZE: Unavailable")).toBeTruthy();
-    if (tool === "pour") expect(screen.getByLabelText("SETPOINT: Unavailable")).toBeTruthy();
+    await waitFor(() => expect(s.controls.getSnapshot()).toMatchObject({phase: "ready", tool, identity}));
+    expect(s.sent.map(item => item.command.kind)).toEqual(["enter"]);
+    if (tool === "grind") expect(screen.getByLabelText("SELECTED SIZE: 1")).toBeTruthy();
+    if (tool === "pour") expect(screen.getByLabelText("SETPOINT: 40 °C")).toBeTruthy();
     if (tool === "scale") expect(screen.getByLabelText("WEIGHT: Unavailable")).toBeTruthy();
     await view.unmount();
     view = await renderWithProviders(<MachineToolScreen controls={s.controls}/>);
@@ -539,21 +527,20 @@ it("keeps the production registry unavailable and never infers scale from other 
     const s = await fixture({production: true});
     const view = await renderWithProviders(<MachineToolScreen controls={s.controls}/>);
     expect(screen.getAllByText(/Controls unavailable: unqualified/).length).toBeGreaterThan(0);
-    expect(screen.getByRole("button", {name: "Open tool"})).toBeDisabled();
+    expect(screen.queryByRole("button", {name: "Open tool"})).toBeNull();
+    expect(screen.getByRole("button", {name: "Start"})).toBeDisabled();
     expect(s.sent).toEqual([]);
     await view.unmount();
     const scale = await fixture({scale: false});
     mockParams.tool = "scale";
     await renderWithProviders(<MachineToolScreen controls={scale.controls}/>);
-    expect(screen.getByRole("button", {name: "Open tool"})).toBeDisabled();
+    expect(screen.getAllByText(/not qualified/).length).toBeGreaterThan(0);
     expect(screen.getByRole("button", {name: "Tare"})).toBeDisabled();
     expect(scale.sent).toEqual([]);
 });
 
-it("requires a deliberate proposal and Start, preserving the request after Stop without restarting", async () => {
+it("pre-seeds an editable proposal and starts deliberately, preserving the request after Stop without restarting", async () => {
     const s = await prepare();
-    expect(screen.getByRole("button", {name: "Start"})).toBeDisabled();
-    await press("Choose editable proposal");
     expect(screen.getByText(/editable proposal, not the machine/)).toBeTruthy();
     await press("Start");
     expect(s.controls.getSnapshot()).toMatchObject({phase: "running", grindRequest: {grindSize: 1, rpm: 100}});
@@ -578,7 +565,6 @@ it("binds Tare to the owner without optimistically replacing its last observed w
 
 it("starts Pour only deliberately and never exposes live mutations from its ordinary pour policy", async () => {
     const s = await prepare("pour");
-    await press("Choose editable proposal");
     await press("Start");
     expect(s.controls.getSnapshot().phase).toBe("running");
     const run = s.sent.find(item => item.command.kind === "pour")!;
@@ -602,14 +588,14 @@ it("does not reserve, switch or connect to a different target or serial", async 
     const connect = jest.spyOn(s.machine, "connect");
     mockMachines[0].serial = "another-serial";
     const view = await renderWithProviders(<MachineToolScreen controls={s.controls}/>);
-    expect(screen.getByRole("button", {name: "Open tool"})).toBeDisabled();
+    expect(screen.getByRole("button", {name: "Start"})).toBeDisabled();
     expect(connect).not.toHaveBeenCalled();
     expect(s.sent).toEqual([]);
     await view.unmount();
     mockMachines = [{...saved, id: "other-device"}];
     mockParams.machineId = "other-device";
     await renderWithProviders(<MachineToolScreen controls={s.controls}/>);
-    expect(screen.getByRole("button", {name: "Open tool"})).toBeDisabled();
+    expect(screen.getByRole("button", {name: "Start"})).toBeDisabled();
     expect(connect).not.toHaveBeenCalled();
     expect(s.recovery.snapshot.marker).toBeNull();
 });
@@ -638,7 +624,6 @@ it("renders failed entry explicitly without treating transport completion as suc
     const s = await fixture();
     s.respond(() => {});
     await renderWithProviders(<MachineToolScreen controls={s.controls}/>);
-    await press("Open tool");
     await waitFor(() => expect(screen.getAllByText("Qualified control response missing.").length).toBeGreaterThan(0));
     expect(s.controls.getSnapshot().phase).toBe("unknown");
     expect(screen.queryByRole("button", {name: "Start"})).toBeNull();
@@ -647,7 +632,6 @@ it("renders failed entry explicitly without treating transport completion as suc
 
 it("covers the underlying content on both accessibility platforms while Stop and leave awaits proof; Stay never cancels Stop", async () => {
     const s = await prepare();
-    await press("Choose editable proposal");
     await press("Start");
     let stop: Sent | undefined;
     s.respond(item => { if (item.command.kind === "stop") stop = item; });
@@ -690,8 +674,7 @@ it("exposes live temperature and pattern mutations on PourTool when qualified in
         if (code === 8013) s.radio.emit(event(8013));
     };
     await renderWithProviders(<MachineToolScreen controls={s.controls}/>);
-    await press("Open tool");
-    await press("Choose editable proposal");
+    await waitFor(() => expect(s.controls.getSnapshot().phase).toBe("ready"));
     await press("Start");
     expect(screen.getByLabelText("Increase Setpoint")).toBeEnabled();
     expect(screen.getByRole("button", {name: "Circular"})).toBeEnabled();
@@ -701,4 +684,33 @@ it("exposes live temperature and pattern mutations on PourTool when qualified in
     await act(flushControls);
     await waitFor(() => expect(s.controls.getSnapshot().temperatureC).toBe(21));
     await press("Stop");
+});
+
+it("seeds Studio Grind size from 40521 dial and closes idle tool cleanly without Leave tool popover", async () => {
+    const studioIdentity = {deviceId: identity.deviceId, serial: "J15A01B5AF231"};
+    mockMachines = [{...saved, id: studioIdentity.deviceId, serial: studioIdentity.serial, label: "Studio"}];
+    mockParams = {machineId: studioIdentity.deviceId, tool: "grind"};
+    const s = await fixture({production: true});
+    const studioBlob = machineInfoFrame({serial: studioIdentity.serial, model: "", firmware: "V12.0D.500"});
+    s.radio.infoReply = studioBlob;
+    s.radio.emit(studioBlob);
+    let exitSent = false;
+    s.radio.syntheticWrite = frame => {
+        const code = frame[3] | (frame[4] << 8);
+        if (code === 8006) s.radio.emit(event(8006));
+        if (code === 8012) exitSent = true;
+    };
+    await renderWithProviders(<MachineToolScreen controls={s.controls}/>);
+    await waitFor(() => expect(s.controls.getSnapshot().phase).toBe("ready"));
+    expect(screen.getByLabelText("SELECTED SIZE: 62")).toBeTruthy();
+    await press("Back");
+    expect(exitSent).toBe(true);
+    expect(screen.queryByText("Leave tool?")).toBeNull();
+    expect(screen.queryByText("Waiting for confirmation…")).toBeNull();
+    await act(async () => {
+        s.radio.emit(event(8012));
+        await flushControls();
+    });
+    expect(mockBack).toHaveBeenCalledTimes(1);
+    expect(s.controls.getSnapshot().phase).toBe("closed");
 });

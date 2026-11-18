@@ -286,6 +286,10 @@ export default class Machine {
     public state: number | null = null;
     /** When `state` was last heard, as a wall clock. 0 means never. */
     private stateAt = 0;
+    private controlStateProbe: Promise<void> | null = null;
+    private static readonly TOOL_IDLE_OR_BOOT_STATES: ReadonlySet<number> = new Set([
+        0x02, MACHINE_STATE.DISPENSING, 0x04, 0x05, MACHINE_STATE.LOADING
+    ]);
 
     /**
      * What the link has been doing, oldest first.
@@ -349,6 +353,56 @@ export default class Machine {
         const snapshot = this.controlStore?.snapshot;
         if (snapshot?.marker == null && snapshot?.error != null) throw snapshot.error;
         return snapshot?.marker?.deviceId ?? null;
+    }
+
+    /**
+     * Queries the machine for a current status frame when control state is missing,
+     * stale, or still sitting in an exited tool/boot screen so switching tools does
+     * not refuse on an expired 15 s state timestamp.
+     */
+    async ensureFreshControlState(): Promise<void> {
+        if (this.controlStateProbe !== null) return this.controlStateProbe;
+        const fresh = this.state !== null && STARTABLE.has(this.state)
+            && Date.now() - this.stateAt <= STATE_FRESH_MS;
+        if (fresh) return;
+        if (!this.isConnected() || this.backgrounded || this.controlSession !== null
+            || this.slotSession !== null || this.controlStore?.blocker != null
+            || (this.connectedId !== null && this.slotStore?.read(this.connectedId).journal != null)
+            || this.unsettledCommand || isActiveBrewPhase(this.phase)
+            || this.phase.name === "lostContact"
+            || Array.from(this.ordinaryOperations).some((operation) => operation.generation === this.generation)) {
+            return;
+        }
+        const expiredFault = this.state !== null && FAULT_BLOCKS[this.state] !== undefined
+            && Date.now() - this.stateAt > STATE_FRESH_MS;
+        const canProbe = this.state === null
+            || STARTABLE.has(this.state)
+            || Machine.TOOL_IDLE_OR_BOOT_STATES.has(this.state)
+            || expiredFault;
+        if (!canProbe) return;
+
+        const generation = this.generation;
+        const finish = this.beginOrdinaryOperation();
+        const check = () => {
+            if (generation !== this.generation || this.backgrounded || this.controlSession !== null) {
+                throw new ControlOperationError("The machine state probe was superseded.");
+            }
+        };
+        let probe!: Promise<void>;
+        probe = (async () => {
+            try {
+                const answered = this.waitForState((state) => STARTABLE.has(state));
+                await this.writeFrame(buildType1(8022), check);
+                await answered;
+            } catch {
+                // Caller falls through to acquireControlSession, which surfaces any refusal.
+            } finally {
+                finish();
+                if (this.controlStateProbe === probe) this.controlStateProbe = null;
+            }
+        })();
+        this.controlStateProbe = probe;
+        return probe;
     }
 
     acquireControlSession(identity: ControlIdentity, purpose: ControlPurpose): ControlSession {
@@ -1057,7 +1111,7 @@ export default class Machine {
         // has to land, so its failure is worth a line of its own.
         // Listening before the handshake: the machine sends its vitals by
         // itself right after acknowledging it, and nothing else asks for them.
-        const heard = await this.waitForAnyInfo();
+        const answered = this.waitForAnyInfo();
         try {
             await this.shakeHands();
         } catch (e) {
@@ -1072,6 +1126,7 @@ export default class Machine {
         // on V12.0D.500 a bare request is ignored (2026-10-19), and a second
         // handshake would beep twice for one connect. A machine that stays
         // quiet is asked once more, with a handshake, at the first BREW.
+        const heard = await answered;
         if (!heard && this.info === null) this.note("machine did not say how it is doing");
         if (generation !== this.generation) throw new Error("Connection was superseded.");
     }
@@ -2520,6 +2575,7 @@ export default class Machine {
         // share.
         this.cancelling = null;
         this.userCancel = null;
+        this.controlStateProbe = null;
         this.state = null;
         this.stateAt = 0;
         // Last, so a listener reading `isConnected()` or `info` sees the link

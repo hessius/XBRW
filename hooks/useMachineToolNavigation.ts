@@ -71,10 +71,10 @@ export function useMachineToolNavigation(
         setState(null);
     }
 
-    async function leave(request: Departure): Promise<void> {
+    async function leave(request: Departure, silent = false): Promise<void> {
         if (!current(request) || pending.current!.busy) return;
         pending.current!.busy = true;
-        setState({request, busy: true, error: null});
+        if (!silent) setState({request, busy: true, error: null});
         try {
             if (request.owner?.deviceId !== request.deviceId || request.owner.serial !== request.serial) {
                 throw new Error("The tool identity does not match the owned machine.");
@@ -122,8 +122,11 @@ export function useMachineToolNavigation(
             }
         };
         pending.current = {request, busy: false, closing: false};
-        setState({request, busy: false, error: actual.error});
-        if (actual.phase === "ready") void leave(request);
+        if (actual.phase === "ready") {
+            void leave(request, true);
+        } else {
+            setState({request, busy: false, error: actual.error});
+        }
     }
 
     // Keep the original action, including native-stack's visited-route marker.

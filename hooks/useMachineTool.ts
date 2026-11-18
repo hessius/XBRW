@@ -3,8 +3,44 @@ import {useMachineToolSupport} from "@/hooks/useMachineToolSupport";
 import type MachineControls from "@/library/machine/MachineControls";
 import {
     validateGrindRequest, validatePourRequest,
-    type ControlIdentity, type ControlSnapshot, type GrindRequest, type Pattern, type PourRequest, type ToolId
+    type ControlIdentity, type ControlSnapshot, type GrindPolicy, type GrindRequest, type Pattern, type PourPolicy, type PourRequest, type ToolId
 } from "@/library/machine/controlModel";
+
+function seedGrindRequest(policy: GrindPolicy | null, dialSize: number | null): GrindRequest | null {
+    if (!policy) return null;
+    if (dialSize !== null) {
+        try {
+            const candidate = {grindSize: dialSize, rpm: policy.rpm.min};
+            validateGrindRequest(candidate, policy);
+            return candidate;
+        } catch { /* Fall back to policy min when reported dial is outside policy. */ }
+    }
+    try {
+        const fallback = {grindSize: policy.grindSize.min, rpm: policy.rpm.min};
+        validateGrindRequest(fallback, policy);
+        return fallback;
+    } catch {
+        return null;
+    }
+}
+
+function seedPourRequest(policy: PourPolicy | null): PourRequest | null {
+    if (!policy) return null;
+    try {
+        const common = {
+            temperatureC: policy.temperatureC.min,
+            flowMlPerSecond: policy.flowMlPerSecond.min,
+            pattern: policy.patterns[0]
+        };
+        const request: PourRequest = policy.modes[0] === "target"
+            ? {...common, mode: "target", volumeMl: policy.volumeMl?.min ?? NaN}
+            : {...common, mode: "continuous"};
+        validatePourRequest(request, policy);
+        return request;
+    } catch {
+        return null;
+    }
+}
 
 /** Draft lifetime is the identity/tool-keyed route, never the shared owner. */
 export function useMachineTool(identity: ControlIdentity, tool: ToolId, controls: MachineControls, snapshot: ControlSnapshot) {
@@ -17,18 +53,32 @@ export function useMachineTool(identity: ControlIdentity, tool: ToolId, controls
     const [busy, setBusy] = useState(false);
     const liveTempEpoch = useRef(0);
     const livePatternEpoch = useRef(0);
-    useEffect(() => () => {
-        liveTempEpoch.current++;
-        livePatternEpoch.current++;
+    const autoOpenedFor = useRef<string | null>(null);
+    const mounted = useRef(true);
+    useEffect(() => {
+        mounted.current = true;
+        const tempEpoch = liveTempEpoch;
+        const patternEpoch = livePatternEpoch;
+        return () => {
+            mounted.current = false;
+            tempEpoch.current++;
+            patternEpoch.current++;
+        };
     }, []);
     const bound = support.bound;
     const owns = snapshot.identity?.deviceId === identity.deviceId
         && snapshot.identity.serial === identity.serial && snapshot.tool === tool;
     const phase = owns ? snapshot.phase : "closed";
-    const grind = grindDraft ?? (bound ? snapshot.grindRequest : null);
-    const pour = pourDraft ?? (bound ? snapshot.pourRequest : null);
-    const unavailable = support.unavailable ?? (!bound ? phase === "closed"
-        ? "Open the tool before choosing a request." : "Reconcile the exact named machine before continuing." : null);
+    const dialSize = bound && tool === "grind" ? controls.dialGrindSizeFor(identity) : null;
+    const seededGrind = bound && tool === "grind" ? seedGrindRequest(support.grind, dialSize) : null;
+    const seededPour = bound && tool === "pour" ? seedPourRequest(support.pour) : null;
+    const grind = grindDraft ?? (bound ? snapshot.grindRequest ?? seededGrind : null);
+    const pour = pourDraft ?? (bound ? snapshot.pourRequest ?? seededPour : null);
+    const unavailable = support.unavailable ?? (!bound
+        ? phase === "closed"
+            ? (error !== null && !busy ? "Tool could not be opened." : "Opening tool…")
+            : "Reconcile the exact named machine before continuing."
+        : null);
 
     async function perform(action: () => Promise<void>): Promise<void> {
         setError(null);
@@ -36,10 +86,43 @@ export function useMachineTool(identity: ControlIdentity, tool: ToolId, controls
         try {
             await action();
         } catch (cause) {
-            setError(cause instanceof Error ? cause.message : "The machine control failed.");
+            if (mounted.current) {
+                setError(cause instanceof Error ? cause.message : "The machine control failed.");
+            }
         }
-        setBusy(false);
+        if (mounted.current) setBusy(false);
     }
+
+    function open(): void {
+        liveTempEpoch.current++;
+        livePatternEpoch.current++;
+        setLiveTempError(null);
+        setLivePatternError(null);
+        void perform(async () => {
+            const current = controls.describeTool(identity, tool);
+            if (current.unavailable) throw new Error(current.unavailable);
+            await controls.open(identity, tool);
+        });
+    }
+
+    useEffect(() => {
+        const routeKey = `${identity.deviceId}\0${identity.serial ?? ""}\0${tool}`;
+        if (autoOpenedFor.current === routeKey) return;
+        if (phase !== "closed" || owns || support.unavailable !== null) return;
+        autoOpenedFor.current = routeKey;
+        const target = {deviceId: identity.deviceId, serial: identity.serial};
+        void (async () => {
+            try {
+                const current = controls.describeTool(target, tool);
+                if (current.unavailable) throw new Error(current.unavailable);
+                await controls.open(target, tool);
+            } catch (cause) {
+                if (mounted.current) {
+                    setError(cause instanceof Error ? cause.message : "The machine control failed.");
+                }
+            }
+        })();
+    }, [controls, identity.deviceId, identity.serial, owns, phase, support.unavailable, tool]);
 
     function requireBound(): void {
         if (!controls.describeTool(identity, tool).bound) {
@@ -54,20 +137,12 @@ export function useMachineTool(identity: ControlIdentity, tool: ToolId, controls
                 throw new Error(current.unavailable ?? "The tool is not ready.");
             }
             if (tool === "grind" && current.grind) {
-                const request = {grindSize: current.grind.grindSize.min, rpm: current.grind.rpm.min};
-                validateGrindRequest(request, current.grind);
+                const request = seedGrindRequest(current.grind, controls.dialGrindSizeFor(identity));
+                if (!request) throw new Error("No qualified grind proposal is available.");
                 setGrind(request);
             } else if (tool === "pour" && current.pour) {
-                const policy = current.pour;
-                const common = {
-                    temperatureC: policy.temperatureC.min,
-                    flowMlPerSecond: policy.flowMlPerSecond.min,
-                    pattern: policy.patterns[0]
-                };
-                const request: PourRequest = policy.modes[0] === "target"
-                    ? {...common, mode: "target", volumeMl: policy.volumeMl?.min ?? NaN}
-                    : {...common, mode: "continuous"};
-                validatePourRequest(request, policy);
+                const request = seedPourRequest(current.pour);
+                if (!request) throw new Error("No qualified pour proposal is available.");
                 setPour(request);
             }
         });
@@ -76,7 +151,7 @@ export function useMachineTool(identity: ControlIdentity, tool: ToolId, controls
     function changeMode(mode: PourRequest["mode"]): void {
         void perform(async () => {
             requireBound();
-            const request = pourDraft ?? controls.getSnapshot().pourRequest;
+            const request = pourDraft ?? controls.getSnapshot().pourRequest ?? seededPour;
             const policy = controls.describeTool(identity, tool).pour;
             if (!request || !policy) throw new Error("Choose a pour request first.");
             const next: PourRequest = mode === "target"
@@ -97,26 +172,14 @@ export function useMachineTool(identity: ControlIdentity, tool: ToolId, controls
         void perform(async () => {
             requireBound();
             if (tool === "grind") {
-                const request = grindDraft ?? controls.getSnapshot().grindRequest;
+                const request = grindDraft ?? controls.getSnapshot().grindRequest ?? seededGrind;
                 if (!request) throw new Error("Choose a grind request first.");
                 await controls.startGrind(request);
             } else if (tool === "pour") {
-                const request = pourDraft ?? controls.getSnapshot().pourRequest;
+                const request = pourDraft ?? controls.getSnapshot().pourRequest ?? seededPour;
                 if (!request) throw new Error("Choose a pour request first.");
                 await controls.startPour(request);
             }
-        });
-    }
-
-    function open(): void {
-        liveTempEpoch.current++;
-        livePatternEpoch.current++;
-        setLiveTempError(null);
-        setLivePatternError(null);
-        void perform(async () => {
-            const current = controls.describeTool(identity, tool);
-            if (current.unavailable) throw new Error(current.unavailable);
-            await controls.open(identity, tool);
         });
     }
 

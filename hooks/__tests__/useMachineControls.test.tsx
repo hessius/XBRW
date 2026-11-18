@@ -2,6 +2,7 @@ import {act, renderHook} from "@testing-library/react-native";
 import {useMachineControls} from "@/hooks/useMachineControls";
 import {holdLinkAcrossAppState} from "@/hooks/useMachine";
 import {controlFixture, flushControls, identity} from "./machineControlFixture";
+import {STATE_REPLY_MS} from "@/constants/machine";
 import {status} from "@/library/machine/__tests__/protocolFixtures";
 import {MACHINE_STATE} from "@/library/machine/protocol";
 
@@ -188,9 +189,30 @@ it("reconciles a stale surviving Scale link through inspection without weakening
         expect(s.machine.controlBlocker).toBeNull();
         expect(s.recovery.snapshot.marker).toBeNull();
         expect(reconnect).not.toHaveBeenCalled();
-        await expect(s.controls.open(identity, "scale")).rejects.toThrow(/fresh known normal/i);
+        const pendingOpen = expect(s.controls.open(identity, "scale")).rejects.toThrow(/fresh known normal/i);
+        await jest.advanceTimersByTimeAsync(STATE_REPLY_MS);
+        await pendingOpen;
     } finally {
         off();
+        s.controls.dispose();
+        jest.useRealTimers();
+    }
+});
+
+it("automatically refreshes stale or exited-tool state via 8022 before reopening Grind", async () => {
+    const s = await controlFixture();
+    await s.controls.open(identity, "scale");
+    s.radio.emit(status(0x05));
+    await s.controls.close();
+    // Simulate exiting Scale while state is still 0x05 or idle reading >15 s old.
+    jest.useFakeTimers();
+    try {
+        await jest.advanceTimersByTimeAsync(16_000);
+        s.radio.homeReply = status(0x41);
+        await s.controls.open(identity, "grind");
+        expect(s.controls.getSnapshot()).toMatchObject({phase: "ready", tool: "grind"});
+        expect(s.radio.sent).toContain(8022);
+    } finally {
         s.controls.dispose();
         jest.useRealTimers();
     }

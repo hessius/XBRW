@@ -103,6 +103,7 @@ export default class MachineControls {
     private epoch = 0;
     private stopping: Promise<void> | null = null;
     private opening: Promise<ControlFeedback["value"]> | null = null;
+    private preflight: {key: string; promise: Promise<void>} | null = null;
     private recovering = false;
     private reconnecting: Promise<void> | null = null;
     private recoveryOnly = false;
@@ -136,6 +137,16 @@ export default class MachineControls {
         const off = [this.subscribe(listener), this.machine.onLink(listener), this.machine.onPhase(listener)];
         return () => off.forEach(unsubscribe => unsubscribe());
     };
+
+    /** Returns the connected machine's reported 40521 grind dial only when its exact identity matches. */
+    dialGrindSizeFor(identity: ControlIdentity): number | null {
+        const actual = this.machine.slotIdentity;
+        if (!this.machine.isConnected() || !identity.serial || !actual
+            || actual.deviceId !== identity.deviceId || actual.serial !== identity.serial) {
+            return null;
+        }
+        return this.machine.readDial();
+    }
 
     /** Read-only description; never infers settings support from a tool. */
     describeSettings(identity: ControlIdentity, id: SettingId): MachineSettingsSupport {
@@ -609,6 +620,14 @@ export default class MachineControls {
 
     async open(identity: ControlIdentity, tool: ToolId): Promise<void> {
         if (this.disposed) throw new Error("The shared control owner was reset.");
+        const key = `${identity.deviceId}\0${identity.serial ?? ""}\0${tool}`;
+        if (this.preflight) {
+            if (this.preflight.key === key) {
+                await this.preflight.promise;
+                return;
+            }
+            throw new Error("A control session is already owned.");
+        }
         const current = this.snapshot;
         if (current.phase !== "closed") {
             if (current.identity?.deviceId === identity.deviceId && current.identity.serial === identity.serial
@@ -620,18 +639,39 @@ export default class MachineControls {
         }
         const {profile} = this.select();
         if ((tool === "grind" && !profile.grind) || (tool === "pour" && !profile.pour)) throw new Error("Tool unsupported.");
-        this.attach(identity, tool);
-        this.recoveryOnly = false;
-        this.opening = Promise.resolve().then(() => this.exchange({kind: "enter", tool}, "ready"));
-        this.update({...initial, identity: Object.freeze({...identity}), tool, phase: "entering"});
+        const actual = this.machine.slotIdentity;
+        if (!actual || actual.deviceId !== identity.deviceId || actual.serial !== identity.serial) {
+            throw new Error("The connected peripheral and reported serial must match the control identity.");
+        }
+
+        const task = (async () => {
+            await this.machine.ensureFreshControlState();
+            if (this.disposed) throw new Error("The shared control owner was reset.");
+            if (this.snapshot.phase !== "closed") throw new Error("A control session is already owned.");
+            const {profile: latestProfile} = this.select();
+            if ((tool === "grind" && !latestProfile.grind) || (tool === "pour" && !latestProfile.pour)) {
+                throw new Error("Tool unsupported.");
+            }
+            this.attach(identity, tool);
+            this.recoveryOnly = false;
+            this.opening = Promise.resolve().then(() => this.exchange({kind: "enter", tool}, "ready"));
+            this.update({...initial, identity: Object.freeze({...identity}), tool, phase: "entering"});
+            try {
+                await this.opening;
+                this.update({phase: "ready"});
+            } catch (error) {
+                this.uncertain(failure(error));
+                throw error;
+            } finally {
+                this.opening = null;
+            }
+        })();
+        const preflight = {key, promise: task};
+        this.preflight = preflight;
         try {
-            await this.opening;
-            this.update({phase: "ready"});
-        } catch (error) {
-            this.uncertain(failure(error));
-            throw error;
+            await task;
         } finally {
-            this.opening = null;
+            if (this.preflight === preflight) this.preflight = null;
         }
     }
 
@@ -766,61 +806,91 @@ export default class MachineControls {
 
     /** Explicit setting read under the shared exclusive lease, never an Apply. */
     async readSettings(identity: ControlIdentity, id: SettingId): Promise<void> {
-        if (this.snapshot.phase !== "closed") throw new Error("Settings require a closed control session.");
+        if (this.snapshot.phase !== "closed" || this.preflight !== null) {
+            throw new Error("Settings require a closed control session.");
+        }
         const support = this.describeSettings(identity, id);
         if (support.unavailable) throw new Error(support.unavailable);
-        const priorSettings = this.settingsInfo === this.machine.info
-            && this.snapshot.identity?.deviceId === identity.deviceId
-            && this.snapshot.identity.serial === identity.serial
-            ? this.snapshot.settings : null;
-        this.attach(identity, "setting");
-        this.recoveryOnly = false;
-        this.update({...initial, identity: Object.freeze({...identity}), phase: "applying", applyingSetting: id,
-            settings: priorSettings});
+        await this.withSettingPreflight(identity, id, async () => {
+            const latestSupport = this.describeSettings(identity, id);
+            if (latestSupport.unavailable) throw new Error(latestSupport.unavailable);
+            const priorSettings = this.settingsInfo === this.machine.info
+                && this.snapshot.identity?.deviceId === identity.deviceId
+                && this.snapshot.identity.serial === identity.serial
+                ? this.snapshot.settings : null;
+            this.attach(identity, "setting");
+            this.recoveryOnly = false;
+            this.update({...initial, identity: Object.freeze({...identity}), phase: "applying", applyingSetting: id,
+                settings: priorSettings});
+            try {
+                const result = await this.exchange({kind: "inspect", tool: null, settingId: id, readOnly: true}, "settings");
+                if (result.kind !== "settings" || result.readings[id] === null) throw new Error("Qualified current setting unavailable.");
+                validateSetting(id, result.readings[id], this.qualification!.profile.settings);
+                const clean = this.sanitizeReadings(result.readings, this.qualification!, identity, true);
+                this.settingsInfo = this.machine.info;
+                this.release();
+                this.update({phase: "closed", applyingSetting: null, error: null, settings: clean});
+            } catch (error) {
+                this.uncertain(failure(error));
+                throw error;
+            }
+        });
+    }
+
+    private async withSettingPreflight(identity: ControlIdentity, id: SettingId, work: () => Promise<void>): Promise<void> {
+        const preflight = {
+            key: `setting\0${identity.deviceId}\0${identity.serial ?? ""}\0${id}`,
+            promise: (async () => {
+                await this.machine.ensureFreshControlState();
+                if (this.disposed) throw new Error("The shared control owner was reset.");
+                if (this.snapshot.phase !== "closed") throw new Error("Settings require a closed control session.");
+                await work();
+            })()
+        };
+        this.preflight = preflight;
         try {
-            const result = await this.exchange({kind: "inspect", tool: null, settingId: id, readOnly: true}, "settings");
-            if (result.kind !== "settings" || result.readings[id] === null) throw new Error("Qualified current setting unavailable.");
-            validateSetting(id, result.readings[id], this.qualification!.profile.settings);
-            const clean = this.sanitizeReadings(result.readings, this.qualification!, identity, true);
-            this.settingsInfo = this.machine.info;
-            this.release();
-            this.update({phase: "closed", applyingSetting: null, error: null, settings: clean});
-        } catch (error) {
-            this.uncertain(failure(error));
-            throw error;
+            await preflight.promise;
+        } finally {
+            if (this.preflight === preflight) this.preflight = null;
         }
     }
 
     async applySetting<K extends SettingId>(identity: ControlIdentity, id: K, value: SettingValues[K]): Promise<void> {
-        if (this.snapshot.phase !== "closed") throw new Error("Settings require a closed control session.");
+        if (this.snapshot.phase !== "closed" || this.preflight !== null) {
+            throw new Error("Settings require a closed control session.");
+        }
         const qualification = this.select();
         validateSetting(id, value, qualification.profile.settings);
-        const priorSettings = this.settingsInfo === this.machine.info
-            && this.snapshot.identity?.deviceId === identity.deviceId
-            && this.snapshot.identity.serial === identity.serial
-            ? this.snapshot.settings : null;
-        this.attach(identity, "setting");
-        this.recoveryOnly = false;
-        this.update({...initial, identity: Object.freeze({...identity}), phase: "applying", applyingSetting: id,
-            settings: priorSettings});
-        try {
-            const current = await this.exchange({kind: "inspect", tool: null, settingId: id}, "settings");
-            if (current.kind !== "settings" || current.readings[id] === null) throw new Error("Qualified current setting unavailable.");
-            validateSetting(id, current.readings[id], this.qualification!.profile.settings);
-            this.update({settings: this.sanitizeReadings(current.readings, this.qualification!, identity, true)});
-            // TS cannot retain the correlation between a generic key and its
-            // value when constructing the mapped command union.
-            const command = {kind: "setting", id, value} as Extract<ControlCommand, {kind: "setting"}>;
-            const result = await this.exchange(command, "settings");
-            if (result.kind !== "settings" || result.readings[id] !== value) throw new Error("Setting readback does not match the proposal.");
-            const clean = this.sanitizeReadings(result.readings, this.qualification!, identity, true);
-            this.settingsInfo = this.machine.info;
-            this.release();
-            this.update({phase: "closed", applyingSetting: null, error: null, settings: clean});
-        } catch (error) {
-            this.uncertain(failure(error));
-            throw error;
-        }
+        await this.withSettingPreflight(identity, id, async () => {
+            const latestQualification = this.select();
+            validateSetting(id, value, latestQualification.profile.settings);
+            const priorSettings = this.settingsInfo === this.machine.info
+                && this.snapshot.identity?.deviceId === identity.deviceId
+                && this.snapshot.identity.serial === identity.serial
+                ? this.snapshot.settings : null;
+            this.attach(identity, "setting");
+            this.recoveryOnly = false;
+            this.update({...initial, identity: Object.freeze({...identity}), phase: "applying", applyingSetting: id,
+                settings: priorSettings});
+            try {
+                const current = await this.exchange({kind: "inspect", tool: null, settingId: id}, "settings");
+                if (current.kind !== "settings" || current.readings[id] === null) throw new Error("Qualified current setting unavailable.");
+                validateSetting(id, current.readings[id], this.qualification!.profile.settings);
+                this.update({settings: this.sanitizeReadings(current.readings, this.qualification!, identity, true)});
+                // TS cannot retain the correlation between a generic key and its
+                // value when constructing the mapped command union.
+                const command = {kind: "setting", id, value} as Extract<ControlCommand, {kind: "setting"}>;
+                const result = await this.exchange(command, "settings");
+                if (result.kind !== "settings" || result.readings[id] !== value) throw new Error("Setting readback does not match the proposal.");
+                const clean = this.sanitizeReadings(result.readings, this.qualification!, identity, true);
+                this.settingsInfo = this.machine.info;
+                this.release();
+                this.update({phase: "closed", applyingSetting: null, error: null, settings: clean});
+            } catch (error) {
+                this.uncertain(failure(error));
+                throw error;
+            }
+        });
     }
 
     private canReconnect(identity: ControlIdentity, tool: ToolId | null): boolean {
