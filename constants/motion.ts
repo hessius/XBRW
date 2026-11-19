@@ -223,6 +223,22 @@ export const ATTRACT = {
 } as const;
 
 /**
+ * Timings and damped shake offsets shared by the inline Home overlay and
+ * unified Machine Tool view. Keep all cadence and refusal intervals here so
+ * motion tuning edits one table.
+ */
+export const TOOL_MOTION = {
+    dotCount:            16,
+    waveStepMs:          45,
+    switchingCycleMs:    800,
+    runningCycleMs:      960,
+    stoppingCycleMs:     550,
+    headShakeDurationMs: 420,
+    headShakeOffsets:    [-6, 6, -4, 4, -2, 0] as const,
+    reducedPulseMs:      DURATION.fast
+} as const;
+
+/**
  * Whether the OS has Reduce Motion enabled.
  *
  * Every animation in the app honours this by degrading to a cross-fade — never
