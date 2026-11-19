@@ -149,14 +149,15 @@ it("disables tools when disconnected, and uses identical destinations when conne
     expect(s.radio.sent).toEqual([]);
     await home.unmount();
 
-    // When connected, tools are enabled and navigate identically from panel and home page
+    // When connected, tools are enabled; panel opens inline then expands to the identical destination as home page
     mockStatus = "connected";
     const connectedPanel = await renderWithProviders(<MachinePanel open status="connected" accent={palette.success}
         vitals={null} now={0} onRefreshWater={async () => false} onConnect={jest.fn()}
-        machineId={kitchen.id}/>);
+        machineId={kitchen.id} machineSerial={kitchen.serial} controls={s.controls}/>);
     for (const tool of ["Grind", "Scale", "Pour"]) {
         expect(screen.getByRole("button", {name: tool})).toBeEnabled();
         await press(tool);
+        await press("Expand to full screen");
     }
     const destinations = ["grind", "scale", "pour"].map(tool => ({
         pathname: "/machineTool", params: {machineId: kitchen.id, tool}

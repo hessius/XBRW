@@ -1,12 +1,15 @@
-import React from "react";
+import React, {useEffect, useRef, useState} from "react";
+import {Pressable} from "react-native";
 import {useLocalSearchParams} from "expo-router";
 import {useSafeAreaInsets} from "react-native-safe-area-context";
-import {Button, ScrollView, Text, YStack} from "tamagui";
+import {Button, ScrollView, Text, XStack, YStack} from "tamagui";
+import DotMatrixText from "@/components/DotMatrixText";
 import GrindTool from "@/components/GrindTool";
 import PourTool from "@/components/PourTool";
 import ScaleTool from "@/components/ScaleTool";
 import ScreenHeader from "@/components/ScreenHeader";
-import XbrwSheet from "@/components/XbrwSheet";
+import ToolHeadShakeView from "@/components/ToolHeadShakeView";
+import {notify} from "@/components/XbrwToast";
 import {useAppearance} from "@/hooks/useAppearance";
 import {useLiveBrew} from "@/hooks/useLiveBrew";
 import {useMachineControls} from "@/hooks/useMachineControls";
@@ -16,62 +19,199 @@ import {useSavedMachines} from "@/hooks/useSavedMachines";
 import {useSetting} from "@/hooks/useSetting";
 import router from "@/hooks/steadyRouter";
 import type MachineControls from "@/library/machine/MachineControls";
-import type {ControlIdentity, ToolId} from "@/library/machine/controlModel";
+import type {ControlIdentity, ControlPhase, ToolId} from "@/library/machine/controlModel";
 
-const TITLES: Record<ToolId, string> = {grind: "Grind", scale: "Scale", pour: "Pour"};
+const TOOLS: readonly {id: ToolId; label: string; display: string}[] = [
+    {id: "grind", label: "Grind", display: "GRIND"},
+    {id: "scale", label: "Scale", display: "SCALE"},
+    {id: "pour",  label: "Pour",  display: "POUR"},
+];
+const ACTIVE_SWITCH_PHASES: readonly ControlPhase[] = [
+    "entering", "leaving", "starting", "running", "stopping", "applying", "unknown"
+];
 
-function ToolScreen({identity, tool, name, injected}: {
-    identity: ControlIdentity; tool: ToolId; name: string; injected?: MachineControls;
+function toolSwitchBlockedReason(phase: ControlPhase, tool: ToolId): string {
+    if (phase === "stopping") return `Stopping ${tool}…`;
+    if (phase === "leaving" || phase === "entering") return "Wait for tool switch to finish.";
+    if (phase === "applying") return "Wait for scale tare to finish.";
+    if (phase === "starting" || phase === "running") return `Stop ${tool} before switching tools`;
+    return "Reconcile the machine before switching tools.";
+}
+
+function ToolScreen({identity, routeTool, name, injected}: {
+    identity: ControlIdentity; routeTool: ToolId; name: string; injected?: MachineControls;
 }) {
-    const {palette, primary} = useAppearance();
+    const {palette, onBrand} = useAppearance();
     const insets = useSafeAreaInsets();
     const {controls, snapshot} = useMachineControls(injected);
+    const [toolOverride, setToolOverride] = useState<{fromRoute: ToolId; tool: ToolId} | null>(null);
+    const [tabShakeKey, setTabShakeKey] = useState(0);
+    const mountedRef = useRef(true);
+    useEffect(() => {
+        mountedRef.current = true;
+        return () => { mountedRef.current = false; };
+    }, []);
+    const tool = toolOverride !== null && toolOverride.fromRoute === routeTool ? toolOverride.tool : routeTool;
     const state = useMachineTool(identity, tool, controls, snapshot);
-    const nav = useMachineToolNavigation(identity, controls);
+    const nav = useMachineToolNavigation(identity, controls, "tool", {
+        onBlocked: (reason) => { notify({tone: "info", message: reason}); }
+    });
     const {ratingNoteOpen} = useLiveBrew();
     const covered = nav.covered || ratingNoteOpen;
     const [animationEnabled] = useSetting("animateBrewChart");
-    const {support, owns, phase, bound, unavailable, error, busy, grind, pour} = state;
-    const prompt = nav.prompt;
+    const {support, owns, phase, uiPhase, bound, unavailable, error, busy, grind, pour, scaleSamples} = state;
+    const sameMachineSnap = snapshot.identity?.deviceId === identity.deviceId
+        && snapshot.identity.serial === identity.serial;
+    const identityConnected = typeof controls.isIdentityConnected === "function"
+        && controls.isIdentityConnected(identity);
+    const canReconcileNullTool = !support.recoverable && !owns && sameMachineSnap
+        && snapshot.phase === "unknown" && snapshot.tool === null && identityConnected;
+    const blockingPhase: ControlPhase = owns ? phase
+        : uiPhase === "entering" ? "entering"
+            : sameMachineSnap ? snapshot.phase : phase;
+    const activeMoving = ACTIVE_SWITCH_PHASES.includes(blockingPhase);
+
+    function switchToolState(nextTool: ToolId) {
+        setToolOverride({fromRoute: routeTool, tool: nextTool});
+        if ("setParams" in router && typeof router.setParams === "function") {
+            router.setParams({tool: nextTool});
+        }
+    }
+
+    function handleSelectTool(nextTool: ToolId) {
+        if (nextTool === tool) return;
+        if (activeMoving) {
+            setTabShakeKey((count) => count + 1);
+            notify({tone: "info", message: toolSwitchBlockedReason(blockingPhase, tool)});
+            return;
+        }
+        const prevTool = tool;
+        const current = controls.getSnapshot();
+        const sameOwned = current.identity?.deviceId === identity.deviceId
+            && current.identity.serial === identity.serial;
+        const closing = sameOwned && current.phase === "ready"
+            ? controls.closeInBackground().catch(() => {})
+            : Promise.resolve();
+        switchToolState(nextTool);
+        void closing.then(() => {
+            const after = controls.getSnapshot();
+            if (mountedRef.current
+                && after.identity?.deviceId === identity.deviceId
+                && after.identity.serial === identity.serial
+                && after.phase === "unknown"
+                && after.tool === prevTool) {
+                switchToolState(prevTool);
+            }
+        });
+    }
+
     return (
         <YStack flex={1} minHeight={0} backgroundColor={palette.base}>
             <YStack testID="machine-tool-content" flex={1} minHeight={0}
                 accessibilityElementsHidden={covered}
                 importantForAccessibility={covered ? "no-hide-descendants" : "auto"}>
-                <ScreenHeader title={TITLES[tool]} subtitle={`${name} · ${identity.serial ?? "Serial not known"}`}
-                    onBack={() => nav.requestDeparture(() => router.back())}/>
+                <ToolHeadShakeView shakeKey={nav.blockedCount} testID="machine-tool-header-shake">
+                    <ScreenHeader
+                        title="Machine Tools"
+                        subtitle={`${name} · ${identity.serial ?? "Serial not known"}`}
+                        onBack={() => nav.requestDeparture(() => router.back())}
+                    />
+                </ToolHeadShakeView>
+                <ToolHeadShakeView shakeKey={tabShakeKey} testID="machine-tool-switcher-shake">
+                    <XStack
+                        testID="machine-tool-switcher"
+                        marginHorizontal="$4"
+                        marginBottom="$2"
+                        padding={4}
+                        gap={4}
+                        borderRadius={13}
+                        backgroundColor={palette.surface}
+                        style={{borderWidth: 1, borderColor: palette.line}}>
+                        {TOOLS.map(({id, label, display}) => {
+                            const selected = id === tool;
+                            const dimmed = activeMoving && !selected;
+                            return (
+                                <Pressable
+                                    key={id}
+                                    accessibilityRole="button"
+                                    accessibilityLabel={label}
+                                    accessibilityState={{selected}}
+                                    onPress={() => handleSelectTool(id)}
+                                    style={({pressed}) => ({
+                                        flex: 1,
+                                        minHeight: 34,
+                                        borderRadius: 9,
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        backgroundColor: selected ? palette.brandFill : "transparent",
+                                        opacity: pressed ? 0.72 : dimmed ? 0.35 : 1
+                                    })}>
+                                    <DotMatrixText
+                                        fontSize={11}
+                                        weight="bold"
+                                        letterSpacing={1.6}
+                                        color={selected ? onBrand.text : palette.dim}>
+                                        {display}
+                                    </DotMatrixText>
+                                </Pressable>
+                            );
+                        })}
+                    </XStack>
+                </ToolHeadShakeView>
                 <YStack flex={1} minHeight={0} paddingHorizontal="$4" paddingBottom={Math.max(insets.bottom, 16)} gap="$2">
                     {/* A sibling, never an outer scroller around the instruments:
                         large copy cannot push their fixed Stop below the screen. */}
-                    <ScrollView flexGrow={0} flexShrink={1} maxHeight="35%" minHeight={0}
+                    <ScrollView flexGrow={0} flexShrink={1} maxHeight="30%" minHeight={0}
                         contentContainerStyle={{gap: 8, paddingBottom: 8}}>
                         {error !== null && <Text selectable color={palette.danger}>{error}</Text>}
-                        {tool === "scale" && owns && snapshot.error !== null
+                        {(canReconcileNullTool || (tool === "scale" && owns))
+                            && snapshot.error !== null && snapshot.error !== error
                             && <Text selectable color={palette.danger}>{snapshot.error}</Text>}
                         {support.unavailable !== null && <Text color={palette.muted}>{support.unavailable}</Text>}
-                        {phase === "closed" && error !== null && support.unavailable === null && (
-                            <Button accessibilityRole="button" disabled={busy} onPress={state.open}>Retry opening tool</Button>
+                        {phase === "closed" && uiPhase === "closed" && support.unavailable === null && (
+                            <Button accessibilityRole="button" disabled={busy} onPress={state.open}>
+                                {error !== null ? "Retry opening tool" : "Open tool"}
+                            </Button>
                         )}
-                        {phase === "entering" && <Text color={palette.muted}>Opening tool…</Text>}
-                        {phase === "leaving" && <Text color={palette.muted}>Closing tool…</Text>}
-                        {support.recoverable && <Button accessibilityRole="button" disabled={busy}
-                            onPress={state.recover}>Reconcile connected machine</Button>}
-                        {support.reconnectable && <>
-                            <Text color={palette.muted}>
-                                Reconnect only this machine to inspect the uncertain operation. Reconnecting does not confirm Stop or restart the tool.
-                            </Text>
+                        {support.recoverable ? <Button accessibilityRole="button" disabled={busy}
+                            onPress={state.recover}>Reconcile connected machine</Button>
+                            : canReconcileNullTool && (
                             <Button accessibilityRole="button" disabled={busy}
-                                onPress={state.reconnect}>Reconnect named machine</Button>
-                        </>}
+                                onPress={state.recoverUnknown}>
+                                Reconcile connected machine
+                            </Button>
+                        )}
+                        {!owns && sameMachineSnap && snapshot.phase === "unknown"
+                            && (snapshot.tool === "grind" || snapshot.tool === "scale" || snapshot.tool === "pour") && (
+                            <Button accessibilityRole="button" disabled={busy}
+                                onPress={() => switchToolState(snapshot.tool as ToolId)}>
+                                Inspect active tool
+                            </Button>
+                        )}
+                        {support.reconnectable ? <>
+                            <Text color={palette.muted}>
+                                Connection lost. Reconnect this machine to inspect and stop, or leave this screen.
+                            </Text>
+                            <XStack gap="$2" flexWrap="wrap">
+                                <Button accessibilityRole="button" disabled={busy}
+                                    onPress={state.reconnect}>Reconnect named machine</Button>
+                                <Button accessibilityRole="button" disabled={busy}
+                                    onPress={() => nav.leaveWhileDisconnected(() => router.back())}>Leave screen</Button>
+                            </XStack>
+                        </> : sameMachineSnap && snapshot.phase === "unknown" && !support.recoverable
+                            && !identityConnected && (
+                            <Button accessibilityRole="button" disabled={busy}
+                                onPress={() => nav.leaveWhileDisconnected(() => router.back())}>Leave screen</Button>
+                        )}
                     </ScrollView>
-                    {tool === "grind" && <GrindTool phase={phase} request={grind}
+                    {tool === "grind" && <GrindTool phase={uiPhase} request={grind}
                         policy={support.grind} unavailable={unavailable} stopUnavailable={support.stopUnavailable}
                         error={owns ? snapshot.error : null} animationEnabled={animationEnabled}
                         onRequestChange={state.setGrind} onStart={state.start} onStop={state.stop}/>}
-                    {tool === "scale" && <ScaleTool grams={bound ? snapshot.cupGrams : null}
-                        unavailable={unavailable} disabled={phase !== "ready"}
+                    {tool === "scale" && <ScaleTool phase={uiPhase} grams={bound ? snapshot.cupGrams : null}
+                        scaleSamples={scaleSamples} unavailable={unavailable} disabled={uiPhase !== "ready"}
                         tarePending={phase === "applying"} onTare={state.tare}/>}
-                    {tool === "pour" && <PourTool phase={phase} request={pour}
+                    {tool === "pour" && <PourTool phase={uiPhase} request={pour}
                         policy={support.pour} dispensedMl={bound ? snapshot.dispensedMl : null}
                         cupGrams={bound ? snapshot.cupGrams : null}
                         temperatureC={bound ? snapshot.temperatureC : null} pattern={bound ? snapshot.pattern : null}
@@ -88,19 +228,6 @@ function ToolScreen({identity, tool, name, injected}: {
                         onModeChange={state.changeMode} onStart={state.start} onStop={state.stop}/>}
                 </YStack>
             </YStack>
-            {prompt && <XbrwSheet open={prompt.open} onOpenChange={prompt.onOpenChange} title="Leave tool?">
-                <YStack gap="$4">
-                    <Text color={palette.text}>{prompt.requiresStop
-                        ? "Stop the machine before leaving." : "Close the tool before leaving."}</Text>
-                    {prompt.error !== null && <Text selectable color={palette.danger}>{prompt.error}</Text>}
-                    <Button accessibilityRole="button" disabled={prompt.busy}
-                        accessibilityState={{busy: prompt.busy}} backgroundColor={primary.fill} color={primary.ink}
-                        onPress={() => { void prompt.stopAndLeave(); }}>
-                        {prompt.busy ? "Waiting for confirmation…" : prompt.requiresStop ? "Stop and leave" : "Close and leave"}
-                    </Button>
-                    <Button accessibilityRole="button" onPress={prompt.stay}>Stay</Button>
-                </YStack>
-            </XbrwSheet>}
         </YStack>
     );
 }
@@ -121,6 +248,6 @@ export default function MachineToolScreen({controls}: {controls?: MachineControl
         </YStack>;
     }
     const identity = {deviceId: machine.id, serial: machine.serial.trim() || null};
-    return <ToolScreen key={JSON.stringify([identity, tool])} identity={identity} tool={tool as ToolId}
+    return <ToolScreen key={JSON.stringify(identity)} identity={identity} routeTool={tool as ToolId}
         name={machine.label || machine.advertisedName || machine.id} injected={controls}/>;
 }

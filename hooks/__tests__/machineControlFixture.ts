@@ -1,5 +1,5 @@
 import Machine from "@/library/machine/Machine";
-import MachineControls from "@/library/machine/MachineControls";
+import MachineControls, {type MachineControlsOptions} from "@/library/machine/MachineControls";
 import {ControlRecoveryStore} from "@/library/machine/controlRecovery";
 import type {ControlCapabilityProfile} from "@/library/machine/controlCapabilities";
 import type {ControlCommand, ControlFeedback, ControlTokens} from "@/library/machine/controlProtocol";
@@ -18,7 +18,7 @@ export type Planned = {command: ControlCommand; tokens: ControlTokens};
 class Radio extends FakeTransport {
     get connectedDeviceId() { return this.connectedTo; }
 }
-export async function controlFixture() {
+export async function controlFixture(options: {reconnect?: MachineControlsOptions["reconnect"]} = {}) {
     const radio = new Radio();
     radio.infoReply = machineInfoFrame({serial: identity.serial, model: "test", firmware: "test"});
     let raw = "";
@@ -36,7 +36,7 @@ export async function controlFixture() {
         feedbacks.set(key, {...item.tokens, value});
         radio.emit(notification(0xFE, 0xFE, [key & 255, key >> 8]));
     }
-    const controls = new MachineControls(machine, {qualifications: [{
+    const controls = new MachineControls(machine, {reconnect: options.reconnect, qualifications: [{
         profile,
         protocol: {
             actualWaterSource: () => "tank",

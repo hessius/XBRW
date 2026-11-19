@@ -1,10 +1,14 @@
-import {useEffect, useRef, useState} from "react";
+import {useEffect, useRef, useState, useSyncExternalStore} from "react";
 import {useMachineToolSupport} from "@/hooks/useMachineToolSupport";
 import type MachineControls from "@/library/machine/MachineControls";
+import {draftStoreFor} from "@/library/machine/controlDrafts";
 import {
     validateGrindRequest, validatePourRequest,
-    type ControlIdentity, type ControlSnapshot, type GrindPolicy, type GrindRequest, type Pattern, type PourPolicy, type PourRequest, type ToolId
+    type ControlIdentity, type ControlPhase, type ControlSnapshot, type GrindPolicy, type GrindRequest,
+    type Pattern, type PourPolicy, type PourRequest, type ToolId
 } from "@/library/machine/controlModel";
+
+const EMPTY_SAMPLES: readonly number[] = Object.freeze([]);
 
 function seedGrindRequest(policy: GrindPolicy | null, dialSize: number | null): GrindRequest | null {
     if (!policy) return null;
@@ -42,88 +46,154 @@ function seedPourRequest(policy: PourPolicy | null): PourRequest | null {
     }
 }
 
-/** Draft lifetime is the identity/tool-keyed route, never the shared owner. */
+type KeyedError = {key: string; message: string};
+
 export function useMachineTool(identity: ControlIdentity, tool: ToolId, controls: MachineControls, snapshot: ControlSnapshot) {
     const support = useMachineToolSupport(controls, identity, tool);
-    const [grindDraft, setGrind] = useState<GrindRequest | null>(null);
-    const [pourDraft, setPour] = useState<PourRequest | null>(null);
-    const [error, setError] = useState<string | null>(null);
-    const [liveTempError, setLiveTempError] = useState<string | null>(null);
-    const [livePatternError, setLivePatternError] = useState<string | null>(null);
-    const [busy, setBusy] = useState(false);
+    const store = draftStoreFor(controls);
+    const draftState = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
+    const routeKey = `${identity.deviceId}\0${identity.serial ?? ""}\0${tool}`;
+    const identityKey = `${identity.deviceId}\0${identity.serial ?? ""}`;
+    const [errorState, setErrorState] = useState<KeyedError | null>(null);
+    const [liveTempErrorState, setLiveTempErrorState] = useState<KeyedError | null>(null);
+    const [livePatternErrorState, setLivePatternErrorState] = useState<KeyedError | null>(null);
+    const [busyState, setBusyState] = useState<string | null>(null);
+    const [settledAutoOpenKey, setSettledAutoOpenKey] = useState<string | null>(null);
+    const [openingKey, setOpeningKey] = useState<string | null>(null);
     const liveTempEpoch = useRef(0);
     const livePatternEpoch = useRef(0);
     const autoOpenedFor = useRef<string | null>(null);
     const mounted = useRef(true);
+    const latestKey = useRef(routeKey);
     const mountAbort = useRef<AbortController | null>(null);
+
     useEffect(() => {
+        latestKey.current = routeKey;
         mounted.current = true;
-        mountAbort.current = new AbortController();
+        const controller = new AbortController();
+        mountAbort.current = controller;
         const tempEpoch = liveTempEpoch;
         const patternEpoch = livePatternEpoch;
-        const abortController = mountAbort.current;
         return () => {
             mounted.current = false;
-            abortController.abort();
+            controller.abort();
             tempEpoch.current++;
             patternEpoch.current++;
         };
-    }, []);
+    }, [routeKey]);
+
+    const error = errorState?.key === routeKey ? errorState.message : null;
+    const liveTempError = liveTempErrorState?.key === routeKey ? liveTempErrorState.message : null;
+    const livePatternError = livePatternErrorState?.key === routeKey ? livePatternErrorState.message : null;
+    const busy = busyState === routeKey;
+
     const bound = support.bound;
     const owns = snapshot.identity?.deviceId === identity.deviceId
         && snapshot.identity.serial === identity.serial && snapshot.tool === tool;
-    const phase = owns ? snapshot.phase : "closed";
-    const dialSize = bound && tool === "grind" ? controls.dialGrindSizeFor(identity) : null;
-    const seededGrind = bound && tool === "grind" ? seedGrindRequest(support.grind, dialSize) : null;
-    const seededPour = bound && tool === "pour" ? seedPourRequest(support.pour) : null;
-    const grind = grindDraft ?? (bound ? snapshot.grindRequest ?? seededGrind : null);
-    const pour = pourDraft ?? (bound ? snapshot.pourRequest ?? seededPour : null);
+    const phase: ControlPhase = owns ? snapshot.phase : "closed";
+    const openingInProgress = !owns
+        && support.unavailable === null
+        && (openingKey === routeKey
+            || (settledAutoOpenKey !== routeKey
+                && error === null
+                && (snapshot.phase === "closed" || snapshot.phase === "leaving")));
+    const uiPhase: ControlPhase = owns ? snapshot.phase : openingInProgress ? "entering" : "closed";
+
+    const grindDraft = draftState.identityKey === identityKey ? draftState.grind : null;
+    const pourDraft = draftState.identityKey === identityKey ? draftState.pour : null;
+
+    // Pre-seed qualified candidate requests while opening (`support.unavailable === null`) so
+    // parameter controls stay mounted across `entering -> ready` without a plain-text flash.
+    const canPreSeed = support.unavailable === null;
+    const dialSize = canPreSeed && tool === "grind" ? controls.dialGrindSizeFor(identity) : null;
+    const seededGrind = canPreSeed && tool === "grind" ? seedGrindRequest(support.grind, dialSize) : null;
+    const seededPour = canPreSeed && tool === "pour" ? seedPourRequest(support.pour) : null;
+    const grind = tool === "grind"
+        ? grindDraft ?? (bound ? snapshot.grindRequest ?? seededGrind : seededGrind)
+        : null;
+    const pour = tool === "pour"
+        ? pourDraft ?? (bound ? snapshot.pourRequest ?? seededPour : seededPour)
+        : null;
+    const scaleSamples = owns && tool === "scale" && draftState.scaleIdentityKey === identityKey
+        ? draftState.scaleSamples
+        : EMPTY_SAMPLES;
+
     const unavailable = support.unavailable ?? (!bound
-        ? phase === "closed"
-            ? (error !== null && !busy ? "Tool could not be opened." : "Opening tool…")
-            : "Reconcile the exact named machine before continuing."
+        ? uiPhase === "entering"
+            ? null
+            : phase === "closed"
+                ? (error !== null && !busy ? "Tool could not be opened." : null)
+                : "Reconcile the exact named machine before continuing."
         : null);
 
     async function perform(action: () => Promise<void>): Promise<void> {
-        setError(null);
-        setBusy(true);
+        const activeKey = routeKey;
+        setErrorState(null);
+        setBusyState(activeKey);
         try {
             await action();
         } catch (cause) {
-            if (mounted.current) {
-                setError(cause instanceof Error ? cause.message : "The machine control failed.");
+            if (mounted.current && latestKey.current === activeKey) {
+                setErrorState({
+                    key: activeKey,
+                    message: cause instanceof Error ? cause.message : "The machine control failed."
+                });
             }
         }
-        if (mounted.current) setBusy(false);
+        if (mounted.current && latestKey.current === activeKey) {
+            setBusyState(null);
+        }
     }
 
     function open(): void {
+        const activeKey = routeKey;
         liveTempEpoch.current++;
         livePatternEpoch.current++;
-        setLiveTempError(null);
-        setLivePatternError(null);
+        setLiveTempErrorState(null);
+        setLivePatternErrorState(null);
+        setOpeningKey(activeKey);
         void perform(async () => {
-            const current = controls.describeTool(identity, tool);
-            if (current.unavailable) throw new Error(current.unavailable);
-            await controls.open(identity, tool, mountAbort.current?.signal);
+            try {
+                const current = controls.describeTool(identity, tool);
+                if (current.unavailable) throw new Error(current.unavailable);
+                await controls.open(identity, tool, mountAbort.current?.signal);
+            } finally {
+                if (mounted.current && latestKey.current === activeKey) {
+                    setOpeningKey((current) => current === activeKey ? null : current);
+                    setSettledAutoOpenKey(activeKey);
+                }
+            }
         });
     }
 
     useEffect(() => {
-        const routeKey = `${identity.deviceId}\0${identity.serial ?? ""}\0${tool}`;
-        if (autoOpenedFor.current === routeKey) return;
-        if (phase !== "closed" || owns || support.unavailable !== null) return;
-        autoOpenedFor.current = routeKey;
+        const targetKey = `${identity.deviceId}\0${identity.serial ?? ""}\0${tool}`;
+        if (autoOpenedFor.current === targetKey) return;
+        autoOpenedFor.current = targetKey;
         const target = {deviceId: identity.deviceId, serial: identity.serial};
         const signal = mountAbort.current?.signal;
         void (async () => {
+            if (phase !== "closed" || owns || support.unavailable !== null) {
+                await Promise.resolve();
+                if (mounted.current && latestKey.current === targetKey && !signal?.aborted) {
+                    setSettledAutoOpenKey(targetKey);
+                }
+                return;
+            }
             try {
                 const current = controls.describeTool(target, tool);
                 if (current.unavailable) throw new Error(current.unavailable);
                 await controls.open(target, tool, signal);
             } catch (cause) {
-                if (mounted.current && !signal?.aborted) {
-                    setError(cause instanceof Error ? cause.message : "The machine control failed.");
+                if (mounted.current && latestKey.current === targetKey && !signal?.aborted) {
+                    setErrorState({
+                        key: targetKey,
+                        message: cause instanceof Error ? cause.message : "The machine control failed."
+                    });
+                }
+            } finally {
+                if (mounted.current && latestKey.current === targetKey && !signal?.aborted) {
+                    setSettledAutoOpenKey(targetKey);
                 }
             }
         })();
@@ -133,6 +203,14 @@ export function useMachineTool(identity: ControlIdentity, tool: ToolId, controls
         if (!controls.describeTool(identity, tool).bound) {
             throw new Error("This tool no longer owns the exact named machine. No command was sent.");
         }
+    }
+
+    function setGrind(request: GrindRequest): void {
+        store.setGrind(identity, request);
+    }
+
+    function setPour(request: PourRequest): void {
+        store.setPour(identity, request);
     }
 
     function changeMode(mode: PourRequest["mode"]): void {
@@ -147,15 +225,15 @@ export function useMachineTool(identity: ControlIdentity, tool: ToolId, controls
                 : {temperatureC: request.temperatureC, flowMlPerSecond: request.flowMlPerSecond,
                     pattern: request.pattern, mode};
             validatePourRequest(next, policy);
-            setPour(next);
+            store.setPour(identity, next);
         });
     }
 
     function start(): void {
         liveTempEpoch.current++;
         livePatternEpoch.current++;
-        setLiveTempError(null);
-        setLivePatternError(null);
+        setLiveTempErrorState(null);
+        setLivePatternErrorState(null);
         void perform(async () => {
             requireBound();
             if (tool === "grind") {
@@ -171,6 +249,8 @@ export function useMachineTool(identity: ControlIdentity, tool: ToolId, controls
     }
 
     function recover(): void {
+        const activeKey = routeKey;
+        setSettledAutoOpenKey(activeKey);
         void perform(async () => {
             if (!controls.describeTool(identity, tool).recoverable) {
                 throw new Error("Reconciliation requires this exact connected machine and tool.");
@@ -178,37 +258,74 @@ export function useMachineTool(identity: ControlIdentity, tool: ToolId, controls
             await controls.recover();
             if (mounted.current && controls.getSnapshot().phase === "closed"
                 && controls.describeTool(identity, tool).unavailable === null) {
-                await controls.open(identity, tool, mountAbort.current?.signal);
+                if (latestKey.current === activeKey) setOpeningKey(activeKey);
+                try {
+                    await controls.open(identity, tool, mountAbort.current?.signal);
+                } finally {
+                    if (mounted.current && latestKey.current === activeKey) {
+                        setOpeningKey((current) => current === activeKey ? null : current);
+                    }
+                }
             }
         });
     }
 
+    function recoverUnknown(): void {
+        setSettledAutoOpenKey(routeKey);
+        void perform(async () => {
+            const current = controls.getSnapshot();
+            if (current.phase !== "unknown" || current.tool !== null
+                || current.identity?.deviceId !== identity.deviceId
+                || current.identity.serial !== identity.serial
+                || (typeof controls.isIdentityConnected === "function"
+                    && !controls.isIdentityConnected(identity))) {
+                throw new Error("Reconciliation requires this exact connected machine.");
+            }
+            await controls.recover();
+        });
+    }
+
     function setLiveTemperature(celsius: number): void {
+        const activeKey = routeKey;
         const epoch = ++liveTempEpoch.current;
-        setLiveTempError(null);
+        setLiveTempErrorState(null);
         void controls.setTemperature(celsius).catch((cause) => {
-            if (liveTempEpoch.current === epoch) {
-                setLiveTempError(cause instanceof Error ? cause.message : "Failed to update temperature.");
+            if (liveTempEpoch.current === epoch && latestKey.current === activeKey) {
+                setLiveTempErrorState({
+                    key: activeKey,
+                    message: cause instanceof Error ? cause.message : "Failed to update temperature."
+                });
             }
         });
     }
 
     function setLivePattern(pattern: Pattern): void {
+        const activeKey = routeKey;
         const epoch = ++livePatternEpoch.current;
-        setLivePatternError(null);
+        setLivePatternErrorState(null);
         void controls.setPattern(pattern).catch((cause) => {
-            if (livePatternEpoch.current === epoch) {
-                setLivePatternError(cause instanceof Error ? cause.message : "Failed to update pattern.");
+            if (livePatternEpoch.current === epoch && latestKey.current === activeKey) {
+                setLivePatternErrorState({
+                    key: activeKey,
+                    message: cause instanceof Error ? cause.message : "Failed to update pattern."
+                });
             }
         });
     }
 
     return {
-        support, owns, phase, bound, unavailable, error, liveTempError, livePatternError, busy, grind, pour,
-        setGrind, setPour, changeMode, start, open, recover,
+        support, owns, phase, uiPhase, bound, unavailable, error, liveTempError, livePatternError, busy,
+        grind, pour, scaleSamples,
+        setGrind, setPour, changeMode, start, open, recover, recoverUnknown,
         setLiveTemperature, setLivePattern,
-        reconnect: () => { void perform(() => controls.reconnectTool(identity, tool)); },
-        stop: () => { void perform(async () => { requireBound(); await controls.stop(); }); },
+        reconnect: () => {
+            setSettledAutoOpenKey(routeKey);
+            void perform(() => controls.reconnectTool(identity, tool));
+        },
+        stop: () => {
+            setSettledAutoOpenKey(routeKey);
+            void perform(async () => { requireBound(); await controls.stop(); });
+        },
         tare: () => { void perform(async () => { requireBound(); await controls.tare(); }); }
     };
 }

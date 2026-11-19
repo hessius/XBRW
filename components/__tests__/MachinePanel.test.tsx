@@ -1,9 +1,12 @@
 import React from "react";
 import {StyleSheet} from "react-native";
-import {fireEvent, within} from "@testing-library/react-native";
+import {act, fireEvent, screen, waitFor, within} from "@testing-library/react-native";
 
 import MachinePanel from "@/components/MachinePanel";
+import PourTool from "@/components/PourTool";
+import * as XbrwToast from "@/components/XbrwToast";
 import {machineColours, palette} from "@/constants/colors";
+import {controlFixture, flushControls, identity, type Planned} from "@/hooks/__tests__/machineControlFixture";
 import {renderWithProviders} from "@/test-utils/render";
 
 const vitals = {
@@ -325,5 +328,316 @@ describe("MachinePanel with several machines saved", () => {
         const r = await draw();
 
         expect(r.queryByTestId("machine-choice")).toBeNull();
+    });
+});
+
+describe("MachinePanel inline tool mode", () => {
+    it("swaps vitals for toned-down green inline grind workbench, preserves session on expand, and closes idle in background", async () => {
+        const s = await controlFixture();
+        let exitCount = 0;
+        let releaseExit!: () => void;
+        s.respond((item: Planned) => {
+            if (item.command.kind === "exit") {
+                exitCount += 1;
+                void new Promise<void>((resolve) => { releaseExit = resolve; }).then(() => s.accept(item));
+                return;
+            }
+            s.accept(item);
+        });
+        const onExpandTool = jest.fn();
+
+        await draw({
+            machineId: identity.deviceId,
+            machineSerial: identity.serial,
+            machineModel: "Studio",
+            controls: s.controls,
+            onExpandTool
+        });
+
+        await fireEvent.press(screen.getByRole("button", {name: "Grind"}));
+        await waitFor(() => expect(screen.getByText(/STUDIO · WATER OK · PRO/)).toBeTruthy());
+        expect(screen.queryByText("REFRESH")).toBeNull();
+        expect(screen.getByTestId("tool-hero-stage")).toHaveStyle({backgroundColor: palette.raised});
+
+        await waitFor(() => expect(s.controls.getSnapshot().phase).toBe("ready"));
+        expect(screen.getByRole("button", {name: "START GRIND"})).toBeEnabled();
+
+        await fireEvent.press(screen.getByRole("button", {name: "Close inline tool"}));
+        expect(screen.getByText("REFRESH")).toBeTruthy();
+        expect(exitCount).toBe(1);
+        await act(async () => {
+            releaseExit();
+            await flushControls();
+        });
+        expect(s.controls.getSnapshot().phase).toBe("closed");
+
+        // Reopen inline and tap Expand -> hands off without emitting exit
+        await fireEvent.press(screen.getByRole("button", {name: "Grind"}));
+        await waitFor(() => expect(s.controls.getSnapshot().phase).toBe("ready"));
+        await fireEvent.press(screen.getByRole("button", {name: "Expand to full screen"}));
+        expect(onExpandTool).toHaveBeenCalledWith(identity.deviceId, "grind");
+        expect(exitCount).toBe(1);
+        s.controls.dispose();
+    });
+
+    it("refuses collapsing or switching inline tool during an active run", async () => {
+        const notifySpy = jest.spyOn(XbrwToast, "notify").mockImplementation(jest.fn());
+        const s = await controlFixture();
+        s.respond((item) => s.accept(item));
+        await draw({
+            machineId: identity.deviceId,
+            machineSerial: identity.serial,
+            machineModel: "Studio",
+            controls: s.controls
+        });
+
+        await fireEvent.press(screen.getByRole("button", {name: "Grind"}));
+        await waitFor(() => expect(s.controls.getSnapshot().phase).toBe("ready"));
+        await fireEvent.press(screen.getByRole("button", {name: "START GRIND"}));
+        await waitFor(() => expect(s.controls.getSnapshot().phase).toBe("running"));
+
+        await fireEvent.press(screen.getByRole("button", {name: "Close inline tool"}));
+        expect(screen.getByRole("button", {name: "STOP GRIND"})).toBeTruthy();
+        expect(screen.queryByText("REFRESH")).toBeNull();
+        expect(notifySpy).toHaveBeenCalledWith(expect.objectContaining({tone: "info"}));
+
+        await fireEvent.press(screen.getByRole("button", {name: "Scale"}));
+        expect(s.controls.getSnapshot().tool).toBe("grind");
+        expect(notifySpy).toHaveBeenCalledTimes(2);
+
+        notifySpy.mockRestore();
+        s.controls.dispose();
+    });
+
+    it("expands inline Pour to available vertical space while keeping actions pinned and mounting scroll cues", async () => {
+        await renderWithProviders(
+            <PourTool
+                variant="inline"
+                phase="ready"
+                request={{mode: "target", volumeMl: 150, temperatureC: 90, flowMlPerSecond: 3, pattern: "spiral"}}
+                policy={{
+                    temperatureC: {min: 80, max: 95, step: 1},
+                    flowMlPerSecond: {min: 2, max: 4, step: 1},
+                    volumeMl: {min: 50, max: 200, step: 10},
+                    patterns: ["centered", "circular", "spiral"],
+                    modes: ["target", "continuous"]
+                }}
+                dispensedMl={null}
+                temperatureC={null}
+                pattern={null}
+                unavailable={null}
+                stopUnavailable={null}
+                error={null}
+                onRequestChange={jest.fn()}
+                onModeChange={jest.fn()}
+                onStart={jest.fn()}
+                onStop={jest.fn()}
+            />
+        );
+        const fields = screen.getByTestId("pour-tool-fields");
+        expect(StyleSheet.flatten(fields.props.style).maxHeight).toBe(487);
+        expect(fields.props.showsVerticalScrollIndicator).toBe(true);
+        expect(screen.getByTestId("pour-tool-fields-scroll-fade", {includeHiddenElements: true})).toBeTruthy();
+        expect(screen.getByTestId("pour-tool-fields-scroll-hint", {includeHiddenElements: true})).toBeTruthy();
+        expect(screen.getByRole("button", {name: "START POUR"})).toBeEnabled();
+        expect(within(fields).queryByRole("button", {name: "START POUR"})).toBeNull();
+    });
+
+    it("keeps inline unknown recovery reachable on disconnect and failed switchback", async () => {
+        const notifySpy = jest.spyOn(XbrwToast, "notify").mockImplementation(jest.fn());
+        const s = await controlFixture({reconnect: jest.fn()});
+        s.respond((item: Planned) => {
+            if (item.command.kind === "exit") return;
+            s.accept(item);
+        });
+        const view = await draw({
+            machineId: identity.deviceId,
+            machineSerial: identity.serial,
+            machineModel: "Studio",
+            controls: s.controls
+        });
+
+        await fireEvent.press(screen.getByRole("button", {name: "Grind"}));
+        await waitFor(() => expect(s.controls.getSnapshot().phase).toBe("ready"));
+
+        await fireEvent.press(screen.getByRole("button", {name: "Scale"}));
+        await waitFor(() => expect(s.controls.getSnapshot().phase).toBe("unknown"));
+        expect(s.controls.getSnapshot().tool).toBe("grind");
+        expect(screen.getByRole("button", {name: "Grind"})).toHaveProp("accessibilityState", {disabled: false, selected: true});
+        expect(screen.getByRole("button", {name: "Reconcile connected machine"})).toBeEnabled();
+
+        // Collapse via X is refused during unknown
+        await fireEvent.press(screen.getByRole("button", {name: "Close inline tool"}));
+        expect(screen.getByRole("button", {name: "Reconcile connected machine"})).toBeTruthy();
+
+        // Disconnect shows Reconnect + Leave screen even while status is disconnected
+        await act(async () => {
+            s.radio.drop();
+            await view.rerender(
+                <MachinePanel
+                    open
+                    status="disconnected"
+                    accent="#C86A3B"
+                    vitals={vitals}
+                    now={4 * 60 * 1000}
+                    onRefreshWater={pending()}
+                    onConnect={jest.fn()}
+                    machineId={identity.deviceId}
+                    machineSerial={identity.serial}
+                    machineModel="Studio"
+                    controls={s.controls}
+                />
+            );
+        });
+        expect(screen.getByRole("button", {name: "Reconnect named machine"})).toBeEnabled();
+        expect(screen.getByRole("button", {name: "Leave screen"})).toBeEnabled();
+        await fireEvent.press(screen.getByRole("button", {name: "Leave screen"}));
+        expect(screen.queryByRole("button", {name: "Reconnect named machine"})).toBeNull();
+
+        notifySpy.mockRestore();
+        s.controls.dispose();
+    });
+
+    it("surfaces Scale error and tool-specific switch block reasons for applying and unknown", async () => {
+        const notifySpy = jest.spyOn(XbrwToast, "notify").mockImplementation(jest.fn());
+        const s = await controlFixture();
+        let pendingTare: Planned | null = null;
+        let holdExit = false;
+        s.respond((item: Planned) => {
+            if (item.command.kind === "tare") {
+                pendingTare = item;
+                return;
+            }
+            if (holdExit && item.command.kind === "exit") return;
+            s.accept(item);
+        });
+        await draw({
+            machineId: identity.deviceId,
+            machineSerial: identity.serial,
+            machineModel: "Studio",
+            controls: s.controls
+        });
+
+        await fireEvent.press(screen.getByRole("button", {name: "Scale"}));
+        await waitFor(() => expect(s.controls.getSnapshot().phase).toBe("ready"));
+
+        await fireEvent.press(screen.getByRole("button", {name: "Tare"}));
+        await waitFor(() => expect(s.controls.getSnapshot().phase).toBe("applying"));
+        await fireEvent.press(screen.getByRole("button", {name: "Grind"}));
+        expect(notifySpy).toHaveBeenCalledWith({tone: "info", message: "Wait for scale tare to finish."});
+
+        await act(async () => { s.feedback(pendingTare!, {kind: "tared"}); });
+        await waitFor(() => expect(s.controls.getSnapshot().phase).toBe("ready"));
+
+        holdExit = true;
+        await fireEvent.press(screen.getByRole("button", {name: "Grind"}));
+        await waitFor(() => expect(s.controls.getSnapshot().phase).toBe("unknown"));
+        expect(s.controls.getSnapshot().tool).toBe("scale");
+        const snapshotError = s.controls.getSnapshot().error;
+        expect(snapshotError).toBeTruthy();
+        expect(screen.getByText(snapshotError!)).toBeTruthy();
+        expect(screen.queryByText(/Connection lost/i)).toBeNull();
+        expect(screen.queryByRole("button", {name: "Leave screen"})).toBeNull();
+
+        await fireEvent.press(screen.getByRole("button", {name: "Grind"}));
+        expect(notifySpy).toHaveBeenCalledWith({tone: "info", message: "Reconcile the machine before switching tools."});
+
+        notifySpy.mockRestore();
+        s.controls.dispose();
+    });
+
+    it("keeps connected cross-tool unknown on Inspect active tool without Connection lost or Leave screen", async () => {
+        const s = await controlFixture();
+        await s.controls.open(identity, "grind");
+        s.respond((item: Planned) => {
+            if (item.command.kind === "grind") s.accept(item);
+            else if (item.command.kind === "inspect") s.feedback(item, {kind: "active"});
+        });
+        await s.controls.startGrind({grindSize: 5, rpm: 150});
+        await s.machine.disconnect();
+        await s.machine.connect(identity.deviceId);
+        await s.controls.recover();
+        expect(s.controls.getSnapshot()).toMatchObject({tool: "grind", phase: "unknown"});
+        expect(s.controls.isIdentityConnected(identity)).toBe(true);
+
+        await renderWithProviders(
+            <MachinePanel
+                open
+                status="connected"
+                accent="#C86A3B"
+                vitals={vitals}
+                now={4 * 60 * 1000}
+                onRefreshWater={pending()}
+                onConnect={jest.fn()}
+                machineId={identity.deviceId}
+                machineSerial={identity.serial}
+                machineModel="Studio"
+                controls={s.controls}
+                inlineTool="scale"
+                onInlineToolChange={jest.fn()}
+            />
+        );
+
+        expect(screen.getByRole("button", {name: "Inspect active tool"})).toBeEnabled();
+        expect(screen.queryByText(/Connection lost/i)).toBeNull();
+        expect(screen.queryByRole("button", {name: "Leave screen"})).toBeNull();
+        s.controls.dispose();
+    });
+
+    it("surfaces initial and failed recovery errors plus busy state on connected inline null-tool Reconcile", async () => {
+        const s = await controlFixture();
+        s.respond(() => {});
+        await expect(s.controls.applySetting(identity, "brightness", 3)).rejects.toThrow(/readback|timeout|unknown|missing/i);
+        expect(s.controls.getSnapshot()).toMatchObject({tool: null, phase: "unknown"});
+        expect(s.controls.isIdentityConnected(identity)).toBe(true);
+        const initialError = s.controls.getSnapshot().error!;
+        expect(initialError).toBeTruthy();
+
+        await renderWithProviders(
+            <MachinePanel
+                open
+                status="connected"
+                accent="#C86A3B"
+                vitals={vitals}
+                now={4 * 60 * 1000}
+                onRefreshWater={pending()}
+                onConnect={jest.fn()}
+                machineId={identity.deviceId}
+                machineSerial={identity.serial}
+                machineModel="Studio"
+                controls={s.controls}
+                inlineTool="grind"
+                onInlineToolChange={jest.fn()}
+            />
+        );
+
+        expect(screen.getAllByText(initialError)).toHaveLength(1);
+        expect(screen.getByRole("button", {name: "Reconcile connected machine"})).toBeEnabled();
+        expect(screen.queryByText(/Connection lost/i)).toBeNull();
+        expect(screen.queryByRole("button", {name: "Leave screen"})).toBeNull();
+
+        await fireEvent.press(screen.getByRole("button", {name: "Reconcile connected machine"}));
+        expect(screen.getByRole("button", {name: "Reconcile connected machine"})).toBeDisabled();
+        await waitFor(() => expect(screen.getByRole("button", {name: "Reconcile connected machine"})).toBeEnabled());
+        const recoveryError = s.controls.getSnapshot().error!;
+        expect(recoveryError).toBeTruthy();
+        expect(screen.getAllByText(recoveryError)).toHaveLength(1);
+
+        s.respond((item: Planned) => {
+            if (item.command.kind === "inspect") {
+                s.feedback(item, {
+                    kind: "settings",
+                    readings: {
+                        brightness: 3, temperatureUnit: null, weightUnit: null,
+                        waterSource: null, pourRadius: null, vibrationAmplitude: null
+                    }
+                });
+            } else {
+                s.accept(item);
+            }
+        });
+        await fireEvent.press(screen.getByRole("button", {name: "Reconcile connected machine"}));
+        await waitFor(() => expect(s.controls.getSnapshot().phase).toBe("closed"));
+        s.controls.dispose();
     });
 });

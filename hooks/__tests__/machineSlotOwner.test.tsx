@@ -13,7 +13,7 @@ import {cancelSlots, unavailableSlotPort, writeSlots, recoverSlots} from "@/libr
 import {prepareSet, snapshotRecipe} from "@/library/slots/slotModel";
 import {SlotDatabase} from "@/library/slots/SlotDatabase";
 import {appDatabase} from "@/library/appDatabase";
-import {FakeTransport} from "@/library/machine/__tests__/FakeTransport";
+import {FakeTransport, machineInfoFrame} from "@/library/machine/__tests__/FakeTransport";
 import {event, float32, kermit, notification, status} from "@/library/machine/__tests__/protocolFixtures";
 import {buildType1, MACHINE_STATE} from "@/library/machine/protocol";
 import {coffee} from "@/library/slots/__tests__/fixtures";
@@ -190,6 +190,7 @@ it("restores control recovery before exposing the shared owner and pins startup 
 });
 
 it("installs exactly one unsupported control controller per shared machine before hook consumers", async () => {
+    mockRadio.infoReply = machineInfoFrame({model: "Original", firmware: "V1.0.0"});
     const machine = sharedMachine();
     const controls = sharedMachineControls();
     const first = await renderHook(() => useMachineControls());
