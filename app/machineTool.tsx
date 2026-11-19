@@ -48,14 +48,10 @@ function ToolScreen({identity, tool, name, injected}: {
                         {error !== null && <Text selectable color={palette.danger}>{error}</Text>}
                         {tool === "scale" && owns && snapshot.error !== null
                             && <Text selectable color={palette.danger}>{snapshot.error}</Text>}
-                        {!bound && <Text color={palette.muted}>
-                            {support.unavailable ?? "Opening only prepares the tool. It never starts the machine."}
-                        </Text>}
-                        {!bound && !owns && <Text color={palette.muted}>
-                            Brew, Easy Mode and other control operations must finish first. Connect this named machine from Machines; this screen never switches or connects automatically.
-                        </Text>}
-                        {phase === "closed" && <Button accessibilityRole="button"
-                            disabled={busy || support.unavailable !== null} onPress={state.open}>Open tool</Button>}
+                        {support.unavailable !== null && <Text color={palette.muted}>{support.unavailable}</Text>}
+                        {phase === "closed" && error !== null && support.unavailable === null && (
+                            <Button accessibilityRole="button" disabled={busy} onPress={state.open}>Retry opening tool</Button>
+                        )}
                         {phase === "entering" && <Text color={palette.muted}>Opening tool…</Text>}
                         {phase === "leaving" && <Text color={palette.muted}>Closing tool…</Text>}
                         {support.recoverable && <Button accessibilityRole="button" disabled={busy}
@@ -67,26 +63,26 @@ function ToolScreen({identity, tool, name, injected}: {
                             <Button accessibilityRole="button" disabled={busy}
                                 onPress={state.reconnect}>Reconnect named machine</Button>
                         </>}
-                        {bound && phase === "ready" && tool !== "scale" && <Button accessibilityRole="button"
-                            disabled={busy} onPress={state.chooseProposal}>
-                            Choose editable proposal
-                        </Button>}
-                        {tool !== "scale" && <Text color={palette.muted}>
-                            Selected values are an editable proposal, not the machine’s current settings. Start is always deliberate.
-                        </Text>}
                     </ScrollView>
                     {tool === "grind" && <GrindTool phase={phase} request={grind}
                         policy={support.grind} unavailable={unavailable} stopUnavailable={support.stopUnavailable}
                         error={owns ? snapshot.error : null} animationEnabled={animationEnabled}
                         onRequestChange={state.setGrind} onStart={state.start} onStop={state.stop}/>}
                     {tool === "scale" && <ScaleTool grams={bound ? snapshot.cupGrams : null}
-                        unavailable={unavailable ?? (phase !== "ready" ? "Scale is not ready." : null)}
+                        unavailable={unavailable} disabled={phase !== "ready"}
                         tarePending={phase === "applying"} onTare={state.tare}/>}
                     {tool === "pour" && <PourTool phase={phase} request={pour}
                         policy={support.pour} dispensedMl={bound ? snapshot.dispensedMl : null}
+                        cupGrams={bound ? snapshot.cupGrams : null}
                         temperatureC={bound ? snapshot.temperatureC : null} pattern={bound ? snapshot.pattern : null}
                         pendingTemperatureC={bound ? snapshot.pendingTemperatureC : null}
                         pendingPattern={bound ? snapshot.pendingPattern : null}
+                        liveTemperature={support.liveTemperature
+                            ? {qualified: true, onChange: state.setLiveTemperature, error: state.liveTempError}
+                            : undefined}
+                        livePattern={support.livePattern
+                            ? {qualified: true, onChange: state.setLivePattern, error: state.livePatternError}
+                            : undefined}
                         unavailable={unavailable} stopUnavailable={support.stopUnavailable}
                         error={owns ? snapshot.error : null} onRequestChange={state.setPour}
                         onModeChange={state.changeMode} onStart={state.start} onStop={state.stop}/>}
@@ -95,7 +91,7 @@ function ToolScreen({identity, tool, name, injected}: {
             {prompt && <XbrwSheet open={prompt.open} onOpenChange={prompt.onOpenChange} title="Leave tool?">
                 <YStack gap="$4">
                     <Text color={palette.text}>{prompt.requiresStop
-                        ? "Stop must be confirmed before leaving." : "Close the tool before leaving."}</Text>
+                        ? "Stop the machine before leaving." : "Close the tool before leaving."}</Text>
                     {prompt.error !== null && <Text selectable color={palette.danger}>{prompt.error}</Text>}
                     <Button accessibilityRole="button" disabled={prompt.busy}
                         accessibilityState={{busy: prompt.busy}} backgroundColor={primary.fill} color={primary.ink}

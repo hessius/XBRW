@@ -40,11 +40,11 @@ async function draw(props: Partial<React.ComponentProps<typeof MachinePanel>> = 
 }
 
 describe("MachinePanel", () => {
-    it("shows water, mode and grind size", async () => {
-        const {getByText} = await draw();
+    it("shows water and mode without grind size", async () => {
+        const {getByText, queryByText} = await draw();
         expect(getByText("WATER")).toBeTruthy();
         expect(getByText("PRO")).toBeTruthy();
-        expect(getByText("62")).toBeTruthy();
+        expect(queryByText("GRIND")).toBeNull();
     });
 
     it("draws EASY in warn, because it will refuse a brew", async () => {
@@ -191,7 +191,7 @@ describe("MachinePanel", () => {
 
     it("shows nothing at all when closed", async () => {
         const r = await draw({open: false, status: "connected", vitals: someVitals,
-            machineId: "HOME", onEasyMode: jest.fn(), onOpenMachine: jest.fn()});
+            machineId: "HOME", onEasyMode: jest.fn()});
 
         expect(r.queryByTestId("machine-refresh")).toBeNull();
         expect(r.queryByRole("button", {name: "Grind"})).toBeNull();
@@ -199,21 +199,18 @@ describe("MachinePanel", () => {
         expect(r.queryByRole("button", {name: "Easy Mode slots"})).toBeNull();
     });
 
-    it("keeps Refresh and Easy Mode beside the machine page link, but offers no tools without a saved id", async () => {
+    it("keeps Refresh and Easy Mode, offers no tools without a saved id, and omits the redundant machine settings button", async () => {
         const onEasyMode = jest.fn();
-        const onOpenMachine = jest.fn();
-        const r = await draw({onEasyMode, onOpenMachine});
+        const r = await draw({onEasyMode});
         expect(r.getByLabelText("Refresh the machine readings")).toBeTruthy();
         expect(r.queryByRole("button", {name: "Grind"})).toBeNull();
+        expect(r.queryByRole("button", {name: "Machine settings and tools"})).toBeNull();
         await fireEvent.press(r.getByLabelText("Easy Mode slots"));
-        await fireEvent.press(r.getByRole("button", {name: "Machine settings and tools"}));
         expect(onEasyMode).toHaveBeenCalledTimes(1);
-        expect(onOpenMachine).toHaveBeenCalledTimes(1);
     });
 
-    it("styles tool launchers and machine settings to match the panel button design", async () => {
-        const onOpenMachine = jest.fn();
-        const r = await draw({machineId: "HOME", onOpenMachine, accent: "#2ECC71"});
+    it("styles tool launchers to match the panel button design", async () => {
+        const r = await draw({machineId: "HOME", accent: "#2ECC71"});
 
         // Tools row
         const grind = r.getByRole("button", {name: "Grind"});
@@ -234,22 +231,7 @@ describe("MachinePanel", () => {
         expect(within(grind).getByText("GRIND")).toBeTruthy();
         expect(within(scale).getByText("SCALE")).toBeTruthy();
         expect(within(pour).getByText("POUR")).toBeTruthy();
-
-        // Machine settings and tools button
-        const settingsBtn = r.getByTestId("machine-settings-entry");
-        expect(settingsBtn).toBeTruthy();
-        expect(r.getByText("MACHINE SETTINGS AND TOOLS")).toBeTruthy();
-
-        // Check minHeight and border styling on the settings button
-        expect(settingsBtn).toHaveStyle({
-            borderTopWidth: 1, borderBottomWidth: 1, borderLeftWidth: 1, borderRightWidth: 1,
-            borderTopColor: "#2ECC71", borderBottomColor: "#2ECC71",
-            borderLeftColor: "#2ECC71", borderRightColor: "#2ECC71",
-            minHeight: 44
-        });
-
-        await fireEvent.press(r.getByRole("button", {name: "Machine settings and tools"}));
-        expect(onOpenMachine).toHaveBeenCalledTimes(1);
+        expect(r.queryByTestId("machine-settings-entry")).toBeNull();
     });
 
     it("disables Grind, Scale and Pour tools when disconnected", async () => {

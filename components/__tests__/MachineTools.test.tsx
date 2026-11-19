@@ -71,15 +71,25 @@ it("tares without optimistically changing a measured weight", async () => {
 it("names an unsupported scale and preserves a real zero", async () => {
     const onTare = jest.fn();
     await renderWithProviders(<ScaleTool grams={0} unavailable="Tare is not qualified for this machine." tarePending={false} onTare={onTare}/>);
-    expect(screen.getByLabelText("WEIGHT: 0 g")).toBeTruthy();
+    expect(screen.getByLabelText("WEIGHT: 0.0 g")).toBeTruthy();
     expect(screen.getByText("Tare is not qualified for this machine.")).toBeTruthy();
     expect(screen.getByRole("button", {name: "Tare"})).toBeDisabled();
+});
+
+it("rounds scale weights to one decimal point without inventing zero", async () => {
+    const onTare = jest.fn();
+    const view = await renderWithProviders(<ScaleTool grams={136.2100067} unavailable={null} tarePending={false} onTare={onTare}/>);
+    expect(screen.getByLabelText("WEIGHT: 136.2 g")).toBeTruthy();
+    await view.rerender(<ScaleTool grams={18.249} unavailable={null} tarePending={false} onTare={onTare}/>);
+    expect(screen.getByLabelText("WEIGHT: 18.2 g")).toBeTruthy();
+    await view.rerender(<ScaleTool grams={-0.02} unavailable={null} tarePending={false} onTare={onTare}/>);
+    expect(screen.getByLabelText("WEIGHT: 0.0 g")).toBeTruthy();
 });
 
 it("does not substitute zero when the scale has no current observation", async () => {
     await renderWithProviders(<ScaleTool grams={null} unavailable="Scale reading is unavailable." tarePending={false} onTare={jest.fn()}/>);
     expect(screen.getByLabelText("WEIGHT: Unavailable")).toBeTruthy();
-    expect(screen.queryByLabelText("WEIGHT: 0 g")).toBeNull();
+    expect(screen.queryByLabelText("WEIGHT: 0.0 g")).toBeNull();
     expect(screen.getByRole("button", {name: "Tare"})).toBeDisabled();
 });
 
@@ -226,4 +236,15 @@ it("uses the app string pattern mapping and reports a mode choice without invent
     expect(pour.onModeChange).toHaveBeenCalledWith("continuous");
     await fireEvent.press(screen.getByRole("button", {name: "Circular"}));
     expect(pour.onRequestChange).toHaveBeenCalledWith({...pour.request, pattern: "circular"});
+});
+
+it("renders rounded cup weight alongside independent dispensed telemetry while active", async () => {
+    const view = await renderWithProviders(<PourTool {...pour} cupGrams={18.249}/>);
+    expect(screen.queryByText("CUP WEIGHT")).toBeNull();
+    await view.rerender(<PourTool {...pour} phase="running" dispensedMl={null} cupGrams={18.249}/>);
+    expect(screen.getByLabelText("DISPENSED: Unavailable")).toBeTruthy();
+    expect(screen.getByLabelText("CUP WEIGHT: 18.2 g")).toBeTruthy();
+    await view.rerender(<PourTool {...pour} phase="stopping" dispensedMl={0} cupGrams={-0.02}/>);
+    expect(screen.getByLabelText("DISPENSED: 0 ml")).toBeTruthy();
+    expect(screen.getByLabelText("CUP WEIGHT: 0.0 g")).toBeTruthy();
 });

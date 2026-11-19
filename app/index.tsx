@@ -1473,8 +1473,6 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                             onRefreshWater={refreshWater}
                             onConnect={connectMachine}
                             machineId={homeMachine?.id}
-                            onOpenMachine={() => router.push(homeMachine === undefined ? "/settings"
-                                : {pathname: "/machineHome", params: {machineId: homeMachine.id}})}
                             onEasyMode={() => router.push(homeMachine === undefined ? "/settings"
                                 : easyModeMatchesHome ? "/easyMode"
                                     : {pathname: "/machineHome", params: {machineId: homeMachine.id}})}

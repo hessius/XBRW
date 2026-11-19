@@ -74,7 +74,9 @@ export async function machineSettingsFixture(options: {
     };
     let respond = accept;
     radio.syntheticWrite = frame => {
-        if ((frame[3] | frame[4] << 8) === 8100) respond(planned[planned.length - 1]);
+        if (!options.production && (frame[3] | frame[4] << 8) === 8100 && planned.length > 0) {
+            respond(planned[planned.length - 1]);
+        }
     };
     return {
         controls, machine, radio, planned, feedback, accept, recovery,

@@ -1,14 +1,14 @@
 import type Machine from "./Machine";
 import {isActiveBrewPhase} from "./Machine";
 import type {ControlSession} from "./Machine";
-import {lookupControlCapabilities} from "./controlCapabilities";
+import {lookupControlCapabilities, resolveControlModel} from "./controlCapabilities";
 import {
     type ControlIdentity, type ControlSnapshot, type GrindRequest, type PourRequest, type ToolId,
-    type Pattern, type SettingId, type SettingValues, type GrindPolicy, type PourPolicy, type SettingPolicy,
+    type Pattern, type SettingId, type SettingReadings, type SettingValues, type GrindPolicy, type PourPolicy, type SettingPolicy,
     validateGrindRequest, validatePourRequest, validateSetting
 } from "./controlModel";
 import type {ControlCommand, ControlFeedback, ControlQualification, ControlTokens} from "./controlProtocol";
-import {productionQualifications} from "./productionQualifications";
+import {createProductionQualifications} from "./productionQualifications";
 
 export type MachineControlsOptions = {
     qualifications?: readonly ControlQualification[];
@@ -18,6 +18,8 @@ export type MachineToolSupport = Readonly<{
     grind: GrindPolicy | null;
     pour: PourPolicy | null;
     scale: boolean;
+    liveTemperature: boolean;
+    livePattern: boolean;
     bound: boolean;
     unavailable: string | null;
     stopUnavailable: string | null;
@@ -78,8 +80,13 @@ function capture({profile: p, protocol}: ControlQualification): ControlQualifica
             })
         }),
         protocol: Object.freeze({
-            plan: protocol.plan.bind(protocol), decode: protocol.decode.bind(protocol),
-            actualWaterSource: protocol.actualWaterSource.bind(protocol), telemetryFreshMs: protocol.telemetryFreshMs
+            plan: protocol.plan.bind(protocol),
+            prepare: protocol.prepare?.bind(protocol),
+            decode: protocol.decode.bind(protocol),
+            decodeInfoSettings: protocol.decodeInfoSettings?.bind(protocol),
+            actualWaterSource: protocol.actualWaterSource.bind(protocol),
+            telemetryFreshMs: protocol.telemetryFreshMs,
+            confirmTargetStopFromCupPlateau: protocol.confirmTargetStopFromCupPlateau
         })
     });
 }
@@ -95,10 +102,12 @@ export default class MachineControls {
     private waiter: Waiter | null = null;
     private run: ControlTokens | null = null;
     private off: (() => void)[] = [];
+    private linkOff: (() => void) | null = null;
     private writeTail: Promise<void> = Promise.resolve();
     private epoch = 0;
     private stopping: Promise<void> | null = null;
     private opening: Promise<ControlFeedback["value"]> | null = null;
+    private preflight: {key: string; promise: Promise<void>} | null = null;
     private recovering = false;
     private reconnecting: Promise<void> | null = null;
     private recoveryOnly = false;
@@ -107,6 +116,15 @@ export default class MachineControls {
     private liveTail: Promise<void> = Promise.resolve();
     private telemetry: ControlTokens | null = null;
     private freshness = new Map<"cupGrams" | "dispensedMl", ReturnType<typeof setTimeout>>();
+    private pourCupTracker: {
+        targetMl: number;
+        lastGrams: number | null;
+        lastAt: number;
+        gainedGrams: number;
+        peakGain: number;
+        cupRemoved: boolean;
+        timer: ReturnType<typeof setTimeout> | null;
+    } | null = null;
     private readonly qualifications: readonly ControlQualification[];
     private disposed = false;
     private deadlines = new Set<ReturnType<typeof setTimeout>>();
@@ -115,7 +133,9 @@ export default class MachineControls {
     private settingsInfo: Machine["info"] = null;
 
     constructor(private readonly machine: Machine, private readonly options: MachineControlsOptions = {}) {
-        this.qualifications = Object.freeze((options.qualifications ?? productionQualifications).map(capture));
+        this.qualifications = Object.freeze((options.qualifications ?? createProductionQualifications()).map(capture));
+        this.linkOff = this.machine.onLink(() => { this.syncInfoSettings(); });
+        this.syncInfoSettings();
     }
 
     getSnapshot = (): ControlSnapshot => this.snapshot;
@@ -130,6 +150,16 @@ export default class MachineControls {
         const off = [this.subscribe(listener), this.machine.onLink(listener), this.machine.onPhase(listener)];
         return () => off.forEach(unsubscribe => unsubscribe());
     };
+
+    /** Returns the connected machine's reported 40521 grind dial only when its exact identity matches. */
+    dialGrindSizeFor(identity: ControlIdentity): number | null {
+        const actual = this.machine.slotIdentity;
+        if (!this.machine.isConnected() || !identity.serial || !actual
+            || actual.deviceId !== identity.deviceId || actual.serial !== identity.serial) {
+            return null;
+        }
+        return this.machine.readDial();
+    }
 
     /** Read-only description; never infers settings support from a tool. */
     describeSettings(identity: ControlIdentity, id: SettingId): MachineSettingsSupport {
@@ -234,12 +264,14 @@ export default class MachineControls {
             grind: qualification?.profile.grind ?? null,
             pour: qualification?.profile.pour ?? null,
             scale: qualification?.profile.scale === true,
+            liveTemperature: toolQualified && tool === "pour" && qualification?.profile.liveTemperature === true,
+            livePattern: toolQualified && tool === "pour" && qualification?.profile.livePattern === true,
             bound,
             unavailable,
             // Stop does not use Start's normal-state or water preflight.
-            stopUnavailable: !bound ? "Reconnect and reconcile the exact named machine before stopping."
-                : this.snapshot.phase === "unknown" && marker == null
-                    ? "No moving operation is reserved. Reconcile this machine before continuing." : null,
+            stopUnavailable: this.snapshot.phase === "unknown" && marker == null
+                ? "No moving operation is reserved. Reconcile this machine before continuing."
+                : !bound ? "Reconnect and reconcile the exact named machine before stopping." : null,
             recoverable: !this.disposed && toolQualified && recoveryMatches
                 && actual?.deviceId === identity.deviceId && actual.serial === identity.serial
                 && ["closed", "unknown"].includes(this.snapshot.phase),
@@ -250,6 +282,79 @@ export default class MachineControls {
         if (previous && JSON.stringify(previous) === JSON.stringify(support)) return previous;
         this.supportCache.set(key, support);
         return support;
+    }
+
+    private sanitizeReadings(
+        readings: Readonly<SettingReadings>,
+        qualification: ControlQualification,
+        identity: ControlIdentity,
+        mergeWithCurrent: boolean
+    ): SettingReadings {
+        const clean: SettingReadings = {
+            temperatureUnit: null,
+            weightUnit: null,
+            brightness: null,
+            waterSource: null,
+            pourRadius: null,
+            vibrationAmplitude: null
+        };
+        const sameLink = mergeWithCurrent
+            && this.settingsInfo !== null
+            && this.snapshot.identity?.deviceId === identity.deviceId
+            && this.snapshot.identity.serial === identity.serial;
+        for (const id of Object.keys(clean) as SettingId[]) {
+            const candidate = readings[id] ?? (sameLink ? this.snapshot.settings?.[id] ?? null : null);
+            if (candidate == null) continue;
+            try {
+                validateSetting(id, candidate, qualification.profile.settings);
+                (clean as Record<SettingId, SettingValues[SettingId] | null>)[id] = candidate;
+            } catch { /* Reject out-of-policy fields rather than exposing invalid readings. */ }
+        }
+        return Object.freeze(clean);
+    }
+
+    /** Passively populates settings already carried in the connected 40521 info frame without dispatching BLE commands. */
+    private buildPassiveInfoPatch(): Partial<ControlSnapshot> | null {
+        if (this.disposed) return null;
+        const actual = this.machine.slotIdentity;
+        const info = this.machine.info;
+        if (!actual || !actual.serial || !info) return null;
+        let qualification: ControlQualification;
+        try {
+            qualification = this.select();
+        } catch {
+            return null;
+        }
+        const decodeInfo = qualification.protocol.decodeInfoSettings;
+        if (!decodeInfo) return null;
+        const raw = decodeInfo(info);
+        if (!raw) return null;
+        const identity = Object.freeze({deviceId: actual.deviceId, serial: actual.serial});
+        const clean = this.sanitizeReadings(raw, qualification, identity, true);
+        this.qualification = qualification;
+        this.settingsInfo = info;
+        return {identity, settings: clean};
+    }
+
+    private syncInfoSettings(): void {
+        if (this.disposed || this.snapshot.phase !== "closed") return;
+        const actual = this.machine.slotIdentity;
+        const info = this.machine.info;
+        if (!actual || !actual.serial || !info) return;
+        if (this.settingsInfo === info
+            && this.snapshot.identity?.deviceId === actual.deviceId
+            && this.snapshot.identity.serial === actual.serial
+            && this.snapshot.settings !== null) {
+            return;
+        }
+        const patch = this.buildPassiveInfoPatch();
+        if (!patch) return;
+        this.update({...initial, ...patch});
+    }
+
+    private closeSessionToRestoredSettings(): void {
+        const patch = this.buildPassiveInfoPatch();
+        this.update(patch ? {...initial, ...patch} : {...initial});
     }
 
     /**
@@ -264,7 +369,10 @@ export default class MachineControls {
         this.waiter?.reject(new Error("The shared control owner was reset."));
         this.deadlines.forEach(clearTimeout);
         this.deadlines.clear();
+        this.clearPourPlateau();
         this.clearFreshness();
+        this.linkOff?.();
+        this.linkOff = null;
         this.off.splice(0).forEach(off => off());
         this.listeners.clear();
         if (this.snapshot.phase !== "closed") {
@@ -283,7 +391,9 @@ export default class MachineControls {
         if (this.disposed) throw new Error("The shared control owner was reset.");
         const info = this.machine.info;
         const selected = lookupControlCapabilities({
-            model: info?.model ?? null, firmware: info?.firmware ?? null, serial: info?.serial ?? null
+            model: info?.model ?? null,
+            firmware: info?.firmware ?? null,
+            serial: info?.serial ?? null
         }, this.qualifications.map((q) => q.profile));
         if (!selected.available) throw new Error(`Controls unavailable: ${selected.reason}`);
         const qualification = this.qualifications.find((q) => q.profile === selected.profile)!;
@@ -323,11 +433,17 @@ export default class MachineControls {
                 lease.check();
                 // Frame logging precedes Machine's info update. Reject an
                 // identity-changing info frame before decoding its proof.
-                if (parsed.kind === "info" && (parsed.serial.trim() !== identity.serial
-                    || !this.qualification!.profile.models.includes(parsed.model)
-                    || !this.qualification!.profile.firmwares.includes(parsed.firmware))) {
-                    invalidate(new Error("The qualified machine identity changed."));
-                    return;
+                if (parsed.kind === "info") {
+                    const parsedModel = resolveControlModel(parsed.model, parsed.serial);
+                    const modelMatches = parsedModel !== null && this.qualification!.profile.models.some(
+                        (m) => m.trim().toLowerCase() === parsedModel.toLowerCase()
+                    );
+                    if (parsed.serial.trim() !== identity.serial
+                        || !modelMatches
+                        || !this.qualification!.profile.firmwares.includes(parsed.firmware.trim())) {
+                        invalidate(new Error("The qualified machine identity changed."));
+                        return;
+                    }
                 }
                 const event = protocol.decode(frame);
                 if (!event || event.session !== this.session) return;
@@ -353,12 +469,14 @@ export default class MachineControls {
 
     private uncertain(error: Error): void {
         this.waiter?.reject(error);
+        this.clearPourPlateau();
         this.clearFreshness();
         this.update({phase: "unknown", error: error.message, cupGrams: null, dispensedMl: null});
     }
 
     private release(): void {
         if (this.disposed) return;
+        this.clearPourPlateau();
         this.clearFreshness();
         this.off.splice(0).forEach((off) => off());
         const lease = this.lease;
@@ -370,6 +488,7 @@ export default class MachineControls {
         if (this.disposed) return;
         const {identity, tool} = this.snapshot;
         if (!identity || (tool !== "grind" && tool !== "pour")) throw new Error("No matching moving operation.");
+        this.clearPourPlateau();
         this.clearing = true;
         try {
             this.lease!.clearRecovery({version: 1, ...identity, tool, qualifiedTerminal: true});
@@ -381,8 +500,68 @@ export default class MachineControls {
         this.run = null;
         if (this.recoveryOnly) {
             this.release();
-            this.update({...initial});
+            this.closeSessionToRestoredSettings();
         } else this.update({phase: "ready", error: null, pendingTemperatureC: null, pendingPattern: null});
+    }
+
+    private clearPourPlateau(): void {
+        if (this.pourCupTracker?.timer) clearTimeout(this.pourCupTracker.timer);
+        this.pourCupTracker = null;
+    }
+
+    private armPourPlateauTimer(): void {
+        const tracker = this.pourCupTracker;
+        if (!tracker) return;
+        if (tracker.timer) clearTimeout(tracker.timer);
+        tracker.timer = setTimeout(() => {
+            if (this.pourCupTracker !== tracker) return;
+            tracker.timer = null;
+            if (this.disposed || this.stopping || this.snapshot.phase !== "running"
+                || this.snapshot.tool !== "pour" || this.snapshot.pourRequest?.mode !== "target") {
+                return;
+            }
+            void this.stop().catch(() => {});
+        }, 2500);
+        tracker.timer.unref?.();
+    }
+
+    private trackPourCup(grams: number): void {
+        const tracker = this.pourCupTracker;
+        if (!tracker || this.snapshot.phase !== "running" || this.snapshot.tool !== "pour") return;
+        const now = Date.now();
+        if (tracker.lastGrams === null) {
+            tracker.lastGrams = grams;
+            tracker.lastAt = now;
+            return;
+        }
+        const delta = grams - tracker.lastGrams;
+        const dtSec = Math.max(0.05, (now - tracker.lastAt) / 1000);
+        tracker.lastGrams = grams;
+        tracker.lastAt = now;
+        // Sudden large steps reflect cup placement or removal on the scale, not spout flow.
+        if (Math.abs(delta) > Math.max(10, dtSec * 8)) {
+            if (delta < -10) {
+                if (tracker.timer) {
+                    clearTimeout(tracker.timer);
+                    tracker.timer = null;
+                }
+                tracker.cupRemoved = true;
+            } else if (delta > 10 && tracker.cupRemoved) {
+                tracker.cupRemoved = false;
+                if (tracker.gainedGrams >= Math.max(1, tracker.targetMl - 2)) this.armPourPlateauTimer();
+            }
+            return;
+        }
+        if (tracker.cupRemoved) return;
+        tracker.gainedGrams = Math.max(0, tracker.gainedGrams + delta);
+        const threshold = Math.max(1, tracker.targetMl - 2);
+        if (tracker.gainedGrams > tracker.peakGain + 0.35) {
+            tracker.peakGain = tracker.gainedGrams;
+            tracker.cupRemoved = false;
+            if (tracker.gainedGrams >= threshold) this.armPourPlateauTimer();
+        } else if (!tracker.cupRemoved && tracker.gainedGrams >= threshold && tracker.timer === null) {
+            this.armPourPlateauTimer();
+        }
     }
 
     private sample(event: ControlFeedback): void {
@@ -392,6 +571,7 @@ export default class MachineControls {
                 || !Number.isFinite(value.grams)) return;
             this.update({cupGrams: value.grams});
             this.expire("cupGrams");
+            if (event.transaction === this.run?.transaction) this.trackPourCup(value.grams);
         } else if (value.kind === "dispensed") {
             if (event.transaction !== this.run?.transaction || !Number.isFinite(value.ml) || value.ml < 0) return;
             this.update({dispensedMl: value.ml});
@@ -422,9 +602,13 @@ export default class MachineControls {
         if (this.contextInvalid) throw new Error("The control context needs reconciliation.");
         this.lease.check();
         const tokens = Object.freeze({session: this.session, transaction: ++this.transaction});
-        const plan = this.qualification.protocol.plan(command, tokens);
+        const protocol = this.qualification.protocol;
+        const plan = (protocol.prepare ?? protocol.plan).call(protocol, command, tokens);
         if (!Number.isFinite(plan.deadlineMs) || plan.deadlineMs <= 0) throw new Error("A qualified deadline is required.");
-        if (command.kind === "inspect" && (command.recovery || command.readOnly) && (plan.frame !== null || !plan.refreshInfo)) {
+        if (command.kind === "inspect" && command.recovery && (plan.frame !== null || !plan.refreshInfo)) {
+            throw new Error("Read-only or recovery inspection must use leased info only.");
+        }
+        if (command.kind === "inspect" && command.readOnly && !plan.inertRead && (plan.frame !== null || !plan.refreshInfo)) {
             throw new Error("Read-only or recovery inspection must use leased info only.");
         }
         let timer: ReturnType<typeof setTimeout>;
@@ -471,6 +655,12 @@ export default class MachineControls {
                     if (cancelled || epoch !== this.epoch || this.contextInvalid) throw new Error("Control transaction cancelled.");
                 };
                 checkCurrent();
+                let armedProtocol = false;
+                const armOnce = () => {
+                    if (armedProtocol) return;
+                    armedProtocol = true;
+                    plan.arm?.();
+                };
                 const dispatch = () => {
                     checkCurrent();
                     if (command.kind === "pour") {
@@ -481,10 +671,12 @@ export default class MachineControls {
                         lease.assertPourPreflight(this.qualification!.protocol.actualWaterSource(this.machine.info, this.machine.infoAt));
                     }
                     checkCurrent();
+                    const nextArmed = !plan.refreshInfo || Boolean(plan.inertRead);
+                    if (nextArmed) armOnce();
                     if (command.kind === "grind" || command.kind === "pour") this.run = tokens;
                     if (command.kind === "enter") this.telemetry = tokens;
                     dispatched = true;
-                    armed = !plan.refreshInfo;
+                    armed = nextArmed;
                 };
                 if (plan.frame !== null) {
                     if (command.kind === "stop") await lease.sendStop(plan.frame, dispatch, checkCurrent);
@@ -494,6 +686,7 @@ export default class MachineControls {
                 if (plan.refreshInfo) {
                     const answered = await lease.refreshInfo(() => {
                         checkCurrent();
+                        armOnce();
                         if (!dispatched && command.kind === "enter") this.telemetry = tokens;
                         dispatched = true;
                         armed = true;
@@ -513,8 +706,17 @@ export default class MachineControls {
         }
     }
 
-    async open(identity: ControlIdentity, tool: ToolId): Promise<void> {
+    async open(identity: ControlIdentity, tool: ToolId, signal?: AbortSignal): Promise<void> {
         if (this.disposed) throw new Error("The shared control owner was reset.");
+        if (signal?.aborted) throw new Error("Control open cancelled before attachment.");
+        const key = `${identity.deviceId}\0${identity.serial ?? ""}\0${tool}`;
+        if (this.preflight) {
+            if (this.preflight.key === key) {
+                await this.preflight.promise;
+                return;
+            }
+            throw new Error("A control session is already owned.");
+        }
         const current = this.snapshot;
         if (current.phase !== "closed") {
             if (current.identity?.deviceId === identity.deviceId && current.identity.serial === identity.serial
@@ -526,18 +728,40 @@ export default class MachineControls {
         }
         const {profile} = this.select();
         if ((tool === "grind" && !profile.grind) || (tool === "pour" && !profile.pour)) throw new Error("Tool unsupported.");
-        this.attach(identity, tool);
-        this.recoveryOnly = false;
-        this.opening = Promise.resolve().then(() => this.exchange({kind: "enter", tool}, "ready"));
-        this.update({...initial, identity: Object.freeze({...identity}), tool, phase: "entering"});
+        const actual = this.machine.slotIdentity;
+        if (!actual || actual.deviceId !== identity.deviceId || actual.serial !== identity.serial) {
+            throw new Error("The connected peripheral and reported serial must match the control identity.");
+        }
+
+        const task = (async () => {
+            await this.machine.ensureFreshControlState();
+            if (signal?.aborted) throw new Error("Control open cancelled before attachment.");
+            if (this.disposed) throw new Error("The shared control owner was reset.");
+            if (this.snapshot.phase !== "closed") throw new Error("A control session is already owned.");
+            const {profile: latestProfile} = this.select();
+            if ((tool === "grind" && !latestProfile.grind) || (tool === "pour" && !latestProfile.pour)) {
+                throw new Error("Tool unsupported.");
+            }
+            this.attach(identity, tool);
+            this.recoveryOnly = false;
+            this.opening = Promise.resolve().then(() => this.exchange({kind: "enter", tool}, "ready"));
+            this.update({...initial, identity: Object.freeze({...identity}), tool, phase: "entering"});
+            try {
+                await this.opening;
+                this.update({phase: "ready"});
+            } catch (error) {
+                this.uncertain(failure(error));
+                throw error;
+            } finally {
+                this.opening = null;
+            }
+        })();
+        const preflight = {key, promise: task};
+        this.preflight = preflight;
         try {
-            await this.opening;
-            this.update({phase: "ready"});
-        } catch (error) {
-            this.uncertain(failure(error));
-            throw error;
+            await task;
         } finally {
-            this.opening = null;
+            if (this.preflight === preflight) this.preflight = null;
         }
     }
 
@@ -561,6 +785,13 @@ export default class MachineControls {
         const captured = Object.freeze({...request});
         validatePourRequest(captured, this.qualification!.profile.pour);
         const epoch = this.epoch;
+        this.clearPourPlateau();
+        if (this.qualification!.protocol.confirmTargetStopFromCupPlateau && captured.mode === "target") {
+            this.pourCupTracker = {
+                targetMl: captured.volumeMl, lastGrams: null, lastAt: 0, gainedGrams: 0, peakGain: 0,
+                cupRemoved: false, timer: null
+            };
+        }
         this.update({phase: "starting", pourRequest: captured, dispensedMl: null});
         try {
             if (epoch !== this.epoch) throw new Error("Control transaction cancelled.");
@@ -576,6 +807,7 @@ export default class MachineControls {
     }
 
     private startFailed(error: Error): void {
+        this.clearPourPlateau();
         if (this.contextInvalid || this.machine.controlRecovery?.marker) this.uncertain(error);
         else {
             this.run = null;
@@ -590,6 +822,7 @@ export default class MachineControls {
             || !["starting", "running", "unknown"].includes(this.snapshot.phase)) {
             return Promise.reject(new Error("No owned moving operation to stop."));
         }
+        this.clearPourPlateau();
         ++this.epoch;
         this.waiter?.reject(new Error("Control transaction cancelled by Stop."));
         const operation = async () => {
@@ -670,50 +903,83 @@ export default class MachineControls {
         return operation;
     }
 
-    /** Explicit info-only read under the shared exclusive lease, never an Apply. */
+    /** Explicit setting read under the shared exclusive lease, never an Apply. */
     async readSettings(identity: ControlIdentity, id: SettingId): Promise<void> {
-        if (this.snapshot.phase !== "closed") throw new Error("Settings require a closed control session.");
         const support = this.describeSettings(identity, id);
         if (support.unavailable) throw new Error(support.unavailable);
-        this.attach(identity, "setting");
-        this.recoveryOnly = false;
-        this.update({...initial, identity: Object.freeze({...identity}), phase: "applying", applyingSetting: id});
-        try {
-            const result = await this.exchange({kind: "inspect", tool: null, readOnly: true}, "settings");
+        await this.runSettingLeaseTransaction(identity, id, () => {
+            const latestSupport = this.describeSettings(identity, id);
+            if (latestSupport.unavailable) throw new Error(latestSupport.unavailable);
+        }, async () => {
+            const result = await this.exchange({kind: "inspect", tool: null, settingId: id, readOnly: true}, "settings");
             if (result.kind !== "settings" || result.readings[id] === null) throw new Error("Qualified current setting unavailable.");
             validateSetting(id, result.readings[id], this.qualification!.profile.settings);
-            this.settingsInfo = this.machine.info;
-            this.release();
-            this.update({phase: "closed", applyingSetting: null, error: null, settings: Object.freeze({...result.readings})});
-        } catch (error) {
-            this.uncertain(failure(error));
-            throw error;
+            return result.readings;
+        });
+    }
+
+    private async runSettingLeaseTransaction(
+        identity: ControlIdentity,
+        id: SettingId,
+        revalidate: () => void,
+        execute: () => Promise<SettingReadings>
+    ): Promise<void> {
+        if (this.snapshot.phase !== "closed" || this.preflight !== null) {
+            throw new Error("Settings require a closed control session.");
+        }
+        const preflight = {
+            key: `setting\0${identity.deviceId}\0${identity.serial ?? ""}\0${id}`,
+            promise: (async () => {
+                await this.machine.ensureFreshControlState();
+                if (this.disposed) throw new Error("The shared control owner was reset.");
+                if (this.snapshot.phase !== "closed") throw new Error("Settings require a closed control session.");
+                revalidate();
+                const priorSettings = this.settingsInfo === this.machine.info
+                    && this.snapshot.identity?.deviceId === identity.deviceId
+                    && this.snapshot.identity.serial === identity.serial
+                    ? this.snapshot.settings : null;
+                this.attach(identity, "setting");
+                this.recoveryOnly = false;
+                this.update({...initial, identity: Object.freeze({...identity}), phase: "applying", applyingSetting: id,
+                    settings: priorSettings});
+                try {
+                    const readings = await execute();
+                    const clean = this.sanitizeReadings(readings, this.qualification!, identity, true);
+                    this.settingsInfo = this.machine.info;
+                    this.release();
+                    this.update({phase: "closed", applyingSetting: null, error: null, settings: clean});
+                } catch (error) {
+                    this.uncertain(failure(error));
+                    throw error;
+                }
+            })()
+        };
+        this.preflight = preflight;
+        try {
+            await preflight.promise;
+        } finally {
+            if (this.preflight === preflight) this.preflight = null;
         }
     }
 
     async applySetting<K extends SettingId>(identity: ControlIdentity, id: K, value: SettingValues[K]): Promise<void> {
-        if (this.snapshot.phase !== "closed") throw new Error("Settings require a closed control session.");
         const qualification = this.select();
         validateSetting(id, value, qualification.profile.settings);
-        this.attach(identity, "setting");
-        this.recoveryOnly = false;
-        this.update({...initial, identity: Object.freeze({...identity}), phase: "applying", applyingSetting: id});
-        try {
-            const current = await this.exchange({kind: "inspect", tool: null}, "settings");
+        await this.runSettingLeaseTransaction(identity, id, () => {
+            const latestQualification = this.select();
+            validateSetting(id, value, latestQualification.profile.settings);
+        }, async () => {
+            const current = await this.exchange({kind: "inspect", tool: null, settingId: id}, "settings");
             if (current.kind !== "settings" || current.readings[id] === null) throw new Error("Qualified current setting unavailable.");
-            this.update({settings: Object.freeze({...current.readings})});
+            validateSetting(id, current.readings[id], this.qualification!.profile.settings);
+            this.update({settings: this.sanitizeReadings(current.readings, this.qualification!, identity, true)});
             // TS cannot retain the correlation between a generic key and its
             // value when constructing the mapped command union.
             const command = {kind: "setting", id, value} as Extract<ControlCommand, {kind: "setting"}>;
             const result = await this.exchange(command, "settings");
             if (result.kind !== "settings" || result.readings[id] !== value) throw new Error("Setting readback does not match the proposal.");
-            this.settingsInfo = this.machine.info;
-            this.release();
-            this.update({phase: "closed", applyingSetting: null, error: null, settings: Object.freeze({...result.readings})});
-        } catch (error) {
-            this.uncertain(failure(error));
-            throw error;
-        }
+            return result.readings;
+        });
     }
 
     private canReconnect(identity: ControlIdentity, tool: ToolId | null): boolean {
@@ -780,7 +1046,8 @@ export default class MachineControls {
 
     /** Never re-enters a tool. A moving recovery remains Stop-only until proof. */
     async recover(): Promise<void> {
-        if (this.recovering || this.stopping || !["closed", "unknown"].includes(this.snapshot.phase)) {
+        if (this.recovering || this.stopping || this.preflight !== null
+            || !["closed", "unknown"].includes(this.snapshot.phase)) {
             throw new Error("Control reconciliation is unavailable.");
         }
         const marker = this.machine.controlRecovery?.marker;
@@ -824,9 +1091,15 @@ export default class MachineControls {
                     this.settingsInfo = this.machine.info;
                 }
                 const settingsIdentity = settings ? this.snapshot.identity : null;
+                const nextSettings = result.kind === "settings" && settingsIdentity
+                    ? this.sanitizeReadings(result.readings, this.qualification!, settingsIdentity, true)
+                    : null;
                 this.release();
-                this.update({...initial, identity: settingsIdentity,
-                    settings: result.kind === "settings" ? Object.freeze({...result.readings}) : null});
+                if (settings) {
+                    this.update({...initial, identity: settingsIdentity, settings: nextSettings});
+                } else {
+                    this.closeSessionToRestoredSettings();
+                }
             }
         } catch (error) {
             this.uncertain(failure(error));
@@ -843,7 +1116,7 @@ export default class MachineControls {
         try {
             await this.exchange({kind: "exit", tool: this.snapshot.tool}, "closed");
             this.release();
-            this.update({...initial});
+            this.closeSessionToRestoredSettings();
         } catch (error) {
             this.uncertain(failure(error));
             throw error;

@@ -1,5 +1,5 @@
 import {
-    ControlCapabilityProfile, lookupControlCapabilities
+    ControlCapabilityProfile, lookupControlCapabilities, studioQualifiedProfile
 } from "@/library/machine/controlCapabilities";
 import {
     ControlValidationError, validateGrindRequest, validatePourRequest, validateSetting
@@ -130,5 +130,36 @@ describe("explicit input policies", () => {
         {min: 0, max: 10, step: 0}, {min: 0, max: 10, step: NaN}
     ])("refuses malformed numeric policy %j", (rule) => {
         expect(() => validateSetting("brightness", 0, {brightness: rule})).toThrow(ControlValidationError);
+    });
+});
+
+describe("real hardware Studio resolution", () => {
+    it("qualifies real Studio hardware when info.model is empty", () => {
+        // Real Studio hardware (e.g. J15A01B5AF231 on V12.0D.500) reports empty model in 40521
+        const realStudio = {model: "", firmware: "V12.0D.500", serial: "J15A01B5AF231"};
+        expect(lookupControlCapabilities(realStudio)).toEqual({
+            available: true,
+            profile: studioQualifiedProfile
+        });
+    });
+
+    it("qualifies real Studio with case-insensitive model matching", () => {
+        for (const model of ["studio", "Studio", "STUDIO", "j15", "J15", "x15", "X15"]) {
+            expect(lookupControlCapabilities({model, firmware: "V12.0D.500", serial: "J15A01B5AF231"})).toEqual({
+                available: true,
+                profile: studioQualifiedProfile
+            });
+        }
+    });
+
+    it("refuses unrecognised firmware or non-Studio serial when model is empty", () => {
+        expect(lookupControlCapabilities({model: "", firmware: "V11.0.0", serial: "J15A01B5AF231"})).toEqual({
+            available: false,
+            reason: "unqualified"
+        });
+        expect(lookupControlCapabilities({model: "", firmware: "V12.0D.500", serial: "J20A01B5AF231"})).toEqual({
+            available: false,
+            reason: "unqualified"
+        });
     });
 });
