@@ -1,5 +1,5 @@
 import React from "react";
-import {Text} from "react-native";
+import {StyleSheet, Text} from "react-native";
 import {screen} from "@testing-library/react-native";
 
 import DotMatrixCadenceStrip from "@/components/DotMatrixCadenceStrip";
@@ -42,6 +42,22 @@ describe("DotMatrixCadenceStrip", () => {
         await renderWithProviders(<DotMatrixCadenceStrip phase="running"/>);
         expect(screen.getByTestId("tool-cadence-strip", {includeHiddenElements: true})).toBeTruthy();
         expect(screen.getAllByTestId("cadence-dot", {includeHiddenElements: true})).toHaveLength(TOOL_MOTION.dotCount);
+    });
+
+    it("keeps wrapped trailing dot opacities non-negative and bounded during stopping", async () => {
+        // Under stopping (550ms cycle / 45ms step), indices 13..15 exceed one full cycle (phaseShift > 1).
+        await renderWithProviders(<DotMatrixCadenceStrip phase="stopping"/>);
+        const dots = screen.getAllByTestId("cadence-dot", {includeHiddenElements: true});
+        expect(dots).toHaveLength(TOOL_MOTION.dotCount);
+        for (const dot of dots) {
+            const flat = StyleSheet.flatten(dot.props.style);
+            expect(typeof flat.opacity).toBe("number");
+            expect(flat.opacity).toBeGreaterThanOrEqual(0);
+            expect(flat.opacity).toBeLessThanOrEqual(1);
+        }
+        // Index 15 has phaseShift = (15 * 45) / 550 > 1; positive modulo keeps its wrapped phase in [0, 1] rather than stalling negative.
+        const trailingOpacities = dots.slice(13).map(dot => StyleSheet.flatten(dot.props.style).opacity as number);
+        expect(Math.max(...trailingOpacities)).toBeGreaterThan(0.25);
     });
 });
 

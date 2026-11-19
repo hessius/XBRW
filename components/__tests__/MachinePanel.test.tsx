@@ -492,4 +492,90 @@ describe("MachinePanel inline tool mode", () => {
         notifySpy.mockRestore();
         s.controls.dispose();
     });
+
+    it("surfaces Scale error and tool-specific switch block reasons for applying and unknown", async () => {
+        const notifySpy = jest.spyOn(XbrwToast, "notify").mockImplementation(jest.fn());
+        const s = await controlFixture();
+        let pendingTare: Planned | null = null;
+        let holdExit = false;
+        s.respond((item: Planned) => {
+            if (item.command.kind === "tare") {
+                pendingTare = item;
+                return;
+            }
+            if (holdExit && item.command.kind === "exit") return;
+            s.accept(item);
+        });
+        await draw({
+            machineId: identity.deviceId,
+            machineSerial: identity.serial,
+            machineModel: "Studio",
+            controls: s.controls
+        });
+
+        await fireEvent.press(screen.getByRole("button", {name: "Scale"}));
+        await waitFor(() => expect(s.controls.getSnapshot().phase).toBe("ready"));
+
+        await fireEvent.press(screen.getByRole("button", {name: "Tare"}));
+        await waitFor(() => expect(s.controls.getSnapshot().phase).toBe("applying"));
+        await fireEvent.press(screen.getByRole("button", {name: "Grind"}));
+        expect(notifySpy).toHaveBeenCalledWith({tone: "info", message: "Wait for scale tare to finish."});
+
+        await act(async () => { s.feedback(pendingTare!, {kind: "tared"}); });
+        await waitFor(() => expect(s.controls.getSnapshot().phase).toBe("ready"));
+
+        holdExit = true;
+        await fireEvent.press(screen.getByRole("button", {name: "Grind"}));
+        await waitFor(() => expect(s.controls.getSnapshot().phase).toBe("unknown"));
+        expect(s.controls.getSnapshot().tool).toBe("scale");
+        const snapshotError = s.controls.getSnapshot().error;
+        expect(snapshotError).toBeTruthy();
+        expect(screen.getByText(snapshotError!)).toBeTruthy();
+        expect(screen.queryByText(/Connection lost/i)).toBeNull();
+        expect(screen.queryByRole("button", {name: "Leave screen"})).toBeNull();
+
+        await fireEvent.press(screen.getByRole("button", {name: "Grind"}));
+        expect(notifySpy).toHaveBeenCalledWith({tone: "info", message: "Reconcile the machine before switching tools."});
+
+        notifySpy.mockRestore();
+        s.controls.dispose();
+    });
+
+    it("keeps connected cross-tool unknown on Inspect active tool without Connection lost or Leave screen", async () => {
+        const s = await controlFixture();
+        await s.controls.open(identity, "grind");
+        s.respond((item: Planned) => {
+            if (item.command.kind === "grind") s.accept(item);
+            else if (item.command.kind === "inspect") s.feedback(item, {kind: "active"});
+        });
+        await s.controls.startGrind({grindSize: 5, rpm: 150});
+        await s.machine.disconnect();
+        await s.machine.connect(identity.deviceId);
+        await s.controls.recover();
+        expect(s.controls.getSnapshot()).toMatchObject({tool: "grind", phase: "unknown"});
+        expect(s.controls.isIdentityConnected(identity)).toBe(true);
+
+        await renderWithProviders(
+            <MachinePanel
+                open
+                status="connected"
+                accent="#C86A3B"
+                vitals={vitals}
+                now={4 * 60 * 1000}
+                onRefreshWater={pending()}
+                onConnect={jest.fn()}
+                machineId={identity.deviceId}
+                machineSerial={identity.serial}
+                machineModel="Studio"
+                controls={s.controls}
+                inlineTool="scale"
+                onInlineToolChange={jest.fn()}
+            />
+        );
+
+        expect(screen.getByRole("button", {name: "Inspect active tool"})).toBeEnabled();
+        expect(screen.queryByText(/Connection lost/i)).toBeNull();
+        expect(screen.queryByRole("button", {name: "Leave screen"})).toBeNull();
+        s.controls.dispose();
+    });
 });

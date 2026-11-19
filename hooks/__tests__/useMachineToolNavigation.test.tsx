@@ -12,7 +12,16 @@ import {controlFixture, flushControls, identity, type Planned} from "./machineCo
 
 jest.mock("react-native-ble-manager", () => ({__esModule: true, default: {}}));
 jest.mock("@/components/XbrwToast", () => ({notify: jest.fn()}));
-jest.mock("expo-router", () => ({useNavigation: () => ({dispatch: mockDispatch})}));
+const mockBeforeRemoveListeners = new Set<() => void>();
+jest.mock("expo-router", () => ({
+    useNavigation: () => ({
+        dispatch: mockDispatch,
+        addListener: (event: string, listener: () => void) => {
+            if (event === "beforeRemove") mockBeforeRemoveListeners.add(listener);
+            return () => { mockBeforeRemoveListeners.delete(listener); };
+        }
+    })
+}));
 jest.mock("expo-router/react-navigation", () => ({
     useIsFocused: () => mockFocused,
     usePreventRemove: (prevent: boolean, callback: Prevention) => { mockPrevention = {prevent, callback}; }
@@ -25,13 +34,18 @@ let mockFocused = true;
 const mockDispatch = jest.fn();
 
 function back(action: Action = {type: "GO_BACK"}) {
-    if (mockPrevention.prevent) mockPrevention.callback({data: {action}});
-    else mockDispatch(action);
+    if (mockPrevention.prevent) {
+        mockPrevention.callback({data: {action}});
+    } else {
+        for (const listener of Array.from(mockBeforeRemoveListeners)) listener();
+        mockDispatch(action);
+    }
 }
 
 beforeEach(() => {
     mockFocused = true;
     mockDispatch.mockClear();
+    mockBeforeRemoveListeners.clear();
 });
 
 function SettingHost({controls, target = identity}: {controls: MachineControls; target?: ControlIdentity}) {
@@ -199,6 +213,51 @@ describe("mode: tool", () => {
         const navigate = jest.fn();
         await act(async () => { stale(navigate); });
         expect(navigate).not.toHaveBeenCalled();
+        s.controls.dispose();
+    });
+
+    it("refuses leaveWhileDisconnected while the matching machine identity is connected", async () => {
+        const s = await controlFixture();
+        await s.controls.open(identity, "grind");
+        s.respond(item => {
+            if (item.command.kind === "grind") s.accept(item);
+            else if (item.command.kind === "inspect") s.feedback(item, {kind: "active"});
+        });
+        await s.controls.startGrind({grindSize: 5, rpm: 150});
+        await s.machine.disconnect();
+        await s.machine.connect(identity.deviceId);
+        await s.controls.recover();
+        expect(s.controls.getSnapshot().phase).toBe("unknown");
+        expect(s.controls.isIdentityConnected(identity)).toBe(true);
+
+        const onBlocked = jest.fn();
+        const hook = await renderHook(() => useMachineToolNavigation(identity, s.controls, "tool", {onBlocked}));
+        const leave = jest.fn();
+        await act(async () => { hook.result.current.leaveWhileDisconnected(leave); });
+        expect(leave).not.toHaveBeenCalled();
+        expect(s.controls.getSnapshot().phase).toBe("unknown");
+        expect(hook.result.current.blockedCount).toBe(0);
+        expect(onBlocked).not.toHaveBeenCalled();
+        s.controls.dispose();
+    });
+
+    it("clears departure escape lock when returning to ready so subsequent native back closes in background", async () => {
+        const s = await controlFixture();
+        await s.controls.open(identity, "grind");
+        const hook = await renderHook(() => useMachineToolNavigation(identity, s.controls, "tool"));
+
+        const navigate = jest.fn();
+        await act(async () => { hook.result.current.requestDeparture(navigate); });
+        await waitFor(() => expect(navigate).toHaveBeenCalledTimes(1));
+        await waitFor(() => expect(s.controls.getSnapshot().phase).toBe("closed"));
+
+        await act(async () => { await s.controls.open(identity, "grind"); });
+        expect(s.controls.getSnapshot().phase).toBe("ready");
+
+        await act(async () => { back(); });
+        await waitFor(() => expect(mockDispatch).toHaveBeenCalledTimes(1));
+        await waitFor(() => expect(s.controls.getSnapshot().phase).toBe("closed"));
+        expect(s.planned.filter(p => p.command.kind === "exit")).toHaveLength(2);
         s.controls.dispose();
     });
 });

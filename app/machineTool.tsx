@@ -168,8 +168,16 @@ function ToolScreen({identity, routeTool, name, injected}: {
                                 {error !== null ? "Retry opening tool" : "Open tool"}
                             </Button>
                         )}
-                        {support.recoverable && <Button accessibilityRole="button" disabled={busy}
-                            onPress={state.recover}>Reconcile connected machine</Button>}
+                        {support.recoverable ? <Button accessibilityRole="button" disabled={busy}
+                            onPress={state.recover}>Reconcile connected machine</Button>
+                            : !owns && sameMachineSnap && snapshot.phase === "unknown" && snapshot.tool === null
+                            && typeof controls.isIdentityConnected === "function"
+                            && controls.isIdentityConnected(identity) && (
+                            <Button accessibilityRole="button" disabled={busy}
+                                onPress={() => { void controls.recover().catch(() => {}); }}>
+                                Reconcile connected machine
+                            </Button>
+                        )}
                         {!owns && sameMachineSnap && snapshot.phase === "unknown"
                             && (snapshot.tool === "grind" || snapshot.tool === "scale" || snapshot.tool === "pour") && (
                             <Button accessibilityRole="button" disabled={busy}
@@ -187,7 +195,9 @@ function ToolScreen({identity, routeTool, name, injected}: {
                                 <Button accessibilityRole="button" disabled={busy}
                                     onPress={() => nav.leaveWhileDisconnected(() => router.back())}>Leave screen</Button>
                             </XStack>
-                        </> : sameMachineSnap && snapshot.phase === "unknown" && !support.recoverable && (
+                        </> : sameMachineSnap && snapshot.phase === "unknown" && !support.recoverable
+                            && !(typeof controls.isIdentityConnected === "function"
+                                && controls.isIdentityConnected(identity)) && (
                             <Button accessibilityRole="button" disabled={busy}
                                 onPress={() => nav.leaveWhileDisconnected(() => router.back())}>Leave screen</Button>
                         )}

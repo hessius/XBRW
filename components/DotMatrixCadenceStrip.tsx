@@ -49,7 +49,7 @@ function CadenceDot({index, colour, active, reduced, cycleMs, progress}: DotProp
             return {opacity: 0.85, transform: [{scaleY: 1}]};
         }
         const phaseShift = (index * TOOL_MOTION.waveStepMs) / cycleMs;
-        const local = (progress.value - phaseShift + 1) % 1;
+        const local = (((progress.value - phaseShift) % 1) + 1) % 1;
         const peak = local < 0.45 ? local / 0.45 : 1 - (local - 0.45) / 0.55;
         return {
             opacity: 0.24 + 0.76 * peak,

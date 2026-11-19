@@ -52,7 +52,7 @@ const saved: SavedMachine = {
 const owners: MachineControls[] = [];
 
 // Synthetic scope, protocol and limits only: none qualify a real machine.
-function profile(scale = true): ControlCapabilityProfile {
+function profile(scale = true, settings: ControlCapabilityProfile["settings"] = {}): ControlCapabilityProfile {
     return {
         id: "route-only", models: ["test"], firmwares: ["test"], serials: [identity.serial], scale,
         grind: {grindSize: {min: 1, max: 10, step: 1}, rpm: {min: 100, max: 200, step: 10}},
@@ -61,14 +61,16 @@ function profile(scale = true): ControlCapabilityProfile {
             volumeMl: {min: 10, max: 100, step: 10}, modes: ["target", "continuous"],
             patterns: ["centered", "circular", "spiral"]
         },
-        settings: {}
+        settings
     };
 }
 type Sent = {command: ControlCommand; tokens: ControlTokens};
 class Radio extends FakeTransport {
     get connectedDeviceId() { return this.connectedTo; }
 }
-async function fixture(options: {production?: boolean; scale?: boolean} = {}) {
+async function fixture(options: {
+    production?: boolean; scale?: boolean; settings?: ControlCapabilityProfile["settings"];
+} = {}) {
     const radio = new Radio();
     radio.infoReply = machineInfoFrame({serial: identity.serial, model: "test", firmware: "test"});
     let raw = "";
@@ -93,7 +95,7 @@ async function fixture(options: {production?: boolean; scale?: boolean} = {}) {
         radio.emit(notification(0xFE, 0xFE, [key & 255, key >> 8]));
     }
     const controls = new MachineControls(machine, {reconnect, ...(options.production ? {} : {qualifications: [{
-        profile: profile(options.scale),
+        profile: profile(options.scale, options.settings),
         protocol: {
             actualWaterSource: () => "tank",
             plan: (command, tokens) => {
@@ -1011,4 +1013,59 @@ it("preserves in-flight preflight when expanding from inline workbench to full s
     } finally {
         jest.useRealTimers();
     }
+});
+
+it("keeps connected cross-tool unknown on Inspect active tool without Connection lost or Leave screen", async () => {
+    const s = await fixture();
+    await s.controls.open(identity, "grind");
+    s.respond(item => {
+        if (item.command.kind === "grind") s.accept(item);
+        else if (item.command.kind === "inspect") s.feedback(item, {kind: "active"});
+    });
+    await s.controls.startGrind({grindSize: 5, rpm: 150});
+    await s.machine.disconnect();
+    await s.machine.connect(identity.deviceId);
+    await s.controls.recover();
+    expect(s.controls.getSnapshot()).toMatchObject({tool: "grind", phase: "unknown"});
+    expect(s.controls.isIdentityConnected(identity)).toBe(true);
+
+    mockParams = {machineId: identity.deviceId, tool: "scale"};
+    await renderWithProviders(<MachineToolScreen controls={s.controls}/>);
+
+    expect(screen.getByRole("button", {name: "Inspect active tool"})).toBeEnabled();
+    expect(screen.queryByText(/Connection lost/i)).toBeNull();
+    expect(screen.queryByRole("button", {name: "Leave screen"})).toBeNull();
+});
+
+it("offers Reconcile connected machine when connected settings leave unknown with null tool", async () => {
+    const s = await fixture({settings: {brightness: {min: 1, max: 3, step: 1}}});
+    s.respond(item => {
+        if (item.command.kind === "inspect") return;
+    });
+    await expect(s.controls.applySetting(identity, "brightness", 3)).rejects.toThrow(/readback|timeout|unknown|missing/i);
+    expect(s.controls.getSnapshot()).toMatchObject({tool: null, phase: "unknown"});
+    expect(s.controls.isIdentityConnected(identity)).toBe(true);
+
+    mockParams = {machineId: identity.deviceId, tool: "grind"};
+    await renderWithProviders(<MachineToolScreen controls={s.controls}/>);
+
+    expect(screen.getByRole("button", {name: "Reconcile connected machine"})).toBeEnabled();
+    expect(screen.queryByText(/Connection lost/i)).toBeNull();
+    expect(screen.queryByRole("button", {name: "Leave screen"})).toBeNull();
+
+    s.respond(item => {
+        if (item.command.kind === "inspect") {
+            s.feedback(item, {
+                kind: "settings",
+                readings: {
+                    temperatureUnit: null, weightUnit: null, brightness: 3,
+                    waterSource: null, pourRadius: null, vibrationAmplitude: null
+                }
+            });
+        } else {
+            s.accept(item);
+        }
+    });
+    await press("Reconcile connected machine");
+    await waitFor(() => expect(s.controls.getSnapshot().phase).toBe("closed"));
 });

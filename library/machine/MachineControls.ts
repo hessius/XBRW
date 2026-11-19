@@ -750,39 +750,47 @@ export default class MachineControls {
 
         const signals = new Set<AbortSignal | undefined>([signal]);
         const preflightCancelled = () => signals.size > 0 && Array.from(signals).every((entry) => entry?.aborted === true);
+        let preflight: {key: string; promise: Promise<void>; signals?: Set<AbortSignal | undefined>} | undefined;
         const task = (async () => {
-            if (this.closing) await this.closing;
-            if (preflightCancelled()) throw new Error("Control open cancelled before attachment.");
-            if (this.disposed) throw new Error("The shared control owner was reset.");
-            await this.machine.ensureFreshControlState();
-            if (preflightCancelled()) throw new Error("Control open cancelled before attachment.");
-            if (this.disposed) throw new Error("The shared control owner was reset.");
-            if (this.snapshot.phase !== "closed") throw new Error("A control session is already owned.");
-            const {profile: latestProfile} = this.select();
-            if ((tool === "grind" && !latestProfile.grind) || (tool === "pour" && !latestProfile.pour)) {
-                throw new Error("Tool unsupported.");
-            }
-            this.attach(identity, tool);
-            this.recoveryOnly = false;
-            this.opening = Promise.resolve().then(() => this.exchange({kind: "enter", tool}, "ready"));
-            this.update({...initial, identity: Object.freeze({...identity}), tool, phase: "entering"});
             try {
-                await this.opening;
-                this.update({phase: "ready"});
-            } catch (error) {
-                this.uncertain(failure(error));
-                throw error;
+                if (this.closing) await this.closing;
+                if (preflightCancelled()) throw new Error("Control open cancelled before attachment.");
+                if (this.disposed) throw new Error("The shared control owner was reset.");
+                await this.machine.ensureFreshControlState();
+                if (preflightCancelled()) throw new Error("Control open cancelled before attachment.");
+                if (this.disposed) throw new Error("The shared control owner was reset.");
+                if (this.snapshot.phase !== "closed") throw new Error("A control session is already owned.");
+                const {profile: latestProfile} = this.select();
+                if ((tool === "grind" && !latestProfile.grind) || (tool === "pour" && !latestProfile.pour)) {
+                    throw new Error("Tool unsupported.");
+                }
+                this.attach(identity, tool);
+                this.recoveryOnly = false;
+                this.opening = Promise.resolve().then(() => this.exchange({kind: "enter", tool}, "ready"));
+                this.update({...initial, identity: Object.freeze({...identity}), tool, phase: "entering"});
+                try {
+                    await this.opening;
+                    this.update({phase: "ready"});
+                } catch (error) {
+                    this.uncertain(failure(error));
+                    throw error;
+                } finally {
+                    this.opening = null;
+                }
             } finally {
-                this.opening = null;
+                if (this.preflight === preflight) this.preflight = null;
             }
         })();
-        const preflight = {key, promise: task, signals};
+        preflight = {key, promise: task, signals};
         this.preflight = preflight;
-        try {
-            await task;
-        } finally {
-            if (this.preflight === preflight) this.preflight = null;
-        }
+        await task;
+    }
+
+    /** True only while the active BLE connection matches `identity` and this owner is live. */
+    isIdentityConnected(identity: ControlIdentity): boolean {
+        const actual = this.machine.slotIdentity;
+        return !this.disposed && this.machine.isConnected() && actual !== null
+            && actual.deviceId === identity.deviceId && actual.serial === identity.serial;
     }
 
     async startGrind(request: GrindRequest): Promise<void> {

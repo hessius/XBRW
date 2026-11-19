@@ -108,6 +108,12 @@ export function useMachineToolNavigation(
     }, [disconnectedExitPending]);
 
     useEffect(() => {
+        if (focused && !disconnectedExitPending && snapshot.phase === "ready") {
+            escapingRef.current = false;
+        }
+    }, [focused, disconnectedExitPending, snapshot.phase]);
+
+    useEffect(() => {
         if (mode !== "tool") return;
         const nav = navigation as {addListener?: (event: string, listener: () => void) => () => void};
         if (typeof nav.addListener !== "function") return;
@@ -219,6 +225,7 @@ export function useMachineToolNavigation(
         if (!currentView() || mode !== "tool") return;
         const actual = controls.getSnapshot();
         if (actual.phase !== "unknown") return;
+        if (typeof controls.isIdentityConnected === "function" && controls.isIdentityConnected(identity)) return;
         disconnectNavigateRef.current = navigate;
         escapingRef.current = true;
         setDisconnectedExitPending(true);

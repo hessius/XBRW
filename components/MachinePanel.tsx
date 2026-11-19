@@ -229,6 +229,14 @@ export function inlineCloseBlockReason(
     return inlineBlockedReason(snapshot.phase, tool);
 }
 
+function inlineSwitchBlockedReason(phase: ControlPhase, tool: ToolId): string {
+    if (phase === "stopping") return `Stopping ${tool}…`;
+    if (phase === "leaving" || phase === "entering") return inlineBlockedReason(phase, tool);
+    if (phase === "applying") return "Wait for scale tare to finish.";
+    if (phase === "unknown") return "Reconcile the machine before switching tools.";
+    return `Stop ${tool} before switching tools`;
+}
+
 function InlineToolWorkbench({
     machineId,
     identity,
@@ -237,6 +245,7 @@ function InlineToolWorkbench({
     contextSummary,
     injectedControls,
     animationEnabled,
+    disconnected,
     onSwitchTool,
     onCollapse,
     onExpand,
@@ -249,6 +258,7 @@ function InlineToolWorkbench({
     contextSummary: string;
     injectedControls?: MachineControls;
     animationEnabled: boolean;
+    disconnected: boolean;
     onSwitchTool: (tool: ToolId) => void;
     onCollapse: () => void;
     onExpand: (machineId: string, tool: ToolId) => void;
@@ -284,9 +294,7 @@ function InlineToolWorkbench({
     function handleSelectTool(nextTool: ToolId) {
         if (nextTool === tool) return;
         if (activeMoving) {
-            onBlocked(blockingPhase === "stopping" ? `Stopping ${tool}…`
-                : blockingPhase === "leaving" || blockingPhase === "entering" ? inlineBlockedReason(blockingPhase, tool)
-                    : `Stop ${tool} before switching tools`);
+            onBlocked(inlineSwitchBlockedReason(blockingPhase, tool));
             return;
         }
         const prevTool = tool;
@@ -415,13 +423,24 @@ function InlineToolWorkbench({
             />
 
             {error !== null && <Text selectable color={palette.danger}>{error}</Text>}
+            {tool === "scale" && owns && snapshot.error !== null && (
+                <Text selectable color={palette.danger}>{snapshot.error}</Text>
+            )}
             {phase === "closed" && uiPhase === "closed" && support.unavailable === null && (
                 <Button accessibilityRole="button" disabled={busy} onPress={state.open}>
                     {error !== null ? "Retry opening tool" : "Open tool"}
                 </Button>
             )}
-            {support.recoverable && (
+            {support.recoverable ? (
                 <Button accessibilityRole="button" disabled={busy} onPress={state.recover}>
+                    Reconcile connected machine
+                </Button>
+            ) : !owns && sameMachineSnap && snapshot.phase === "unknown"
+                && (disconnected || (typeof controls.isIdentityConnected === "function"
+                    && !controls.isIdentityConnected(identity))) === false
+                && snapshot.tool === null && (
+                <Button accessibilityRole="button" disabled={busy}
+                        onPress={() => { void controls.recover().catch(() => {}); }}>
                     Reconcile connected machine
                 </Button>
             )}
@@ -446,7 +465,9 @@ function InlineToolWorkbench({
                         </Button>
                     </XStack>
                 </YStack>
-            ) : sameMachineSnap && snapshot.phase === "unknown" && !support.recoverable && (
+            ) : sameMachineSnap && snapshot.phase === "unknown" && !support.recoverable
+                && (disconnected || (typeof controls.isIdentityConnected === "function"
+                    && !controls.isIdentityConnected(identity))) && (
                 <YStack gap="$2">
                     <Text color={palette.muted}>
                         Connection lost while a tool operation was uncertain.
@@ -642,6 +663,7 @@ export default function MachinePanel({
                             contextSummary={contextSummary}
                             injectedControls={controls}
                             animationEnabled={animationEnabled}
+                            disconnected={status !== "connected"}
                             onSwitchTool={updateInlineTool}
                             onCollapse={() => updateInlineTool(null)}
                             onExpand={handleExpand}
