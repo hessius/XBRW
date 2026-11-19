@@ -2,8 +2,9 @@ import React from "react";
 import {Button, Text, XStack, YStack} from "tamagui";
 import DotMatrixText from "@/components/DotMatrixText";
 import Stepper from "@/components/Stepper";
+import {mix} from "@/constants/colors";
 import {useAppearance} from "@/hooks/useAppearance";
-import type {ControlPhase, NumericPolicy} from "@/library/machine/controlModel";
+import type {ControlPhase, NumericPolicy, ToolId} from "@/library/machine/controlModel";
 import {editableNumericLadder} from "@/library/numericLadder";
 
 export type MachineControlReadoutProps = {
@@ -75,30 +76,95 @@ export type MachineToolActionsProps = {
     phase: ControlPhase;
     startDisabled: boolean;
     stopUnavailable: string | null;
+    tool?: ToolId;
+    variant?: "full" | "inline";
     onStart: () => void;
     onStop: () => void;
 };
 
-/** Only an explicitly ready tool may start. Uncertain active work keeps Stop. */
+/** Only an explicitly ready tool may start. Tapping Stop transitions immediately to outlined Stopping…. */
 export function MachineToolActions({
-    phase, startDisabled, stopUnavailable, onStart, onStop
+    phase, startDisabled, stopUnavailable, tool, variant = "full", onStart, onStop
 }: MachineToolActionsProps) {
-    const {palette, primary} = useAppearance();
-    const stopOnly = ["starting", "running", "stopping", "unknown"].includes(phase);
-    return (
-        <YStack gap="$2" paddingTop="$4">
-            {stopOnly ? <>
-                {stopUnavailable !== null && <Text color={palette.muted}>{stopUnavailable}</Text>}
-                <Button accessibilityRole="button" disabled={stopUnavailable !== null}
-                        onPress={onStop} minHeight={48} height="auto" padding="$3"
-                        backgroundColor={palette.danger} color={palette.base}>
-                    Stop
+    const {palette, onBrand, onFill} = useAppearance();
+    const upper = tool ? ` ${tool.toUpperCase()}` : "";
+    const isFull = variant === "full";
+    const startBg = isFull ? palette.brandFill : palette.success;
+    const startInk = isFull ? onBrand.text : onFill(palette.success).text;
+    const height = isFull ? 48 : 42;
+
+    if (phase === "stopping") {
+        const label = `STOPPING${upper}…`;
+        return (
+            <YStack gap="$2" paddingTop={isFull ? "$3" : "$2"}>
+                <Button
+                    accessibilityRole="button"
+                    accessibilityLabel={label}
+                    accessibilityState={{busy: true, disabled: true}}
+                    disabled
+                    minHeight={height}
+                    height="auto"
+                    padding="$3"
+                    borderRadius="$4"
+                    backgroundColor={mix(palette.raised, palette.danger, 0.14)}
+                    color={palette.danger}
+                    style={{borderWidth: 1, borderColor: palette.danger}}>
+                    <DotMatrixText fontSize={isFull ? 13 : 12} weight="extrabold" letterSpacing={1.8} color={palette.danger}>
+                        {label}
+                    </DotMatrixText>
                 </Button>
-            </> : <Button accessibilityRole="button" disabled={phase !== "ready" || startDisabled}
-                          onPress={onStart} minHeight={48} height="auto" padding="$3"
-                          backgroundColor={primary.fill} color={primary.ink}>
-                Start
-            </Button>}
+            </YStack>
+        );
+    }
+
+    const stopOnly = ["starting", "running", "unknown"].includes(phase);
+    if (stopOnly) {
+        const label = `STOP${upper}`;
+        return (
+            <YStack gap="$2" paddingTop={isFull ? "$3" : "$2"}>
+                {stopUnavailable !== null && <Text color={palette.muted}>{stopUnavailable}</Text>}
+                <Button
+                    accessibilityRole="button"
+                    accessibilityLabel={label}
+                    disabled={stopUnavailable !== null}
+                    onPress={onStop}
+                    minHeight={height}
+                    height="auto"
+                    padding="$3"
+                    borderRadius="$4"
+                    backgroundColor={palette.danger}
+                    color={onFill(palette.danger).text}>
+                    <DotMatrixText fontSize={isFull ? 13 : 12} weight="extrabold" letterSpacing={1.8}
+                                   color={onFill(palette.danger).text}>
+                        {label}
+                    </DotMatrixText>
+                </Button>
+            </YStack>
+        );
+    }
+
+    const entering = phase === "entering" || phase === "leaving" || phase === "applying";
+    const label = entering ? `${phase === "leaving" ? "CLOSING" : "ENTERING"}${upper}…` : `START${upper}`;
+    const disabled = phase !== "ready" || startDisabled;
+    return (
+        <YStack gap="$2" paddingTop={isFull ? "$3" : "$2"}>
+            <Button
+                accessibilityRole="button"
+                accessibilityLabel={label}
+                accessibilityState={{busy: entering, disabled}}
+                disabled={disabled}
+                onPress={onStart}
+                minHeight={height}
+                height="auto"
+                padding="$3"
+                borderRadius="$4"
+                opacity={entering || disabled ? 0.48 : 1}
+                backgroundColor={startBg}
+                color={startInk}>
+                <DotMatrixText fontSize={isFull ? 13 : 12} weight="extrabold" letterSpacing={1.8} color={startInk}>
+                    {label}
+                </DotMatrixText>
+            </Button>
         </YStack>
     );
 }
