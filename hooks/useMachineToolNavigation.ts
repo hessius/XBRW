@@ -1,4 +1,4 @@
-import {useLayoutEffect, useRef, useState} from "react";
+import {useEffect, useLayoutEffect, useRef, useState} from "react";
 import {useNavigation} from "expo-router";
 import {useIsFocused, usePreventRemove} from "expo-router/react-navigation";
 import {useLiveBrewBarGuard} from "@/hooks/useLiveBrewBarGuard";
@@ -14,6 +14,10 @@ type Departure = {
     exit: () => void;
 };
 type Prompt = {request: Departure; busy: boolean; error: string | null};
+export type NavigationOptions = {
+    onBlocked?: (reason: string) => void;
+};
+
 function moving(snapshot: ControlSnapshot, controls: MachineControls): boolean {
     if (snapshot.tool !== "grind" && snapshot.tool !== "pour") return false;
     if (snapshot.phase === "starting" || snapshot.phase === "running" || snapshot.phase === "stopping") return true;
@@ -23,19 +27,47 @@ function moving(snapshot: ControlSnapshot, controls: MachineControls): boolean {
             !== "No moving operation is reserved. Reconcile this machine before continuing.";
 }
 
+function toolBlockReason(
+    identity: ControlIdentity,
+    actual: ControlSnapshot,
+    controls: MachineControls
+): string {
+    if (actual.identity !== null
+        && (actual.identity.deviceId !== identity.deviceId || actual.identity.serial !== identity.serial)) {
+        return "Another machine controls the connection.";
+    }
+    if (moving(actual, controls)) {
+        const label = actual.tool === "pour" ? "pour" : actual.tool === "grind" ? "grind" : "operation";
+        return actual.phase === "stopping" ? `Stopping ${label}…` : `Stop ${label} before leaving.`;
+    }
+    if (actual.phase === "applying") return "Wait for scale tare to finish.";
+    if (actual.phase === "entering") return "Wait for tool to finish opening.";
+    if (actual.tool !== null && controls.describeTool(identity, actual.tool).reconnectable) {
+        return "Machine disconnected — reconnect to inspect or use Leave screen below.";
+    }
+    return "Reconcile the machine before leaving.";
+}
+
 /**
- * The focused route hosts the returned prompt in XbrwSheet and applies covered
- * to both accessibilityElementsHidden and Android's no-hide-descendants.
- * Dismissing cancels departure, never an already dispatched Stop.
+ * Tool departure exits immediately in the background when idle and blocks active runs
+ * in-place via `blockedCount` / `onBlocked` (paired with a horizontal head-shake UI cue).
+ * `mode === "setting"` preserves explicit synchronous recovery/confirmation prompts.
  */
 export function useMachineToolNavigation(
-    identity: ControlIdentity, injected?: MachineControls, mode: "tool" | "setting" = "tool"
+    identity: ControlIdentity,
+    injected?: MachineControls,
+    mode: "tool" | "setting" = "tool",
+    options?: NavigationOptions
 ) {
     const {deviceId, serial} = identity;
     const {controls, snapshot} = useMachineControls(injected);
     const navigation = useNavigation();
     const focused = useIsFocused();
     const [state, setState] = useState<Prompt | null>(null);
+    const [blocked, setBlocked] = useState<{count: number; reason: string}>({count: 0, reason: ""});
+    const [disconnectedExitPending, setDisconnectedExitPending] = useState(false);
+    const disconnectNavigateRef = useRef<(() => void) | null>(null);
+    const escapingRef = useRef(false);
     const pending = useRef<{request: Departure; busy: boolean; closing: boolean} | null>(null);
     const live = useRef({deviceId, serial, focused, controls, mounted: false});
 
@@ -68,6 +100,28 @@ export function useMachineToolNavigation(
         pending.current = null;
     }, []);
 
+    useEffect(() => {
+        if (!disconnectedExitPending) return;
+        const navigate = disconnectNavigateRef.current;
+        disconnectNavigateRef.current = null;
+        if (navigate && live.current.mounted) navigate();
+    }, [disconnectedExitPending]);
+
+    useEffect(() => {
+        if (mode !== "tool") return;
+        const nav = navigation as {addListener?: (event: string, listener: () => void) => () => void};
+        if (typeof nav.addListener !== "function") return;
+        return nav.addListener("beforeRemove", () => {
+            if (escapingRef.current || !currentView()) return;
+            const actual = controls.getSnapshot();
+            if (actual.phase === "ready"
+                && actual.identity?.deviceId === deviceId
+                && actual.identity?.serial === serial) {
+                void controls.closeInBackground();
+            }
+        });
+    }, [navigation, mode, controls, deviceId, serial]);
+
     function stay(request: Departure): void {
         if (pending.current?.request !== request) return;
         request.cancel.abort();
@@ -91,8 +145,6 @@ export function useMachineToolNavigation(
                 await controls.recover();
             }
             if (moving(controls.getSnapshot(), controls)) await controls.stop();
-            // A recovery-only Stop closes its lease on terminal proof; an
-            // ordinary tool still requires its separate qualified exit.
             if (!current(request, true)) return;
             await controls.close();
             if (!current(request, true) || controls.getSnapshot().phase !== "closed") return;
@@ -104,21 +156,48 @@ export function useMachineToolNavigation(
             if (!current(request, true)) return;
             pending.current!.busy = false;
             pending.current!.closing = false;
-            setState({request, busy: false, error: error instanceof Error ? error.message : "Could not safely leave the tool."});
+            setState({
+                request,
+                busy: false,
+                error: error instanceof Error ? error.message : "Could not safely leave the tool."
+            });
         }
     }
 
     function requestDeparture(navigate: () => void): void {
         if (!currentView()) return;
-        if (pending.current && current(pending.current.request, pending.current.closing)) return;
         const actual = controls.getSnapshot();
+
+        if (mode === "tool") {
+            if (actual.phase === "closed" || actual.phase === "leaving") {
+                escapingRef.current = true;
+                navigate();
+                return;
+            }
+            const sameOwner = actual.identity?.deviceId === deviceId && actual.identity?.serial === serial;
+            if (actual.phase === "ready" && sameOwner) {
+                escapingRef.current = true;
+                void controls.closeInBackground();
+                navigate();
+                return;
+            }
+            const reason = toolBlockReason({deviceId, serial}, actual, controls);
+            setBlocked(prev => ({count: prev.count + 1, reason}));
+            options?.onBlocked?.(reason);
+            return;
+        }
+
+        if (pending.current && current(pending.current.request, pending.current.closing)) return;
         if (actual.phase === "closed") {
             navigate();
             return;
         }
         let used = false;
         const request: Departure = {
-            owner: actual.identity, deviceId, serial, cancel: new AbortController(),
+            owner: actual.identity,
+            deviceId,
+            serial,
+            cancel: new AbortController(),
             exit: () => {
                 if (used) return;
                 used = true;
@@ -133,16 +212,35 @@ export function useMachineToolNavigation(
         }
     }
 
+    function leaveWhileDisconnected(navigate: () => void): void {
+        if (!currentView() || mode !== "tool") return;
+        const actual = controls.getSnapshot();
+        if (actual.phase !== "unknown") return;
+        disconnectNavigateRef.current = navigate;
+        escapingRef.current = true;
+        setDisconnectedExitPending(true);
+    }
+
+    const sameOwner = snapshot.identity?.deviceId === deviceId && snapshot.identity.serial === serial;
+    const toolCanDepartSilently = snapshot.phase === "closed"
+        || snapshot.phase === "leaving"
+        || (snapshot.phase === "ready" && sameOwner);
+    const prevent = mode === "tool"
+        ? (focused && !disconnectedExitPending && !toolCanDepartSilently)
+        : (focused && snapshot.phase !== "closed");
+
     // Keep the original action, including native-stack's visited-route marker.
-    usePreventRemove(focused && snapshot.phase !== "closed", ({data}) => {
+    usePreventRemove(prevent, ({data}) => {
         requestDeparture(() => navigation.dispatch(data.action));
     });
 
-    const visible = state !== null && focused && !state.request.cancel.signal.aborted
+    const visible = mode === "setting" && state !== null && focused && !state.request.cancel.signal.aborted
         && state.request.deviceId === deviceId && state.request.serial === serial
         && (state.request.owner === snapshot.identity || (state.busy && snapshot.phase === "closed"));
     const covered = visible;
-    const navigationBlocked = covered || (focused && ["entering", "leaving", "applying"].includes(snapshot.phase));
+    const navigationBlocked = mode === "tool"
+        ? prevent
+        : (covered || (focused && ["entering", "leaving", "applying"].includes(snapshot.phase)));
     useLiveBrewBarGuard(focused, {covered: navigationBlocked, requestNavigation: requestDeparture});
     const prompt = visible ? {
         open: true,
@@ -154,5 +252,14 @@ export function useMachineToolNavigation(
         stay: () => stay(state.request),
         onOpenChange: (open: boolean) => { if (!open) stay(state.request); }
     } : null;
-    return {covered, navigationBlocked, prompt, requestDeparture};
+
+    return {
+        covered,
+        navigationBlocked,
+        prompt,
+        blockedCount: blocked.count,
+        blockedReason: blocked.reason,
+        requestDeparture,
+        leaveWhileDisconnected
+    };
 }
