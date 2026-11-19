@@ -81,7 +81,7 @@ Implementations must strictly use appearance tokens from `constants/colors.ts` /
      - **`↗` (`Expand`)**: Navigates immediately to `/machineTool?machineId=<id>&tool=<activeTool>`, handing off the active BLE session and uncommitted draft cleanly (including while `RUNNING` without interrupting the motor/pump).
      - **`✕` (`Collapse`)**: If idle (`ready` / `closed`), collapses back to the vitals panel immediately and triggers background BLE exit; if active/uncertain (`starting`, `running`, `stopping`, `unknown`), blocks collapse with the horizontal **head-shake refusal**.
   3. Below the context bar, `GRIND | SCALE | POUR` remains pinned as a 3-column tab row so the user can switch inline tools or re-trigger the current tool directly inside `MachinePanel` (same active-run switch guard as Design 2).
-  4. Below the launcher row sit the toned-down green **Inline Readout Card** (`36 pt` Doto value + green dot-matrix visualizer + 16-dot cadence strip), the compact parameter rows (`Stepper` / `Target` / `Continuous` / live temp & pattern pills when scrollable inside a bounded max-height container if Pour parameters exceed viewport), and the fixed bottom inline CTA (`START <TOOL>` / `STOP <TOOL>` / `STOPPING <TOOL>…` / `TARE`).
+  4. Below the launcher row sit the toned-down green **Inline Readout Card** (`36 pt` Doto value + green dot-matrix visualizer + 16-dot cadence strip), the compact parameter rows (`Stepper` / `Target` / `Continuous` / live temp & pattern pills, expanding vertically up to the available screen budget before bounding into a scrollable viewport with bottom `ScrollFade` + `SCROLL` overflow indicator when space is tight), and the fixed bottom inline CTA (`START <TOOL>` / `STOP <TOOL>` / `STOPPING <TOOL>…` / `TARE`).
 
 ### Home `MachineDot` collapse safety
 
@@ -104,7 +104,7 @@ In `app/index.tsx`, tapping the top-right `MachineDot` normally toggles `popover
 All three tools render inside the shared `#101010` + `1.5px` `#FF007F` hero card and `#101010` parameter deck:
 
 - **Grind**:
-  - Hero kicker: `SELECTED SIZE`; main Doto number: `grindSize` (kept steady, never animated); visualizer: 12-block `burr-matrix` in `palette.brand` that uses the existing RPM-derived cadence (`flickerMsFor(rpm)`) only when confirmed `running` (`animationEnabled && !reducedMotion`); sub-readout: `RPM <rpm>` · operational cue (`BURR CALIBRATED` / status).
+  - Hero kicker: `SELECTED SIZE`; main Doto number: `grindSize` (kept steady, never animated); visualizer: 12-block `burr-matrix` in `palette.brand` that uses the existing RPM-derived cadence (`flickerMsFor(rpm)`) only when confirmed `running` (`animationEnabled && !reducedMotion`); sub-readout: `RPM <rpm>`.
   - Deck rows: `Grind size` (`Stepper`, locked outside `ready`), `RPM` (`Stepper`, locked outside `ready`).
 - **Scale**:
   - Hero kicker: `LIVE WEIGHT`; main Doto number: confirmed `cupGrams` rounded to 1 decimal (`18.4 g`) or `—` while entering/missing (never fabricated `0.0`); visualizer: `scale-spark` dot/bar trace rendered strictly from recent in-session `cupGrams` observations (muted flat baseline when fewer than 2 live samples have arrived or telemetry is missing—never synthetic bars); sub-readout: `0.1 G PRECISION · GRAMS`.

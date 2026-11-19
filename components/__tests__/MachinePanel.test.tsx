@@ -409,7 +409,7 @@ describe("MachinePanel inline tool mode", () => {
         s.controls.dispose();
     });
 
-    it("keeps inline Pour actions pinned outside the bounded pour parameter scroll view", async () => {
+    it("expands inline Pour to available vertical space while keeping actions pinned and mounting scroll cues", async () => {
         await renderWithProviders(
             <PourTool
                 variant="inline"
@@ -434,8 +434,13 @@ describe("MachinePanel inline tool mode", () => {
                 onStop={jest.fn()}
             />
         );
+        const fields = screen.getByTestId("pour-tool-fields");
+        expect(StyleSheet.flatten(fields.props.style).maxHeight).toBe(487);
+        expect(fields.props.showsVerticalScrollIndicator).toBe(true);
+        expect(screen.getByTestId("pour-tool-fields-scroll-fade", {includeHiddenElements: true})).toBeTruthy();
+        expect(screen.getByTestId("pour-tool-fields-scroll-hint", {includeHiddenElements: true})).toBeTruthy();
         expect(screen.getByRole("button", {name: "START POUR"})).toBeEnabled();
-        expect(within(screen.getByTestId("pour-tool-fields")).queryByRole("button", {name: "START POUR"})).toBeNull();
+        expect(within(fields).queryByRole("button", {name: "START POUR"})).toBeNull();
     });
 
     it("keeps inline unknown recovery reachable on disconnect and failed switchback", async () => {

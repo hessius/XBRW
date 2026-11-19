@@ -1,9 +1,15 @@
 import React from "react";
-import {screen} from "@testing-library/react-native";
+import {StyleSheet} from "react-native";
+import {SafeAreaProvider} from "react-native-safe-area-context";
+import {fireEvent, screen} from "@testing-library/react-native";
 
+import GrindTool from "@/components/GrindTool";
+import PourTool from "@/components/PourTool";
 import ToolHeroStage from "@/components/ToolHeroStage";
 import ToolParameterDeck from "@/components/ToolParameterDeck";
-import {MachineToolActions} from "@/components/MachineControlReadout";
+import {
+    INLINE_MIN_SCROLL_HEIGHT, inlineFieldsMaxHeight, MachineToolActions
+} from "@/components/MachineControlReadout";
 import {mix, palette, onBrand, resolveAppearance} from "@/constants/colors";
 import {AppearanceScope} from "@/hooks/useAppearance";
 import {DEFAULT_APPEARANCE, THEME_IDS} from "@/library/appearance";
@@ -51,7 +57,6 @@ describe("ToolHeroStage", () => {
                 kicker="SELECTED SIZE"
                 value={48}
                 subLeft="RPM 90"
-                subRight="BURR CALIBRATED"
                 burr={{running: false, rpm: 90, animationEnabled: true}}
             />
         );
@@ -254,5 +259,101 @@ describe("MachineToolActions", () => {
             expect(screen.getByText("RPM")).toHaveStyle({color: app.palette.success});
             await inlineView.unmount();
         }
+    });
+
+    it("omits BURR CALIBRATED on both full and inline grinder views while preserving RPM telemetry", async () => {
+        const grindPolicy = {
+            grindSize: {min: 1, max: 80, step: 1},
+            rpm: {min: 60, max: 120, step: 10}
+        };
+        const fullView = await renderWithProviders(
+            <GrindTool
+                variant="full"
+                phase="ready"
+                request={{grindSize: 48, rpm: 90}}
+                policy={grindPolicy}
+                unavailable={null}
+                stopUnavailable={null}
+                error={null}
+                animationEnabled={true}
+                onRequestChange={jest.fn()}
+                onStart={jest.fn()}
+                onStop={jest.fn()}
+            />
+        );
+        expect(screen.getByText("RPM 90")).toBeTruthy();
+        expect(screen.queryByText(/BURR CALIBRATED/i)).toBeNull();
+        await fullView.unmount();
+
+        await renderWithProviders(
+            <GrindTool
+                variant="inline"
+                phase="ready"
+                request={{grindSize: 48, rpm: 90}}
+                policy={grindPolicy}
+                unavailable={null}
+                stopUnavailable={null}
+                error={null}
+                animationEnabled={true}
+                onRequestChange={jest.fn()}
+                onStart={jest.fn()}
+                onStop={jest.fn()}
+            />
+        );
+        expect(screen.getByText("RPM 90")).toBeTruthy();
+        expect(screen.queryByText(/BURR CALIBRATED/i)).toBeNull();
+    });
+
+    it("computes inline Pour height from available screen budget and renders accessible-hidden scroll cues", async () => {
+        expect(inlineFieldsMaxHeight({frameHeight: 844, topInset: 47, bottomInset: 34})).toBe(487);
+        expect(inlineFieldsMaxHeight({frameHeight: 667, topInset: 20, bottomInset: 0})).toBe(371);
+        expect(inlineFieldsMaxHeight({frameHeight: 844, topInset: 47, bottomInset: 34, headerChromeHeight: 160})).toBe(413);
+        expect(inlineFieldsMaxHeight({frameHeight: 360, topInset: 0, bottomInset: 0})).toBe(INLINE_MIN_SCROLL_HEIGHT);
+
+        await renderWithProviders(
+            <SafeAreaProvider initialMetrics={{
+                frame: {x: 0, y: 0, width: 375, height: 667},
+                insets: {top: 20, right: 0, bottom: 0, left: 0}
+            }}>
+                <PourTool
+                    variant="inline"
+                    phase="ready"
+                    request={{mode: "target", volumeMl: 150, temperatureC: 90, flowMlPerSecond: 3, pattern: "spiral"}}
+                    policy={{
+                        temperatureC: {min: 80, max: 95, step: 1},
+                        flowMlPerSecond: {min: 2, max: 4, step: 1},
+                        volumeMl: {min: 50, max: 200, step: 10},
+                        patterns: ["centered", "circular", "spiral"],
+                        modes: ["target", "continuous"]
+                    }}
+                    dispensedMl={null}
+                    temperatureC={null}
+                    pattern={null}
+                    unavailable={null}
+                    stopUnavailable={null}
+                    error={null}
+                    onRequestChange={jest.fn()}
+                    onModeChange={jest.fn()}
+                    onStart={jest.fn()}
+                    onStop={jest.fn()}
+                />
+            </SafeAreaProvider>
+        );
+        const scroller = screen.getByTestId("pour-tool-fields");
+        expect(StyleSheet.flatten(scroller.props.style).maxHeight).toBe(371);
+        expect(scroller.props.showsVerticalScrollIndicator).toBe(true);
+        expect(scroller.props.persistentScrollbar).toBe(true);
+
+        const fade = screen.getByTestId("pour-tool-fields-scroll-fade", {includeHiddenElements: true});
+        const hint = screen.getByTestId("pour-tool-fields-scroll-hint", {includeHiddenElements: true});
+        expect(fade.props.pointerEvents).toBe("none");
+        expect(hint.props.pointerEvents).toBe("none");
+        expect(hint.props.accessibilityElementsHidden).toBe(true);
+        expect(hint.props.importantForAccessibility).toBe("no-hide-descendants");
+        expect(screen.getByText("SCROLL", {includeHiddenElements: true})).toBeTruthy();
+
+        await fireEvent(scroller, "layout", {nativeEvent: {layout: {width: 340, height: 371, x: 0, y: 0}}});
+        await fireEvent(scroller, "contentSizeChange", 340, 460);
+        expect(screen.getByTestId("pour-tool-fields-scroll-hint", {includeHiddenElements: true})).toBeTruthy();
     });
 });

@@ -1,9 +1,14 @@
 import React from "react";
-import {Button, Text, XStack, YStack} from "tamagui";
+import {StyleSheet} from "react-native";
+import Animated, {useAnimatedStyle} from "react-native-reanimated";
+import {Button, ScrollView, Text, XStack, YStack} from "tamagui";
+import DotIcon from "@/components/DotIcon";
 import DotMatrixText from "@/components/DotMatrixText";
+import ScrollFade from "@/components/ScrollFade";
 import Stepper from "@/components/Stepper";
 import {mix} from "@/constants/colors";
 import {useAppearance} from "@/hooks/useAppearance";
+import useScrollFade from "@/hooks/useScrollFade";
 import type {ControlPhase, NumericPolicy, ToolId} from "@/library/machine/controlModel";
 import {editableNumericLadder} from "@/library/numericLadder";
 
@@ -71,6 +76,111 @@ export function MachineNumericControl({
         </YStack>
     );
 }
+
+export const INLINE_MIN_SCROLL_HEIGHT = 180;
+export const INLINE_FIXED_CHROME = 190;
+export const DEFAULT_INLINE_WORKBENCH_HEADER = 86;
+
+/**
+ * Available height for an inline scrollable tool body before its pinned CTA would
+ * be pushed past the bottom safe area. Expands on taller screens so options fit
+ * without scrolling when room exists.
+ */
+export function inlineFieldsMaxHeight({
+    frameHeight,
+    topInset,
+    bottomInset,
+    headerChromeHeight = DEFAULT_INLINE_WORKBENCH_HEADER
+}: {
+    frameHeight: number;
+    topInset: number;
+    bottomInset: number;
+    headerChromeHeight?: number;
+}): number {
+    if (frameHeight <= 0) return INLINE_MIN_SCROLL_HEIGHT;
+    const usable = frameHeight - topInset - bottomInset;
+    const available = usable - INLINE_FIXED_CHROME - headerChromeHeight;
+    return Math.max(INLINE_MIN_SCROLL_HEIGHT, Math.round(available));
+}
+
+export type ToolFieldsScrollerProps = {
+    testID: string;
+    variant: "full" | "inline";
+    maxInlineHeight?: number;
+    children: React.ReactNode;
+};
+
+/** Bounded fields scroller paired with bottom ScrollFade and an overflow pill when content clips. */
+export function ToolFieldsScroller({
+    testID,
+    variant,
+    maxInlineHeight,
+    children
+}: ToolFieldsScrollerProps) {
+    const {palette} = useAppearance();
+    const fade = useScrollFade();
+    const isFull = variant === "full";
+    const accent = isFull ? palette.brand : palette.success;
+    const fadeColor = isFull ? palette.base : palette.surface;
+    const hintStyle = useAnimatedStyle(() => ({opacity: fade.progress.value}));
+
+    return (
+        <YStack
+            position="relative"
+            flex={isFull ? 1 : undefined}
+            flexGrow={isFull ? 1 : 0}
+            flexShrink={1}
+            maxHeight={isFull ? undefined : maxInlineHeight}
+            minHeight={0}>
+            <ScrollView
+                testID={testID}
+                flex={isFull ? 1 : undefined}
+                flexGrow={isFull ? 1 : 0}
+                flexShrink={1}
+                maxHeight={isFull ? undefined : maxInlineHeight}
+                minHeight={0}
+                showsVerticalScrollIndicator={true}
+                persistentScrollbar={true}
+                scrollEventThrottle={16}
+                onScroll={fade.onScroll}
+                onLayout={fade.onLayout}
+                onContentSizeChange={fade.onContentSizeChange}>
+                {children}
+            </ScrollView>
+            <ScrollFade progress={fade.progress} color={fadeColor} testID={`${testID}-scroll-fade`}/>
+            <Animated.View
+                testID={`${testID}-scroll-hint`}
+                pointerEvents="none"
+                accessibilityElementsHidden={true}
+                importantForAccessibility="no-hide-descendants"
+                style={[scrollerStyles.hintWrap, hintStyle]}>
+                <XStack
+                    alignItems="center"
+                    gap="$1.5"
+                    paddingHorizontal="$2.5"
+                    paddingVertical={3}
+                    borderRadius={999}
+                    backgroundColor={palette.raised}
+                    style={{borderWidth: 1, borderColor: mix(palette.line, accent, 0.45)}}>
+                    <DotIcon name="more" size={10} color={accent}/>
+                    <DotMatrixText fontSize={9} weight="bold" letterSpacing={1.4} color={accent}>
+                        SCROLL
+                    </DotMatrixText>
+                </XStack>
+            </Animated.View>
+        </YStack>
+    );
+}
+
+const scrollerStyles = StyleSheet.create({
+    hintWrap: {
+        position: "absolute",
+        left: 0,
+        right: 0,
+        bottom: 6,
+        alignItems: "center"
+    }
+});
 
 export type MachineToolActionsProps = {
     phase: ControlPhase;

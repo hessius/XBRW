@@ -522,7 +522,7 @@ function telemetryMetrics(tool, phase, isInline) {
     mainNum = `${state.grindSize}`;
     graphic = `<div class="burr-matrix ${clrCls} ${phase==='running'?'active':''}">${'<i></i>'.repeat(12)}</div>`;
     extraLeft = `RPM ${state.rpm}`;
-    extraRight = `BURR CALIBRATED`;
+    extraRight = '';
   } else if (tool === 'scale') {
     title = 'LIVE WEIGHT';
     mainNum = `${phase==='entering'?'—':'18.4'}<small>g</small>`;
@@ -556,7 +556,7 @@ function inlineHeroStage() {
       <div class="inline-num">${m.mainNum}</div>
       ${m.graphic}
       ${matrixStrip(phase)}
-      <div class="inline-sub"><span>${m.extraLeft}</span><span>${m.extraRight}</span></div>
+      <div class="inline-sub"><span>${m.extraLeft}</span>${m.extraRight ? `<span>${m.extraRight}</span>` : ''}</div>
     </div>`;
 }
 
@@ -573,7 +573,7 @@ function fullHeroStage() {
       <div class="big-val">${m.mainNum}</div>
       ${m.graphic}
       ${matrixStrip(phase)}
-      <div class="sub-readout"><span>${m.extraLeft}</span><span>${m.extraRight}</span></div>
+      <div class="sub-readout"><span>${m.extraLeft}</span>${m.extraRight ? `<span>${m.extraRight}</span>` : ''}</div>
     </div>`;
 }
 

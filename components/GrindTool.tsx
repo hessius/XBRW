@@ -1,6 +1,6 @@
 import React from "react";
-import {ScrollView, Text, YStack} from "tamagui";
-import {MachineToolActions} from "@/components/MachineControlReadout";
+import {Text, YStack} from "tamagui";
+import {MachineToolActions, ToolFieldsScroller} from "@/components/MachineControlReadout";
 import ToolHeroStage from "@/components/ToolHeroStage";
 import ToolParameterDeck from "@/components/ToolParameterDeck";
 import {useAppearance} from "@/hooks/useAppearance";
@@ -48,7 +48,6 @@ export default function GrindTool({
                 kicker="SELECTED SIZE"
                 value={request?.grindSize ?? null}
                 subLeft={request ? `RPM ${request.rpm}` : "RPM —"}
-                subRight={valid ? "BURR CALIBRATED" : null}
                 burr={{running: phase === "running", rpm: request?.rpm ?? null, animationEnabled}}
             />
             <ToolParameterDeck
@@ -68,9 +67,9 @@ export default function GrindTool({
     return (
         <YStack gap={isFull ? "$2" : "$2"} flex={isFull ? 1 : undefined} minHeight={isFull ? 0 : undefined}>
             {isFull ? (
-                <ScrollView testID="grind-tool-fields" flex={1} minHeight={0}>
+                <ToolFieldsScroller testID="grind-tool-fields" variant="full">
                     {content}
-                </ScrollView>
+                </ToolFieldsScroller>
             ) : (
                 <YStack testID="grind-tool-fields">{content}</YStack>
             )}

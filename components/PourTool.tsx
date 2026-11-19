@@ -1,7 +1,9 @@
 import React from "react";
-import {ScrollView, Text, XStack, YStack} from "tamagui";
+import {useWindowDimensions} from "react-native";
+import {useSafeAreaFrame, useSafeAreaInsets} from "react-native-safe-area-context";
+import {Text, XStack, YStack} from "tamagui";
 import DotMatrixText from "@/components/DotMatrixText";
-import {MachineToolActions} from "@/components/MachineControlReadout";
+import {inlineFieldsMaxHeight, MachineToolActions, ToolFieldsScroller} from "@/components/MachineControlReadout";
 import {formatScaleGrams} from "@/components/ScaleTool";
 import ToolHeroStage from "@/components/ToolHeroStage";
 import ToolParameterDeck from "@/components/ToolParameterDeck";
@@ -32,6 +34,7 @@ export type PourToolProps = {
     stopUnavailable: string | null;
     error: string | null;
     variant?: "full" | "inline";
+    maxInlineHeight?: number;
     onRequestChange: (request: PourRequest) => void;
     /** Owner chooses any target value; this view never invents one on a mode switch. */
     onModeChange: (mode: PourRequest["mode"]) => void;
@@ -43,11 +46,22 @@ export type PourToolProps = {
 export default function PourTool({
     phase, request, policy, dispensedMl, cupGrams, temperatureC, pattern,
     pendingTemperatureC = null, pendingPattern = null, liveTemperature, livePattern,
-    unavailable, stopUnavailable, error, variant = "full",
+    unavailable, stopUnavailable, error, variant = "full", maxInlineHeight,
     onRequestChange, onModeChange, onStart, onStop
 }: PourToolProps) {
     const {palette} = useAppearance();
+    const frame = useSafeAreaFrame();
+    const window = useWindowDimensions();
+    const insets = useSafeAreaInsets();
     const isFull = variant === "full";
+    const resolvedFrameHeight = frame.height > 0 ? frame.height : window.height;
+    const inlineMaxHeight = isFull
+        ? undefined
+        : maxInlineHeight ?? inlineFieldsMaxHeight({
+            frameHeight: resolvedFrameHeight,
+            topInset: insets.top,
+            bottomInset: insets.bottom
+        });
     const active = ["starting", "running", "stopping", "unknown"].includes(phase);
 
     let valid = false;
@@ -88,7 +102,7 @@ export default function PourTool({
         : null;
 
     const content = (
-        <YStack gap={isFull ? "$3" : "$2.5"} paddingBottom={isFull ? "$4" : 0}>
+        <YStack gap={isFull ? "$3" : "$2.5"} paddingBottom={isFull ? "$4" : "$2"}>
             <ToolHeroStage
                 tool="pour"
                 phase={phase}
@@ -144,15 +158,9 @@ export default function PourTool({
 
     return (
         <YStack gap="$2" flex={isFull ? 1 : undefined} minHeight={isFull ? 0 : undefined}>
-            <ScrollView
-                testID="pour-tool-fields"
-                flex={isFull ? 1 : undefined}
-                flexGrow={isFull ? 1 : 0}
-                flexShrink={1}
-                maxHeight={isFull ? undefined : 290}
-                minHeight={0}>
+            <ToolFieldsScroller testID="pour-tool-fields" variant={variant} maxInlineHeight={inlineMaxHeight}>
                 {content}
-            </ScrollView>
+            </ToolFieldsScroller>
             <MachineToolActions
                 tool="pour"
                 variant={variant}
