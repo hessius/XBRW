@@ -328,7 +328,13 @@ function InlineToolWorkbench({
     );
 
     return (
-        <YStack gap="$2.5">
+        <YStack
+            testID="inline-tool-workbench"
+            gap="$2.5"
+            backgroundColor={palette.surface}
+            borderRadius={18}
+            padding="$3"
+            style={{borderWidth: 1, borderColor: palette.line}}>
             <XStack alignItems="center" justifyContent="space-between" gap="$2">
                 <XStack alignItems="center" gap="$1.5" flex={1} minWidth={0}>
                     <YStack width={6} height={6} borderRadius={3} backgroundColor={palette.success}/>

@@ -287,7 +287,7 @@ export default function ToolHeroStage({
             gap="$1"
             style={containerStyle}>
             {isFull && (
-                <View pointerEvents="none" style={[StyleSheet.absoluteFillObject, {borderRadius: radius - 2, overflow: "hidden"}]}>
+                <View pointerEvents="none" style={[StyleSheet.absoluteFill, {borderRadius: radius - 2, overflow: "hidden"}]}>
                     <Svg width="100%" height="100%">
                         <Defs>
                             <Pattern id={gridId} width={10} height={10} patternUnits="userSpaceOnUse">

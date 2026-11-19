@@ -92,11 +92,12 @@ export function MachineToolActions({
     const startBg = isFull ? palette.brandFill : palette.success;
     const startInk = isFull ? onBrand.text : onFill(palette.success).text;
     const height = isFull ? 48 : 42;
+    const dockStyle = isFull ? {borderTopWidth: 1, borderTopColor: palette.line} : undefined;
 
     if (phase === "stopping") {
         const label = `STOPPING${upper}…`;
         return (
-            <YStack gap="$2" paddingTop={isFull ? "$3" : "$2"}>
+            <YStack gap="$2" paddingTop={isFull ? "$3" : "$2"} style={dockStyle}>
                 <Button
                     accessibilityRole="button"
                     accessibilityLabel={label}
@@ -121,7 +122,7 @@ export function MachineToolActions({
     if (stopOnly) {
         const label = `STOP${upper}`;
         return (
-            <YStack gap="$2" paddingTop={isFull ? "$3" : "$2"}>
+            <YStack gap="$2" paddingTop={isFull ? "$3" : "$2"} style={dockStyle}>
                 {stopUnavailable !== null && <Text color={palette.muted}>{stopUnavailable}</Text>}
                 <Button
                     accessibilityRole="button"
@@ -147,7 +148,7 @@ export function MachineToolActions({
     const label = entering ? `${phase === "leaving" ? "CLOSING" : "ENTERING"}${upper}…` : `START${upper}`;
     const disabled = phase !== "ready" || startDisabled;
     return (
-        <YStack gap="$2" paddingTop={isFull ? "$3" : "$2"}>
+        <YStack gap="$2" paddingTop={isFull ? "$3" : "$2"} style={dockStyle}>
             <Button
                 accessibilityRole="button"
                 accessibilityLabel={label}

@@ -65,7 +65,8 @@ export default function ScaleTool({
             {isFull ? (
                 <ScrollView flex={1} minHeight={0}>{content}</ScrollView>
             ) : content}
-            <YStack paddingTop={isFull ? "$3" : "$2"}>
+            <YStack paddingTop={isFull ? "$3" : "$2"}
+                    style={isFull ? {borderTopWidth: 1, borderTopColor: palette.line} : undefined}>
                 <Button
                     accessibilityRole="button"
                     accessibilityLabel={a11yLabel}

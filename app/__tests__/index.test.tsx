@@ -167,7 +167,7 @@ let mockMachineInfo: {
 
 const mockOnLink = jest.fn((_listener: () => void) => () => undefined);
 const mockAskHowItIsDoing = jest.fn(async () => false);
-const mockOpenTool = jest.fn(async () => undefined);
+const mockOpenTool = jest.fn(async (_id?: unknown, _tool?: string) => undefined);
 const mockCloseInBackground = jest.fn(async () => undefined);
 let mockControlSnapshot: Record<string, unknown> = {
     identity: null, tool: null, phase: "closed",
@@ -184,18 +184,18 @@ const notifyControlListeners = () => {
 };
 const BASE_MOCK_TOOL_SUPPORT = {
     grind: {
-        bound: true, unavailable: null, recoverable: false, reconnectable: false,
+        bound: true as boolean, unavailable: null, recoverable: false, reconnectable: false,
         liveTemperature: false, livePattern: false, stopUnavailable: null,
         grind: {grindSize: {min: 40, max: 80, step: 1}, rpm: {min: 60, max: 120, step: 10}},
         pour: null, scale: false
     },
     scale: {
-        bound: true, unavailable: null, recoverable: false, reconnectable: false,
+        bound: true as boolean, unavailable: null, recoverable: false, reconnectable: false,
         liveTemperature: false, livePattern: false, stopUnavailable: null,
         grind: null, pour: null, scale: true
     },
     pour: {
-        bound: true, unavailable: null, recoverable: false, reconnectable: false,
+        bound: true as boolean, unavailable: null, recoverable: false, reconnectable: false,
         liveTemperature: false, livePattern: false, stopUnavailable: null,
         grind: null,
         pour: {
@@ -207,7 +207,7 @@ const BASE_MOCK_TOOL_SUPPORT = {
         },
         scale: false
     }
-} as const;
+};
 let mockSupportCache = {...BASE_MOCK_TOOL_SUPPORT};
 const setMockControlSnapshot = (next: Record<string, unknown>) => {
     mockControlSnapshot = next;

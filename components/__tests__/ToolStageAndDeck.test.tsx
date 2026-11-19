@@ -4,7 +4,7 @@ import {screen} from "@testing-library/react-native";
 import ToolHeroStage from "@/components/ToolHeroStage";
 import ToolParameterDeck from "@/components/ToolParameterDeck";
 import {MachineToolActions} from "@/components/MachineControlReadout";
-import {palette, onBrand, resolveAppearance} from "@/constants/colors";
+import {mix, palette, onBrand, resolveAppearance} from "@/constants/colors";
 import {DEFAULT_APPEARANCE} from "@/library/appearance";
 import {renderWithProviders} from "@/test-utils/render";
 
@@ -194,5 +194,51 @@ describe("MachineToolActions", () => {
         const stoppingBtn = screen.getByRole("button", {name: "STOPPING POUR…"});
         expect(stoppingBtn).toBeDisabled();
         expect(stoppingBtn).toHaveStyle({borderColor: app.palette.danger, borderWidth: 1});
+    });
+
+    it("enforces full-vs-inline design spec invariants across light/dark palettes and phases (no sheen, white numerals, brand vs success tokens)", async () => {
+        const dark = resolveAppearance(DEFAULT_APPEARANCE);
+        const view = await renderWithProviders(
+            <ToolHeroStage
+                tool="grind"
+                phase="running"
+                variant="full"
+                kicker="SELECTED SIZE"
+                value={48}
+                unit="rpm"
+                subLeft="RPM 90"
+                burr={{running: true, rpm: 90, animationEnabled: false}}
+            />
+        );
+        const fullStage = screen.getByTestId("tool-hero-stage");
+        expect(fullStage).toHaveStyle({
+            backgroundColor: dark.palette.surface,
+            borderColor: dark.palette.brand,
+            borderWidth: 1.5
+        });
+        expect(screen.queryByTestId("hero-sheen")).toBeNull();
+        expect(screen.getByText("48")).toHaveStyle({color: dark.palette.text});
+        expect(screen.getByText("RPM")).toHaveStyle({color: dark.palette.brand});
+
+        await view.rerender(
+            <ToolHeroStage
+                tool="grind"
+                phase="running"
+                variant="inline"
+                kicker="SELECTED SIZE"
+                value={48}
+                unit="rpm"
+                subLeft="RPM 90"
+                burr={{running: true, rpm: 90, animationEnabled: false}}
+            />
+        );
+        const inlineStage = screen.getByTestId("tool-hero-stage");
+        expect(inlineStage).toHaveStyle({
+            backgroundColor: dark.palette.raised,
+            borderColor: mix(dark.palette.raised, dark.palette.success, 0.42),
+            borderWidth: 1
+        });
+        expect(screen.getByText("48")).toHaveStyle({color: dark.palette.text});
+        expect(screen.getByText("RPM")).toHaveStyle({color: dark.palette.success});
     });
 });

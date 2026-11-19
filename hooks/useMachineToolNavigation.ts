@@ -112,7 +112,10 @@ export function useMachineToolNavigation(
         const nav = navigation as {addListener?: (event: string, listener: () => void) => () => void};
         if (typeof nav.addListener !== "function") return;
         return nav.addListener("beforeRemove", () => {
-            if (escapingRef.current || !currentView()) return;
+            const view = live.current;
+            const isCurrent = view.mounted && view.focused && view.controls === controls
+                && view.deviceId === deviceId && view.serial === serial;
+            if (escapingRef.current || !isCurrent) return;
             const actual = controls.getSnapshot();
             if (actual.phase === "ready"
                 && actual.identity?.deviceId === deviceId

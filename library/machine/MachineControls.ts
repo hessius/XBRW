@@ -1130,7 +1130,8 @@ export default class MachineControls {
         if (this.snapshot.phase !== "ready") throw new Error("Cannot close an uncertain or active control.");
         this.leavingSession = true;
         this.update({phase: "leaving"});
-        const operation = (async () => {
+        let operation: Promise<void> | undefined;
+        operation = (async () => {
             try {
                 await this.exchange({kind: "exit", tool: this.snapshot.tool}, "closed");
                 this.release();

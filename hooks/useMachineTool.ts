@@ -65,9 +65,8 @@ export function useMachineTool(identity: ControlIdentity, tool: ToolId, controls
     const latestKey = useRef(routeKey);
     const mountAbort = useRef<AbortController | null>(null);
 
-    latestKey.current = routeKey;
-
     useEffect(() => {
+        latestKey.current = routeKey;
         mounted.current = true;
         const controller = new AbortController();
         mountAbort.current = controller;
