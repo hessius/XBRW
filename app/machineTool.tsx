@@ -62,6 +62,10 @@ function ToolScreen({identity, routeTool, name, injected}: {
     const {support, owns, phase, uiPhase, bound, unavailable, error, busy, grind, pour, scaleSamples} = state;
     const sameMachineSnap = snapshot.identity?.deviceId === identity.deviceId
         && snapshot.identity.serial === identity.serial;
+    const identityConnected = typeof controls.isIdentityConnected === "function"
+        && controls.isIdentityConnected(identity);
+    const canReconcileNullTool = !support.recoverable && !owns && sameMachineSnap
+        && snapshot.phase === "unknown" && snapshot.tool === null && identityConnected;
     const blockingPhase: ControlPhase = owns ? phase
         : uiPhase === "entering" ? "entering"
             : sameMachineSnap ? snapshot.phase : phase;
@@ -160,7 +164,8 @@ function ToolScreen({identity, routeTool, name, injected}: {
                     <ScrollView flexGrow={0} flexShrink={1} maxHeight="30%" minHeight={0}
                         contentContainerStyle={{gap: 8, paddingBottom: 8}}>
                         {error !== null && <Text selectable color={palette.danger}>{error}</Text>}
-                        {tool === "scale" && owns && snapshot.error !== null
+                        {(canReconcileNullTool || (tool === "scale" && owns))
+                            && snapshot.error !== null && snapshot.error !== error
                             && <Text selectable color={palette.danger}>{snapshot.error}</Text>}
                         {support.unavailable !== null && <Text color={palette.muted}>{support.unavailable}</Text>}
                         {phase === "closed" && uiPhase === "closed" && support.unavailable === null && (
@@ -170,11 +175,9 @@ function ToolScreen({identity, routeTool, name, injected}: {
                         )}
                         {support.recoverable ? <Button accessibilityRole="button" disabled={busy}
                             onPress={state.recover}>Reconcile connected machine</Button>
-                            : !owns && sameMachineSnap && snapshot.phase === "unknown" && snapshot.tool === null
-                            && typeof controls.isIdentityConnected === "function"
-                            && controls.isIdentityConnected(identity) && (
+                            : canReconcileNullTool && (
                             <Button accessibilityRole="button" disabled={busy}
-                                onPress={() => { void controls.recover().catch(() => {}); }}>
+                                onPress={state.recoverUnknown}>
                                 Reconcile connected machine
                             </Button>
                         )}
@@ -196,8 +199,7 @@ function ToolScreen({identity, routeTool, name, injected}: {
                                     onPress={() => nav.leaveWhileDisconnected(() => router.back())}>Leave screen</Button>
                             </XStack>
                         </> : sameMachineSnap && snapshot.phase === "unknown" && !support.recoverable
-                            && !(typeof controls.isIdentityConnected === "function"
-                                && controls.isIdentityConnected(identity)) && (
+                            && !identityConnected && (
                             <Button accessibilityRole="button" disabled={busy}
                                 onPress={() => nav.leaveWhileDisconnected(() => router.back())}>Leave screen</Button>
                         )}

@@ -270,6 +270,21 @@ export function useMachineTool(identity: ControlIdentity, tool: ToolId, controls
         });
     }
 
+    function recoverUnknown(): void {
+        setSettledAutoOpenKey(routeKey);
+        void perform(async () => {
+            const current = controls.getSnapshot();
+            if (current.phase !== "unknown" || current.tool !== null
+                || current.identity?.deviceId !== identity.deviceId
+                || current.identity.serial !== identity.serial
+                || (typeof controls.isIdentityConnected === "function"
+                    && !controls.isIdentityConnected(identity))) {
+                throw new Error("Reconciliation requires this exact connected machine.");
+            }
+            await controls.recover();
+        });
+    }
+
     function setLiveTemperature(celsius: number): void {
         const activeKey = routeKey;
         const epoch = ++liveTempEpoch.current;
@@ -301,7 +316,7 @@ export function useMachineTool(identity: ControlIdentity, tool: ToolId, controls
     return {
         support, owns, phase, uiPhase, bound, unavailable, error, liveTempError, livePatternError, busy,
         grind, pour, scaleSamples,
-        setGrind, setPour, changeMode, start, open, recover,
+        setGrind, setPour, changeMode, start, open, recover, recoverUnknown,
         setLiveTemperature, setLivePattern,
         reconnect: () => {
             setSettledAutoOpenKey(routeKey);

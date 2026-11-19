@@ -276,6 +276,10 @@ function InlineToolWorkbench({
 
     const sameMachineSnap = snapshot.identity?.deviceId === identity.deviceId
         && snapshot.identity.serial === identity.serial;
+    const identityConnected = !disconnected
+        && (typeof controls.isIdentityConnected !== "function" || controls.isIdentityConnected(identity));
+    const canReconcileNullTool = !support.recoverable && !owns && sameMachineSnap
+        && snapshot.phase === "unknown" && snapshot.tool === null && identityConnected;
     const blockingPhase: ControlPhase = owns ? phase
         : uiPhase === "entering" ? "entering"
             : sameMachineSnap ? snapshot.phase : phase;
@@ -423,7 +427,8 @@ function InlineToolWorkbench({
             />
 
             {error !== null && <Text selectable color={palette.danger}>{error}</Text>}
-            {tool === "scale" && owns && snapshot.error !== null && (
+            {(canReconcileNullTool || (tool === "scale" && owns))
+                && snapshot.error !== null && snapshot.error !== error && (
                 <Text selectable color={palette.danger}>{snapshot.error}</Text>
             )}
             {phase === "closed" && uiPhase === "closed" && support.unavailable === null && (
@@ -435,12 +440,8 @@ function InlineToolWorkbench({
                 <Button accessibilityRole="button" disabled={busy} onPress={state.recover}>
                     Reconcile connected machine
                 </Button>
-            ) : !owns && sameMachineSnap && snapshot.phase === "unknown"
-                && (disconnected || (typeof controls.isIdentityConnected === "function"
-                    && !controls.isIdentityConnected(identity))) === false
-                && snapshot.tool === null && (
-                <Button accessibilityRole="button" disabled={busy}
-                        onPress={() => { void controls.recover().catch(() => {}); }}>
+            ) : canReconcileNullTool && (
+                <Button accessibilityRole="button" disabled={busy} onPress={state.recoverUnknown}>
                     Reconcile connected machine
                 </Button>
             )}
@@ -465,9 +466,7 @@ function InlineToolWorkbench({
                         </Button>
                     </XStack>
                 </YStack>
-            ) : sameMachineSnap && snapshot.phase === "unknown" && !support.recoverable
-                && (disconnected || (typeof controls.isIdentityConnected === "function"
-                    && !controls.isIdentityConnected(identity))) && (
+            ) : sameMachineSnap && snapshot.phase === "unknown" && !support.recoverable && !identityConnected && (
                 <YStack gap="$2">
                     <Text color={palette.muted}>
                         Connection lost while a tool operation was uncertain.

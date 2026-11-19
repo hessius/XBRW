@@ -1037,21 +1037,30 @@ it("keeps connected cross-tool unknown on Inspect active tool without Connection
     expect(screen.queryByRole("button", {name: "Leave screen"})).toBeNull();
 });
 
-it("offers Reconcile connected machine when connected settings leave unknown with null tool", async () => {
+it("offers Reconcile connected machine when connected settings leave unknown with null tool and surfaces failed recovery errors", async () => {
     const s = await fixture({settings: {brightness: {min: 1, max: 3, step: 1}}});
-    s.respond(item => {
-        if (item.command.kind === "inspect") return;
-    });
+    s.respond(() => {});
     await expect(s.controls.applySetting(identity, "brightness", 3)).rejects.toThrow(/readback|timeout|unknown|missing/i);
     expect(s.controls.getSnapshot()).toMatchObject({tool: null, phase: "unknown"});
     expect(s.controls.isIdentityConnected(identity)).toBe(true);
+    const initialError = s.controls.getSnapshot().error!;
+    expect(initialError).toBeTruthy();
 
     mockParams = {machineId: identity.deviceId, tool: "grind"};
     await renderWithProviders(<MachineToolScreen controls={s.controls}/>);
 
+    expect(screen.getAllByText(initialError)).toHaveLength(1);
     expect(screen.getByRole("button", {name: "Reconcile connected machine"})).toBeEnabled();
     expect(screen.queryByText(/Connection lost/i)).toBeNull();
     expect(screen.queryByRole("button", {name: "Leave screen"})).toBeNull();
+
+    // Failed connected reconciliation disables the button while in flight and surfaces recovery errors cleanly.
+    await fireEvent.press(screen.getByRole("button", {name: "Reconcile connected machine"}));
+    expect(screen.getByRole("button", {name: "Reconcile connected machine"})).toBeDisabled();
+    await waitFor(() => expect(screen.getByRole("button", {name: "Reconcile connected machine"})).toBeEnabled());
+    const recoveryError = s.controls.getSnapshot().error!;
+    expect(recoveryError).toBeTruthy();
+    expect(screen.getAllByText(recoveryError)).toHaveLength(1);
 
     s.respond(item => {
         if (item.command.kind === "inspect") {

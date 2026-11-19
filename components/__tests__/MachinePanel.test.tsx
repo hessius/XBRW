@@ -578,4 +578,61 @@ describe("MachinePanel inline tool mode", () => {
         expect(screen.queryByRole("button", {name: "Leave screen"})).toBeNull();
         s.controls.dispose();
     });
+
+    it("surfaces initial and failed recovery errors plus busy state on connected inline null-tool Reconcile", async () => {
+        const s = await controlFixture();
+        s.respond(() => {});
+        await expect(s.controls.applySetting(identity, "brightness", 3)).rejects.toThrow(/readback|timeout|unknown|missing/i);
+        expect(s.controls.getSnapshot()).toMatchObject({tool: null, phase: "unknown"});
+        expect(s.controls.isIdentityConnected(identity)).toBe(true);
+        const initialError = s.controls.getSnapshot().error!;
+        expect(initialError).toBeTruthy();
+
+        await renderWithProviders(
+            <MachinePanel
+                open
+                status="connected"
+                accent="#C86A3B"
+                vitals={vitals}
+                now={4 * 60 * 1000}
+                onRefreshWater={pending()}
+                onConnect={jest.fn()}
+                machineId={identity.deviceId}
+                machineSerial={identity.serial}
+                machineModel="Studio"
+                controls={s.controls}
+                inlineTool="grind"
+                onInlineToolChange={jest.fn()}
+            />
+        );
+
+        expect(screen.getAllByText(initialError)).toHaveLength(1);
+        expect(screen.getByRole("button", {name: "Reconcile connected machine"})).toBeEnabled();
+        expect(screen.queryByText(/Connection lost/i)).toBeNull();
+        expect(screen.queryByRole("button", {name: "Leave screen"})).toBeNull();
+
+        await fireEvent.press(screen.getByRole("button", {name: "Reconcile connected machine"}));
+        expect(screen.getByRole("button", {name: "Reconcile connected machine"})).toBeDisabled();
+        await waitFor(() => expect(screen.getByRole("button", {name: "Reconcile connected machine"})).toBeEnabled());
+        const recoveryError = s.controls.getSnapshot().error!;
+        expect(recoveryError).toBeTruthy();
+        expect(screen.getAllByText(recoveryError)).toHaveLength(1);
+
+        s.respond((item: Planned) => {
+            if (item.command.kind === "inspect") {
+                s.feedback(item, {
+                    kind: "settings",
+                    readings: {
+                        brightness: 3, temperatureUnit: null, weightUnit: null,
+                        waterSource: null, pourRadius: null, vibrationAmplitude: null
+                    }
+                });
+            } else {
+                s.accept(item);
+            }
+        });
+        await fireEvent.press(screen.getByRole("button", {name: "Reconcile connected machine"}));
+        await waitFor(() => expect(s.controls.getSnapshot().phase).toBe("closed"));
+        s.controls.dispose();
+    });
 });
