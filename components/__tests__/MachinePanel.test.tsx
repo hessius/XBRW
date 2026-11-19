@@ -1,9 +1,11 @@
 import React from "react";
 import {StyleSheet} from "react-native";
-import {fireEvent, within} from "@testing-library/react-native";
+import {act, fireEvent, screen, waitFor, within} from "@testing-library/react-native";
 
 import MachinePanel from "@/components/MachinePanel";
+import * as XbrwToast from "@/components/XbrwToast";
 import {machineColours, palette} from "@/constants/colors";
+import {controlFixture, flushControls, identity, type Planned} from "@/hooks/__tests__/machineControlFixture";
 import {renderWithProviders} from "@/test-utils/render";
 
 const vitals = {
@@ -325,5 +327,84 @@ describe("MachinePanel with several machines saved", () => {
         const r = await draw();
 
         expect(r.queryByTestId("machine-choice")).toBeNull();
+    });
+});
+
+describe("MachinePanel inline tool mode", () => {
+    it("swaps vitals for toned-down green inline grind workbench, preserves session on expand, and closes idle in background", async () => {
+        const s = await controlFixture();
+        let exitCount = 0;
+        let releaseExit!: () => void;
+        s.respond((item: Planned) => {
+            if (item.command.kind === "exit") {
+                exitCount += 1;
+                void new Promise<void>((resolve) => { releaseExit = resolve; }).then(() => s.accept(item));
+                return;
+            }
+            s.accept(item);
+        });
+        const onExpandTool = jest.fn();
+
+        await draw({
+            machineId: identity.deviceId,
+            machineSerial: identity.serial,
+            machineModel: "Studio",
+            controls: s.controls,
+            onExpandTool
+        });
+
+        await fireEvent.press(screen.getByRole("button", {name: "Grind"}));
+        await waitFor(() => expect(screen.getByText(/STUDIO · WATER OK · PRO/)).toBeTruthy());
+        expect(screen.queryByText("REFRESH")).toBeNull();
+        expect(screen.getByTestId("tool-hero-stage")).toHaveStyle({backgroundColor: palette.raised});
+
+        await waitFor(() => expect(s.controls.getSnapshot().phase).toBe("ready"));
+        expect(screen.getByRole("button", {name: "START GRIND"})).toBeEnabled();
+
+        await fireEvent.press(screen.getByRole("button", {name: "Close inline tool"}));
+        expect(screen.getByText("REFRESH")).toBeTruthy();
+        expect(exitCount).toBe(1);
+        await act(async () => {
+            releaseExit();
+            await flushControls();
+        });
+        expect(s.controls.getSnapshot().phase).toBe("closed");
+
+        // Reopen inline and tap Expand -> hands off without emitting exit
+        await fireEvent.press(screen.getByRole("button", {name: "Grind"}));
+        await waitFor(() => expect(s.controls.getSnapshot().phase).toBe("ready"));
+        await fireEvent.press(screen.getByRole("button", {name: "Expand to full screen"}));
+        expect(onExpandTool).toHaveBeenCalledWith(identity.deviceId, "grind");
+        expect(exitCount).toBe(1);
+        s.controls.dispose();
+    });
+
+    it("refuses collapsing or switching inline tool during an active run", async () => {
+        const notifySpy = jest.spyOn(XbrwToast, "notify").mockImplementation(jest.fn());
+        const s = await controlFixture();
+        s.respond((item) => s.accept(item));
+        await draw({
+            machineId: identity.deviceId,
+            machineSerial: identity.serial,
+            machineModel: "Studio",
+            controls: s.controls
+        });
+
+        await fireEvent.press(screen.getByRole("button", {name: "Grind"}));
+        await waitFor(() => expect(s.controls.getSnapshot().phase).toBe("ready"));
+        await fireEvent.press(screen.getByRole("button", {name: "START GRIND"}));
+        await waitFor(() => expect(s.controls.getSnapshot().phase).toBe("running"));
+
+        await fireEvent.press(screen.getByRole("button", {name: "Close inline tool"}));
+        expect(screen.getByRole("button", {name: "STOP GRIND"})).toBeTruthy();
+        expect(screen.queryByText("REFRESH")).toBeNull();
+        expect(notifySpy).toHaveBeenCalledWith(expect.objectContaining({tone: "info"}));
+
+        await fireEvent.press(screen.getByRole("button", {name: "Scale"}));
+        expect(s.controls.getSnapshot().tool).toBe("grind");
+        expect(notifySpy).toHaveBeenCalledTimes(2);
+
+        notifySpy.mockRestore();
+        s.controls.dispose();
     });
 });

@@ -167,6 +167,87 @@ let mockMachineInfo: {
 
 const mockOnLink = jest.fn((_listener: () => void) => () => undefined);
 const mockAskHowItIsDoing = jest.fn(async () => false);
+const mockOpenTool = jest.fn(async () => undefined);
+const mockCloseInBackground = jest.fn(async () => undefined);
+let mockControlSnapshot: Record<string, unknown> = {
+    identity: null, tool: null, phase: "closed",
+    setting: null, settingValue: null, pendingSettingValue: null,
+    cupGrams: null, dispensedMl: null, temperatureC: null, pattern: null,
+    pendingTemperatureC: null, pendingPattern: null,
+    settings: null, dirtySettings: [], error: null, recovery: null
+};
+const mockControlListeners = new Set<() => void>();
+const mockSupportListeners = new Set<() => void>();
+const notifyControlListeners = () => {
+    for (const listener of mockControlListeners) listener();
+    for (const listener of mockSupportListeners) listener();
+};
+const BASE_MOCK_TOOL_SUPPORT = {
+    grind: {
+        bound: true, unavailable: null, recoverable: false, reconnectable: false,
+        liveTemperature: false, livePattern: false, stopUnavailable: null,
+        grind: {grindSize: {min: 40, max: 80, step: 1}, rpm: {min: 60, max: 120, step: 10}},
+        pour: null, scale: false
+    },
+    scale: {
+        bound: true, unavailable: null, recoverable: false, reconnectable: false,
+        liveTemperature: false, livePattern: false, stopUnavailable: null,
+        grind: null, pour: null, scale: true
+    },
+    pour: {
+        bound: true, unavailable: null, recoverable: false, reconnectable: false,
+        liveTemperature: false, livePattern: false, stopUnavailable: null,
+        grind: null,
+        pour: {
+            temperatureC: {min: 80, max: 96, step: 1},
+            flowMlPerSecond: {min: 2, max: 4, step: 1},
+            volumeMl: {min: 50, max: 200, step: 10},
+            patterns: ["centered", "circular", "spiral"],
+            modes: ["target", "continuous"]
+        },
+        scale: false
+    }
+} as const;
+let mockSupportCache = {...BASE_MOCK_TOOL_SUPPORT};
+const setMockControlSnapshot = (next: Record<string, unknown>) => {
+    mockControlSnapshot = next;
+    const tool = next.tool as "grind" | "scale" | "pour" | null;
+    mockSupportCache = {
+        grind: {...BASE_MOCK_TOOL_SUPPORT.grind, bound: tool === "grind" && next.identity !== null},
+        scale: {...BASE_MOCK_TOOL_SUPPORT.scale, bound: tool === "scale" && next.identity !== null},
+        pour: {...BASE_MOCK_TOOL_SUPPORT.pour, bound: tool === "pour" && next.identity !== null}
+    };
+    notifyControlListeners();
+};
+const mockDefaultControls = {
+    subscribe: (listener: () => void) => {
+        mockControlListeners.add(listener);
+        return () => { mockControlListeners.delete(listener); };
+    },
+    getSnapshot: () => mockControlSnapshot,
+    subscribeToolSupport: (listener: () => void) => {
+        mockSupportListeners.add(listener);
+        return () => { mockSupportListeners.delete(listener); };
+    },
+    describeTool: (_identity: unknown, tool: "grind" | "scale" | "pour") => mockSupportCache[tool],
+    dialGrindSizeFor: () => 62,
+    open: async (id: unknown, tool: string) => {
+        await mockOpenTool(id, tool);
+        setMockControlSnapshot({...mockControlSnapshot, identity: id, tool, phase: "ready", error: null});
+    },
+    startGrind: async () => undefined,
+    startPour: async () => undefined,
+    stop: async () => undefined,
+    tare: async () => undefined,
+    recover: async () => undefined,
+    reconnectTool: async () => undefined,
+    setTemperature: async () => undefined,
+    setPattern: async () => undefined,
+    closeInBackground: async () => {
+        await mockCloseInBackground();
+        setMockControlSnapshot({...mockControlSnapshot, identity: null, tool: null, phase: "closed"});
+    }
+};
 // The picker's door to the link. The real ones reach for Bluetooth.
 let mockChangeBlocker: string | null = null;
 const mockChooseMachine = jest.fn(async (..._args: unknown[]) => undefined);
@@ -179,6 +260,7 @@ jest.mock("@/hooks/useMachine", () => ({
         onLink: () => () => {},
         onPhase: () => () => {}
     }),
+    sharedMachineControls: () => mockDefaultControls,
     machineChangeBlocker: () => mockChangeBlocker,
     latestSurvey:         () => null,
     surveyMachines:       () => mockSurveyMachines(),
@@ -386,6 +468,18 @@ beforeEach(() => {
     mockLiveRun = null;
     mockOnLink.mockClear();
     mockAskHowItIsDoing.mockClear();
+    mockOpenTool.mockClear();
+    mockCloseInBackground.mockClear();
+    mockControlSnapshot = {
+        identity: null, tool: null, phase: "closed",
+        setting: null, settingValue: null, pendingSettingValue: null,
+        cupGrams: null, dispensedMl: null, temperatureC: null, pattern: null,
+        pendingTemperatureC: null, pendingPattern: null,
+        settings: null, dirtySettings: [], error: null, recovery: null
+    };
+    mockControlListeners.clear();
+    mockSupportListeners.clear();
+    mockSupportCache = {...BASE_MOCK_TOOL_SUPPORT};
     mockChangeBlocker = null;
     mockChooseMachine.mockClear();
     mockSurveyMachines.mockClear();
@@ -3633,18 +3727,54 @@ describe("switching machines from the home screen", () => {
         mockMachineInfo = {waterEnough: true, mode: "PRO", grindSize: 62};
     });
 
-    it.each([false, true])("launches tools for the saved machine in use, not another machine (several: %s)", async several => {
+    it.each([false, true])("opens inline tools for the saved machine in use and hands off to full screen on expand (several: %s)", async several => {
         const settings = several ? twoMachines()
             : new Settings(memoryStorage({machineDeviceId: "HOME"}));
         await renderWithProviders(<HomeScreen db={store([])} settings={settings}/>);
         expect(screen.queryByRole("button", {name: "Grind"})).toBeNull();
         await fireEvent.press(screen.getByLabelText(several ? "Connected to Home" : "Machine connected"));
         await fireEvent.press(screen.getByRole("button", {name: "Grind"}));
+        await waitFor(() => expect(mockOpenTool).toHaveBeenCalledWith({deviceId: "HOME", serial: null}, "grind"));
+        expect(mockPush).not.toHaveBeenCalled();
+        expect(screen.getByRole("button", {name: "START GRIND"})).toBeTruthy();
+
+        await fireEvent.press(screen.getByRole("button", {name: "Expand to full screen"}));
         expect(mockPush).toHaveBeenLastCalledWith({
             pathname: "/machineTool", params: {machineId: "HOME", tool: "grind"}
         });
+        expect(mockCloseInBackground).not.toHaveBeenCalled();
         expect(screen.queryByRole("button", {name: "Machine settings and tools"})).toBeNull();
         expect(mockChooseMachine).not.toHaveBeenCalled();
+    });
+
+    it("refuses collapsing the machine panel via the header dot while an inline tool is running, then closes idle in background", async () => {
+        const settings = new Settings(memoryStorage({machineDeviceId: "HOME"}));
+        await renderWithProviders(<HomeScreen db={store([])} settings={settings}/>);
+
+        await fireEvent.press(screen.getByLabelText("Machine connected"));
+        await fireEvent.press(screen.getByRole("button", {name: "Grind"}));
+        await waitFor(() => expect(screen.getByRole("button", {name: "START GRIND"})).toBeEnabled());
+
+        await act(async () => {
+            setMockControlSnapshot({
+                ...mockControlSnapshot,
+                identity: {deviceId: "HOME", serial: null},
+                tool: "grind",
+                phase: "running"
+            });
+        });
+        expect(screen.getByRole("button", {name: "STOP GRIND"})).toBeTruthy();
+
+        await fireEvent.press(screen.getByLabelText("Machine connected"));
+        expect(screen.getByRole("button", {name: "STOP GRIND"})).toBeTruthy();
+        expect(mockNotify).toHaveBeenCalledWith(expect.objectContaining({tone: "info"}));
+        expect(mockCloseInBackground).not.toHaveBeenCalled();
+
+        await act(async () => {
+            setMockControlSnapshot({...mockControlSnapshot, phase: "ready"});
+        });
+        await fireEvent.press(screen.getByLabelText("Machine connected"));
+        expect(mockCloseInBackground).toHaveBeenCalledTimes(1);
     });
 
     it("directs an unpaired or unsaved ambient connection to existing pairing instead of inventing a target", async () => {
@@ -3658,14 +3788,17 @@ describe("switching machines from the home screen", () => {
         expect(mockChooseMachine).not.toHaveBeenCalled();
     });
 
-    it("keeps all launchers about Home when an ambient link is to Work", async () => {
+    it("keeps all launchers and inline tools about Home when an ambient link is to Work", async () => {
         mockLinkedDeviceId = "WORK";
         await renderWithProviders(<HomeScreen db={store([])} settings={twoMachines()}/>);
         await fireEvent.press(screen.getByLabelText("Connected to Home"));
         await fireEvent.press(screen.getByRole("button", {name: "Scale"}));
+        await waitFor(() => expect(mockOpenTool).toHaveBeenCalledWith({deviceId: "HOME", serial: null}, "scale"));
+        await fireEvent.press(screen.getByRole("button", {name: "Expand to full screen"}));
         expect(mockPush).toHaveBeenLastCalledWith({
             pathname: "/machineTool", params: {machineId: "HOME", tool: "scale"}
         });
+        await fireEvent.press(screen.getByLabelText("Connected to Home"));
         await fireEvent.press(screen.getByLabelText("Easy Mode slots"));
         expect(mockPush).toHaveBeenLastCalledWith({pathname: "/machineHome", params: {machineId: "HOME"}});
         expect(mockChooseMachine).not.toHaveBeenCalled();

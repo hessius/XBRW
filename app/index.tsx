@@ -27,7 +27,8 @@ import RoasterOfferSheet from "@/components/RoasterOfferSheet";
 import ImportTile from "@/components/ImportTile";
 import BrewMindBrowser from "@/components/BrewMindBrowser";
 import LibraryRail, {type RailFilter} from "@/components/LibraryRail";
-import MachinePanel from "@/components/MachinePanel";
+import MachinePanel, {inlineCloseBlockReason, type MachineVitals} from "@/components/MachinePanel";
+import {machineToolRoute} from "@/components/MachineTools";
 import MachinePickerSheet from "@/components/MachinePickerSheet";
 import NewRecipeSheet from "@/components/NewRecipeSheet";
 import NfcOverlay from "@/components/NfcOverlay";
@@ -36,7 +37,7 @@ import SortSheet from "@/components/SortSheet";
 import SwipeableRecipeRow from "@/components/SwipeableRecipeRow";
 import XbrwSheet from "@/components/XbrwSheet";
 import {notify} from "@/components/XbrwToast";
-import type {MachineVitals} from "@/components/MachinePanel";
+import type {ToolId} from "@/library/machine/controlModel";
 import {OVER} from "@/constants/brewCopy";
 import {ALREADY_IN_LIBRARY, CARD_READ_FAILED, HOLD_CARD} from "@/constants/copy";
 import {type AccentGroup} from "@/constants/colors";
@@ -45,7 +46,7 @@ import {useCollapsibleHeader} from "@/hooks/useCollapsibleHeader";
 import {useShelfPicker} from "@/hooks/useShelfPicker";
 import {useCardWriter} from "@/hooks/useCardWriter";
 import {useBeanFilters, type BeanVocabularyStore} from "@/hooks/useBeanFilters";
-import {useMachine} from "@/hooks/useMachine";
+import {sharedMachineControls, useMachine} from "@/hooks/useMachine";
 import {useMachinePicker} from "@/hooks/useMachinePicker";
 import {openEasyModeRecipe, useSlotRecord} from "@/hooks/useEasyModeSlots";
 import {slotMarkers} from "@/library/slots/slotModel";
@@ -359,6 +360,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
     const [hiddenShelves, setHiddenShelves] = useSetting("hiddenShelves", settings);
     const [rawTemperatureUnit] = useSetting("temperatureUnit", settings);
     const temperatureUnit = asTemperatureUnit(rawTemperatureUnit);
+    const [animateBrewChart] = useSetting("animateBrewChart", settings);
     // Written from the card-read sink below, never read here. The setter is the
     // whole point: a diagnostic capture has to be persisted the instant it is
     // taken, before `parseData` gets a chance to crash on a bypass card.
@@ -391,6 +393,8 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
 
     const [popoverOpen, setPopoverOpen] = useState(false);
     const [popoverNow, setPopoverNow] = useState(0);
+    const [inlineTool, setInlineTool] = useState<ToolId | null>(null);
+    const [panelShakeKey, setPanelShakeKey] = useState(0);
     const [sortOpen, setSortOpen] = useState(false);
     const [beanFilterOpen, setBeanFilterOpen] = useState(false);
     const injectedBeanStore = beanStore
@@ -1473,6 +1477,16 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                             onRefreshWater={refreshWater}
                             onConnect={connectMachine}
                             machineId={homeMachine?.id}
+                            machineSerial={homeMachine?.serial ?? null}
+                            animationEnabled={animateBrewChart}
+                            externalShakeKey={panelShakeKey}
+                            inlineTool={inlineTool}
+                            onInlineToolChange={setInlineTool}
+                            onExpandTool={(id, tool) => {
+                                setInlineTool(null);
+                                setPopoverOpen(false);
+                                router.push(machineToolRoute(id, tool));
+                            }}
                             onEasyMode={() => router.push(homeMachine === undefined ? "/settings"
                                 : easyModeMatchesHome ? "/easyMode"
                                     : {pathname: "/machineHome", params: {machineId: homeMachine.id}})}
@@ -1488,6 +1502,19 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                         ? {name: machinePicker.label, colour: machinePicker.colour}
                         : undefined}
                     onMachinePress={() => {
+                        if (popoverOpen && inlineTool !== null) {
+                            const controls = sharedMachineControls();
+                            const reason = machineStatus === "connected"
+                                ? inlineCloseBlockReason(controls.getSnapshot(), inlineTool, homeMachine?.id)
+                                : null;
+                            if (reason !== null) {
+                                setPanelShakeKey((count) => count + 1);
+                                notify({tone: "info", message: reason});
+                                return;
+                            }
+                            void controls.closeInBackground();
+                            setInlineTool(null);
+                        }
                         setPopoverNow(Date.now());
                         setPopoverOpen((open) => !open);
                     }}
