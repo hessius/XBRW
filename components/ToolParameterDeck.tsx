@@ -349,35 +349,50 @@ export default function ToolParameterDeck({
                 <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.2} color={palette.muted}>
                     {phase === "running" && livePattern?.qualified ? "PATTERN · LIVE ADJUSTABLE" : "PATTERN"}
                 </DotMatrixText>
-                <XStack flexWrap="wrap" gap="$1.5">
-                    {(pourPolicy?.patterns ?? ["centered", "circular", "spiral"]).map((choice) => {
-                        const selected = choice === shownPattern;
-                        const ink = selected ? activeInk : palette.text;
-                        return (
-                            <Button
-                                key={choice}
-                                accessibilityRole="button"
-                                accessibilityLabel={PATTERN_LABELS[choice]}
-                                accessibilityState={{selected, disabled: !canEditPattern}}
-                                disabled={!canEditPattern}
-                                minHeight={compact ? 36 : 40}
-                                height="auto"
-                                paddingHorizontal="$2.5"
-                                paddingVertical="$1.5"
-                                borderRadius="$3"
-                                opacity={!canEditPattern && !selected ? 0.36 : 1}
-                                backgroundColor={selected ? activeFill : palette.control}
-                                color={ink}
-                                onPress={() => {
-                                    if (ready && pourRequest) onPourChange?.({...pourRequest, pattern: choice});
-                                    else if (livePattern?.qualified) livePattern.onChange(choice);
-                                }}>
-                                <PourGlyph kind={choice} accent={ink} size={compact ? 14 : 16}/>
-                                {PATTERN_LABELS[choice]}
-                            </Button>
-                        );
-                    })}
-                </XStack>
+                {active && !livePattern?.qualified ? (
+                    <XStack
+                        accessible
+                        accessibilityRole="text"
+                        accessibilityLabel={`PATTERN: ${shownPattern ? PATTERN_LABELS[shownPattern] : "Unavailable"}`}
+                        alignItems="center"
+                        gap="$2">
+                        {shownPattern !== null && <PourGlyph kind={shownPattern} accent={palette.text} size={compact ? 14 : 16}/>}
+                        <DotMatrixText fontSize={compact ? 13 : 14} weight="bold"
+                                       color={shownPattern !== null ? palette.text : palette.muted}>
+                            {shownPattern !== null ? PATTERN_LABELS[shownPattern].toUpperCase() : "UNAVAILABLE"}
+                        </DotMatrixText>
+                    </XStack>
+                ) : (
+                    <XStack flexWrap="wrap" gap="$1.5">
+                        {(pourPolicy?.patterns ?? ["centered", "circular", "spiral"]).map((choice) => {
+                            const selected = choice === shownPattern;
+                            const ink = selected ? activeInk : palette.text;
+                            return (
+                                <Button
+                                    key={choice}
+                                    accessibilityRole="button"
+                                    accessibilityLabel={PATTERN_LABELS[choice]}
+                                    accessibilityState={{selected, disabled: !canEditPattern}}
+                                    disabled={!canEditPattern}
+                                    minHeight={compact ? 36 : 40}
+                                    height="auto"
+                                    paddingHorizontal="$2.5"
+                                    paddingVertical="$1.5"
+                                    borderRadius="$3"
+                                    opacity={!canEditPattern && !selected ? 0.36 : 1}
+                                    backgroundColor={selected ? activeFill : palette.control}
+                                    color={ink}
+                                    onPress={() => {
+                                        if (ready && pourRequest) onPourChange?.({...pourRequest, pattern: choice});
+                                        else if (livePattern?.qualified) livePattern.onChange(choice);
+                                    }}>
+                                    <PourGlyph kind={choice} accent={ink} size={compact ? 14 : 16}/>
+                                    {PATTERN_LABELS[choice]}
+                                </Button>
+                            );
+                        })}
+                    </XStack>
+                )}
                 {active && !livePattern?.qualified && (
                     <Text fontSize={12} color={palette.muted}>
                         {livePattern?.reason ?? "Live pattern control is not qualified."}

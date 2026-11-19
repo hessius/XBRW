@@ -1,6 +1,14 @@
-import React, {useId} from "react";
+import React, {useEffect, useId} from "react";
 import {StyleSheet, View} from "react-native";
-import Animated, {useAnimatedStyle, useFrameCallback, useSharedValue} from "react-native-reanimated";
+import Animated, {
+    cancelAnimation,
+    Easing,
+    type SharedValue,
+    useAnimatedStyle,
+    useSharedValue,
+    withRepeat,
+    withTiming
+} from "react-native-reanimated";
 import Svg, {Circle, Defs, Pattern, Rect} from "react-native-svg";
 import {XStack, YStack} from "tamagui";
 
@@ -9,7 +17,7 @@ import DotMatrixText from "@/components/DotMatrixText";
 import {mix} from "@/constants/colors";
 import {useReducedMotion} from "@/constants/motion";
 import {useAppearance} from "@/hooks/useAppearance";
-import {EDGE_EPSILON, flickerMsFor} from "@/library/brew/grindFlicker";
+import {flickerMsFor} from "@/library/brew/grindFlicker";
 import type {ControlPhase, ToolId} from "@/library/machine/controlModel";
 
 export type ToolHeroStageVariant = "full" | "inline";
@@ -50,15 +58,16 @@ function statusBadge(tool: ToolId, phase: ControlPhase): {
     return {label: tool === "scale" ? "LIVE SCALE" : "READY", tone: "ready"};
 }
 
-function BurrDot({index, litValue, accent, restingOpacity}: {
+function BurrDot({index, progress, accent, restingOpacity}: {
     index: number;
-    litValue: Animated.SharedValue<boolean>;
+    progress: SharedValue<number>;
     accent: string;
     restingOpacity: number;
 }) {
     const isOdd = index % 2 === 1;
     const style = useAnimatedStyle(() => {
-        const active = isOdd ? litValue.get() : !litValue.get();
+        const firstHalf = progress.value < 0.5;
+        const active = isOdd ? firstHalf : !firstHalf;
         return {opacity: active ? 1 : restingOpacity};
     });
     return (
@@ -71,6 +80,31 @@ function BurrDot({index, litValue, accent, restingOpacity}: {
     );
 }
 
+function BurrFlickerAnimated({rpm, accent}: {rpm: number; accent: string}) {
+    const progress = useSharedValue(0);
+    const periodMs = flickerMsFor(rpm) * 2;
+
+    useEffect(() => {
+        progress.value = 0;
+        progress.value = withRepeat(
+            withTiming(1, {duration: periodMs, easing: Easing.linear}),
+            -1,
+            false
+        );
+        return () => {
+            cancelAnimation(progress);
+        };
+    }, [periodMs, progress]);
+
+    return (
+        <XStack testID="grind-activity-animated" gap="$1.5" marginTop="$1.5">
+            {BURR_INDICES.map((index) => (
+                <BurrDot key={index} index={index} progress={progress} accent={accent} restingOpacity={0.22}/>
+            ))}
+        </XStack>
+    );
+}
+
 function BurrFlickerRow({running, rpm, accent, animationEnabled}: {
     running: boolean;
     rpm: number | null;
@@ -79,13 +113,6 @@ function BurrFlickerRow({running, rpm, accent, animationEnabled}: {
 }) {
     const reducedMotion = useReducedMotion();
     const animated = running && animationEnabled && !reducedMotion && rpm !== null;
-    const lit = useSharedValue(true);
-    const half = flickerMsFor(rpm ?? 90);
-
-    useFrameCallback(({timeSinceFirstFrame}) => {
-        if (!animated) return;
-        lit.set(Math.floor(timeSinceFirstFrame / half + EDGE_EPSILON) % 2 === 0);
-    });
 
     if (!running) {
         return (
@@ -102,11 +129,7 @@ function BurrFlickerRow({running, rpm, accent, animationEnabled}: {
     return (
         <YStack testID="grind-activity-band" accessible={false} importantForAccessibility="no-hide-descendants">
             {animated ? (
-                <XStack testID="grind-activity-animated" gap="$1.5" marginTop="$1.5">
-                    {BURR_INDICES.map((index) => (
-                        <BurrDot key={index} index={index} litValue={lit} accent={accent} restingOpacity={0.22}/>
-                    ))}
-                </XStack>
+                <BurrFlickerAnimated rpm={rpm} accent={accent}/>
             ) : (
                 <XStack testID="grind-activity-static" gap="$1.5" marginTop="$1.5">
                     {BURR_INDICES.map((index) => (
