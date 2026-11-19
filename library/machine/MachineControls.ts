@@ -107,6 +107,8 @@ export default class MachineControls {
     private epoch = 0;
     private stopping: Promise<void> | null = null;
     private opening: Promise<ControlFeedback["value"]> | null = null;
+    private closing: Promise<void> | null = null;
+    private leavingSession = false;
     private preflight: {key: string; promise: Promise<void>} | null = null;
     private recovering = false;
     private reconnecting: Promise<void> | null = null;
@@ -222,6 +224,13 @@ export default class MachineControls {
         return support;
     }
 
+    private isClosingSameIdentity(identity: ControlIdentity): boolean {
+        return this.leavingSession
+            && this.snapshot.phase === "leaving"
+            && this.snapshot.identity?.deviceId === identity.deviceId
+            && this.snapshot.identity.serial === identity.serial;
+    }
+
     /** Uses precisely the immutable qualifications captured by this owner. */
     describeTool(identity: ControlIdentity, tool: ToolId): MachineToolSupport {
         let unavailable: string | null = null;
@@ -246,13 +255,15 @@ export default class MachineControls {
                 this.lease.check();
                 bound = true;
             }
-            if (this.snapshot.phase !== "closed" && !own) {
+            if (this.snapshot.phase !== "closed" && !own && !this.isClosingSameIdentity(identity)) {
                 throw new Error("Another machine control session owns the connection.");
             }
             if (isActiveBrewPhase(this.machine.phase) || this.machine.phase.name === "lostContact") {
                 throw new Error("A brew owns the connection. Finish or stop the brew first.");
             }
-            if (this.snapshot.phase === "closed") this.machine.assertCanForgetDevice(identity.deviceId);
+            if (this.snapshot.phase === "closed") {
+                this.machine.assertCanForgetDevice(identity.deviceId);
+            }
         } catch (error) {
             unavailable = failure(error).message;
         }
@@ -718,7 +729,8 @@ export default class MachineControls {
             throw new Error("A control session is already owned.");
         }
         const current = this.snapshot;
-        if (current.phase !== "closed") {
+        const closingSameMachine = this.isClosingSameIdentity(identity);
+        if (current.phase !== "closed" && !closingSameMachine) {
             if (current.identity?.deviceId === identity.deviceId && current.identity.serial === identity.serial
                 && current.tool === tool && current.phase !== "leaving" && current.phase !== "applying") {
                 if (current.phase === "entering" && this.opening) await this.opening;
@@ -734,6 +746,9 @@ export default class MachineControls {
         }
 
         const task = (async () => {
+            if (this.closing) await this.closing;
+            if (signal?.aborted) throw new Error("Control open cancelled before attachment.");
+            if (this.disposed) throw new Error("The shared control owner was reset.");
             await this.machine.ensureFreshControlState();
             if (signal?.aborted) throw new Error("Control open cancelled before attachment.");
             if (this.disposed) throw new Error("The shared control owner was reset.");
@@ -1110,16 +1125,35 @@ export default class MachineControls {
     }
 
     async close(): Promise<void> {
+        if (this.closing) return this.closing;
         if (this.snapshot.phase === "closed") return;
         if (this.snapshot.phase !== "ready") throw new Error("Cannot close an uncertain or active control.");
+        this.leavingSession = true;
         this.update({phase: "leaving"});
-        try {
-            await this.exchange({kind: "exit", tool: this.snapshot.tool}, "closed");
-            this.release();
-            this.closeSessionToRestoredSettings();
-        } catch (error) {
-            this.uncertain(failure(error));
-            throw error;
+        const operation = (async () => {
+            try {
+                await this.exchange({kind: "exit", tool: this.snapshot.tool}, "closed");
+                this.release();
+                this.closeSessionToRestoredSettings();
+            } catch (error) {
+                this.uncertain(failure(error));
+                throw error;
+            } finally {
+                this.leavingSession = false;
+                if (this.closing === operation) this.closing = null;
+            }
+        })();
+        this.closing = operation;
+        return operation;
+    }
+
+    /** Initiates idle BLE tool exit without keeping callers blocked on navigation; surfaces errors honestly on snapshot. */
+    closeInBackground(): Promise<void> {
+        if (this.closing) return this.closing.catch(() => {});
+        if (this.snapshot.phase === "closed") return Promise.resolve();
+        if (this.snapshot.phase !== "ready") {
+            return Promise.reject(new Error("Cannot close an uncertain or active control."));
         }
+        return this.close().catch(() => {});
     }
 }

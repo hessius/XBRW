@@ -1053,3 +1053,54 @@ it("ignores unverified DIS modelNumber when 40521 model bytes are empty on J15 S
     expect(controls.describeSettings(studioIdentity, "temperatureUnit").reason).toBeNull();
     controls.dispose();
 });
+
+it("closes ready controls in background and serializes an immediate reopen on the next tool", async () => {
+    const s = await setup();
+    let releaseExit!: () => void;
+    let exitItem!: Sent;
+    s.respond((item) => {
+        if (item.command.kind === "exit") {
+            exitItem = item;
+            void new Promise<void>((resolve) => { releaseExit = resolve; }).then(() => {
+                accept(s.radio, exitItem);
+            });
+            return;
+        }
+        accept(s.radio, item);
+    });
+    await s.controls.open(identity, "grind");
+    expect(s.controls.getSnapshot().phase).toBe("ready");
+
+    const closing = s.controls.closeInBackground();
+    expect(s.controls.getSnapshot().phase).toBe("leaving");
+    expect(s.controls.describeTool(identity, "pour")).toMatchObject({bound: false, unavailable: null});
+
+    const reopening = s.controls.open(identity, "pour");
+    await Promise.resolve();
+    expect(s.sent.map((item) => item.command.kind)).toEqual(["enter", "exit"]);
+
+    releaseExit();
+    await Promise.all([closing, reopening]);
+    expect(s.controls.getSnapshot()).toMatchObject({phase: "ready", tool: "pour"});
+    expect(s.sent.map((item) => item.command.kind)).toEqual(["enter", "exit", "enter"]);
+    s.controls.dispose();
+});
+
+it("refuses background close during active work and fails queued open when background close errors", async () => {
+    const s = await setup();
+    s.respond((item) => {
+        if (item.command.kind === "exit") return;
+        accept(s.radio, item);
+    });
+    await s.controls.open(identity, "grind");
+    await s.controls.startGrind({grindSize: 5, rpm: 120});
+    await expect(s.controls.closeInBackground()).rejects.toThrow("Cannot close an uncertain or active control.");
+    await s.controls.stop();
+
+    const bg = s.controls.closeInBackground();
+    await expect(s.controls.open(identity, "pour")).rejects.toThrow(/missing|owned/i);
+    await bg;
+    expect(s.controls.getSnapshot().phase).toBe("unknown");
+    expect(s.machine.controlBlocker).not.toBeNull();
+    s.controls.dispose();
+});
