@@ -1504,15 +1504,22 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                     onMachinePress={() => {
                         if (popoverOpen && inlineTool !== null) {
                             const controls = sharedMachineControls();
-                            const reason = machineStatus === "connected"
-                                ? inlineCloseBlockReason(controls.getSnapshot(), inlineTool, homeMachine?.id)
+                            const snap = controls.getSnapshot();
+                            const expectedSerial = homeMachine?.serial.trim() || null;
+                            const sameMachine = snap.identity === null || homeMachine === undefined
+                                || (snap.identity.deviceId === homeMachine.id
+                                    && (expectedSerial === null || snap.identity.serial === expectedSerial));
+                            const reason = sameMachine
+                                ? inlineCloseBlockReason(snap, inlineTool, homeMachine?.id, homeMachine?.serial)
                                 : null;
                             if (reason !== null) {
                                 setPanelShakeKey((count) => count + 1);
                                 notify({tone: "info", message: reason});
                                 return;
                             }
-                            void controls.closeInBackground();
+                            if (sameMachine && snap.identity !== null && snap.phase === "ready") {
+                                void controls.closeInBackground().catch(() => {});
+                            }
                             setInlineTool(null);
                         }
                         setPopoverNow(Date.now());

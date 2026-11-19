@@ -167,15 +167,19 @@ describe("mode: tool", () => {
     );
 
     it("refuses another machine's identity even when phase appears ready and leaves disconnected unknown only via explicit escape", async () => {
-        const s = await moving();
-        const hook = await renderHook(() => useMachineToolNavigation({...identity, serial: "other"}, s.controls, "tool"));
+        const sReady = await controlFixture();
+        await sReady.controls.open(identity, "grind");
+        expect(sReady.controls.getSnapshot().phase).toBe("ready");
+        const hook = await renderHook(() => useMachineToolNavigation({...identity, serial: "other"}, sReady.controls, "tool"));
         const navigate = jest.fn();
         await act(async () => { hook.result.current.requestDeparture(navigate); });
         expect(navigate).not.toHaveBeenCalled();
         expect(hook.result.current.blockedCount).toBe(1);
-        expect(hook.result.current.blockedReason).toMatch(/identity|machine|stop/i);
+        expect(hook.result.current.blockedReason).toMatch(/reconcile|machine|identity/i);
+        sReady.controls.dispose();
 
-        // Now drop connection -> disconnected unknown permits explicit escape while preserving recovery marker
+        // Now test disconnected unknown from a moving run -> permits explicit escape while preserving recovery marker
+        const s = await moving();
         await act(async () => { s.radio.drop(); });
         const ownerHook = await renderHook(() => useMachineToolNavigation(identity, s.controls, "tool"));
         const leave = jest.fn();

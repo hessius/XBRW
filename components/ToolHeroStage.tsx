@@ -247,6 +247,7 @@ export default function ToolHeroStage({
     const radius = isFull ? 18 : 14;
 
     const badge = statusBadge(tool, phase);
+    const badgeSpoken = badge.detail !== undefined ? `${badge.label} ${badge.detail}` : badge.label;
     const badgeDotColour = badge.tone === "warn"
         ? palette.warn
         : badge.tone === "danger"
@@ -299,41 +300,43 @@ export default function ToolHeroStage({
                 </View>
             )}
 
-            <YStack testID="machine-control-readout" accessible accessibilityRole="text"
-                    accessibilityLabel={`${kicker}: ${spoken}`} accessibilityLiveRegion="none" gap="$1">
-                <XStack alignItems="center" justifyContent="space-between" gap="$2">
+            <XStack alignItems="flex-start" justifyContent="space-between" gap="$2" flexWrap="wrap">
+                <YStack testID="machine-control-readout" flex={1} minWidth={140} accessible accessibilityRole="text"
+                        accessibilityLabel={`${kicker}: ${spoken}`} accessibilityLiveRegion="none" gap="$1">
                     <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.2} color={palette.muted}>
                         {kicker}
                     </DotMatrixText>
-                    <XStack alignItems="center" gap="$1.5">
-                        <YStack width={7} height={7} borderRadius={4} backgroundColor={badgeDotColour}/>
-                        <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.4} color={badgeTextColour}>
-                            {badge.label}
+                    <XStack alignItems="baseline" gap="$1.5" flexWrap="wrap">
+                        <DotMatrixText
+                            testID="machine-control-value"
+                            fontSize={primaryFontSize}
+                            weight="extrabold"
+                            color={available ? palette.text : palette.muted}
+                            style={{flexShrink: 1}}>
+                            {available ? String(value) : unavailable}
                         </DotMatrixText>
-                        {badge.detail !== undefined && (
-                            <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.2} color={badgeTextColour}>
-                                {badge.detail}
+                        {available && unit !== undefined && unit !== "" && (
+                            <DotMatrixText fontSize={unitFontSize} weight="bold" color={accent}>
+                                {unit.toUpperCase()}
                             </DotMatrixText>
                         )}
                     </XStack>
-                </XStack>
+                </YStack>
 
-                <XStack alignItems="baseline" gap="$1.5" flexWrap="wrap">
-                    <DotMatrixText
-                        testID="machine-control-value"
-                        fontSize={primaryFontSize}
-                        weight="extrabold"
-                        color={available ? palette.text : palette.muted}
-                        style={{flexShrink: 1}}>
-                        {available ? String(value) : unavailable}
+                <XStack testID="tool-status-badge" accessible accessibilityRole="text"
+                        accessibilityLabel={badgeSpoken} accessibilityLiveRegion="none"
+                        alignItems="center" gap="$1.5">
+                    <YStack width={7} height={7} borderRadius={4} backgroundColor={badgeDotColour}/>
+                    <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.4} color={badgeTextColour}>
+                        {badge.label}
                     </DotMatrixText>
-                    {available && unit !== undefined && unit !== "" && (
-                        <DotMatrixText fontSize={unitFontSize} weight="bold" color={accent}>
-                            {unit.toUpperCase()}
+                    {badge.detail !== undefined && (
+                        <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.2} color={badgeTextColour}>
+                            {badge.detail}
                         </DotMatrixText>
                     )}
                 </XStack>
-            </YStack>
+            </XStack>
 
             {tool === "grind" && burr && (
                 <BurrFlickerRow running={burr.running} rpm={burr.rpm} accent={accent} animationEnabled={burr.animationEnabled}/>

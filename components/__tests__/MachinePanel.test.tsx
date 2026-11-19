@@ -3,6 +3,7 @@ import {StyleSheet} from "react-native";
 import {act, fireEvent, screen, waitFor, within} from "@testing-library/react-native";
 
 import MachinePanel from "@/components/MachinePanel";
+import PourTool from "@/components/PourTool";
 import * as XbrwToast from "@/components/XbrwToast";
 import {machineColours, palette} from "@/constants/colors";
 import {controlFixture, flushControls, identity, type Planned} from "@/hooks/__tests__/machineControlFixture";
@@ -403,6 +404,90 @@ describe("MachinePanel inline tool mode", () => {
         await fireEvent.press(screen.getByRole("button", {name: "Scale"}));
         expect(s.controls.getSnapshot().tool).toBe("grind");
         expect(notifySpy).toHaveBeenCalledTimes(2);
+
+        notifySpy.mockRestore();
+        s.controls.dispose();
+    });
+
+    it("keeps inline Pour actions pinned outside the bounded pour parameter scroll view", async () => {
+        await renderWithProviders(
+            <PourTool
+                variant="inline"
+                phase="ready"
+                request={{mode: "target", volumeMl: 150, temperatureC: 90, flowMlPerSecond: 3, pattern: "spiral"}}
+                policy={{
+                    temperatureC: {min: 80, max: 95, step: 1},
+                    flowMlPerSecond: {min: 2, max: 4, step: 1},
+                    volumeMl: {min: 50, max: 200, step: 10},
+                    patterns: ["centered", "circular", "spiral"],
+                    modes: ["target", "continuous"]
+                }}
+                dispensedMl={null}
+                temperatureC={null}
+                pattern={null}
+                unavailable={null}
+                stopUnavailable={null}
+                error={null}
+                onRequestChange={jest.fn()}
+                onModeChange={jest.fn()}
+                onStart={jest.fn()}
+                onStop={jest.fn()}
+            />
+        );
+        expect(screen.getByRole("button", {name: "START POUR"})).toBeEnabled();
+        expect(within(screen.getByTestId("pour-tool-fields")).queryByRole("button", {name: "START POUR"})).toBeNull();
+    });
+
+    it("keeps inline unknown recovery reachable on disconnect and failed switchback", async () => {
+        const notifySpy = jest.spyOn(XbrwToast, "notify").mockImplementation(jest.fn());
+        const s = await controlFixture({reconnect: jest.fn()});
+        s.respond((item: Planned) => {
+            if (item.command.kind === "exit") return;
+            s.accept(item);
+        });
+        const view = await draw({
+            machineId: identity.deviceId,
+            machineSerial: identity.serial,
+            machineModel: "Studio",
+            controls: s.controls
+        });
+
+        await fireEvent.press(screen.getByRole("button", {name: "Grind"}));
+        await waitFor(() => expect(s.controls.getSnapshot().phase).toBe("ready"));
+
+        await fireEvent.press(screen.getByRole("button", {name: "Scale"}));
+        await waitFor(() => expect(s.controls.getSnapshot().phase).toBe("unknown"));
+        expect(s.controls.getSnapshot().tool).toBe("grind");
+        expect(screen.getByRole("button", {name: "Grind"})).toHaveProp("accessibilityState", {disabled: false, selected: true});
+        expect(screen.getByRole("button", {name: "Reconcile connected machine"})).toBeEnabled();
+
+        // Collapse via X is refused during unknown
+        await fireEvent.press(screen.getByRole("button", {name: "Close inline tool"}));
+        expect(screen.getByRole("button", {name: "Reconcile connected machine"})).toBeTruthy();
+
+        // Disconnect shows Reconnect + Leave screen even while status is disconnected
+        await act(async () => {
+            s.radio.drop();
+            await view.rerender(
+                <MachinePanel
+                    open
+                    status="disconnected"
+                    accent="#C86A3B"
+                    vitals={vitals}
+                    now={4 * 60 * 1000}
+                    onRefreshWater={pending()}
+                    onConnect={jest.fn()}
+                    machineId={identity.deviceId}
+                    machineSerial={identity.serial}
+                    machineModel="Studio"
+                    controls={s.controls}
+                />
+            );
+        });
+        expect(screen.getByRole("button", {name: "Reconnect named machine"})).toBeEnabled();
+        expect(screen.getByRole("button", {name: "Leave screen"})).toBeEnabled();
+        await fireEvent.press(screen.getByRole("button", {name: "Leave screen"}));
+        expect(screen.queryByRole("button", {name: "Reconnect named machine"})).toBeNull();
 
         notifySpy.mockRestore();
         s.controls.dispose();

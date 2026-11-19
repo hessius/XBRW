@@ -109,7 +109,7 @@ export default class MachineControls {
     private opening: Promise<ControlFeedback["value"]> | null = null;
     private closing: Promise<void> | null = null;
     private leavingSession = false;
-    private preflight: {key: string; promise: Promise<void>} | null = null;
+    private preflight: {key: string; promise: Promise<void>; signals?: Set<AbortSignal | undefined>} | null = null;
     private recovering = false;
     private reconnecting: Promise<void> | null = null;
     private recoveryOnly = false;
@@ -723,7 +723,10 @@ export default class MachineControls {
         const key = `${identity.deviceId}\0${identity.serial ?? ""}\0${tool}`;
         if (this.preflight) {
             if (this.preflight.key === key) {
+                if (signal?.aborted) throw new Error("Control open cancelled before attachment.");
+                this.preflight.signals?.add(signal);
                 await this.preflight.promise;
+                if (signal?.aborted) throw new Error("Control open cancelled before attachment.");
                 return;
             }
             throw new Error("A control session is already owned.");
@@ -745,12 +748,14 @@ export default class MachineControls {
             throw new Error("The connected peripheral and reported serial must match the control identity.");
         }
 
+        const signals = new Set<AbortSignal | undefined>([signal]);
+        const preflightCancelled = () => signals.size > 0 && Array.from(signals).every((entry) => entry?.aborted === true);
         const task = (async () => {
             if (this.closing) await this.closing;
-            if (signal?.aborted) throw new Error("Control open cancelled before attachment.");
+            if (preflightCancelled()) throw new Error("Control open cancelled before attachment.");
             if (this.disposed) throw new Error("The shared control owner was reset.");
             await this.machine.ensureFreshControlState();
-            if (signal?.aborted) throw new Error("Control open cancelled before attachment.");
+            if (preflightCancelled()) throw new Error("Control open cancelled before attachment.");
             if (this.disposed) throw new Error("The shared control owner was reset.");
             if (this.snapshot.phase !== "closed") throw new Error("A control session is already owned.");
             const {profile: latestProfile} = this.select();
@@ -771,7 +776,7 @@ export default class MachineControls {
                 this.opening = null;
             }
         })();
-        const preflight = {key, promise: task};
+        const preflight = {key, promise: task, signals};
         this.preflight = preflight;
         try {
             await task;

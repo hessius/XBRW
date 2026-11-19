@@ -58,6 +58,8 @@ export function useMachineTool(identity: ControlIdentity, tool: ToolId, controls
     const [liveTempErrorState, setLiveTempErrorState] = useState<KeyedError | null>(null);
     const [livePatternErrorState, setLivePatternErrorState] = useState<KeyedError | null>(null);
     const [busyState, setBusyState] = useState<string | null>(null);
+    const [settledAutoOpenKey, setSettledAutoOpenKey] = useState<string | null>(null);
+    const [openingKey, setOpeningKey] = useState<string | null>(null);
     const liveTempEpoch = useRef(0);
     const livePatternEpoch = useRef(0);
     const autoOpenedFor = useRef<string | null>(null);
@@ -91,8 +93,10 @@ export function useMachineTool(identity: ControlIdentity, tool: ToolId, controls
     const phase: ControlPhase = owns ? snapshot.phase : "closed";
     const openingInProgress = !owns
         && support.unavailable === null
-        && error === null
-        && (snapshot.phase === "closed" || snapshot.phase === "leaving");
+        && (openingKey === routeKey
+            || (settledAutoOpenKey !== routeKey
+                && error === null
+                && (snapshot.phase === "closed" || snapshot.phase === "leaving")));
     const uiPhase: ControlPhase = owns ? snapshot.phase : openingInProgress ? "entering" : "closed";
 
     const grindDraft = draftState.identityKey === identityKey ? draftState.grind : null;
@@ -142,25 +146,40 @@ export function useMachineTool(identity: ControlIdentity, tool: ToolId, controls
     }
 
     function open(): void {
+        const activeKey = routeKey;
         liveTempEpoch.current++;
         livePatternEpoch.current++;
         setLiveTempErrorState(null);
         setLivePatternErrorState(null);
+        setOpeningKey(activeKey);
         void perform(async () => {
-            const current = controls.describeTool(identity, tool);
-            if (current.unavailable) throw new Error(current.unavailable);
-            await controls.open(identity, tool, mountAbort.current?.signal);
+            try {
+                const current = controls.describeTool(identity, tool);
+                if (current.unavailable) throw new Error(current.unavailable);
+                await controls.open(identity, tool, mountAbort.current?.signal);
+            } finally {
+                if (mounted.current && latestKey.current === activeKey) {
+                    setOpeningKey((current) => current === activeKey ? null : current);
+                    setSettledAutoOpenKey(activeKey);
+                }
+            }
         });
     }
 
     useEffect(() => {
         const targetKey = `${identity.deviceId}\0${identity.serial ?? ""}\0${tool}`;
         if (autoOpenedFor.current === targetKey) return;
-        if (phase !== "closed" || owns || support.unavailable !== null) return;
         autoOpenedFor.current = targetKey;
         const target = {deviceId: identity.deviceId, serial: identity.serial};
         const signal = mountAbort.current?.signal;
         void (async () => {
+            if (phase !== "closed" || owns || support.unavailable !== null) {
+                await Promise.resolve();
+                if (mounted.current && latestKey.current === targetKey && !signal?.aborted) {
+                    setSettledAutoOpenKey(targetKey);
+                }
+                return;
+            }
             try {
                 const current = controls.describeTool(target, tool);
                 if (current.unavailable) throw new Error(current.unavailable);
@@ -171,6 +190,10 @@ export function useMachineTool(identity: ControlIdentity, tool: ToolId, controls
                         key: targetKey,
                         message: cause instanceof Error ? cause.message : "The machine control failed."
                     });
+                }
+            } finally {
+                if (mounted.current && latestKey.current === targetKey && !signal?.aborted) {
+                    setSettledAutoOpenKey(targetKey);
                 }
             }
         })();
@@ -226,6 +249,8 @@ export function useMachineTool(identity: ControlIdentity, tool: ToolId, controls
     }
 
     function recover(): void {
+        const activeKey = routeKey;
+        setSettledAutoOpenKey(activeKey);
         void perform(async () => {
             if (!controls.describeTool(identity, tool).recoverable) {
                 throw new Error("Reconciliation requires this exact connected machine and tool.");
@@ -233,7 +258,14 @@ export function useMachineTool(identity: ControlIdentity, tool: ToolId, controls
             await controls.recover();
             if (mounted.current && controls.getSnapshot().phase === "closed"
                 && controls.describeTool(identity, tool).unavailable === null) {
-                await controls.open(identity, tool, mountAbort.current?.signal);
+                if (latestKey.current === activeKey) setOpeningKey(activeKey);
+                try {
+                    await controls.open(identity, tool, mountAbort.current?.signal);
+                } finally {
+                    if (mounted.current && latestKey.current === activeKey) {
+                        setOpeningKey((current) => current === activeKey ? null : current);
+                    }
+                }
             }
         });
     }
@@ -271,8 +303,14 @@ export function useMachineTool(identity: ControlIdentity, tool: ToolId, controls
         grind, pour, scaleSamples,
         setGrind, setPour, changeMode, start, open, recover,
         setLiveTemperature, setLivePattern,
-        reconnect: () => { void perform(() => controls.reconnectTool(identity, tool)); },
-        stop: () => { void perform(async () => { requireBound(); await controls.stop(); }); },
+        reconnect: () => {
+            setSettledAutoOpenKey(routeKey);
+            void perform(() => controls.reconnectTool(identity, tool));
+        },
+        stop: () => {
+            setSettledAutoOpenKey(routeKey);
+            void perform(async () => { requireBound(); await controls.stop(); });
+        },
         tare: () => { void perform(async () => { requireBound(); await controls.tare(); }); }
     };
 }

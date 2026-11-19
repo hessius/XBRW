@@ -244,6 +244,10 @@ const mockDefaultControls = {
     setTemperature: async () => undefined,
     setPattern: async () => undefined,
     closeInBackground: async () => {
+        if (mockControlSnapshot.phase === "closed") return;
+        if (mockControlSnapshot.phase !== "ready") {
+            throw new Error("Cannot close an uncertain or active control.");
+        }
         await mockCloseInBackground();
         setMockControlSnapshot({...mockControlSnapshot, identity: null, tool: null, phase: "closed"});
     }
@@ -3775,6 +3779,41 @@ describe("switching machines from the home screen", () => {
         });
         await fireEvent.press(screen.getByLabelText("Machine connected"));
         expect(mockCloseInBackground).toHaveBeenCalledTimes(1);
+    });
+
+    it("refuses collapsing via header dot on disconnected unknown recovery and closes foreign-lease panels without rejecting", async () => {
+        const settings = new Settings(memoryStorage({machineDeviceId: "HOME"}));
+        const view = await renderWithProviders(<HomeScreen db={store([])} settings={settings}/>);
+
+        await fireEvent.press(screen.getByLabelText("Machine connected"));
+        await fireEvent.press(screen.getByRole("button", {name: "Grind"}));
+        await waitFor(() => expect(screen.getByRole("button", {name: "START GRIND"})).toBeEnabled());
+
+        mockMachineStatus = "disconnected";
+        await act(async () => {
+            setMockControlSnapshot({
+                ...mockControlSnapshot,
+                identity: {deviceId: "HOME", serial: null},
+                tool: "grind",
+                phase: "unknown"
+            });
+            await view.rerender(<HomeScreen db={store([])} settings={settings}/>);
+        });
+        await fireEvent.press(screen.getByLabelText("Machine not in range"));
+        expect(mockNotify).toHaveBeenCalledWith(expect.objectContaining({tone: "info"}));
+        expect(mockCloseInBackground).not.toHaveBeenCalled();
+
+        // Foreign machine holds unknown lease -> HOME collapses without calling closeInBackground on it
+        await act(async () => {
+            setMockControlSnapshot({
+                ...mockControlSnapshot,
+                identity: {deviceId: "WORK", serial: null},
+                tool: "grind",
+                phase: "unknown"
+            });
+        });
+        await fireEvent.press(screen.getByLabelText("Machine not in range"));
+        expect(mockCloseInBackground).not.toHaveBeenCalled();
     });
 
     it("directs an unpaired or unsaved ambient connection to existing pairing instead of inventing a target", async () => {

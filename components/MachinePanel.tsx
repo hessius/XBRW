@@ -1,7 +1,7 @@
 import {useAppearance} from "@/hooks/useAppearance";
-import React, {useState} from "react";
+import React, {useEffect, useMemo, useRef, useState} from "react";
 import {Pressable} from "react-native";
-import {Button, ScrollView, Text, XStack, YStack} from "tamagui";
+import {Button, Text, XStack, YStack} from "tamagui";
 
 import DotMatrixText from "@/components/DotMatrixText";
 import DotIcon from "@/components/DotIcon";
@@ -200,11 +200,12 @@ function RefreshButton({accent, onRefresh}: {
 }
 
 export const INLINE_MOVING_PHASES: readonly ControlPhase[] = [
-    "entering", "starting", "running", "stopping", "applying", "unknown"
+    "entering", "leaving", "starting", "running", "stopping", "applying", "unknown"
 ];
 
 export function inlineBlockedReason(phase: ControlPhase, tool: ToolId): string {
     if (phase === "stopping") return `Stopping ${tool}…`;
+    if (phase === "leaving") return "Wait for tool switch to finish.";
     if (phase === "entering") return "Wait for the tool to finish opening.";
     if (phase === "applying") return "Wait for scale tare to finish.";
     if (phase === "starting" || phase === "running") return `Stop ${tool} before closing`;
@@ -214,9 +215,14 @@ export function inlineBlockedReason(phase: ControlPhase, tool: ToolId): string {
 export function inlineCloseBlockReason(
     snapshot: {identity: ControlIdentity | null; phase: ControlPhase},
     tool: ToolId,
-    machineId?: string
+    machineId?: string,
+    machineSerial?: string | null
 ): string | null {
     if (machineId !== undefined && snapshot.identity !== null && snapshot.identity.deviceId !== machineId) {
+        return null;
+    }
+    const expectedSerial = machineSerial?.trim() || null;
+    if (expectedSerial !== null && snapshot.identity !== null && snapshot.identity.serial !== expectedSerial) {
         return null;
     }
     if (!INLINE_MOVING_PHASES.includes(snapshot.phase)) return null;
@@ -252,17 +258,50 @@ function InlineToolWorkbench({
     const {controls, snapshot} = useMachineControls(injectedControls);
     const state = useMachineTool(identity, tool, controls, snapshot);
     const {support, owns, phase, uiPhase, bound, unavailable, error, busy, grind, pour, scaleSamples} = state;
-    const blockingPhase = owns ? phase : uiPhase === "entering" ? "entering" : phase;
+    const mountedRef = useRef(true);
+    useEffect(() => {
+        mountedRef.current = true;
+        return () => { mountedRef.current = false; };
+    }, []);
+
+    const sameMachineSnap = snapshot.identity?.deviceId === identity.deviceId
+        && snapshot.identity.serial === identity.serial;
+    const blockingPhase: ControlPhase = owns ? phase
+        : uiPhase === "entering" ? "entering"
+            : sameMachineSnap ? snapshot.phase : phase;
     const activeMoving = INLINE_MOVING_PHASES.includes(blockingPhase);
+
+    function closeOwnedIdle(): Promise<void> {
+        const current = controls.getSnapshot();
+        const sameOwned = current.identity?.deviceId === identity.deviceId
+            && current.identity.serial === identity.serial;
+        if (sameOwned && current.phase === "ready") {
+            return controls.closeInBackground().catch(() => {});
+        }
+        return Promise.resolve();
+    }
 
     function handleSelectTool(nextTool: ToolId) {
         if (nextTool === tool) return;
         if (activeMoving) {
-            onBlocked(blockingPhase === "stopping" ? `Stopping ${tool}…` : `Stop ${tool} before switching tools`);
+            onBlocked(blockingPhase === "stopping" ? `Stopping ${tool}…`
+                : blockingPhase === "leaving" || blockingPhase === "entering" ? inlineBlockedReason(blockingPhase, tool)
+                    : `Stop ${tool} before switching tools`);
             return;
         }
-        void controls.closeInBackground();
+        const prevTool = tool;
+        const closing = closeOwnedIdle();
         onSwitchTool(nextTool);
+        void closing.then(() => {
+            const after = controls.getSnapshot();
+            if (mountedRef.current
+                && after.identity?.deviceId === identity.deviceId
+                && after.identity.serial === identity.serial
+                && after.phase === "unknown"
+                && after.tool === prevTool) {
+                onSwitchTool(prevTool);
+            }
+        });
     }
 
     function handleCollapse() {
@@ -270,7 +309,7 @@ function InlineToolWorkbench({
             onBlocked(inlineBlockedReason(blockingPhase, tool));
             return;
         }
-        void controls.closeInBackground();
+        void closeOwnedIdle();
         onCollapse();
     }
 
@@ -349,7 +388,7 @@ function InlineToolWorkbench({
                         hitSlop={{top: 4, bottom: 4, left: 4, right: 4}}
                         onPress={() => onExpand(machineId, tool)}
                         style={({pressed}) => ({opacity: pressed ? 0.65 : 1})}>
-                        <XStack width={34} height={34} borderRadius="$3" backgroundColor={palette.raised}
+                        <XStack width={36} height={36} borderRadius="$3" backgroundColor={palette.raised}
                                 borderWidth={1} borderColor={palette.line} alignItems="center" justifyContent="center">
                             <Text fontSize={14} fontWeight="700" color={palette.text}>↗</Text>
                         </XStack>
@@ -360,7 +399,7 @@ function InlineToolWorkbench({
                         hitSlop={{top: 4, bottom: 4, left: 4, right: 4}}
                         onPress={handleCollapse}
                         style={({pressed}) => ({opacity: pressed ? 0.65 : 1})}>
-                        <XStack width={34} height={34} borderRadius="$3" backgroundColor={palette.raised}
+                        <XStack width={36} height={36} borderRadius="$3" backgroundColor={palette.raised}
                                 borderWidth={1} borderColor={palette.line} alignItems="center" justifyContent="center">
                             <Text fontSize={13} fontWeight="700" color={palette.text}>✕</Text>
                         </XStack>
@@ -376,25 +415,49 @@ function InlineToolWorkbench({
             />
 
             {error !== null && <Text selectable color={palette.danger}>{error}</Text>}
-            {phase === "closed" && error !== null && support.unavailable === null && (
-                <Button accessibilityRole="button" disabled={busy} onPress={state.open}>Retry opening tool</Button>
+            {phase === "closed" && uiPhase === "closed" && support.unavailable === null && (
+                <Button accessibilityRole="button" disabled={busy} onPress={state.open}>
+                    {error !== null ? "Retry opening tool" : "Open tool"}
+                </Button>
             )}
             {support.recoverable && (
                 <Button accessibilityRole="button" disabled={busy} onPress={state.recover}>
                     Reconcile connected machine
                 </Button>
             )}
-            {support.reconnectable && (
-                <Button accessibilityRole="button" disabled={busy} onPress={state.reconnect}>
-                    Reconnect named machine
+            {!owns && sameMachineSnap && snapshot.phase === "unknown"
+                && (snapshot.tool === "grind" || snapshot.tool === "scale" || snapshot.tool === "pour") && (
+                <Button accessibilityRole="button" disabled={busy}
+                        onPress={() => onSwitchTool(snapshot.tool as ToolId)}>
+                    Inspect active tool
                 </Button>
             )}
+            {support.reconnectable ? (
+                <YStack gap="$2">
+                    <Text color={palette.muted}>
+                        Connection lost. Reconnect this machine to inspect and stop, or leave this tool overlay.
+                    </Text>
+                    <XStack gap="$2" flexWrap="wrap">
+                        <Button accessibilityRole="button" disabled={busy} onPress={state.reconnect}>
+                            Reconnect named machine
+                        </Button>
+                        <Button accessibilityRole="button" disabled={busy} onPress={onCollapse}>
+                            Leave screen
+                        </Button>
+                    </XStack>
+                </YStack>
+            ) : sameMachineSnap && snapshot.phase === "unknown" && !support.recoverable && (
+                <YStack gap="$2">
+                    <Text color={palette.muted}>
+                        Connection lost while a tool operation was uncertain.
+                    </Text>
+                    <Button accessibilityRole="button" disabled={busy} onPress={onCollapse}>
+                        Leave screen
+                    </Button>
+                </YStack>
+            )}
 
-            {tool === "pour" ? (
-                <ScrollView flexGrow={0} flexShrink={1} maxHeight={390} minHeight={0}>
-                    {toolBody}
-                </ScrollView>
-            ) : toolBody}
+            {toolBody}
         </YStack>
     );
 }
@@ -424,7 +487,11 @@ export default function MachinePanel({
     const [localInlineTool, setLocalInlineTool] = useState<ToolId | null>(null);
     const [localShakeKey, setLocalShakeKey] = useState(0);
     const requestedTool = inlineToolProp !== undefined ? inlineToolProp : localInlineTool;
-    const activeInlineTool = open && status === "connected" && machineId !== undefined ? requestedTool : null;
+    const inlineIdentity = useMemo(
+        () => machineId !== undefined ? {deviceId: machineId, serial: machineSerial?.trim() || null} : null,
+        [machineId, machineSerial]
+    );
+    const activeInlineTool = open && inlineIdentity !== null ? requestedTool : null;
 
     function updateInlineTool(next: ToolId | null) {
         if (inlineToolProp === undefined) setLocalInlineTool(next);
@@ -566,10 +633,10 @@ export default function MachinePanel({
                         // flush against the edge of the header and made the panel
                         // read as clipped rather than finished.
                         paddingBottom="$4">
-                    {activeInlineTool !== null && machineId !== undefined ? (
+                    {activeInlineTool !== null && machineId !== undefined && inlineIdentity !== null ? (
                         <InlineToolWorkbench
                             machineId={machineId}
-                            identity={{deviceId: machineId, serial: machineSerial?.trim() || null}}
+                            identity={inlineIdentity}
                             tool={activeInlineTool}
                             accent={accent}
                             contextSummary={contextSummary}

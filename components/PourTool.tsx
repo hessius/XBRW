@@ -143,14 +143,16 @@ export default function PourTool({
     );
 
     return (
-        <YStack gap={isFull ? "$2" : "$2"} flex={isFull ? 1 : undefined} minHeight={isFull ? 0 : undefined}>
-            {isFull ? (
-                <ScrollView testID="pour-tool-fields" flex={1} minHeight={0}>
-                    {content}
-                </ScrollView>
-            ) : (
-                <YStack testID="pour-tool-fields">{content}</YStack>
-            )}
+        <YStack gap="$2" flex={isFull ? 1 : undefined} minHeight={isFull ? 0 : undefined}>
+            <ScrollView
+                testID="pour-tool-fields"
+                flex={isFull ? 1 : undefined}
+                flexGrow={isFull ? 1 : 0}
+                flexShrink={1}
+                maxHeight={isFull ? undefined : 290}
+                minHeight={0}>
+                {content}
+            </ScrollView>
             <MachineToolActions
                 tool="pour"
                 variant={variant}

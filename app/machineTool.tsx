@@ -1,4 +1,4 @@
-import React, {useState} from "react";
+import React, {useEffect, useRef, useState} from "react";
 import {Pressable} from "react-native";
 import {useLocalSearchParams} from "expo-router";
 import {useSafeAreaInsets} from "react-native-safe-area-context";
@@ -27,12 +27,12 @@ const TOOLS: readonly {id: ToolId; label: string; display: string}[] = [
     {id: "pour",  label: "Pour",  display: "POUR"},
 ];
 const ACTIVE_SWITCH_PHASES: readonly ControlPhase[] = [
-    "entering", "starting", "running", "stopping", "applying", "unknown"
+    "entering", "leaving", "starting", "running", "stopping", "applying", "unknown"
 ];
 
 function toolSwitchBlockedReason(phase: ControlPhase, tool: ToolId): string {
     if (phase === "stopping") return `Stopping ${tool}…`;
-    if (phase === "entering") return "Wait for the tool to finish opening.";
+    if (phase === "leaving" || phase === "entering") return "Wait for tool switch to finish.";
     if (phase === "applying") return "Wait for scale tare to finish.";
     if (phase === "starting" || phase === "running") return `Stop ${tool} before switching tools`;
     return "Reconcile the machine before switching tools.";
@@ -46,6 +46,11 @@ function ToolScreen({identity, routeTool, name, injected}: {
     const {controls, snapshot} = useMachineControls(injected);
     const [toolOverride, setToolOverride] = useState<{fromRoute: ToolId; tool: ToolId} | null>(null);
     const [tabShakeKey, setTabShakeKey] = useState(0);
+    const mountedRef = useRef(true);
+    useEffect(() => {
+        mountedRef.current = true;
+        return () => { mountedRef.current = false; };
+    }, []);
     const tool = toolOverride !== null && toolOverride.fromRoute === routeTool ? toolOverride.tool : routeTool;
     const state = useMachineTool(identity, tool, controls, snapshot);
     const nav = useMachineToolNavigation(identity, controls, "tool", {
@@ -55,8 +60,19 @@ function ToolScreen({identity, routeTool, name, injected}: {
     const covered = nav.covered || ratingNoteOpen;
     const [animationEnabled] = useSetting("animateBrewChart");
     const {support, owns, phase, uiPhase, bound, unavailable, error, busy, grind, pour, scaleSamples} = state;
-    const blockingPhase = owns ? phase : uiPhase === "entering" ? "entering" : phase;
+    const sameMachineSnap = snapshot.identity?.deviceId === identity.deviceId
+        && snapshot.identity.serial === identity.serial;
+    const blockingPhase: ControlPhase = owns ? phase
+        : uiPhase === "entering" ? "entering"
+            : sameMachineSnap ? snapshot.phase : phase;
     const activeMoving = ACTIVE_SWITCH_PHASES.includes(blockingPhase);
+
+    function switchToolState(nextTool: ToolId) {
+        setToolOverride({fromRoute: routeTool, tool: nextTool});
+        if ("setParams" in router && typeof router.setParams === "function") {
+            router.setParams({tool: nextTool});
+        }
+    }
 
     function handleSelectTool(nextTool: ToolId) {
         if (nextTool === tool) return;
@@ -65,11 +81,24 @@ function ToolScreen({identity, routeTool, name, injected}: {
             notify({tone: "info", message: toolSwitchBlockedReason(blockingPhase, tool)});
             return;
         }
-        void controls.closeInBackground();
-        setToolOverride({fromRoute: routeTool, tool: nextTool});
-        if ("setParams" in router && typeof router.setParams === "function") {
-            router.setParams({tool: nextTool});
-        }
+        const prevTool = tool;
+        const current = controls.getSnapshot();
+        const sameOwned = current.identity?.deviceId === identity.deviceId
+            && current.identity.serial === identity.serial;
+        const closing = sameOwned && current.phase === "ready"
+            ? controls.closeInBackground().catch(() => {})
+            : Promise.resolve();
+        switchToolState(nextTool);
+        void closing.then(() => {
+            const after = controls.getSnapshot();
+            if (mountedRef.current
+                && after.identity?.deviceId === identity.deviceId
+                && after.identity.serial === identity.serial
+                && after.phase === "unknown"
+                && after.tool === prevTool) {
+                switchToolState(prevTool);
+            }
+        });
     }
 
     return (
@@ -134,12 +163,21 @@ function ToolScreen({identity, routeTool, name, injected}: {
                         {tool === "scale" && owns && snapshot.error !== null
                             && <Text selectable color={palette.danger}>{snapshot.error}</Text>}
                         {support.unavailable !== null && <Text color={palette.muted}>{support.unavailable}</Text>}
-                        {phase === "closed" && error !== null && support.unavailable === null && (
-                            <Button accessibilityRole="button" disabled={busy} onPress={state.open}>Retry opening tool</Button>
+                        {phase === "closed" && uiPhase === "closed" && support.unavailable === null && (
+                            <Button accessibilityRole="button" disabled={busy} onPress={state.open}>
+                                {error !== null ? "Retry opening tool" : "Open tool"}
+                            </Button>
                         )}
                         {support.recoverable && <Button accessibilityRole="button" disabled={busy}
                             onPress={state.recover}>Reconcile connected machine</Button>}
-                        {support.reconnectable && <>
+                        {!owns && sameMachineSnap && snapshot.phase === "unknown"
+                            && (snapshot.tool === "grind" || snapshot.tool === "scale" || snapshot.tool === "pour") && (
+                            <Button accessibilityRole="button" disabled={busy}
+                                onPress={() => switchToolState(snapshot.tool as ToolId)}>
+                                Inspect active tool
+                            </Button>
+                        )}
+                        {support.reconnectable ? <>
                             <Text color={palette.muted}>
                                 Connection lost. Reconnect this machine to inspect and stop, or leave this screen.
                             </Text>
@@ -149,7 +187,10 @@ function ToolScreen({identity, routeTool, name, injected}: {
                                 <Button accessibilityRole="button" disabled={busy}
                                     onPress={() => nav.leaveWhileDisconnected(() => router.back())}>Leave screen</Button>
                             </XStack>
-                        </>}
+                        </> : sameMachineSnap && snapshot.phase === "unknown" && !support.recoverable && (
+                            <Button accessibilityRole="button" disabled={busy}
+                                onPress={() => nav.leaveWhileDisconnected(() => router.back())}>Leave screen</Button>
+                        )}
                     </ScrollView>
                     {tool === "grind" && <GrindTool phase={uiPhase} request={grind}
                         policy={support.grind} unavailable={unavailable} stopUnavailable={support.stopUnavailable}

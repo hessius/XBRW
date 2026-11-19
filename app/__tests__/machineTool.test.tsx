@@ -3,7 +3,9 @@ import {Text} from "react-native";
 import {act, fireEvent, screen, waitFor} from "@testing-library/react-native";
 import {renderWithProviders} from "@/test-utils/render";
 import MachineToolScreen from "@/app/machineTool";
+import MachinePanel from "@/components/MachinePanel";
 import {notify} from "@/components/XbrwToast";
+import {palette} from "@/constants/colors";
 import Machine from "@/library/machine/Machine";
 import MachineControls from "@/library/machine/MachineControls";
 import {ControlRecoveryStore} from "@/library/machine/controlRecovery";
@@ -202,6 +204,9 @@ it.each(["grind", "pour"] as const)("reconnects a foreground-dropped %s only to 
     expect(s.controls.getSnapshot().phase).toBe("closed");
     expect(s.recovery.snapshot.marker).toBeNull();
     expect(s.sent.map(item => item.command.kind)).toEqual(["enter", tool, "inspect", "stop"]);
+    expect(screen.queryByRole("button", {name: /Entering/i})).toBeNull();
+    expect(screen.queryByText(/SWITCHING TO/)).toBeNull();
+    expect(screen.getByRole("button", {name: "Open tool"})).toBeEnabled();
     await press("Back");
     expect(mockBack).toHaveBeenCalledTimes(1);
 });
@@ -219,6 +224,9 @@ it("closes foreground recovery only on qualified terminal inspection, not on the
     expect(s.recovery.snapshot.marker).toBeNull();
     expect(s.sent.map(item => item.command.kind)).toEqual(["enter", "grind", "inspect"]);
     expect(mockPrevention.prevent).toBe(false);
+    expect(screen.queryByRole("button", {name: /Entering/i})).toBeNull();
+    expect(screen.queryByText(/SWITCHING TO/)).toBeNull();
+    expect(screen.getByRole("button", {name: "Open tool"})).toBeEnabled();
 });
 
 it.each(["grind", "pour"] as const)("reconnects marker-free %s entry only for qualified closed inspection", async tool => {
@@ -248,6 +256,9 @@ it.each(["grind", "pour"] as const)("reconnects marker-free %s entry only for qu
     expect(s.recovery.snapshot.marker).toBeNull();
     expect(s.sent.map(item => item.command.kind)).toEqual(["enter", "inspect"]);
     expect(s.store.rememberId).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", {name: /Entering/i})).toBeNull();
+    expect(screen.queryByText(/SWITCHING TO/)).toBeNull();
+    expect(screen.getByRole("button", {name: "Open tool"})).toBeEnabled();
 });
 
 it.each(["enter", "ready", "tare"] as const)("reconnects a foreground-dropped Scale during %s without replay or motor markers", async operation => {
@@ -294,6 +305,9 @@ it.each(["enter", "ready", "tare"] as const)("reconnects a foreground-dropped Sc
     expect(s.machine.controlBlocker).toBeNull();
     expect(s.recovery.snapshot.marker).toBeNull();
     expect(s.store.rememberId).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", {name: /Entering/i})).toBeNull();
+    expect(screen.queryByText(/SWITCHING TO/)).toBeNull();
+    expect(screen.getByRole("button", {name: "Open tool"})).toBeEnabled();
 });
 
 it.each(["failure", "device", "serial"] as const)("keeps a nonmoving Scale lease on reconnect %s", async mismatch => {
@@ -924,4 +938,77 @@ it("auto-reopens a tool after Reconcile connected machine clears a recovered res
     await waitFor(() => expect(s.controls.getSnapshot().phase).toBe("ready"));
     expect(s.recovery.snapshot.marker).toBeNull();
     expect(s.sent.map(item => item.command.kind)).toEqual(["enter", "grind", "inspect", "enter"]);
+});
+
+it("reverts to owning tool and surfaces reconciliation when background exit fails during tab switch", async () => {
+    const s = await prepare("grind");
+    s.respond(item => {
+        if (item.command.kind === "exit") return;
+        s.accept(item);
+    });
+    await fireEvent.press(screen.getByRole("button", {name: "Scale"}));
+    await waitFor(() => expect(s.controls.getSnapshot().phase).toBe("unknown"));
+    expect(s.controls.getSnapshot().tool).toBe("grind");
+    expect(screen.getByRole("button", {name: "Grind"})).toHaveProp("accessibilityState", {selected: true});
+    expect(screen.getByRole("button", {name: "Reconcile connected machine"})).toBeEnabled();
+
+    await press("Back");
+    expect(mockBack).not.toHaveBeenCalled();
+    await press("Scale");
+    expect(screen.getByRole("button", {name: "Grind"})).toHaveProp("accessibilityState", {selected: true});
+});
+
+it("preserves in-flight preflight when expanding from inline workbench to full screen", async () => {
+    jest.useFakeTimers();
+    try {
+        const s = await fixture();
+        await jest.advanceTimersByTimeAsync(16_000);
+        let release8022!: () => void;
+        const gate8022 = new Promise<void>(resolve => { release8022 = resolve; });
+        const originalWrite = s.radio.write.bind(s.radio);
+        s.radio.write = async frame => {
+            if ((frame[3] | (frame[4] << 8)) === 8022) await gate8022;
+            await originalWrite(frame);
+        };
+        const onExpandTool = jest.fn();
+        const panel = await renderWithProviders(
+            <MachinePanel
+                open
+                status="connected"
+                accent={palette.success}
+                vitals={null}
+                now={0}
+                onRefreshWater={async () => false}
+                onConnect={jest.fn()}
+                machineId={identity.deviceId}
+                machineSerial={identity.serial}
+                controls={s.controls}
+                onExpandTool={onExpandTool}
+            />
+        );
+        await fireEvent.press(screen.getByRole("button", {name: "Grind"}));
+        await act(flushControls);
+        expect(screen.getByRole("button", {name: "ENTERING GRIND…"})).toBeDisabled();
+
+        // Expand while 8022 preflight is still suspended -> unmounts inline workbench, mounts full screen
+        await fireEvent.press(screen.getByRole("button", {name: "Expand to full screen"}));
+        expect(onExpandTool).toHaveBeenCalledWith(identity.deviceId, "grind");
+        await panel.unmount();
+
+        mockParams = {machineId: identity.deviceId, tool: "grind"};
+        await renderWithProviders(<MachineToolScreen controls={s.controls}/>);
+        await act(flushControls);
+
+        s.radio.homeReply = status(0x41);
+        await act(async () => {
+            release8022();
+            await jest.advanceTimersByTimeAsync(0);
+            await flushControls();
+        });
+        await waitFor(() => expect(s.controls.getSnapshot().phase).toBe("ready"));
+        expect(screen.getByRole("button", {name: "START GRIND"})).toBeEnabled();
+        expect(screen.queryByText(/Control open cancelled/i)).toBeNull();
+    } finally {
+        jest.useRealTimers();
+    }
 });
