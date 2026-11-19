@@ -1,5 +1,5 @@
 import React from "react";
-import {Button, Text, YStack} from "tamagui";
+import {Button, Text, XStack, YStack} from "tamagui";
 import DotMatrixText from "@/components/DotMatrixText";
 import Stepper from "@/components/Stepper";
 import {useAppearance} from "@/hooks/useAppearance";
@@ -24,7 +24,7 @@ export default function MachineControlReadout({
     return (
         <YStack testID="machine-control-readout" accessible accessibilityRole="text"
                 accessibilityLabel={`${label}: ${display}`} accessibilityLiveRegion="none" gap="$2">
-            <Text color={palette.muted}>{label}</Text>
+            <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.6} color={palette.muted}>{label}</DotMatrixText>
             <DotMatrixText testID="machine-control-value" fontSize={available && prominent ? 56 : 22}
                            color={available ? palette.text : palette.muted}
                            style={{flexShrink: 1}}>
@@ -40,6 +40,7 @@ export function usableNumericPolicy(policy: NumericPolicy | null): policy is Num
 
 export type MachineNumericControlProps = {
     label: string;
+    note?: string | null;
     value: number | null;
     unit?: string;
     policy: NumericPolicy | null;
@@ -48,15 +49,21 @@ export type MachineNumericControlProps = {
 };
 
 export function MachineNumericControl({
-    label, value, unit, policy, editable, onChange
+    label, note, value, unit, policy, editable, onChange
 }: MachineNumericControlProps) {
     const {palette} = useAppearance();
     return (
         <YStack gap="$2">
-            {editable && value !== null && usableNumericPolicy(policy) ? <>
-                <Text color={palette.muted}>{label}</Text>
-                <Stepper label={label} value={value} unit={unit} {...policy} snapToStep onChange={onChange}/>
-            </> : <MachineControlReadout label={label} value={value} unit={unit} prominent={false}/>}
+            {editable && value !== null && usableNumericPolicy(policy) ? (
+                <XStack justifyContent="space-between" alignItems="center" gap="$3" paddingVertical="$3"
+                        borderBottomWidth={1} borderBottomColor={palette.line}>
+                    <YStack flex={1} minWidth={0} gap="$0.5">
+                        <Text fontSize={15} fontWeight="600" color={palette.text}>{label}</Text>
+                        {note ? <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.4} color={palette.muted}>{note}</DotMatrixText> : null}
+                    </YStack>
+                    <Stepper label={label} value={value} unit={unit} {...policy} snapToStep onChange={onChange}/>
+                </XStack>
+            ) : <MachineControlReadout label={label} value={value} unit={unit} prominent={false}/>}
             {editable && !usableNumericPolicy(policy) && <Text color={palette.muted}>
                 {`${label} control is unavailable: no qualified range.`}
             </Text>}

@@ -2,6 +2,7 @@ import {act, renderHook} from "@testing-library/react-native";
 import {useMachineControls} from "@/hooks/useMachineControls";
 import {holdLinkAcrossAppState} from "@/hooks/useMachine";
 import {controlFixture, flushControls, identity} from "./machineControlFixture";
+import {STATE_REPLY_MS} from "@/constants/machine";
 import {status} from "@/library/machine/__tests__/protocolFixtures";
 import {MACHINE_STATE} from "@/library/machine/protocol";
 
@@ -188,9 +189,65 @@ it("reconciles a stale surviving Scale link through inspection without weakening
         expect(s.machine.controlBlocker).toBeNull();
         expect(s.recovery.snapshot.marker).toBeNull();
         expect(reconnect).not.toHaveBeenCalled();
-        await expect(s.controls.open(identity, "scale")).rejects.toThrow(/fresh known normal/i);
+        const pendingOpen = expect(s.controls.open(identity, "scale")).rejects.toThrow(/fresh known normal/i);
+        await jest.advanceTimersByTimeAsync(STATE_REPLY_MS);
+        await pendingOpen;
     } finally {
         off();
+        s.controls.dispose();
+        jest.useRealTimers();
+    }
+});
+
+it("automatically refreshes stale or exited-tool state via 8022 before reopening Grind", async () => {
+    const s = await controlFixture();
+    await s.controls.open(identity, "scale");
+    s.radio.emit(status(0x05));
+    await s.controls.close();
+    // Simulate exiting Scale while state is still 0x05 or idle reading >15 s old.
+    jest.useFakeTimers();
+    try {
+        await jest.advanceTimersByTimeAsync(16_000);
+        s.radio.homeReply = status(0x41);
+        await s.controls.open(identity, "grind");
+        expect(s.controls.getSnapshot()).toMatchObject({phase: "ready", tool: "grind"});
+        expect(s.radio.sent).toContain(8022);
+    } finally {
+        s.controls.dispose();
+        jest.useRealTimers();
+    }
+});
+
+it("refreshes state for readSettings, blocks recover during preflight, and cancels open before attachment on signal abort", async () => {
+    const s = await controlFixture();
+    let release8022!: () => void;
+    const waiting8022 = new Promise<void>(resolve => { release8022 = resolve; });
+    const originalWrite = s.radio.write.bind(s.radio);
+    s.radio.write = async frame => {
+        if ((frame[3] | (frame[4] << 8)) === 8022) {
+            await waiting8022;
+        }
+        await originalWrite(frame);
+    };
+    jest.useFakeTimers();
+    try {
+        await jest.advanceTimersByTimeAsync(16_000);
+        const abort = new AbortController();
+        const openPromise = s.controls.open(identity, "grind", abort.signal);
+        await flushControls();
+        await expect(s.controls.recover()).rejects.toThrow("Control reconciliation is unavailable.");
+        abort.abort();
+        s.radio.homeReply = status(0x41);
+        release8022();
+        await expect(openPromise).rejects.toThrow("Control open cancelled before attachment.");
+        expect(s.controls.getSnapshot().phase).toBe("closed");
+        expect(s.machine.controlBlocker).toBeNull();
+        expect(s.planned).toEqual([]);
+
+        await jest.advanceTimersByTimeAsync(16_000);
+        await s.controls.applySetting(identity, "brightness", 3);
+        expect(s.controls.getSnapshot()).toMatchObject({phase: "closed", settings: {brightness: 3}});
+    } finally {
         s.controls.dispose();
         jest.useRealTimers();
     }

@@ -10,7 +10,7 @@ import {notification, status} from "@/library/machine/__tests__/protocolFixtures
 // Synthetic adapter only. No command, bound or deadline here qualifies hardware.
 export const identity = {deviceId: "controls-test", serial: "hook-serial"};
 const profile: ControlCapabilityProfile = {
-    id: "hook-test", models: ["test"], firmwares: ["test"], serials: [identity.serial],
+    id: "hook-test", models: ["test"], firmwares: ["test"], serials: [identity.serial], scale: true,
     grind: {grindSize: {min: 1, max: 10, step: 1}, rpm: {min: 100, max: 200, step: 10}},
     pour: null, settings: {brightness: {min: 1, max: 5, step: 1}}
 };

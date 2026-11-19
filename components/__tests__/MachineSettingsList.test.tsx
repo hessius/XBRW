@@ -14,7 +14,7 @@ it("groups six named setting links without reading, connecting or choosing a fir
     await renderWithProviders(<MachineSettingsList identity={settingIdentity} controls={s.controls} onSelect={select}/>);
     expect(screen.getAllByRole("header").map(node => node.props.children)).toEqual(["Machine settings", "Tuning"]);
     expect(screen.getAllByRole("button")).toHaveLength(6);
-    expect(screen.getByRole("button", {name: /Temperature unit: Unavailable/})).toBeTruthy();
+    expect(screen.getByRole("button", {name: /Temperature unit: Not read yet/})).toBeTruthy();
     expect(s.radio.sent).toEqual([]);
     await fireEvent.press(screen.getByRole("button", {name: /Water source:/}));
     expect(select).toHaveBeenCalledWith("waterSource");
