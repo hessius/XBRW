@@ -84,11 +84,17 @@ export class StudioControlProtocol implements ControlProtocol {
         if (!info) {
             this.waterFeed = 0;
             this.waterEnough = true;
+            this.waterPresent = null;
             return null;
         }
         this.waterFeed = info.waterFeed === "tap" ? 1 : 0;
         this.waterEnough = info.waterEnough;
         return info.waterFeed === "tap" ? "tap" : "tank";
+    }
+
+    syncWaterState(info: MachineInfo | null, waterPresent: boolean | null): void {
+        this.actualWaterSource(info);
+        this.waterPresent = waterPresent;
     }
 
     idleToolForState(state: number, controlStateSeen: boolean): ToolId | null {

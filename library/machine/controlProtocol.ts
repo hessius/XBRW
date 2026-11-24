@@ -47,6 +47,7 @@ export interface ControlProtocol {
     decode(frame: Uint8Array): ControlFeedback | null;
     decodeInfoSettings?(info: MachineInfo): SettingReadings | null;
     actualWaterSource(info: MachineInfo | null, infoAt: number): "tank" | "tap" | null;
+    syncWaterState?(info: MachineInfo | null, waterPresent: boolean | null): void;
     /** Identifies an idle open tool screen from a non-normal machine status byte so preflight can exit it before opening another tool. */
     idleToolForState?(state: number, controlStateSeen: boolean): ToolId | null;
     readonly telemetryFreshMs?: number;

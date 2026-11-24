@@ -85,6 +85,7 @@ function capture({profile: p, protocol}: ControlQualification): ControlQualifica
             decode: protocol.decode.bind(protocol),
             decodeInfoSettings: protocol.decodeInfoSettings?.bind(protocol),
             actualWaterSource: protocol.actualWaterSource.bind(protocol),
+            syncWaterState: protocol.syncWaterState?.bind(protocol),
             idleToolForState: protocol.idleToolForState?.bind(protocol),
             telemetryFreshMs: protocol.telemetryFreshMs,
             confirmTargetStopFromCupPlateau: protocol.confirmTargetStopFromCupPlateau
@@ -428,6 +429,7 @@ export default class MachineControls {
         if (replacement) this.lease = replacement;
         this.qualification = this.select();
         const protocol = this.qualification.protocol;
+        protocol.syncWaterState?.(this.machine.info, this.machine.tankWaterPresent);
         const ms = protocol.telemetryFreshMs;
         if (ms !== undefined && (!Number.isFinite(ms) || ms <= 0)) throw new Error("Invalid qualified telemetry freshness.");
         const lease = replacement ?? this.machine.acquireControlSession(identity, purpose);
@@ -445,6 +447,7 @@ export default class MachineControls {
         this.off.push(lease.onInvalidated(invalidate));
         this.off.push(this.machine.onLink(() => {
             if (this.lease !== lease || this.contextInvalid || this.clearing) return;
+            protocol.syncWaterState?.(this.machine.info, this.machine.tankWaterPresent);
             try {
                 lease.check();
                 if (this.select() !== this.qualification) throw new Error("The qualified machine identity changed.");
@@ -502,6 +505,7 @@ export default class MachineControls {
 
     private release(): void {
         if (this.disposed) return;
+        this.qualification?.protocol.syncWaterState?.(null, null);
         this.clearPourPlateau();
         this.clearFreshness();
         this.off.splice(0).forEach((off) => off());

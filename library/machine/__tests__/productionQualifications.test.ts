@@ -793,5 +793,37 @@ describe("Studio production qualifications", () => {
         };
         await expect(second.controls.open(studioIdentity, "grind")).rejects.toThrow(/showing a warning/i);
         second.controls.dispose();
+
+        // Mid-session 40522(0) does not stay stale across close() + refill: subsequent WARNING refuses with MACHINE WARNING.
+        const third = await studioSetup(j15F231Frame, 20);
+        third.radio.emit(okTank);
+        third.radio.emit(status(MACHINE_STATE.IDLE));
+        let warnOnScale = false;
+        third.radio.syntheticWrite = (frame) => {
+            const code = frame[3] | (frame[4] << 8);
+            if (code === 8003) third.radio.emit(warnOnScale ? status(MACHINE_STATE.WARNING) : event(8003));
+            else if (code === 8014) {
+                third.radio.emit(event(8014));
+                third.radio.emit(status(MACHINE_STATE.IDLE));
+            }
+        };
+        await third.controls.open(studioIdentity, "scale");
+        third.radio.emit(event(40522, 0));
+        await third.controls.close();
+        third.radio.emit(event(40522, 1));
+        warnOnScale = true;
+        await expect(third.controls.open(studioIdentity, "scale")).rejects.toThrow(/showing a warning/i);
+        third.controls.dispose();
+
+        // 40522(0) received while closed (with info.waterEnough=true) still syncs into StudioControlProtocol before enter.
+        const fourth = await studioSetup(j15F231Frame, 20);
+        fourth.radio.emit(okTank);
+        fourth.radio.emit(status(MACHINE_STATE.IDLE));
+        fourth.radio.emit(event(40522, 0));
+        fourth.radio.syntheticWrite = (frame) => {
+            if ((frame[3] | (frame[4] << 8)) === 8003) fourth.radio.emit(status(MACHINE_STATE.WARNING));
+        };
+        await expect(fourth.controls.open(studioIdentity, "scale")).rejects.toThrow(/\+WATER.*Refill the water tank/i);
+        fourth.controls.dispose();
     });
 });

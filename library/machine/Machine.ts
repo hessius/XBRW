@@ -378,6 +378,10 @@ export default class Machine {
         return false;
     }
 
+    get tankWaterPresent(): boolean | null {
+        return this.waterPresent;
+    }
+
     private hasLowWaterTank(): boolean {
         if (this.info === null) return this.waterPresent === false;
         if (this.info.waterFeed !== "tank") return false;
