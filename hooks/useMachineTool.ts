@@ -169,11 +169,12 @@ export function useMachineTool(identity: ControlIdentity, tool: ToolId, controls
     useEffect(() => {
         const targetKey = `${identity.deviceId}\0${identity.serial ?? ""}\0${tool}`;
         if (autoOpenedFor.current === targetKey) return;
+        if (snapshot.phase === "closed" && !owns && support.unavailable !== null) return;
         autoOpenedFor.current = targetKey;
         const target = {deviceId: identity.deviceId, serial: identity.serial};
         const signal = mountAbort.current?.signal;
         void (async () => {
-            if (phase !== "closed" || owns || support.unavailable !== null) {
+            if (phase !== "closed" || owns) {
                 await Promise.resolve();
                 if (mounted.current && latestKey.current === targetKey && !signal?.aborted) {
                     setSettledAutoOpenKey(targetKey);
@@ -197,7 +198,7 @@ export function useMachineTool(identity: ControlIdentity, tool: ToolId, controls
                 }
             }
         })();
-    }, [controls, identity.deviceId, identity.serial, owns, phase, support.unavailable, tool]);
+    }, [controls, identity.deviceId, identity.serial, owns, phase, snapshot.phase, support.unavailable, tool]);
 
     function requireBound(): void {
         if (!controls.describeTool(identity, tool).bound) {

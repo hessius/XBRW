@@ -205,20 +205,23 @@ export const INLINE_MOVING_PHASES: readonly ControlPhase[] = [
     "entering", "leaving", "starting", "running", "stopping", "applying", "unknown"
 ];
 
-export function inlineBlockedReason(phase: ControlPhase, tool: ToolId): string {
+export function inlineBlockedReason(phase: ControlPhase, tool: ToolId, disconnected = false): string {
     if (phase === "stopping") return `Stopping ${tool}…`;
     if (phase === "leaving") return "Wait for tool switch to finish.";
     if (phase === "entering") return "Wait for the tool to finish opening.";
     if (phase === "applying") return "Wait for scale tare to finish.";
     if (phase === "starting" || phase === "running") return `Stop ${tool} before closing`;
-    return "Reconcile the machine before closing.";
+    return disconnected
+        ? "Machine disconnected — reconnect to inspect or tap ✕ / Leave screen."
+        : "Reconcile the machine before closing.";
 }
 
 export function inlineCloseBlockReason(
     snapshot: {identity: ControlIdentity | null; phase: ControlPhase},
     tool: ToolId,
     machineId?: string,
-    machineSerial?: string | null
+    machineSerial?: string | null,
+    disconnected = false
 ): string | null {
     if (machineId !== undefined && snapshot.identity !== null && snapshot.identity.deviceId !== machineId) {
         return null;
@@ -228,14 +231,18 @@ export function inlineCloseBlockReason(
         return null;
     }
     if (!INLINE_MOVING_PHASES.includes(snapshot.phase)) return null;
-    return inlineBlockedReason(snapshot.phase, tool);
+    return inlineBlockedReason(snapshot.phase, tool, disconnected);
 }
 
-function inlineSwitchBlockedReason(phase: ControlPhase, tool: ToolId): string {
+function inlineSwitchBlockedReason(phase: ControlPhase, tool: ToolId, disconnected = false): string {
     if (phase === "stopping") return `Stopping ${tool}…`;
     if (phase === "leaving" || phase === "entering") return inlineBlockedReason(phase, tool);
     if (phase === "applying") return "Wait for scale tare to finish.";
-    if (phase === "unknown") return "Reconcile the machine before switching tools.";
+    if (phase === "unknown") {
+        return disconnected
+            ? "Machine disconnected — reconnect to inspect or close this tool."
+            : "Reconcile the machine before switching tools.";
+    }
     return `Stop ${tool} before switching tools`;
 }
 
@@ -245,9 +252,11 @@ function InlineToolWorkbench({
     tool,
     accent,
     contextSummary,
+    hasVitals,
     injectedControls,
     animationEnabled,
     disconnected,
+    onRefreshWater,
     onSwitchTool,
     onCollapse,
     onExpand,
@@ -258,9 +267,11 @@ function InlineToolWorkbench({
     tool: ToolId;
     accent: string;
     contextSummary: string;
+    hasVitals: boolean;
     injectedControls?: MachineControls;
     animationEnabled: boolean;
     disconnected: boolean;
+    onRefreshWater: () => Promise<boolean>;
     onSwitchTool: (tool: ToolId) => void;
     onCollapse: () => void;
     onExpand: (machineId: string, tool: ToolId) => void;
@@ -311,7 +322,7 @@ function InlineToolWorkbench({
     function handleSelectTool(nextTool: ToolId) {
         if (nextTool === tool) return;
         if (activeMoving) {
-            onBlocked(inlineSwitchBlockedReason(blockingPhase, tool));
+            onBlocked(inlineSwitchBlockedReason(blockingPhase, tool, !identityConnected));
             return;
         }
         const prevTool = tool;
@@ -330,8 +341,12 @@ function InlineToolWorkbench({
     }
 
     function handleCollapse() {
+        if (!identityConnected && blockingPhase === "unknown") {
+            onCollapse();
+            return;
+        }
         if (activeMoving) {
-            onBlocked(inlineBlockedReason(blockingPhase, tool));
+            onBlocked(inlineBlockedReason(blockingPhase, tool, !identityConnected));
             return;
         }
         void closeOwnedIdle();
@@ -458,23 +473,73 @@ function InlineToolWorkbench({
                     <Text selectable color={palette.danger}>{snapshot.error}</Text>
                 )}
                 {phase === "closed" && uiPhase === "closed" && support.unavailable === null && (
-                    <Button accessibilityRole="button" disabled={busy} onPress={state.open}>
+                    <Button
+                        accessibilityRole="button"
+                        disabled={busy}
+                        onPress={state.open}
+                        backgroundColor={palette.raised}
+                        color={palette.text}
+                        borderRadius="$4"
+                        minHeight={42}
+                        height="auto"
+                        paddingVertical="$2.5"
+                        paddingHorizontal="$3"
+                        opacity={busy ? 0.5 : 1}
+                        style={{borderWidth: 1, borderColor: palette.success}}>
                         {error !== null ? "Retry opening tool" : "Open tool"}
                     </Button>
                 )}
+                {!disconnected && !hasVitals && support.unavailable !== null && phase === "closed" && (
+                    <RefreshButton accent={palette.success} onRefresh={onRefreshWater}/>
+                )}
                 {support.recoverable ? (
-                    <Button accessibilityRole="button" disabled={busy} onPress={state.recover}>
+                    <Button
+                        accessibilityRole="button"
+                        disabled={busy}
+                        onPress={state.recover}
+                        backgroundColor={palette.raised}
+                        color={palette.text}
+                        borderRadius="$4"
+                        minHeight={42}
+                        height="auto"
+                        paddingVertical="$2.5"
+                        paddingHorizontal="$3"
+                        opacity={busy ? 0.5 : 1}
+                        style={{borderWidth: 1, borderColor: palette.success}}>
                         Reconcile connected machine
                     </Button>
                 ) : canReconcileNullTool && (
-                    <Button accessibilityRole="button" disabled={busy} onPress={state.recoverUnknown}>
+                    <Button
+                        accessibilityRole="button"
+                        disabled={busy}
+                        onPress={state.recoverUnknown}
+                        backgroundColor={palette.raised}
+                        color={palette.text}
+                        borderRadius="$4"
+                        minHeight={42}
+                        height="auto"
+                        paddingVertical="$2.5"
+                        paddingHorizontal="$3"
+                        opacity={busy ? 0.5 : 1}
+                        style={{borderWidth: 1, borderColor: palette.success}}>
                         Reconcile connected machine
                     </Button>
                 )}
                 {!owns && sameMachineSnap && snapshot.phase === "unknown"
                     && (snapshot.tool === "grind" || snapshot.tool === "scale" || snapshot.tool === "pour") && (
-                    <Button accessibilityRole="button" disabled={busy}
-                            onPress={() => onSwitchTool(snapshot.tool as ToolId)}>
+                    <Button
+                        accessibilityRole="button"
+                        disabled={busy}
+                        onPress={() => onSwitchTool(snapshot.tool as ToolId)}
+                        backgroundColor={palette.raised}
+                        color={palette.text}
+                        borderRadius="$4"
+                        minHeight={42}
+                        height="auto"
+                        paddingVertical="$2.5"
+                        paddingHorizontal="$3"
+                        opacity={busy ? 0.5 : 1}
+                        style={{borderWidth: 1, borderColor: palette.line}}>
                         Inspect active tool
                     </Button>
                 )}
@@ -484,10 +549,34 @@ function InlineToolWorkbench({
                             Connection lost. Reconnect this machine to inspect and stop, or leave this tool overlay.
                         </Text>
                         <XStack gap="$2" flexWrap="wrap">
-                            <Button accessibilityRole="button" disabled={busy} onPress={state.reconnect}>
+                            <Button
+                                accessibilityRole="button"
+                                disabled={busy}
+                                onPress={state.reconnect}
+                                backgroundColor={palette.raised}
+                                color={palette.text}
+                                borderRadius="$4"
+                                minHeight={42}
+                                height="auto"
+                                paddingVertical="$2.5"
+                                paddingHorizontal="$3"
+                                opacity={busy ? 0.5 : 1}
+                                style={{borderWidth: 1, borderColor: palette.success}}>
                                 Reconnect named machine
                             </Button>
-                            <Button accessibilityRole="button" disabled={busy} onPress={onCollapse}>
+                            <Button
+                                accessibilityRole="button"
+                                disabled={busy}
+                                onPress={onCollapse}
+                                backgroundColor={palette.raised}
+                                color={palette.text}
+                                borderRadius="$4"
+                                minHeight={42}
+                                height="auto"
+                                paddingVertical="$2.5"
+                                paddingHorizontal="$3"
+                                opacity={busy ? 0.5 : 1}
+                                style={{borderWidth: 1, borderColor: palette.line}}>
                                 Leave screen
                             </Button>
                         </XStack>
@@ -497,7 +586,19 @@ function InlineToolWorkbench({
                         <Text color={palette.muted}>
                             Connection lost while a tool operation was uncertain.
                         </Text>
-                        <Button accessibilityRole="button" disabled={busy} onPress={onCollapse}>
+                        <Button
+                            accessibilityRole="button"
+                            disabled={busy}
+                            onPress={onCollapse}
+                            backgroundColor={palette.raised}
+                            color={palette.text}
+                            borderRadius="$4"
+                            minHeight={42}
+                            height="auto"
+                            paddingVertical="$2.5"
+                            paddingHorizontal="$3"
+                            opacity={busy ? 0.5 : 1}
+                            style={{borderWidth: 1, borderColor: palette.line}}>
                             Leave screen
                         </Button>
                     </YStack>
@@ -687,9 +788,11 @@ export default function MachinePanel({
                             tool={activeInlineTool}
                             accent={accent}
                             contextSummary={contextSummary}
+                            hasVitals={vitals !== null}
                             injectedControls={controls}
                             animationEnabled={animationEnabled}
                             disconnected={status !== "connected"}
+                            onRefreshWater={onRefreshWater}
                             onSwitchTool={updateInlineTool}
                             onCollapse={() => updateInlineTool(null)}
                             onExpand={handleExpand}

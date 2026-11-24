@@ -241,6 +241,9 @@ export default class MachineControls {
         const own = this.snapshot.identity?.deviceId === identity.deviceId
             && this.snapshot.identity.serial === identity.serial && this.snapshot.tool === tool;
         try {
+            if (actual && actual.deviceId === identity.deviceId && actual.serial === null && this.machine.info === null) {
+                throw new Error("The connected machine has not reported its readings yet. Refresh readings to verify its serial.");
+            }
             if (!identity.serial || !actual || actual.deviceId !== identity.deviceId || actual.serial !== identity.serial) {
                 throw new Error("Connect the named machine with its exact saved serial before using this tool.");
             }

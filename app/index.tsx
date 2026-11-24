@@ -1510,7 +1510,7 @@ export default function HomeScreen({db, beanStore, settings}: Props) {
                                 || (snap.identity.deviceId === homeMachine.id
                                     && (expectedSerial === null || snap.identity.serial === expectedSerial));
                             const reason = sameMachine
-                                ? inlineCloseBlockReason(snap, inlineTool, homeMachine?.id, homeMachine?.serial)
+                                ? inlineCloseBlockReason(snap, inlineTool, homeMachine?.id, homeMachine?.serial, machineStatus !== "connected")
                                 : null;
                             if (reason !== null) {
                                 setPanelShakeKey((count) => count + 1);

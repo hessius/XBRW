@@ -493,11 +493,17 @@ export default class Machine {
                         return;
                     }
                     const carriedHome = frame.length === 28 && STARTABLE.has(frame[25]);
-                    if (!sawNonStartableAfter8022 && this.controlStateSeen && carriedHome
+                    const allowCarriedHome = this.state === null
+                        || this.controlStateSeen
+                        || Machine.TOOL_IDLE_OR_BOOT_STATES.has(this.state);
+                    if (!sawNonStartableAfter8022 && allowCarriedHome && carriedHome
                         && (this.state === null || !FAULT_BLOCKS[this.state]) && homeTimer === null) {
                         homeTimer = setTimeout(() => {
+                            const stillAllowed = this.state === null
+                                || this.controlStateSeen
+                                || Machine.TOOL_IDLE_OR_BOOT_STATES.has(this.state);
                             if (generation === this.generation && !done && !sawNonStartableAfter8022
-                                && this.controlStateSeen && (this.state === null || !FAULT_BLOCKS[this.state])
+                                && stillAllowed && (this.state === null || !FAULT_BLOCKS[this.state])
                                 && !this.controlProbeBlocked(generation, probeOp)) {
                                 this.state = frame[25];
                                 this.stateAt = Date.now();

@@ -1104,3 +1104,38 @@ it("refuses background close during active work and fails queued open when backg
     expect(s.machine.controlBlocker).not.toBeNull();
     s.controls.dispose();
 });
+
+it("distinguishes connected-without-readings from serial mismatch in describeTool()", async () => {
+    const radio = new Radio();
+    radio.infoReply = null;
+    const machine = new Machine(radio, {frameGapMs: 0, infoWaitMs: 5});
+    machine.installControlRecovery(new ControlRecoveryStore({read: () => "", write: () => {}}));
+    await machine.connect(identity.deviceId);
+    radio.emit(status(MACHINE_STATE.IDLE));
+    const controls = new MachineControls(machine, {
+        qualifications: [{
+            profile: {...profile, scale: false},
+            protocol: {
+                actualWaterSource: () => "tank",
+                plan: () => ({frame: null, deadlineMs: 50}),
+                decode: () => null
+            }
+        }]
+    });
+
+    expect(controls.describeTool(identity, "grind").unavailable).toBe(
+        "The connected machine has not reported its readings yet. Refresh readings to verify its serial."
+    );
+    expect(controls.describeTool({...identity, deviceId: "other"}, "grind").unavailable).toBe(
+        "Connect the named machine with its exact saved serial before using this tool."
+    );
+
+    radio.emit(machineInfoFrame({serial: identity.serial, model: "test", firmware: "test"}));
+    expect(controls.describeTool({...identity, serial: "other"}, "grind").unavailable).toBe(
+        "Connect the named machine with its exact saved serial before using this tool."
+    );
+    expect(controls.describeTool(identity, "scale").unavailable).toBe(
+        "This tool is not qualified for this machine and firmware."
+    );
+    controls.dispose();
+});

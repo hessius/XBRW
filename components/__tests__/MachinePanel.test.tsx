@@ -7,7 +7,17 @@ import PourTool from "@/components/PourTool";
 import * as XbrwToast from "@/components/XbrwToast";
 import {machineColours, palette} from "@/constants/colors";
 import {controlFixture, flushControls, identity, type Planned} from "@/hooks/__tests__/machineControlFixture";
+import Machine from "@/library/machine/Machine";
+import MachineControls from "@/library/machine/MachineControls";
+import {ControlRecoveryStore} from "@/library/machine/controlRecovery";
+import {FakeTransport, machineInfoFrame} from "@/library/machine/__tests__/FakeTransport";
+import {status} from "@/library/machine/__tests__/protocolFixtures";
+import {MACHINE_STATE} from "@/library/machine/protocol";
 import {renderWithProviders} from "@/test-utils/render";
+
+class QuietRadio extends FakeTransport {
+    get connectedDeviceId() { return this.connectedTo; }
+}
 
 const vitals = {
     waterEnough: true, waterFeed: "tank" as const,
@@ -638,6 +648,133 @@ describe("MachinePanel inline tool mode", () => {
         });
         await fireEvent.press(screen.getByRole("button", {name: "Reconcile connected machine"}));
         await waitFor(() => expect(s.controls.getSnapshot().phase).toBe("closed"));
+        s.controls.dispose();
+    });
+
+    it("offers inline REFRESH when connected without readings and auto-opens once 40521 arrives", async () => {
+        const radio = new QuietRadio();
+        radio.infoReply = null;
+        const machine = new Machine(radio, {frameGapMs: 0, infoWaitMs: 5});
+        machine.installControlRecovery(new ControlRecoveryStore({read: () => "", write: () => {}}));
+        await machine.connect(identity.deviceId);
+        radio.emit(status(MACHINE_STATE.IDLE));
+        const controls = new MachineControls(machine, {
+            qualifications: [{
+                profile: {
+                    id: "inline-refresh",
+                    models: ["Studio"],
+                    firmwares: ["V12.0D.500"],
+                    serials: ["*"],
+                    scale: true,
+                    grind: {grindSize: {min: 1, max: 80, step: 1}, rpm: {min: 60, max: 120, step: 5}},
+                    pour: null,
+                    settings: {}
+                },
+                protocol: {
+                    actualWaterSource: () => "tank",
+                    plan: (command, tokens) => ({
+                        frame: new Uint8Array([0x58, 0x01, 0x01, command.kind === "enter" ? 1 : 2, 0, 12, 0, 0, 0, 1, tokens.session & 0xff, 0]),
+                        deadlineMs: 50
+                    }),
+                    decode: () => null
+                }
+            }]
+        });
+
+        const onRefreshWater = jest.fn(async () => {
+            radio.emit(machineInfoFrame({serial: identity.serial, model: "Studio", firmware: "V12.0D.500"}));
+            return true;
+        });
+
+        const view = await renderWithProviders(
+            <MachinePanel
+                open
+                status="connected"
+                accent={palette.success}
+                vitals={null}
+                now={0}
+                onRefreshWater={onRefreshWater}
+                onConnect={jest.fn()}
+                machineId={identity.deviceId}
+                machineSerial={identity.serial}
+                controls={controls}
+            />
+        );
+
+        await fireEvent.press(screen.getByRole("button", {name: "Grind"}));
+        expect(screen.getByText(/has not reported its readings yet/i)).toBeTruthy();
+        expect(screen.getByLabelText("Refresh the machine readings")).toBeTruthy();
+
+        const openSpy = jest.spyOn(controls, "open").mockResolvedValue(undefined);
+        await fireEvent.press(screen.getByTestId("machine-refresh"));
+        await view.rerender(
+            <MachinePanel
+                open
+                status="connected"
+                accent={palette.success}
+                vitals={vitals}
+                now={0}
+                onRefreshWater={onRefreshWater}
+                onConnect={jest.fn()}
+                machineId={identity.deviceId}
+                machineSerial={identity.serial}
+                controls={controls}
+            />
+        );
+        await waitFor(() => expect(openSpy).toHaveBeenCalledWith(identity, "grind", expect.anything()));
+        openSpy.mockRestore();
+        controls.dispose();
+    });
+
+    it("lets disconnected unknown inline workbench collapse via X while retaining unknown state and showing disconnected switch guidance", async () => {
+        const notifySpy = jest.spyOn(XbrwToast, "notify").mockImplementation(jest.fn());
+        const s = await controlFixture({reconnect: jest.fn()});
+        s.respond((item) => s.accept(item));
+        const view = await draw({
+            machineId: identity.deviceId,
+            machineSerial: identity.serial,
+            machineModel: "Studio",
+            controls: s.controls
+        });
+
+        await fireEvent.press(screen.getByRole("button", {name: "Grind"}));
+        await waitFor(() => expect(s.controls.getSnapshot().phase).toBe("ready"));
+        await fireEvent.press(screen.getByRole("button", {name: "START GRIND"}));
+        await waitFor(() => expect(s.controls.getSnapshot().phase).toBe("running"));
+
+        await act(async () => {
+            s.radio.drop();
+            await view.rerender(
+                <MachinePanel
+                    open
+                    status="disconnected"
+                    accent={palette.success}
+                    vitals={vitals}
+                    now={4 * 60 * 1000}
+                    onRefreshWater={pending()}
+                    onConnect={jest.fn()}
+                    machineId={identity.deviceId}
+                    machineSerial={identity.serial}
+                    machineModel="Studio"
+                    controls={s.controls}
+                />
+            );
+        });
+
+        expect(s.controls.getSnapshot().phase).toBe("unknown");
+        await fireEvent.press(screen.getByRole("button", {name: "Scale"}));
+        expect(notifySpy).toHaveBeenCalledWith({
+            tone: "info",
+            message: "Machine disconnected — reconnect to inspect or close this tool."
+        });
+
+        // Disconnected X collapses cleanly while keeping recovery marker & unknown phase
+        await fireEvent.press(screen.getByRole("button", {name: "Close inline tool"}));
+        expect(screen.queryByTestId("inline-tool-workbench")).toBeNull();
+        expect(s.controls.getSnapshot().phase).toBe("unknown");
+        expect(s.recovery.snapshot.marker).not.toBeNull();
+
+        notifySpy.mockRestore();
         s.controls.dispose();
     });
 });

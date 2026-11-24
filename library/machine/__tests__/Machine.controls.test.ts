@@ -871,3 +871,75 @@ it("aborts ensureFreshControlState waitGap immediately when console send() or br
         await machine.disconnect();
     }
 });
+
+it("accepts Studio's 28-byte event 8022 home reply when state is null after connect/reconnect", async () => {
+    const probe8022AtHome = Array.from(
+        Buffer.from("580207561f1c000000c1000000000000000000000000001000410373", "hex")
+    );
+    const radio = new Radio();
+    radio.homeReply = null;
+    radio.infoReply = machineInfoFrame({serial: identity.serial, model: "Studio", firmware: "V12.0D.500"});
+    const machine = new Machine(radio, {frameGapMs: 0});
+    machine.installControlRecovery(new ControlRecoveryStore({read: () => "", write: () => {}}));
+    machine.setAppState("active");
+    await machine.connect(identity.deviceId);
+    jest.useFakeTimers();
+    try {
+        expect(machine.state).toBeNull();
+
+        radio.written = [];
+        radio.syntheticWrite = (frame) => {
+            if ((frame[3] | (frame[4] << 8)) === 8022) radio.emit(probe8022AtHome);
+        };
+        const probe = machine.ensureFreshControlState();
+        await jest.advanceTimersByTimeAsync(900);
+        await probe;
+        expect(radio.sent).toEqual([8022]);
+        expect(machine.slotStateIsNormal).toBe(true);
+        const lease = machine.acquireControlSession(identity, "scale");
+        lease.release();
+    } finally {
+        jest.useRealTimers();
+        await machine.disconnect();
+    }
+});
+
+it("cancels 28-byte event 8022 homeTimer when non-startable status follows from null state and never clears expired faults", async () => {
+    const probe8022AtHome = Array.from(
+        Buffer.from("580207561f1c000000c1000000000000000000000000001000410373", "hex")
+    );
+    const radio = new Radio();
+    radio.homeReply = null;
+    radio.infoReply = machineInfoFrame({serial: identity.serial, model: "Studio", firmware: "V12.0D.500"});
+    const machine = new Machine(radio, {frameGapMs: 0});
+    machine.installControlRecovery(new ControlRecoveryStore({read: () => "", write: () => {}}));
+    machine.setAppState("active");
+    await machine.connect(identity.deviceId);
+    jest.useFakeTimers();
+    try {
+        radio.written = [];
+        radio.syntheticWrite = (frame) => {
+            if ((frame[3] | (frame[4] << 8)) === 8022) radio.emit(probe8022AtHome);
+        };
+        const probe = machine.ensureFreshControlState();
+        await Promise.resolve();
+        radio.emit(status(MACHINE_STATE.BREWING));
+        await probe;
+        await jest.advanceTimersByTimeAsync(900);
+        expect(machine.state).toBe(MACHINE_STATE.BREWING);
+        expect(machine.slotStateIsNormal).toBe(false);
+
+        radio.emit(status(MACHINE_STATE.NO_WATER));
+        await jest.advanceTimersByTimeAsync(STATE_FRESH_MS + 1000);
+        radio.written = [];
+        const faultProbe = machine.ensureFreshControlState();
+        await jest.advanceTimersByTimeAsync(3500);
+        await faultProbe;
+        expect(radio.sent).toContain(8022);
+        expect(machine.state).toBe(MACHINE_STATE.NO_WATER);
+        expect(machine.slotStateIsNormal).toBe(false);
+    } finally {
+        jest.useRealTimers();
+        await machine.disconnect();
+    }
+});
