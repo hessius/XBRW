@@ -42,7 +42,7 @@ function recipes(count: number): string {
 }
 
 const ERRORS: Record<CloudErrorKind, string> = {
-    credentials: "Email or password not accepted.",
+    credentials: "Email or password not accepted. Accounts created with Google or Apple cannot sign in here.",
     unauthorised: "That sign-in has expired. Please sign in again.",
     network: "Could not reach xBloom. Check your connection.",
     server: "xBloom could not answer that just now.",
@@ -199,6 +199,13 @@ export default function ImportCloudScreen() {
                                 to us or to anyone else. This phone keeps your email
                                 address and a revocable token, in the device
                                 keychain. Your password is never stored.
+                            </Text>
+
+                            <Text color={palette.dim} fontSize={13}>
+                                Only xBloom accounts with an email and password can
+                                sign in here. Accounts created with Google or Apple
+                                cannot be used. You can still import recipes one by
+                                one using share links from the xBloom app.
                             </Text>
 
                             <Input

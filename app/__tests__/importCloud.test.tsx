@@ -131,6 +131,36 @@ describe("importCloud", () => {
         expect(screen.getByText(/Email or password not accepted/i)).toBeTruthy();
     });
 
+    it("explains that Google and Apple accounts cannot sign in when credentials are refused", async () => {
+        mockHook.error = "credentials";
+        await renderWithProviders(<ImportCloudScreen/>);
+        expect(
+            screen.getByText(/Accounts created with Google or Apple cannot sign in here/i)
+        ).toBeTruthy();
+    });
+
+    it("explains before the fields that Google and Apple accounts cannot sign in", async () => {
+        await renderWithProviders(<ImportCloudScreen/>);
+
+        expect(
+            screen.getByText(/Only xBloom accounts with an email and password can sign in here/i)
+        ).toBeTruthy();
+        expect(
+            screen.getByText(/Accounts created with Google or Apple cannot be used/i)
+        ).toBeTruthy();
+        expect(
+            screen.getByText(/import recipes one by one using share links/i)
+        ).toBeTruthy();
+
+        const tree = renderedText().join("\u0000");
+        const limitation = tree.indexOf("Only xBloom accounts with an email and password");
+        const field = tree.indexOf("Password");
+
+        expect(limitation).toBeGreaterThan(-1);
+        expect(field).toBeGreaterThan(-1);
+        expect(limitation).toBeLessThan(field);
+    });
+
     it("says so when the network was unreachable", async () => {
         mockHook.error = "network";
         await renderWithProviders(<ImportCloudScreen/>);
@@ -597,10 +627,19 @@ describe("importCloud", () => {
         const caveats = [
             screen.getByText(/not an official xBloom feature/i),
             screen.getByText(/password is never stored/i),
+            screen.getByText(/Only xBloom accounts with an email and password/i),
         ];
         for (const node of caveats) {
             expect(String(node.props.children)).not.toMatch(/[\u2013\u2014]/);
         }
+    });
+
+    it("writes the credentials error without dashes", async () => {
+        mockHook.error = "credentials";
+        await renderWithProviders(<ImportCloudScreen/>);
+
+        const error = screen.getByText(/Email or password not accepted/i);
+        expect(String(error.props.children)).not.toMatch(/[\u2013\u2014]/);
     });
 
     describe("a very large account", () => {
