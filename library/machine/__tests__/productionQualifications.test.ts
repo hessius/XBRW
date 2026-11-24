@@ -55,12 +55,12 @@ class Radio extends FakeTransport {
     get connectedDeviceId() { return this.connectedTo; }
 }
 
-async function studioSetup(infoFrame: number[] = j15F231Frame) {
+async function studioSetup(infoFrame: number[] = j15F231Frame, stateReplyMs?: number) {
     const radio = new Radio();
     radio.infoReply = infoFrame;
     let raw = "";
     const recovery = new ControlRecoveryStore({read: () => raw, write: (next) => { raw = next; }});
-    const machine = new Machine(radio, {frameGapMs: 0});
+    const machine = new Machine(radio, {frameGapMs: 0, stateReplyMs});
     machine.installControlRecovery(recovery);
     await machine.connect(studioIdentity.deviceId);
     radio.emit(status(MACHINE_STATE.IDLE));
@@ -679,7 +679,7 @@ describe("Studio production qualifications", () => {
         expect(protocol.idleToolForState(MACHINE_STATE.DISPENSING, false)).toBeNull();
         expect(protocol.idleToolForState(0x41, false)).toBeNull();
 
-        const s = await studioSetup();
+        const s = await studioSetup(j15F231Frame, 20);
         let activeScreen: number = MACHINE_STATE.IDLE;
         s.radio.syntheticWrite = (frame) => {
             const code = frame[3] | (frame[4] << 8);
@@ -701,11 +701,11 @@ describe("Studio production qualifications", () => {
             }
         };
 
-        // 1. Machine already sitting in Scale (0x05): open("grind") sends 8014 exit first, then 8006 enter.
+        // 1. Machine already sitting in Scale (0x05): open("grind") probes 8022, sends 8014 exit, then 8006 enter.
         activeScreen = 0x05;
         s.radio.emit(status(0x05));
         await s.controls.open(studioIdentity, "grind");
-        expect(s.radio.sent).toEqual([8014, 8006]);
+        expect(s.radio.sent).toEqual([8022, 8014, 8006]);
         expect(s.controls.getSnapshot()).toMatchObject({phase: "ready", tool: "grind"});
 
         // 2. If Grind (0x02) stays on 0x02 after close(), switching to Pour still sends 8012 -> 8007.
@@ -714,7 +714,7 @@ describe("Studio production qualifications", () => {
         s.radio.emit(status(0x02));
         s.radio.written = [];
         await s.controls.open(studioIdentity, "pour");
-        expect(s.radio.sent).toEqual([8012, 8007]);
+        expect(s.radio.sent).toEqual([8022, 8012, 8007]);
         expect(s.controls.getSnapshot()).toMatchObject({phase: "ready", tool: "pour"});
 
         // 3. Switch away from Pour (8013 ack resolves close(), then delayed status 0x03 arrives while controlSession is null):
@@ -756,7 +756,7 @@ describe("Studio production qualifications", () => {
         };
         s.radio.written = [];
         await s.controls.open(studioIdentity, "scale");
-        expect(s.radio.sent).toEqual([8013, 8003]);
+        expect(s.radio.sent).toEqual([8022, 8013, 8003]);
         expect(s.controls.getSnapshot()).toMatchObject({phase: "ready", tool: "scale"});
         await s.controls.close();
 
