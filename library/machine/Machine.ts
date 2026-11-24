@@ -729,6 +729,8 @@ export default class Machine {
         assertAvailable(purpose !== "recovery" && purpose !== "exit" && !inspectionOnly, true);
         if (purpose === "grind" || purpose === "pour" || purpose === "scale") {
             this.recentControlPurpose = purpose;
+        } else if (purpose === "setting") {
+            this.recentControlPurpose = null;
         }
         const check = () => {
             if (failure !== null) throw failure;
@@ -1031,6 +1033,7 @@ export default class Machine {
             }
         };
         this.slotSession = {token, invalidate};
+        this.recentControlPurpose = null;
         return {
             restartFromBeginning: journal !== null && options?.restart === true,
             validateFrames: (frames) => {
@@ -2011,6 +2014,7 @@ export default class Machine {
         // about its mode again if this send also goes nowhere.
         this.retriedInPro = false;
         this.pauseSent = false;
+        this.recentControlPurpose = null;
         // A CANCEL pressed while this attempt is still preparing must stop it
         // before the recipe goes out, not after.
         const ticket = this.cancelTicket;

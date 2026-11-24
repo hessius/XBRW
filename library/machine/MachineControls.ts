@@ -436,6 +436,10 @@ export default class MachineControls {
         const session = this.session = ++nextSession;
         const invalidate = (error: Error) => {
             this.contextInvalid = true;
+            if (purpose === "exit") {
+                this.waiter?.reject(error);
+                return;
+            }
             this.uncertain(error);
         };
         this.off.push(lease.onInvalidated(invalidate));
@@ -483,7 +487,8 @@ export default class MachineControls {
                 }
                 if (this.waiter?.tokens.transaction === event.transaction) this.waiter.receive(event.value);
             } catch (error) {
-                this.uncertain(failure(error));
+                if (purpose === "exit") invalidate(failure(error));
+                else this.uncertain(failure(error));
             }
         }));
     }
@@ -735,6 +740,8 @@ export default class MachineControls {
             await this.exchange({kind: "exit", tool: idleTool}, "closed");
         } finally {
             this.release();
+            this.contextInvalid = false;
+            await this.writeTail;
         }
     }
 

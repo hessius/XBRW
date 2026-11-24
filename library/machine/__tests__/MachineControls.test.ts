@@ -1357,5 +1357,58 @@ it("exits an idle open tool reported by idleToolForState before opening a new to
     await controls.open(identity, "grind");
     expect(sentCommands).toEqual(["exit", "enter"]);
     expect(controls.getSnapshot()).toMatchObject({phase: "ready", tool: "grind"});
+    await controls.close();
+
+    // Link drop / backgrounding / identity-changing info during exitIdleToolBeforeOpen keeps phase "closed" and never wedges in unknown.
+    const originalWrite = radio.write.bind(radio);
+    let releaseExitWrite!: () => void;
+    let signalExitWrite!: () => void;
+    const waitExitWrite = () => new Promise<void>((resolve) => { signalExitWrite = resolve; });
+    radio.homeReply = status(0x05);
+    radio.emit(status(0x05));
+    let gateExitWrite = new Promise<void>((resolve) => { releaseExitWrite = resolve; });
+    let exitWriteReady = waitExitWrite();
+    radio.write = async (frame) => {
+        if ((frame[3] | (frame[4] << 8)) === codes.exit) {
+            signalExitWrite();
+            await gateExitWrite;
+        }
+        await originalWrite(frame);
+    };
+    const droppedDuringExit = controls.open(identity, "grind").then(() => null, (error: Error) => error);
+    await exitWriteReady;
+    radio.drop();
+    releaseExitWrite();
+    expect((await droppedDuringExit)?.message).toBeTruthy();
+    expect(controls.getSnapshot().phase).toBe("closed");
+    expect(machine.controlBlocker).toBeNull();
+
+    // Reconnect and background during idle exit -> still keeps phase "closed" and reopens cleanly when active again.
+    await machine.connect(identity.deviceId);
+    radio.emit(status(0x05));
+    gateExitWrite = new Promise<void>((resolve) => { releaseExitWrite = resolve; });
+    exitWriteReady = waitExitWrite();
+    const bgDuringExit = controls.open(identity, "grind").then(() => null, (error: Error) => error);
+    await exitWriteReady;
+    machine.setAppState("background");
+    releaseExitWrite();
+    expect((await bgDuringExit)?.message).toBeTruthy();
+    expect(controls.getSnapshot().phase).toBe("closed");
+    expect(machine.controlBlocker).toBeNull();
+    machine.setAppState("active");
+
+    radio.write = originalWrite;
+    await controls.open(identity, "grind");
+    expect(controls.getSnapshot()).toMatchObject({phase: "ready", tool: "grind"});
+    await controls.close();
+
+    // Acquiring a setting lease clears recentControlPurpose ("pour") so non-control 0x03 stays refused.
+    await controls.open(identity, "pour");
+    await controls.close();
+    const settingLease = machine.acquireControlSession(identity, "setting");
+    settingLease.release();
+    radio.emit(status(MACHINE_STATE.DISPENSING));
+    expect(machine.controlStateConfirmed).toBe(false);
+    await expect(controls.open(identity, "grind")).rejects.toThrow(/fresh known normal/i);
     controls.dispose();
 });
