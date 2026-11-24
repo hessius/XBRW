@@ -1053,3 +1053,89 @@ it("ignores unverified DIS modelNumber when 40521 model bytes are empty on J15 S
     expect(controls.describeSettings(studioIdentity, "temperatureUnit").reason).toBeNull();
     controls.dispose();
 });
+
+it("closes ready controls in background and serializes an immediate reopen on the next tool", async () => {
+    const s = await setup();
+    let releaseExit!: () => void;
+    let exitItem!: Sent;
+    s.respond((item) => {
+        if (item.command.kind === "exit") {
+            exitItem = item;
+            void new Promise<void>((resolve) => { releaseExit = resolve; }).then(() => {
+                accept(s.radio, exitItem);
+            });
+            return;
+        }
+        accept(s.radio, item);
+    });
+    await s.controls.open(identity, "grind");
+    expect(s.controls.getSnapshot().phase).toBe("ready");
+
+    const closing = s.controls.closeInBackground();
+    expect(s.controls.getSnapshot().phase).toBe("leaving");
+    expect(s.controls.describeTool(identity, "pour")).toMatchObject({bound: false, unavailable: null});
+
+    const reopening = s.controls.open(identity, "pour");
+    await Promise.resolve();
+    expect(s.sent.map((item) => item.command.kind)).toEqual(["enter", "exit"]);
+
+    releaseExit();
+    await Promise.all([closing, reopening]);
+    expect(s.controls.getSnapshot()).toMatchObject({phase: "ready", tool: "pour"});
+    expect(s.sent.map((item) => item.command.kind)).toEqual(["enter", "exit", "enter"]);
+    s.controls.dispose();
+});
+
+it("refuses background close during active work and fails queued open when background close errors", async () => {
+    const s = await setup();
+    s.respond((item) => {
+        if (item.command.kind === "exit") return;
+        accept(s.radio, item);
+    });
+    await s.controls.open(identity, "grind");
+    await s.controls.startGrind({grindSize: 5, rpm: 120});
+    await expect(s.controls.closeInBackground()).rejects.toThrow("Cannot close an uncertain or active control.");
+    await s.controls.stop();
+
+    const bg = s.controls.closeInBackground();
+    await expect(s.controls.open(identity, "pour")).rejects.toThrow(/missing|owned/i);
+    await bg;
+    expect(s.controls.getSnapshot().phase).toBe("unknown");
+    expect(s.machine.controlBlocker).not.toBeNull();
+    s.controls.dispose();
+});
+
+it("distinguishes connected-without-readings from serial mismatch in describeTool()", async () => {
+    const radio = new Radio();
+    radio.infoReply = null;
+    const machine = new Machine(radio, {frameGapMs: 0, infoWaitMs: 5});
+    machine.installControlRecovery(new ControlRecoveryStore({read: () => "", write: () => {}}));
+    await machine.connect(identity.deviceId);
+    radio.emit(status(MACHINE_STATE.IDLE));
+    const controls = new MachineControls(machine, {
+        qualifications: [{
+            profile: {...profile, scale: false},
+            protocol: {
+                actualWaterSource: () => "tank",
+                plan: () => ({frame: null, deadlineMs: 50}),
+                decode: () => null
+            }
+        }]
+    });
+
+    expect(controls.describeTool(identity, "grind").unavailable).toBe(
+        "The connected machine has not reported its readings yet. Refresh readings to verify its serial."
+    );
+    expect(controls.describeTool({...identity, deviceId: "other"}, "grind").unavailable).toBe(
+        "Connect the named machine with its exact saved serial before using this tool."
+    );
+
+    radio.emit(machineInfoFrame({serial: identity.serial, model: "test", firmware: "test"}));
+    expect(controls.describeTool({...identity, serial: "other"}, "grind").unavailable).toBe(
+        "Connect the named machine with its exact saved serial before using this tool."
+    );
+    expect(controls.describeTool(identity, "scale").unavailable).toBe(
+        "This tool is not qualified for this machine and firmware."
+    );
+    controls.dispose();
+});

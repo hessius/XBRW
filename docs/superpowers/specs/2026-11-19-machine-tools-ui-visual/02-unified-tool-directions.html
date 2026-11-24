@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Design 2 · Unified Full Tool Screen Directions — XBRW++</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Doto:wght@500;700;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --base: #000000;
+    --surface: #101010;
+    --raised: #161616;
+    --line: #262626;
+    --control: #2E2E2E;
+    --text: #FFFFFF;
+    --dim: #A3A3A3;
+    --muted: #6E6E6E;
+    --accent: #9FC3F0;
+    --peach: #F0B98E;
+    --mint: #97D8C4;
+    --success: #5DDC8A;
+    --danger: #FF6B5E;
+    --warn: #F0C24A;
+    --brand: #FF007F;
+    --doto: 'Doto', ui-monospace, 'SF Mono', Menlo, monospace;
+    --sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: #0d0d10;
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  .page {
+    max-width: 1320px;
+    margin: 0 auto;
+    padding: 32px 24px 96px;
+  }
+  .kicker {
+    font-family: var(--doto);
+    font-weight: 700;
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 6px;
+  }
+  h1 {
+    margin: 0 0 10px;
+    font-size: 26px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+  .lede {
+    color: var(--dim);
+    max-width: 78ch;
+    margin: 0 0 18px;
+  }
+  .toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 14px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    margin-bottom: 24px;
+  }
+  .toolbar-label {
+    font-family: var(--doto);
+    font-weight: 700;
+    font-size: 11px;
+    letter-spacing: 1.6px;
+    color: var(--muted);
+    margin: 0 4px 0 8px;
+  }
+  .toolbar-label:first-child { margin-left: 0; }
+  .pill {
+    appearance: none;
+    border: 1px solid var(--line);
+    background: var(--raised);
+    color: var(--dim);
+    font-family: var(--doto);
+    font-weight: 700;
+    font-size: 11px;
+    letter-spacing: 1.5px;
+    padding: 7px 12px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: all 120ms ease;
+  }
+  .pill:hover { border-color: var(--control); color: var(--text); }
+  .pill.on { background: var(--accent); border-color: var(--accent); color: #0C0C0C; }
+  .pill.run.on { background: var(--success); border-color: var(--success); color: #0C0C0C; }
+  .pill.stop.on { background: var(--danger); border-color: var(--danger); color: #0C0C0C; }
+  .pill.warn.on { background: var(--warn); border-color: var(--warn); color: #0C0C0C; }
+
+  .stage {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(393px, 1fr));
+    gap: 24px;
+    align-items: start;
+  }
+  .option-wrap { display: flex; flex-direction: column; gap: 10px; }
+  .option-card {
+    border: 2px solid var(--line);
+    border-radius: 22px;
+    background: #141418;
+    padding: 14px;
+    cursor: pointer;
+    transition: border-color 150ms ease, box-shadow 150ms ease;
+  }
+  .option-card:hover { border-color: #3a3a46; }
+  .option-card.selected {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent), 0 14px 40px rgba(159, 195, 240, 0.14);
+  }
+  .option-head {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .letter {
+    width: 28px; height: 28px; border-radius: 8px;
+    background: var(--raised); border: 1px solid var(--line);
+    display: grid; place-items: center;
+    font-family: var(--doto); font-weight: 900; font-size: 13px; color: var(--text);
+    flex: 0 0 28px;
+  }
+  .option-card.selected .letter {
+    background: var(--accent); border-color: var(--accent); color: #0C0C0C;
+  }
+  .option-head h3 { margin: 0 0 2px; font-size: 15px; font-weight: 600; }
+  .option-head p { margin: 0; font-size: 12.5px; color: var(--dim); }
+  .badge-rec {
+    display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px;
+    background: rgba(93, 220, 138, 0.16); color: var(--success);
+    font-family: var(--doto); font-size: 10px; letter-spacing: 1.2px;
+  }
+
+  /* Phone viewport (393 x ~740) */
+  .phone {
+    width: 100%;
+    max-width: 393px;
+    height: 752px;
+    margin: 0 auto;
+    background: var(--base);
+    border: 1px solid #2b2b30;
+    border-radius: 30px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.65);
+  }
+  .statusbar {
+    height: 34px;
+    padding: 10px 20px 0;
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+  .screen-hdr {
+    padding: 8px 16px 10px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+  .back-well {
+    width: 32px; height: 32px; border-radius: 10px;
+    background: var(--control);
+    border: 0; color: var(--text);
+    display: grid; place-items: center;
+    font-family: var(--doto); font-weight: 900; font-size: 14px;
+    cursor: pointer;
+  }
+  .hdr-title-wrap { flex: 1; min-width: 0; }
+  .hdr-title { font-size: 20px; font-weight: 700; line-height: 1.15; }
+  .hdr-sub { font-family: var(--doto); font-size: 11px; letter-spacing: 1.2px; color: var(--dim); }
+
+  /* Mode Switcher bar under ScreenHeader */
+  .switcher {
+    margin: 0 16px 10px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 13px;
+    padding: 4px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
+    flex-shrink: 0;
+  }
+  .sw-tab {
+    height: 34px;
+    border-radius: 9px;
+    border: 0;
+    background: transparent;
+    color: var(--dim);
+    font-family: var(--doto);
+    font-weight: 700;
+    font-size: 11px;
+    letter-spacing: 1.6px;
+    cursor: pointer;
+    transition: all 120ms ease;
+  }
+  .sw-tab.on {
+    background: var(--accent);
+    color: #0C0C0C;
+  }
+  .sw-tab.locked { opacity: 0.35; }
+
+  @keyframes head-shake {
+    0%, 100% { transform: translateX(0); }
+    16% { transform: translateX(-6px); }
+    33% { transform: translateX(6px); }
+    50% { transform: translateX(-4px); }
+    67% { transform: translateX(4px); }
+    84% { transform: translateX(-2px); }
+  }
+  .shaking { animation: head-shake 420ms cubic-bezier(.36,.07,.19,.97) both; }
+
+  /* Scroll body */
+  .body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 0 16px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  /* Dot matrix wave animation (on-brand loading/transitioning) */
+  .doto-matrix-strip {
+    display: grid;
+    grid-template-columns: repeat(16, 1fr);
+    gap: 4px;
+    padding: 6px 0 2px;
+  }
+  .doto-matrix-strip i {
+    display: block;
+    height: 5px;
+    border-radius: 2px;
+    background: rgba(255,255,255,0.08);
+  }
+  .doto-matrix-strip.light i { background: rgba(0,0,0,0.12); }
+
+  @keyframes wave-travel {
+    0%, 100% { opacity: 0.2; transform: scaleY(0.75); }
+    45% { opacity: 1; transform: scaleY(1.2); }
+  }
+  .doto-matrix-strip.switching i {
+    background: var(--warn);
+    animation: wave-travel 800ms infinite ease-in-out;
+  }
+  .doto-matrix-strip.running i {
+    background: var(--success);
+    animation: wave-travel 960ms infinite ease-in-out;
+  }
+  .doto-matrix-strip.light.running i {
+    background: #0C0C0C;
+    animation: wave-travel 960ms infinite ease-in-out;
+  }
+  .doto-matrix-strip.light.switching i {
+    background: #0C0C0C;
+    animation: wave-travel 800ms infinite ease-in-out;
+  }
+  .doto-matrix-strip.stopping i {
+    background: var(--danger);
+    animation: wave-travel 550ms infinite ease-in-out;
+  }
+  .doto-matrix-strip i:nth-child(n) { animation-delay: calc(var(--i) * 45ms); }
+
+  /* Grind dot-matrix burr bar (cycles cadence like grindFlicker) */
+  @keyframes burr-flicker {
+    0%, 49% { opacity: 1; }
+    50%, 100% { opacity: 0.22; }
+  }
+  .burr-matrix {
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 5px;
+    margin-top: 10px;
+  }
+  .burr-matrix i {
+    display: block;
+    height: 8px;
+    border-radius: 2px;
+    background: var(--accent);
+    opacity: 0.25;
+  }
+  .burr-matrix.dark i { background: rgba(0,0,0,0.28); }
+  .burr-matrix.active i:nth-child(odd) { animation: burr-flicker 340ms steps(1,end) infinite; opacity: 1; }
+  .burr-matrix.active i:nth-child(even) { animation: burr-flicker 340ms steps(1,end) infinite 170ms; opacity: 1; }
+  .burr-matrix.dark.active i { background: #0C0C0C; }
+
+  /* Pour dot-grid vessel meter */
+  .vessel-bar {
+    height: 16px;
+    border-radius: 8px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
+    overflow: hidden;
+    position: relative;
+    margin-top: 10px;
+  }
+  .vessel-bar.dark {
+    background: rgba(0,0,0,0.12);
+    border-color: rgba(0,0,0,0.18);
+  }
+  .vessel-fill {
+    height: 100%;
+    background-image: radial-gradient(currentColor 1.4px, transparent 1.4px);
+    background-size: 5px 5px;
+    color: var(--accent);
+    border-right: 2px solid currentColor;
+  }
+  .vessel-bar.dark .vessel-fill { color: #0C0C0C; }
+
+  /* Scale sparkline dots */
+  .scale-spark {
+    display: flex;
+    align-items: flex-end;
+    gap: 4px;
+    height: 26px;
+    margin-top: 10px;
+  }
+  .scale-spark span {
+    flex: 1;
+    background: var(--mint);
+    border-radius: 2px;
+    opacity: 0.65;
+  }
+  .scale-spark.dark span { background: #0C0C0C; opacity: 0.55; }
+
+  /* Direction A: Studio Dark Instrument Stage */
+  .stage-card-a {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    padding: 16px;
+    background-image: radial-gradient(rgba(255,255,255,0.055) 1px, transparent 1px);
+    background-size: 10px 10px;
+  }
+  .stage-top-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  .state-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--doto);
+    font-weight: 700;
+    font-size: 11px;
+    letter-spacing: 1.6px;
+    color: var(--dim);
+  }
+  .state-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); }
+  .state-tag.switching { color: var(--warn); }
+  .state-tag.switching .state-dot { background: var(--warn); }
+  .state-tag.running { color: var(--success); }
+  .state-tag.stopping { color: var(--danger); }
+  .state-tag.stopping .state-dot { background: var(--danger); }
+
+  .big-val-a {
+    font-family: var(--doto);
+    font-weight: 900;
+    font-size: 56px;
+    line-height: 0.96;
+    letter-spacing: -1px;
+  }
+  .big-val-a small { font-size: 20px; color: var(--dim); margin-left: 4px; }
+  .sub-readout {
+    display: flex;
+    gap: 16px;
+    margin-top: 10px;
+    font-family: var(--doto);
+    font-size: 12px;
+    color: var(--dim);
+  }
+
+  /* Direction B: Accent Hero Slab (Brew/Recipe Card Twin) */
+  .stage-card-b {
+    border-radius: 18px;
+    padding: 16px;
+    color: #0C0C0C;
+    position: relative;
+    overflow: hidden;
+  }
+  .stage-card-b.grind { background: var(--peach); }
+  .stage-card-b.scale { background: var(--mint); }
+  .stage-card-b.pour { background: var(--accent); }
+  .stage-card-b .bg-dots {
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(rgba(0,0,0,0.12) 1px, transparent 1px);
+    background-size: 9px 9px;
+    pointer-events: none;
+  }
+  .stage-card-b > * { position: relative; z-index: 1; }
+  .card-b-kicker {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: var(--doto);
+    font-weight: 900;
+    font-size: 11px;
+    letter-spacing: 1.6px;
+    color: rgba(0,0,0,0.65);
+    margin-bottom: 8px;
+  }
+  .card-b-pill {
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: rgba(0,0,0,0.78);
+    color: #FFFFFF;
+    font-size: 10px;
+  }
+  .big-val-b {
+    font-family: var(--doto);
+    font-weight: 900;
+    font-size: 62px;
+    line-height: 0.95;
+    color: #0C0C0C;
+  }
+  .big-val-b small { font-size: 22px; color: rgba(0,0,0,0.65); margin-left: 4px; }
+
+  /* Direction C: Industrial Edge Rail Bench */
+  .bench-c-wrap {
+    display: flex;
+    gap: 12px;
+    align-items: stretch;
+  }
+  .edge-rail {
+    width: 6px;
+    border-radius: 999px;
+    background: var(--line);
+    flex-shrink: 0;
+    position: relative;
+    overflow: hidden;
+  }
+  .edge-rail.ready { background: var(--accent); }
+  .edge-rail.running { background: var(--success); box-shadow: 0 0 12px rgba(93,220,138,0.5); }
+  .edge-rail.stopping { background: var(--danger); opacity: 0.55; }
+  @keyframes rail-scan {
+    0% { top: -40%; }
+    100% { top: 100%; }
+  }
+  .edge-rail.switching::after {
+    content: "";
+    position: absolute;
+    left: 0; right: 0; height: 42%;
+    background: var(--warn);
+    border-radius: 999px;
+    animation: rail-scan 780ms linear infinite;
+  }
+  .c-main { flex: 1; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+
+  /* Parameter Deck (reused cleanly across directions, zero flash on enter) */
+  .deck {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 4px 14px;
+    transition: opacity 150ms ease;
+  }
+  .deck.dimmed { opacity: 0.55; }
+  .p-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .p-row:last-child { border-bottom: 0; }
+  .p-label { font-size: 14px; font-weight: 600; color: var(--text); }
+  .p-sub { font-family: var(--doto); font-size: 10.5px; letter-spacing: 1.2px; color: var(--muted); }
+  .stepper {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--raised);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 3px;
+  }
+  .s-btn {
+    width: 30px; height: 28px; border-radius: 7px;
+    border: 0; background: var(--control); color: var(--text);
+    font-weight: 700; font-size: 15px;
+  }
+  .s-val {
+    min-width: 56px; text-align: center;
+    font-family: var(--doto); font-weight: 700; font-size: 13.5px;
+  }
+  .stepper.locked .s-btn { opacity: 0.3; }
+  .stepper.locked .s-val { color: var(--dim); }
+
+  .seg-row { display: flex; gap: 5px; flex-wrap: wrap; }
+  .seg-b {
+    padding: 6px 10px; border-radius: 9px;
+    background: var(--control); color: var(--text);
+    font-size: 12px; font-weight: 600; border: 0;
+    display: inline-flex; align-items: center; gap: 5px;
+  }
+  .seg-b.on { background: var(--accent); color: #0C0C0C; }
+  .seg-row.locked .seg-b:not(.on) { opacity: 0.36; }
+
+  /* Fixed Bottom Action Bar */
+  .dock {
+    padding: 10px 16px 16px;
+    border-top: 1px solid var(--line);
+    background: var(--base);
+    flex-shrink: 0;
+  }
+  .cta {
+    width: 100%;
+    height: 48px;
+    border-radius: 14px;
+    border: 1px solid transparent;
+    font-family: var(--doto);
+    font-weight: 900;
+    font-size: 13px;
+    letter-spacing: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    cursor: pointer;
+    transition: all 120ms ease;
+  }
+  .cta.start { background: var(--accent); color: #0C0C0C; }
+  .cta.start.wait { opacity: 0.48; cursor: default; }
+  .cta.stop { background: var(--danger); color: #0C0C0C; }
+  .cta.stopping {
+    background: rgba(255, 107, 94, 0.14);
+    border-color: var(--danger);
+    color: var(--danger);
+    cursor: default;
+  }
+  .toast-sim {
+    position: absolute;
+    left: 16px; right: 16px; bottom: 76px;
+    padding: 9px 12px;
+    border-radius: 12px;
+    background: #1a1f1c;
+    border: 1px solid rgba(93,220,138,0.45);
+    color: var(--success);
+    font-size: 12px;
+    display: none;
+    z-index: 20;
+  }
+  .toast-sim.show { display: block; }
+  .tradeoff {
+    font-size: 12px; color: var(--dim);
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 12px;
+  }
+  .tradeoff strong { color: var(--text); }
+</style>
+</head>
+<body>
+<div class="page">
+  <p class="kicker">Design 2 of 2 · Unified Full Tool Screen</p>
+  <h1>Which visual aesthetic fits the unified 3-tool instrument view best?</h1>
+  <p class="lede">
+    All three share your decisions: pinned <code>GRIND | SCALE | POUR</code> switcher under <code>ScreenHeader</code>, instant steady controls (no flash during <code>ENTERING</code>), immediate non-blocking back navigation when idle (closing BLE tool mode in the background), Mac-style head-shake refusal if trying to switch/leave while active, and distinct <code>STOPPING…</code> feedback.
+  </p>
+
+  <div class="toolbar">
+    <span class="toolbar-label">TOOL:</span>
+    <button type="button" class="pill on" data-sim-tool="pour">POUR</button>
+    <button type="button" class="pill" data-sim-tool="grind">GRIND</button>
+    <button type="button" class="pill" data-sim-tool="scale">SCALE</button>
+
+    <span class="toolbar-label">PHASE:</span>
+    <button type="button" class="pill warn" data-sim-phase="entering">SWITCH / ENTER…</button>
+    <button type="button" class="pill on" data-sim-phase="ready">READY</button>
+    <button type="button" class="pill run" data-sim-phase="running">RUNNING</button>
+    <button type="button" class="pill stop" data-sim-phase="stopping">STOPPING…</button>
+  </div>
+
+  <div class="stage options">
+    <!-- DIRECTION A -->
+    <div class="option-wrap">
+      <div class="option-card option" data-choice="a" onclick="if(!event.target.closest('.phone button'))toggleSelect(this)">
+        <div class="option-head">
+          <div class="letter">A</div>
+          <div>
+            <h3>Studio Dot-Matrix Instrument <span class="badge-rec">RECOMMENDED</span></h3>
+            <p>Dark OLED dot-grid telemetry card (burr matrix, scale trace, pour tank fill) over a clean <code>QuickEdit</code>-style parameter deck.</p>
+          </div>
+        </div>
+        <div class="phone" data-dir="a"></div>
+      </div>
+      <div class="tradeoff"><strong>Feel:</strong> Calm hardware precision; dot-matrix graphics animate transitions & live telemetry without bright color glare in dark rooms.</div>
+    </div>
+
+    <!-- DIRECTION B -->
+    <div class="option-wrap">
+      <div class="option-card option" data-choice="b" onclick="if(!event.target.closest('.phone button'))toggleSelect(this)">
+        <div class="option-head">
+          <div class="letter">B</div>
+          <div>
+            <h3>Signature Flooded-Accent Hero Card</h3>
+            <p>Mirrors XBRW++ recipe cards with dark ink on saturated Sky / Mint / Peach dot-screen hero slabs above the OLED controls deck.</p>
+          </div>
+        </div>
+        <div class="phone" data-dir="b"></div>
+      </div>
+      <div class="tradeoff"><strong>Feel:</strong> Highest visual punch and unmistakable twin to XBRW++ Home recipe cards; each tool owns a distinct color identity.</div>
+    </div>
+
+    <!-- DIRECTION C -->
+    <div class="option-wrap">
+      <div class="option-card option" data-choice="c" onclick="if(!event.target.closest('.phone button'))toggleSelect(this)">
+        <div class="option-head">
+          <div class="letter">C</div>
+          <div>
+            <h3>Industrial Edge-Rail Bench</h3>
+            <p>Vertical animated LED rail anchors the full screen beside compact split telemetry + parameter blocks.</p>
+          </div>
+        </div>
+        <div class="phone" data-dir="c"></div>
+      </div>
+      <div class="tradeoff"><strong>Feel:</strong> Minimalist lab-monitor vibe; saves vertical height so Pour's controls require minimal scrolling.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const state = { tool: 'pour', phase: 'ready' };
+
+function matrixStrip(phase, light = false) {
+  const cls = phase === 'entering' ? 'switching' : phase === 'running' ? 'running' : phase === 'stopping' ? 'stopping' : '';
+  const dots = Array.from({length: 16}, (_, i) => `<i style="--i:${i}"></i>`).join('');
+  return `<div class="doto-matrix-strip ${light?'light':''} ${cls}">${dots}</div>`;
+}
+
+function pourGlyphSvg(kind, stroke) {
+  if (kind === 'centered') {
+    return `<svg width="14" height="14" viewBox="0 0 9 9"><circle cx="4.5" cy="4.5" r="3.4" stroke="${stroke}" stroke-width="0.9" fill="none"/><circle cx="4.5" cy="4.5" r="1.9" stroke="${stroke}" stroke-width="0.9" fill="none"/><circle cx="4.5" cy="4.5" r="0.8" fill="${stroke}"/></svg>`;
+  }
+  if (kind === 'circular') {
+    return `<svg width="14" height="14" viewBox="0 0 9 9"><circle cx="4.5" cy="4.5" r="2.9" stroke="${stroke}" stroke-width="1" fill="none"/></svg>`;
+  }
+  return `<svg width="14" height="14" viewBox="0 0 9 9"><path d="M4.5 4.5 C5 4.5,5.2 3.8,4.5 3.6 C3.6 3.4,3.1 4.5,3.8 5.2 C4.8 6.1,6.4 5.2,6.2 3.7 C6 2,3.4 1.6,2.4 3.2" stroke="${stroke}" stroke-width="0.9" fill="none" stroke-linecap="round"/></svg>`;
+}
+
+function heroVisual(dir, tool, phase) {
+  const light = dir === 'b';
+  const liveRun = phase === 'running' || phase === 'stopping';
+  const statusText = phase === 'entering' ? `SWITCHING TO ${tool.toUpperCase()}…`
+    : phase === 'stopping' ? 'STOPPING…'
+    : phase === 'running' ? (tool === 'grind' ? 'GRINDING · 90 RPM' : tool === 'pour' ? 'POURING · 3.0 ML/S' : 'LIVE SCALE')
+    : 'READY';
+
+  let title = '';
+  let mainNum = '';
+  let graphic = '';
+  let extra = '';
+
+  if (tool === 'grind') {
+    title = 'SELECTED SIZE';
+    mainNum = `48`;
+    graphic = `<div class="burr-matrix ${light?'dark':''} ${phase==='running'?'active':''}">${'<i></i>'.repeat(12)}</div>`;
+    extra = `<div class="sub-readout" style="${light?'color:rgba(0,0,0,0.68)':''}"><span>RPM 90</span><span>BURR CALIBRATED</span></div>`;
+  } else if (tool === 'scale') {
+    title = 'LIVE WEIGHT';
+    mainNum = `${phase==='entering'?'—':'18.4'}<small>g</small>`;
+    const bars = [22,22,24,28,36,52,68,78,82,82,84,84];
+    graphic = `<div class="scale-spark ${light?'dark':''}">${bars.map(h=>`<span style="height:${h}%"></span>`).join('')}</div>`;
+    extra = `<div class="sub-readout" style="${light?'color:rgba(0,0,0,0.68)':''}"><span>0.1 G PRECISION</span><span>GRAMS</span></div>`;
+  } else {
+    title = liveRun ? 'DISPENSED' : 'TARGET VOLUME';
+    mainNum = `${liveRun ? '64' : '150'}<small>ml</small>`;
+    graphic = `<div class="vessel-bar ${light?'dark':''}"><div class="vessel-fill" style="width:${liveRun?'43%':'100%'};${liveRun?'':'opacity:0.32'}"></div></div>`;
+    extra = `<div class="sub-readout" style="${light?'color:rgba(0,0,0,0.72)':''}"><span>${liveRun?'TARGET 150 ML':'FLOW 3.0 ML/S'}</span><span>${liveRun?'CUP 62.1 G':'SETPOINT 93 °C'}</span></div>`;
+  }
+
+  if (dir === 'b') {
+    return `
+      <div class="stage-card-b ${tool}">
+        <div class="bg-dots"></div>
+        <div class="card-b-kicker"><span>${title}</span><span class="card-b-pill">${statusText}</span></div>
+        <div class="big-val-b">${mainNum}</div>
+        ${graphic}
+        ${phase==='entering' || phase==='running' || phase==='stopping' ? matrixStrip(phase, true) : ''}
+        ${extra}
+      </div>`;
+  }
+
+  const tagCls = phase === 'entering' ? 'switching' : phase;
+  if (dir === 'c') {
+    return `
+      <div class="stage-card-a" style="padding:13px 14px">
+        <div class="stage-top-row" style="margin-bottom:6px">
+          <span class="p-sub">${title}</span>
+          <span class="state-tag ${tagCls}"><i class="state-dot"></i>${statusText}</span>
+        </div>
+        <div class="big-val-a" style="font-size:48px">${mainNum}</div>
+        ${graphic}
+        ${matrixStrip(phase, false)}
+        ${extra}
+      </div>`;
+  }
+
+  return `
+    <div class="stage-card-a">
+      <div class="stage-top-row">
+        <span class="p-sub">${title}</span>
+        <span class="state-tag ${tagCls}"><i class="state-dot"></i>${statusText}</span>
+      </div>
+      <div class="big-val-a">${mainNum}</div>
+      ${graphic}
+      ${matrixStrip(phase, false)}
+      ${extra}
+    </div>`;
+}
+
+function paramDeck(tool, phase) {
+  const entering = phase === 'entering';
+  const locked = phase !== 'ready';
+  const liveOk = phase === 'ready' || phase === 'running';
+
+  if (tool === 'grind') {
+    return `<div class="deck ${entering?'dimmed':''}">
+      <div class="p-row">
+        <div><div class="p-label">Grind size</div><div class="p-sub">1 – 80 BLE</div></div>
+        <div class="stepper ${locked?'locked':''}"><button class="s-btn">-</button><span class="s-val">48</span><button class="s-btn">+</button></div>
+      </div>
+      <div class="p-row">
+        <div><div class="p-label">Burr RPM</div><div class="p-sub">60 – 120 RPM</div></div>
+        <div class="stepper ${locked?'locked':''}"><button class="s-btn">-</button><span class="s-val">90</span><button class="s-btn">+</button></div>
+      </div>
+    </div>`;
+  }
+
+  if (tool === 'scale') {
+    return `<div class="deck ${entering?'dimmed':''}">
+      <div class="p-row">
+        <div><div class="p-label">Scale stream</div><div class="p-sub">ALWAYS LIVE · NON-BLOCKING EXIT</div></div>
+        <span style="font-family:var(--doto);font-size:12px;color:var(--success)">ACTIVE</span>
+      </div>
+    </div>`;
+  }
+
+  return `<div class="deck ${entering?'dimmed':''}">
+    <div class="p-row">
+      <div><div class="p-label">Mode</div></div>
+      <div class="seg-row ${locked?'locked':''}">
+        <button type="button" class="seg-b on">Target</button>
+        <button type="button" class="seg-b">Until stopped</button>
+      </div>
+    </div>
+    <div class="p-row">
+      <div><div class="p-label">Target volume</div></div>
+      <div class="stepper ${locked?'locked':''}"><button class="s-btn">-</button><span class="s-val">150 ml</span><button class="s-btn">+</button></div>
+    </div>
+    <div class="p-row">
+      <div><div class="p-label">Flow rate</div></div>
+      <div class="stepper ${locked?'locked':''}"><button class="s-btn">-</button><span class="s-val">3.0 ml/s</span><button class="s-btn">+</button></div>
+    </div>
+    <div class="p-row">
+      <div><div class="p-label">Setpoint</div><div class="p-sub">${phase==='running'?'LIVE ADJUSTABLE':'REQUESTED TEMP'}</div></div>
+      <div class="stepper ${!liveOk?'locked':''}"><button class="s-btn">-</button><span class="s-val">93 °C</span><button class="s-btn">+</button></div>
+    </div>
+    <div class="p-row" style="flex-direction:column;align-items:flex-start;gap:8px">
+      <div class="p-sub">${phase==='running'?'PATTERN · LIVE ADJUSTABLE':'PATTERN'}</div>
+      <div class="seg-row ${!liveOk?'locked':''}">
+        <button type="button" class="seg-b on">${pourGlyphSvg('centered','#0C0C0C')} Centred</button>
+        <button type="button" class="seg-b">${pourGlyphSvg('circular','#fff')} Circular</button>
+        <button type="button" class="seg-b">${pourGlyphSvg('spiral','#fff')} Spiral</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function bottomDock(tool, phase) {
+  if (tool === 'scale') {
+    return `<button type="button" class="cta start ${phase==='entering'?'wait':''}" data-act="tare">${phase==='entering'?'ENTERING SCALE…':'TARE'}</button>`;
+  }
+  if (phase === 'entering') {
+    return `<button type="button" class="cta start wait">ENTERING ${tool.toUpperCase()}…</button>`;
+  }
+  if (phase === 'stopping') {
+    return `<button type="button" class="cta stopping">STOPPING ${tool.toUpperCase()}…</button>`;
+  }
+  if (phase === 'running') {
+    return `<button type="button" class="cta stop" data-act="stop">STOP ${tool.toUpperCase()}</button>`;
+  }
+  return `<button type="button" class="cta start" data-act="start">START ${tool.toUpperCase()}</button>`;
+}
+
+function renderPhones() {
+  const { tool, phase } = state;
+  const activeMoving = phase === 'running' || phase === 'stopping';
+  document.querySelectorAll('.phone').forEach((phone) => {
+    const dir = phone.dataset.dir;
+    const hero = heroVisual(dir, tool, phase);
+    const deck = paramDeck(tool, phase);
+    const railClass = phase === 'entering' ? 'switching' : phase;
+
+    const innerBody = dir === 'c'
+      ? `<div class="bench-c-wrap"><div class="edge-rail ${railClass}"></div><div class="c-main">${hero}${deck}</div></div>`
+      : `${hero}${deck}`;
+
+    phone.innerHTML = `
+      <div class="statusbar"><span>07:38</span><span>5G 85</span></div>
+      <div class="screen-hdr">
+        <button type="button" class="back-well" data-act="back" title="Back (background exit when idle)">&lt;</button>
+        <div class="hdr-title-wrap">
+          <div class="hdr-title">Machine Tools</div>
+          <div class="hdr-sub">XBLOOM 5AF231 · J15A01B5AF231</div>
+        </div>
+      </div>
+      <div class="switcher">
+        <button type="button" class="sw-tab ${tool==='grind'?'on':''} ${activeMoving && tool!=='grind'?'locked':''}" data-pick-tool="grind">GRIND</button>
+        <button type="button" class="sw-tab ${tool==='scale'?'on':''} ${activeMoving && tool!=='scale'?'locked':''}" data-pick-tool="scale">SCALE</button>
+        <button type="button" class="sw-tab ${tool==='pour'?'on':''} ${activeMoving && tool!=='pour'?'locked':''}" data-pick-tool="pour">POUR</button>
+      </div>
+      <div class="body">${innerBody}</div>
+      <div class="toast-sim"></div>
+      <div class="dock">${bottomDock(tool, phase)}</div>
+    `;
+  });
+}
+
+function flashToast(phone, msg, warn = false) {
+  const el = phone.querySelector('.toast-sim');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.borderColor = warn ? 'rgba(240,194,74,0.55)' : 'rgba(93,220,138,0.45)';
+  el.style.color = warn ? 'var(--warn)' : 'var(--success)';
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2200);
+}
+
+function syncToolbar() {
+  document.querySelectorAll('[data-sim-tool]').forEach(b => b.classList.toggle('on', b.dataset.simTool === state.tool));
+  document.querySelectorAll('[data-sim-phase]').forEach(b => b.classList.toggle('on', b.dataset.simPhase === state.phase));
+}
+
+document.addEventListener('click', (e) => {
+  const toolBtn = e.target.closest('[data-sim-tool]');
+  if (toolBtn) { state.tool = toolBtn.dataset.simTool; syncToolbar(); renderPhones(); return; }
+  const phaseBtn = e.target.closest('[data-sim-phase]');
+  if (phaseBtn) { state.phase = phaseBtn.dataset.simPhase; syncToolbar(); renderPhones(); return; }
+
+  const pick = e.target.closest('[data-pick-tool]');
+  if (pick) {
+    const next = pick.dataset.pickTool;
+    const phone = pick.closest('.phone');
+    if (next === state.tool) return;
+    if (state.phase === 'running' || state.phase === 'stopping') {
+      const sw = phone.querySelector('.switcher');
+      sw.classList.remove('shaking'); void sw.offsetWidth; sw.classList.add('shaking');
+      flashToast(phone, `Stop ${state.tool} before switching tools`, true);
+      return;
+    }
+    state.tool = next;
+    state.phase = 'entering';
+    syncToolbar(); renderPhones();
+    setTimeout(() => { state.phase = 'ready'; syncToolbar(); renderPhones(); }, 650);
+    return;
+  }
+
+  const act = e.target.closest('[data-act]');
+  if (act) {
+    const phone = act.closest('.phone');
+    const name = act.dataset.act;
+    if (name === 'start') {
+      state.phase = 'running'; syncToolbar(); renderPhones();
+    } else if (name === 'stop') {
+      state.phase = 'stopping'; syncToolbar(); renderPhones();
+      setTimeout(() => { state.phase = 'ready'; syncToolbar(); renderPhones(); }, 800);
+    } else if (name === 'back') {
+      if (state.phase === 'running' || state.phase === 'stopping') {
+        const hdr = phone.querySelector('.screen-hdr');
+        hdr.classList.remove('shaking'); void hdr.offsetWidth; hdr.classList.add('shaking');
+        flashToast(phone, 'Active tool running — Stop before leaving', true);
+      } else {
+        flashToast(phone, 'Left immediately · Exiting machine mode in background');
+      }
+    }
+  }
+});
+
+renderPhones();
+</script>
+</body>
+</html>

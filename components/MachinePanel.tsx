@@ -1,16 +1,28 @@
 import {useAppearance} from "@/hooks/useAppearance";
-import React from "react";
-import {Pressable} from "react-native";
-import {XStack, YStack} from "tamagui";
+import React, {useEffect, useMemo, useRef, useState} from "react";
+import {Pressable, useWindowDimensions} from "react-native";
+import {useSafeAreaFrame, useSafeAreaInsets} from "react-native-safe-area-context";
+import {Button, Text, XStack, YStack} from "tamagui";
 
 import DotMatrixText from "@/components/DotMatrixText";
 import DotIcon from "@/components/DotIcon";
 import Collapsible from "@/components/Collapsible";
+import GrindTool from "@/components/GrindTool";
 import MachineColourDot from "@/components/MachineColourDot";
-import MachineTools from "@/components/MachineTools";
+import {DEFAULT_INLINE_WORKBENCH_HEADER, inlineFieldsMaxHeight} from "@/components/MachineControlReadout";
+import MachineTools, {machineToolRoute} from "@/components/MachineTools";
+import PourTool from "@/components/PourTool";
+import ScaleTool from "@/components/ScaleTool";
+import ToolHeadShakeView from "@/components/ToolHeadShakeView";
+import {notify} from "@/components/XbrwToast";
 
+import router from "@/hooks/steadyRouter";
+import {useMachineControls} from "@/hooks/useMachineControls";
+import {useMachineTool} from "@/hooks/useMachineTool";
 import {useRefreshRequest} from "@/hooks/useRefreshRequest";
 import type {LinkStatus} from "@/hooks/useMachine";
+import type MachineControls from "@/library/machine/MachineControls";
+import type {ControlIdentity, ControlPhase, ToolId} from "@/library/machine/controlModel";
 
 /** What the panel shows, copied out of the machine's info blob. */
 export type MachineVitals = {
@@ -36,6 +48,13 @@ type Props = {
     onEasyMode?: () => void;
     /** A known saved machine in use, never the ambient Bluetooth peer. */
     machineId?: string;
+    machineSerial?: string | null;
+    controls?: MachineControls;
+    animationEnabled?: boolean;
+    externalShakeKey?: number;
+    inlineTool?: ToolId | null;
+    onInlineToolChange?: (tool: ToolId | null) => void;
+    onExpandTool?: (machineId: string, tool: ToolId) => void;
     /**
      * The active machine's name, with two or more saved. Absent with one or
      * none, and the panel then looks exactly as it did before the list.
@@ -182,6 +201,415 @@ function RefreshButton({accent, onRefresh}: {
     );
 }
 
+export const INLINE_MOVING_PHASES: readonly ControlPhase[] = [
+    "entering", "leaving", "starting", "running", "stopping", "applying", "unknown"
+];
+
+export function inlineBlockedReason(phase: ControlPhase, tool: ToolId, disconnected = false): string {
+    if (phase === "stopping") return `Stopping ${tool}…`;
+    if (phase === "leaving") return "Wait for tool switch to finish.";
+    if (phase === "entering") return "Wait for the tool to finish opening.";
+    if (phase === "applying") return "Wait for scale tare to finish.";
+    if (phase === "starting" || phase === "running") return `Stop ${tool} before closing`;
+    return disconnected
+        ? "Machine disconnected — reconnect to inspect or tap ✕ / Leave screen."
+        : "Reconcile the machine before closing.";
+}
+
+export function inlineCloseBlockReason(
+    snapshot: {identity: ControlIdentity | null; phase: ControlPhase},
+    tool: ToolId,
+    machineId?: string,
+    machineSerial?: string | null,
+    disconnected = false
+): string | null {
+    if (machineId !== undefined && snapshot.identity !== null && snapshot.identity.deviceId !== machineId) {
+        return null;
+    }
+    const expectedSerial = machineSerial?.trim() || null;
+    if (expectedSerial !== null && snapshot.identity !== null && snapshot.identity.serial !== expectedSerial) {
+        return null;
+    }
+    if (!INLINE_MOVING_PHASES.includes(snapshot.phase)) return null;
+    return inlineBlockedReason(snapshot.phase, tool, disconnected);
+}
+
+function inlineSwitchBlockedReason(phase: ControlPhase, tool: ToolId, disconnected = false): string {
+    if (phase === "stopping") return `Stopping ${tool}…`;
+    if (phase === "leaving" || phase === "entering") return inlineBlockedReason(phase, tool);
+    if (phase === "applying") return "Wait for scale tare to finish.";
+    if (phase === "unknown") {
+        return disconnected
+            ? "Machine disconnected — reconnect to inspect or close this tool."
+            : "Reconcile the machine before switching tools.";
+    }
+    return `Stop ${tool} before switching tools`;
+}
+
+function InlineToolWorkbench({
+    machineId,
+    identity,
+    tool,
+    accent,
+    contextSummary,
+    hasVitals,
+    injectedControls,
+    animationEnabled,
+    disconnected,
+    onRefreshWater,
+    onSwitchTool,
+    onCollapse,
+    onExpand,
+    onBlocked
+}: {
+    machineId: string;
+    identity: ControlIdentity;
+    tool: ToolId;
+    accent: string;
+    contextSummary: string;
+    hasVitals: boolean;
+    injectedControls?: MachineControls;
+    animationEnabled: boolean;
+    disconnected: boolean;
+    onRefreshWater: () => Promise<boolean>;
+    onSwitchTool: (tool: ToolId) => void;
+    onCollapse: () => void;
+    onExpand: (machineId: string, tool: ToolId) => void;
+    onBlocked: (reason: string) => void;
+}) {
+    const {palette} = useAppearance();
+    const frame = useSafeAreaFrame();
+    const window = useWindowDimensions();
+    const insets = useSafeAreaInsets();
+    const [headerChromeHeight, setHeaderChromeHeight] = useState<number | null>(null);
+    const {controls, snapshot} = useMachineControls(injectedControls);
+    const state = useMachineTool(identity, tool, controls, snapshot);
+    const {support, owns, phase, uiPhase, bound, unavailable, error, busy, grind, pour, scaleSamples} = state;
+    const mountedRef = useRef(true);
+    useEffect(() => {
+        mountedRef.current = true;
+        return () => { mountedRef.current = false; };
+    }, []);
+    const resolvedFrameHeight = frame.height > 0 ? frame.height : window.height;
+    const inlineMaxFieldsHeight = inlineFieldsMaxHeight({
+        frameHeight: resolvedFrameHeight,
+        topInset: insets.top,
+        bottomInset: insets.bottom,
+        headerChromeHeight: headerChromeHeight ?? undefined
+    });
+
+    const sameMachineSnap = snapshot.identity?.deviceId === identity.deviceId
+        && snapshot.identity.serial === identity.serial;
+    const identityConnected = !disconnected
+        && (typeof controls.isIdentityConnected !== "function" || controls.isIdentityConnected(identity));
+    const canReconcileNullTool = !support.recoverable && !owns && sameMachineSnap
+        && snapshot.phase === "unknown" && snapshot.tool === null && identityConnected;
+    const blockingPhase: ControlPhase = owns ? phase
+        : uiPhase === "entering" ? "entering"
+            : sameMachineSnap ? snapshot.phase : phase;
+    const activeMoving = INLINE_MOVING_PHASES.includes(blockingPhase);
+
+    function closeOwnedIdle(): Promise<void> {
+        const current = controls.getSnapshot();
+        const sameOwned = current.identity?.deviceId === identity.deviceId
+            && current.identity.serial === identity.serial;
+        if (sameOwned && current.phase === "ready") {
+            return controls.closeInBackground().catch(() => {});
+        }
+        return Promise.resolve();
+    }
+
+    function handleSelectTool(nextTool: ToolId) {
+        if (nextTool === tool) return;
+        if (activeMoving) {
+            onBlocked(inlineSwitchBlockedReason(blockingPhase, tool, !identityConnected));
+            return;
+        }
+        const prevTool = tool;
+        const closing = closeOwnedIdle();
+        onSwitchTool(nextTool);
+        void closing.then(() => {
+            const after = controls.getSnapshot();
+            if (mountedRef.current
+                && after.identity?.deviceId === identity.deviceId
+                && after.identity.serial === identity.serial
+                && after.phase === "unknown"
+                && after.tool === prevTool) {
+                onSwitchTool(prevTool);
+            }
+        });
+    }
+
+    function handleCollapse() {
+        if (!identityConnected && blockingPhase === "unknown") {
+            onCollapse();
+            return;
+        }
+        if (activeMoving) {
+            onBlocked(inlineBlockedReason(blockingPhase, tool, !identityConnected));
+            return;
+        }
+        void closeOwnedIdle();
+        onCollapse();
+    }
+
+    const toolBody = tool === "grind" ? (
+        <GrindTool
+            variant="inline"
+            phase={uiPhase}
+            request={grind}
+            policy={support.grind}
+            unavailable={unavailable}
+            stopUnavailable={support.stopUnavailable}
+            error={owns ? snapshot.error : null}
+            animationEnabled={animationEnabled}
+            onRequestChange={state.setGrind}
+            onStart={state.start}
+            onStop={state.stop}
+        />
+    ) : tool === "scale" ? (
+        <ScaleTool
+            variant="inline"
+            phase={uiPhase}
+            grams={bound ? snapshot.cupGrams : null}
+            scaleSamples={scaleSamples}
+            unavailable={unavailable}
+            disabled={uiPhase !== "ready"}
+            tarePending={phase === "applying"}
+            onTare={state.tare}
+        />
+    ) : (
+        <PourTool
+            variant="inline"
+            maxInlineHeight={inlineMaxFieldsHeight}
+            phase={uiPhase}
+            request={pour}
+            policy={support.pour}
+            dispensedMl={bound ? snapshot.dispensedMl : null}
+            cupGrams={bound ? snapshot.cupGrams : null}
+            temperatureC={bound ? snapshot.temperatureC : null}
+            pattern={bound ? snapshot.pattern : null}
+            pendingTemperatureC={bound ? snapshot.pendingTemperatureC : null}
+            pendingPattern={bound ? snapshot.pendingPattern : null}
+            liveTemperature={support.liveTemperature
+                ? {qualified: true, onChange: state.setLiveTemperature, error: state.liveTempError}
+                : undefined}
+            livePattern={support.livePattern
+                ? {qualified: true, onChange: state.setLivePattern, error: state.livePatternError}
+                : undefined}
+            unavailable={unavailable}
+            stopUnavailable={support.stopUnavailable}
+            error={owns ? snapshot.error : null}
+            onRequestChange={state.setPour}
+            onModeChange={state.changeMode}
+            onStart={state.start}
+            onStop={state.stop}
+        />
+    );
+
+    return (
+        <YStack
+            testID="inline-tool-workbench"
+            gap="$2.5"
+            backgroundColor={palette.surface}
+            borderRadius={18}
+            padding="$3"
+            style={{borderWidth: 1, borderColor: palette.line}}>
+            <YStack
+                gap="$2.5"
+                onLayout={(event) => {
+                    const measured = event.nativeEvent.layout.height;
+                    if (measured <= 0) return;
+                    setHeaderChromeHeight((prev) => {
+                        if (prev === null) {
+                            return Math.abs(measured - DEFAULT_INLINE_WORKBENCH_HEADER) <= 2 ? null : measured;
+                        }
+                        return Math.abs(measured - prev) <= 2 ? prev : measured;
+                    });
+                }}>
+                <XStack alignItems="center" justifyContent="space-between" gap="$2">
+                    <XStack alignItems="center" gap="$1.5" flex={1} minWidth={0}>
+                        <YStack width={6} height={6} borderRadius={3} backgroundColor={palette.success}/>
+                        <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.2} color={palette.dim} numberOfLines={1}>
+                            {contextSummary}
+                        </DotMatrixText>
+                    </XStack>
+                    <XStack gap="$2" alignItems="center">
+                        <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel="Expand to full screen"
+                            hitSlop={{top: 4, bottom: 4, left: 4, right: 4}}
+                            onPress={() => onExpand(machineId, tool)}
+                            style={({pressed}) => ({opacity: pressed ? 0.65 : 1})}>
+                            <XStack width={36} height={36} borderRadius="$3" backgroundColor={palette.raised}
+                                    borderWidth={1} borderColor={palette.line} alignItems="center" justifyContent="center">
+                                <Text fontSize={14} fontWeight="700" color={palette.text}>↗</Text>
+                            </XStack>
+                        </Pressable>
+                        <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel="Close inline tool"
+                            hitSlop={{top: 4, bottom: 4, left: 4, right: 4}}
+                            onPress={handleCollapse}
+                            style={({pressed}) => ({opacity: pressed ? 0.65 : 1})}>
+                            <XStack width={36} height={36} borderRadius="$3" backgroundColor={palette.raised}
+                                    borderWidth={1} borderColor={palette.line} alignItems="center" justifyContent="center">
+                                <Text fontSize={13} fontWeight="700" color={palette.text}>✕</Text>
+                            </XStack>
+                        </Pressable>
+                    </XStack>
+                </XStack>
+
+                <MachineTools
+                    machineId={machineId}
+                    accent={accent}
+                    activeTool={tool}
+                    onSelectTool={handleSelectTool}
+                />
+
+                {error !== null && <Text selectable color={palette.danger}>{error}</Text>}
+                {(canReconcileNullTool || (tool === "scale" && owns))
+                    && snapshot.error !== null && snapshot.error !== error && (
+                    <Text selectable color={palette.danger}>{snapshot.error}</Text>
+                )}
+                {phase === "closed" && uiPhase === "closed" && support.unavailable === null && (
+                    <Button
+                        accessibilityRole="button"
+                        disabled={busy}
+                        onPress={state.open}
+                        backgroundColor={palette.raised}
+                        color={palette.text}
+                        borderRadius="$4"
+                        minHeight={42}
+                        height="auto"
+                        paddingVertical="$2.5"
+                        paddingHorizontal="$3"
+                        opacity={busy ? 0.5 : 1}
+                        style={{borderWidth: 1, borderColor: palette.success}}>
+                        {error !== null ? "Retry opening tool" : "Open tool"}
+                    </Button>
+                )}
+                {!disconnected && !hasVitals && support.unavailable !== null && phase === "closed" && (
+                    <RefreshButton accent={palette.success} onRefresh={onRefreshWater}/>
+                )}
+                {support.recoverable ? (
+                    <Button
+                        accessibilityRole="button"
+                        disabled={busy}
+                        onPress={state.recover}
+                        backgroundColor={palette.raised}
+                        color={palette.text}
+                        borderRadius="$4"
+                        minHeight={42}
+                        height="auto"
+                        paddingVertical="$2.5"
+                        paddingHorizontal="$3"
+                        opacity={busy ? 0.5 : 1}
+                        style={{borderWidth: 1, borderColor: palette.success}}>
+                        Reconcile connected machine
+                    </Button>
+                ) : canReconcileNullTool && (
+                    <Button
+                        accessibilityRole="button"
+                        disabled={busy}
+                        onPress={state.recoverUnknown}
+                        backgroundColor={palette.raised}
+                        color={palette.text}
+                        borderRadius="$4"
+                        minHeight={42}
+                        height="auto"
+                        paddingVertical="$2.5"
+                        paddingHorizontal="$3"
+                        opacity={busy ? 0.5 : 1}
+                        style={{borderWidth: 1, borderColor: palette.success}}>
+                        Reconcile connected machine
+                    </Button>
+                )}
+                {!owns && sameMachineSnap && snapshot.phase === "unknown"
+                    && (snapshot.tool === "grind" || snapshot.tool === "scale" || snapshot.tool === "pour") && (
+                    <Button
+                        accessibilityRole="button"
+                        disabled={busy}
+                        onPress={() => onSwitchTool(snapshot.tool as ToolId)}
+                        backgroundColor={palette.raised}
+                        color={palette.text}
+                        borderRadius="$4"
+                        minHeight={42}
+                        height="auto"
+                        paddingVertical="$2.5"
+                        paddingHorizontal="$3"
+                        opacity={busy ? 0.5 : 1}
+                        style={{borderWidth: 1, borderColor: palette.line}}>
+                        Inspect active tool
+                    </Button>
+                )}
+                {support.reconnectable ? (
+                    <YStack gap="$2">
+                        <Text color={palette.muted}>
+                            Connection lost. Reconnect this machine to inspect and stop, or leave this tool overlay.
+                        </Text>
+                        <XStack gap="$2" flexWrap="wrap">
+                            <Button
+                                accessibilityRole="button"
+                                disabled={busy}
+                                onPress={state.reconnect}
+                                backgroundColor={palette.raised}
+                                color={palette.text}
+                                borderRadius="$4"
+                                minHeight={42}
+                                height="auto"
+                                paddingVertical="$2.5"
+                                paddingHorizontal="$3"
+                                opacity={busy ? 0.5 : 1}
+                                style={{borderWidth: 1, borderColor: palette.success}}>
+                                Reconnect named machine
+                            </Button>
+                            <Button
+                                accessibilityRole="button"
+                                disabled={busy}
+                                onPress={onCollapse}
+                                backgroundColor={palette.raised}
+                                color={palette.text}
+                                borderRadius="$4"
+                                minHeight={42}
+                                height="auto"
+                                paddingVertical="$2.5"
+                                paddingHorizontal="$3"
+                                opacity={busy ? 0.5 : 1}
+                                style={{borderWidth: 1, borderColor: palette.line}}>
+                                Leave screen
+                            </Button>
+                        </XStack>
+                    </YStack>
+                ) : sameMachineSnap && snapshot.phase === "unknown" && !support.recoverable && !identityConnected && (
+                    <YStack gap="$2">
+                        <Text color={palette.muted}>
+                            Connection lost while a tool operation was uncertain.
+                        </Text>
+                        <Button
+                            accessibilityRole="button"
+                            disabled={busy}
+                            onPress={onCollapse}
+                            backgroundColor={palette.raised}
+                            color={palette.text}
+                            borderRadius="$4"
+                            minHeight={42}
+                            height="auto"
+                            paddingVertical="$2.5"
+                            paddingHorizontal="$3"
+                            opacity={busy ? 0.5 : 1}
+                            style={{borderWidth: 1, borderColor: palette.line}}>
+                            Leave screen
+                        </Button>
+                    </YStack>
+                )}
+            </YStack>
+
+            {toolBody}
+        </YStack>
+    );
+}
+
 /**
  * The machine status panel.
  *
@@ -198,10 +626,43 @@ function RefreshButton({accent, onRefresh}: {
  */
 export default function MachinePanel({
     open, status, accent, vitals, now, onRefreshWater, onConnect, onEasyMode,
-    machineLabel, machineModel, machineColour, onChooseMachine, machineId
+    machineLabel, machineModel, machineColour, onChooseMachine, machineId, machineSerial = null,
+    controls, animationEnabled = true, externalShakeKey = 0, inlineTool: inlineToolProp,
+    onInlineToolChange, onExpandTool
 }: Props) {
     const appearance = useAppearance();
     const {palette} = appearance;
+    const [localInlineTool, setLocalInlineTool] = useState<ToolId | null>(null);
+    const [localShakeKey, setLocalShakeKey] = useState(0);
+    const requestedTool = inlineToolProp !== undefined ? inlineToolProp : localInlineTool;
+    const inlineIdentity = useMemo(
+        () => machineId !== undefined ? {deviceId: machineId, serial: machineSerial?.trim() || null} : null,
+        [machineId, machineSerial]
+    );
+    const activeInlineTool = open && inlineIdentity !== null ? requestedTool : null;
+
+    function updateInlineTool(next: ToolId | null) {
+        if (inlineToolProp === undefined) setLocalInlineTool(next);
+        onInlineToolChange?.(next);
+    }
+
+    function handleBlocked(reason: string) {
+        setLocalShakeKey((count) => count + 1);
+        notify({tone: "info", message: reason});
+    }
+
+    function handleExpand(id: string, tool: ToolId) {
+        updateInlineTool(null);
+        if (onExpandTool) onExpandTool(id, tool);
+        else router.push(machineToolRoute(id, tool));
+    }
+
+    const machineTitle = (machineModel?.trim() || machineLabel?.trim() || "MACHINE").toUpperCase();
+    const waterSummary = vitals === null ? "—"
+        : vitals.waterFeed === "tap" ? "PLUMBED"
+            : vitals.waterEnough ? "OK" : "LOW";
+    const modeSummary = vitals?.mode ?? "—";
+    const contextSummary = `${machineTitle} · WATER ${waterSummary} · ${modeSummary}`;
     let body: React.ReactNode;
 
     if (status === "connected" && vitals !== null) {
@@ -314,38 +775,66 @@ export default function MachinePanel({
     // collapse already gets.
     return (
         <Collapsible open={open}>
-            <YStack testID="machine-panel" paddingHorizontal="$3"
-                    // $2 was seven points, which left the last reading almost
-                    // flush against the edge of the header and made the panel
-                    // read as clipped rather than finished.
-                    paddingBottom="$4">
-                {machineLabel !== undefined && onChooseMachine !== undefined && (
-                    <MachineChoiceRow label={machineLabel} model={machineModel}
-                                      colour={machineColour}
-                                      connected={status === "connected"}
-                                      onPress={onChooseMachine}/>
-                )}
-                {body}
-                {machineId !== undefined && <YStack marginTop="$2">
-                    <MachineTools machineId={machineId} accent={accent} disabled={status !== "connected"}/>
-                </YStack>}
-                {onEasyMode !== undefined && (
-                    <Pressable accessibilityRole="button" accessibilityLabel="Easy Mode slots"
-                               onPress={onEasyMode}
-                               style={({pressed}) => ({opacity: pressed ? 0.6 : 1})}>
-                        <XStack testID="easy-mode-entry" minHeight={44} alignItems="center"
-                                justifyContent="center" marginTop="$2"
-                                paddingVertical="$2.5" borderRadius="$4"
-                                borderWidth={1} borderColor={accent}
-                                pressStyle={{opacity: 0.6, backgroundColor: palette.raised}}>
-                            <DotMatrixText fontSize={11} weight="bold" letterSpacing={2}
-                                           color={accent}>
-                                A B C · EASY MODE
-                            </DotMatrixText>
-                        </XStack>
-                    </Pressable>
-                )}
-            </YStack>
+            <ToolHeadShakeView shakeKey={localShakeKey + externalShakeKey} testID="machine-panel-shake">
+                <YStack testID="machine-panel" paddingHorizontal="$3"
+                        // $2 was seven points, which left the last reading almost
+                        // flush against the edge of the header and made the panel
+                        // read as clipped rather than finished.
+                        paddingBottom="$4">
+                    {activeInlineTool !== null && machineId !== undefined && inlineIdentity !== null ? (
+                        <InlineToolWorkbench
+                            machineId={machineId}
+                            identity={inlineIdentity}
+                            tool={activeInlineTool}
+                            accent={accent}
+                            contextSummary={contextSummary}
+                            hasVitals={vitals !== null}
+                            injectedControls={controls}
+                            animationEnabled={animationEnabled}
+                            disconnected={status !== "connected"}
+                            onRefreshWater={onRefreshWater}
+                            onSwitchTool={updateInlineTool}
+                            onCollapse={() => updateInlineTool(null)}
+                            onExpand={handleExpand}
+                            onBlocked={handleBlocked}
+                        />
+                    ) : (
+                        <>
+                            {machineLabel !== undefined && onChooseMachine !== undefined && (
+                                <MachineChoiceRow label={machineLabel} model={machineModel}
+                                                  colour={machineColour}
+                                                  connected={status === "connected"}
+                                                  onPress={onChooseMachine}/>
+                            )}
+                            {body}
+                            {machineId !== undefined && <YStack marginTop="$2">
+                                <MachineTools
+                                    machineId={machineId}
+                                    accent={accent}
+                                    disabled={status !== "connected"}
+                                    onSelectTool={(tool) => updateInlineTool(tool)}
+                                />
+                            </YStack>}
+                            {onEasyMode !== undefined && (
+                                <Pressable accessibilityRole="button" accessibilityLabel="Easy Mode slots"
+                                           onPress={onEasyMode}
+                                           style={({pressed}) => ({opacity: pressed ? 0.6 : 1})}>
+                                    <XStack testID="easy-mode-entry" minHeight={44} alignItems="center"
+                                            justifyContent="center" marginTop="$2"
+                                            paddingVertical="$2.5" borderRadius="$4"
+                                            borderWidth={1} borderColor={accent}
+                                            pressStyle={{opacity: 0.6, backgroundColor: palette.raised}}>
+                                        <DotMatrixText fontSize={11} weight="bold" letterSpacing={2}
+                                                       color={accent}>
+                                            A B C · EASY MODE
+                                        </DotMatrixText>
+                                    </XStack>
+                                </Pressable>
+                            )}
+                        </>
+                    )}
+                </YStack>
+            </ToolHeadShakeView>
         </Collapsible>
     );
 }

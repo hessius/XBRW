@@ -34,6 +34,18 @@ not by a branch name or an `app.json` version alone.
   Do not launch agents, competing hardware clients or heavy parallel test runs
   merely because the work could be split.
 
+## Brainstorming and visual mockups
+
+- Never leave brainstorming HTML mockups solely in `/tmp`, ephemeral agent
+  session directories, or `.superpowers/` (which is gitignored in this
+  repository).
+- Always save every generated brainstorming HTML mockup and visual preview (both
+  intermediate options and final approved views) into a git-tracked directory or
+  visual spec file alongside the design document under `docs/superpowers/specs/`
+  (for example `docs/superpowers/specs/YYYY-MM-DD-<topic>-visual/` or
+  `docs/superpowers/specs/YYYY-MM-DD-<topic>-visual.html`) and commit them on the
+  task branch.
+
 ## Checkpoints and handoff
 
 Commit coherent checkpoints without secrets, generated native directories,

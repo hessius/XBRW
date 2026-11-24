@@ -1,9 +1,15 @@
 import React from "react";
-import {Button, Text, XStack, YStack} from "tamagui";
+import {StyleSheet} from "react-native";
+import Animated, {useAnimatedStyle} from "react-native-reanimated";
+import {Button, ScrollView, Text, XStack, YStack} from "tamagui";
+import DotIcon from "@/components/DotIcon";
 import DotMatrixText from "@/components/DotMatrixText";
+import ScrollFade from "@/components/ScrollFade";
 import Stepper from "@/components/Stepper";
+import {mix} from "@/constants/colors";
 import {useAppearance} from "@/hooks/useAppearance";
-import type {ControlPhase, NumericPolicy} from "@/library/machine/controlModel";
+import useScrollFade from "@/hooks/useScrollFade";
+import type {ControlPhase, NumericPolicy, ToolId} from "@/library/machine/controlModel";
 import {editableNumericLadder} from "@/library/numericLadder";
 
 export type MachineControlReadoutProps = {
@@ -71,34 +77,205 @@ export function MachineNumericControl({
     );
 }
 
+export const INLINE_MIN_SCROLL_HEIGHT = 180;
+export const INLINE_FIXED_CHROME = 190;
+export const DEFAULT_INLINE_WORKBENCH_HEADER = 86;
+
+/**
+ * Available height for an inline scrollable tool body before its pinned CTA would
+ * be pushed past the bottom safe area. Expands on taller screens so options fit
+ * without scrolling when room exists.
+ */
+export function inlineFieldsMaxHeight({
+    frameHeight,
+    topInset,
+    bottomInset,
+    headerChromeHeight = DEFAULT_INLINE_WORKBENCH_HEADER
+}: {
+    frameHeight: number;
+    topInset: number;
+    bottomInset: number;
+    headerChromeHeight?: number;
+}): number {
+    if (frameHeight <= 0) return INLINE_MIN_SCROLL_HEIGHT;
+    const usable = frameHeight - topInset - bottomInset;
+    const available = usable - INLINE_FIXED_CHROME - headerChromeHeight;
+    return Math.max(INLINE_MIN_SCROLL_HEIGHT, Math.round(available));
+}
+
+export type ToolFieldsScrollerProps = {
+    testID: string;
+    variant: "full" | "inline";
+    maxInlineHeight?: number;
+    children: React.ReactNode;
+};
+
+/** Bounded fields scroller paired with bottom ScrollFade and an overflow pill when content clips. */
+export function ToolFieldsScroller({
+    testID,
+    variant,
+    maxInlineHeight,
+    children
+}: ToolFieldsScrollerProps) {
+    const {palette} = useAppearance();
+    const fade = useScrollFade();
+    const isFull = variant === "full";
+    const accent = isFull ? palette.brand : palette.success;
+    const fadeColor = isFull ? palette.base : palette.surface;
+    const hintStyle = useAnimatedStyle(() => ({opacity: fade.progress.value}));
+
+    return (
+        <YStack
+            position="relative"
+            flex={isFull ? 1 : undefined}
+            flexGrow={isFull ? 1 : 0}
+            flexShrink={1}
+            maxHeight={isFull ? undefined : maxInlineHeight}
+            minHeight={0}>
+            <ScrollView
+                testID={testID}
+                flex={isFull ? 1 : undefined}
+                flexGrow={isFull ? 1 : 0}
+                flexShrink={1}
+                maxHeight={isFull ? undefined : maxInlineHeight}
+                minHeight={0}
+                showsVerticalScrollIndicator={true}
+                persistentScrollbar={true}
+                scrollEventThrottle={16}
+                onScroll={fade.onScroll}
+                onLayout={fade.onLayout}
+                onContentSizeChange={fade.onContentSizeChange}>
+                {children}
+            </ScrollView>
+            <ScrollFade progress={fade.progress} color={fadeColor} testID={`${testID}-scroll-fade`}/>
+            <Animated.View
+                testID={`${testID}-scroll-hint`}
+                pointerEvents="none"
+                accessibilityElementsHidden={true}
+                importantForAccessibility="no-hide-descendants"
+                style={[scrollerStyles.hintWrap, hintStyle]}>
+                <XStack
+                    alignItems="center"
+                    gap="$1.5"
+                    paddingHorizontal="$2.5"
+                    paddingVertical={3}
+                    borderRadius={999}
+                    backgroundColor={palette.raised}
+                    style={{borderWidth: 1, borderColor: mix(palette.line, accent, 0.45)}}>
+                    <DotIcon name="more" size={10} color={accent}/>
+                    <DotMatrixText fontSize={9} weight="bold" letterSpacing={1.4} color={accent}>
+                        SCROLL
+                    </DotMatrixText>
+                </XStack>
+            </Animated.View>
+        </YStack>
+    );
+}
+
+const scrollerStyles = StyleSheet.create({
+    hintWrap: {
+        position: "absolute",
+        left: 0,
+        right: 0,
+        bottom: 6,
+        alignItems: "center"
+    }
+});
+
 export type MachineToolActionsProps = {
     phase: ControlPhase;
     startDisabled: boolean;
     stopUnavailable: string | null;
+    tool?: ToolId;
+    variant?: "full" | "inline";
     onStart: () => void;
     onStop: () => void;
 };
 
-/** Only an explicitly ready tool may start. Uncertain active work keeps Stop. */
+/** Only an explicitly ready tool may start. Tapping Stop transitions immediately to outlined Stopping…. */
 export function MachineToolActions({
-    phase, startDisabled, stopUnavailable, onStart, onStop
+    phase, startDisabled, stopUnavailable, tool, variant = "full", onStart, onStop
 }: MachineToolActionsProps) {
-    const {palette, primary} = useAppearance();
-    const stopOnly = ["starting", "running", "stopping", "unknown"].includes(phase);
-    return (
-        <YStack gap="$2" paddingTop="$4">
-            {stopOnly ? <>
-                {stopUnavailable !== null && <Text color={palette.muted}>{stopUnavailable}</Text>}
-                <Button accessibilityRole="button" disabled={stopUnavailable !== null}
-                        onPress={onStop} minHeight={48} height="auto" padding="$3"
-                        backgroundColor={palette.danger} color={palette.base}>
-                    Stop
+    const {palette, onBrand, onFill} = useAppearance();
+    const upper = tool ? ` ${tool.toUpperCase()}` : "";
+    const isFull = variant === "full";
+    const startBg = isFull ? palette.brandFill : palette.success;
+    const startInk = isFull ? onBrand.text : onFill(palette.success).text;
+    const height = isFull ? 48 : 42;
+    const dockStyle = isFull ? {borderTopWidth: 1, borderTopColor: palette.line} : undefined;
+
+    if (phase === "stopping") {
+        const label = `STOPPING${upper}…`;
+        return (
+            <YStack gap="$2" paddingTop={isFull ? "$3" : "$2"} style={dockStyle}>
+                <Button
+                    accessibilityRole="button"
+                    accessibilityLabel={label}
+                    accessibilityState={{busy: true, disabled: true}}
+                    disabled
+                    minHeight={height}
+                    height="auto"
+                    padding="$3"
+                    borderRadius="$4"
+                    backgroundColor={mix(palette.raised, palette.danger, 0.14)}
+                    color={palette.danger}
+                    style={{borderWidth: 1, borderColor: palette.danger}}>
+                    <DotMatrixText fontSize={isFull ? 13 : 12} weight="extrabold" letterSpacing={1.8} color={palette.danger}>
+                        {label}
+                    </DotMatrixText>
                 </Button>
-            </> : <Button accessibilityRole="button" disabled={phase !== "ready" || startDisabled}
-                          onPress={onStart} minHeight={48} height="auto" padding="$3"
-                          backgroundColor={primary.fill} color={primary.ink}>
-                Start
-            </Button>}
+            </YStack>
+        );
+    }
+
+    const stopOnly = ["starting", "running", "unknown"].includes(phase);
+    if (stopOnly) {
+        const label = `STOP${upper}`;
+        return (
+            <YStack gap="$2" paddingTop={isFull ? "$3" : "$2"} style={dockStyle}>
+                {stopUnavailable !== null && <Text color={palette.muted}>{stopUnavailable}</Text>}
+                <Button
+                    accessibilityRole="button"
+                    accessibilityLabel={label}
+                    disabled={stopUnavailable !== null}
+                    onPress={onStop}
+                    minHeight={height}
+                    height="auto"
+                    padding="$3"
+                    borderRadius="$4"
+                    backgroundColor={palette.danger}
+                    color={onFill(palette.danger).text}>
+                    <DotMatrixText fontSize={isFull ? 13 : 12} weight="extrabold" letterSpacing={1.8}
+                                   color={onFill(palette.danger).text}>
+                        {label}
+                    </DotMatrixText>
+                </Button>
+            </YStack>
+        );
+    }
+
+    const entering = phase === "entering" || phase === "leaving" || phase === "applying";
+    const label = entering ? `${phase === "leaving" ? "CLOSING" : "ENTERING"}${upper}…` : `START${upper}`;
+    const disabled = phase !== "ready" || startDisabled;
+    return (
+        <YStack gap="$2" paddingTop={isFull ? "$3" : "$2"} style={dockStyle}>
+            <Button
+                accessibilityRole="button"
+                accessibilityLabel={label}
+                accessibilityState={{busy: entering, disabled}}
+                disabled={disabled}
+                onPress={onStart}
+                minHeight={height}
+                height="auto"
+                padding="$3"
+                borderRadius="$4"
+                opacity={entering || disabled ? 0.48 : 1}
+                backgroundColor={startBg}
+                color={startInk}>
+                <DotMatrixText fontSize={isFull ? 13 : 12} weight="extrabold" letterSpacing={1.8} color={startInk}>
+                    {label}
+                </DotMatrixText>
+            </Button>
         </YStack>
     );
 }

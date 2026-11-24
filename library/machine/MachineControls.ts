@@ -107,7 +107,9 @@ export default class MachineControls {
     private epoch = 0;
     private stopping: Promise<void> | null = null;
     private opening: Promise<ControlFeedback["value"]> | null = null;
-    private preflight: {key: string; promise: Promise<void>} | null = null;
+    private closing: Promise<void> | null = null;
+    private leavingSession = false;
+    private preflight: {key: string; promise: Promise<void>; signals?: Set<AbortSignal | undefined>} | null = null;
     private recovering = false;
     private reconnecting: Promise<void> | null = null;
     private recoveryOnly = false;
@@ -222,6 +224,13 @@ export default class MachineControls {
         return support;
     }
 
+    private isClosingSameIdentity(identity: ControlIdentity): boolean {
+        return this.leavingSession
+            && this.snapshot.phase === "leaving"
+            && this.snapshot.identity?.deviceId === identity.deviceId
+            && this.snapshot.identity.serial === identity.serial;
+    }
+
     /** Uses precisely the immutable qualifications captured by this owner. */
     describeTool(identity: ControlIdentity, tool: ToolId): MachineToolSupport {
         let unavailable: string | null = null;
@@ -232,6 +241,9 @@ export default class MachineControls {
         const own = this.snapshot.identity?.deviceId === identity.deviceId
             && this.snapshot.identity.serial === identity.serial && this.snapshot.tool === tool;
         try {
+            if (actual && actual.deviceId === identity.deviceId && actual.serial === null && this.machine.info === null) {
+                throw new Error("The connected machine has not reported its readings yet. Refresh readings to verify its serial.");
+            }
             if (!identity.serial || !actual || actual.deviceId !== identity.deviceId || actual.serial !== identity.serial) {
                 throw new Error("Connect the named machine with its exact saved serial before using this tool.");
             }
@@ -246,13 +258,15 @@ export default class MachineControls {
                 this.lease.check();
                 bound = true;
             }
-            if (this.snapshot.phase !== "closed" && !own) {
+            if (this.snapshot.phase !== "closed" && !own && !this.isClosingSameIdentity(identity)) {
                 throw new Error("Another machine control session owns the connection.");
             }
             if (isActiveBrewPhase(this.machine.phase) || this.machine.phase.name === "lostContact") {
                 throw new Error("A brew owns the connection. Finish or stop the brew first.");
             }
-            if (this.snapshot.phase === "closed") this.machine.assertCanForgetDevice(identity.deviceId);
+            if (this.snapshot.phase === "closed") {
+                this.machine.assertCanForgetDevice(identity.deviceId);
+            }
         } catch (error) {
             unavailable = failure(error).message;
         }
@@ -712,13 +726,17 @@ export default class MachineControls {
         const key = `${identity.deviceId}\0${identity.serial ?? ""}\0${tool}`;
         if (this.preflight) {
             if (this.preflight.key === key) {
+                if (signal?.aborted) throw new Error("Control open cancelled before attachment.");
+                this.preflight.signals?.add(signal);
                 await this.preflight.promise;
+                if (signal?.aborted) throw new Error("Control open cancelled before attachment.");
                 return;
             }
             throw new Error("A control session is already owned.");
         }
         const current = this.snapshot;
-        if (current.phase !== "closed") {
+        const closingSameMachine = this.isClosingSameIdentity(identity);
+        if (current.phase !== "closed" && !closingSameMachine) {
             if (current.identity?.deviceId === identity.deviceId && current.identity.serial === identity.serial
                 && current.tool === tool && current.phase !== "leaving" && current.phase !== "applying") {
                 if (current.phase === "entering" && this.opening) await this.opening;
@@ -733,36 +751,49 @@ export default class MachineControls {
             throw new Error("The connected peripheral and reported serial must match the control identity.");
         }
 
+        const signals = new Set<AbortSignal | undefined>([signal]);
+        const preflightCancelled = () => signals.size > 0 && Array.from(signals).every((entry) => entry?.aborted === true);
+        let preflight: {key: string; promise: Promise<void>; signals?: Set<AbortSignal | undefined>} | undefined;
         const task = (async () => {
-            await this.machine.ensureFreshControlState();
-            if (signal?.aborted) throw new Error("Control open cancelled before attachment.");
-            if (this.disposed) throw new Error("The shared control owner was reset.");
-            if (this.snapshot.phase !== "closed") throw new Error("A control session is already owned.");
-            const {profile: latestProfile} = this.select();
-            if ((tool === "grind" && !latestProfile.grind) || (tool === "pour" && !latestProfile.pour)) {
-                throw new Error("Tool unsupported.");
-            }
-            this.attach(identity, tool);
-            this.recoveryOnly = false;
-            this.opening = Promise.resolve().then(() => this.exchange({kind: "enter", tool}, "ready"));
-            this.update({...initial, identity: Object.freeze({...identity}), tool, phase: "entering"});
             try {
-                await this.opening;
-                this.update({phase: "ready"});
-            } catch (error) {
-                this.uncertain(failure(error));
-                throw error;
+                if (this.closing) await this.closing;
+                if (preflightCancelled()) throw new Error("Control open cancelled before attachment.");
+                if (this.disposed) throw new Error("The shared control owner was reset.");
+                await this.machine.ensureFreshControlState();
+                if (preflightCancelled()) throw new Error("Control open cancelled before attachment.");
+                if (this.disposed) throw new Error("The shared control owner was reset.");
+                if (this.snapshot.phase !== "closed") throw new Error("A control session is already owned.");
+                const {profile: latestProfile} = this.select();
+                if ((tool === "grind" && !latestProfile.grind) || (tool === "pour" && !latestProfile.pour)) {
+                    throw new Error("Tool unsupported.");
+                }
+                this.attach(identity, tool);
+                this.recoveryOnly = false;
+                this.opening = Promise.resolve().then(() => this.exchange({kind: "enter", tool}, "ready"));
+                this.update({...initial, identity: Object.freeze({...identity}), tool, phase: "entering"});
+                try {
+                    await this.opening;
+                    this.update({phase: "ready"});
+                } catch (error) {
+                    this.uncertain(failure(error));
+                    throw error;
+                } finally {
+                    this.opening = null;
+                }
             } finally {
-                this.opening = null;
+                if (this.preflight === preflight) this.preflight = null;
             }
         })();
-        const preflight = {key, promise: task};
+        preflight = {key, promise: task, signals};
         this.preflight = preflight;
-        try {
-            await task;
-        } finally {
-            if (this.preflight === preflight) this.preflight = null;
-        }
+        await task;
+    }
+
+    /** True only while the active BLE connection matches `identity` and this owner is live. */
+    isIdentityConnected(identity: ControlIdentity): boolean {
+        const actual = this.machine.slotIdentity;
+        return !this.disposed && this.machine.isConnected() && actual !== null
+            && actual.deviceId === identity.deviceId && actual.serial === identity.serial;
     }
 
     async startGrind(request: GrindRequest): Promise<void> {
@@ -1110,16 +1141,36 @@ export default class MachineControls {
     }
 
     async close(): Promise<void> {
+        if (this.closing) return this.closing;
         if (this.snapshot.phase === "closed") return;
         if (this.snapshot.phase !== "ready") throw new Error("Cannot close an uncertain or active control.");
+        this.leavingSession = true;
         this.update({phase: "leaving"});
-        try {
-            await this.exchange({kind: "exit", tool: this.snapshot.tool}, "closed");
-            this.release();
-            this.closeSessionToRestoredSettings();
-        } catch (error) {
-            this.uncertain(failure(error));
-            throw error;
+        let operation: Promise<void> | undefined;
+        operation = (async () => {
+            try {
+                await this.exchange({kind: "exit", tool: this.snapshot.tool}, "closed");
+                this.release();
+                this.closeSessionToRestoredSettings();
+            } catch (error) {
+                this.uncertain(failure(error));
+                throw error;
+            } finally {
+                this.leavingSession = false;
+                if (this.closing === operation) this.closing = null;
+            }
+        })();
+        this.closing = operation;
+        return operation;
+    }
+
+    /** Initiates idle BLE tool exit without keeping callers blocked on navigation; surfaces errors honestly on snapshot. */
+    closeInBackground(): Promise<void> {
+        if (this.closing) return this.closing.catch(() => {});
+        if (this.snapshot.phase === "closed") return Promise.resolve();
+        if (this.snapshot.phase !== "ready") {
+            return Promise.reject(new Error("Cannot close an uncertain or active control."));
         }
+        return this.close().catch(() => {});
     }
 }

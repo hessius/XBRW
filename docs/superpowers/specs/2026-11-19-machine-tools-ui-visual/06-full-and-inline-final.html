@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Final Visual Check · Inline Home (Green) &amp; Full Tool (Flat Neon Rim) — XBRW++</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Doto:wght@500;700;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --base: #000000;
+    --surface: #101010;
+    --raised: #161616;
+    --line: #262626;
+    --control: #2E2E2E;
+    --text: #FFFFFF;
+    --dim: #A3A3A3;
+    --muted: #6E6E6E;
+    --brand: #FF007F;      /* 5.56:1 ink/stroke on dark OLED */
+    --brand-fill: #D10069; /* 5.36:1 w/ #FFFFFF onBrand ink (Option A) */
+    --on-accent-text: #0C0C0C;
+    --accent: #9FC3F0;
+    --peach: #F0B98E;
+    --success: #5DDC8A;    /* Machine status overlay green */
+    --danger: #FF6B5E;
+    --warn: #F0C24A;
+    --doto: 'Doto', ui-monospace, 'SF Mono', Menlo, monospace;
+    --sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: #0d0d10;
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  .page {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 32px 24px 96px;
+  }
+  .kicker {
+    font-family: var(--doto); font-weight: 700; font-size: 11px;
+    letter-spacing: 2px; text-transform: uppercase;
+    color: var(--success); margin: 0 0 6px;
+  }
+  h1 { margin: 0 0 10px; font-size: 26px; font-weight: 600; letter-spacing: -0.02em; }
+  .lede { color: var(--dim); max-width: 84ch; margin: 0 0 18px; }
+  .lede code {
+    color: #fff; background: rgba(255,255,255,0.08);
+    padding: 1px 6px; border-radius: 5px; font-size: 12.5px;
+  }
+  .toolbar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+    padding: 12px 14px; background: var(--surface);
+    border: 1px solid var(--line); border-radius: 14px; margin-bottom: 24px;
+  }
+  .toolbar-label {
+    font-family: var(--doto); font-weight: 700; font-size: 11px;
+    letter-spacing: 1.6px; color: var(--muted); margin: 0 4px 0 8px;
+  }
+  .toolbar-label:first-child { margin-left: 0; }
+  .pill {
+    appearance: none; border: 1px solid var(--line); background: var(--raised);
+    color: var(--dim); font-family: var(--doto); font-weight: 700;
+    font-size: 11px; letter-spacing: 1.5px; padding: 7px 12px;
+    border-radius: 999px; cursor: pointer; transition: all 120ms ease;
+  }
+  .pill:hover { border-color: var(--control); color: var(--text); }
+  .pill.on { background: var(--brand-fill); border-color: var(--brand-fill); color: #FFFFFF; }
+  .pill.run.on { background: var(--success); border-color: var(--success); color: #0C0C0C; }
+  .pill.stop.on { background: var(--danger); border-color: var(--danger); color: #0C0C0C; }
+  .pill.warn.on { background: var(--warn); border-color: var(--warn); color: #0C0C0C; }
+
+  .pair {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(393px, 1fr));
+    gap: 28px;
+    align-items: start;
+  }
+  .col { display: flex; flex-direction: column; gap: 12px; }
+  .col-head {
+    background: #141418; border: 1px solid var(--line);
+    border-radius: 16px; padding: 12px 14px;
+  }
+  .col-head h2 { margin: 0 0 3px; font-size: 15px; font-weight: 600; }
+  .col-head p { margin: 0; font-size: 12.5px; color: var(--dim); }
+  .tag {
+    display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px;
+    font-family: var(--doto); font-size: 10px; letter-spacing: 1.1px; vertical-align: middle;
+  }
+  .tag.green { background: rgba(93, 220, 138, 0.16); color: var(--success); }
+  .tag.pink { background: rgba(255, 0, 127, 0.18); color: #FF7BC0; border: 1px solid rgba(255,0,127,0.35); }
+
+  /* Phone viewport */
+  .phone {
+    width: 100%; max-width: 393px; height: 752px; margin: 0 auto;
+    background: var(--base); border: 1px solid #2b2b30; border-radius: 30px;
+    overflow: hidden; display: flex; flex-direction: column; position: relative;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.65);
+  }
+  .statusbar {
+    height: 34px; padding: 10px 20px 0;
+    display: flex; justify-content: space-between;
+    font-size: 12px; font-weight: 600; flex-shrink: 0;
+  }
+
+  /* =========================================================
+     LEFT PHONE: HOME OVERLAY (DESIGN 1) — Toned Down + Green
+     Matches HomeHeader + MachinePanel aesthetic cleanly
+     ========================================================= */
+  .home-hdr {
+    padding: 8px 16px 10px; display: flex; align-items: center; justify-content: space-between;
+    flex-shrink: 0;
+  }
+  .brand-wordmark { font-family: var(--doto); font-weight: 900; font-size: 21px; letter-spacing: 1px; }
+  .brand-wordmark span { color: var(--brand); }
+  .hdr-right { display: flex; align-items: center; gap: 10px; }
+  .hdr-dot-btn {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 5px 10px; border-radius: 999px;
+    background: var(--surface); border: 1px solid var(--line);
+    font-family: var(--doto); font-size: 10.5px; letter-spacing: 1.2px; color: var(--text);
+  }
+  .hdr-dot-btn i { width: 8px; height: 8px; border-radius: 50%; background: var(--success); display: block; }
+
+  /* MachinePanel area inside HomeHeader container */
+  .machine-panel {
+    margin: 0 12px 10px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    padding: 12px;
+    display: flex; flex-direction: column; gap: 10px;
+    flex-shrink: 0;
+  }
+  .panel-top {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  }
+  .ctx-bar {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: var(--doto); font-size: 10.5px; letter-spacing: 1.3px; color: var(--dim);
+  }
+  .ctx-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); }
+  .icon-row { display: flex; gap: 6px; }
+  .icon-btn {
+    width: 28px; height: 28px; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--raised); color: var(--text);
+    display: grid; place-items: center; font-size: 13px; font-weight: 700;
+    cursor: pointer;
+  }
+  .icon-btn:hover { border-color: var(--control); }
+
+  .launcher-row {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+  }
+  .launch-pill {
+    height: 36px; border-radius: 11px; border: 1px solid var(--line);
+    background: var(--raised); color: var(--text);
+    font-family: var(--doto); font-weight: 900; font-size: 11px; letter-spacing: 1.6px;
+    cursor: pointer; transition: all 120ms ease;
+  }
+  .launch-pill:hover { border-color: rgba(93, 220, 138, 0.55); }
+  .launch-pill.active-green {
+    background: rgba(93, 220, 138, 0.14);
+    border-color: var(--success);
+    color: var(--success);
+  }
+
+  .vitals-rows {
+    display: flex; flex-direction: column; gap: 6px; padding: 2px 2px 0;
+  }
+  .v-row {
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .v-k { font-family: var(--doto); font-size: 10.5px; letter-spacing: 1.5px; color: var(--dim); }
+  .v-v { font-family: var(--doto); font-size: 16px; font-weight: 700; color: var(--text); }
+  .v-age { font-family: var(--doto); font-size: 10.5px; color: var(--muted); margin-left: 6px; }
+  .refresh-outline {
+    height: 38px; border-radius: 11px; border: 1px solid rgba(93,220,138,0.55);
+    background: transparent; color: var(--success);
+    font-family: var(--doto); font-weight: 700; font-size: 11px; letter-spacing: 2px;
+    cursor: pointer;
+  }
+
+  /* Toned-down Inline Readout Card (Green status accent, NO glow, NO pink) */
+  .inline-stage {
+    background: var(--raised);
+    border: 1px solid rgba(93, 220, 138, 0.42);
+    border-radius: 14px;
+    padding: 11px 12px;
+  }
+  .inline-top {
+    display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;
+  }
+  .inline-num {
+    font-family: var(--doto); font-weight: 900; font-size: 36px; line-height: 1; color: var(--text);
+  }
+  .inline-num small { font-size: 15px; color: var(--success); margin-left: 3px; }
+  .inline-sub {
+    display: flex; gap: 14px; margin-top: 7px;
+    font-family: var(--doto); font-size: 11px; color: var(--dim);
+  }
+
+  /* Green inline meters */
+  .vessel-bar.green { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.08); height: 11px; }
+  .vessel-bar.green .vessel-fill {
+    background-image: radial-gradient(var(--success) 1.3px, transparent 1.3px);
+    border-right-color: var(--success);
+  }
+  .burr-matrix.green i { background: var(--success); }
+  .scale-spark.green span { background: var(--success); }
+
+  /* Faded recipe list underneath */
+  .recipe-under {
+    flex: 1; min-height: 0; padding: 2px 12px 14px;
+    display: flex; flex-direction: column; gap: 10px; overflow: hidden;
+  }
+  .recipe-tile {
+    border-radius: 18px; padding: 14px; color: #0C0C0C;
+    background: var(--accent);
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .recipe-tile.peach { background: var(--peach); }
+  .recipe-tile span { font-family: var(--doto); font-size: 10px; letter-spacing: 1.3px; opacity: 0.7; font-weight: 900; }
+  .recipe-tile strong { font-size: 16px; font-weight: 700; }
+
+  /* =========================================================
+     RIGHT PHONE: FULL UNIFIED SCREEN (DESIGN 2)
+     - Outline from C (#FF007F rim + soft outer glow)
+     - ZERO SHEEN (flat dark OLED #101010 + subtle dot matrix)
+     - Rest from A (white numerals, neutral deck, #D10069 + white)
+     ========================================================= */
+  .screen-hdr {
+    padding: 8px 16px 10px;
+    display: flex; align-items: center; gap: 12px; flex-shrink: 0;
+  }
+  .back-well {
+    width: 32px; height: 32px; border-radius: 10px;
+    background: var(--control); border: 0; color: var(--text);
+    display: grid; place-items: center;
+    font-family: var(--doto); font-weight: 900; font-size: 14px; cursor: pointer;
+  }
+  .hdr-title-wrap { flex: 1; min-width: 0; }
+  .hdr-title { font-size: 20px; font-weight: 700; line-height: 1.15; }
+  .hdr-title .brand-plus { color: var(--brand); font-family: var(--doto); font-weight: 900; }
+  .hdr-sub { font-family: var(--doto); font-size: 11px; letter-spacing: 1.2px; color: var(--dim); }
+
+  .switcher {
+    margin: 0 16px 10px;
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: 13px; padding: 4px;
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; flex-shrink: 0;
+  }
+  .sw-tab {
+    height: 34px; border-radius: 9px; border: 0;
+    background: transparent; color: var(--dim);
+    font-family: var(--doto); font-weight: 700; font-size: 11px; letter-spacing: 1.6px;
+    cursor: pointer; transition: all 120ms ease;
+  }
+  .sw-tab.on.fill { background: var(--brand-fill); color: #FFFFFF; }
+  .sw-tab.locked { opacity: 0.35; }
+
+  @keyframes head-shake {
+    0%, 100% { transform: translateX(0); }
+    16% { transform: translateX(-6px); }
+    33% { transform: translateX(6px); }
+    50% { transform: translateX(-4px); }
+    67% { transform: translateX(4px); }
+    84% { transform: translateX(-2px); }
+  }
+  .shaking { animation: head-shake 420ms cubic-bezier(.36,.07,.19,.97) both; }
+
+  .body {
+    flex: 1; min-height: 0; overflow-y: auto;
+    padding: 0 16px 14px;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+
+  /* Flat OLED Hero Stage: Top Outline from C + Zero Sheen + Rest from A */
+  .hero-stage {
+    background-color: var(--surface);
+    border: 1.5px solid rgba(255, 0, 127, 0.88);
+    border-radius: 18px;
+    padding: 15px 16px;
+    box-shadow: 0 0 22px rgba(255, 0, 127, 0.14);
+    background-image: radial-gradient(rgba(255, 0, 127, 0.10) 1px, transparent 1px);
+    background-size: 10px 10px;
+  }
+
+  .stage-top-row {
+    display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;
+  }
+  .kicker-a { font-family: var(--doto); font-size: 10.5px; letter-spacing: 1.2px; color: var(--muted); }
+  .state-tag {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: var(--doto); font-weight: 700; font-size: 10.5px; letter-spacing: 1.5px;
+    color: var(--dim);
+  }
+  .state-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); }
+  .state-tag.switching { color: var(--warn); }
+  .state-tag.switching .state-dot { background: var(--warn); }
+  .state-tag.running { color: var(--success); }
+  .state-tag.stopping { color: var(--danger); }
+  .state-tag.stopping .state-dot { background: var(--danger); }
+
+  .big-val {
+    font-family: var(--doto); font-weight: 900; font-size: 54px; line-height: 0.96;
+    letter-spacing: -1px; color: #FFFFFF;
+  }
+  .big-val small { font-size: 19px; color: var(--brand); margin-left: 4px; }
+  .sub-readout {
+    display: flex; gap: 16px; margin-top: 8px;
+    font-family: var(--doto); font-size: 11.5px; color: var(--dim);
+  }
+
+  /* Dot matrix wave cadence (Active tool animation without any sheen) */
+  .doto-matrix-strip {
+    display: grid; grid-template-columns: repeat(16, 1fr); gap: 4px; padding: 6px 0 2px;
+  }
+  .doto-matrix-strip i {
+    display: block; height: 5px; border-radius: 2px; background: rgba(255,255,255,0.08);
+  }
+  @keyframes wave-travel {
+    0%, 100% { opacity: 0.24; transform: scaleY(0.75); }
+    45% { opacity: 1; transform: scaleY(1.2); }
+  }
+  .doto-matrix-strip.switching i { background: var(--warn); animation: wave-travel 800ms infinite ease-in-out; }
+  .doto-matrix-strip.running i { background: var(--success); animation: wave-travel 960ms infinite ease-in-out; }
+  .doto-matrix-strip.stopping i { background: var(--danger); animation: wave-travel 550ms infinite ease-in-out; }
+  .doto-matrix-strip i:nth-child(n) { animation-delay: calc(var(--i) * 45ms); }
+
+  @keyframes burr-flicker {
+    0%, 49% { opacity: 1; }
+    50%, 100% { opacity: 0.22; }
+  }
+  .burr-matrix { display: grid; grid-template-columns: repeat(12, 1fr); gap: 5px; margin-top: 9px; }
+  .burr-matrix i { display: block; height: 7px; border-radius: 2px; background: var(--brand); opacity: 0.30; }
+  .burr-matrix.active i:nth-child(odd) { animation: burr-flicker 340ms steps(1,end) infinite; opacity: 1; }
+  .burr-matrix.active i:nth-child(even) { animation: burr-flicker 340ms steps(1,end) infinite 170ms; opacity: 1; }
+
+  .vessel-bar {
+    height: 14px; border-radius: 7px;
+    background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.10);
+    overflow: hidden; position: relative; margin-top: 9px;
+  }
+  .vessel-fill {
+    height: 100%;
+    background-image: radial-gradient(var(--brand) 1.4px, transparent 1.4px);
+    background-size: 5px 5px;
+    border-right: 2px solid var(--brand);
+  }
+  .scale-spark { display: flex; align-items: flex-end; gap: 4px; height: 22px; margin-top: 9px; }
+  .scale-spark span { flex: 1; border-radius: 2px; background: var(--brand); opacity: 0.82; }
+
+  /* Parameter Deck */
+  .deck {
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: 16px; padding: 3px 14px; transition: opacity 150ms ease;
+  }
+  .deck.compact { background: var(--raised); border-radius: 13px; padding: 2px 11px; }
+  .deck.dimmed { opacity: 0.55; }
+  .p-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 9px 0; border-bottom: 1px solid var(--line);
+  }
+  .deck.compact .p-row { padding: 7px 0; }
+  .p-row:last-child { border-bottom: 0; }
+  .p-label { font-size: 13.5px; font-weight: 600; color: var(--text); }
+  .p-sub { font-family: var(--doto); font-size: 10px; letter-spacing: 1.2px; color: var(--muted); }
+  .stepper {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: var(--raised); border: 1px solid var(--line);
+    border-radius: 10px; padding: 3px;
+  }
+  .deck.compact .stepper { background: var(--surface); }
+  .s-btn {
+    width: 28px; height: 26px; border-radius: 7px; border: 0;
+    background: var(--control); color: var(--text);
+    font-weight: 700; font-size: 15px; cursor: pointer;
+  }
+  .s-val {
+    min-width: 54px; text-align: center;
+    font-family: var(--doto); font-weight: 700; font-size: 13px;
+  }
+  .stepper.locked .s-btn { opacity: 0.3; cursor: default; }
+  .stepper.locked .s-val { color: var(--dim); }
+
+  .seg-row { display: flex; gap: 5px; flex-wrap: wrap; }
+  .seg-b {
+    padding: 5px 9px; border-radius: 9px;
+    background: var(--control); color: var(--text);
+    font-size: 12px; font-weight: 600; border: 0;
+    display: inline-flex; align-items: center; gap: 5px; cursor: pointer;
+  }
+  .seg-b.on.fill { background: var(--brand-fill); color: #FFFFFF; }
+  .seg-b.on.green { background: var(--success); color: var(--on-accent-text); }
+  .seg-row.locked .seg-b:not(.on) { opacity: 0.36; cursor: default; }
+
+  /* Bottom / Inline CTA */
+  .dock {
+    padding: 10px 16px 16px; border-top: 1px solid var(--line);
+    background: var(--base); flex-shrink: 0;
+  }
+  .cta {
+    width: 100%; height: 46px; border-radius: 14px; border: 1px solid transparent;
+    font-family: var(--doto); font-weight: 900; font-size: 12.5px; letter-spacing: 2px;
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    cursor: pointer; transition: all 120ms ease;
+  }
+  .cta.inline-cta { height: 40px; border-radius: 12px; font-size: 11.5px; }
+  .cta.start-fill { background: var(--brand-fill); color: #FFFFFF; }
+  .cta.start-green { background: var(--success); color: var(--on-accent-text); }
+  .cta.wait { opacity: 0.48; cursor: default; }
+  .cta.stop { background: var(--danger); color: #0C0C0C; }
+  .cta.stopping {
+    background: rgba(255, 107, 94, 0.14);
+    border-color: var(--danger); color: var(--danger); cursor: default;
+  }
+
+  .toast-sim {
+    position: absolute; left: 16px; right: 16px; bottom: 72px;
+    padding: 9px 12px; border-radius: 12px;
+    background: #1a1f1c; border: 1px solid rgba(93,220,138,0.45);
+    color: var(--success); font-size: 12px; display: none; z-index: 20;
+  }
+  .toast-sim.show { display: block; }
+</style>
+</head>
+<body>
+<div class="page">
+  <p class="kicker">Visual Sign-off · Home Overlay (Green) &amp; Full Tool Screen (Flat Neon Rim)</p>
+  <h1>Inline Status Overlay vs. Dedicated Full Tool Screen</h1>
+  <p class="lede">
+    Left: <strong>Inline Home Overlay</strong> keeps the clean status-panel language and uses machine-status green (<code>#5DDC8A</code>) so it lives calmly above colourful recipe cards. Right: <strong>Full Tool Screen</strong> uses Option A (<code>#D10069</code> + white ink, white Doto readouts, dot-matrix wave animation during active runs) framed by the crisp <code>#FF007F</code> top-card outline with zero sheen.
+  </p>
+
+  <div class="toolbar">
+    <span class="toolbar-label">TOOL:</span>
+    <button type="button" class="pill on" data-sim-tool="pour">POUR</button>
+    <button type="button" class="pill" data-sim-tool="grind">GRIND</button>
+    <button type="button" class="pill" data-sim-tool="scale">SCALE</button>
+
+    <span class="toolbar-label">PHASE:</span>
+    <button type="button" class="pill warn" data-sim-phase="entering">SWITCH / ENTER…</button>
+    <button type="button" class="pill" data-sim-phase="ready">READY</button>
+    <button type="button" class="pill run on" data-sim-phase="running">RUNNING</button>
+    <button type="button" class="pill stop" data-sim-phase="stopping">STOPPING…</button>
+  </div>
+
+  <div class="pair">
+    <!-- DESIGN 1: HOME INLINE OVERLAY (GREEN STATUS ACCENT) -->
+    <div class="col">
+      <div class="col-head">
+        <h2>Home Inline Overlay <span class="tag green">MACHINE GREEN · TONED DOWN</span></h2>
+        <p>Uses <code>palette.success</code> (<code>#5DDC8A</code>), flat dark card, and crisp compact deck. Tap <code>↗</code> to jump to the Full Tool view or <code>✕</code> to collapse cleanly when idle.</p>
+      </div>
+      <div class="phone" id="phone-home"></div>
+    </div>
+
+    <!-- DESIGN 2: FULL TOOL VIEW (OPTION A + C OUTLINE, NO SHEEN) -->
+    <div class="col">
+      <div class="col-head">
+        <h2>Full Tool Screen <span class="tag pink">OPTION A + #FF007F RIM · NO SHEEN</span></h2>
+        <p>Flat OLED dark hero with <code>1.5px #FF007F</code> rim, dot-grid texture, animated dot-matrix / burr cadence on active run, and Option A <code>#D10069</code> controls.</p>
+      </div>
+      <div class="phone" id="phone-full"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const state = {
+  homeOpen: true,
+  tool: 'pour',
+  phase: 'running',
+  grindSize: 48,
+  rpm: 90,
+  pourMode: 'target',
+  targetMl: 150,
+  flowRate: 3.0,
+  tempC: 93,
+  pattern: 'centered'
+};
+
+function matrixStrip(phase) {
+  const cls = phase === 'entering' ? 'switching' : phase === 'running' ? 'running' : phase === 'stopping' ? 'stopping' : '';
+  const dots = Array.from({length: 16}, (_, i) => `<i style="--i:${i}"></i>`).join('');
+  return `<div class="doto-matrix-strip ${cls}">${dots}</div>`;
+}
+
+function pourGlyphSvg(kind, stroke) {
+  if (kind === 'centered') {
+    return `<svg width="13" height="13" viewBox="0 0 9 9"><circle cx="4.5" cy="4.5" r="3.4" stroke="${stroke}" stroke-width="0.9" fill="none"/><circle cx="4.5" cy="4.5" r="1.9" stroke="${stroke}" stroke-width="0.9" fill="none"/><circle cx="4.5" cy="4.5" r="0.8" fill="${stroke}"/></svg>`;
+  }
+  if (kind === 'circular') {
+    return `<svg width="13" height="13" viewBox="0 0 9 9"><circle cx="4.5" cy="4.5" r="2.9" stroke="${stroke}" stroke-width="1" fill="none"/></svg>`;
+  }
+  return `<svg width="13" height="13" viewBox="0 0 9 9"><path d="M4.5 4.5 C5 4.5,5.2 3.8,4.5 3.6 C3.6 3.4,3.1 4.5,3.8 5.2 C4.8 6.1,6.4 5.2,6.2 3.7 C6 2,3.4 1.6,2.4 3.2" stroke="${stroke}" stroke-width="0.9" fill="none" stroke-linecap="round"/></svg>`;
+}
+
+function telemetryMetrics(tool, phase, isInline) {
+  const liveRun = phase === 'running' || phase === 'stopping';
+  const statusText = phase === 'entering' ? `SWITCHING TO ${tool.toUpperCase()}…`
+    : phase === 'stopping' ? 'STOPPING…'
+    : phase === 'running' ? (tool === 'grind' ? `GRINDING · ${state.rpm} RPM` : tool === 'pour' ? `POURING · ${state.flowRate.toFixed(1)} ML/S` : 'LIVE SCALE')
+    : 'READY';
+  const clrCls = isInline ? 'green' : '';
+
+  let title = '';
+  let mainNum = '';
+  let graphic = '';
+  let extraLeft = '';
+  let extraRight = '';
+
+  if (tool === 'grind') {
+    title = 'SELECTED SIZE';
+    mainNum = `${state.grindSize}`;
+    graphic = `<div class="burr-matrix ${clrCls} ${phase==='running'?'active':''}">${'<i></i>'.repeat(12)}</div>`;
+    extraLeft = `RPM ${state.rpm}`;
+    extraRight = '';
+  } else if (tool === 'scale') {
+    title = 'LIVE WEIGHT';
+    mainNum = `${phase==='entering'?'—':'18.4'}<small>g</small>`;
+    const bars = [22,22,24,28,36,52,68,78,82,82,84,84];
+    graphic = `<div class="scale-spark ${clrCls}">${bars.map(h=>`<span style="height:${h}%"></span>`).join('')}</div>`;
+    extraLeft = `0.1 G PRECISION`;
+    extraRight = `GRAMS`;
+  } else {
+    const isTarget = state.pourMode === 'target';
+    title = liveRun ? 'DISPENSED' : (isTarget ? 'TARGET VOLUME' : 'CONTINUOUS POUR');
+    mainNum = liveRun ? `64<small>ml</small>` : (isTarget ? `${state.targetMl}<small>ml</small>` : `∞<small>open</small>`);
+    const pct = liveRun ? (isTarget ? Math.min(100, Math.round((64 / state.targetMl) * 100)) : 52) : (isTarget ? 100 : 38);
+    graphic = `<div class="vessel-bar ${clrCls}"><div class="vessel-fill" style="width:${pct}%;${liveRun?'':'opacity:0.46'}"></div></div>`;
+    extraLeft = liveRun ? (isTarget ? `TARGET ${state.targetMl} ML` : 'UNTIL STOPPED') : `FLOW ${state.flowRate.toFixed(1)} ML/S`;
+    extraRight = liveRun ? 'CUP 62.1 G' : `SETPOINT ${state.tempC} °C`;
+  }
+
+  return { statusText, title, mainNum, graphic, extraLeft, extraRight };
+}
+
+function inlineHeroStage() {
+  const { tool, phase } = state;
+  const m = telemetryMetrics(tool, phase, true);
+  const tagCls = phase === 'entering' ? 'switching' : phase;
+  return `
+    <div class="inline-stage">
+      <div class="inline-top">
+        <span class="kicker-a">${m.title}</span>
+        <span class="state-tag ${tagCls}"><i class="state-dot"></i>${m.statusText}</span>
+      </div>
+      <div class="inline-num">${m.mainNum}</div>
+      ${m.graphic}
+      ${matrixStrip(phase)}
+      <div class="inline-sub"><span>${m.extraLeft}</span>${m.extraRight ? `<span>${m.extraRight}</span>` : ''}</div>
+    </div>`;
+}
+
+function fullHeroStage() {
+  const { tool, phase } = state;
+  const m = telemetryMetrics(tool, phase, false);
+  const tagCls = phase === 'entering' ? 'switching' : phase;
+  return `
+    <div class="hero-stage">
+      <div class="stage-top-row">
+        <span class="kicker-a">${m.title}</span>
+        <span class="state-tag ${tagCls}"><i class="state-dot"></i>${m.statusText}</span>
+      </div>
+      <div class="big-val">${m.mainNum}</div>
+      ${m.graphic}
+      ${matrixStrip(phase)}
+      <div class="sub-readout"><span>${m.extraLeft}</span>${m.extraRight ? `<span>${m.extraRight}</span>` : ''}</div>
+    </div>`;
+}
+
+function deckMarkup(compact) {
+  const { tool, phase } = state;
+  const entering = phase === 'entering';
+  const locked = phase !== 'ready';
+  const liveOk = phase === 'ready' || phase === 'running';
+  const onClass = compact ? 'green' : 'fill';
+  const onInk = compact ? '#0C0C0C' : '#FFFFFF';
+  const wrapCls = `deck ${compact ? 'compact' : ''} ${entering ? 'dimmed' : ''}`;
+
+  if (tool === 'grind') {
+    return `<div class="${wrapCls}">
+      <div class="p-row">
+        <div><div class="p-label">Grind size</div>${compact ? '' : '<div class="p-sub">1 – 80 BLE</div>'}</div>
+        <div class="stepper ${locked?'locked':''}">
+          <button type="button" class="s-btn" data-step="grindSize:-1">-</button>
+          <span class="s-val">${state.grindSize}</span>
+          <button type="button" class="s-btn" data-step="grindSize:1">+</button>
+        </div>
+      </div>
+      <div class="p-row">
+        <div><div class="p-label">Burr RPM</div>${compact ? '' : '<div class="p-sub">60 – 120 RPM</div>'}</div>
+        <div class="stepper ${locked?'locked':''}">
+          <button type="button" class="s-btn" data-step="rpm:-5">-</button>
+          <span class="s-val">${state.rpm}</span>
+          <button type="button" class="s-btn" data-step="rpm:5">+</button>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  if (tool === 'scale') {
+    return `<div class="${wrapCls}">
+      <div class="p-row">
+        <div><div class="p-label">Scale stream</div><div class="p-sub">ALWAYS LIVE · NON-BLOCKING EXIT</div></div>
+        <span style="font-family:var(--doto);font-size:12px;color:var(--success)">ACTIVE</span>
+      </div>
+    </div>`;
+  }
+
+  const isTarget = state.pourMode === 'target';
+  return `<div class="${wrapCls}">
+    <div class="p-row">
+      <div><div class="p-label">Mode</div></div>
+      <div class="seg-row ${locked?'locked':''}">
+        <button type="button" class="seg-b ${isTarget?`on ${onClass}`:''}" data-mode="target">Target</button>
+        <button type="button" class="seg-b ${!isTarget?`on ${onClass}`:''}" data-mode="untilStopped">Until stopped</button>
+      </div>
+    </div>
+    ${isTarget ? `<div class="p-row">
+      <div><div class="p-label">Target volume</div></div>
+      <div class="stepper ${locked?'locked':''}">
+        <button type="button" class="s-btn" data-step="targetMl:-10">-</button>
+        <span class="s-val">${state.targetMl} ml</span>
+        <button type="button" class="s-btn" data-step="targetMl:10">+</button>
+      </div>
+    </div>` : ''}
+    <div class="p-row">
+      <div><div class="p-label">Flow rate</div></div>
+      <div class="stepper ${locked?'locked':''}">
+        <button type="button" class="s-btn" data-step="flowRate:-0.5">-</button>
+        <span class="s-val">${state.flowRate.toFixed(1)} ml/s</span>
+        <button type="button" class="s-btn" data-step="flowRate:0.5">+</button>
+      </div>
+    </div>
+    <div class="p-row">
+      <div><div class="p-label">Setpoint</div><div class="p-sub">${phase==='running'?'LIVE ADJUSTABLE':'REQUESTED TEMP'}</div></div>
+      <div class="stepper ${!liveOk?'locked':''}">
+        <button type="button" class="s-btn" data-step="tempC:-1">-</button>
+        <span class="s-val">${state.tempC} °C</span>
+        <button type="button" class="s-btn" data-step="tempC:1">+</button>
+      </div>
+    </div>
+    <div class="p-row" style="flex-direction:column;align-items:flex-start;gap:7px">
+      <div class="p-sub">${phase==='running'?'PATTERN · LIVE ADJUSTABLE':'PATTERN'}</div>
+      <div class="seg-row ${!liveOk?'locked':''}">
+        <button type="button" class="seg-b ${state.pattern==='centered'?`on ${onClass}`:''}" data-pat="centered">${pourGlyphSvg('centered', state.pattern==='centered'?onInk:'#fff')} Centred</button>
+        <button type="button" class="seg-b ${state.pattern==='circular'?`on ${onClass}`:''}" data-pat="circular">${pourGlyphSvg('circular', state.pattern==='circular'?onInk:'#fff')} Circular</button>
+        <button type="button" class="seg-b ${state.pattern==='spiral'?`on ${onClass}`:''}" data-pat="spiral">${pourGlyphSvg('spiral', state.pattern==='spiral'?onInk:'#fff')} Spiral</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function ctaMarkup(inline) {
+  const { tool, phase } = state;
+  const startCls = inline ? 'start-green' : 'start-fill';
+  const sz = inline ? 'inline-cta' : '';
+  if (tool === 'scale') {
+    return `<button type="button" class="cta ${sz} ${startCls} ${phase==='entering'?'wait':''}" data-act="tare">${phase==='entering'?'ENTERING SCALE…':'TARE'}</button>`;
+  }
+  if (phase === 'entering') {
+    return `<button type="button" class="cta ${sz} ${startCls} wait">ENTERING ${tool.toUpperCase()}…</button>`;
+  }
+  if (phase === 'stopping') {
+    return `<button type="button" class="cta ${sz} stopping">STOPPING ${tool.toUpperCase()}…</button>`;
+  }
+  if (phase === 'running') {
+    return `<button type="button" class="cta ${sz} stop" data-act="stop">STOP ${tool.toUpperCase()}</button>`;
+  }
+  return `<button type="button" class="cta ${sz} ${startCls}" data-act="start">START ${tool.toUpperCase()}</button>`;
+}
+
+function renderAll() {
+  const { homeOpen, tool, phase } = state;
+
+  // Left Phone: Home + MachinePanel (Toned-down + Machine Green)
+  const home = document.getElementById('phone-home');
+  const overlayBody = homeOpen
+    ? `
+      <div class="panel-top">
+        <span class="ctx-bar"><i class="ctx-dot"></i>STUDIO · WATER OK · PRO</span>
+        <div class="icon-row">
+          <button type="button" class="icon-btn" data-act="expand" title="Open Full Tool Screen">↗</button>
+          <button type="button" class="icon-btn" data-act="collapse" title="Close inline tool">✕</button>
+        </div>
+      </div>
+      <div class="launcher-row">
+        <button type="button" class="launch-pill ${tool==='grind'?'active-green':''}" data-pick-tool="grind">GRIND</button>
+        <button type="button" class="launch-pill ${tool==='scale'?'active-green':''}" data-pick-tool="scale">SCALE</button>
+        <button type="button" class="launch-pill ${tool==='pour'?'active-green':''}" data-pick-tool="pour">POUR</button>
+      </div>
+      ${inlineHeroStage()}
+      ${deckMarkup(true)}
+      ${ctaMarkup(true)}
+    `
+    : `
+      <div class="vitals-rows">
+        <div class="v-row"><span class="v-k">WATER</span><span><span class="v-v">OK</span><span class="v-age">JUST NOW</span></span></div>
+        <div class="v-row"><span class="v-k">MODE</span><span class="v-v">PRO</span></div>
+      </div>
+      <button type="button" class="refresh-outline" data-act="refresh">REFRESH</button>
+      <div class="launcher-row">
+        <button type="button" class="launch-pill" data-open-tool="grind">GRIND</button>
+        <button type="button" class="launch-pill" data-open-tool="scale">SCALE</button>
+        <button type="button" class="launch-pill" data-open-tool="pour">POUR</button>
+      </div>
+    `;
+
+  home.innerHTML = `
+    <div class="statusbar"><span>08:25</span><span>5G 85</span></div>
+    <div class="home-hdr">
+      <div class="brand-wordmark">XBRW<span>++</span></div>
+      <div class="hdr-right">
+        <div class="hdr-dot-btn"><i></i>5AF231</div>
+      </div>
+    </div>
+    <div class="machine-panel">${overlayBody}</div>
+    <div class="recipe-under" style="opacity:${homeOpen?0.42:0.95}">
+      <div class="recipe-tile"><span>COFFEE · FILTER</span><strong>Washed Ethiopian V60</strong></div>
+      <div class="recipe-tile peach"><span>COFFEE · STUDIO</span><strong>Natural Anaerobic · 15g</strong></div>
+    </div>
+    <div class="toast-sim"></div>
+  `;
+
+  // Right Phone: Full Unified Tool View (Option A + #FF007F Rim, ZERO SHEEN)
+  const full = document.getElementById('phone-full');
+  const activeMoving = phase === 'running' || phase === 'stopping';
+  full.innerHTML = `
+    <div class="statusbar"><span>08:25</span><span>5G 85</span></div>
+    <div class="screen-hdr">
+      <button type="button" class="back-well" data-act="back" title="Back (background exit when idle)">&lt;</button>
+      <div class="hdr-title-wrap">
+        <div class="hdr-title">Machine Tools <span class="brand-plus">++</span></div>
+        <div class="hdr-sub">XBLOOM 5AF231 · J15A01B5AF231</div>
+      </div>
+    </div>
+    <div class="switcher">
+      <button type="button" class="sw-tab ${tool==='grind'?'on fill':''} ${activeMoving && tool!=='grind'?'locked':''}" data-pick-tool="grind">GRIND</button>
+      <button type="button" class="sw-tab ${tool==='scale'?'on fill':''} ${activeMoving && tool!=='scale'?'locked':''}" data-pick-tool="scale">SCALE</button>
+      <button type="button" class="sw-tab ${tool==='pour'?'on fill':''} ${activeMoving && tool!=='pour'?'locked':''}" data-pick-tool="pour">POUR</button>
+    </div>
+    <div class="body">${fullHeroStage()}${deckMarkup(false)}</div>
+    <div class="toast-sim"></div>
+    <div class="dock">${ctaMarkup(false)}</div>
+  `;
+}
+
+function flashToast(phone, msg, warn = false) {
+  const el = phone.querySelector('.toast-sim');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.borderColor = warn ? 'rgba(240,194,74,0.55)' : 'rgba(93,220,138,0.45)';
+  el.style.color = warn ? 'var(--warn)' : 'var(--success)';
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2200);
+}
+
+function syncToolbar() {
+  document.querySelectorAll('[data-sim-tool]').forEach(b => b.classList.toggle('on', b.dataset.simTool === state.tool));
+  document.querySelectorAll('[data-sim-phase]').forEach(b => b.classList.toggle('on', b.dataset.simPhase === state.phase));
+}
+
+document.addEventListener('click', (e) => {
+  const toolBtn = e.target.closest('[data-sim-tool]');
+  if (toolBtn) { state.tool = toolBtn.dataset.simTool; syncToolbar(); renderAll(); return; }
+  const phaseBtn = e.target.closest('[data-sim-phase]');
+  if (phaseBtn) { state.phase = phaseBtn.dataset.simPhase; syncToolbar(); renderAll(); return; }
+
+  const openBtn = e.target.closest('[data-open-tool]');
+  if (openBtn) {
+    state.homeOpen = true;
+    state.tool = openBtn.dataset.openTool;
+    state.phase = 'entering';
+    syncToolbar(); renderAll();
+    setTimeout(() => { state.phase = 'ready'; syncToolbar(); renderAll(); }, 650);
+    return;
+  }
+
+  const stepBtn = e.target.closest('[data-step]');
+  if (stepBtn) {
+    const [key, deltaRaw] = stepBtn.dataset.step.split(':');
+    const delta = Number(deltaRaw);
+    const liveOk = key === 'tempC' ? (state.phase === 'ready' || state.phase === 'running') : state.phase === 'ready';
+    if (!liveOk) return;
+    if (key === 'grindSize') state.grindSize = Math.min(80, Math.max(1, state.grindSize + delta));
+    if (key === 'rpm') state.rpm = Math.min(120, Math.max(60, state.rpm + delta));
+    if (key === 'targetMl') state.targetMl = Math.min(350, Math.max(20, state.targetMl + delta));
+    if (key === 'flowRate') state.flowRate = Math.round(Math.min(5.0, Math.max(1.0, state.flowRate + delta)) * 10) / 10;
+    if (key === 'tempC') state.tempC = Math.min(98, Math.max(40, state.tempC + delta));
+    renderAll(); return;
+  }
+
+  const modeBtn = e.target.closest('[data-mode]');
+  if (modeBtn && state.phase === 'ready') { state.pourMode = modeBtn.dataset.mode; renderAll(); return; }
+  const patBtn = e.target.closest('[data-pat]');
+  if (patBtn && (state.phase === 'ready' || state.phase === 'running')) { state.pattern = patBtn.dataset.pat; renderAll(); return; }
+
+  const pick = e.target.closest('[data-pick-tool]');
+  if (pick) {
+    const next = pick.dataset.pickTool;
+    const phone = pick.closest('.phone');
+    if (next === state.tool) return;
+    if (state.phase === 'running' || state.phase === 'stopping') {
+      const target = phone.querySelector('.switcher, .launcher-row');
+      if (target) { target.classList.remove('shaking'); void target.offsetWidth; target.classList.add('shaking'); }
+      flashToast(phone, `Stop ${state.tool} before switching tools`, true);
+      return;
+    }
+    state.tool = next; state.phase = 'entering';
+    syncToolbar(); renderAll();
+    setTimeout(() => { state.phase = 'ready'; syncToolbar(); renderAll(); }, 650);
+    return;
+  }
+
+  const act = e.target.closest('[data-act]');
+  if (act) {
+    const phone = act.closest('.phone');
+    const name = act.dataset.act;
+    if (name === 'start') {
+      state.phase = 'running'; syncToolbar(); renderAll();
+    } else if (name === 'stop') {
+      state.phase = 'stopping'; syncToolbar(); renderAll();
+      setTimeout(() => { state.phase = 'ready'; syncToolbar(); renderAll(); }, 800);
+    } else if (name === 'tare') {
+      flashToast(phone, 'Scale zeroed (0.0 g)');
+    } else if (name === 'refresh') {
+      flashToast(phone, 'Vitals refreshed (WATER OK · PRO)');
+    } else if (name === 'expand') {
+      flashToast(document.getElementById('phone-full'), 'Expanded cleanly with live session preserved');
+    } else if (name === 'collapse') {
+      if (state.phase === 'running' || state.phase === 'stopping') {
+        const box = phone.querySelector('.machine-panel');
+        box.classList.remove('shaking'); void box.offsetWidth; box.classList.add('shaking');
+        flashToast(phone, `Stop ${state.tool} before collapsing overlay`, true);
+      } else {
+        state.homeOpen = false; renderAll();
+        flashToast(document.getElementById('phone-home'), 'Collapsed · Exiting BLE tool mode in background');
+      }
+    } else if (name === 'back') {
+      if (state.phase === 'running' || state.phase === 'stopping') {
+        const hdr = phone.querySelector('.screen-hdr');
+        hdr.classList.remove('shaking'); void hdr.offsetWidth; hdr.classList.add('shaking');
+        flashToast(phone, 'Active tool running — Stop before leaving', true);
+      } else {
+        flashToast(phone, 'Left immediately · Exiting machine mode in background');
+      }
+    }
+  }
+});
+
+renderAll();
+</script>
+</body>
+</html>

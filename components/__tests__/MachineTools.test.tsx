@@ -98,35 +98,42 @@ it("edits a ready grinder explicitly, and never starts on mount", async () => {
     expect(grind.onStart).not.toHaveBeenCalled();
     await fireEvent.press(screen.getByLabelText("Increase Grind size"));
     expect(grind.onRequestChange).toHaveBeenCalledWith({grindSize: 51, rpm: 80});
-    await fireEvent.press(screen.getByRole("button", {name: "Start"}));
+    await fireEvent.press(screen.getByRole("button", {name: "START GRIND"}));
     expect(grind.onStart).toHaveBeenCalledTimes(1);
     expect(screen.queryByTestId("grind-activity-band")).toBeNull();
 });
 
-it.each(["starting", "running", "stopping", "unknown"] as const)("keeps %s grinding readonly and Stop reachable", async (phase) => {
+it.each(["starting", "running", "unknown"] as const)("keeps %s grinding readonly and Stop reachable", async (phase) => {
     await renderWithProviders(<GrindTool {...grind} phase={phase} error="Connection uncertain"/>);
     expect(screen.queryByLabelText("Increase Grind size")).toBeNull();
-    expect(screen.queryByRole("button", {name: "Start"})).toBeNull();
+    expect(screen.queryByRole("button", {name: "START GRIND"})).toBeNull();
     expect(screen.getByText(phase === "running" ? "GRINDING" : phase.toUpperCase())).toBeTruthy();
     expect(screen.getByText("Connection uncertain")).toBeTruthy();
-    expect(within(screen.getByTestId("grind-tool-fields")).queryByRole("button", {name: "Stop"})).toBeNull();
-    await fireEvent.press(screen.getByRole("button", {name: "Stop"}));
+    expect(within(screen.getByTestId("grind-tool-fields")).queryByRole("button", {name: "STOP GRIND"})).toBeNull();
+    await fireEvent.press(screen.getByRole("button", {name: "STOP GRIND"}));
     expect(grind.onStop).toHaveBeenCalledTimes(1);
     expect(Boolean(screen.queryByTestId("grind-activity-band", {includeHiddenElements: true}))).toBe(phase === "running");
+});
+
+it("shows unmistakable outlined STOPPING GRIND… feedback while confirming grind stop", async () => {
+    await renderWithProviders(<GrindTool {...grind} phase="stopping"/>);
+    expect(screen.getByText("STOPPING")).toBeTruthy();
+    expect(screen.getByRole("button", {name: "STOPPING GRIND…"})).toBeDisabled();
+    expect(screen.queryByRole("button", {name: "START GRIND"})).toBeNull();
 });
 
 it("does not invent a grinder request or bounds when unsupported", async () => {
     await renderWithProviders(<GrindTool {...grind} request={null} policy={null} unavailable="Grind is not qualified."/>);
     expect(screen.getByText("Grind is not qualified.")).toBeTruthy();
     expect(screen.queryByLabelText("Increase Grind size")).toBeNull();
-    expect(screen.getByRole("button", {name: "Start"})).toBeDisabled();
+    expect(screen.getByRole("button", {name: "START GRIND"})).toBeDisabled();
 });
 
 it("blocks an invalid grind selection and names a missing numeric policy", async () => {
     await renderWithProviders(<GrindTool {...grind} policy={{
         grindSize: {min: 40, max: 60, step: 0}, rpm: {min: 60, max: 100, step: 10}
     }}/>);
-    expect(screen.getByRole("button", {name: "Start"})).toBeDisabled();
+    expect(screen.getByRole("button", {name: "START GRIND"})).toBeDisabled();
     expect(screen.queryByLabelText("Increase Grind size")).toBeNull();
     expect(screen.getByText("Grind size control is unavailable: no qualified range.")).toBeTruthy();
 });
@@ -157,7 +164,7 @@ it("shows target before starting and only independent dispensed telemetry during
     expect(screen.getByLabelText("DISPENSED: 0 ml")).toBeTruthy();
     expect(screen.queryByLabelText("TARGET VOLUME: 150 ml")).toBeNull();
     expect(screen.queryByLabelText("Increase Flow")).toBeNull();
-    expect(screen.queryByRole("button", {name: "Continuous"})).toBeNull();
+    expect(screen.getByRole("button", {name: "Until stopped"})).toBeDisabled();
     await view.rerender(<PourTool {...pour} phase="running" dispensedMl={null}/>);
     expect(screen.getByLabelText("DISPENSED: Unavailable")).toBeTruthy();
 });
@@ -169,7 +176,7 @@ it("retains a readonly target alongside the independent dispensed readout while 
     expect(screen.queryByLabelText("Increase Target volume")).toBeNull();
     expect(screen.queryByLabelText("Decrease Target volume")).toBeNull();
     expect(screen.queryByLabelText("Edit Target volume")).toBeNull();
-    expect(screen.getByRole("button", {name: "Stop"})).toBeEnabled();
+    expect(screen.getByRole("button", {name: "STOP POUR"})).toBeEnabled();
 });
 
 it("never displays a volume or progress for continuous pour", async () => {
@@ -178,6 +185,7 @@ it("never displays a volume or progress for continuous pour", async () => {
     expect(screen.queryByText("DISPENSED")).toBeNull();
     expect(screen.queryByText("TARGET VOLUME")).toBeNull();
     expect(screen.queryByLabelText("Increase Target volume")).toBeNull();
+    expect(screen.queryByTestId("pour-vessel-meter", {includeHiddenElements: true})).toBeNull();
     expect(screen.queryByRole("progressbar")).toBeNull();
 });
 
@@ -186,20 +194,26 @@ it("defaults live controls to unqualified while Stop stays accessible in unknown
     expect(screen.queryByLabelText("Increase Setpoint")).toBeNull();
     expect(screen.getByText("Live temperature control is not qualified.")).toBeTruthy();
     expect(screen.getByText("Live pattern control is not qualified.")).toBeTruthy();
-    expect(screen.queryByRole("button", {name: "Start"})).toBeNull();
-    expect(screen.getByRole("button", {name: "Stop"})).toBeEnabled();
+    expect(screen.queryByRole("button", {name: "START POUR"})).toBeNull();
+    expect(screen.getByRole("button", {name: "STOP POUR"})).toBeEnabled();
 });
 
-it.each(["starting", "stopping"] as const)("freezes a %s pour without concealing Stop", async (phase) => {
-    await renderWithProviders(<PourTool {...pour} phase={phase} dispensedMl={18.2}
+it("freezes a starting pour with enabled STOP POUR and transitions cleanly on stopping", async () => {
+    const view = await renderWithProviders(<PourTool {...pour} phase="starting" dispensedMl={18.2}
         liveTemperature={{qualified: true, onChange: jest.fn(), error: null}}
         livePattern={{qualified: true, onChange: jest.fn(), error: null}}/>);
-    expect(screen.getByText(phase.toUpperCase())).toBeTruthy();
+    expect(screen.getByText("STARTING")).toBeTruthy();
     expect(screen.getByLabelText("DISPENSED: 18.2 ml")).toBeTruthy();
     expect(screen.queryByLabelText("Increase Flow")).toBeNull();
     expect(screen.queryByLabelText("Increase Setpoint")).toBeNull();
-    expect(screen.queryByRole("button", {name: "Circular"})).toBeNull();
-    expect(screen.getByRole("button", {name: "Stop"})).toBeEnabled();
+    expect(screen.getByRole("button", {name: "Circular"})).toBeDisabled();
+    expect(screen.getByRole("button", {name: "STOP POUR"})).toBeEnabled();
+
+    await view.rerender(<PourTool {...pour} phase="stopping" dispensedMl={18.2}
+        liveTemperature={{qualified: true, onChange: jest.fn(), error: null}}
+        livePattern={{qualified: true, onChange: jest.fn(), error: null}}/>);
+    expect(screen.getByText("STOPPING")).toBeTruthy();
+    expect(screen.getByRole("button", {name: "STOPPING POUR…"})).toBeDisabled();
 });
 
 it("keeps an unqualified pour unavailable without inventing target or flow values", async () => {
@@ -207,7 +221,7 @@ it("keeps an unqualified pour unavailable without inventing target or flow value
     expect(screen.getByText("Pour is not qualified.")).toBeTruthy();
     expect(screen.getByLabelText("Flow: Unavailable")).toBeTruthy();
     expect(screen.queryByLabelText("Increase Target volume")).toBeNull();
-    expect(screen.getByRole("button", {name: "Start"})).toBeDisabled();
+    expect(screen.getByRole("button", {name: "START POUR"})).toBeDisabled();
 });
 
 it("keeps confirmed and pending live setpoints separate and shows failed mutations without hiding Stop", async () => {
@@ -221,8 +235,8 @@ it("keeps confirmed and pending live setpoints separate and shows failed mutatio
     expect(screen.getByText("Pending pattern: circular")).toBeTruthy();
     expect(screen.queryByLabelText("Increase Setpoint")).toBeNull();
     expect(screen.getByText("Setpoint failed")).toBeTruthy();
-    expect(screen.getByRole("button", {name: "Stop"})).toBeEnabled();
-    expect(within(screen.getByTestId("pour-tool-fields")).queryByRole("button", {name: "Stop"})).toBeNull();
+    expect(screen.getByRole("button", {name: "STOP POUR"})).toBeEnabled();
+    expect(within(screen.getByTestId("pour-tool-fields")).queryByRole("button", {name: "STOP POUR"})).toBeNull();
     await view.rerender(<PourTool {...pour} phase="running" temperatureC={90} pattern="spiral"
         liveTemperature={{qualified: true, onChange, error: null}}/>);
     await fireEvent.press(screen.getByLabelText("Increase Setpoint"));
@@ -232,7 +246,7 @@ it("keeps confirmed and pending live setpoints separate and shows failed mutatio
 it("uses the app string pattern mapping and reports a mode choice without inventing target defaults", async () => {
     await renderWithProviders(<PourTool {...pour}/>);
     expect(screen.getAllByLabelText("Spiral pour").length).toBeGreaterThan(0);
-    await fireEvent.press(screen.getByRole("button", {name: "Continuous"}));
+    await fireEvent.press(screen.getByRole("button", {name: "Until stopped"}));
     expect(pour.onModeChange).toHaveBeenCalledWith("continuous");
     await fireEvent.press(screen.getByRole("button", {name: "Circular"}));
     expect(pour.onRequestChange).toHaveBeenCalledWith({...pour.request, pattern: "circular"});
