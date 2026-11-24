@@ -343,7 +343,7 @@ describe("MachinePanel with several machines saved", () => {
 
 describe("MachinePanel inline tool mode", () => {
     it("swaps vitals for toned-down green inline grind workbench, preserves session on expand, and closes idle in background", async () => {
-        const s = await controlFixture();
+        const s = await controlFixture({deadlineMs: 5000});
         let exitCount = 0;
         let releaseExit!: () => void;
         s.respond((item: Planned) => {

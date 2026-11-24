@@ -18,7 +18,8 @@ export type Planned = {command: ControlCommand; tokens: ControlTokens};
 class Radio extends FakeTransport {
     get connectedDeviceId() { return this.connectedTo; }
 }
-export async function controlFixture(options: {reconnect?: MachineControlsOptions["reconnect"]} = {}) {
+export async function controlFixture(options: {reconnect?: MachineControlsOptions["reconnect"]; deadlineMs?: number} = {}) {
+    const deadlineMs = options.deadlineMs ?? 100;
     const radio = new Radio();
     radio.infoReply = machineInfoFrame({serial: identity.serial, model: "test", firmware: "test"});
     let raw = "";
@@ -43,9 +44,9 @@ export async function controlFixture(options: {reconnect?: MachineControlsOption
             plan: (command, tokens) => {
                 planned.push({command, tokens});
                 if (command.kind === "inspect" && command.recovery) {
-                    return {frame: null, refreshInfo: true, deadlineMs: 100};
+                    return {frame: null, refreshInfo: true, deadlineMs};
                 }
-                return {frame: buildType1(60001, [tokens.session, tokens.transaction]), deadlineMs: 100};
+                return {frame: buildType1(60001, [tokens.session, tokens.transaction]), deadlineMs};
             },
             decode: frame => frame[3] === 0xFE && frame[4] === 0xFE
                 ? feedbacks.get(frame[10] | frame[11] << 8) ?? null : null
