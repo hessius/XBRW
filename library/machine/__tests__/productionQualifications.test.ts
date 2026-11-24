@@ -652,7 +652,6 @@ describe("Studio production qualifications", () => {
             }
         });
 
-        const tapIdentity = {deviceId: "studio-5af231", serial: "J15A02A45H038"};
         const s = await studioSetup(j15H038Captured);
         expect(protocol.actualWaterSource(s.machine.info)).toBe("tap");
         expect(protocol.actualWaterSource(null)).toBeNull();
@@ -668,7 +667,6 @@ describe("Studio production qualifications", () => {
         expect(Array.from(ex.frame!)).toEqual(
             Array.from(buildType1(4506, [floatBits(15.0), floatBits(300.0), floatBits(620.0), 0, 1]))
         );
-        expect(tapIdentity).toBeTruthy();
         s.controls.dispose();
     });
 });

@@ -626,8 +626,14 @@ export default class Machine {
         const op = {generation};
         const finish = this.beginOrdinaryOperation(op);
         try {
-            await this.askInfo(() => guard(op), undefined, signal);
-            if (generation === this.generation) this.lastControlTxAt = Date.now();
+            await this.askInfo(
+                () => guard(op),
+                async (frame) => {
+                    await this.writeFrame(frame, () => guard(op));
+                    if (generation === this.generation) this.lastControlTxAt = Date.now();
+                },
+                signal
+            );
         } finally {
             finish();
         }
@@ -1555,27 +1561,29 @@ export default class Machine {
         if (signal?.aborted) abort.abort();
         const answered = this.waitForAnyInfo(abort.signal);
         try {
-            if (write === undefined) await this.shakeHands();
-            else {
-                await write(buildType1(8100, [185, 1]));
-                check?.();
-                this.lastHandshakeAt = Date.now();
+            try {
+                if (write === undefined) await this.shakeHands();
+                else {
+                    await write(buildType1(8100, [185, 1]));
+                    check?.();
+                    this.lastHandshakeAt = Date.now();
+                }
+            } catch (error) {
+                if (check !== undefined) throw error;
+                if (generation !== this.generation) throw error;
+                // A handshake the radio would not carry is not a reason to abandon
+                // what the caller was doing. The brew decides on what it last
+                // heard, and fails on its own first frame if the radio is gone.
+                return false;
             }
-        } catch (error) {
+            check?.();
+            const result = await answered || this.info !== infoBeforeRequest;
+            check?.();
+            return result;
+        } finally {
             signal?.removeEventListener("abort", onOuterAbort);
             abort.abort();
-            if (check !== undefined) throw error;
-            if (generation !== this.generation) throw error;
-            // A handshake the radio would not carry is not a reason to abandon
-            // what the caller was doing. The brew decides on what it last
-            // heard, and fails on its own first frame if the radio is gone.
-            return false;
         }
-        check?.();
-        const result = await answered || this.info !== infoBeforeRequest;
-        signal?.removeEventListener("abort", onOuterAbort);
-        check?.();
-        return result;
     }
 
     async disconnect(): Promise<void> {

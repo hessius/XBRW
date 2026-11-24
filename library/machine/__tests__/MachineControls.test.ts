@@ -1172,48 +1172,126 @@ it("blocks opening Pour before sending enter when tank water is low, refreshes v
     expect(enterCount).toBe(2);
     await s.controls.close();
 
-    // Aborting during frame-gap wait in ensurePourWaterForControl stops before sending 8100, and reconnect/disconnect rejects cleanly.
+    // Aborting during frame-gap wait in spacedControls.open stops before sending 8100, and reconnect/disconnect rejects cleanly.
     const spacedRadio = new Radio();
     spacedRadio.infoReply = lowTank;
     const spacedMachine = new Machine(spacedRadio, {frameGapMs: 1000});
     spacedMachine.installControlRecovery(new ControlRecoveryStore({read: () => "", write: () => {}}));
     await spacedMachine.connect(identity.deviceId);
     spacedRadio.emit(status(MACHINE_STATE.IDLE));
+    const spacedSent: Sent[] = [];
     const spacedControls = new MachineControls(spacedMachine, {
         qualifications: [{
             profile,
             protocol: {
                 actualWaterSource: () => "tank",
-                plan: (_command, tokens) => ({
-                    frame: buildType1(60000, [tokens.session, tokens.transaction]),
-                    deadlineMs: 50
-                }),
-                decode: () => null
+                plan: (command, tokens) => {
+                    spacedSent.push({command, tokens});
+                    return {
+                        frame: buildType1(codes[command.kind], [tokens.session, tokens.transaction]),
+                        deadlineMs: 2500
+                    };
+                },
+                decode: (frame) => frame[3] === 0xFE && frame[4] === 0xFE
+                    ? feedbacks.get(frame[10] | frame[11] << 8) ?? null
+                    : null
             }
         }]
     });
     jest.useFakeTimers();
     try {
-        spacedControls.dispose();
-        // Verify abort & connection change directly via Machine.ensurePourWaterForControl.
-        await spacedMachine.disconnect();
-        await spacedMachine.connect(identity.deviceId);
-        spacedRadio.emit(status(MACHINE_STATE.IDLE));
         // Seed lastControlTxAt via ensureFreshControlState with stale state.
         await jest.advanceTimersByTimeAsync(16_000);
         spacedRadio.homeReply = status(MACHINE_STATE.IDLE);
         await spacedMachine.ensureFreshControlState();
         spacedRadio.written = [];
-        const ac = new AbortController();
-        const abortedPreflight = spacedMachine.ensurePourWaterForControl(ac.signal);
-        ac.abort();
-        await expect(abortedPreflight).rejects.toThrow(/cancelled/i);
-        expect(spacedRadio.sent).toEqual([]);
+        spacedSent.length = 0;
 
+        const ac = new AbortController();
+        const abortedOpenError = spacedControls.open(identity, "pour", ac.signal).then(() => null, (error: Error) => error);
+        await Promise.resolve();
+        ac.abort();
+        expect((await abortedOpenError)?.message).toMatch(/cancelled/i);
+        expect(spacedRadio.written).toEqual([]);
+        expect(spacedSent).toEqual([]);
+
+        // Advance past frame gap, start open so 8100 is written, then abort during waitForAnyInfo:
+        // lastControlTxAt must already be updated upon writing 8100 so an immediate next open waits frameGapMs.
+        await jest.advanceTimersByTimeAsync(1000);
+        spacedRadio.infoReply = null;
+        const originalSpacedWrite = spacedRadio.write.bind(spacedRadio);
+        let release8100!: () => void;
+        const wrote8100 = new Promise<void>((resolve) => { release8100 = resolve; });
+        spacedRadio.write = async (frame) => {
+            await originalSpacedWrite(frame);
+            if ((frame[3] | (frame[4] << 8)) === 8100) release8100();
+        };
+        const acDuringWait = new AbortController();
+        const waitingOpenError = spacedControls.open(identity, "pour", acDuringWait.signal).then(() => null, (error: Error) => error);
+        await wrote8100;
+        const txCountAfterWrite = spacedRadio.written.length;
+        expect(txCountAfterWrite).toBe(1);
+
+        // Joining while ensurePourWaterForControl has aborted waits for unwind and opens cleanly via fresh preflight.
+        spacedRadio.infoReply = okTank;
+        spacedRadio.syntheticWrite = (frame) => {
+            const code = frame[3] | (frame[4] << 8);
+            if (code === codes.enter || code === codes.exit) {
+                const session = new DataView(frame.buffer, frame.byteOffset).getUint32(10, true);
+                const transaction = new DataView(frame.buffer, frame.byteOffset).getUint32(14, true);
+                feedback(spacedRadio, {session, transaction}, {kind: code === codes.enter ? "ready" : "closed"});
+            }
+        };
+        acDuringWait.abort();
+        const handoffOpen = spacedControls.open(identity, "pour");
+        expect((await waitingOpenError)?.message).toMatch(/cancelled/i);
+        // Right after settling, immediate retry still waits the 1000ms gap because 8100 stamped lastControlTxAt when sent.
+        await Promise.resolve();
+        expect(spacedRadio.written.length).toBe(txCountAfterWrite);
+        await jest.advanceTimersByTimeAsync(1000);
+        await jest.advanceTimersByTimeAsync(1000);
+        await handoffOpen;
+        expect(spacedControls.getSnapshot().phase).toBe("ready");
+        const closingSpaced = spacedControls.close();
+        await jest.advanceTimersByTimeAsync(1000);
+        await closingSpaced;
+
+        // Handoff across signalA abort + signalB join during ensureFreshControlState does not latch pourAbort.
+        await jest.advanceTimersByTimeAsync(16_000);
+        spacedRadio.emit(lowTank);
+        spacedRadio.infoReply = okTank;
+        let release8022!: () => void;
+        const gate8022 = new Promise<void>((resolve) => { release8022 = resolve; });
+        spacedRadio.write = async (frame) => {
+            if ((frame[3] | (frame[4] << 8)) === 8022) await gate8022;
+            await originalSpacedWrite(frame);
+        };
+        const ac1 = new AbortController();
+        const ac2 = new AbortController();
+        const inlineOpenError = spacedControls.open(identity, "pour", ac1.signal).then(() => null, (error: Error) => error);
+        await Promise.resolve();
+        ac1.abort();
+        const fullOpen = spacedControls.open(identity, "pour", ac2.signal);
+        await jest.advanceTimersByTimeAsync(0);
+        release8022();
+        await jest.advanceTimersByTimeAsync(1000);
+        await jest.advanceTimersByTimeAsync(1000);
+        const [inlineErr] = await Promise.all([inlineOpenError, fullOpen]);
+        expect(inlineErr?.message).toMatch(/cancelled/i);
+        expect(spacedControls.getSnapshot().phase).toBe("ready");
+
+        const closingFull = spacedControls.close();
+        await jest.advanceTimersByTimeAsync(1000);
+        await closingFull;
+
+        spacedRadio.write = originalSpacedWrite;
+        spacedRadio.emit(lowTank);
         const linkDropped = spacedMachine.ensurePourWaterForControl();
+        const linkDroppedError = linkDropped.then(() => null, (error: Error) => error);
         await spacedMachine.disconnect();
-        await expect(linkDropped).rejects.toThrow(/connection changed/i);
+        expect((await linkDroppedError)?.message).toMatch(/connection changed/i);
     } finally {
+        spacedControls.dispose();
         jest.useRealTimers();
     }
     s.controls.dispose();

@@ -114,6 +114,7 @@ export default class MachineControls {
         promise: Promise<void>;
         signals?: Set<AbortSignal | undefined>;
         watchSignal?: (signal?: AbortSignal) => void;
+        aborted?: () => boolean;
     } | null = null;
     private recovering = false;
     private reconnecting: Promise<void> | null = null;
@@ -730,14 +731,21 @@ export default class MachineControls {
         if (this.disposed) throw new Error("The shared control owner was reset.");
         if (signal?.aborted) throw new Error("Control open cancelled before attachment.");
         const key = `${identity.deviceId}\0${identity.serial ?? ""}\0${tool}`;
-        if (this.preflight) {
+        while (this.preflight) {
             if (this.preflight.key === key) {
                 if (signal?.aborted) throw new Error("Control open cancelled before attachment.");
-                this.preflight.signals?.add(signal);
-                this.preflight.watchSignal?.(signal);
-                await this.preflight.promise;
+                if (!this.preflight.aborted?.()) {
+                    this.preflight.signals?.add(signal);
+                    this.preflight.watchSignal?.(signal);
+                    await this.preflight.promise;
+                    if (signal?.aborted) throw new Error("Control open cancelled before attachment.");
+                    return;
+                }
+                // Wait for an already-aborted preflight to unwind so the caller gets a fresh un-aborted run.
+                await this.preflight.promise.catch(() => {});
+                if (this.disposed) throw new Error("The shared control owner was reset.");
                 if (signal?.aborted) throw new Error("Control open cancelled before attachment.");
-                return;
+                continue;
             }
             throw new Error("A control session is already owned.");
         }
@@ -760,9 +768,9 @@ export default class MachineControls {
 
         const signals = new Set<AbortSignal | undefined>([signal]);
         const preflightCancelled = () => signals.size > 0 && Array.from(signals).every((entry) => entry?.aborted === true);
-        const preflightAbort = new AbortController();
+        let pourAbort: AbortController | null = null;
         const syncPreflightAbort = () => {
-            if (preflightCancelled()) preflightAbort.abort();
+            if (pourAbort && preflightCancelled()) pourAbort.abort();
         };
         const watchedSignals: AbortSignal[] = [];
         const watchSignal = (entry?: AbortSignal) => {
@@ -780,6 +788,7 @@ export default class MachineControls {
             promise: Promise<void>;
             signals?: Set<AbortSignal | undefined>;
             watchSignal?: (signal?: AbortSignal) => void;
+            aborted?: () => boolean;
         } | undefined;
         const task = (async () => {
             try {
@@ -791,7 +800,10 @@ export default class MachineControls {
                 if (this.disposed) throw new Error("The shared control owner was reset.");
                 if (this.snapshot.phase !== "closed") throw new Error("A control session is already owned.");
                 if (tool === "pour") {
-                    await this.machine.ensurePourWaterForControl(preflightAbort.signal);
+                    pourAbort = new AbortController();
+                    if (preflightCancelled()) pourAbort.abort();
+                    await this.machine.ensurePourWaterForControl(pourAbort.signal);
+                    pourAbort = null;
                     if (preflightCancelled()) throw new Error("Control open cancelled before attachment.");
                     if (this.disposed) throw new Error("The shared control owner was reset.");
                     if (this.snapshot.phase !== "closed") throw new Error("A control session is already owned.");
@@ -814,13 +826,21 @@ export default class MachineControls {
                     this.opening = null;
                 }
             } finally {
+                pourAbort = null;
                 for (const entry of watchedSignals) entry.removeEventListener("abort", syncPreflightAbort);
                 if (this.preflight === preflight) this.preflight = null;
             }
         })();
-        preflight = {key, promise: task, signals, watchSignal};
+        preflight = {
+            key,
+            promise: task,
+            signals,
+            watchSignal,
+            aborted: () => pourAbort !== null && pourAbort.signal.aborted
+        };
         this.preflight = preflight;
         await task;
+        if (signal?.aborted) throw new Error("Control open cancelled before attachment.");
     }
 
     /** True only while the active BLE connection matches `identity` and this owner is live. */
