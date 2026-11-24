@@ -1,3 +1,4 @@
+import {Linking} from "react-native";
 import {fireEvent, screen, waitFor, within} from "@testing-library/react-native";
 
 import ImportCloudScreen from "@/app/importCloud";
@@ -131,34 +132,101 @@ describe("importCloud", () => {
         expect(screen.getByText(/Email or password not accepted/i)).toBeTruthy();
     });
 
-    it("explains that Google and Apple accounts cannot sign in when credentials are refused", async () => {
+    it("explains how Google and Apple accounts can set a password when credentials are refused", async () => {
         mockHook.error = "credentials";
         await renderWithProviders(<ImportCloudScreen/>);
         expect(
-            screen.getByText(/Accounts created with Google or Apple cannot sign in here/i)
+            screen.getByText(/created your account with Google or Apple, set a password using the help below/i)
         ).toBeTruthy();
     });
 
-    it("explains before the fields that Google and Apple accounts cannot sign in", async () => {
+    it("explains before the fields how Google and Apple accounts can sign in", async () => {
         await renderWithProviders(<ImportCloudScreen/>);
 
         expect(
-            screen.getByText(/Only xBloom accounts with an email and password can sign in here/i)
+            screen.getByText(/Sign in with your xBloom email and password/i)
         ).toBeTruthy();
         expect(
-            screen.getByText(/Accounts created with Google or Apple cannot be used/i)
+            screen.getByText(/created your account with Google or Apple, you can set a password for it below/i)
         ).toBeTruthy();
         expect(
             screen.getByText(/import recipes one by one using share links/i)
         ).toBeTruthy();
 
         const tree = renderedText().join("\u0000");
-        const limitation = tree.indexOf("Only xBloom accounts with an email and password");
+        const limitation = tree.indexOf("Sign in with your xBloom email and password");
         const field = tree.indexOf("Password");
 
         expect(limitation).toBeGreaterThan(-1);
         expect(field).toBeGreaterThan(-1);
         expect(limitation).toBeLessThan(field);
+    });
+
+    it("keeps the Google and Apple password guide collapsed until opened", async () => {
+        await renderWithProviders(<ImportCloudScreen/>);
+
+        const toggle = screen.getByTestId("social-signin-help-toggle");
+        expect(toggle.props.accessibilityState.expanded).toBe(false);
+        expect(
+            screen.getByTestId("collapsible", {includeHiddenElements: true}).props.accessibilityElementsHidden
+        ).toBe(true);
+
+        await fireEvent.press(toggle);
+
+        expect(toggle.props.accessibilityState.expanded).toBe(true);
+        expect(screen.getByTestId("collapsible").props.accessibilityElementsHidden).toBe(false);
+        expect(screen.getByText(/Open collective\.xbloom\.com in your browser/i)).toBeTruthy();
+        expect(screen.getByText(/Tap Forgot password/i)).toBeTruthy();
+        expect(screen.getByLabelText("Open collective.xbloom.com in your browser")).toBeTruthy();
+
+        await fireEvent.press(toggle);
+
+        expect(toggle.props.accessibilityState.expanded).toBe(false);
+    });
+
+    it("opens the Google and Apple password guide automatically on a credentials error and still allows collapsing", async () => {
+        mockHook.error = "credentials";
+        await renderWithProviders(<ImportCloudScreen/>);
+
+        const toggle = screen.getByTestId("social-signin-help-toggle");
+        expect(toggle.props.accessibilityState.expanded).toBe(true);
+        expect(screen.getByTestId("collapsible").props.accessibilityElementsHidden).toBe(false);
+
+        await fireEvent.press(toggle);
+
+        expect(toggle.props.accessibilityState.expanded).toBe(false);
+    });
+
+    it("resets the manual help toggle on sign-in submit so a credentials error re-opens it", async () => {
+        const rendered = await renderWithProviders(<ImportCloudScreen/>);
+        const toggle = screen.getByTestId("social-signin-help-toggle");
+
+        await fireEvent.press(toggle);
+        await fireEvent.press(toggle);
+        expect(toggle.props.accessibilityState.expanded).toBe(false);
+
+        await fireEvent.changeText(screen.getByLabelText("Email"), "a@b.c");
+        await fireEvent.changeText(screen.getByLabelText("Password"), "secret");
+        await fireEvent.press(screen.getByLabelText("Sign in"));
+
+        mockHook.error = "credentials";
+        await rendered.rerender(<ImportCloudScreen/>);
+
+        expect(screen.getByTestId("social-signin-help-toggle").props.accessibilityState.expanded).toBe(true);
+    });
+
+    it("opens collective.xbloom.com in the browser from the help guide link", async () => {
+        const openURL = jest.spyOn(Linking, "openURL").mockResolvedValue(true);
+        try {
+            await renderWithProviders(<ImportCloudScreen/>);
+
+            await fireEvent.press(screen.getByTestId("social-signin-help-toggle"));
+            await fireEvent.press(screen.getByLabelText("Open collective.xbloom.com in your browser"));
+
+            expect(openURL).toHaveBeenCalledWith("https://collective.xbloom.com/");
+        } finally {
+            openURL.mockRestore();
+        }
     });
 
     it("says so when the network was unreachable", async () => {
@@ -623,11 +691,17 @@ describe("importCloud", () => {
     /** House style: dashes read as AI copy, so the screen carries none. */
     it("writes its caveats without dashes", async () => {
         await renderWithProviders(<ImportCloudScreen/>);
+        await fireEvent.press(screen.getByTestId("social-signin-help-toggle"));
 
         const caveats = [
             screen.getByText(/not an official xBloom feature/i),
             screen.getByText(/password is never stored/i),
-            screen.getByText(/Only xBloom accounts with an email and password/i),
+            screen.getByText(/Sign in with your xBloom email and password/i),
+            screen.getByText(/Signed up with Google or Apple\?/i),
+            screen.getByText(/xBloom only lets third party apps sign in/i),
+            screen.getByText(/1\. Open collective\.xbloom\.com/i),
+            screen.getByText(/2\. Tap Forgot password/i),
+            screen.getByText(/3\. Follow the recovery email/i),
         ];
         for (const node of caveats) {
             expect(String(node.props.children)).not.toMatch(/[\u2013\u2014]/);
