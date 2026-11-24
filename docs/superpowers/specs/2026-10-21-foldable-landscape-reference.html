@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>XBRW++ / Unfolded landscape</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#eae9e5;color:#242424;font:15px/1.5 system-ui,sans-serif}main{max-width:1040px;padding:36px 24px;margin:auto}
+h1{font-size:34px;letter-spacing:-1px;line-height:1.15;margin:10px 0}.eyebrow{font:11px ui-monospace,monospace;letter-spacing:2px}.intro{max-width:850px;color:#555}
+.toolbar{display:flex;flex-wrap:wrap;gap:7px;padding:12px 0;margin:22px 0;position:sticky;top:0;background:#eae9e5ed;z-index:4;backdrop-filter:blur(12px)}
+button{border:1px solid #aaa;background:transparent;border-radius:24px;padding:8px 14px;font:13px system-ui;color:#333;cursor:pointer}button[aria-pressed=true]{background:#222;color:white;border-color:#222}
+.view{margin:0 0 42px}.view h2{font-size:22px;letter-spacing:-.5px;margin:0 0 6px}.description{font-size:14px;color:#555;margin:0 0 18px;max-width:820px}
+.device{background:#050505;color:white;aspect-ratio:2670/1878;border:6px solid #343437;border-radius:32px;overflow:hidden;container-type:inline-size;box-shadow:0 12px 30px #0002}
+.screen{height:100%;padding:1.8cqw 2.4cqw 0;display:flex;flex-direction:column;font-size:1.5cqw;line-height:1.4}
+.status{font-size:1.1cqw;display:flex;justify-content:space-between;color:#ccc;padding:0 .6cqw 1.5cqw}.top{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.8cqw;gap:2cqw}
+.wordmark{font:700 3.2cqw ui-monospace,monospace;letter-spacing:-.25cqw}.pink{color:#ff58a2}.machine{font-size:1.15cqw;padding:.7cqw 1.2cqw;border:1px solid #444;border-radius:6cqw}.green{color:#5ddc8a}.dim{color:#a3a3a3}.crumb{font:1.1cqw ui-monospace,monospace;letter-spacing:.1cqw;color:#aaa}
+.body{flex:1;min-height:0;overflow:auto}.split{display:grid;grid-template-columns:29% 1fr;gap:2.5cqw;height:100%}.sidebar{padding-right:2.5cqw;border-right:1px solid #333;overflow:auto}.detail{min-width:0;display:flex;flex-direction:column;min-height:0}.object-scroll{flex:1;min-height:0;overflow:auto}
+.search{border:1px solid #444;border-radius:1.2cqw;padding:1cqw 1.3cqw;font-size:1.3cqw;color:#aaa;margin-bottom:1.4cqw}.chips{display:flex;gap:.8cqw;flex-wrap:wrap;margin-bottom:1.5cqw}.chip{padding:.5cqw 1cqw;border:1px solid #444;border-radius:3cqw;font-size:1.1cqw;color:#aaa}.chip.active{background:white;color:#111;border-color:white}
+.recipe{background:#9fc3f0;color:#0c0c0c;border-radius:1.3cqw;padding:1.4cqw;margin:0 0 1.3cqw;position:relative;overflow:hidden}.recipe b{display:block;font-size:1.7cqw;margin-bottom:.7cqw}.recipe small{font:1.1cqw ui-monospace,monospace}.recipe.selected{outline:1px solid white;outline-offset:.4cqw}.peach{background:#f0b98e}.sage{background:#cfd6a3}.lilac{background:#bdb2e8}.recipe svg{display:block;width:100%;height:3.5cqw;margin-top:.7cqw}
+.title{font-size:3.2cqw;letter-spacing:-.14cqw;line-height:1.15;margin:.8cqw 0 1cqw;font-weight:700}.star{font-size:3cqw;color:#f0c24a}.titleline{display:flex;align-items:center;justify-content:space-between}.section{font:1.05cqw ui-monospace,monospace;letter-spacing:.1cqw;color:#aaa;margin:1.6cqw 0 1cqw}
+.graph{width:100%;height:20cqw;display:block}.hero{background:#9fc3f0;color:#0c0c0c;border-radius:1.5cqw;padding:1.7cqw;margin:1.5cqw 0}.hero .graph{height:17cqw}.axis{display:flex;justify-content:space-between;font:1cqw ui-monospace,monospace;color:#aaa;margin-top:.5cqw}
+.figures{display:grid;grid-template-columns:repeat(4,1fr);gap:2cqw;margin:1.5cqw 0}.figures label{font:1cqw ui-monospace,monospace;color:#aaa;display:block;margin-bottom:.6cqw}.figures strong{font:700 2.8cqw ui-monospace,monospace;letter-spacing:-.1cqw}.figures small{font-size:1.3cqw}
+.button{display:block;text-align:center;border:1px solid #666;border-radius:1cqw;padding:1cqw;font:700 1.3cqw ui-monospace,monospace}.primary{background:#9fc3f0;color:#0c0c0c;border-color:#9fc3f0}.actions{display:grid;grid-template-columns:2fr .8fr 1fr 1fr 1fr;gap:.9cqw;margin-top:1.4cqw}.note{color:#aaa;font-size:1.25cqw;margin:1.5cqw 0;border-left:2px solid #9fc3f0;padding-left:1.2cqw}
+.nav{display:flex;align-items:center;gap:3cqw;border-top:1px solid #333;padding:1.3cqw 0 .6cqw;margin-top:1.8cqw;color:#aaa;font:1.1cqw ui-monospace,monospace}.nav .active{color:white}.nav .spacer{flex:1}.indicator{width:14cqw;height:.5cqw;border-radius:3cqw;background:#eee;margin:1cqw auto}
+.editor-grid{display:grid;grid-template-columns:1fr 1fr;gap:3cqw;height:100%}.panel{background:#141414;border-radius:1.3cqw;padding:1.5cqw}.panel .graph{height:21cqw}.params{display:grid;grid-template-columns:1fr 1fr;gap:1cqw}.param{border-bottom:1px solid #333;padding:1cqw 0;display:flex;justify-content:space-between;font-size:1.3cqw}.value{color:#9fc3f0;font-family:ui-monospace,monospace}
+.stage{padding:1.2cqw;border:1px solid #444;border-radius:1.1cqw;margin-bottom:.8cqw;font-size:1.3cqw}.stage.active{border-color:#9fc3f0;background:#152030}.stagehead{display:flex;justify-content:space-between;margin-bottom:.4cqw}.stage small{font-size:1.05cqw;color:#aaa}.stage-controls{display:grid;grid-template-columns:1fr 1fr;gap:.5cqw 1.5cqw;margin-top:1cqw;border-top:1px solid #3b506b;padding-top:.5cqw}
+.draftbar{border-top:1px solid #333;display:flex;align-items:center;justify-content:space-between;padding-top:1.2cqw;margin-top:1.8cqw;font-size:1.2cqw}.draftbar .button{min-width:17cqw}.tabs{display:flex;gap:2cqw;font:1.1cqw ui-monospace,monospace;color:#aaa}.tabs .active{color:white}
+.history-table{border:1px solid #444;border-radius:1.3cqw;overflow:hidden;margin-bottom:1.8cqw}.table-row{display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr 1fr 1.2fr;padding:.8cqw 1.5cqw;gap:1cqw;border-bottom:1px solid #333;font-size:1.25cqw}.table-row:last-child{border-bottom:0}.table-row.header{color:#aaa;font:1cqw ui-monospace,monospace}.table-row.selected{background:#172438;box-shadow:inset 2px 0 #9fc3f0}
+.evidence{display:grid;grid-template-columns:1.6fr 1fr;gap:2.5cqw}.trace{width:100%;height:21cqw;display:block}.legend{display:flex;gap:2cqw;font-size:1.1cqw;margin-top:.7cqw}.water{color:#9fc3f0}.cup{color:#f0b98e}.gold{color:#f0c24a}.judgement{border:1px solid #333;border-radius:1cqw;padding:1.4cqw;font-size:1.3cqw;margin:1.3cqw 0}.history-actions{display:flex;gap:1cqw}.history-actions .button{flex:1}
+.live-head{display:grid;grid-template-columns:1fr 1fr 1fr;gap:2cqw;align-items:center;margin:.8cqw 0 1.4cqw}.big{font:700 4.5cqw ui-monospace,monospace;letter-spacing:-.25cqw}.big small{font:1.5cqw ui-monospace,monospace;letter-spacing:0;color:#aaa}.live-clock{text-align:center;font:3cqw ui-monospace,monospace}.live-cup{text-align:right;font:2.6cqw ui-monospace,monospace}.live-head label{display:block;color:#aaa;font:1cqw ui-monospace,monospace;letter-spacing:.1cqw;margin-bottom:.4cqw}.live-graph .trace{height:22cqw}
+.sequence{display:grid;grid-template-columns:repeat(4,1fr);gap:1cqw;margin-top:1cqw}.sequence .stage{margin:0;padding:1cqw}.sequence .done{color:#999}.live-bottom{display:grid;grid-template-columns:1fr 18cqw 18cqw;gap:1.3cqw;align-items:center;border-top:1px solid #333;padding-top:1.2cqw;margin-top:1.5cqw}.stop{color:#ff6b5e;border-color:#99524b}
+.caption{font-size:13px;color:#555;max-width:850px;margin:17px 0 0}.note-page{font-size:13px;background:#ffffff88;padding:18px 22px;border-radius:11px;color:#555}.note-page b{color:#222}
+.screen{position:relative;padding-right:10cqw}
+.screen>.status,.screen>.indicator,.screen>.nav{display:none}
+.side-controls{position:absolute;right:1.4cqw;top:1.8cqw;bottom:1.8cqw;width:6.6cqw;display:flex;flex-direction:column;align-items:stretch;gap:1cqw;border-left:1px solid #333;padding-left:1cqw}
+.side-status{font:1cqw ui-monospace,monospace;text-align:center;color:#bbb;margin-bottom:1cqw}
+.side-control{font-size:1.7cqw;line-height:1.2;text-align:center;padding:.9cqw .2cqw;border:1px solid transparent;border-radius:1cqw}
+.side-control small{display:block;font: .85cqw system-ui;margin-top:.35cqw}
+.side-control.current{background:#252525;color:white}
+.side-control.primary{border-color:#9fc3f0}
+.side-control.stop{border-color:#99524b}
+.side-group{display:flex;flex-direction:column;gap:.7cqw}
+.side-group.navigation{margin-top:auto;border-top:1px solid #333;padding-top:1cqw;color:#aaa}
+.side-divider{border-top:1px solid #444;margin:.8cqw 0}
+.live-layout{display:grid;grid-template-columns:minmax(0,1.75fr) minmax(0,1fr);gap:2.6cqw;height:100%;min-height:0}
+.live-main{min-width:0;overflow:auto}
+.live-layout .live-head{grid-template-columns:1.2fr 1fr;gap:1cqw;margin-top:1.5cqw}
+.live-layout .live-clock{text-align:right}
+.live-layout .big{font-size:4.8cqw}
+.live-layout .live-graph .trace{height:24cqw}
+.live-ladder{border-left:1px solid #333;padding-left:2.2cqw;overflow:auto}
+.live-ladder .stage{border:0;border-left:2px solid #444;border-radius:0;margin:0;padding:2cqw 1.4cqw}
+.live-ladder .stage.active{border-left-color:#9fc3f0;border-radius:0 1cqw 1cqw 0}
+.live-ladder .stage.done{color:#999}
+.live-ladder .stagehead{font-size:1.45cqw}
+.live-ladder .stage small{font-size:1.2cqw;line-height:1.8}
+.live-layout .figures{grid-template-columns:1fr 1fr}
+.live-layout .figures strong{font-size:2.6cqw}
+.live-explainer{font-size:1.2cqw;color:#aaa;margin-top:1.8cqw}
+.actions .button,.draftbar,.live-bottom,.history-actions{display:none}
+.actions{margin-top:0}
+.evidence{grid-template-columns:1.5fr 1fr}
+[hidden]{display:none!important}@media(max-width:650px){main{padding:24px 13px}.device{border-width:3px;border-radius:18px}.description,.caption{font-size:13px}}
+</style>
+</head>
+<body>
+<main>
+<div class="eyebrow">XBRW++ / UNFOLDED LANDSCAPE / HIG REFINEMENT</div>
+<h1>A wider workspace, view by view.</h1>
+<p class="intro">Home, editor and history retain their content layouts. Live brewing now puts the trace beside a vertical ladder. Landscape navigation and toolbar actions move to the side, following Apple's Duo guidance. Symbol-and-label controls here are schematic, not final platform assets.</p>
+<div class="toolbar" aria-label="Views"><button data-view="all" aria-pressed="true">All views</button><button data-view="home" aria-pressed="false">Home</button><button data-view="editor" aria-pressed="false">Editor</button><button data-view="history" aria-pressed="false">History</button><button data-view="live" aria-pressed="false">Live brew</button></div>
+<div id="views"></div>
+<div class="note-page"><b>Grounded in Apple's HIG:</b> <a href="https://developer.apple.com/design/human-interface-guidelines/designing-for-iphone-duo">Designing for iPhone Duo</a> calls for side toolbars/navigation in unfolded landscape, consistent state and hierarchy across displays, and minimal movement during folding. Search and shelf controls stay with the collection they affect. Recipe and brew actions occupy the side toolbar; navigation stays outside the content arrangement.<br><br><b>Adaptive, not device-locked:</b> the preview frame uses your supplied 2670 × 1878 proportions, but a real layout must respond to available space, safe areas, multitasking and conditional fold/camera reserved regions. A fixed percentage split or this schematic toolbar is not a substitute for those APIs. Native guidance is verified; Expo/React Native support is not yet assessed.<br><br><b>Unfolded only:</b> no tabletop reorganisation is decided here. The graph and ladder are a natural content pair to adapt around reserved regions, without changing the task or sending brew commands. Touch targets, large text, keyboard behaviour, native bars and all brew states still require a detailed design pass. No app implementation is included.</div>
+</main>
+<script>
+const shape=(cls="graph",color="#9fc3f0")=>`<svg class="${cls}" viewBox="0 0 500 160" preserveAspectRatio="none" aria-label="Four-stage recipe profile"><path d="M0 155V124H94V89H220V48H350V9H500V155Z" fill="${color}" fill-opacity=".12"/><path d="M0 155V124H94V89H220V48H350V9H500" fill="none" stroke="${color}" stroke-width="2" vector-effect="non-scaling-stroke"/></svg>`;
+const trace=(live=false)=>`<svg class="trace" viewBox="0 0 700 190" preserveAspectRatio="none" aria-label="${live?"Live":"Recorded"} water and cup traces"><path d="M0 180H700M0 125H700M0 70H700M0 15H700" fill="none" stroke="#333" stroke-width=".6"/><path d="M0 180L58 143H125L208 101H290L386 58H470L568 15H700" fill="none" stroke="#9fc3f0" opacity="${live?".35":"1"}" stroke-width="2" stroke-dasharray="${live?"5 4":"none"}" vector-effect="non-scaling-stroke"/><path d="${live?"M0 180L58 143H125L208 101H290L335 81":"M0 180L50 172L125 151L208 126L290 99L386 70L470 46L568 25L700 18"}" fill="none" stroke="${live?"#9fc3f0":"#f0b98e"}" stroke-width="2.5" stroke-dasharray="${live?"none":"5 3"}" vector-effect="non-scaling-stroke"/>${live?'<path d="M0 180L50 175L125 159L208 138L290 112L335 101" fill="none" stroke="#f0b98e" stroke-width="2.5" stroke-dasharray="5 3" vector-effect="non-scaling-stroke"/><circle cx="335" cy="81" r="4" fill="#9fc3f0"/>':""}</svg><div class="axis"><span>0:00</span><span>1:00</span><span>2:00</span><span>3:00</span></div><div class="legend"><span class="water">Water</span><span class="cup">Cup</span>${live?'<span class="dim">Dashed staircase: planned water</span>':""}</div>`;
+const header=(label="XBRW")=>`<div class="status"><span>9:41</span><span>LTE &#9632;</span></div><div class="top">${label==="XBRW"?'<div class="wordmark">XBRW<span class="pink">++</span></div>':`<span class="crumb">${label}</span>`}<span class="machine"><span class="green">&#9679;</span> Home Studio</span></div>`;
+const nav=()=>`<div class="nav"><span class="active">LIBRARY</span><span>DISCOVER</span><span>HISTORY</span><span class="spacer"></span><span>SETTINGS</span></div>`;
+const frame=content=>`<div class="device"><div class="screen">${content}<div class="indicator"></div></div></div>`;
+const recipe=(name,cls,stats)=>`<div class="recipe ${cls}"><b>${name}</b><small>${stats}</small>${shape("mini-profile","#0c0c0c")}</div>`;
+const views={
+home:{
+title:"01 / Home",
+description:"Library at the left. A real recipe overview at the right, with its profile centre stage and all its next actions together.",
+content:()=>frame(header()+`<div class="body split"><aside class="sidebar"><div class="search">Search recipes</div><div class="chips"><span class="chip active">Weekday brews</span><span class="chip">All</span></div>${recipe("Morning ritual","selected","18g / 1:16 / grind 65")}${recipe("Slow Sunday","peach","15g / 1:17 / grind 60")}${recipe("Afternoon sencha","sage","5g / tea / two stages")}${recipe("Workday","lilac","18g / 1:15 / grind 62")}</aside><div class="detail"><div class="object-scroll"><div class="titleline"><div><div class="crumb">COFFEE / FOUR STAGES</div><div class="title">Morning ritual</div></div><span class="star">&#9733;</span></div><div class="dim">Colombia / washed</div><div class="hero">${shape("graph","#0c0c0c")}</div><div class="figures"><div><label>DOSE</label><strong>18<small>g</small></strong></div><div><label>RATIO</label><strong>1:16</strong></div><div><label>GRIND</label><strong>65</strong></div><div><label>WATER</label><strong>288<small>ml</small></strong></div></div><div class="note">Last brew: 5 stars / today / 3:12<br>Sweet and balanced. Keep this grind.</div></div><div class="actions"><span class="button primary">BREW</span><span class="button">TUNE</span><span class="button">EDIT</span><span class="button">WRITE</span><span class="button">HISTORY</span></div></div></div>${nav()}`),
+caption:"Selecting a recipe replaces only the detail pane. Edit and History open their own workspaces; Tune opens one-brew controls without turning a temporary adjustment into a saved edit."
+},
+editor:{
+title:"02 / Recipe editor",
+description:"The library gives way to editing. Keep the recipe's shape and overall parameters beside the stage list, with the selected stage expanded in place.",
+content:()=>frame(header("&#8249; LIBRARY / MORNING RITUAL")+`<div class="top"><div class="title" style="margin:0">Edit recipe</div><div class="tabs"><span class="active">BREW + STAGES</span><span>ABOUT</span></div></div><div class="body editor-grid"><div><div class="section">RECIPE SHAPE / STAGE 2 SELECTED</div><div class="panel">${shape()}<div class="axis"><span>Stage 1</span><span>Stage 2</span><span>Stage 3</span><span>Stage 4</span></div></div><div class="section">BREW PARAMETERS</div><div class="params"><div class="param"><span>Dose</span><span class="value">− &nbsp;18g&nbsp; +</span></div><div class="param"><span>Ratio</span><span class="value">− &nbsp;16&nbsp; +</span></div><div class="param"><span>Grind</span><span class="value">− &nbsp;65&nbsp; +</span></div><div class="param"><span>Total water</span><span>288ml</span></div></div><div class="note">See the whole recipe while changing one stage.</div></div><div><div class="section">STAGES</div><div class="stage"><div class="stagehead"><b>1 / Bloom</b><span>48ml</span></div><small>94°C / centered / 30s pause</small></div><div class="stage active"><div class="stagehead"><b>2 / Main pour</b><span>80ml</span></div><small>Spiral pattern</small><div class="stage-controls"><div class="param"><span>Volume</span><span class="value">80ml</span></div><div class="param"><span>Temperature</span><span class="value">94°C</span></div><div class="param"><span>Pause</span><span class="value">10s</span></div><div class="param"><span>Flow</span><span class="value">3ml/s</span></div></div></div><div class="stage"><div class="stagehead"><b>3 / Main pour</b><span>80ml</span></div><small>93°C / circular / 10s pause</small></div><div class="stage"><div class="stagehead"><b>4 / Finish</b><span>80ml</span></div><small>92°C / centered</small></div><div class="button">ADD STAGE</div></div></div><div class="draftbar"><span class="dim">Unsaved changes</span><span class="button primary">SAVE</span></div>`),
+caption:"The split follows the task, not a permanent navigation sidebar. The selected stage's actual relationship with its profile segment should be highlighted in a later refinement; full controls and the editor action bar still need their own design pass."
+},
+history:{
+title:"03 / Brew history",
+description:"Use the width to scan comparable attempts, then give the selected attempt's evidence a broad canvas. This example is scoped to one recipe.",
+content:()=>frame(header("&#8249; MORNING RITUAL / HISTORY")+`<div class="top"><div class="title" style="margin:0">Brew history</div><span class="dim" style="font-size:1.2cqw">Morning ritual / 3 brews</span></div><div class="body"><div class="history-table"><div class="table-row header"><span>BREW</span><span>DOSE</span><span>GRIND</span><span>TIME</span><span>RATING</span><span>TRACE</span></div><div class="table-row selected"><b>Today / 08:14</b><span>18g</span><span>65</span><span>3:12</span><span class="gold">5 stars</span><span>Available</span></div><div class="table-row"><span>Yesterday</span><span>18g</span><span>63</span><span>3:28</span><span>4 stars</span><span>Available</span></div><div class="table-row"><span>Monday</span><span>18g</span><span>66</span><span>3:06</span><span>Unrated</span><span>Figures only</span></div></div><div class="evidence"><div><div class="section">TODAY / 08:14</div><div class="panel">${trace()}</div></div><div><div class="section">RESULT</div><div class="figures" style="grid-template-columns:1fr 1fr"><div><label>WATER</label><strong>288<small>ml</small></strong></div><div><label>CUP</label><strong>252<small>ml</small></strong></div><div><label>BREW TIME</label><strong>3:12</strong></div><div><label>RATING</label><strong class="gold">5/5</strong></div></div><div class="judgement">Sweet and balanced.<br>Keep this grind.</div><div class="history-actions"><span class="button">COMPARE</span><span class="button">SHARE</span></div></div></div></div>`),
+caption:"The table is the navigator; the lower area is the selected record. Comparison can later use this width without adding a permanent list pane. A swept trace is explicitly marked as figures only rather than leaving an apparently empty graph."
+},
+live:{
+title:"04 / Live brew",
+description:"A wide trace is the centrepiece. The stage sequence runs underneath, with the current stage highlighted and brew controls kept in a stable bottom strip.",
+content:()=>frame(header("LIVE BREW")+`<div class="top" style="margin-bottom:.7cqw"><div class="title" style="margin:0">Morning ritual</div><span class="green" style="font:1.15cqw ui-monospace,monospace">POURING / STAGE 2 OF 4</span></div><div class="body"><div class="live-head"><div><label>WATER DELIVERED</label><div class="big">156<small> / 288ml</small></div></div><div class="live-clock"><label>ELAPSED</label>1:42</div><div class="live-cup"><label>CUP</label>118<small style="font-size:1.3cqw">ml</small></div></div><div class="panel live-graph">${trace(true)}</div><div class="section">RECIPE PROGRESS</div><div class="sequence"><div class="stage done"><div class="stagehead"><b>1 / Bloom</b><span>Done</span></div><small>48ml / 94°C</small></div><div class="stage active"><div class="stagehead"><b>2 / Spiral</b><span>Now</span></div><small>80ml / 94°C</small></div><div class="stage"><div class="stagehead"><b>3 / Circular</b><span>Next</span></div><small>80ml / 93°C</small></div><div class="stage"><div class="stagehead"><b>4 / Finish</b><span>Then</span></div><small>80ml / 92°C</small></div></div></div><div class="live-bottom"><span class="dim" style="font-size:1.15cqw">You can leave this view.<br>The brew continues.</span><span class="button primary">PAUSE</span><span class="button stop">STOP BREW</span></div>`),
+caption:"This takes the dedicated-canvas direction rather than copying the editor's split. It is the unfolded handheld view only. A countertop arrangement with a trace beside a vertical ladder remains a separate exploration."
+}
+};
+views.live.description="The delivered-water and cup trace stays alongside the complete vertical stage ladder. The active stage is expanded, with upcoming temperatures and pauses visible without changing views.";
+views.live.content=()=>frame(header("LIVE BREW")+`<div class="top" style="margin-bottom:1cqw"><div class="title" style="margin:0">Morning ritual</div><span class="green" style="font:1.15cqw ui-monospace,monospace">POURING</span></div><div class="body live-layout"><div class="live-main"><div class="live-head"><div><label>WATER DELIVERED</label><div class="big">156<small> / 288ml</small></div></div><div class="live-clock"><label>ELAPSED</label>1:42</div></div><div class="panel live-graph">${trace(true)}</div><div class="figures"><div><label>CUP</label><strong>118<small>ml</small></strong></div><div><label>STAGE TEMPERATURE</label><strong>94<small>°C</small></strong></div></div><div class="live-explainer">Stage details stay visible beside the trace.<br>You can leave this view. The brew continues.</div></div><div class="live-ladder"><div class="section">RECIPE PROGRESS / 2 OF 4</div><div class="stage done"><div class="stagehead"><b>1 / Bloom</b><span>Done</span></div><small>48ml / 94°C<br>Centered / 30s pause</small></div><div class="stage active"><div class="stagehead"><b>2 / Main pour</b><span class="water">Now</span></div><small>80ml / 94°C<br>Spiral / 3ml/s<br>Then pause 10s</small></div><div class="stage"><div class="stagehead"><b>3 / Main pour</b><span>Next</span></div><small>80ml / 93°C<br>Circular / 10s pause</small></div><div class="stage"><div class="stagehead"><b>4 / Finish</b><span>Then</span></div><small>80ml / 92°C<br>Centered / no pause</small></div></div></div>`);
+views.live.caption="The chart and ladder are persistent companion views. Pause and Stop live in a separated action group on the side; Back leaves the view without stopping the brew. Longer stage lists scroll within the ladder rather than displacing the chart. Tea and fault states remain to be explored.";
+views.home.caption+=" Recipe actions are shown in the side toolbar in this revision, freeing the lower edge for content.";
+document.getElementById("views").innerHTML=Object.entries(views).map(([key,v])=>`<section class="view" data-section="${key}"><h2>${v.title}</h2><p class="description">${v.description}</p>${v.content()}<p class="caption">${v.caption}</p></section>`).join("");
+const item=(symbol,label,cls="")=>`<div class="side-control ${cls}">${symbol}<small>${label}</small></div>`;
+document.querySelectorAll(".view").forEach(view=>{
+ const key=view.dataset.section,screen=view.querySelector(".screen");
+ const rail=document.createElement("aside");rail.className="side-controls";rail.setAttribute("aria-label","Schematic side toolbar");
+ const actions=key==="home"?item("▶","Brew","primary")+item("≋","Tune")+item("✎","Edit")+item("▣","Write")+item("◷","History"):
+ key==="editor"?item("✓","Save","primary")+item("▶","Brew")+item("▣","Write"):
+ key==="history"?item("⇄","Compare")+item("↑","Share"):
+ item("Ⅱ","Pause","primary")+'<div class="side-divider"></div>'+item("■","Stop","stop");
+ const navigation=key==="home"?item("▤","Library","current")+item("⌕","Discover")+item("◷","History")+item("⚙","Settings"):item("▤","Library");
+ rail.innerHTML='<div class="side-status">9:41</div>'+item("‹",key==="home"?"":"Back")+'<div class="side-group">'+actions+'</div><div class="side-group navigation">'+navigation+'</div>';
+ if(key==="home")rail.querySelector(".side-control").remove();
+ screen.appendChild(rail);
+});
+document.querySelectorAll("[data-view]").forEach(button=>button.addEventListener("click",()=>{
+document.querySelectorAll("[data-view]").forEach(b=>b.setAttribute("aria-pressed",String(b===button)));
+document.querySelectorAll("[data-section]").forEach(section=>section.hidden=button.dataset.view!=="all"&&button.dataset.view!==section.dataset.section);
+}));
+</script>
+</body>
+</html>
