@@ -34,7 +34,8 @@ const STATE_NAMES = new Map<number, string>([
     [MACHINE_STATE.BREWING_ALT, "brewing"],
     [MACHINE_STATE.COMPLETE, "complete (Easy idle)"],
     [MACHINE_STATE.SAVING_SLOTS, "saving_slots"],
-    [MACHINE_STATE.SLOTS_SAVED, "slots_saved"]
+    [MACHINE_STATE.SLOTS_SAVED, "slots_saved"],
+    [MACHINE_STATE.WARNING, "warning"]
 ]);
 
 export function stateName(state: number): string {

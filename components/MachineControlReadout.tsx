@@ -285,6 +285,7 @@ export type ToolNoticeTone = "warn" | "danger" | "muted";
 export function classifyToolNotice(message: string): {tone: ToolNoticeTone; kicker: string} {
     if (/\+WATER|water tank|water supply/i.test(message)) return {tone: "warn", kicker: "ADD WATER"};
     if (/waiting for beans|fill the hopper/i.test(message)) return {tone: "warn", kicker: "ADD BEANS"};
+    if (/showing a warning/i.test(message)) return {tone: "warn", kicker: "MACHINE WARNING"};
     if (/fresh known normal machine state|return to normal/i.test(message)) return {tone: "warn", kicker: "MACHINE NOT READY"};
     return {tone: "danger", kicker: "TOOL ERROR"};
 }

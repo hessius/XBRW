@@ -159,7 +159,9 @@ export const MACHINE_STATE = {
     SAVING_SLOTS:     0x43,
     SLOTS_SAVED:      0x25,
     /** Tea steeping state, observed in one three-stage V12.0D.500 capture. */
-    TEA_STEEPING:     0x45
+    TEA_STEEPING:     0x45,
+    /** Machine warning state (e.g. blinking +WATER), observed in Studio BLE qualification captures. */
+    WARNING:          0x51
 } as const;
 
 /**

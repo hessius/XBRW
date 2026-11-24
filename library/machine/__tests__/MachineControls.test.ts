@@ -1412,3 +1412,42 @@ it("exits an idle open tool reported by idleToolForState before opening a new to
     await expect(controls.open(identity, "grind")).rejects.toThrow(/fresh known normal/i);
     controls.dispose();
 });
+
+it("detects +WATER / low tank when tool open fails on non-startable or WARNING states and recovers on retry after refill", async () => {
+    const s = await setup();
+    s.respond((item) => accept(s.radio, item));
+    const lowTank = machineInfoFrame({serial: identity.serial, model: "test", firmware: "test", waterEnough: 0});
+    const okTank = machineInfoFrame({serial: identity.serial, model: "test", firmware: "test", waterEnough: 1});
+    const tapLowTank = machineInfoFrame({serial: identity.serial, model: "test", firmware: "test", waterEnough: 0, waterFeed: 1});
+
+    // Non-startable WARNING (0x51) + low tank refuses Grind & Scale with +WATER guidance instead of "fresh known normal".
+    s.radio.emit(lowTank);
+    s.radio.infoReply = lowTank;
+    s.radio.emit(status(MACHINE_STATE.WARNING));
+    await expect(s.controls.open(identity, "grind")).rejects.toThrow(/\+WATER.*Refill the water tank/i);
+    await expect(s.controls.open(identity, "scale")).rejects.toThrow(/\+WATER.*Refill the water tank/i);
+
+    // 40522(0) + stale non-startable state also refuses with +WATER even when cached info still says okTank.
+    s.radio.emit(okTank);
+    s.radio.infoReply = okTank;
+    s.radio.emit(event(40522, 0));
+    s.radio.emit(status(MACHINE_STATE.LOADING));
+    await expect(s.controls.open(identity, "grind")).rejects.toThrow(/\+WATER.*Refill the water tank/i);
+    s.radio.emit(event(40522, 1));
+
+    // WARNING without low tank (e.g., plumbed machine) surfaces machine warning guidance instead of generic normal-state error.
+    s.radio.emit(tapLowTank);
+    s.radio.infoReply = tapLowTank;
+    s.radio.emit(status(MACHINE_STATE.WARNING));
+    await expect(s.controls.open(identity, "grind")).rejects.toThrow(/showing a warning/i);
+
+    // Explicit Retry after refilling tank (even within 15s) probes 8100 + 8022 and opens the tool.
+    s.radio.emit(lowTank);
+    s.radio.emit(status(MACHINE_STATE.NO_WATER));
+    s.radio.infoReply = okTank;
+    s.radio.homeReply = status(MACHINE_STATE.IDLE);
+    await s.controls.open(identity, "grind", undefined, {recheckFault: true});
+    expect(s.controls.getSnapshot()).toMatchObject({phase: "ready", tool: "grind"});
+    await s.controls.close();
+    s.controls.dispose();
+});

@@ -967,6 +967,25 @@ it("surfaces +WATER / NO_BEANS guidance instead of generic normal-state refusal 
         await machine.ensureFreshControlState();
         expect(radio.sent).toContain(8022);
         expect(machine.slotStateIsNormal).toBe(true);
+
+        // WARNING (0x51) or non-startable state paired with low tank reports +WATER instead of generic normal-state refusal.
+        radio.emit(machineInfoFrame({waterEnough: 0, waterFeed: 0}));
+        radio.emit(status(MACHINE_STATE.WARNING));
+        expect(() => machine.acquireControlSession(identity, "grind")).toThrow(/\+WATER.*Refill the water tank/i);
+
+        // Tap-fed machines ignore reservoir waterEnough=0 and report MACHINE WARNING on 0x51.
+        radio.emit(machineInfoFrame({waterEnough: 0, waterFeed: 1}));
+        expect(() => machine.acquireControlSession(identity, "scale")).toThrow(/showing a warning/i);
+
+        // Explicit retry rechecks fresh fault within 15s (sending 8100 + 8022) and recovers once status returns to IDLE.
+        radio.emit(machineInfoFrame({waterEnough: 0, waterFeed: 0}));
+        radio.emit(status(MACHINE_STATE.NO_WATER));
+        radio.written = [];
+        radio.infoReply = machineInfoFrame({waterEnough: 1, waterFeed: 0});
+        radio.homeReply = status(MACHINE_STATE.IDLE);
+        await machine.ensureFreshControlState({recheckFault: true});
+        expect(radio.sent).toEqual([8100, 8022]);
+        expect(machine.slotStateIsNormal).toBe(true);
     } finally {
         await machine.disconnect();
     }

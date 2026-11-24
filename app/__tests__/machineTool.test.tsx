@@ -1161,3 +1161,26 @@ it("hands off suspended 8022 preflight to full screen for Pour and refreshes tan
         jest.useRealTimers();
     }
 });
+
+it("surfaces ADD WATER on blinking +WATER warning + low tank across tools and omits ALWAYS LIVE / NON-BLOCKING EXIT in full Scale view", async () => {
+    const s = await fixture();
+    const lowTank = machineInfoFrame({serial: identity.serial, model: "test", firmware: "test", waterEnough: 0});
+    const okTank = machineInfoFrame({serial: identity.serial, model: "test", firmware: "test", waterEnough: 1});
+    s.radio.emit(lowTank);
+    s.radio.infoReply = lowTank;
+    s.radio.emit(status(MACHINE_STATE.WARNING));
+
+    mockParams = {machineId: identity.deviceId, tool: "scale"};
+    await renderWithProviders(<MachineToolScreen controls={s.controls}/>);
+    await waitFor(() => expect(screen.getByText("ADD WATER")).toBeTruthy());
+    expect(screen.queryByText(/fresh known normal/i)).toBeNull();
+
+    // After refilling tank, Retry opening tool probes within 15s and opens Scale cleanly without ALWAYS LIVE / NON-BLOCKING EXIT.
+    s.radio.infoReply = okTank;
+    s.radio.homeReply = status(MACHINE_STATE.IDLE);
+    await press("Retry opening tool");
+    await waitFor(() => expect(s.controls.getSnapshot()).toMatchObject({phase: "ready", tool: "scale"}));
+    expect(screen.getByText("Scale stream")).toBeTruthy();
+    expect(screen.queryByText(/ALWAYS LIVE/i)).toBeNull();
+    expect(screen.queryByText(/NON-BLOCKING EXIT/i)).toBeNull();
+});

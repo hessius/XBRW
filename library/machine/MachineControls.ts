@@ -745,7 +745,12 @@ export default class MachineControls {
         }
     }
 
-    async open(identity: ControlIdentity, tool: ToolId, signal?: AbortSignal): Promise<void> {
+    async open(
+        identity: ControlIdentity,
+        tool: ToolId,
+        signal?: AbortSignal,
+        options?: {recheckFault?: boolean}
+    ): Promise<void> {
         if (this.disposed) throw new Error("The shared control owner was reset.");
         if (signal?.aborted) throw new Error("Control open cancelled before attachment.");
         const key = `${identity.deviceId}\0${identity.serial ?? ""}\0${tool}`;
@@ -813,7 +818,9 @@ export default class MachineControls {
                 if (this.closing) await this.closing;
                 if (preflightCancelled()) throw new Error("Control open cancelled before attachment.");
                 if (this.disposed) throw new Error("The shared control owner was reset.");
-                await this.machine.ensureFreshControlState();
+                await this.machine.ensureFreshControlState(
+                    options?.recheckFault ? {recheckFault: true} : undefined
+                );
                 if (preflightCancelled()) throw new Error("Control open cancelled before attachment.");
                 if (this.disposed) throw new Error("The shared control owner was reset.");
                 if (this.snapshot.phase !== "closed") throw new Error("A control session is already owned.");
@@ -830,7 +837,9 @@ export default class MachineControls {
                     if (preflightCancelled()) throw new Error("Control open cancelled before attachment.");
                     if (this.disposed) throw new Error("The shared control owner was reset.");
                     if (this.snapshot.phase !== "closed") throw new Error("A control session is already owned.");
-                    await this.machine.ensureFreshControlState();
+                    await this.machine.ensureFreshControlState(
+                        options?.recheckFault ? {recheckFault: true} : undefined
+                    );
                     if (preflightCancelled()) throw new Error("Control open cancelled before attachment.");
                     if (this.disposed) throw new Error("The shared control owner was reset.");
                     if (this.snapshot.phase !== "closed") throw new Error("A control session is already owned.");
