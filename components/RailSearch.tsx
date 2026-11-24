@@ -1,6 +1,6 @@
 import {useAppearance} from "@/hooks/useAppearance";
 import React, {useEffect, useRef} from "react";
-import {Pressable, TextInput} from "react-native";
+import {Platform, Pressable, TextInput} from "react-native";
 import {XStack} from "tamagui";
 
 import DotIcon from "@/components/DotIcon";
@@ -88,6 +88,12 @@ export function RailSearchField({state, text, active, onChangeText, onBlur, onCl
     // The imperative replacement for `autoFocus`, which under a programmatic
     // mount can fire before the field is in the tree. This component exists only
     // while the field is live, so mounting is the edge to focus on.
+    //
+    // On Android this alone is not enough: the focus command can land before
+    // the EditText is attached to the window, so it takes focus without a
+    // keyboard and the user has to tap the field a second time to type. Android
+    // also gets the native `autoFocus` below, which focuses on attach and opens
+    // the keyboard then.
     useEffect(() => {
         inputRef.current?.focus();
     }, []);
@@ -110,6 +116,7 @@ export function RailSearchField({state, text, active, onChangeText, onBlur, onCl
             <TextInput
                 ref={inputRef}
                 testID="rail-search-input"
+                autoFocus={Platform.OS === "android"}
                 accessibilityLabel={`Search recipes, expanded, ${state}`}
                 maxFontSizeMultiplier={doto.maxFontSizeMultiplier}
                 style={[doto.style, {flex: 1, color: palette.text}]}
