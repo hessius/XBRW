@@ -52,7 +52,7 @@ export type SlotSession = {
     release: (safe: boolean) => void;
 };
 
-export type ControlPurpose = ToolId | "setting" | "recovery";
+export type ControlPurpose = ToolId | "setting" | "recovery" | "exit";
 export type ControlSession = {
     check: () => void;
     /** Only a future qualified adapter may supply frames; no encoders are provided here. */
@@ -327,6 +327,7 @@ export default class Machine {
     private unsettledCommand = false;
     private lastControlTxAt = 0;
     private controlStateSeen = false;
+    private recentControlPurpose: ControlPurpose | null = null;
     private faultClearedByWaterEvent = false;
     private controlStore: ControlRecoveryStore | undefined;
     private controlSession: {token: symbol; invalidate: (error: Error) => void} | null = null;
@@ -476,6 +477,7 @@ export default class Machine {
                                 this.state = frame[25];
                                 this.stateAt = Date.now();
                                 this.controlStateSeen = false;
+                                this.recentControlPurpose = null;
                             }
                             finishWait();
                         }, Math.min(800, this.stateReplyMs));
@@ -652,8 +654,17 @@ export default class Machine {
         }
     }
 
+    get controlStateConfirmed(): boolean {
+        return this.controlStateSeen;
+    }
+
     acquireControlSession(identity: ControlIdentity, purpose: ControlPurpose): ControlSession {
         return this.acquireControlLease(identity, purpose);
+    }
+
+    /** Acquires a non-moving exit lease while the machine is idle on an open tool screen (`0x02`/`0x04`/`0x05`/`0x03`). */
+    acquireIdleExitSession(identity: ControlIdentity): ControlSession {
+        return this.acquireControlLease(identity, "exit");
     }
 
     private acquireControlLease(
@@ -715,7 +726,10 @@ export default class Machine {
                 refuseNonNormal();
             }
         };
-        assertAvailable(purpose !== "recovery" && !inspectionOnly, true);
+        assertAvailable(purpose !== "recovery" && purpose !== "exit" && !inspectionOnly, true);
+        if (purpose === "grind" || purpose === "pour" || purpose === "scale") {
+            this.recentControlPurpose = purpose;
+        }
         const check = () => {
             if (failure !== null) throw failure;
             const current = this.slotIdentity;
@@ -1640,6 +1654,7 @@ export default class Machine {
         if (!isActiveBrewPhase(this.phase)) {
             this.unsettledCommand = true;
             this.controlStateSeen = false;
+            this.recentControlPurpose = null;
             this.controlStateAbort?.();
         }
         const finish = this.beginOrdinaryOperation();
@@ -1738,7 +1753,9 @@ export default class Machine {
             if (STARTABLE.has(parsed.state)) {
                 this.unsettledCommand = false;
                 this.controlStateSeen = false;
-            } else if (this.controlSession !== null) {
+                this.recentControlPurpose = null;
+            } else if (this.controlSession !== null
+                || (parsed.state === MACHINE_STATE.DISPENSING && this.recentControlPurpose === "pour")) {
                 this.controlStateSeen = true;
             }
             this.onState(parsed.state);
@@ -2888,6 +2905,7 @@ export default class Machine {
         this.controlStateProbe = null;
         this.lastControlTxAt = 0;
         this.controlStateSeen = false;
+        this.recentControlPurpose = null;
         this.faultClearedByWaterEvent = false;
         this.state = null;
         this.stateAt = 0;

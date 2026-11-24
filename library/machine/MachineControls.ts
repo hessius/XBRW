@@ -85,6 +85,7 @@ function capture({profile: p, protocol}: ControlQualification): ControlQualifica
             decode: protocol.decode.bind(protocol),
             decodeInfoSettings: protocol.decodeInfoSettings?.bind(protocol),
             actualWaterSource: protocol.actualWaterSource.bind(protocol),
+            idleToolForState: protocol.idleToolForState?.bind(protocol),
             telemetryFreshMs: protocol.telemetryFreshMs,
             confirmTargetStopFromCupPlateau: protocol.confirmTargetStopFromCupPlateau
         })
@@ -421,7 +422,7 @@ export default class MachineControls {
     }
 
     private attach(
-        callerIdentity: ControlIdentity, purpose: ToolId | "setting" | "recovery", replacement?: ControlSession
+        callerIdentity: ControlIdentity, purpose: ToolId | "setting" | "recovery" | "exit", replacement?: ControlSession
     ): void {
         const identity = Object.freeze({...callerIdentity});
         if (replacement) this.lease = replacement;
@@ -727,6 +728,16 @@ export default class MachineControls {
         }
     }
 
+    private async exitIdleToolBeforeOpen(identity: ControlIdentity, idleTool: ToolId): Promise<void> {
+        const lease = this.machine.acquireIdleExitSession(identity);
+        this.attach(identity, "exit", lease);
+        try {
+            await this.exchange({kind: "exit", tool: idleTool}, "closed");
+        } finally {
+            this.release();
+        }
+    }
+
     async open(identity: ControlIdentity, tool: ToolId, signal?: AbortSignal): Promise<void> {
         if (this.disposed) throw new Error("The shared control owner was reset.");
         if (signal?.aborted) throw new Error("Control open cancelled before attachment.");
@@ -799,6 +810,24 @@ export default class MachineControls {
                 if (preflightCancelled()) throw new Error("Control open cancelled before attachment.");
                 if (this.disposed) throw new Error("The shared control owner was reset.");
                 if (this.snapshot.phase !== "closed") throw new Error("A control session is already owned.");
+                const idleTool = !this.machine.slotStateIsNormal
+                    && this.machine.state !== null
+                    && this.machine.controlRecovery?.marker == null
+                    ? this.select().protocol.idleToolForState?.(
+                        this.machine.state,
+                        this.machine.controlStateConfirmed
+                    ) ?? null
+                    : null;
+                if (idleTool !== null) {
+                    await this.exitIdleToolBeforeOpen(identity, idleTool);
+                    if (preflightCancelled()) throw new Error("Control open cancelled before attachment.");
+                    if (this.disposed) throw new Error("The shared control owner was reset.");
+                    if (this.snapshot.phase !== "closed") throw new Error("A control session is already owned.");
+                    await this.machine.ensureFreshControlState();
+                    if (preflightCancelled()) throw new Error("Control open cancelled before attachment.");
+                    if (this.disposed) throw new Error("The shared control owner was reset.");
+                    if (this.snapshot.phase !== "closed") throw new Error("A control session is already owned.");
+                }
                 if (tool === "pour") {
                     pourAbort = new AbortController();
                     if (preflightCancelled()) pourAbort.abort();

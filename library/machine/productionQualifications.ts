@@ -87,6 +87,13 @@ export class StudioControlProtocol implements ControlProtocol {
         return info.waterFeed === "tap" ? "tap" : "tank";
     }
 
+    idleToolForState(state: number, controlStateSeen: boolean): ToolId | null {
+        if (state === 0x02) return "grind";
+        if (state === 0x04 || state === 0x05) return "scale";
+        if (state === MACHINE_STATE.DISPENSING && controlStateSeen) return "pour";
+        return null;
+    }
+
     decodeInfoSettings(info: MachineInfo): SettingReadings {
         this.waterFeed = info.waterFeed === "tap" ? 1 : 0;
         const temp = info.settingsRaw?.temperatureUnit;

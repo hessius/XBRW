@@ -669,4 +669,105 @@ describe("Studio production qualifications", () => {
         );
         s.controls.dispose();
     });
+
+    it("exits an open idle Studio tool (0x02 grind, 0x04/0x05 scale, or control-originated 0x03 pour) before switching, while refusing non-control 0x03", async () => {
+        const protocol = new StudioControlProtocol();
+        expect(protocol.idleToolForState(0x02, false)).toBe("grind");
+        expect(protocol.idleToolForState(0x04, false)).toBe("scale");
+        expect(protocol.idleToolForState(0x05, false)).toBe("scale");
+        expect(protocol.idleToolForState(MACHINE_STATE.DISPENSING, true)).toBe("pour");
+        expect(protocol.idleToolForState(MACHINE_STATE.DISPENSING, false)).toBeNull();
+        expect(protocol.idleToolForState(0x41, false)).toBeNull();
+
+        const s = await studioSetup();
+        let activeScreen: number = MACHINE_STATE.IDLE;
+        s.radio.syntheticWrite = (frame) => {
+            const code = frame[3] | (frame[4] << 8);
+            if (code === 8022) {
+                s.radio.emit(status(activeScreen));
+            } else if (code === 8003) {
+                activeScreen = 0x05;
+                s.radio.emit(event(8003));
+            } else if (code === 8006) {
+                activeScreen = 0x02;
+                s.radio.emit(event(8006));
+            } else if (code === 8007) {
+                activeScreen = MACHINE_STATE.DISPENSING;
+                s.radio.emit(event(8007));
+            } else if (code === 8012 || code === 8013 || code === 8014) {
+                activeScreen = MACHINE_STATE.COMPLETE;
+                s.radio.emit(event(code));
+                s.radio.emit(status(MACHINE_STATE.COMPLETE));
+            }
+        };
+
+        // 1. Machine already sitting in Scale (0x05): open("grind") sends 8014 exit first, then 8006 enter.
+        activeScreen = 0x05;
+        s.radio.emit(status(0x05));
+        await s.controls.open(studioIdentity, "grind");
+        expect(s.radio.sent).toEqual([8014, 8006]);
+        expect(s.controls.getSnapshot()).toMatchObject({phase: "ready", tool: "grind"});
+
+        // 2. If Grind (0x02) stays on 0x02 after close(), switching to Pour still sends 8012 -> 8007.
+        await s.controls.closeInBackground();
+        activeScreen = 0x02;
+        s.radio.emit(status(0x02));
+        s.radio.written = [];
+        await s.controls.open(studioIdentity, "pour");
+        expect(s.radio.sent).toEqual([8012, 8007]);
+        expect(s.controls.getSnapshot()).toMatchObject({phase: "ready", tool: "pour"});
+
+        // 3. Switch away from Pour (8013 ack resolves close(), then delayed status 0x03 arrives while controlSession is null):
+        // recentControlPurpose tracks that 0x03 came from our Pour session, so open("scale") sends 8013 before 8003.
+        s.radio.syntheticWrite = (frame) => {
+            const code = frame[3] | (frame[4] << 8);
+            if (code === 8022) s.radio.emit(status(activeScreen));
+            else if (code === 8013) {
+                activeScreen = MACHINE_STATE.COMPLETE;
+                s.radio.emit(event(8013));
+            } else if (code === 8003) {
+                activeScreen = 0x05;
+                s.radio.emit(event(8003));
+            } else if (code === 8014) {
+                activeScreen = MACHINE_STATE.COMPLETE;
+                s.radio.emit(event(8014));
+                s.radio.emit(status(MACHINE_STATE.COMPLETE));
+            }
+        };
+        await s.controls.closeInBackground();
+        activeScreen = MACHINE_STATE.DISPENSING;
+        s.radio.emit(status(MACHINE_STATE.DISPENSING));
+        expect(s.machine.controlStateConfirmed).toBe(true);
+        s.radio.syntheticWrite = (frame) => {
+            const code = frame[3] | (frame[4] << 8);
+            if (code === 8022) s.radio.emit(status(activeScreen));
+            else if (code === 8013) {
+                activeScreen = MACHINE_STATE.COMPLETE;
+                s.radio.emit(event(8013));
+                s.radio.emit(status(MACHINE_STATE.COMPLETE));
+            } else if (code === 8003) {
+                activeScreen = 0x05;
+                s.radio.emit(event(8003));
+            } else if (code === 8014) {
+                activeScreen = MACHINE_STATE.COMPLETE;
+                s.radio.emit(event(8014));
+                s.radio.emit(status(MACHINE_STATE.COMPLETE));
+            }
+        };
+        s.radio.written = [];
+        await s.controls.open(studioIdentity, "scale");
+        expect(s.radio.sent).toEqual([8013, 8003]);
+        expect(s.controls.getSnapshot()).toMatchObject({phase: "ready", tool: "scale"});
+        await s.controls.close();
+
+        // 4. Non-control 0x03 (after Home reset) must NEVER send 8013 exit.
+        s.radio.emit(status(MACHINE_STATE.IDLE));
+        expect(s.machine.controlStateConfirmed).toBe(false);
+        s.radio.written = [];
+        s.radio.emit(status(MACHINE_STATE.DISPENSING));
+        await expect(s.controls.open(studioIdentity, "grind")).rejects.toThrow(/fresh known normal/i);
+        expect(s.radio.sent).toEqual([]);
+
+        s.controls.dispose();
+    });
 });

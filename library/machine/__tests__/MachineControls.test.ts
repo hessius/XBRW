@@ -1296,3 +1296,66 @@ it("blocks opening Pour before sending enter when tank water is low, refreshes v
     }
     s.controls.dispose();
 });
+
+it("exits an idle open tool reported by idleToolForState before opening a new tool and releases its lease if exit fails", async () => {
+    const radio = new Radio();
+    radio.infoReply = machineInfoFrame({serial: identity.serial, model: "test", firmware: "test"});
+    let raw = "";
+    const recovery = new ControlRecoveryStore({read: () => raw, write: (next) => { raw = next; }});
+    const machine = new Machine(radio, {frameGapMs: 0, stateReplyMs: 20});
+    machine.installControlRecovery(recovery);
+    await machine.connect(identity.deviceId);
+    radio.emit(status(0x05));
+    radio.written = [];
+    const controls = new MachineControls(machine, {
+        qualifications: [{
+            profile,
+            protocol: {
+                actualWaterSource: () => "tank",
+                idleToolForState: (state, seen) => state === 0x05 ? "scale" : state === 0x03 && seen ? "pour" : null,
+                plan: (command, tokens) => ({
+                    frame: buildType1(codes[command.kind], [tokens.session, tokens.transaction]),
+                    deadlineMs: 30
+                }),
+                decode: (frame) => frame[3] === 0xFE && frame[4] === 0xFE
+                    ? feedbacks.get(frame[10] | frame[11] << 8) ?? null
+                    : null
+            }
+        }]
+    });
+
+    // Exit fails without acknowledgement -> releases exit lease cleanly and keeps closed for retry.
+    const sentCommands: string[] = [];
+    radio.homeReply = status(0x05);
+    radio.syntheticWrite = (frame) => {
+        const code = frame[3] | (frame[4] << 8);
+        if (code === codes.exit) sentCommands.push("exit");
+        if (code === codes.enter) sentCommands.push("enter");
+    };
+    await expect(controls.open(identity, "grind")).rejects.toThrow(/response missing/i);
+    expect(sentCommands).toEqual(["exit"]);
+    expect(controls.getSnapshot().phase).toBe("closed");
+    expect(machine.controlBlocker).toBeNull();
+
+    // Retry when exit succeeds and returns Home (0x41) -> enters grind cleanly.
+    sentCommands.length = 0;
+    radio.syntheticWrite = (frame) => {
+        const code = frame[3] | (frame[4] << 8);
+        if (code === codes.exit) {
+            sentCommands.push("exit");
+            const session = new DataView(frame.buffer, frame.byteOffset).getUint32(10, true);
+            const transaction = new DataView(frame.buffer, frame.byteOffset).getUint32(14, true);
+            radio.homeReply = status(0x41);
+            feedback(radio, {session, transaction}, {kind: "closed"});
+        } else if (code === codes.enter) {
+            sentCommands.push("enter");
+            const session = new DataView(frame.buffer, frame.byteOffset).getUint32(10, true);
+            const transaction = new DataView(frame.buffer, frame.byteOffset).getUint32(14, true);
+            feedback(radio, {session, transaction}, {kind: "ready"});
+        }
+    };
+    await controls.open(identity, "grind");
+    expect(sentCommands).toEqual(["exit", "enter"]);
+    expect(controls.getSnapshot()).toMatchObject({phase: "ready", tool: "grind"});
+    controls.dispose();
+});
