@@ -200,9 +200,11 @@ export default function ToolParameterDeck({
                         <Text fontSize={compact ? 13.5 : 14.5} fontWeight="600" color={palette.text}>
                             Scale stream
                         </Text>
-                        <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.1} color={palette.muted}>
-                            {isFull ? "ALWAYS LIVE · NON-BLOCKING EXIT" : "ALWAYS LIVE · TARE ANYTIME"}
-                        </DotMatrixText>
+                        {!isFull && (
+                            <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.1} color={palette.muted}>
+                                ALWAYS LIVE · TARE ANYTIME
+                            </DotMatrixText>
+                        )}
                     </YStack>
                     <DotMatrixText fontSize={12} weight="bold" color={scaleAvailable && !entering ? palette.success : palette.muted}>
                         {entering ? "ENTERING" : scaleAvailable ? "ACTIVE" : "UNAVAILABLE"}

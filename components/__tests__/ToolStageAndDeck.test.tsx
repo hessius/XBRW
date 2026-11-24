@@ -356,4 +356,37 @@ describe("MachineToolActions", () => {
         await fireEvent(scroller, "contentSizeChange", 340, 460);
         expect(screen.getByTestId("pour-tool-fields-scroll-hint", {includeHiddenElements: true})).toBeTruthy();
     });
+
+    it("omits ALWAYS LIVE and NON-BLOCKING EXIT from expanded Scale deck while keeping inline subtitle", async () => {
+        const view = await renderWithProviders(
+            <ToolParameterDeck
+                variant="full"
+                phase="ready"
+                tool="scale"
+                scaleAvailable={true}
+                onGrindChange={jest.fn()}
+                onPourChange={jest.fn()}
+                onModeChange={jest.fn()}
+                onStart={jest.fn()}
+            />
+        );
+        expect(screen.getByText("Scale stream")).toBeTruthy();
+        expect(screen.getByText("ACTIVE")).toBeTruthy();
+        expect(screen.queryByText(/ALWAYS LIVE/i)).toBeNull();
+        expect(screen.queryByText(/NON-BLOCKING EXIT/i)).toBeNull();
+
+        await view.rerender(
+            <ToolParameterDeck
+                variant="inline"
+                phase="ready"
+                tool="scale"
+                scaleAvailable={true}
+                onGrindChange={jest.fn()}
+                onPourChange={jest.fn()}
+                onModeChange={jest.fn()}
+                onStart={jest.fn()}
+            />
+        );
+        expect(screen.getByText("ALWAYS LIVE · TARE ANYTIME")).toBeTruthy();
+    });
 });

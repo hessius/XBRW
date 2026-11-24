@@ -6,7 +6,7 @@ import type {ControlCommand, ControlFeedback, ControlProtocol, ControlTokens} fr
 import type {SettingReadings} from "@/library/machine/controlModel";
 import {buildType1, MACHINE_STATE} from "@/library/machine/protocol";
 import {FakeTransport, machineInfoFrame} from "./FakeTransport";
-import {notification, status, type1} from "./protocolFixtures";
+import {event, notification, status, type1} from "./protocolFixtures";
 
 // Entirely synthetic qualification: these codes, payloads, limits and timings
 // are NOT captures and must never enter the production qualification registry.
@@ -1138,4 +1138,325 @@ it("distinguishes connected-without-readings from serial mismatch in describeToo
         "This tool is not qualified for this machine and firmware."
     );
     controls.dispose();
+});
+
+it("blocks opening Pour before sending enter when tank water is low, refreshes vitals on retry, and opens after refill", async () => {
+    const s = await setup();
+    let enterCount = 0;
+    s.respond((item) => {
+        if (item.command.kind === "enter") enterCount += 1;
+        accept(s.radio, item);
+    });
+    const lowTank = machineInfoFrame({serial: identity.serial, model: "test", firmware: "test", waterEnough: 0});
+    const okTank = machineInfoFrame({serial: identity.serial, model: "test", firmware: "test", waterEnough: 1});
+    s.radio.infoReply = lowTank;
+    s.radio.emit(lowTank);
+
+    await expect(s.controls.open(identity, "pour")).rejects.toThrow(/water tank is low/i);
+    expect(enterCount).toBe(0);
+    expect(s.controls.getSnapshot().phase).toBe("closed");
+
+    // Simulate refilling tank: askInfo refreshes 40521 on retry without requiring manual refresh first.
+    s.radio.infoReply = okTank;
+    await s.controls.open(identity, "pour");
+    expect(enterCount).toBe(1);
+    expect(s.controls.getSnapshot().phase).toBe("ready");
+    await s.controls.close();
+
+    // 40522(0) (waterPresent === false) also blocks opening Pour even when info.waterEnough === true, until 40522(1) arrives.
+    s.radio.emit(event(40522, 0));
+    await expect(s.controls.open(identity, "pour")).rejects.toThrow(/water tank is low/i);
+    expect(enterCount).toBe(1);
+    s.radio.emit(event(40522, 1));
+    await s.controls.open(identity, "pour");
+    expect(enterCount).toBe(2);
+    await s.controls.close();
+
+    // Aborting during frame-gap wait in spacedControls.open stops before sending 8100, and reconnect/disconnect rejects cleanly.
+    const spacedRadio = new Radio();
+    spacedRadio.infoReply = lowTank;
+    const spacedMachine = new Machine(spacedRadio, {frameGapMs: 1000});
+    spacedMachine.installControlRecovery(new ControlRecoveryStore({read: () => "", write: () => {}}));
+    await spacedMachine.connect(identity.deviceId);
+    spacedRadio.emit(status(MACHINE_STATE.IDLE));
+    const spacedSent: Sent[] = [];
+    const spacedControls = new MachineControls(spacedMachine, {
+        qualifications: [{
+            profile,
+            protocol: {
+                actualWaterSource: () => "tank",
+                plan: (command, tokens) => {
+                    spacedSent.push({command, tokens});
+                    return {
+                        frame: buildType1(codes[command.kind], [tokens.session, tokens.transaction]),
+                        deadlineMs: 2500
+                    };
+                },
+                decode: (frame) => frame[3] === 0xFE && frame[4] === 0xFE
+                    ? feedbacks.get(frame[10] | frame[11] << 8) ?? null
+                    : null
+            }
+        }]
+    });
+    jest.useFakeTimers();
+    try {
+        // Seed lastControlTxAt via ensureFreshControlState with stale state.
+        await jest.advanceTimersByTimeAsync(16_000);
+        spacedRadio.homeReply = status(MACHINE_STATE.IDLE);
+        await spacedMachine.ensureFreshControlState();
+        spacedRadio.written = [];
+        spacedSent.length = 0;
+
+        const ac = new AbortController();
+        const abortedOpenError = spacedControls.open(identity, "pour", ac.signal).then(() => null, (error: Error) => error);
+        await Promise.resolve();
+        ac.abort();
+        expect((await abortedOpenError)?.message).toMatch(/cancelled/i);
+        expect(spacedRadio.written).toEqual([]);
+        expect(spacedSent).toEqual([]);
+
+        // Advance past frame gap, start open so 8100 is written, then abort during waitForAnyInfo:
+        // lastControlTxAt must already be updated upon writing 8100 so an immediate next open waits frameGapMs.
+        await jest.advanceTimersByTimeAsync(1000);
+        spacedRadio.infoReply = null;
+        const originalSpacedWrite = spacedRadio.write.bind(spacedRadio);
+        let release8100!: () => void;
+        const wrote8100 = new Promise<void>((resolve) => { release8100 = resolve; });
+        spacedRadio.write = async (frame) => {
+            await originalSpacedWrite(frame);
+            if ((frame[3] | (frame[4] << 8)) === 8100) release8100();
+        };
+        const acDuringWait = new AbortController();
+        const waitingOpenError = spacedControls.open(identity, "pour", acDuringWait.signal).then(() => null, (error: Error) => error);
+        await wrote8100;
+        const txCountAfterWrite = spacedRadio.written.length;
+        expect(txCountAfterWrite).toBe(1);
+
+        // Joining while ensurePourWaterForControl has aborted waits for unwind and opens cleanly via fresh preflight.
+        spacedRadio.infoReply = okTank;
+        spacedRadio.syntheticWrite = (frame) => {
+            const code = frame[3] | (frame[4] << 8);
+            if (code === codes.enter || code === codes.exit) {
+                const session = new DataView(frame.buffer, frame.byteOffset).getUint32(10, true);
+                const transaction = new DataView(frame.buffer, frame.byteOffset).getUint32(14, true);
+                feedback(spacedRadio, {session, transaction}, {kind: code === codes.enter ? "ready" : "closed"});
+            }
+        };
+        acDuringWait.abort();
+        const handoffOpen = spacedControls.open(identity, "pour");
+        expect((await waitingOpenError)?.message).toMatch(/cancelled/i);
+        // Right after settling, immediate retry still waits the 1000ms gap because 8100 stamped lastControlTxAt when sent.
+        await Promise.resolve();
+        expect(spacedRadio.written.length).toBe(txCountAfterWrite);
+        await jest.advanceTimersByTimeAsync(1000);
+        await jest.advanceTimersByTimeAsync(1000);
+        await handoffOpen;
+        expect(spacedControls.getSnapshot().phase).toBe("ready");
+        const closingSpaced = spacedControls.close();
+        await jest.advanceTimersByTimeAsync(1000);
+        await closingSpaced;
+
+        // Handoff across signalA abort + signalB join during ensureFreshControlState does not latch pourAbort.
+        await jest.advanceTimersByTimeAsync(16_000);
+        spacedRadio.emit(lowTank);
+        spacedRadio.infoReply = okTank;
+        let release8022!: () => void;
+        const gate8022 = new Promise<void>((resolve) => { release8022 = resolve; });
+        spacedRadio.write = async (frame) => {
+            if ((frame[3] | (frame[4] << 8)) === 8022) await gate8022;
+            await originalSpacedWrite(frame);
+        };
+        const ac1 = new AbortController();
+        const ac2 = new AbortController();
+        const inlineOpenError = spacedControls.open(identity, "pour", ac1.signal).then(() => null, (error: Error) => error);
+        await Promise.resolve();
+        ac1.abort();
+        const fullOpen = spacedControls.open(identity, "pour", ac2.signal);
+        await jest.advanceTimersByTimeAsync(0);
+        release8022();
+        await jest.advanceTimersByTimeAsync(1000);
+        await jest.advanceTimersByTimeAsync(1000);
+        const [inlineErr] = await Promise.all([inlineOpenError, fullOpen]);
+        expect(inlineErr?.message).toMatch(/cancelled/i);
+        expect(spacedControls.getSnapshot().phase).toBe("ready");
+
+        const closingFull = spacedControls.close();
+        await jest.advanceTimersByTimeAsync(1000);
+        await closingFull;
+
+        spacedRadio.write = originalSpacedWrite;
+        spacedRadio.emit(lowTank);
+        const linkDropped = spacedMachine.ensurePourWaterForControl();
+        const linkDroppedError = linkDropped.then(() => null, (error: Error) => error);
+        await spacedMachine.disconnect();
+        expect((await linkDroppedError)?.message).toMatch(/connection changed/i);
+    } finally {
+        spacedControls.dispose();
+        jest.useRealTimers();
+    }
+    s.controls.dispose();
+});
+
+it("exits an idle open tool reported by idleToolForState before opening a new tool and releases its lease if exit fails", async () => {
+    const radio = new Radio();
+    radio.infoReply = machineInfoFrame({serial: identity.serial, model: "test", firmware: "test"});
+    let raw = "";
+    const recovery = new ControlRecoveryStore({read: () => raw, write: (next) => { raw = next; }});
+    const machine = new Machine(radio, {frameGapMs: 0, stateReplyMs: 20});
+    machine.installControlRecovery(recovery);
+    await machine.connect(identity.deviceId);
+    radio.emit(status(0x05));
+    radio.written = [];
+    const controls = new MachineControls(machine, {
+        qualifications: [{
+            profile,
+            protocol: {
+                actualWaterSource: () => "tank",
+                idleToolForState: (state, seen) => state === 0x05 ? "scale" : state === 0x03 && seen ? "pour" : null,
+                plan: (command, tokens) => ({
+                    frame: buildType1(codes[command.kind], [tokens.session, tokens.transaction]),
+                    deadlineMs: 30
+                }),
+                decode: (frame) => frame[3] === 0xFE && frame[4] === 0xFE
+                    ? feedbacks.get(frame[10] | frame[11] << 8) ?? null
+                    : null
+            }
+        }]
+    });
+
+    // Exit fails without acknowledgement -> releases exit lease cleanly and keeps closed for retry.
+    const sentCommands: string[] = [];
+    radio.homeReply = status(0x05);
+    radio.syntheticWrite = (frame) => {
+        const code = frame[3] | (frame[4] << 8);
+        if (code === codes.exit) sentCommands.push("exit");
+        if (code === codes.enter) sentCommands.push("enter");
+    };
+    await expect(controls.open(identity, "grind")).rejects.toThrow(/response missing/i);
+    expect(sentCommands).toEqual(["exit"]);
+    expect(controls.getSnapshot().phase).toBe("closed");
+    expect(machine.controlBlocker).toBeNull();
+
+    // Retry when exit succeeds and returns Home (0x41) -> enters grind cleanly.
+    sentCommands.length = 0;
+    radio.syntheticWrite = (frame) => {
+        const code = frame[3] | (frame[4] << 8);
+        if (code === codes.exit) {
+            sentCommands.push("exit");
+            const session = new DataView(frame.buffer, frame.byteOffset).getUint32(10, true);
+            const transaction = new DataView(frame.buffer, frame.byteOffset).getUint32(14, true);
+            radio.homeReply = status(0x41);
+            feedback(radio, {session, transaction}, {kind: "closed"});
+        } else if (code === codes.enter) {
+            sentCommands.push("enter");
+            const session = new DataView(frame.buffer, frame.byteOffset).getUint32(10, true);
+            const transaction = new DataView(frame.buffer, frame.byteOffset).getUint32(14, true);
+            feedback(radio, {session, transaction}, {kind: "ready"});
+        }
+    };
+    await controls.open(identity, "grind");
+    expect(sentCommands).toEqual(["exit", "enter"]);
+    expect(controls.getSnapshot()).toMatchObject({phase: "ready", tool: "grind"});
+    await controls.close();
+
+    // Link drop / backgrounding / identity-changing info during exitIdleToolBeforeOpen keeps phase "closed" and never wedges in unknown.
+    const originalWrite = radio.write.bind(radio);
+    let releaseExitWrite!: () => void;
+    let signalExitWrite!: () => void;
+    const waitExitWrite = () => new Promise<void>((resolve) => { signalExitWrite = resolve; });
+    radio.homeReply = status(0x05);
+    radio.emit(status(0x05));
+    let gateExitWrite = new Promise<void>((resolve) => { releaseExitWrite = resolve; });
+    let exitWriteReady = waitExitWrite();
+    radio.write = async (frame) => {
+        if ((frame[3] | (frame[4] << 8)) === codes.exit) {
+            signalExitWrite();
+            await gateExitWrite;
+        }
+        await originalWrite(frame);
+    };
+    const droppedDuringExit = controls.open(identity, "grind").then(() => null, (error: Error) => error);
+    await exitWriteReady;
+    radio.drop();
+    releaseExitWrite();
+    expect((await droppedDuringExit)?.message).toBeTruthy();
+    expect(controls.getSnapshot().phase).toBe("closed");
+    expect(machine.controlBlocker).toBeNull();
+
+    // Reconnect and background during idle exit -> still keeps phase "closed" and reopens cleanly when active again.
+    await machine.connect(identity.deviceId);
+    radio.emit(status(0x05));
+    gateExitWrite = new Promise<void>((resolve) => { releaseExitWrite = resolve; });
+    exitWriteReady = waitExitWrite();
+    const bgDuringExit = controls.open(identity, "grind").then(() => null, (error: Error) => error);
+    await exitWriteReady;
+    machine.setAppState("background");
+    releaseExitWrite();
+    expect((await bgDuringExit)?.message).toBeTruthy();
+    expect(controls.getSnapshot().phase).toBe("closed");
+    expect(machine.controlBlocker).toBeNull();
+    machine.setAppState("active");
+
+    radio.write = originalWrite;
+    await controls.open(identity, "grind");
+    expect(controls.getSnapshot()).toMatchObject({phase: "ready", tool: "grind"});
+    await controls.close();
+
+    // Acquiring a setting lease clears recentControlPurpose ("pour") so non-control 0x03 stays refused.
+    await controls.open(identity, "pour");
+    await controls.close();
+    const settingLease = machine.acquireControlSession(identity, "setting");
+    settingLease.release();
+    radio.emit(status(MACHINE_STATE.DISPENSING));
+    expect(machine.controlStateConfirmed).toBe(false);
+    await expect(controls.open(identity, "grind")).rejects.toThrow(/fresh known normal/i);
+    controls.dispose();
+});
+
+it("detects +WATER / low tank when tool open fails on non-startable or WARNING states and recovers on retry after refill", async () => {
+    const s = await setup();
+    s.respond((item) => accept(s.radio, item));
+    const lowTank = machineInfoFrame({serial: identity.serial, model: "test", firmware: "test", waterEnough: 0});
+    const okTank = machineInfoFrame({serial: identity.serial, model: "test", firmware: "test", waterEnough: 1});
+    const tapLowTank = machineInfoFrame({serial: identity.serial, model: "test", firmware: "test", waterEnough: 0, waterFeed: 1});
+
+    // Non-startable WARNING (0x51) + low tank refuses Grind & Scale with +WATER guidance instead of "fresh known normal".
+    s.radio.emit(lowTank);
+    s.radio.infoReply = lowTank;
+    s.radio.emit(status(MACHINE_STATE.WARNING));
+    await expect(s.controls.open(identity, "grind")).rejects.toThrow(/\+WATER.*Refill the water tank/i);
+    await expect(s.controls.open(identity, "scale")).rejects.toThrow(/\+WATER.*Refill the water tank/i);
+
+    // 40522(0) + stale non-startable state also refuses with +WATER even when cached info still says okTank.
+    s.radio.emit(okTank);
+    s.radio.infoReply = okTank;
+    s.radio.emit(event(40522, 0));
+    s.radio.emit(status(MACHINE_STATE.LOADING));
+    await expect(s.controls.open(identity, "grind")).rejects.toThrow(/\+WATER.*Refill the water tank/i);
+    s.radio.emit(event(40522, 1));
+
+    // WARNING without low tank (e.g., plumbed machine) surfaces machine warning guidance instead of generic normal-state error.
+    s.radio.emit(tapLowTank);
+    s.radio.infoReply = tapLowTank;
+    s.radio.emit(status(MACHINE_STATE.WARNING));
+    await expect(s.controls.open(identity, "grind")).rejects.toThrow(/showing a warning/i);
+
+    // Explicit Retry after refilling tank (even within 15s) probes 8100 + 8022 and opens the tool.
+    s.radio.emit(lowTank);
+    s.radio.emit(status(MACHINE_STATE.NO_WATER));
+    s.radio.infoReply = okTank;
+    s.radio.homeReply = status(MACHINE_STATE.IDLE);
+    await s.controls.open(identity, "grind", undefined, {recheckFault: true});
+    expect(s.controls.getSnapshot()).toMatchObject({phase: "ready", tool: "grind"});
+    await s.controls.close();
+
+    // Pour retry when tank is STILL empty sends 8100 once (not twice back-to-back) before failing.
+    s.radio.emit(lowTank);
+    s.radio.emit(status(MACHINE_STATE.WARNING));
+    s.radio.infoReply = lowTank;
+    s.radio.homeReply = status(MACHINE_STATE.IDLE);
+    s.radio.written = [];
+    await expect(s.controls.open(identity, "pour", undefined, {recheckFault: true})).rejects.toThrow(/water tank is low/i);
+    expect(s.radio.sent.filter((code) => code === 8100)).toHaveLength(1);
+    s.controls.dispose();
 });

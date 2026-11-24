@@ -943,3 +943,63 @@ it("cancels 28-byte event 8022 homeTimer when non-startable status follows from 
         await machine.disconnect();
     }
 });
+
+it("surfaces +WATER / NO_BEANS guidance instead of generic normal-state refusal and unlocks prompt probe on 40522(1) refill", async () => {
+    const {machine, radio} = await setup();
+    try {
+        radio.emit(status(MACHINE_STATE.NO_WATER));
+        expect(() => machine.acquireControlSession(identity, "scale")).toThrow(/\+WATER.*Refill the water tank/i);
+
+        radio.emit(status(MACHINE_STATE.NO_BEANS));
+        expect(() => machine.acquireControlSession(identity, "grind")).toThrow(/waiting for beans.*Fill the hopper/i);
+
+        // If NO_WATER arrives mid-lease (after enter), preflight/reserve checks report +WATER guidance too.
+        radio.emit(status(MACHINE_STATE.IDLE));
+        const lease = machine.acquireControlSession(identity, "pour");
+        radio.emit(status(MACHINE_STATE.NO_WATER));
+        expect(() => lease.assertPourPreflight("tank")).toThrow(/\+WATER.*Refill the water tank/i);
+        lease.release();
+
+        // When 40522(1) refill arrives while NO_WATER is active, ensureFreshControlState probes 8022 promptly without waiting 15s.
+        radio.written = [];
+        radio.emit(event(40522, 1));
+        radio.homeReply = status(MACHINE_STATE.IDLE);
+        await machine.ensureFreshControlState();
+        expect(radio.sent).toContain(8022);
+        expect(machine.slotStateIsNormal).toBe(true);
+
+        // WARNING (0x51) or non-startable state paired with low tank reports +WATER instead of generic normal-state refusal.
+        radio.emit(machineInfoFrame({waterEnough: 0, waterFeed: 0}));
+        radio.emit(status(MACHINE_STATE.WARNING));
+        expect(() => machine.acquireControlSession(identity, "grind")).toThrow(/\+WATER.*Refill the water tank/i);
+
+        // Tap-fed machines ignore reservoir waterEnough=0 and report MACHINE WARNING on 0x51;
+        // a non-water 40521 while WARNING is active must NOT arm faultClearedByWaterEvent.
+        radio.emit(status(MACHINE_STATE.IDLE));
+        radio.emit(machineInfoFrame({waterEnough: 0, waterFeed: 1}));
+        radio.emit(status(MACHINE_STATE.WARNING));
+        expect(() => machine.acquireControlSession(identity, "scale")).toThrow(/showing a warning/i);
+        radio.written = [];
+        radio.emit(machineInfoFrame({waterEnough: 1, waterFeed: 1}));
+        await machine.ensureFreshControlState();
+        expect(radio.sent).toEqual([]);
+
+        // NO_BEANS and active BREWING states take precedence over low tank so they are not shadowed by +WATER.
+        radio.emit(machineInfoFrame({waterEnough: 0, waterFeed: 0}));
+        radio.emit(status(MACHINE_STATE.NO_BEANS));
+        expect(() => machine.acquireControlSession(identity, "grind")).toThrow(/waiting for beans.*Fill the hopper/i);
+        radio.emit(status(MACHINE_STATE.BREWING));
+        expect(() => machine.acquireControlSession(identity, "grind")).toThrow(/fresh known normal/i);
+
+        // Explicit retry rechecks fresh fault within 15s (sending 8100 + 8022) and recovers once status returns to IDLE.
+        radio.emit(status(MACHINE_STATE.NO_WATER));
+        radio.written = [];
+        radio.infoReply = machineInfoFrame({waterEnough: 1, waterFeed: 0});
+        radio.homeReply = status(MACHINE_STATE.IDLE);
+        await machine.ensureFreshControlState({recheckFault: true});
+        expect(radio.sent).toEqual([8100, 8022]);
+        expect(machine.slotStateIsNormal).toBe(true);
+    } finally {
+        await machine.disconnect();
+    }
+});

@@ -156,7 +156,7 @@ export function useMachineTool(identity: ControlIdentity, tool: ToolId, controls
             try {
                 const current = controls.describeTool(identity, tool);
                 if (current.unavailable) throw new Error(current.unavailable);
-                await controls.open(identity, tool, mountAbort.current?.signal);
+                await controls.open(identity, tool, mountAbort.current?.signal, {recheckFault: true});
             } finally {
                 if (mounted.current && latestKey.current === activeKey) {
                     setOpeningKey((current) => current === activeKey ? null : current);
@@ -261,7 +261,7 @@ export function useMachineTool(identity: ControlIdentity, tool: ToolId, controls
                 && controls.describeTool(identity, tool).unavailable === null) {
                 if (latestKey.current === activeKey) setOpeningKey(activeKey);
                 try {
-                    await controls.open(identity, tool, mountAbort.current?.signal);
+                    await controls.open(identity, tool, mountAbort.current?.signal, {recheckFault: true});
                 } finally {
                     if (mounted.current && latestKey.current === activeKey) {
                         setOpeningKey((current) => current === activeKey ? null : current);

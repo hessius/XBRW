@@ -1,4 +1,4 @@
-import {buildType1, buildType2, parseNotification, type MachineInfo} from "./protocol";
+import {buildType1, buildType2, EVENT, MACHINE_STATE, parseNotification, type MachineInfo} from "./protocol";
 import type {
     ControlCommand,
     ControlFeedback,
@@ -7,7 +7,10 @@ import type {
     ControlProtocol,
     ControlExchange
 } from "./controlProtocol";
-import type {Pattern, SettingId, SettingReadings, SettingValues, ToolId} from "./controlModel";
+import {
+    MACHINE_WARNING_CONTROL_MESSAGE, NO_BEANS_CONTROL_MESSAGE, NO_WATER_CONTROL_MESSAGE,
+    type Pattern, type SettingId, type SettingReadings, type SettingValues, type ToolId
+} from "./controlModel";
 import {studioQualifiedProfile} from "./controlCapabilities";
 
 const PATTERN_CODE: Record<Pattern, number> = {
@@ -73,13 +76,37 @@ export class StudioControlProtocol implements ControlProtocol {
     private enterPrepared = false;
     private movingStarted = false;
     private waterDispensedObserved = false;
+    private waterFeed: 0 | 1 = 0;
+    private waterEnough = true;
+    private waterPresent: boolean | null = null;
 
     actualWaterSource(info: MachineInfo | null): "tank" | "tap" | null {
-        if (!info) return null;
+        if (!info) {
+            this.waterFeed = 0;
+            this.waterEnough = true;
+            this.waterPresent = null;
+            return null;
+        }
+        this.waterFeed = info.waterFeed === "tap" ? 1 : 0;
+        this.waterEnough = info.waterEnough;
         return info.waterFeed === "tap" ? "tap" : "tank";
     }
 
+    syncWaterState(info: MachineInfo | null, waterPresent: boolean | null): void {
+        this.actualWaterSource(info);
+        this.waterPresent = waterPresent;
+    }
+
+    idleToolForState(state: number, controlStateSeen: boolean): ToolId | null {
+        if (state === 0x02) return "grind";
+        if (state === 0x04 || state === 0x05) return "scale";
+        if (state === MACHINE_STATE.DISPENSING && controlStateSeen) return "pour";
+        return null;
+    }
+
     decodeInfoSettings(info: MachineInfo): SettingReadings {
+        this.waterFeed = info.waterFeed === "tap" ? 1 : 0;
+        this.waterEnough = info.waterEnough;
         const temp = info.settingsRaw?.temperatureUnit;
         const weight = info.settingsRaw?.weightUnit;
         const rawRadius = info.settingsRaw?.pourRadius;
@@ -165,13 +192,14 @@ export class StudioControlProtocol implements ControlProtocol {
         }
         if (command.kind === "pour") {
             const {request} = command;
-            const volumeMl = request.mode === "target" ? Math.round(request.volumeMl) : 0;
+            const volumeX10 = request.mode === "target" ? request.volumeMl * 10 : 0;
             return {
                 frame: buildType1(4506, [
-                    Math.round(request.temperatureC * 10),
-                    PATTERN_CODE[request.pattern],
-                    volumeMl,
-                    floatBitsToInt32(request.flowMlPerSecond * 10)
+                    floatBitsToInt32(request.flowMlPerSecond * 10),
+                    floatBitsToInt32(volumeX10),
+                    floatBitsToInt32(Math.round(request.temperatureC) * 10),
+                    this.waterFeed,
+                    PATTERN_CODE[request.pattern]
                 ]),
                 deadlineMs: 10000,
                 arm: () => {
@@ -243,7 +271,7 @@ export class StudioControlProtocol implements ControlProtocol {
             case "grind":
                 return buildType1(8006, [60, 80]);
             case "pour":
-                return buildType1(8007, [1, floatBitsToInt32(250.0)]);
+                return buildType1(8007, [0, floatBitsToInt32(250.0)]);
             default:
                 throw new Error(`Unsupported tool entry: ${String(tool)}`);
         }
@@ -285,6 +313,13 @@ export class StudioControlProtocol implements ControlProtocol {
     decode(frame: Uint8Array): ControlFeedback | null {
         const parsed = parseNotification(frame);
         if (parsed.kind === "unknown") return null;
+        if (parsed.kind === "info") {
+            this.waterFeed = parsed.waterFeed === "tap" ? 1 : 0;
+            this.waterEnough = parsed.waterEnough;
+        }
+        if (parsed.kind === "event" && parsed.code === EVENT.WATER_LOW && parsed.value !== undefined) {
+            this.waterPresent = parsed.value !== 0;
+        }
 
         if (parsed.kind === "cupWeight") {
             if (this.runTokens && this.activeTool === "pour") {
@@ -347,6 +382,22 @@ export class StudioControlProtocol implements ControlProtocol {
 
         switch (command.kind) {
             case "enter": {
+                if (parsed.kind === "status" && parsed.state === MACHINE_STATE.NO_WATER) {
+                    return {...tokens, value: {kind: "refused", reason: NO_WATER_CONTROL_MESSAGE}};
+                }
+                if (parsed.kind === "status" && parsed.state === MACHINE_STATE.NO_BEANS) {
+                    return {...tokens, value: {kind: "refused", reason: NO_BEANS_CONTROL_MESSAGE}};
+                }
+                if (parsed.kind === "status" && parsed.state === MACHINE_STATE.WARNING) {
+                    const lowWater = this.waterFeed === 0 && (!this.waterEnough || this.waterPresent === false);
+                    return {
+                        ...tokens,
+                        value: {
+                            kind: "refused",
+                            reason: lowWater ? NO_WATER_CONTROL_MESSAGE : MACHINE_WARNING_CONTROL_MESSAGE
+                        }
+                    };
+                }
                 if (command.tool === "scale" && ((parsed.kind === "event" && parsed.code === 8003)
                     || (parsed.kind === "status" && (parsed.state === 0x04 || parsed.state === 0x05)))) {
                     return {...tokens, value: {kind: "ready"}};

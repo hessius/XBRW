@@ -55,12 +55,12 @@ class Radio extends FakeTransport {
     get connectedDeviceId() { return this.connectedTo; }
 }
 
-async function studioSetup(infoFrame: number[] = j15F231Frame) {
+async function studioSetup(infoFrame: number[] = j15F231Frame, stateReplyMs?: number) {
     const radio = new Radio();
     radio.infoReply = infoFrame;
     let raw = "";
     const recovery = new ControlRecoveryStore({read: () => raw, write: (next) => { raw = next; }});
-    const machine = new Machine(radio, {frameGapMs: 0});
+    const machine = new Machine(radio, {frameGapMs: 0, stateReplyMs});
     machine.installControlRecovery(recovery);
     await machine.connect(studioIdentity.deviceId);
     radio.emit(status(MACHINE_STATE.IDLE));
@@ -193,12 +193,22 @@ describe("Studio production qualifications", () => {
 
     it("executes Pour target and continuous (vol=0), live temp (4510 float32 ack), live pattern (8016) and stop (4507)", async () => {
         const s = await studioSetup();
-        const flow30Bits = 0x41F00000; // float32(30.0)
+        const floatBits = (value: number): number => {
+            const buf = new ArrayBuffer(4);
+            new DataView(buf).setFloat32(0, value, true);
+            return new DataView(buf).getInt32(0, true);
+        };
+        const flow30Bits = floatBits(30.0);
+        const vol600Bits = floatBits(600.0);
+        const temp620Bits = floatBits(620.0);
         const captured4510 = hexBytes("5802079e1110000000c10000c8430000");
         const valid4510 = notification(0x9E, 0x11, captured4510.slice(10, 14));
         s.radio.syntheticWrite = (frame) => {
             const code = frame[3] | (frame[4] << 8);
-            if (code === 8007) s.radio.emit(event(8007));
+            if (code === 8007) {
+                expect(Array.from(frame)).toEqual(Array.from(buildType1(8007, [0, floatBits(250.0)])));
+                s.radio.emit(event(8007));
+            }
             if (code === 4506) s.radio.emit(event(4506));
             if (code === 4510) {
                 expect(Array.from(frame)).toEqual(Array.from(buildType1(4510, [400])));
@@ -213,25 +223,53 @@ describe("Studio production qualifications", () => {
         };
         await s.controls.open(studioIdentity, "pour");
         await s.controls.startPour({
-            mode: "target", temperatureC: 25, pattern: "circular", volumeMl: 60, flowMlPerSecond: 3
+            mode: "target", temperatureC: 62, pattern: "circular", volumeMl: 60, flowMlPerSecond: 3
         });
         expect(s.radio.written.map((f) => Array.from(f))).toContainEqual(
-            Array.from(buildType1(4506, [250, 1, 60, flow30Bits]))
+            Array.from(buildType1(4506, [flow30Bits, vol600Bits, temp620Bits, 0, 1]))
         );
         await s.controls.setTemperature(40);
         await s.controls.setPattern("spiral");
         expect(s.controls.getSnapshot()).toMatchObject({phase: "running", temperatureC: 40, pattern: "spiral"});
         await s.controls.stop();
         await s.controls.startPour({
-            mode: "continuous", temperatureC: 25, pattern: "circular", flowMlPerSecond: 3
+            mode: "continuous", temperatureC: 62, pattern: "spiral", flowMlPerSecond: 3
         });
         expect(s.radio.written.map((f) => Array.from(f))).toContainEqual(
-            Array.from(buildType1(4506, [250, 1, 0, flow30Bits]))
+            Array.from(buildType1(4506, [flow30Bits, 0, temp620Bits, 0, 2]))
+        );
+        await s.controls.stop();
+        await s.controls.startPour({
+            mode: "target", temperatureC: 62, pattern: "centered", volumeMl: 60, flowMlPerSecond: 3
+        });
+        expect(s.radio.written.map((f) => Array.from(f))).toContainEqual(
+            Array.from(buildType1(4506, [flow30Bits, vol600Bits, temp620Bits, 0, 0]))
         );
         await s.controls.stop();
         await s.controls.close();
         expect(s.controls.getSnapshot().phase).toBe("closed");
         s.controls.dispose();
+
+        // Tap-fed Studio reports waterFeed = 1 in arg 3 of 4506.
+        const tapIdentity = {deviceId: "studio-5af231", serial: "J15A02A45H038"};
+        const tap = await studioSetup(j15H038Captured);
+        tap.radio.syntheticWrite = (frame) => {
+            const code = frame[3] | (frame[4] << 8);
+            if (code === 8007) tap.radio.emit(event(8007));
+            if (code === 4506) tap.radio.emit(event(4506));
+            if (code === 4507) tap.radio.emit(event(4507));
+            if (code === 8013) tap.radio.emit(event(8013));
+        };
+        await tap.controls.open(tapIdentity, "pour");
+        await tap.controls.startPour({
+            mode: "target", temperatureC: 62, pattern: "centered", volumeMl: 60, flowMlPerSecond: 3
+        });
+        expect(tap.radio.written.map((f) => Array.from(f))).toContainEqual(
+            Array.from(buildType1(4506, [flow30Bits, vol600Bits, temp620Bits, 1, 0]))
+        );
+        await tap.controls.stop();
+        await tap.controls.close();
+        tap.controls.dispose();
     });
 
     it("never leaks tuning readings across machine switches or disconnect/reconnect", async () => {
@@ -590,5 +628,202 @@ describe("Studio production qualifications", () => {
         } finally {
             jest.useRealTimers();
         }
+    });
+
+    it("maps 0x0C NO_WATER and 0x0F NO_BEANS during Studio tool entry to explicit refusals, encodes fractional flow, and resets waterFeed on null info", async () => {
+        const protocol = new StudioControlProtocol();
+        const tokens = {session: 1, transaction: 1};
+        protocol.plan({kind: "enter", tool: "pour"}, tokens);
+        expect(protocol.decode(Uint8Array.from(status(MACHINE_STATE.NO_WATER)))).toEqual({
+            session: 1,
+            transaction: 1,
+            value: {
+                kind: "refused",
+                reason: expect.stringMatching(/\+WATER.*Refill the water tank/i)
+            }
+        });
+        protocol.plan({kind: "enter", tool: "grind"}, tokens);
+        expect(protocol.decode(Uint8Array.from(status(MACHINE_STATE.NO_BEANS)))).toEqual({
+            session: 1,
+            transaction: 1,
+            value: {
+                kind: "refused",
+                reason: expect.stringMatching(/waiting for beans.*Fill the hopper/i)
+            }
+        });
+
+        const s = await studioSetup(j15H038Captured);
+        expect(protocol.actualWaterSource(s.machine.info)).toBe("tap");
+        expect(protocol.actualWaterSource(null)).toBeNull();
+        const floatBits = (value: number): number => {
+            const buf = new ArrayBuffer(4);
+            new DataView(buf).setFloat32(0, value, true);
+            return new DataView(buf).getInt32(0, true);
+        };
+        const ex = protocol.prepare({
+            kind: "pour",
+            request: {mode: "target", temperatureC: 62, pattern: "circular", volumeMl: 30, flowMlPerSecond: 1.5}
+        }, tokens);
+        expect(Array.from(ex.frame!)).toEqual(
+            Array.from(buildType1(4506, [floatBits(15.0), floatBits(300.0), floatBits(620.0), 0, 1]))
+        );
+        s.controls.dispose();
+    });
+
+    it("exits an open idle Studio tool (0x02 grind, 0x04/0x05 scale, or control-originated 0x03 pour) before switching, while refusing non-control 0x03", async () => {
+        const protocol = new StudioControlProtocol();
+        expect(protocol.idleToolForState(0x02, false)).toBe("grind");
+        expect(protocol.idleToolForState(0x04, false)).toBe("scale");
+        expect(protocol.idleToolForState(0x05, false)).toBe("scale");
+        expect(protocol.idleToolForState(MACHINE_STATE.DISPENSING, true)).toBe("pour");
+        expect(protocol.idleToolForState(MACHINE_STATE.DISPENSING, false)).toBeNull();
+        expect(protocol.idleToolForState(0x41, false)).toBeNull();
+
+        const s = await studioSetup(j15F231Frame, 20);
+        let activeScreen: number = MACHINE_STATE.IDLE;
+        s.radio.syntheticWrite = (frame) => {
+            const code = frame[3] | (frame[4] << 8);
+            if (code === 8022) {
+                s.radio.emit(status(activeScreen));
+            } else if (code === 8003) {
+                activeScreen = 0x05;
+                s.radio.emit(event(8003));
+            } else if (code === 8006) {
+                activeScreen = 0x02;
+                s.radio.emit(event(8006));
+            } else if (code === 8007) {
+                activeScreen = MACHINE_STATE.DISPENSING;
+                s.radio.emit(event(8007));
+            } else if (code === 8012 || code === 8013 || code === 8014) {
+                activeScreen = MACHINE_STATE.COMPLETE;
+                s.radio.emit(event(code));
+                s.radio.emit(status(MACHINE_STATE.COMPLETE));
+            }
+        };
+
+        // 1. Machine already sitting in Scale (0x05): open("grind") probes 8022, sends 8014 exit, then 8006 enter.
+        activeScreen = 0x05;
+        s.radio.emit(status(0x05));
+        await s.controls.open(studioIdentity, "grind");
+        expect(s.radio.sent).toEqual([8022, 8014, 8006]);
+        expect(s.controls.getSnapshot()).toMatchObject({phase: "ready", tool: "grind"});
+
+        // 2. If Grind (0x02) stays on 0x02 after close(), switching to Pour still sends 8012 -> 8007.
+        await s.controls.closeInBackground();
+        activeScreen = 0x02;
+        s.radio.emit(status(0x02));
+        s.radio.written = [];
+        await s.controls.open(studioIdentity, "pour");
+        expect(s.radio.sent).toEqual([8022, 8012, 8007]);
+        expect(s.controls.getSnapshot()).toMatchObject({phase: "ready", tool: "pour"});
+
+        // 3. Switch away from Pour (8013 ack resolves close(), then delayed status 0x03 arrives while controlSession is null):
+        // recentControlPurpose tracks that 0x03 came from our Pour session, so open("scale") sends 8013 before 8003.
+        s.radio.syntheticWrite = (frame) => {
+            const code = frame[3] | (frame[4] << 8);
+            if (code === 8022) s.radio.emit(status(activeScreen));
+            else if (code === 8013) {
+                activeScreen = MACHINE_STATE.COMPLETE;
+                s.radio.emit(event(8013));
+            } else if (code === 8003) {
+                activeScreen = 0x05;
+                s.radio.emit(event(8003));
+            } else if (code === 8014) {
+                activeScreen = MACHINE_STATE.COMPLETE;
+                s.radio.emit(event(8014));
+                s.radio.emit(status(MACHINE_STATE.COMPLETE));
+            }
+        };
+        await s.controls.closeInBackground();
+        activeScreen = MACHINE_STATE.DISPENSING;
+        s.radio.emit(status(MACHINE_STATE.DISPENSING));
+        expect(s.machine.controlStateConfirmed).toBe(true);
+        s.radio.syntheticWrite = (frame) => {
+            const code = frame[3] | (frame[4] << 8);
+            if (code === 8022) s.radio.emit(status(activeScreen));
+            else if (code === 8013) {
+                activeScreen = MACHINE_STATE.COMPLETE;
+                s.radio.emit(event(8013));
+                s.radio.emit(status(MACHINE_STATE.COMPLETE));
+            } else if (code === 8003) {
+                activeScreen = 0x05;
+                s.radio.emit(event(8003));
+            } else if (code === 8014) {
+                activeScreen = MACHINE_STATE.COMPLETE;
+                s.radio.emit(event(8014));
+                s.radio.emit(status(MACHINE_STATE.COMPLETE));
+            }
+        };
+        s.radio.written = [];
+        await s.controls.open(studioIdentity, "scale");
+        expect(s.radio.sent).toEqual([8022, 8013, 8003]);
+        expect(s.controls.getSnapshot()).toMatchObject({phase: "ready", tool: "scale"});
+        await s.controls.close();
+
+        // 4. Non-control 0x03 (after Home reset) must NEVER send 8013 exit.
+        s.radio.emit(status(MACHINE_STATE.IDLE));
+        expect(s.machine.controlStateConfirmed).toBe(false);
+        s.radio.written = [];
+        s.radio.emit(status(MACHINE_STATE.DISPENSING));
+        await expect(s.controls.open(studioIdentity, "grind")).rejects.toThrow(/fresh known normal/i);
+        expect(s.radio.sent).toEqual([]);
+
+        s.controls.dispose();
+    });
+
+    it("fails enter fast on WARNING (0x51) with +WATER when low tank or MACHINE WARNING otherwise", async () => {
+        const s = await studioSetup(j15F231Frame, 20);
+        const lowTank = machineInfoFrame({serial: studioIdentity.serial, model: "Studio", firmware: "V12.0D.500", waterEnough: 0});
+        const okTank = machineInfoFrame({serial: studioIdentity.serial, model: "Studio", firmware: "V12.0D.500", waterEnough: 1});
+        s.radio.emit(lowTank);
+        s.radio.syntheticWrite = (frame) => {
+            const code = frame[3] | (frame[4] << 8);
+            if (code === 8003 || code === 8006) s.radio.emit(status(MACHINE_STATE.WARNING));
+        };
+        await expect(s.controls.open(studioIdentity, "scale")).rejects.toThrow(/\+WATER.*Refill the water tank/i);
+        s.controls.dispose();
+
+        // With water OK, WARNING status during enter refuses fast with MACHINE WARNING guidance.
+        const second = await studioSetup(j15F231Frame, 20);
+        second.radio.emit(okTank);
+        second.radio.emit(status(MACHINE_STATE.IDLE));
+        second.radio.syntheticWrite = (frame) => {
+            const code = frame[3] | (frame[4] << 8);
+            if (code === 8006) second.radio.emit(status(MACHINE_STATE.WARNING));
+        };
+        await expect(second.controls.open(studioIdentity, "grind")).rejects.toThrow(/showing a warning/i);
+        second.controls.dispose();
+
+        // Mid-session 40522(0) does not stay stale across close() + refill: subsequent WARNING refuses with MACHINE WARNING.
+        const third = await studioSetup(j15F231Frame, 20);
+        third.radio.emit(okTank);
+        third.radio.emit(status(MACHINE_STATE.IDLE));
+        let warnOnScale = false;
+        third.radio.syntheticWrite = (frame) => {
+            const code = frame[3] | (frame[4] << 8);
+            if (code === 8003) third.radio.emit(warnOnScale ? status(MACHINE_STATE.WARNING) : event(8003));
+            else if (code === 8014) {
+                third.radio.emit(event(8014));
+                third.radio.emit(status(MACHINE_STATE.IDLE));
+            }
+        };
+        await third.controls.open(studioIdentity, "scale");
+        third.radio.emit(event(40522, 0));
+        await third.controls.close();
+        third.radio.emit(event(40522, 1));
+        warnOnScale = true;
+        await expect(third.controls.open(studioIdentity, "scale")).rejects.toThrow(/showing a warning/i);
+        third.controls.dispose();
+
+        // 40522(0) received while closed (with info.waterEnough=true) still syncs into StudioControlProtocol before enter.
+        const fourth = await studioSetup(j15F231Frame, 20);
+        fourth.radio.emit(okTank);
+        fourth.radio.emit(status(MACHINE_STATE.IDLE));
+        fourth.radio.emit(event(40522, 0));
+        fourth.radio.syntheticWrite = (frame) => {
+            if ((frame[3] | (frame[4] << 8)) === 8003) fourth.radio.emit(status(MACHINE_STATE.WARNING));
+        };
+        await expect(fourth.controls.open(studioIdentity, "scale")).rejects.toThrow(/\+WATER.*Refill the water tank/i);
+        fourth.controls.dispose();
     });
 });

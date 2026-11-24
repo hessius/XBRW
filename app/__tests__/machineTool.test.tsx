@@ -1078,3 +1078,109 @@ it("offers Reconcile connected machine when connected settings leave unknown wit
     await press("Reconcile connected machine");
     await waitFor(() => expect(s.controls.getSnapshot().phase).toBe("closed"));
 });
+
+it("shows styled ADD WATER guidance and RETRY OPENING TOOL button when +WATER (0x0C) blocks entry, and opens after refill", async () => {
+    const s = await fixture();
+    mockParams.tool = "pour";
+    s.radio.emit(status(MACHINE_STATE.NO_WATER));
+    await renderWithProviders(<MachineToolScreen controls={s.controls}/>);
+
+    await waitFor(() => expect(screen.getByText(/\+WATER.*Refill the water tank/i)).toBeTruthy());
+    expect(screen.getByText("ADD WATER")).toBeTruthy();
+    expect(screen.getByTestId("full-tool-error")).toHaveProp("accessibilityRole", "alert");
+    const retryBtn = screen.getByRole("button", {name: "Retry opening tool"});
+    expect(retryBtn).toBeEnabled();
+    expect(screen.getByText("RETRY OPENING TOOL")).toBeTruthy();
+    expect(retryBtn).toHaveStyle({borderColor: palette.warn});
+    expect(s.sent).toEqual([]);
+
+    await act(async () => {
+        s.radio.emit(status(MACHINE_STATE.IDLE));
+        await flushControls();
+    });
+    await press("Retry opening tool");
+    await waitFor(() => expect(s.controls.getSnapshot().phase).toBe("ready"));
+    expect(screen.queryByTestId("full-tool-error")).toBeNull();
+});
+
+it("hands off suspended 8022 preflight to full screen for Pour and refreshes tank water without false cancellation", async () => {
+    jest.useFakeTimers();
+    try {
+        const s = await fixture();
+        const lowTank = machineInfoFrame({serial: identity.serial, model: "test", firmware: "test", waterEnough: 0});
+        const okTank = machineInfoFrame({serial: identity.serial, model: "test", firmware: "test", waterEnough: 1});
+        s.radio.emit(lowTank);
+        s.radio.infoReply = okTank;
+        await jest.advanceTimersByTimeAsync(16_000);
+
+        let release8022!: () => void;
+        const gate8022 = new Promise<void>(resolve => { release8022 = resolve; });
+        const originalWrite = s.radio.write.bind(s.radio);
+        s.radio.write = async frame => {
+            if ((frame[3] | (frame[4] << 8)) === 8022) await gate8022;
+            await originalWrite(frame);
+        };
+        const onExpandTool = jest.fn();
+        const panel = await renderWithProviders(
+            <MachinePanel
+                open
+                status="connected"
+                accent={palette.success}
+                vitals={null}
+                now={0}
+                onRefreshWater={async () => false}
+                onConnect={jest.fn()}
+                machineId={identity.deviceId}
+                machineSerial={identity.serial}
+                controls={s.controls}
+                onExpandTool={onExpandTool}
+            />
+        );
+        await fireEvent.press(screen.getByRole("button", {name: "Pour"}));
+        await act(flushControls);
+        expect(screen.getByRole("button", {name: "ENTERING POUR…"})).toBeDisabled();
+
+        await fireEvent.press(screen.getByRole("button", {name: "Expand to full screen"}));
+        expect(onExpandTool).toHaveBeenCalledWith(identity.deviceId, "pour");
+        await panel.unmount();
+
+        mockParams = {machineId: identity.deviceId, tool: "pour"};
+        await renderWithProviders(<MachineToolScreen controls={s.controls}/>);
+        await act(flushControls);
+
+        s.radio.homeReply = status(0x41);
+        await act(async () => {
+            release8022();
+            await jest.advanceTimersByTimeAsync(0);
+            await flushControls();
+        });
+        await waitFor(() => expect(s.controls.getSnapshot().phase).toBe("ready"));
+        expect(screen.getByRole("button", {name: "START POUR"})).toBeEnabled();
+        expect(screen.queryByText(/Control open cancelled/i)).toBeNull();
+    } finally {
+        jest.useRealTimers();
+    }
+});
+
+it("surfaces ADD WATER on blinking +WATER warning + low tank across tools and omits ALWAYS LIVE / NON-BLOCKING EXIT in full Scale view", async () => {
+    const s = await fixture();
+    const lowTank = machineInfoFrame({serial: identity.serial, model: "test", firmware: "test", waterEnough: 0});
+    const okTank = machineInfoFrame({serial: identity.serial, model: "test", firmware: "test", waterEnough: 1});
+    s.radio.emit(lowTank);
+    s.radio.infoReply = lowTank;
+    s.radio.emit(status(MACHINE_STATE.WARNING));
+
+    mockParams = {machineId: identity.deviceId, tool: "scale"};
+    await renderWithProviders(<MachineToolScreen controls={s.controls}/>);
+    await waitFor(() => expect(screen.getByText("ADD WATER")).toBeTruthy());
+    expect(screen.queryByText(/fresh known normal/i)).toBeNull();
+
+    // After refilling tank, Retry opening tool probes within 15s and opens Scale cleanly without ALWAYS LIVE / NON-BLOCKING EXIT.
+    s.radio.infoReply = okTank;
+    s.radio.homeReply = status(MACHINE_STATE.IDLE);
+    await press("Retry opening tool");
+    await waitFor(() => expect(s.controls.getSnapshot()).toMatchObject({phase: "ready", tool: "scale"}));
+    expect(screen.getByText("Scale stream")).toBeTruthy();
+    expect(screen.queryByText(/ALWAYS LIVE/i)).toBeNull();
+    expect(screen.queryByText(/NON-BLOCKING EXIT/i)).toBeNull();
+});

@@ -11,7 +11,10 @@ import type {SlotAcquireOptions, SlotIdentity} from "@/library/slots/slotWriter"
 import {sameBytes} from "@/library/slots/slotModel";
 
 import {BrewOwnershipError, BrewUploadError, ControlOperationError, RadioUnavailableError, SlotOperationError} from "./errors";
-import type {ControlIdentity, ToolId} from "./controlModel";
+import {
+    LOW_WATER_POUR_MESSAGE, MACHINE_WARNING_CONTROL_MESSAGE, NO_BEANS_CONTROL_MESSAGE, NO_WATER_CONTROL_MESSAGE,
+    type ControlIdentity, type ToolId
+} from "./controlModel";
 import type {ControlRecoverySnapshot, ControlRecoveryStore, ControlTerminalProof} from "./controlRecovery";
 
 import {frameLogText, historyLine} from "./frameLog";
@@ -49,7 +52,7 @@ export type SlotSession = {
     release: (safe: boolean) => void;
 };
 
-export type ControlPurpose = ToolId | "setting" | "recovery";
+export type ControlPurpose = ToolId | "setting" | "recovery" | "exit";
 export type ControlSession = {
     check: () => void;
     /** Only a future qualified adapter may supply frames; no encoders are provided here. */
@@ -324,6 +327,8 @@ export default class Machine {
     private unsettledCommand = false;
     private lastControlTxAt = 0;
     private controlStateSeen = false;
+    private recentControlPurpose: ControlPurpose | null = null;
+    private faultClearedByWaterEvent = false;
     private controlStore: ControlRecoveryStore | undefined;
     private controlSession: {token: symbol; invalidate: (error: Error) => void} | null = null;
 
@@ -373,19 +378,34 @@ export default class Machine {
         return false;
     }
 
+    get tankWaterPresent(): boolean | null {
+        return this.waterPresent;
+    }
+
+    private hasLowWaterTank(): boolean {
+        if (this.info === null) return this.waterPresent === false;
+        if (this.info.waterFeed !== "tank") return false;
+        return !this.info.waterEnough || this.waterPresent === false;
+    }
+
+    private isControlFaultState(state: number | null): boolean {
+        return state !== null && (FAULT_BLOCKS[state] !== undefined || state === MACHINE_STATE.WARNING);
+    }
+
     /**
      * Queries the machine for a current status frame when control state is missing,
      * stale, or still sitting in an exited tool/boot screen so switching tools does
      * not refuse on an expired 15 s state timestamp.
      */
-    async ensureFreshControlState(): Promise<void> {
+    async ensureFreshControlState(options?: {recheckFault?: boolean}): Promise<void> {
         if (this.controlStateProbe !== null) return this.controlStateProbe;
         const fresh = this.state !== null && STARTABLE.has(this.state)
             && Date.now() - this.stateAt <= STATE_FRESH_MS;
         if (fresh) return;
         if (this.controlProbeBlocked(this.generation)) return;
-        const expiredFault = this.state !== null && FAULT_BLOCKS[this.state] !== undefined
-            && Date.now() - this.stateAt > STATE_FRESH_MS;
+        const isFault = this.isControlFaultState(this.state);
+        const expiredFault = isFault
+            && (options?.recheckFault === true || this.faultClearedByWaterEvent || Date.now() - this.stateAt > STATE_FRESH_MS);
         const passiveWaitOnly = this.state === MACHINE_STATE.DISPENSING && !this.controlStateSeen;
         const canProbe = this.state === null
             || STARTABLE.has(this.state)
@@ -408,42 +428,6 @@ export default class Machine {
         };
         const isFresh = () => this.state !== null && STARTABLE.has(this.state)
             && Date.now() - this.stateAt <= STATE_FRESH_MS;
-        const waitGap = async (signal: AbortSignal) => {
-            check();
-            if (this.frameGapMs <= 0 || this.lastControlTxAt <= 0) return;
-            const remaining = this.frameGapMs - (Date.now() - this.lastControlTxAt);
-            if (remaining <= 0) return;
-            await new Promise<void>((resolve, reject) => {
-                const cleanup = () => {
-                    clearTimeout(timer);
-                    offState();
-                    offLink();
-                    offPhase();
-                    signal.removeEventListener("abort", onStop);
-                    if (this.controlStateAbort === checkInterrupted) this.controlStateAbort = null;
-                };
-                const onStop = () => { cleanup(); resolve(); };
-                const checkInterrupted = () => {
-                    if (this.controlProbeBlocked(generation, probeOp)) {
-                        cleanup();
-                        reject(new ControlOperationError("The machine state probe was superseded."));
-                    }
-                };
-                const offState = this.onNotification((parsed) => {
-                    if (parsed.kind === "status" && STARTABLE.has(parsed.state)) {
-                        cleanup();
-                        resolve();
-                    }
-                });
-                const offLink = this.onLink(checkInterrupted);
-                const offPhase = this.onPhase(checkInterrupted);
-                this.controlStateAbort = checkInterrupted;
-                signal.addEventListener("abort", onStop, {once: true});
-                const timer = setTimeout(() => { cleanup(); resolve(); }, remaining);
-                timer.unref?.();
-            });
-            check();
-        };
         let probe!: Promise<void>;
         probe = (async () => {
             const abort = new AbortController();
@@ -497,17 +481,18 @@ export default class Machine {
                         || this.controlStateSeen
                         || Machine.TOOL_IDLE_OR_BOOT_STATES.has(this.state);
                     if (!sawNonStartableAfter8022 && allowCarriedHome && carriedHome
-                        && (this.state === null || !FAULT_BLOCKS[this.state]) && homeTimer === null) {
+                        && !this.isControlFaultState(this.state) && homeTimer === null) {
                         homeTimer = setTimeout(() => {
                             const stillAllowed = this.state === null
                                 || this.controlStateSeen
                                 || Machine.TOOL_IDLE_OR_BOOT_STATES.has(this.state);
                             if (generation === this.generation && !done && !sawNonStartableAfter8022
-                                && stillAllowed && (this.state === null || !FAULT_BLOCKS[this.state])
+                                && stillAllowed && !this.isControlFaultState(this.state)
                                 && !this.controlProbeBlocked(generation, probeOp)) {
                                 this.state = frame[25];
                                 this.stateAt = Date.now();
                                 this.controlStateSeen = false;
+                                this.recentControlPurpose = null;
                             }
                             finishWait();
                         }, Math.min(800, this.stateReplyMs));
@@ -527,14 +512,21 @@ export default class Machine {
                     this.controlStateAbort = onAbort;
                     armReplyTimer();
                 } else {
-                    await waitGap(abort.signal);
+                    check();
+                    if (this.frameGapMs > 0 && this.lastControlTxAt > 0) {
+                        await this.waitControlFrameGap(generation, probeOp, abort.signal, check, isFresh, true);
+                    }
                     if (isFresh()) { abort.abort(); await waitUntilReady; return; }
-                    if (!this.sessionIsFresh()) {
+                    const refreshInfoForWater = options?.recheckFault === true
+                        && (isFault || this.hasLowWaterTank());
+                    if (!this.sessionIsFresh() || refreshInfoForWater || this.state === MACHINE_STATE.WARNING) {
                         await this.writeFrame(buildType1(8100, [185, 1]), check);
                         this.lastHandshakeAt = Date.now();
                         this.lastControlTxAt = Date.now();
                         check();
-                        if (this.frameGapMs > 0) await waitGap(abort.signal);
+                        if (this.frameGapMs > 0) {
+                            await this.waitControlFrameGap(generation, probeOp, abort.signal, check, isFresh, true);
+                        }
                         if (isFresh()) { abort.abort(); await waitUntilReady; return; }
                     }
                     check();
@@ -558,8 +550,143 @@ export default class Machine {
         return probe;
     }
 
+    private async waitControlFrameGap(
+        generation: number,
+        ignoreOp: {generation: number} | undefined,
+        signal: AbortSignal | undefined,
+        check: () => void,
+        shouldResolveEarly?: () => boolean,
+        resolveOnAbort = false
+    ): Promise<void> {
+        check();
+        if (this.frameGapMs <= 0 || this.lastControlTxAt <= 0) return;
+        const remaining = this.frameGapMs - (Date.now() - this.lastControlTxAt);
+        if (remaining <= 0) return;
+        await new Promise<void>((resolve, reject) => {
+            let settled = false;
+            const cleanup = () => {
+                clearTimeout(timer);
+                offNotify();
+                offLink();
+                offPhase();
+                signal?.removeEventListener("abort", onAbort);
+                if (this.controlStateAbort === checkInterrupted) this.controlStateAbort = null;
+            };
+            const finishResolve = () => {
+                if (settled) return;
+                settled = true;
+                cleanup();
+                resolve();
+            };
+            const finishReject = (error: Error) => {
+                if (settled) return;
+                settled = true;
+                cleanup();
+                reject(error);
+            };
+            const onAbort = () => {
+                if (resolveOnAbort) finishResolve();
+                else finishReject(new ControlOperationError("Control open cancelled before attachment."));
+            };
+            const checkInterrupted = () => {
+                if (generation !== this.generation || !this.isConnected()) {
+                    finishReject(new ControlOperationError("The machine connection changed."));
+                    return;
+                }
+                if (this.controlProbeBlocked(generation, ignoreOp)) {
+                    finishReject(new ControlOperationError("The machine state probe was superseded."));
+                }
+            };
+            const offNotify = shouldResolveEarly
+                ? this.onNotification((parsed) => {
+                    if (parsed.kind === "status" && STARTABLE.has(parsed.state) && shouldResolveEarly()) {
+                        finishResolve();
+                    }
+                })
+                : () => {};
+            const offLink = this.onLink(checkInterrupted);
+            const offPhase = this.onPhase(checkInterrupted);
+            this.controlStateAbort = checkInterrupted;
+            signal?.addEventListener("abort", onAbort, {once: true});
+            const timer = setTimeout(finishResolve, remaining);
+            timer.unref?.();
+        });
+        check();
+    }
+
+    /**
+     * Checks tank water availability before entering Pour so a low or empty tank
+     * does not trigger `+WATER` (`0x0C`) on hardware during tool entry (`8007`).
+     * Refreshes stale/low vitals once when needed so refilling before Retry recovers cleanly.
+     */
+    async ensurePourWaterForControl(signal?: AbortSignal, infoAlreadyFresh = false): Promise<void> {
+        if (signal?.aborted) throw new ControlOperationError("Control open cancelled before attachment.");
+        if (this.state === MACHINE_STATE.NO_WATER
+            || (this.state === MACHINE_STATE.WARNING && this.hasLowWaterTank())) {
+            throw new ControlOperationError(NO_WATER_CONTROL_MESSAGE);
+        }
+        if (this.state === MACHINE_STATE.NO_BEANS) {
+            throw new ControlOperationError(NO_BEANS_CONTROL_MESSAGE);
+        }
+        if (this.info === null || this.info.waterFeed !== "tank") return;
+        if (this.info.waterEnough && this.waterPresent !== false) return;
+        if (infoAlreadyFresh) {
+            throw new ControlOperationError(LOW_WATER_POUR_MESSAGE);
+        }
+
+        const generation = this.generation;
+        const guard = (ignoreOp?: {generation: number}) => {
+            if (signal?.aborted) throw new ControlOperationError("Control open cancelled before attachment.");
+            if (generation !== this.generation || !this.isConnected()) {
+                throw new ControlOperationError("The machine connection changed.");
+            }
+            if (this.controlProbeBlocked(generation, ignoreOp)) {
+                throw new ControlOperationError("The machine is busy or unavailable for controls.");
+            }
+        };
+        guard();
+        await this.waitControlFrameGap(generation, undefined, signal, () => guard());
+        const op = {generation};
+        const finish = this.beginOrdinaryOperation(op);
+        try {
+            await this.askInfo(
+                () => guard(op),
+                async (frame) => {
+                    await this.writeFrame(frame, () => guard(op));
+                    if (generation === this.generation) this.lastControlTxAt = Date.now();
+                },
+                signal
+            );
+        } finally {
+            finish();
+        }
+        if (signal?.aborted) throw new ControlOperationError("Control open cancelled before attachment.");
+        if (generation !== this.generation || !this.isConnected()) {
+            throw new ControlOperationError("The machine connection changed.");
+        }
+        if (this.state === MACHINE_STATE.NO_WATER
+            || (this.state === MACHINE_STATE.WARNING && this.hasLowWaterTank())) {
+            throw new ControlOperationError(NO_WATER_CONTROL_MESSAGE);
+        }
+        if (this.state === MACHINE_STATE.NO_BEANS) {
+            throw new ControlOperationError(NO_BEANS_CONTROL_MESSAGE);
+        }
+        if (this.info?.waterFeed === "tank" && (!this.info.waterEnough || this.waterPresent === false)) {
+            throw new ControlOperationError(LOW_WATER_POUR_MESSAGE);
+        }
+    }
+
+    get controlStateConfirmed(): boolean {
+        return this.controlStateSeen;
+    }
+
     acquireControlSession(identity: ControlIdentity, purpose: ControlPurpose): ControlSession {
         return this.acquireControlLease(identity, purpose);
+    }
+
+    /** Acquires a non-moving exit lease while the machine is idle on an open tool screen (`0x02`/`0x04`/`0x05`/`0x03`). */
+    acquireIdleExitSession(identity: ControlIdentity): ControlSession {
+        return this.acquireControlLease(identity, "exit");
     }
 
     private acquireControlLease(
@@ -604,19 +731,37 @@ export default class Machine {
                 refuse("The machine is busy or unavailable for controls.");
             }
             if (!requireNormal) return;
+            const refuseNonNormal = (): never => {
+                if (this.state === MACHINE_STATE.NO_WATER) return refuse(NO_WATER_CONTROL_MESSAGE);
+                if (this.state === MACHINE_STATE.NO_BEANS) return refuse(NO_BEANS_CONTROL_MESSAGE);
+                if (this.hasLowWaterTank() && (
+                    this.state === null
+                    || this.state === MACHINE_STATE.WARNING
+                    || Machine.TOOL_IDLE_OR_BOOT_STATES.has(this.state)
+                )) {
+                    return refuse(NO_WATER_CONTROL_MESSAGE);
+                }
+                if (this.state === MACHINE_STATE.WARNING) return refuse(MACHINE_WARNING_CONTROL_MESSAGE);
+                return refuse("Controls require a fresh known normal machine state.");
+            };
             if (!atAcquisition && (purpose === "grind" || purpose === "pour")) {
                 const toolReadyState = purpose === "grind" ? 0x02 : 0x03;
                 if (this.state === null || (!STARTABLE.has(this.state) && this.state !== toolReadyState)) {
-                    refuse("Controls require a fresh known normal machine state.");
+                    refuseNonNormal();
                 }
                 return;
             }
             if (this.state === null || !STARTABLE.has(this.state)
                 || (atAcquisition && Date.now() - this.stateAt > STATE_FRESH_MS)) {
-                refuse("Controls require a fresh known normal machine state.");
+                refuseNonNormal();
             }
         };
-        assertAvailable(purpose !== "recovery" && !inspectionOnly, true);
+        assertAvailable(purpose !== "recovery" && purpose !== "exit" && !inspectionOnly, true);
+        if (purpose === "grind" || purpose === "pour" || purpose === "scale") {
+            this.recentControlPurpose = purpose;
+        } else if (purpose === "setting") {
+            this.recentControlPurpose = null;
+        }
         const check = () => {
             if (failure !== null) throw failure;
             const current = this.slotIdentity;
@@ -918,6 +1063,7 @@ export default class Machine {
             }
         };
         this.slotSession = {token, invalidate};
+        this.recentControlPurpose = null;
         return {
             restartFromBeginning: journal !== null && options?.restart === true,
             validateFrames: (frames) => {
@@ -1446,34 +1592,45 @@ export default class Machine {
         }
     }
 
-    private async askInfo(check?: () => void, write?: (frame: Uint8Array) => Promise<void>): Promise<boolean> {
+    private async askInfo(
+        check?: () => void,
+        write?: (frame: Uint8Array) => Promise<void>,
+        signal?: AbortSignal
+    ): Promise<boolean> {
         check?.();
         const generation = this.generation;
         const infoBeforeRequest = this.info;
         // Listening before the handshake, not after: the info can arrive
         // inside the write, since the radio delivers on its own thread.
         const abort = new AbortController();
+        const onOuterAbort = () => abort.abort();
+        signal?.addEventListener("abort", onOuterAbort, {once: true});
+        if (signal?.aborted) abort.abort();
         const answered = this.waitForAnyInfo(abort.signal);
         try {
-            if (write === undefined) await this.shakeHands();
-            else {
-                await write(buildType1(8100, [185, 1]));
-                check?.();
-                this.lastHandshakeAt = Date.now();
+            try {
+                if (write === undefined) await this.shakeHands();
+                else {
+                    await write(buildType1(8100, [185, 1]));
+                    check?.();
+                    this.lastHandshakeAt = Date.now();
+                }
+            } catch (error) {
+                if (check !== undefined) throw error;
+                if (generation !== this.generation) throw error;
+                // A handshake the radio would not carry is not a reason to abandon
+                // what the caller was doing. The brew decides on what it last
+                // heard, and fails on its own first frame if the radio is gone.
+                return false;
             }
-        } catch (error) {
+            check?.();
+            const result = await answered || this.info !== infoBeforeRequest;
+            check?.();
+            return result;
+        } finally {
+            signal?.removeEventListener("abort", onOuterAbort);
             abort.abort();
-            if (check !== undefined) throw error;
-            if (generation !== this.generation) throw error;
-            // A handshake the radio would not carry is not a reason to abandon
-            // what the caller was doing. The brew decides on what it last
-            // heard, and fails on its own first frame if the radio is gone.
-            return false;
         }
-        check?.();
-        const result = await answered || this.info !== infoBeforeRequest;
-        check?.();
-        return result;
     }
 
     async disconnect(): Promise<void> {
@@ -1530,6 +1687,7 @@ export default class Machine {
         if (!isActiveBrewPhase(this.phase)) {
             this.unsettledCommand = true;
             this.controlStateSeen = false;
+            this.recentControlPurpose = null;
             this.controlStateAbort?.();
         }
         const finish = this.beginOrdinaryOperation();
@@ -1624,17 +1782,27 @@ export default class Machine {
         if (parsed.kind === "status") {
             this.state = parsed.state;
             this.stateAt = Date.now();
+            this.faultClearedByWaterEvent = false;
             if (STARTABLE.has(parsed.state)) {
                 this.unsettledCommand = false;
                 this.controlStateSeen = false;
-            } else if (this.controlSession !== null) {
+                this.recentControlPurpose = null;
+            } else if (this.controlSession !== null
+                || (parsed.state === MACHINE_STATE.DISPENSING && this.recentControlPurpose === "pour")) {
                 this.controlStateSeen = true;
             }
             this.onState(parsed.state);
         }
         if (parsed.kind === "info") {
+            const wasWaterFaultOrLow = this.state === MACHINE_STATE.NO_WATER || this.hasLowWaterTank();
             this.info = parsed;
             this.infoAt = Date.now();
+            if ((this.state === MACHINE_STATE.NO_WATER || this.state === MACHINE_STATE.WARNING)
+                && wasWaterFaultOrLow
+                && (parsed.waterFeed !== "tank" || parsed.waterEnough)
+                && this.waterPresent !== false) {
+                this.faultClearedByWaterEvent = true;
+            }
             this.announceLink();
         }
         if (parsed.kind === "event" && parsed.code === EVENT.WATER_LOW
@@ -1642,6 +1810,10 @@ export default class Machine {
             // Kept whether or not a brew is running: it is the tank, and the
             // next brew's pre-flight is what reads it.
             this.waterPresent = parsed.value !== 0;
+            if (this.waterPresent
+                && (this.state === MACHINE_STATE.NO_WATER || this.state === MACHINE_STATE.WARNING)) {
+                this.faultClearedByWaterEvent = true;
+            }
         }
         if (parsed.kind === "event") this.onEvent(parsed.code, parsed.value);
         // Proof of life during the drawdown. Handled after the frame, so an
@@ -1880,6 +2052,7 @@ export default class Machine {
         // about its mode again if this send also goes nowhere.
         this.retriedInPro = false;
         this.pauseSent = false;
+        this.recentControlPurpose = null;
         // A CANCEL pressed while this attempt is still preparing must stop it
         // before the recipe goes out, not after.
         const ticket = this.cancelTicket;
@@ -2774,6 +2947,8 @@ export default class Machine {
         this.controlStateProbe = null;
         this.lastControlTxAt = 0;
         this.controlStateSeen = false;
+        this.recentControlPurpose = null;
+        this.faultClearedByWaterEvent = false;
         this.state = null;
         this.stateAt = 0;
         // Last, so a listener reading `isConnected()` or `info` sees the link

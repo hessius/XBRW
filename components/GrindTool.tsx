@@ -1,6 +1,6 @@
 import React from "react";
 import {Text, YStack} from "tamagui";
-import {MachineToolActions, ToolFieldsScroller} from "@/components/MachineControlReadout";
+import {MachineToolActions, ToolFieldsScroller, ToolNoticeBanner} from "@/components/MachineControlReadout";
 import ToolHeroStage from "@/components/ToolHeroStage";
 import ToolParameterDeck from "@/components/ToolParameterDeck";
 import {useAppearance} from "@/hooks/useAppearance";
@@ -60,7 +60,7 @@ export default function GrindTool({
                 onGrindChange={onRequestChange}
             />
             {explanation !== null && <Text color={palette.muted}>{explanation}</Text>}
-            {error !== null && <Text color={palette.danger}>{error}</Text>}
+            {error !== null && <ToolNoticeBanner variant={variant} message={error}/>}
         </YStack>
     );
 

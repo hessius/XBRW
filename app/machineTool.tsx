@@ -2,9 +2,10 @@ import React, {useEffect, useRef, useState} from "react";
 import {Pressable} from "react-native";
 import {useLocalSearchParams} from "expo-router";
 import {useSafeAreaInsets} from "react-native-safe-area-context";
-import {Button, ScrollView, Text, XStack, YStack} from "tamagui";
+import {ScrollView, Text, XStack, YStack} from "tamagui";
 import DotMatrixText from "@/components/DotMatrixText";
 import GrindTool from "@/components/GrindTool";
+import {retryButtonEmphasis, ToolActionButton, ToolNoticeBanner} from "@/components/MachineControlReadout";
 import PourTool from "@/components/PourTool";
 import ScaleTool from "@/components/ScaleTool";
 import ScreenHeader from "@/components/ScreenHeader";
@@ -161,139 +162,94 @@ function ToolScreen({identity, routeTool, name, injected}: {
                 <YStack flex={1} minHeight={0} paddingHorizontal="$4" paddingBottom={Math.max(insets.bottom, 16)} gap="$2">
                     {/* A sibling, never an outer scroller around the instruments:
                         large copy cannot push their fixed Stop below the screen. */}
-                    <ScrollView flexGrow={0} flexShrink={1} maxHeight="30%" minHeight={0}
+                    <ScrollView flexGrow={0} flexShrink={1} maxHeight="38%" minHeight={0}
                         contentContainerStyle={{gap: 8, paddingBottom: 8}}>
-                        {error !== null && <Text selectable color={palette.danger}>{error}</Text>}
+                        {error !== null && (
+                            <ToolNoticeBanner testID="full-tool-error" variant="full" message={error}/>
+                        )}
                         {(canReconcileNullTool || (tool === "scale" && owns))
-                            && snapshot.error !== null && snapshot.error !== error
-                            && <Text selectable color={palette.danger}>{snapshot.error}</Text>}
+                            && snapshot.error !== null && snapshot.error !== error && (
+                            <ToolNoticeBanner testID="full-tool-snapshot-error" variant="full" message={snapshot.error}/>
+                        )}
                         {support.unavailable !== null && <Text color={palette.muted}>{support.unavailable}</Text>}
                         {phase === "closed" && uiPhase === "closed" && support.unavailable === null && (
-                            <Button
-                                accessibilityRole="button"
+                            <ToolActionButton
+                                testID="full-tool-open"
+                                variant="full"
+                                emphasis={error !== null ? retryButtonEmphasis(error) : "primary"}
+                                label={error !== null ? "Retry opening tool" : "Open tool"}
                                 disabled={busy}
+                                busy={busy}
                                 onPress={state.open}
-                                backgroundColor={palette.raised}
-                                color={palette.text}
-                                borderRadius="$4"
-                                minHeight={42}
-                                height="auto"
-                                paddingVertical="$2.5"
-                                paddingHorizontal="$3"
-                                opacity={busy ? 0.5 : 1}
-                                style={{borderWidth: 1, borderColor: palette.brand}}>
-                                {error !== null ? "Retry opening tool" : "Open tool"}
-                            </Button>
+                            />
                         )}
                         {support.recoverable ? (
-                            <Button
-                                accessibilityRole="button"
+                            <ToolActionButton
+                                variant="full"
+                                emphasis="primary"
+                                label="Reconcile connected machine"
                                 disabled={busy}
+                                busy={busy}
                                 onPress={state.recover}
-                                backgroundColor={palette.raised}
-                                color={palette.text}
-                                borderRadius="$4"
-                                minHeight={42}
-                                height="auto"
-                                paddingVertical="$2.5"
-                                paddingHorizontal="$3"
-                                opacity={busy ? 0.5 : 1}
-                                style={{borderWidth: 1, borderColor: palette.brand}}>
-                                Reconcile connected machine
-                            </Button>
+                            />
                         ) : canReconcileNullTool && (
-                            <Button
-                                accessibilityRole="button"
+                            <ToolActionButton
+                                variant="full"
+                                emphasis="primary"
+                                label="Reconcile connected machine"
                                 disabled={busy}
+                                busy={busy}
                                 onPress={state.recoverUnknown}
-                                backgroundColor={palette.raised}
-                                color={palette.text}
-                                borderRadius="$4"
-                                minHeight={42}
-                                height="auto"
-                                paddingVertical="$2.5"
-                                paddingHorizontal="$3"
-                                opacity={busy ? 0.5 : 1}
-                                style={{borderWidth: 1, borderColor: palette.brand}}>
-                                Reconcile connected machine
-                            </Button>
+                            />
                         )}
                         {!owns && sameMachineSnap && snapshot.phase === "unknown"
                             && (snapshot.tool === "grind" || snapshot.tool === "scale" || snapshot.tool === "pour") && (
-                            <Button
-                                accessibilityRole="button"
+                            <ToolActionButton
+                                variant="full"
+                                emphasis="secondary"
+                                label="Inspect active tool"
                                 disabled={busy}
+                                busy={busy}
                                 onPress={() => switchToolState(snapshot.tool as ToolId)}
-                                backgroundColor={palette.raised}
-                                color={palette.text}
-                                borderRadius="$4"
-                                minHeight={42}
-                                height="auto"
-                                paddingVertical="$2.5"
-                                paddingHorizontal="$3"
-                                opacity={busy ? 0.5 : 1}
-                                style={{borderWidth: 1, borderColor: palette.line}}>
-                                Inspect active tool
-                            </Button>
+                            />
                         )}
                         {support.reconnectable ? <>
                             <Text color={palette.muted}>
                                 Connection lost. Reconnect this machine to inspect and stop, or leave this screen.
                             </Text>
                             <XStack gap="$2" flexWrap="wrap">
-                                <Button
-                                    accessibilityRole="button"
+                                <ToolActionButton
+                                    variant="full"
+                                    emphasis="primary"
+                                    label="Reconnect named machine"
                                     disabled={busy}
+                                    busy={busy}
                                     onPress={state.reconnect}
-                                    backgroundColor={palette.raised}
-                                    color={palette.text}
-                                    borderRadius="$4"
-                                    minHeight={42}
-                                    height="auto"
-                                    paddingVertical="$2.5"
-                                    paddingHorizontal="$3"
-                                    opacity={busy ? 0.5 : 1}
-                                    style={{borderWidth: 1, borderColor: palette.brand}}>
-                                    Reconnect named machine
-                                </Button>
-                                <Button
-                                    accessibilityRole="button"
+                                />
+                                <ToolActionButton
+                                    variant="full"
+                                    emphasis="secondary"
+                                    label="Leave screen"
                                     disabled={busy}
+                                    busy={busy}
                                     onPress={() => nav.leaveWhileDisconnected(() => router.back())}
-                                    backgroundColor={palette.raised}
-                                    color={palette.text}
-                                    borderRadius="$4"
-                                    minHeight={42}
-                                    height="auto"
-                                    paddingVertical="$2.5"
-                                    paddingHorizontal="$3"
-                                    opacity={busy ? 0.5 : 1}
-                                    style={{borderWidth: 1, borderColor: palette.line}}>
-                                    Leave screen
-                                </Button>
+                                />
                             </XStack>
                         </> : sameMachineSnap && snapshot.phase === "unknown" && !support.recoverable
                             && !identityConnected && (
-                            <Button
-                                accessibilityRole="button"
+                            <ToolActionButton
+                                variant="full"
+                                emphasis="secondary"
+                                label="Leave screen"
                                 disabled={busy}
+                                busy={busy}
                                 onPress={() => nav.leaveWhileDisconnected(() => router.back())}
-                                backgroundColor={palette.raised}
-                                color={palette.text}
-                                borderRadius="$4"
-                                minHeight={42}
-                                height="auto"
-                                paddingVertical="$2.5"
-                                paddingHorizontal="$3"
-                                opacity={busy ? 0.5 : 1}
-                                style={{borderWidth: 1, borderColor: palette.line}}>
-                                Leave screen
-                            </Button>
+                            />
                         )}
                     </ScrollView>
                     {tool === "grind" && <GrindTool phase={uiPhase} request={grind}
                         policy={support.grind} unavailable={unavailable} stopUnavailable={support.stopUnavailable}
-                        error={owns ? snapshot.error : null} animationEnabled={animationEnabled}
+                        error={owns && snapshot.error !== error ? snapshot.error : null} animationEnabled={animationEnabled}
                         onRequestChange={state.setGrind} onStart={state.start} onStop={state.stop}/>}
                     {tool === "scale" && <ScaleTool phase={uiPhase} grams={bound ? snapshot.cupGrams : null}
                         scaleSamples={scaleSamples} unavailable={unavailable} disabled={uiPhase !== "ready"}
@@ -311,7 +267,7 @@ function ToolScreen({identity, routeTool, name, injected}: {
                             ? {qualified: true, onChange: state.setLivePattern, error: state.livePatternError}
                             : undefined}
                         unavailable={unavailable} stopUnavailable={support.stopUnavailable}
-                        error={owns ? snapshot.error : null} onRequestChange={state.setPour}
+                        error={owns && snapshot.error !== error ? snapshot.error : null} onRequestChange={state.setPour}
                         onModeChange={state.changeMode} onStart={state.start} onStop={state.stop}/>}
                 </YStack>
             </YStack>

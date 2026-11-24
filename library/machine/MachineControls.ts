@@ -85,6 +85,8 @@ function capture({profile: p, protocol}: ControlQualification): ControlQualifica
             decode: protocol.decode.bind(protocol),
             decodeInfoSettings: protocol.decodeInfoSettings?.bind(protocol),
             actualWaterSource: protocol.actualWaterSource.bind(protocol),
+            syncWaterState: protocol.syncWaterState?.bind(protocol),
+            idleToolForState: protocol.idleToolForState?.bind(protocol),
             telemetryFreshMs: protocol.telemetryFreshMs,
             confirmTargetStopFromCupPlateau: protocol.confirmTargetStopFromCupPlateau
         })
@@ -109,7 +111,13 @@ export default class MachineControls {
     private opening: Promise<ControlFeedback["value"]> | null = null;
     private closing: Promise<void> | null = null;
     private leavingSession = false;
-    private preflight: {key: string; promise: Promise<void>; signals?: Set<AbortSignal | undefined>} | null = null;
+    private preflight: {
+        key: string;
+        promise: Promise<void>;
+        signals?: Set<AbortSignal | undefined>;
+        watchSignal?: (signal?: AbortSignal) => void;
+        aborted?: () => boolean;
+    } | null = null;
     private recovering = false;
     private reconnecting: Promise<void> | null = null;
     private recoveryOnly = false;
@@ -415,12 +423,13 @@ export default class MachineControls {
     }
 
     private attach(
-        callerIdentity: ControlIdentity, purpose: ToolId | "setting" | "recovery", replacement?: ControlSession
+        callerIdentity: ControlIdentity, purpose: ToolId | "setting" | "recovery" | "exit", replacement?: ControlSession
     ): void {
         const identity = Object.freeze({...callerIdentity});
         if (replacement) this.lease = replacement;
         this.qualification = this.select();
         const protocol = this.qualification.protocol;
+        protocol.syncWaterState?.(this.machine.info, this.machine.tankWaterPresent);
         const ms = protocol.telemetryFreshMs;
         if (ms !== undefined && (!Number.isFinite(ms) || ms <= 0)) throw new Error("Invalid qualified telemetry freshness.");
         const lease = replacement ?? this.machine.acquireControlSession(identity, purpose);
@@ -429,11 +438,16 @@ export default class MachineControls {
         const session = this.session = ++nextSession;
         const invalidate = (error: Error) => {
             this.contextInvalid = true;
+            if (purpose === "exit") {
+                this.waiter?.reject(error);
+                return;
+            }
             this.uncertain(error);
         };
         this.off.push(lease.onInvalidated(invalidate));
         this.off.push(this.machine.onLink(() => {
             if (this.lease !== lease || this.contextInvalid || this.clearing) return;
+            protocol.syncWaterState?.(this.machine.info, this.machine.tankWaterPresent);
             try {
                 lease.check();
                 if (this.select() !== this.qualification) throw new Error("The qualified machine identity changed.");
@@ -476,7 +490,8 @@ export default class MachineControls {
                 }
                 if (this.waiter?.tokens.transaction === event.transaction) this.waiter.receive(event.value);
             } catch (error) {
-                this.uncertain(failure(error));
+                if (purpose === "exit") invalidate(failure(error));
+                else this.uncertain(failure(error));
             }
         }));
     }
@@ -490,6 +505,7 @@ export default class MachineControls {
 
     private release(): void {
         if (this.disposed) return;
+        this.qualification?.protocol.syncWaterState?.(null, null);
         this.clearPourPlateau();
         this.clearFreshness();
         this.off.splice(0).forEach((off) => off());
@@ -617,6 +633,7 @@ export default class MachineControls {
         this.lease.check();
         const tokens = Object.freeze({session: this.session, transaction: ++this.transaction});
         const protocol = this.qualification.protocol;
+        if (command.kind === "pour") protocol.actualWaterSource(this.machine.info, this.machine.infoAt);
         const plan = (protocol.prepare ?? protocol.plan).call(protocol, command, tokens);
         if (!Number.isFinite(plan.deadlineMs) || plan.deadlineMs <= 0) throw new Error("A qualified deadline is required.");
         if (command.kind === "inspect" && command.recovery && (plan.frame !== null || !plan.refreshInfo)) {
@@ -720,17 +737,42 @@ export default class MachineControls {
         }
     }
 
-    async open(identity: ControlIdentity, tool: ToolId, signal?: AbortSignal): Promise<void> {
+    private async exitIdleToolBeforeOpen(identity: ControlIdentity, idleTool: ToolId): Promise<void> {
+        const lease = this.machine.acquireIdleExitSession(identity);
+        this.attach(identity, "exit", lease);
+        try {
+            await this.exchange({kind: "exit", tool: idleTool}, "closed");
+        } finally {
+            this.release();
+            this.contextInvalid = false;
+            await this.writeTail;
+        }
+    }
+
+    async open(
+        identity: ControlIdentity,
+        tool: ToolId,
+        signal?: AbortSignal,
+        options?: {recheckFault?: boolean}
+    ): Promise<void> {
         if (this.disposed) throw new Error("The shared control owner was reset.");
         if (signal?.aborted) throw new Error("Control open cancelled before attachment.");
         const key = `${identity.deviceId}\0${identity.serial ?? ""}\0${tool}`;
-        if (this.preflight) {
+        while (this.preflight) {
             if (this.preflight.key === key) {
                 if (signal?.aborted) throw new Error("Control open cancelled before attachment.");
-                this.preflight.signals?.add(signal);
-                await this.preflight.promise;
+                if (!this.preflight.aborted?.()) {
+                    this.preflight.signals?.add(signal);
+                    this.preflight.watchSignal?.(signal);
+                    await this.preflight.promise;
+                    if (signal?.aborted) throw new Error("Control open cancelled before attachment.");
+                    return;
+                }
+                // Wait for an already-aborted preflight to unwind so the caller gets a fresh un-aborted run.
+                await this.preflight.promise.catch(() => {});
+                if (this.disposed) throw new Error("The shared control owner was reset.");
                 if (signal?.aborted) throw new Error("Control open cancelled before attachment.");
-                return;
+                continue;
             }
             throw new Error("A control session is already owned.");
         }
@@ -753,16 +795,69 @@ export default class MachineControls {
 
         const signals = new Set<AbortSignal | undefined>([signal]);
         const preflightCancelled = () => signals.size > 0 && Array.from(signals).every((entry) => entry?.aborted === true);
-        let preflight: {key: string; promise: Promise<void>; signals?: Set<AbortSignal | undefined>} | undefined;
+        let pourAbort: AbortController | null = null;
+        const syncPreflightAbort = () => {
+            if (pourAbort && preflightCancelled()) pourAbort.abort();
+        };
+        const watchedSignals: AbortSignal[] = [];
+        const watchSignal = (entry?: AbortSignal) => {
+            if (!entry) return;
+            if (entry.aborted) {
+                syncPreflightAbort();
+                return;
+            }
+            entry.addEventListener("abort", syncPreflightAbort, {once: true});
+            watchedSignals.push(entry);
+        };
+        watchSignal(signal);
+        let preflight: {
+            key: string;
+            promise: Promise<void>;
+            signals?: Set<AbortSignal | undefined>;
+            watchSignal?: (signal?: AbortSignal) => void;
+            aborted?: () => boolean;
+        } | undefined;
         const task = (async () => {
             try {
                 if (this.closing) await this.closing;
                 if (preflightCancelled()) throw new Error("Control open cancelled before attachment.");
                 if (this.disposed) throw new Error("The shared control owner was reset.");
-                await this.machine.ensureFreshControlState();
+                const infoBefore = this.machine.info;
+                await this.machine.ensureFreshControlState(
+                    options?.recheckFault ? {recheckFault: true} : undefined
+                );
                 if (preflightCancelled()) throw new Error("Control open cancelled before attachment.");
                 if (this.disposed) throw new Error("The shared control owner was reset.");
                 if (this.snapshot.phase !== "closed") throw new Error("A control session is already owned.");
+                const idleTool = !this.machine.slotStateIsNormal
+                    && this.machine.state !== null
+                    && this.machine.controlRecovery?.marker == null
+                    ? this.select().protocol.idleToolForState?.(
+                        this.machine.state,
+                        this.machine.controlStateConfirmed
+                    ) ?? null
+                    : null;
+                if (idleTool !== null) {
+                    await this.exitIdleToolBeforeOpen(identity, idleTool);
+                    if (preflightCancelled()) throw new Error("Control open cancelled before attachment.");
+                    if (this.disposed) throw new Error("The shared control owner was reset.");
+                    if (this.snapshot.phase !== "closed") throw new Error("A control session is already owned.");
+                    await this.machine.ensureFreshControlState(
+                        options?.recheckFault ? {recheckFault: true} : undefined
+                    );
+                    if (preflightCancelled()) throw new Error("Control open cancelled before attachment.");
+                    if (this.disposed) throw new Error("The shared control owner was reset.");
+                    if (this.snapshot.phase !== "closed") throw new Error("A control session is already owned.");
+                }
+                if (tool === "pour") {
+                    pourAbort = new AbortController();
+                    if (preflightCancelled()) pourAbort.abort();
+                    await this.machine.ensurePourWaterForControl(pourAbort.signal, this.machine.info !== infoBefore);
+                    pourAbort = null;
+                    if (preflightCancelled()) throw new Error("Control open cancelled before attachment.");
+                    if (this.disposed) throw new Error("The shared control owner was reset.");
+                    if (this.snapshot.phase !== "closed") throw new Error("A control session is already owned.");
+                }
                 const {profile: latestProfile} = this.select();
                 if ((tool === "grind" && !latestProfile.grind) || (tool === "pour" && !latestProfile.pour)) {
                     throw new Error("Tool unsupported.");
@@ -781,12 +876,21 @@ export default class MachineControls {
                     this.opening = null;
                 }
             } finally {
+                pourAbort = null;
+                for (const entry of watchedSignals) entry.removeEventListener("abort", syncPreflightAbort);
                 if (this.preflight === preflight) this.preflight = null;
             }
         })();
-        preflight = {key, promise: task, signals};
+        preflight = {
+            key,
+            promise: task,
+            signals,
+            watchSignal,
+            aborted: () => pourAbort !== null && pourAbort.signal.aborted
+        };
         this.preflight = preflight;
         await task;
+        if (signal?.aborted) throw new Error("Control open cancelled before attachment.");
     }
 
     /** True only while the active BLE connection matches `identity` and this owner is live. */

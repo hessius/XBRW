@@ -108,6 +108,15 @@ export function validatePourRequest(request: PourRequest, policy: PourPolicy | n
     if (request.mode === "target") validateNumber("volumeMl", request.volumeMl, policy.volumeMl);
 }
 
+export const NO_WATER_CONTROL_MESSAGE =
+    "Machine needs water (+WATER). Refill the water tank, wait for +WATER to clear on the machine, then retry.";
+export const LOW_WATER_POUR_MESSAGE =
+    "The machine's water tank is low. Refill the water tank, wait for +WATER to clear if shown, then retry.";
+export const NO_BEANS_CONTROL_MESSAGE =
+    "The machine is waiting for beans. Fill the hopper and wait for it to return to normal, then retry.";
+export const MACHINE_WARNING_CONTROL_MESSAGE =
+    "The machine is showing a warning. Check the machine screen, resolve the warning, and retry.";
+
 export function validateSetting<K extends SettingId>(id: K, value: SettingValues[K], policy: SettingPolicy): void {
     const rule = policy[id];
     if (!rule) throw new ControlValidationError(id, "unsupported");
