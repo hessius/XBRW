@@ -736,7 +736,6 @@ export default class Machine {
                 if (this.state === MACHINE_STATE.NO_BEANS) return refuse(NO_BEANS_CONTROL_MESSAGE);
                 if (this.hasLowWaterTank() && (
                     this.state === null
-                    || STARTABLE.has(this.state)
                     || this.state === MACHINE_STATE.WARNING
                     || Machine.TOOL_IDLE_OR_BOOT_STATES.has(this.state)
                 )) {
