@@ -1449,5 +1449,14 @@ it("detects +WATER / low tank when tool open fails on non-startable or WARNING s
     await s.controls.open(identity, "grind", undefined, {recheckFault: true});
     expect(s.controls.getSnapshot()).toMatchObject({phase: "ready", tool: "grind"});
     await s.controls.close();
+
+    // Pour retry when tank is STILL empty sends 8100 once (not twice back-to-back) before failing.
+    s.radio.emit(lowTank);
+    s.radio.emit(status(MACHINE_STATE.WARNING));
+    s.radio.infoReply = lowTank;
+    s.radio.homeReply = status(MACHINE_STATE.IDLE);
+    s.radio.written = [];
+    await expect(s.controls.open(identity, "pour", undefined, {recheckFault: true})).rejects.toThrow(/water tank is low/i);
+    expect(s.radio.sent.filter((code) => code === 8100)).toHaveLength(1);
     s.controls.dispose();
 });

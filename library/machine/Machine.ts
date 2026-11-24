@@ -615,7 +615,7 @@ export default class Machine {
      * does not trigger `+WATER` (`0x0C`) on hardware during tool entry (`8007`).
      * Refreshes stale/low vitals once when needed so refilling before Retry recovers cleanly.
      */
-    async ensurePourWaterForControl(signal?: AbortSignal): Promise<void> {
+    async ensurePourWaterForControl(signal?: AbortSignal, infoAlreadyFresh = false): Promise<void> {
         if (signal?.aborted) throw new ControlOperationError("Control open cancelled before attachment.");
         if (this.state === MACHINE_STATE.NO_WATER
             || (this.state === MACHINE_STATE.WARNING && this.hasLowWaterTank())) {
@@ -626,6 +626,9 @@ export default class Machine {
         }
         if (this.info === null || this.info.waterFeed !== "tank") return;
         if (this.info.waterEnough && this.waterPresent !== false) return;
+        if (infoAlreadyFresh) {
+            throw new ControlOperationError(LOW_WATER_POUR_MESSAGE);
+        }
 
         const generation = this.generation;
         const guard = (ignoreOp?: {generation: number}) => {
@@ -725,10 +728,16 @@ export default class Machine {
             }
             if (!requireNormal) return;
             const refuseNonNormal = (): never => {
-                if (this.state === MACHINE_STATE.NO_WATER || this.hasLowWaterTank()) {
+                if (this.state === MACHINE_STATE.NO_WATER) return refuse(NO_WATER_CONTROL_MESSAGE);
+                if (this.state === MACHINE_STATE.NO_BEANS) return refuse(NO_BEANS_CONTROL_MESSAGE);
+                if (this.hasLowWaterTank() && (
+                    this.state === null
+                    || STARTABLE.has(this.state)
+                    || this.state === MACHINE_STATE.WARNING
+                    || Machine.TOOL_IDLE_OR_BOOT_STATES.has(this.state)
+                )) {
                     return refuse(NO_WATER_CONTROL_MESSAGE);
                 }
-                if (this.state === MACHINE_STATE.NO_BEANS) return refuse(NO_BEANS_CONTROL_MESSAGE);
                 if (this.state === MACHINE_STATE.WARNING) return refuse(MACHINE_WARNING_CONTROL_MESSAGE);
                 return refuse("Controls require a fresh known normal machine state.");
             };
@@ -1782,9 +1791,11 @@ export default class Machine {
             this.onState(parsed.state);
         }
         if (parsed.kind === "info") {
+            const wasWaterFaultOrLow = this.state === MACHINE_STATE.NO_WATER || this.hasLowWaterTank();
             this.info = parsed;
             this.infoAt = Date.now();
             if ((this.state === MACHINE_STATE.NO_WATER || this.state === MACHINE_STATE.WARNING)
+                && wasWaterFaultOrLow
                 && (parsed.waterFeed !== "tank" || parsed.waterEnough)
                 && this.waterPresent !== false) {
                 this.faultClearedByWaterEvent = true;

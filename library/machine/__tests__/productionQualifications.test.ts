@@ -770,4 +770,28 @@ describe("Studio production qualifications", () => {
 
         s.controls.dispose();
     });
+
+    it("fails enter fast on WARNING (0x51) with +WATER when low tank or MACHINE WARNING otherwise", async () => {
+        const s = await studioSetup(j15F231Frame, 20);
+        const lowTank = machineInfoFrame({serial: studioIdentity.serial, model: "Studio", firmware: "V12.0D.500", waterEnough: 0});
+        const okTank = machineInfoFrame({serial: studioIdentity.serial, model: "Studio", firmware: "V12.0D.500", waterEnough: 1});
+        s.radio.emit(lowTank);
+        s.radio.syntheticWrite = (frame) => {
+            const code = frame[3] | (frame[4] << 8);
+            if (code === 8003 || code === 8006) s.radio.emit(status(MACHINE_STATE.WARNING));
+        };
+        await expect(s.controls.open(studioIdentity, "scale")).rejects.toThrow(/\+WATER.*Refill the water tank/i);
+        s.controls.dispose();
+
+        // With water OK, WARNING status during enter refuses fast with MACHINE WARNING guidance.
+        const second = await studioSetup(j15F231Frame, 20);
+        second.radio.emit(okTank);
+        second.radio.emit(status(MACHINE_STATE.IDLE));
+        second.radio.syntheticWrite = (frame) => {
+            const code = frame[3] | (frame[4] << 8);
+            if (code === 8006) second.radio.emit(status(MACHINE_STATE.WARNING));
+        };
+        await expect(second.controls.open(studioIdentity, "grind")).rejects.toThrow(/showing a warning/i);
+        second.controls.dispose();
+    });
 });

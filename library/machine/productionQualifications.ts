@@ -1,4 +1,4 @@
-import {buildType1, buildType2, MACHINE_STATE, parseNotification, type MachineInfo} from "./protocol";
+import {buildType1, buildType2, EVENT, MACHINE_STATE, parseNotification, type MachineInfo} from "./protocol";
 import type {
     ControlCommand,
     ControlFeedback,
@@ -8,7 +8,7 @@ import type {
     ControlExchange
 } from "./controlProtocol";
 import {
-    NO_BEANS_CONTROL_MESSAGE, NO_WATER_CONTROL_MESSAGE,
+    MACHINE_WARNING_CONTROL_MESSAGE, NO_BEANS_CONTROL_MESSAGE, NO_WATER_CONTROL_MESSAGE,
     type Pattern, type SettingId, type SettingReadings, type SettingValues, type ToolId
 } from "./controlModel";
 import {studioQualifiedProfile} from "./controlCapabilities";
@@ -77,13 +77,17 @@ export class StudioControlProtocol implements ControlProtocol {
     private movingStarted = false;
     private waterDispensedObserved = false;
     private waterFeed: 0 | 1 = 0;
+    private waterEnough = true;
+    private waterPresent: boolean | null = null;
 
     actualWaterSource(info: MachineInfo | null): "tank" | "tap" | null {
         if (!info) {
             this.waterFeed = 0;
+            this.waterEnough = true;
             return null;
         }
         this.waterFeed = info.waterFeed === "tap" ? 1 : 0;
+        this.waterEnough = info.waterEnough;
         return info.waterFeed === "tap" ? "tap" : "tank";
     }
 
@@ -96,6 +100,7 @@ export class StudioControlProtocol implements ControlProtocol {
 
     decodeInfoSettings(info: MachineInfo): SettingReadings {
         this.waterFeed = info.waterFeed === "tap" ? 1 : 0;
+        this.waterEnough = info.waterEnough;
         const temp = info.settingsRaw?.temperatureUnit;
         const weight = info.settingsRaw?.weightUnit;
         const rawRadius = info.settingsRaw?.pourRadius;
@@ -304,6 +309,10 @@ export class StudioControlProtocol implements ControlProtocol {
         if (parsed.kind === "unknown") return null;
         if (parsed.kind === "info") {
             this.waterFeed = parsed.waterFeed === "tap" ? 1 : 0;
+            this.waterEnough = parsed.waterEnough;
+        }
+        if (parsed.kind === "event" && parsed.code === EVENT.WATER_LOW && parsed.value !== undefined) {
+            this.waterPresent = parsed.value !== 0;
         }
 
         if (parsed.kind === "cupWeight") {
@@ -372,6 +381,16 @@ export class StudioControlProtocol implements ControlProtocol {
                 }
                 if (parsed.kind === "status" && parsed.state === MACHINE_STATE.NO_BEANS) {
                     return {...tokens, value: {kind: "refused", reason: NO_BEANS_CONTROL_MESSAGE}};
+                }
+                if (parsed.kind === "status" && parsed.state === MACHINE_STATE.WARNING) {
+                    const lowWater = this.waterFeed === 0 && (!this.waterEnough || this.waterPresent === false);
+                    return {
+                        ...tokens,
+                        value: {
+                            kind: "refused",
+                            reason: lowWater ? NO_WATER_CONTROL_MESSAGE : MACHINE_WARNING_CONTROL_MESSAGE
+                        }
+                    };
                 }
                 if (command.tool === "scale" && ((parsed.kind === "event" && parsed.code === 8003)
                     || (parsed.kind === "status" && (parsed.state === 0x04 || parsed.state === 0x05)))) {

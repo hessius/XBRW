@@ -818,6 +818,7 @@ export default class MachineControls {
                 if (this.closing) await this.closing;
                 if (preflightCancelled()) throw new Error("Control open cancelled before attachment.");
                 if (this.disposed) throw new Error("The shared control owner was reset.");
+                const infoBefore = this.machine.info;
                 await this.machine.ensureFreshControlState(
                     options?.recheckFault ? {recheckFault: true} : undefined
                 );
@@ -847,7 +848,7 @@ export default class MachineControls {
                 if (tool === "pour") {
                     pourAbort = new AbortController();
                     if (preflightCancelled()) pourAbort.abort();
-                    await this.machine.ensurePourWaterForControl(pourAbort.signal);
+                    await this.machine.ensurePourWaterForControl(pourAbort.signal, this.machine.info !== infoBefore);
                     pourAbort = null;
                     if (preflightCancelled()) throw new Error("Control open cancelled before attachment.");
                     if (this.disposed) throw new Error("The shared control owner was reset.");

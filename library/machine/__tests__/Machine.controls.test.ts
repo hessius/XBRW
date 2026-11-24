@@ -973,12 +973,25 @@ it("surfaces +WATER / NO_BEANS guidance instead of generic normal-state refusal 
         radio.emit(status(MACHINE_STATE.WARNING));
         expect(() => machine.acquireControlSession(identity, "grind")).toThrow(/\+WATER.*Refill the water tank/i);
 
-        // Tap-fed machines ignore reservoir waterEnough=0 and report MACHINE WARNING on 0x51.
+        // Tap-fed machines ignore reservoir waterEnough=0 and report MACHINE WARNING on 0x51;
+        // a non-water 40521 while WARNING is active must NOT arm faultClearedByWaterEvent.
+        radio.emit(status(MACHINE_STATE.IDLE));
         radio.emit(machineInfoFrame({waterEnough: 0, waterFeed: 1}));
+        radio.emit(status(MACHINE_STATE.WARNING));
         expect(() => machine.acquireControlSession(identity, "scale")).toThrow(/showing a warning/i);
+        radio.written = [];
+        radio.emit(machineInfoFrame({waterEnough: 1, waterFeed: 1}));
+        await machine.ensureFreshControlState();
+        expect(radio.sent).toEqual([]);
+
+        // NO_BEANS and active BREWING states take precedence over low tank so they are not shadowed by +WATER.
+        radio.emit(machineInfoFrame({waterEnough: 0, waterFeed: 0}));
+        radio.emit(status(MACHINE_STATE.NO_BEANS));
+        expect(() => machine.acquireControlSession(identity, "grind")).toThrow(/waiting for beans.*Fill the hopper/i);
+        radio.emit(status(MACHINE_STATE.BREWING));
+        expect(() => machine.acquireControlSession(identity, "grind")).toThrow(/fresh known normal/i);
 
         // Explicit retry rechecks fresh fault within 15s (sending 8100 + 8022) and recovers once status returns to IDLE.
-        radio.emit(machineInfoFrame({waterEnough: 0, waterFeed: 0}));
         radio.emit(status(MACHINE_STATE.NO_WATER));
         radio.written = [];
         radio.infoReply = machineInfoFrame({waterEnough: 1, waterFeed: 0});
