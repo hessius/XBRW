@@ -51,7 +51,7 @@ STATE_NAMES: dict[int, str] = {
     0x02: "GRINDING",
     0x03: "BREWING",
     0x04: "PAUSED",
-    0x10: "COMPLETED",
+    0x10: "BREWING",
     0x21: "BREWING_NFC",
     0x23: "BREWING_SOLO",
     0x29: "SCALE",
@@ -80,7 +80,6 @@ EVENT_NAMES: dict[int, str] = {
     8019: "ACK_FREESOLO_POUR",
     8021: "ACK_PAUSE_TEA",
     8022: "ACK_GET_STATUS",
-    8023: "EVT_GRIND_COMPLETE_8023",
     8100: "ACK_HANDSHAKE",
     8103: "ACK_LED_BRIGHTNESS",
     8107: "EVT_BREWER_TEMP_APPLIED",
@@ -411,7 +410,6 @@ class QualificationSession:
                     existing["updatedAt"] = dt.datetime.now(dt.timezone.utc).isoformat()
                     existing["device"] = {
                         "name": self.device_name,
-                        "address": self.device_address,
                     }
                     existing.setdefault("sections", {})
                     return existing
@@ -423,7 +421,6 @@ class QualificationSession:
             "updatedAt": dt.datetime.now(dt.timezone.utc).isoformat(),
             "device": {
                 "name": self.device_name,
-                "address": self.device_address,
             },
             "machineIdentity": None,
             "initialInfo": None,
@@ -468,7 +465,7 @@ class QualificationSession:
                     f"  [BLE <- {char_label}] STATUS (0x57): "
                     f"{parsed['stateHex']} ({parsed['stateName']})"
                 )
-            elif kind in ("cup_weight", "water_weight", "temperature"):
+            elif kind in ("cup_weight", "water_weight"):
                 if self.echo_telemetry:
                     if kind == "cup_weight":
                         print(f"  [BLE <- {char_label}] CUP_WEIGHT (0x15): {parsed['grams']} g")
@@ -477,8 +474,6 @@ class QualificationSession:
                             f"  [BLE <- {char_label}] WATER_WEIGHT (0x4B): "
                             f"raw={parsed['rawFloat']} ({parsed['gramsOrMl']} ml/g)"
                         )
-                    elif kind == "temperature":
-                        print(f"  [BLE <- {char_label}] TEMP (0x35): {parsed['celsius']} C")
             else:
                 print(
                     f"  [BLE <- {char_label}] {parsed.get('cmdName')} "
@@ -538,9 +533,9 @@ async def ainput(prompt: str) -> str:
     return await asyncio.to_thread(input, prompt)
 
 
-def ask_yes_no(prompt: str, default: bool = True) -> bool:
+async def ask_yes_no(prompt: str, default: bool = True) -> bool:
     suffix = " [Y/n]: " if default else " [y/N]: "
-    ans = input(prompt + suffix).strip().lower()
+    ans = (await ainput(prompt + suffix)).strip().lower()
     if not ans:
         return default
     return ans in ("y", "yes")
@@ -595,80 +590,90 @@ async def run_phase_settings(session: QualificationSession) -> None:
         "waterSource_4508": {},
     }
 
+    async def restore_setting(label: str, cmd: int, value: int) -> None:
+        if not session.client or not session.client.is_connected:
+            return
+        print(f"  Restoring {label} ({value})...")
+        try:
+            await session.send_and_collect(build_type1(cmd, [value]), wait_seconds=0.8)
+            await session.refresh_info(wait_seconds=1.2)
+        except Exception as exc:
+            print(f"  [WARN] Failed to restore {label}: {exc}")
+
     # 1. Temperature Unit (8010) - Contradiction C6
     print("\n--- 2A. Temperature Unit (8010) ---")
     orig_temp_unit = baseline["tempUnit_40"]
-    for val in (0, 1):
-        frames = await session.send_and_collect(
-            build_type1(8010, [val]), label=f"TEMP_UNIT_8010({val})", wait_seconds=1.0
-        )
-        info_after = await session.refresh_info(wait_seconds=1.5)
-        observed = (
-            await ainput(
-                f"  -> Sent 8010 [{val}]. What temperature unit is shown on the Studio display? (c/f/unchanged): "
+    try:
+        for val in (0, 1):
+            frames = await session.send_and_collect(
+                build_type1(8010, [val]), label=f"TEMP_UNIT_8010({val})", wait_seconds=1.0
             )
-        ).strip().lower()
-        results["temperatureUnit_8010"][str(val)] = {
-            "sentValue": val,
-            "userObservedDisplay": observed,
-            "infoTempUnit_40": info_after["tempUnit_40"] if info_after else None,
-            "frames": frames,
-            "infoAfter": info_after,
-        }
-    if orig_temp_unit is not None:
-        print(f"  Restoring original temperature unit ({orig_temp_unit})...")
-        await session.send_and_collect(build_type1(8010, [orig_temp_unit]), wait_seconds=0.8)
-        await session.refresh_info(wait_seconds=1.2)
+            info_after = await session.refresh_info(wait_seconds=1.5)
+            observed = (
+                await ainput(
+                    f"  -> Sent 8010 [{val}]. What temperature unit is shown on the Studio display? (c/f/unchanged): "
+                )
+            ).strip().lower()
+            results["temperatureUnit_8010"][str(val)] = {
+                "sentValue": val,
+                "userObservedDisplay": observed,
+                "infoTempUnit_40": info_after["tempUnit_40"] if info_after else None,
+                "frames": frames,
+                "infoAfter": info_after,
+            }
+    finally:
+        if orig_temp_unit is not None:
+            await restore_setting("original temperature unit", 8010, orig_temp_unit)
 
     # 2. Weight Unit (8005) - Contradiction C5
     print("\n--- 2B. Weight Unit (8005) ---")
     orig_weight_unit = baseline["weightUnit_41"]
-    for val in (0, 1, 2):
-        frames = await session.send_and_collect(
-            build_type1(8005, [val]), label=f"WEIGHT_UNIT_8005({val})", wait_seconds=1.0
-        )
-        info_after = await session.refresh_info(wait_seconds=1.5)
-        observed = (
-            await ainput(
-                f"  -> Sent 8005 [{val}]. What weight unit is shown on the Studio display? (g/oz/ml/unchanged): "
+    try:
+        for val in (0, 1, 2):
+            frames = await session.send_and_collect(
+                build_type1(8005, [val]), label=f"WEIGHT_UNIT_8005({val})", wait_seconds=1.0
             )
-        ).strip().lower()
-        results["weightUnit_8005"][str(val)] = {
-            "sentValue": val,
-            "userObservedDisplay": observed,
-            "infoWeightUnit_41": info_after["weightUnit_41"] if info_after else None,
-            "frames": frames,
-            "infoAfter": info_after,
-        }
-    if orig_weight_unit is not None:
-        print(f"  Restoring original weight unit ({orig_weight_unit})...")
-        await session.send_and_collect(build_type1(8005, [orig_weight_unit]), wait_seconds=0.8)
-        await session.refresh_info(wait_seconds=1.2)
+            info_after = await session.refresh_info(wait_seconds=1.5)
+            observed = (
+                await ainput(
+                    f"  -> Sent 8005 [{val}]. What weight unit is shown on the Studio display? (g/oz/ml/unchanged): "
+                )
+            ).strip().lower()
+            results["weightUnit_8005"][str(val)] = {
+                "sentValue": val,
+                "userObservedDisplay": observed,
+                "infoWeightUnit_41": info_after["weightUnit_41"] if info_after else None,
+                "frames": frames,
+                "infoAfter": info_after,
+            }
+    finally:
+        if orig_weight_unit is not None:
+            await restore_setting("original weight unit", 8005, orig_weight_unit)
 
     # 3. Brightness (8103)
     print("\n--- 2C. Display Brightness (8103) ---")
     orig_led = baseline["ledType_38"]
-    for level in (1, 8, 15, 0):
-        frames = await session.send_and_collect(
-            build_type1(8103, [level]), label=f"BRIGHTNESS_8103({level})", wait_seconds=1.0
-        )
-        info_after = await session.refresh_info(wait_seconds=1.5)
-        observed = (
-            await ainput(
-                f"  -> Sent 8103 [{level}]. Describe display brightness (dim/mid/bright/off/unchanged): "
-            )
-        ).strip()
-        results["brightness_8103"][str(level)] = {
-            "sentValue": level,
-            "userObservedDisplay": observed,
-            "infoLedType_38": info_after["ledType_38"] if info_after else None,
-            "frames": frames,
-            "infoAfter": info_after,
-        }
     restore_led = orig_led if (orig_led is not None and orig_led > 0) else 10
-    print(f"  Restoring brightness ({restore_led})...")
-    await session.send_and_collect(build_type1(8103, [restore_led]), wait_seconds=0.8)
-    await session.refresh_info(wait_seconds=1.2)
+    try:
+        for level in (1, 8, 15, 0):
+            frames = await session.send_and_collect(
+                build_type1(8103, [level]), label=f"BRIGHTNESS_8103({level})", wait_seconds=1.0
+            )
+            info_after = await session.refresh_info(wait_seconds=1.5)
+            observed = (
+                await ainput(
+                    f"  -> Sent 8103 [{level}]. Describe display brightness (dim/mid/bright/off/unchanged): "
+                )
+            ).strip()
+            results["brightness_8103"][str(level)] = {
+                "sentValue": level,
+                "userObservedDisplay": observed,
+                "infoLedType_38": info_after["ledType_38"] if info_after else None,
+                "frames": frames,
+                "infoAfter": info_after,
+            }
+    finally:
+        await restore_setting("brightness", 8103, restore_led)
 
     # 4. Mechanical Tuning Read (11506 / 11508)
     print("\n--- 2D. Mechanical Tuning Read Probes (11506 Pour Radius / 11508 Vibration) ---")
@@ -691,18 +696,30 @@ async def run_phase_settings(session: QualificationSession) -> None:
     print("\n--- 2E. Water Source (4508) ---")
     orig_water_feed = baseline["waterFeed_36"]
     print(f"  Current 40521 waterFeed_36 = {orig_water_feed} (0=tank, 1=tap)")
-    if ask_yes_no("  Test toggling water source setting 4508 (non-pumping setting, will restore immediately)?", default=True):
+    if await ask_yes_no("  Test toggling water source setting 4508 (non-pumping setting, will restore immediately)?", default=True):
         alt_feed = 1 if orig_water_feed == 0 else 0
-        f_toggle = await session.send_and_collect(
-            build_type1(4508, [alt_feed]), label=f"WATER_SOURCE_4508({alt_feed})", wait_seconds=1.0
-        )
-        info_toggled = await session.refresh_info(wait_seconds=1.5)
-        f_restore = await session.send_and_collect(
-            build_type1(4508, [orig_water_feed or 0]),
-            label=f"WATER_SOURCE_4508({orig_water_feed or 0})",
-            wait_seconds=1.0,
-        )
-        info_restored = await session.refresh_info(wait_seconds=1.5)
+        f_toggle: list[dict[str, Any]] = []
+        info_toggled: dict[str, Any] | None = None
+        f_restore: list[dict[str, Any]] = []
+        info_restored: dict[str, Any] | None = None
+        toggled_sent = False
+        try:
+            f_toggle = await session.send_and_collect(
+                build_type1(4508, [alt_feed]), label=f"WATER_SOURCE_4508({alt_feed})", wait_seconds=1.0
+            )
+            toggled_sent = True
+            info_toggled = await session.refresh_info(wait_seconds=1.5)
+        finally:
+            if toggled_sent and session.client and session.client.is_connected:
+                try:
+                    f_restore = await session.send_and_collect(
+                        build_type1(4508, [orig_water_feed or 0]),
+                        label=f"WATER_SOURCE_4508({orig_water_feed or 0})",
+                        wait_seconds=1.0,
+                    )
+                    info_restored = await session.refresh_info(wait_seconds=1.5)
+                except Exception as exc:
+                    print(f"  [WARN] Failed to restore water source: {exc}")
         results["waterSource_4508"] = {
             "originalWaterFeed_36": orig_water_feed,
             "toggledTo": alt_feed,
@@ -771,7 +788,7 @@ async def run_phase_grind(session: QualificationSession) -> None:
     print("PHASE 4: Grind Tool Qualification (8006 Enter, 3500 Start, 3505 Stop, 8012 Quit)")
     print("=" * 72)
     print("  SAFETY CHECK: Confirm the grinder hopper is EMPTY and clear of fingers/tools.")
-    if not ask_yes_no("  Ready to run Phase 4 (Grind Tool)?", default=True):
+    if not await ask_yes_no("  Ready to run Phase 4 (Grind Tool)?", default=True):
         print("  Skipping Phase 4 (grind).")
         return
 
@@ -807,7 +824,7 @@ async def run_phase_grind(session: QualificationSession) -> None:
     stop_repeat_frames: list[dict[str, Any]] = []
     natural_frames: list[dict[str, Any]] = []
 
-    if ask_yes_no("\n  Run attended Grinder Start (3500) for ~2.5s followed by Grinder Stop (3505)?", default=True):
+    if await ask_yes_no("\n  Run attended Grinder Start (3500) for ~2.5s followed by Grinder Stop (3505)?", default=True):
         session.active_motor_or_water = "grind"
         try:
             idx_start = await session.send_frame(
@@ -829,7 +846,7 @@ async def run_phase_grind(session: QualificationSession) -> None:
             if session.active_motor_or_water == "grind":
                 await session.emergency_stop()
 
-    if ask_yes_no(
+    if await ask_yes_no(
         "\n  Also observe empty-hopper auto-stop / natural completion on 3500 (waits up to 15s, or press Ctrl+C to stop)?",
         default=True,
     ):
@@ -844,7 +861,11 @@ async def run_phase_grind(session: QualificationSession) -> None:
             deadline = time.monotonic() + 15.0
             while time.monotonic() < deadline:
                 recent = session.frames_since(idx_nat)
-                if any(f.get("cmdCodeLE") in (40507, 9004, 8023) for f in recent):
+                if any(
+                    (f.get("kind") == "event" and f.get("cmdCodeLE") in (40507, 9004))
+                    or (f.get("kind") == "status" and f.get("stateByte") in (0x01, 0x41))
+                    for f in recent
+                ):
                     await asyncio.sleep(1.0)
                     break
                 await asyncio.sleep(0.2)
@@ -883,7 +904,7 @@ async def run_phase_pour(session: QualificationSession) -> None:
     print("PHASE 5: Pour / Brewer Tool Qualification (8007, 4506, 4510, 8016, 4507, 8013)")
     print("=" * 72)
     print("  SAFETY CHECK: Place an empty cup (>= 150 ml capacity) on the scale and confirm water is in the tank.")
-    if not ask_yes_no("  Ready to run Phase 5 (Pour Tool)?", default=True):
+    if not await ask_yes_no("  Ready to run Phase 5 (Pour Tool)?", default=True):
         print("  Skipping Phase 5 (pour).")
         return
 
@@ -910,7 +931,7 @@ async def run_phase_pour(session: QualificationSession) -> None:
     continuous_probe_run: dict[str, Any] = {}
 
     try:
-        if ask_yes_no(
+        if await ask_yes_no(
             "\n  Run 5B: Start ambient/warm 25C pour (4506, 60ml target @ 3.0 ml/s), test live temp (4510) + pattern (8016), then Stop (4507)?",
             default=True,
         ):
@@ -953,7 +974,7 @@ async def run_phase_pour(session: QualificationSession) -> None:
             }
 
         # 5C. Small Natural Completion Pour (4506, 15ml @ 3.5 ml/s, 25C)
-        if ask_yes_no(
+        if await ask_yes_no(
             "\n  Run 5C: Small 15 ml ambient pour (4506) allowed to finish naturally so we capture natural terminal proof?",
             default=True,
         ):
@@ -970,8 +991,8 @@ async def run_phase_pour(session: QualificationSession) -> None:
             deadline = time.monotonic() + 20.0
             while time.monotonic() < deadline:
                 recent = session.frames_since(idx_nat)
-                if any(f.get("cmdCodeLE") in (40511, 9006) for f in recent) or any(
-                    f.get("kind") == "status" and f.get("stateByte") in (0x10, 0x01, 0x41)
+                if any(f.get("kind") == "event" and f.get("cmdCodeLE") in (40511, 9006) for f in recent) or any(
+                    f.get("kind") == "status" and f.get("stateByte") in (0x01, 0x41)
                     for f in recent
                 ):
                     await asyncio.sleep(1.5)
@@ -986,7 +1007,7 @@ async def run_phase_pour(session: QualificationSession) -> None:
             }
 
         # 5D. Continuous Pour Probe (4506 with volume=0 vs 8019 FreeSolo pour)
-        if ask_yes_no(
+        if await ask_yes_no(
             "\n  Run 5D: Probe continuous pour candidate (4506 with volume=0, stopped after 3s if it pours)?",
             default=True,
         ):
@@ -1093,8 +1114,9 @@ async def discover_studio(timeout: float = 8.0, explicit_address: str | None = N
     if explicit_address:
         print(f"Looking up xBloom Studio at {explicit_address}...")
         dev = await BleakScanner.find_device_by_address(explicit_address, timeout=timeout)
-        if dev is not None:
-            return dev, (dev.name or "XBLOOM"), dev.address
+        if dev is None:
+            raise RuntimeError(f"No xBloom Studio found at --address {explicit_address}.")
+        return dev, (dev.name or "XBLOOM"), dev.address
 
     print(f"Scanning for xBloom Studio over Bluetooth LE ({timeout:.0f}s)...")
     devices = await BleakScanner.discover(timeout=timeout, return_adv=True)
@@ -1160,7 +1182,7 @@ async def async_main(args: argparse.Namespace) -> None:
                     await run_phase_grind(session)
                 elif sec == "pour":
                     await run_phase_pour(session)
-        except KeyboardInterrupt:
+        except (KeyboardInterrupt, asyncio.CancelledError):
             print("\n[INTERRUPTED] Ctrl+C received.")
             await session.emergency_stop()
             session.save_capture()
