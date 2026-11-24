@@ -630,12 +630,11 @@ describe("Studio production qualifications", () => {
         }
     });
 
-    it("maps 0x0C NO_WATER during Studio tool entry directly to +WATER refusal", () => {
+    it("maps 0x0C NO_WATER and 0x0F NO_BEANS during Studio tool entry to explicit refusals, encodes fractional flow, and resets waterFeed on null info", async () => {
         const protocol = new StudioControlProtocol();
         const tokens = {session: 1, transaction: 1};
         protocol.plan({kind: "enter", tool: "pour"}, tokens);
-        const feedback = protocol.decode(Uint8Array.from(status(MACHINE_STATE.NO_WATER)));
-        expect(feedback).toEqual({
+        expect(protocol.decode(Uint8Array.from(status(MACHINE_STATE.NO_WATER)))).toEqual({
             session: 1,
             transaction: 1,
             value: {
@@ -643,5 +642,33 @@ describe("Studio production qualifications", () => {
                 reason: expect.stringMatching(/\+WATER.*Refill the water tank/i)
             }
         });
+        protocol.plan({kind: "enter", tool: "grind"}, tokens);
+        expect(protocol.decode(Uint8Array.from(status(MACHINE_STATE.NO_BEANS)))).toEqual({
+            session: 1,
+            transaction: 1,
+            value: {
+                kind: "refused",
+                reason: expect.stringMatching(/waiting for beans.*Fill the hopper/i)
+            }
+        });
+
+        const tapIdentity = {deviceId: "studio-5af231", serial: "J15A02A45H038"};
+        const s = await studioSetup(j15H038Captured);
+        expect(protocol.actualWaterSource(s.machine.info)).toBe("tap");
+        expect(protocol.actualWaterSource(null)).toBeNull();
+        const floatBits = (value: number): number => {
+            const buf = new ArrayBuffer(4);
+            new DataView(buf).setFloat32(0, value, true);
+            return new DataView(buf).getInt32(0, true);
+        };
+        const ex = protocol.prepare({
+            kind: "pour",
+            request: {mode: "target", temperatureC: 62, pattern: "circular", volumeMl: 30, flowMlPerSecond: 1.5}
+        }, tokens);
+        expect(Array.from(ex.frame!)).toEqual(
+            Array.from(buildType1(4506, [floatBits(15.0), floatBits(300.0), floatBits(620.0), 0, 1]))
+        );
+        expect(tapIdentity).toBeTruthy();
+        s.controls.dispose();
     });
 });

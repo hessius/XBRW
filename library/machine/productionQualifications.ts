@@ -79,7 +79,10 @@ export class StudioControlProtocol implements ControlProtocol {
     private waterFeed: 0 | 1 = 0;
 
     actualWaterSource(info: MachineInfo | null): "tank" | "tap" | null {
-        if (!info) return null;
+        if (!info) {
+            this.waterFeed = 0;
+            return null;
+        }
         this.waterFeed = info.waterFeed === "tap" ? 1 : 0;
         return info.waterFeed === "tap" ? "tap" : "tank";
     }

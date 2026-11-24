@@ -6,7 +6,7 @@ import type {ControlCommand, ControlFeedback, ControlProtocol, ControlTokens} fr
 import type {SettingReadings} from "@/library/machine/controlModel";
 import {buildType1, MACHINE_STATE} from "@/library/machine/protocol";
 import {FakeTransport, machineInfoFrame} from "./FakeTransport";
-import {notification, status, type1} from "./protocolFixtures";
+import {event, notification, status, type1} from "./protocolFixtures";
 
 // Entirely synthetic qualification: these codes, payloads, limits and timings
 // are NOT captures and must never enter the production qualification registry.
@@ -1161,5 +1161,60 @@ it("blocks opening Pour before sending enter when tank water is low, refreshes v
     await s.controls.open(identity, "pour");
     expect(enterCount).toBe(1);
     expect(s.controls.getSnapshot().phase).toBe("ready");
+    await s.controls.close();
+
+    // 40522(0) (waterPresent === false) also blocks opening Pour even when info.waterEnough === true, until 40522(1) arrives.
+    s.radio.emit(event(40522, 0));
+    await expect(s.controls.open(identity, "pour")).rejects.toThrow(/water tank is low/i);
+    expect(enterCount).toBe(1);
+    s.radio.emit(event(40522, 1));
+    await s.controls.open(identity, "pour");
+    expect(enterCount).toBe(2);
+    await s.controls.close();
+
+    // Aborting during frame-gap wait in ensurePourWaterForControl stops before sending 8100, and reconnect/disconnect rejects cleanly.
+    const spacedRadio = new Radio();
+    spacedRadio.infoReply = lowTank;
+    const spacedMachine = new Machine(spacedRadio, {frameGapMs: 1000});
+    spacedMachine.installControlRecovery(new ControlRecoveryStore({read: () => "", write: () => {}}));
+    await spacedMachine.connect(identity.deviceId);
+    spacedRadio.emit(status(MACHINE_STATE.IDLE));
+    const spacedControls = new MachineControls(spacedMachine, {
+        qualifications: [{
+            profile,
+            protocol: {
+                actualWaterSource: () => "tank",
+                plan: (_command, tokens) => ({
+                    frame: buildType1(60000, [tokens.session, tokens.transaction]),
+                    deadlineMs: 50
+                }),
+                decode: () => null
+            }
+        }]
+    });
+    jest.useFakeTimers();
+    try {
+        spacedControls.dispose();
+        // Verify abort & connection change directly via Machine.ensurePourWaterForControl.
+        await spacedMachine.disconnect();
+        await spacedMachine.connect(identity.deviceId);
+        spacedRadio.emit(status(MACHINE_STATE.IDLE));
+        // Seed lastControlTxAt via ensureFreshControlState with stale state.
+        await jest.advanceTimersByTimeAsync(16_000);
+        spacedRadio.homeReply = status(MACHINE_STATE.IDLE);
+        await spacedMachine.ensureFreshControlState();
+        spacedRadio.written = [];
+        const ac = new AbortController();
+        const abortedPreflight = spacedMachine.ensurePourWaterForControl(ac.signal);
+        ac.abort();
+        await expect(abortedPreflight).rejects.toThrow(/cancelled/i);
+        expect(spacedRadio.sent).toEqual([]);
+
+        const linkDropped = spacedMachine.ensurePourWaterForControl();
+        await spacedMachine.disconnect();
+        await expect(linkDropped).rejects.toThrow(/connection changed/i);
+    } finally {
+        jest.useRealTimers();
+    }
     s.controls.dispose();
 });

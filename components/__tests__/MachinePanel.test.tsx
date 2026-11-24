@@ -11,7 +11,7 @@ import Machine from "@/library/machine/Machine";
 import MachineControls from "@/library/machine/MachineControls";
 import {ControlRecoveryStore} from "@/library/machine/controlRecovery";
 import {FakeTransport, machineInfoFrame} from "@/library/machine/__tests__/FakeTransport";
-import {status} from "@/library/machine/__tests__/protocolFixtures";
+import {notification, status} from "@/library/machine/__tests__/protocolFixtures";
 import {MACHINE_STATE} from "@/library/machine/protocol";
 import {renderWithProviders} from "@/test-utils/render";
 
@@ -808,5 +808,40 @@ describe("MachinePanel inline tool mode", () => {
         await waitFor(() => expect(s.controls.getSnapshot().phase).toBe("ready"));
         expect(screen.queryByTestId("inline-tool-error")).toBeNull();
         s.controls.dispose();
+    });
+
+    it("surfaces inline Pour low-water guidance before enter when tank water is low, and opens after refill", async () => {
+        const radio = new QuietRadio();
+        const lowBlob = machineInfoFrame({serial: identity.serial, model: "Studio", firmware: "V12.0D.500", waterEnough: 0});
+        const okBlob = machineInfoFrame({serial: identity.serial, model: "Studio", firmware: "V12.0D.500", waterEnough: 1});
+        radio.infoReply = lowBlob;
+        const machine = new Machine(radio, {frameGapMs: 0, infoWaitMs: 5});
+        machine.installControlRecovery(new ControlRecoveryStore({read: () => "", write: () => {}}));
+        await machine.connect(identity.deviceId);
+        radio.emit(status(MACHINE_STATE.IDLE));
+        radio.syntheticWrite = frame => {
+            const code = frame[3] | (frame[4] << 8);
+            if (code === 8007) radio.emit(notification(0x47, 0x1F, []));
+        };
+        const controls = new MachineControls(machine);
+
+        await draw({
+            machineId: identity.deviceId,
+            machineSerial: identity.serial,
+            machineModel: "Studio",
+            vitals: {...vitals, waterEnough: false},
+            controls
+        });
+
+        await fireEvent.press(screen.getByRole("button", {name: "Pour"}));
+        await waitFor(() => expect(screen.getByText(/water tank is low.*Refill the water tank/i)).toBeTruthy());
+        expect(screen.getByText("ADD WATER")).toBeTruthy();
+        expect(radio.sent).not.toContain(8007);
+
+        radio.infoReply = okBlob;
+        await fireEvent.press(screen.getByRole("button", {name: "Retry opening tool"}));
+        await waitFor(() => expect(controls.getSnapshot().phase).toBe("ready"));
+        expect(radio.sent).toContain(8007);
+        controls.dispose();
     });
 });

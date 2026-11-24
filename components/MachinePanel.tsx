@@ -364,7 +364,7 @@ function InlineToolWorkbench({
             policy={support.grind}
             unavailable={unavailable}
             stopUnavailable={support.stopUnavailable}
-            error={owns ? snapshot.error : null}
+            error={owns && snapshot.error !== error ? snapshot.error : null}
             animationEnabled={animationEnabled}
             onRequestChange={state.setGrind}
             onStart={state.start}
@@ -402,7 +402,7 @@ function InlineToolWorkbench({
                 : undefined}
             unavailable={unavailable}
             stopUnavailable={support.stopUnavailable}
-            error={owns ? snapshot.error : null}
+            error={owns && snapshot.error !== error ? snapshot.error : null}
             onRequestChange={state.setPour}
             onModeChange={state.changeMode}
             onStart={state.start}
@@ -484,6 +484,7 @@ function InlineToolWorkbench({
                         emphasis={error !== null ? retryButtonEmphasis(error) : "primary"}
                         label={error !== null ? "Retry opening tool" : "Open tool"}
                         disabled={busy}
+                        busy={busy}
                         onPress={state.open}
                     />
                 )}
@@ -496,6 +497,7 @@ function InlineToolWorkbench({
                         emphasis="primary"
                         label="Reconcile connected machine"
                         disabled={busy}
+                        busy={busy}
                         onPress={state.recover}
                     />
                 ) : canReconcileNullTool && (
@@ -504,6 +506,7 @@ function InlineToolWorkbench({
                         emphasis="primary"
                         label="Reconcile connected machine"
                         disabled={busy}
+                        busy={busy}
                         onPress={state.recoverUnknown}
                     />
                 )}
@@ -514,6 +517,7 @@ function InlineToolWorkbench({
                         emphasis="secondary"
                         label="Inspect active tool"
                         disabled={busy}
+                        busy={busy}
                         onPress={() => onSwitchTool(snapshot.tool as ToolId)}
                     />
                 )}
@@ -528,6 +532,7 @@ function InlineToolWorkbench({
                                 emphasis="primary"
                                 label="Reconnect named machine"
                                 disabled={busy}
+                                busy={busy}
                                 onPress={state.reconnect}
                             />
                             <ToolActionButton
@@ -535,6 +540,7 @@ function InlineToolWorkbench({
                                 emphasis="secondary"
                                 label="Leave screen"
                                 disabled={busy}
+                                busy={busy}
                                 onPress={onCollapse}
                             />
                         </XStack>
@@ -549,6 +555,7 @@ function InlineToolWorkbench({
                             emphasis="secondary"
                             label="Leave screen"
                             disabled={busy}
+                            busy={busy}
                             onPress={onCollapse}
                         />
                     </YStack>

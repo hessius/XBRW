@@ -310,6 +310,7 @@ export function ToolNoticeBanner({
     const resolvedTone = tone ?? classified.tone;
     const resolvedKicker = kicker ?? classified.kicker;
     const accentColor = resolvedTone === "warn" ? palette.warn : resolvedTone === "muted" ? palette.muted : palette.danger;
+    const kickerColor = resolvedTone === "muted" ? palette.dim : accentColor;
     const surfaceColor = isFull ? palette.surface : palette.raised;
 
     return (
@@ -326,7 +327,7 @@ export function ToolNoticeBanner({
             borderColor={mix(palette.line, accentColor, 0.45)}
             borderLeftWidth={3}
             borderLeftColor={accentColor}>
-            <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.6} color={accentColor}>
+            <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.6} color={kickerColor}>
                 {resolvedKicker}
             </DotMatrixText>
             <Text selectable fontSize={isFull ? 13.5 : 13} lineHeight={isFull ? 19 : 18} color={palette.text}>
@@ -342,12 +343,13 @@ export type ToolActionButtonProps = {
     variant?: "full" | "inline";
     emphasis?: "primary" | "warn" | "secondary";
     disabled?: boolean;
+    busy?: boolean;
     onPress: () => void;
     testID?: string;
 };
 
 export function ToolActionButton({
-    label, displayLabel, variant = "full", emphasis = "primary", disabled = false, onPress, testID
+    label, displayLabel, variant = "full", emphasis = "primary", disabled = false, busy = false, onPress, testID
 }: ToolActionButtonProps) {
     const {palette} = useAppearance();
     const isFull = variant === "full";
@@ -365,7 +367,7 @@ export function ToolActionButton({
             testID={testID}
             accessibilityRole="button"
             accessibilityLabel={label}
-            accessibilityState={{disabled, busy: disabled}}
+            accessibilityState={{disabled, busy}}
             disabled={disabled}
             onPress={onPress}
             backgroundColor={backgroundColor}

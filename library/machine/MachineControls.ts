@@ -109,7 +109,12 @@ export default class MachineControls {
     private opening: Promise<ControlFeedback["value"]> | null = null;
     private closing: Promise<void> | null = null;
     private leavingSession = false;
-    private preflight: {key: string; promise: Promise<void>; signals?: Set<AbortSignal | undefined>} | null = null;
+    private preflight: {
+        key: string;
+        promise: Promise<void>;
+        signals?: Set<AbortSignal | undefined>;
+        watchSignal?: (signal?: AbortSignal) => void;
+    } | null = null;
     private recovering = false;
     private reconnecting: Promise<void> | null = null;
     private recoveryOnly = false;
@@ -729,6 +734,7 @@ export default class MachineControls {
             if (this.preflight.key === key) {
                 if (signal?.aborted) throw new Error("Control open cancelled before attachment.");
                 this.preflight.signals?.add(signal);
+                this.preflight.watchSignal?.(signal);
                 await this.preflight.promise;
                 if (signal?.aborted) throw new Error("Control open cancelled before attachment.");
                 return;
@@ -754,7 +760,27 @@ export default class MachineControls {
 
         const signals = new Set<AbortSignal | undefined>([signal]);
         const preflightCancelled = () => signals.size > 0 && Array.from(signals).every((entry) => entry?.aborted === true);
-        let preflight: {key: string; promise: Promise<void>; signals?: Set<AbortSignal | undefined>} | undefined;
+        const preflightAbort = new AbortController();
+        const syncPreflightAbort = () => {
+            if (preflightCancelled()) preflightAbort.abort();
+        };
+        const watchedSignals: AbortSignal[] = [];
+        const watchSignal = (entry?: AbortSignal) => {
+            if (!entry) return;
+            if (entry.aborted) {
+                syncPreflightAbort();
+                return;
+            }
+            entry.addEventListener("abort", syncPreflightAbort, {once: true});
+            watchedSignals.push(entry);
+        };
+        watchSignal(signal);
+        let preflight: {
+            key: string;
+            promise: Promise<void>;
+            signals?: Set<AbortSignal | undefined>;
+            watchSignal?: (signal?: AbortSignal) => void;
+        } | undefined;
         const task = (async () => {
             try {
                 if (this.closing) await this.closing;
@@ -765,7 +791,7 @@ export default class MachineControls {
                 if (this.disposed) throw new Error("The shared control owner was reset.");
                 if (this.snapshot.phase !== "closed") throw new Error("A control session is already owned.");
                 if (tool === "pour") {
-                    await this.machine.ensurePourWaterForControl();
+                    await this.machine.ensurePourWaterForControl(preflightAbort.signal);
                     if (preflightCancelled()) throw new Error("Control open cancelled before attachment.");
                     if (this.disposed) throw new Error("The shared control owner was reset.");
                     if (this.snapshot.phase !== "closed") throw new Error("A control session is already owned.");
@@ -788,10 +814,11 @@ export default class MachineControls {
                     this.opening = null;
                 }
             } finally {
+                for (const entry of watchedSignals) entry.removeEventListener("abort", syncPreflightAbort);
                 if (this.preflight === preflight) this.preflight = null;
             }
         })();
-        preflight = {key, promise: task, signals};
+        preflight = {key, promise: task, signals, watchSignal};
         this.preflight = preflight;
         await task;
     }

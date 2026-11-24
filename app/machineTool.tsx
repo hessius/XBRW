@@ -179,6 +179,7 @@ function ToolScreen({identity, routeTool, name, injected}: {
                                 emphasis={error !== null ? retryButtonEmphasis(error) : "primary"}
                                 label={error !== null ? "Retry opening tool" : "Open tool"}
                                 disabled={busy}
+                                busy={busy}
                                 onPress={state.open}
                             />
                         )}
@@ -188,6 +189,7 @@ function ToolScreen({identity, routeTool, name, injected}: {
                                 emphasis="primary"
                                 label="Reconcile connected machine"
                                 disabled={busy}
+                                busy={busy}
                                 onPress={state.recover}
                             />
                         ) : canReconcileNullTool && (
@@ -196,6 +198,7 @@ function ToolScreen({identity, routeTool, name, injected}: {
                                 emphasis="primary"
                                 label="Reconcile connected machine"
                                 disabled={busy}
+                                busy={busy}
                                 onPress={state.recoverUnknown}
                             />
                         )}
@@ -206,6 +209,7 @@ function ToolScreen({identity, routeTool, name, injected}: {
                                 emphasis="secondary"
                                 label="Inspect active tool"
                                 disabled={busy}
+                                busy={busy}
                                 onPress={() => switchToolState(snapshot.tool as ToolId)}
                             />
                         )}
@@ -219,6 +223,7 @@ function ToolScreen({identity, routeTool, name, injected}: {
                                     emphasis="primary"
                                     label="Reconnect named machine"
                                     disabled={busy}
+                                    busy={busy}
                                     onPress={state.reconnect}
                                 />
                                 <ToolActionButton
@@ -226,6 +231,7 @@ function ToolScreen({identity, routeTool, name, injected}: {
                                     emphasis="secondary"
                                     label="Leave screen"
                                     disabled={busy}
+                                    busy={busy}
                                     onPress={() => nav.leaveWhileDisconnected(() => router.back())}
                                 />
                             </XStack>
@@ -236,13 +242,14 @@ function ToolScreen({identity, routeTool, name, injected}: {
                                 emphasis="secondary"
                                 label="Leave screen"
                                 disabled={busy}
+                                busy={busy}
                                 onPress={() => nav.leaveWhileDisconnected(() => router.back())}
                             />
                         )}
                     </ScrollView>
                     {tool === "grind" && <GrindTool phase={uiPhase} request={grind}
                         policy={support.grind} unavailable={unavailable} stopUnavailable={support.stopUnavailable}
-                        error={owns ? snapshot.error : null} animationEnabled={animationEnabled}
+                        error={owns && snapshot.error !== error ? snapshot.error : null} animationEnabled={animationEnabled}
                         onRequestChange={state.setGrind} onStart={state.start} onStop={state.stop}/>}
                     {tool === "scale" && <ScaleTool phase={uiPhase} grams={bound ? snapshot.cupGrams : null}
                         scaleSamples={scaleSamples} unavailable={unavailable} disabled={uiPhase !== "ready"}
@@ -260,7 +267,7 @@ function ToolScreen({identity, routeTool, name, injected}: {
                             ? {qualified: true, onChange: state.setLivePattern, error: state.livePatternError}
                             : undefined}
                         unavailable={unavailable} stopUnavailable={support.stopUnavailable}
-                        error={owns ? snapshot.error : null} onRequestChange={state.setPour}
+                        error={owns && snapshot.error !== error ? snapshot.error : null} onRequestChange={state.setPour}
                         onModeChange={state.changeMode} onStart={state.start} onStop={state.stop}/>}
                 </YStack>
             </YStack>

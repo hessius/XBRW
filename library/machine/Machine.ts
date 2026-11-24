@@ -412,42 +412,6 @@ export default class Machine {
         };
         const isFresh = () => this.state !== null && STARTABLE.has(this.state)
             && Date.now() - this.stateAt <= STATE_FRESH_MS;
-        const waitGap = async (signal: AbortSignal) => {
-            check();
-            if (this.frameGapMs <= 0 || this.lastControlTxAt <= 0) return;
-            const remaining = this.frameGapMs - (Date.now() - this.lastControlTxAt);
-            if (remaining <= 0) return;
-            await new Promise<void>((resolve, reject) => {
-                const cleanup = () => {
-                    clearTimeout(timer);
-                    offState();
-                    offLink();
-                    offPhase();
-                    signal.removeEventListener("abort", onStop);
-                    if (this.controlStateAbort === checkInterrupted) this.controlStateAbort = null;
-                };
-                const onStop = () => { cleanup(); resolve(); };
-                const checkInterrupted = () => {
-                    if (this.controlProbeBlocked(generation, probeOp)) {
-                        cleanup();
-                        reject(new ControlOperationError("The machine state probe was superseded."));
-                    }
-                };
-                const offState = this.onNotification((parsed) => {
-                    if (parsed.kind === "status" && STARTABLE.has(parsed.state)) {
-                        cleanup();
-                        resolve();
-                    }
-                });
-                const offLink = this.onLink(checkInterrupted);
-                const offPhase = this.onPhase(checkInterrupted);
-                this.controlStateAbort = checkInterrupted;
-                signal.addEventListener("abort", onStop, {once: true});
-                const timer = setTimeout(() => { cleanup(); resolve(); }, remaining);
-                timer.unref?.();
-            });
-            check();
-        };
         let probe!: Promise<void>;
         probe = (async () => {
             const abort = new AbortController();
@@ -531,14 +495,19 @@ export default class Machine {
                     this.controlStateAbort = onAbort;
                     armReplyTimer();
                 } else {
-                    await waitGap(abort.signal);
+                    check();
+                    if (this.frameGapMs > 0 && this.lastControlTxAt > 0) {
+                        await this.waitControlFrameGap(generation, probeOp, abort.signal, check, isFresh, true);
+                    }
                     if (isFresh()) { abort.abort(); await waitUntilReady; return; }
                     if (!this.sessionIsFresh()) {
                         await this.writeFrame(buildType1(8100, [185, 1]), check);
                         this.lastHandshakeAt = Date.now();
                         this.lastControlTxAt = Date.now();
                         check();
-                        if (this.frameGapMs > 0) await waitGap(abort.signal);
+                        if (this.frameGapMs > 0) {
+                            await this.waitControlFrameGap(generation, probeOp, abort.signal, check, isFresh, true);
+                        }
                         if (isFresh()) { abort.abort(); await waitUntilReady; return; }
                     }
                     check();
@@ -562,12 +531,77 @@ export default class Machine {
         return probe;
     }
 
+    private async waitControlFrameGap(
+        generation: number,
+        ignoreOp: {generation: number} | undefined,
+        signal: AbortSignal | undefined,
+        check: () => void,
+        shouldResolveEarly?: () => boolean,
+        resolveOnAbort = false
+    ): Promise<void> {
+        check();
+        if (this.frameGapMs <= 0 || this.lastControlTxAt <= 0) return;
+        const remaining = this.frameGapMs - (Date.now() - this.lastControlTxAt);
+        if (remaining <= 0) return;
+        await new Promise<void>((resolve, reject) => {
+            let settled = false;
+            const cleanup = () => {
+                clearTimeout(timer);
+                offNotify();
+                offLink();
+                offPhase();
+                signal?.removeEventListener("abort", onAbort);
+                if (this.controlStateAbort === checkInterrupted) this.controlStateAbort = null;
+            };
+            const finishResolve = () => {
+                if (settled) return;
+                settled = true;
+                cleanup();
+                resolve();
+            };
+            const finishReject = (error: Error) => {
+                if (settled) return;
+                settled = true;
+                cleanup();
+                reject(error);
+            };
+            const onAbort = () => {
+                if (resolveOnAbort) finishResolve();
+                else finishReject(new ControlOperationError("Control open cancelled before attachment."));
+            };
+            const checkInterrupted = () => {
+                if (generation !== this.generation || !this.isConnected()) {
+                    finishReject(new ControlOperationError("The machine connection changed."));
+                    return;
+                }
+                if (this.controlProbeBlocked(generation, ignoreOp)) {
+                    finishReject(new ControlOperationError("The machine state probe was superseded."));
+                }
+            };
+            const offNotify = shouldResolveEarly
+                ? this.onNotification((parsed) => {
+                    if (parsed.kind === "status" && STARTABLE.has(parsed.state) && shouldResolveEarly()) {
+                        finishResolve();
+                    }
+                })
+                : () => {};
+            const offLink = this.onLink(checkInterrupted);
+            const offPhase = this.onPhase(checkInterrupted);
+            this.controlStateAbort = checkInterrupted;
+            signal?.addEventListener("abort", onAbort, {once: true});
+            const timer = setTimeout(finishResolve, remaining);
+            timer.unref?.();
+        });
+        check();
+    }
+
     /**
      * Checks tank water availability before entering Pour so a low or empty tank
      * does not trigger `+WATER` (`0x0C`) on hardware during tool entry (`8007`).
      * Refreshes stale/low vitals once when needed so refilling before Retry recovers cleanly.
      */
-    async ensurePourWaterForControl(): Promise<void> {
+    async ensurePourWaterForControl(signal?: AbortSignal): Promise<void> {
+        if (signal?.aborted) throw new ControlOperationError("Control open cancelled before attachment.");
         if (this.state === MACHINE_STATE.NO_WATER) {
             throw new ControlOperationError(NO_WATER_CONTROL_MESSAGE);
         }
@@ -578,28 +612,29 @@ export default class Machine {
         if (this.info.waterEnough && this.waterPresent !== false) return;
 
         const generation = this.generation;
-        if (!this.controlProbeBlocked(generation)) {
-            if (this.frameGapMs > 0 && this.lastControlTxAt > 0) {
-                const remaining = this.frameGapMs - (Date.now() - this.lastControlTxAt);
-                if (remaining > 0) {
-                    await new Promise<void>((resolve) => {
-                        const timer = setTimeout(resolve, remaining);
-                        timer.unref?.();
-                    });
-                }
+        const guard = (ignoreOp?: {generation: number}) => {
+            if (signal?.aborted) throw new ControlOperationError("Control open cancelled before attachment.");
+            if (generation !== this.generation || !this.isConnected()) {
+                throw new ControlOperationError("The machine connection changed.");
             }
-            if (!this.controlProbeBlocked(generation)) {
-                const op = {generation};
-                const finish = this.beginOrdinaryOperation(op);
-                try {
-                    await this.askInfo();
-                    if (generation === this.generation) this.lastControlTxAt = Date.now();
-                } finally {
-                    finish();
-                }
+            if (this.controlProbeBlocked(generation, ignoreOp)) {
+                throw new ControlOperationError("The machine is busy or unavailable for controls.");
             }
+        };
+        guard();
+        await this.waitControlFrameGap(generation, undefined, signal, () => guard());
+        const op = {generation};
+        const finish = this.beginOrdinaryOperation(op);
+        try {
+            await this.askInfo(() => guard(op), undefined, signal);
+            if (generation === this.generation) this.lastControlTxAt = Date.now();
+        } finally {
+            finish();
         }
-        if (generation !== this.generation || !this.isConnected()) return;
+        if (signal?.aborted) throw new ControlOperationError("Control open cancelled before attachment.");
+        if (generation !== this.generation || !this.isConnected()) {
+            throw new ControlOperationError("The machine connection changed.");
+        }
         if (this.state === MACHINE_STATE.NO_WATER) {
             throw new ControlOperationError(NO_WATER_CONTROL_MESSAGE);
         }
@@ -1504,13 +1539,20 @@ export default class Machine {
         }
     }
 
-    private async askInfo(check?: () => void, write?: (frame: Uint8Array) => Promise<void>): Promise<boolean> {
+    private async askInfo(
+        check?: () => void,
+        write?: (frame: Uint8Array) => Promise<void>,
+        signal?: AbortSignal
+    ): Promise<boolean> {
         check?.();
         const generation = this.generation;
         const infoBeforeRequest = this.info;
         // Listening before the handshake, not after: the info can arrive
         // inside the write, since the radio delivers on its own thread.
         const abort = new AbortController();
+        const onOuterAbort = () => abort.abort();
+        signal?.addEventListener("abort", onOuterAbort, {once: true});
+        if (signal?.aborted) abort.abort();
         const answered = this.waitForAnyInfo(abort.signal);
         try {
             if (write === undefined) await this.shakeHands();
@@ -1520,6 +1562,7 @@ export default class Machine {
                 this.lastHandshakeAt = Date.now();
             }
         } catch (error) {
+            signal?.removeEventListener("abort", onOuterAbort);
             abort.abort();
             if (check !== undefined) throw error;
             if (generation !== this.generation) throw error;
@@ -1530,6 +1573,7 @@ export default class Machine {
         }
         check?.();
         const result = await answered || this.info !== infoBeforeRequest;
+        signal?.removeEventListener("abort", onOuterAbort);
         check?.();
         return result;
     }
