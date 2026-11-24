@@ -14,9 +14,13 @@ type Departure = {
     exit: () => void;
 };
 type Prompt = {request: Departure; busy: boolean; error: string | null};
-function moving(snapshot: ControlSnapshot): boolean {
-    return (snapshot.tool === "grind" || snapshot.tool === "pour")
-        && ["starting", "running", "stopping", "unknown"].includes(snapshot.phase);
+function moving(snapshot: ControlSnapshot, controls: MachineControls): boolean {
+    if (snapshot.tool !== "grind" && snapshot.tool !== "pour") return false;
+    if (snapshot.phase === "starting" || snapshot.phase === "running" || snapshot.phase === "stopping") return true;
+    return snapshot.phase === "unknown"
+        && snapshot.identity !== null
+        && controls.describeTool(snapshot.identity, snapshot.tool).stopUnavailable
+            !== "No moving operation is reserved. Reconcile this machine before continuing.";
 }
 
 /**
@@ -71,10 +75,10 @@ export function useMachineToolNavigation(
         setState(null);
     }
 
-    async function leave(request: Departure): Promise<void> {
+    async function leave(request: Departure, silent = false): Promise<void> {
         if (!current(request) || pending.current!.busy) return;
         pending.current!.busy = true;
-        setState({request, busy: true, error: null});
+        if (!silent) setState({request, busy: true, error: null});
         try {
             if (request.owner?.deviceId !== request.deviceId || request.owner.serial !== request.serial) {
                 throw new Error("The tool identity does not match the owned machine.");
@@ -86,7 +90,7 @@ export function useMachineToolNavigation(
             if (mode === "setting" && controls.getSnapshot().phase === "unknown") {
                 await controls.recover();
             }
-            if (moving(controls.getSnapshot())) await controls.stop();
+            if (moving(controls.getSnapshot(), controls)) await controls.stop();
             // A recovery-only Stop closes its lease on terminal proof; an
             // ordinary tool still requires its separate qualified exit.
             if (!current(request, true)) return;
@@ -122,8 +126,11 @@ export function useMachineToolNavigation(
             }
         };
         pending.current = {request, busy: false, closing: false};
-        setState({request, busy: false, error: actual.error});
-        if (actual.phase === "ready") void leave(request);
+        if (actual.phase === "ready") {
+            void leave(request, true);
+        } else {
+            setState({request, busy: false, error: actual.error});
+        }
     }
 
     // Keep the original action, including native-stack's visited-route marker.
@@ -142,7 +149,7 @@ export function useMachineToolNavigation(
         busy: state.busy || snapshot.phase === "applying",
         error: state.error ?? snapshot.error,
         requiresReconciliation: mode === "setting" && snapshot.tool === null && snapshot.phase === "unknown",
-        requiresStop: moving(snapshot),
+        requiresStop: moving(snapshot, controls),
         stopAndLeave: () => leave(state.request),
         stay: () => stay(state.request),
         onOpenChange: (open: boolean) => { if (!open) stay(state.request); }

@@ -286,6 +286,11 @@ export default class Machine {
     public state: number | null = null;
     /** When `state` was last heard, as a wall clock. 0 means never. */
     private stateAt = 0;
+    private controlStateProbe: Promise<void> | null = null;
+    private controlStateAbort: (() => void) | null = null;
+    private static readonly TOOL_IDLE_OR_BOOT_STATES: ReadonlySet<number> = new Set([
+        0x02, 0x04, 0x05, MACHINE_STATE.LOADING
+    ]);
 
     /**
      * What the link has been doing, oldest first.
@@ -317,6 +322,8 @@ export default class Machine {
     private backgrounded = false;
     private connectedId: string | null = null;
     private unsettledCommand = false;
+    private lastControlTxAt = 0;
+    private controlStateSeen = false;
     private controlStore: ControlRecoveryStore | undefined;
     private controlSession: {token: symbol; invalidate: (error: Error) => void} | null = null;
 
@@ -349,6 +356,200 @@ export default class Machine {
         const snapshot = this.controlStore?.snapshot;
         if (snapshot?.marker == null && snapshot?.error != null) throw snapshot.error;
         return snapshot?.marker?.deviceId ?? null;
+    }
+
+    private controlProbeBlocked(generation: number, ignoreOp?: {generation: number}): boolean {
+        if (generation !== this.generation || !this.isConnected() || this.backgrounded
+            || this.controlSession !== null || this.slotSession !== null
+            || this.controlStore?.blocker != null
+            || (this.connectedId !== null && this.slotStore?.read(this.connectedId).journal != null)
+            || this.unsettledCommand || isActiveBrewPhase(this.phase)
+            || this.phase.name === "lostContact") {
+            return true;
+        }
+        for (const operation of this.ordinaryOperations) {
+            if (operation !== ignoreOp && operation.generation === generation) return true;
+        }
+        return false;
+    }
+
+    /**
+     * Queries the machine for a current status frame when control state is missing,
+     * stale, or still sitting in an exited tool/boot screen so switching tools does
+     * not refuse on an expired 15 s state timestamp.
+     */
+    async ensureFreshControlState(): Promise<void> {
+        if (this.controlStateProbe !== null) return this.controlStateProbe;
+        const fresh = this.state !== null && STARTABLE.has(this.state)
+            && Date.now() - this.stateAt <= STATE_FRESH_MS;
+        if (fresh) return;
+        if (this.controlProbeBlocked(this.generation)) return;
+        const expiredFault = this.state !== null && FAULT_BLOCKS[this.state] !== undefined
+            && Date.now() - this.stateAt > STATE_FRESH_MS;
+        const passiveWaitOnly = this.state === MACHINE_STATE.DISPENSING && !this.controlStateSeen;
+        const canProbe = this.state === null
+            || STARTABLE.has(this.state)
+            || Machine.TOOL_IDLE_OR_BOOT_STATES.has(this.state)
+            || (this.controlStateSeen && (
+                this.state === MACHINE_STATE.DISPENSING
+                || this.state === MACHINE_STATE.STARTING
+                || this.state === MACHINE_STATE.BREWING_SUB
+            ))
+            || expiredFault;
+        if (!canProbe && !passiveWaitOnly) return;
+
+        const generation = this.generation;
+        const probeOp = {generation};
+        const finish = this.beginOrdinaryOperation(probeOp);
+        const check = () => {
+            if (this.controlProbeBlocked(generation, probeOp)) {
+                throw new ControlOperationError("The machine state probe was superseded.");
+            }
+        };
+        const isFresh = () => this.state !== null && STARTABLE.has(this.state)
+            && Date.now() - this.stateAt <= STATE_FRESH_MS;
+        const waitGap = async (signal: AbortSignal) => {
+            check();
+            if (this.frameGapMs <= 0 || this.lastControlTxAt <= 0) return;
+            const remaining = this.frameGapMs - (Date.now() - this.lastControlTxAt);
+            if (remaining <= 0) return;
+            await new Promise<void>((resolve, reject) => {
+                const cleanup = () => {
+                    clearTimeout(timer);
+                    offState();
+                    offLink();
+                    offPhase();
+                    signal.removeEventListener("abort", onStop);
+                    if (this.controlStateAbort === checkInterrupted) this.controlStateAbort = null;
+                };
+                const onStop = () => { cleanup(); resolve(); };
+                const checkInterrupted = () => {
+                    if (this.controlProbeBlocked(generation, probeOp)) {
+                        cleanup();
+                        reject(new ControlOperationError("The machine state probe was superseded."));
+                    }
+                };
+                const offState = this.onNotification((parsed) => {
+                    if (parsed.kind === "status" && STARTABLE.has(parsed.state)) {
+                        cleanup();
+                        resolve();
+                    }
+                });
+                const offLink = this.onLink(checkInterrupted);
+                const offPhase = this.onPhase(checkInterrupted);
+                this.controlStateAbort = checkInterrupted;
+                signal.addEventListener("abort", onStop, {once: true});
+                const timer = setTimeout(() => { cleanup(); resolve(); }, remaining);
+                timer.unref?.();
+            });
+            check();
+        };
+        let probe!: Promise<void>;
+        probe = (async () => {
+            const abort = new AbortController();
+            let sent8022 = false;
+            let armReplyTimer!: () => void;
+            const waitUntilReady = new Promise<void>((resolve) => {
+                let done = false;
+                let sawNonStartableAfter8022 = false;
+                let homeTimer: ReturnType<typeof setTimeout> | null = null;
+                let timer: ReturnType<typeof setTimeout> | null = null;
+                const finishWait = () => {
+                    if (done) return;
+                    done = true;
+                    if (homeTimer !== null) clearTimeout(homeTimer);
+                    if (timer !== null) clearTimeout(timer);
+                    offFrame();
+                    offLink();
+                    offPhase();
+                    abort.signal.removeEventListener("abort", finishWait);
+                    resolve();
+                };
+                armReplyTimer = () => {
+                    if (done || timer !== null) return;
+                    timer = setTimeout(finishWait, this.stateReplyMs);
+                    timer.unref?.();
+                };
+                const offFrame = this.onFrame((direction, frame, parsed) => {
+                    if (direction !== "received" || generation !== this.generation) return;
+                    if (parsed.kind === "status" && STARTABLE.has(parsed.state)) {
+                        finishWait();
+                        return;
+                    }
+                    if (parsed.kind === "status" && !STARTABLE.has(parsed.state)) {
+                        if (sent8022) sawNonStartableAfter8022 = true;
+                        if (homeTimer !== null) {
+                            clearTimeout(homeTimer);
+                            homeTimer = null;
+                            finishWait();
+                        }
+                        return;
+                    }
+                    if (!sent8022 || parsed.kind !== "event" || parsed.code !== 8022) return;
+                    if (this.state !== null && STARTABLE.has(this.state)) {
+                        // Studio V12.0D.500 replies to 8022 with event 8022 (and no 0x57) when already at home.
+                        this.stateAt = Date.now();
+                        finishWait();
+                        return;
+                    }
+                    const carriedHome = frame.length === 28 && STARTABLE.has(frame[25]);
+                    if (!sawNonStartableAfter8022 && this.controlStateSeen && carriedHome
+                        && (this.state === null || !FAULT_BLOCKS[this.state]) && homeTimer === null) {
+                        homeTimer = setTimeout(() => {
+                            if (generation === this.generation && !done && !sawNonStartableAfter8022
+                                && this.controlStateSeen && (this.state === null || !FAULT_BLOCKS[this.state])
+                                && !this.controlProbeBlocked(generation, probeOp)) {
+                                this.state = frame[25];
+                                this.stateAt = Date.now();
+                                this.controlStateSeen = false;
+                            }
+                            finishWait();
+                        }, Math.min(800, this.stateReplyMs));
+                        homeTimer.unref?.();
+                    }
+                });
+                const abortIfSuperseded = () => {
+                    if (this.controlProbeBlocked(generation, probeOp)) finishWait();
+                };
+                const offLink = this.onLink(abortIfSuperseded);
+                const offPhase = this.onPhase(abortIfSuperseded);
+                abort.signal.addEventListener("abort", finishWait, {once: true});
+            });
+            const onAbort = () => abort.abort();
+            try {
+                if (passiveWaitOnly) {
+                    this.controlStateAbort = onAbort;
+                    armReplyTimer();
+                } else {
+                    await waitGap(abort.signal);
+                    if (isFresh()) { abort.abort(); await waitUntilReady; return; }
+                    if (!this.sessionIsFresh()) {
+                        await this.writeFrame(buildType1(8100, [185, 1]), check);
+                        this.lastHandshakeAt = Date.now();
+                        this.lastControlTxAt = Date.now();
+                        check();
+                        if (this.frameGapMs > 0) await waitGap(abort.signal);
+                        if (isFresh()) { abort.abort(); await waitUntilReady; return; }
+                    }
+                    check();
+                    this.controlStateAbort = onAbort;
+                    sent8022 = true;
+                    armReplyTimer();
+                    await this.writeFrame(buildType1(8022), check);
+                    this.lastControlTxAt = Date.now();
+                }
+                await waitUntilReady;
+            } catch {
+                abort.abort();
+                // Caller falls through to acquireControlSession, which surfaces any refusal.
+            } finally {
+                if (this.controlStateAbort === onAbort) this.controlStateAbort = null;
+                finish();
+                if (this.controlStateProbe === probe) this.controlStateProbe = null;
+            }
+        })();
+        this.controlStateProbe = probe;
+        return probe;
     }
 
     acquireControlSession(identity: ControlIdentity, purpose: ControlPurpose): ControlSession {
@@ -388,7 +589,7 @@ export default class Machine {
             listeners.forEach((listener) => listener(error));
             this.announceLink();
         };
-        const assertAvailable = (requireNormal: boolean) => {
+        const assertAvailable = (requireNormal: boolean, atAcquisition = true) => {
             if (this.backgrounded || this.slotSession !== null
                 || this.slotStore?.read(pinned.deviceId).journal != null
                 || this.unsettledCommand
@@ -396,12 +597,20 @@ export default class Machine {
                 || isActiveBrewPhase(this.phase) || this.phase.name === "lostContact") {
                 refuse("The machine is busy or unavailable for controls.");
             }
-            if (requireNormal && (this.state === null || !STARTABLE.has(this.state)
-                || Date.now() - this.stateAt > STATE_FRESH_MS)) {
+            if (!requireNormal) return;
+            if (!atAcquisition && (purpose === "grind" || purpose === "pour")) {
+                const toolReadyState = purpose === "grind" ? 0x02 : 0x03;
+                if (this.state === null || (!STARTABLE.has(this.state) && this.state !== toolReadyState)) {
+                    refuse("Controls require a fresh known normal machine state.");
+                }
+                return;
+            }
+            if (this.state === null || !STARTABLE.has(this.state)
+                || (atAcquisition && Date.now() - this.stateAt > STATE_FRESH_MS)) {
                 refuse("Controls require a fresh known normal machine state.");
             }
         };
-        assertAvailable(purpose !== "recovery" && !inspectionOnly);
+        assertAvailable(purpose !== "recovery" && !inspectionOnly, true);
         const check = () => {
             if (failure !== null) throw failure;
             const current = this.slotIdentity;
@@ -446,7 +655,10 @@ export default class Machine {
         let sent = false;
         const write = async (frame: Uint8Array, guard = check, beforeDispatch?: () => void) => {
             guard();
-            if (sent && this.frameGapMs > 0) {
+            const waitMs = !this.frameGapMs ? 0
+                : sent ? this.frameGapMs
+                    : this.lastControlTxAt > 0 ? Math.max(0, this.frameGapMs - (Date.now() - this.lastControlTxAt)) : 0;
+            if (waitMs > 0) {
                 await new Promise<void>((resolve, reject) => {
                     const onFailure = (error: Error) => {
                         clearTimeout(timer);
@@ -456,7 +668,7 @@ export default class Machine {
                     const timer = setTimeout(() => {
                         listeners.delete(onFailure);
                         resolve();
-                    }, this.frameGapMs);
+                    }, waitMs);
                     timer.unref?.();
                     listeners.add(onFailure);
                 });
@@ -464,6 +676,7 @@ export default class Machine {
             }
             sent = true;
             await this.writeFrame(frame, guard, beforeDispatch);
+            this.lastControlTxAt = Date.now();
             guard();
         };
         const sendFrame = async (frame: Uint8Array, guard = check, beforeDispatch?: () => void) => {
@@ -485,7 +698,7 @@ export default class Machine {
                     if (inspectionOnly) refuse("Nonmoving recovery permits inspection only.");
                     if (purpose === "recovery") refuse("Recovery cannot start tools or change settings.");
                     if (store.snapshot.error !== null) throw store.snapshot.error;
-                    if (purpose === "setting") assertAvailable(true);
+                    if (purpose === "setting") assertAvailable(true, false);
                 };
                 await sendFrame(frame, guard, beforeDispatch);
             }),
@@ -509,7 +722,7 @@ export default class Machine {
                 if (inspectionOnly) refuse("Nonmoving recovery permits inspection only.");
                 if (purpose !== "pour") refuse("Only a fresh pour session can prepare a pour.");
                 if (store.snapshot.error !== null) throw store.snapshot.error;
-                assertAvailable(true);
+                assertAvailable(true, false);
                 // The caller supplies a qualified actual-source reading. The
                 // info frame's waterFeed field is not that qualification.
                 if (source !== "tap" && (source !== "tank" || !this.infoIsFresh()
@@ -521,7 +734,7 @@ export default class Machine {
                 check();
                 if (inspectionOnly) refuse("Nonmoving recovery permits inspection only.");
                 if (purpose !== "grind" && purpose !== "pour") refuse("Only grind or pour can reserve a possible start.");
-                assertAvailable(true);
+                assertAvailable(true, false);
                 store.reserve({version: 1, ...pinned, tool: purpose as "grind" | "pour"});
                 check();
             },
@@ -593,12 +806,15 @@ export default class Machine {
 
     setAppState(state: string | null): void {
         this.backgrounded = state !== "active";
-        if (this.backgrounded) this.slotSession?.invalidate(
-            new Error("Easy Mode writing stopped because the app entered the background.")
-        );
-        if (this.backgrounded) this.controlSession?.invalidate(
-            new ControlOperationError("Machine controls stopped because the app entered the background.")
-        );
+        if (this.backgrounded) {
+            this.controlStateAbort?.();
+            this.slotSession?.invalidate(
+                new Error("Easy Mode writing stopped because the app entered the background.")
+            );
+            this.controlSession?.invalidate(
+                new ControlOperationError("Machine controls stopped because the app entered the background.")
+            );
+        }
     }
 
     assertCanForgetDevice(deviceId: string): void {
@@ -610,8 +826,7 @@ export default class Machine {
         }
     }
 
-    private beginOrdinaryOperation(): () => void {
-        const operation = {generation: this.generation};
+    private beginOrdinaryOperation(operation: {generation: number} = {generation: this.generation}): () => void {
         this.ordinaryOperations.add(operation);
         return () => { this.ordinaryOperations.delete(operation); };
     }
@@ -1057,10 +1272,12 @@ export default class Machine {
         // has to land, so its failure is worth a line of its own.
         // Listening before the handshake: the machine sends its vitals by
         // itself right after acknowledging it, and nothing else asks for them.
-        const heard = await this.waitForAnyInfo();
+        const abort = new AbortController();
+        const answered = this.waitForAnyInfo(abort.signal);
         try {
             await this.shakeHands();
         } catch (e) {
+            abort.abort();
             this.note(`handshake not sent — ${(e as Error).message}`);
             throw e;
         }
@@ -1072,6 +1289,7 @@ export default class Machine {
         // on V12.0D.500 a bare request is ignored (2026-10-19), and a second
         // handshake would beep twice for one connect. A machine that stays
         // quiet is asked once more, with a handshake, at the first BREW.
+        const heard = await answered;
         if (!heard && this.info === null) this.note("machine did not say how it is doing");
         if (generation !== this.generation) throw new Error("Connection was superseded.");
     }
@@ -1111,6 +1329,44 @@ export default class Machine {
         return this.info !== null;
     }
 
+    /** Wait until a matching notification arrives, the connection generation changes, or timeout/abort elapses. */
+    private waitForNotification<T>(
+        timeoutMs: number,
+        fallback: T,
+        match: (parsed: Notification) => T | undefined,
+        signal?: AbortSignal
+    ): Promise<T> {
+        if (signal?.aborted) return Promise.resolve(fallback);
+        const generation = this.generation;
+        return new Promise((resolve) => {
+            let done = false;
+            const finish = (value: T): void => {
+                if (done) return;
+                done = true;
+                clearTimeout(timer);
+                offNotify();
+                offLink();
+                signal?.removeEventListener("abort", onAbort);
+                resolve(value);
+            };
+            const onAbort = () => finish(fallback);
+            const offNotify = this.onNotification((parsed) => {
+                if (generation !== this.generation) {
+                    finish(fallback);
+                    return;
+                }
+                const matched = match(parsed);
+                if (matched !== undefined) finish(matched);
+            });
+            const offLink = this.onLink(() => {
+                if (generation !== this.generation) finish(fallback);
+            });
+            signal?.addEventListener("abort", onAbort, {once: true});
+            const timer = setTimeout(() => finish(fallback), timeoutMs);
+            timer.unref?.();
+        });
+    }
+
     /**
      * Wait for the next info frame (any info frame).
      *
@@ -1122,19 +1378,9 @@ export default class Machine {
      *
      * @returns whether the machine answered before the window closed.
      */
-    private waitForAnyInfo(): Promise<boolean> {
-        return new Promise((resolve) => {
-            const finish = (answered: boolean): void => {
-                clearTimeout(timer);
-                off();
-                resolve(answered);
-            };
-            const off = this.onNotification((parsed) => {
-                if (parsed.kind === "info") finish(true);
-            });
-            const timer = setTimeout(() => finish(false), this.infoWaitMs);
-            timer.unref?.();
-        });
+    private waitForAnyInfo(signal?: AbortSignal): Promise<boolean> {
+        return this.waitForNotification(this.infoWaitMs, false,
+            (parsed) => (parsed.kind === "info" ? true : undefined), signal);
     }
 
     /**
@@ -1200,7 +1446,8 @@ export default class Machine {
         const infoBeforeRequest = this.info;
         // Listening before the handshake, not after: the info can arrive
         // inside the write, since the radio delivers on its own thread.
-        const answered = this.waitForAnyInfo();
+        const abort = new AbortController();
+        const answered = this.waitForAnyInfo(abort.signal);
         try {
             if (write === undefined) await this.shakeHands();
             else {
@@ -1209,6 +1456,7 @@ export default class Machine {
                 this.lastHandshakeAt = Date.now();
             }
         } catch (error) {
+            abort.abort();
             if (check !== undefined) throw error;
             if (generation !== this.generation) throw error;
             // A handshake the radio would not carry is not a reason to abandon
@@ -1273,7 +1521,11 @@ export default class Machine {
         this.assertOrdinaryOperation();
         // Native acceptance is not completion of a standalone console action.
         // Keep slots out until a fresh terminal state or a new connection.
-        if (!isActiveBrewPhase(this.phase)) this.unsettledCommand = true;
+        if (!isActiveBrewPhase(this.phase)) {
+            this.unsettledCommand = true;
+            this.controlStateSeen = false;
+            this.controlStateAbort?.();
+        }
         const finish = this.beginOrdinaryOperation();
         try {
             await this.writeFrame(frame);
@@ -1366,7 +1618,12 @@ export default class Machine {
         if (parsed.kind === "status") {
             this.state = parsed.state;
             this.stateAt = Date.now();
-            if (STARTABLE.has(parsed.state)) this.unsettledCommand = false;
+            if (STARTABLE.has(parsed.state)) {
+                this.unsettledCommand = false;
+                this.controlStateSeen = false;
+            } else if (this.controlSession !== null) {
+                this.controlStateSeen = true;
+            }
             this.onState(parsed.state);
         }
         if (parsed.kind === "info") {
@@ -1435,6 +1692,7 @@ export default class Machine {
     }
 
     private setPhase(phase: BrewPhase): void {
+        if (isActiveBrewPhase(phase) || phase.name === "lostContact") this.controlStateAbort?.();
         if (phase.name === "sending") this.startupGrinderPosition = undefined;
         // The acknowledgement timer only asks one question — did the recipe
         // reach the machine? — and any phase other than `sending` has already
@@ -1909,24 +2167,9 @@ export default class Machine {
      *
      * @returns the state reported, or null when none came in time.
      */
-    private waitForState(accept: (state: number) => boolean): Promise<number | null> {
-        const generation = this.generation;
-        return new Promise((resolve) => {
-            const finish = (state: number | null): void => {
-                clearTimeout(timer);
-                off();
-                resolve(state);
-            };
-            const off = this.onNotification((parsed) => {
-                if (generation !== this.generation) {
-                    finish(null);
-                    return;
-                }
-                if (parsed.kind === "status" && accept(parsed.state)) finish(parsed.state);
-            });
-            const timer = setTimeout(() => finish(null), this.stateReplyMs);
-            timer.unref?.();
-        });
+    private waitForState(accept: (state: number) => boolean, signal?: AbortSignal): Promise<number | null> {
+        return this.waitForNotification(this.stateReplyMs, null,
+            (parsed) => (parsed.kind === "status" && accept(parsed.state) ? parsed.state : undefined), signal);
     }
 
     /**
@@ -2520,6 +2763,11 @@ export default class Machine {
         // share.
         this.cancelling = null;
         this.userCancel = null;
+        this.controlStateAbort?.();
+        this.controlStateAbort = null;
+        this.controlStateProbe = null;
+        this.lastControlTxAt = 0;
+        this.controlStateSeen = false;
         this.state = null;
         this.stateAt = 0;
         // Last, so a listener reading `isConnected()` or `info` sees the link

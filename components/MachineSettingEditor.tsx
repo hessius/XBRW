@@ -83,7 +83,9 @@ export default function MachineSettingEditor({
                 : reading === "last-known" ? "Last-known machine value" : "Current machine value unavailable"}</Text>
             <Text selectable accessibilityLabel={`${title} ${reading}: ${observed}`}
                 color={palette.text} fontSize={24}>{observed}</Text>
-            {reading === "unavailable" && <Text color={palette.muted}>Missing qualified readback. Read current value explicitly.</Text>}
+            {reading === "unavailable" && <Text color={palette.muted}>
+                {unavailable === null ? "Not read yet. Tap Read current value to inspect." : "Missing qualified readback."}
+            </Text>}
             {unavailable && <Text selectable color={palette.muted}>{unavailable}</Text>}
             <Button accessibilityRole="button" disabled={!editable} onPress={onRead}>Read current value</Button>
             {recoverable && <Button accessibilityRole="button" disabled={pending} onPress={onRecover}>

@@ -2,7 +2,7 @@ import {machineSettingsFixture, settingIdentity, settingProfile, settingReadings
 import {machineInfoFrame} from "@/library/machine/__tests__/FakeTransport";
 import {applySettingProposal} from "@/library/machine/settingEditor";
 import {MACHINE_STATE} from "@/library/machine/protocol";
-import {status} from "@/library/machine/__tests__/protocolFixtures";
+import {notification, status} from "@/library/machine/__tests__/protocolFixtures";
 
 it("reads qualified settings explicitly with leased info only, never Apply or a recovery marker", async () => {
     const s = await machineSettingsFixture();
@@ -11,7 +11,7 @@ it("reads qualified settings explicitly with leased info only, never Apply or a 
     expect(support).toMatchObject({reading: "unavailable", reason: null, readingReason: "missing-readback"});
     expect(s.radio.sent).toEqual([]);
     await s.controls.readSettings(settingIdentity, "brightness");
-    expect(s.planned.map(p => p.command)).toEqual([{kind: "inspect", tool: null, readOnly: true}]);
+    expect(s.planned.map(p => p.command)).toEqual([{kind: "inspect", tool: null, settingId: "brightness", readOnly: true}]);
     expect(s.radio.sent).toEqual([8100]);
     expect(s.controls.getSnapshot()).toMatchObject({phase: "closed", identity: settingIdentity, settings: settingReadings});
     expect(s.controls.describeSettings(settingIdentity, "brightness").reading).toBe("current");
@@ -105,5 +105,69 @@ it("fails closed for production, unsupported settings and mismatched identities 
     await expect(s.controls.readSettings({...settingIdentity, serial: "wrong"}, "brightness")).rejects.toThrow("serial");
     expect(s.planned).toEqual([]);
     expect(s.machine.controlBlocker).toBeNull();
+    s.controls.dispose();
+});
+
+it("qualifies real Studio hardware with empty model in info blob under production qualifications", async () => {
+    const studioIdentity = {deviceId: "setting-test", serial: "J15A01B5AF231"};
+    const payload = new Array(63).fill(0);
+    const put = (at: number, textValue: string) => {
+        for (let i = 0; i < textValue.length; i++) payload[at + i] = textValue.charCodeAt(i);
+    };
+    put(0, studioIdentity.serial);
+    // model is 0xFF padded on real Studio hardware (bytes 13-18)
+    payload.fill(0xff, 13, 19);
+    put(19, "V12.0D.500");
+    payload[33] = 1; // waterEnough
+    payload[36] = 0; // waterFeed = tank
+    payload[37] = 30 + 62;
+    payload[38] = 8; // brightness = 8 (Mid)
+    payload[40] = 1; // tempUnit = 1 (C)
+    payload[41] = 1; // weightUnit = 1 (g)
+    put(51, "0000");
+    const realStudioBlob = notification(0x49, 0x9E, payload);
+
+    const s = await machineSettingsFixture({production: true});
+    s.radio.infoReply = realStudioBlob;
+    s.radio.emit(realStudioBlob);
+
+    // describeSettings hydrates 40521 settings immediately without identity-unavailable error
+    const tempSupport = s.controls.describeSettings(studioIdentity, "temperatureUnit");
+    expect(tempSupport.unavailable).toBeNull();
+    expect(tempSupport.reason).toBeNull();
+    expect(tempSupport.reading).toBe("current");
+    expect(tempSupport.readingReason).toBeNull();
+    expect(tempSupport.policy.temperatureUnit).toEqual(["C", "F"]);
+
+    // 40521 reports 0 for tuning on J15A01B5AF231, which stays unavailable until read via 11508/11506
+    const vibSupport = s.controls.describeSettings(studioIdentity, "vibrationAmplitude");
+    expect(vibSupport.unavailable).toBeNull();
+    expect(vibSupport.reading).toBe("unavailable");
+    expect(vibSupport.readingReason).toBe("missing-readback");
+
+    // Standalone tools are now qualified on Studio V12.0D.500
+    for (const tool of ["grind", "pour", "scale"] as const) {
+        expect(s.controls.describeTool(studioIdentity, tool).unavailable).toBeNull();
+    }
+    expect(s.controls.describeTool(studioIdentity, "pour")).toMatchObject({
+        liveTemperature: true,
+        livePattern: true
+    });
+
+    // Reading settings explicitly succeeds and decodes from info refresh
+    await s.controls.readSettings(studioIdentity, "temperatureUnit");
+    expect(s.controls.getSnapshot()).toMatchObject({
+        phase: "closed",
+        identity: studioIdentity,
+        settings: expect.objectContaining({
+            temperatureUnit: "C",
+            weightUnit: "g",
+            brightness: 8,
+            waterSource: "tank",
+            pourRadius: null,
+            vibrationAmplitude: null
+        })
+    });
+    expect(s.controls.describeSettings(studioIdentity, "temperatureUnit").reading).toBe("current");
     s.controls.dispose();
 });

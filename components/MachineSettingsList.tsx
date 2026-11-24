@@ -21,7 +21,8 @@ function SettingRow({identity, id, controls, snapshot, onSelect}: {
     const value = support.reading === "unavailable" ? null : snapshot.settings?.[id] ?? null;
     const rule = support.policy[id];
     const unit = rule && "min" in rule ? rule.unit : undefined;
-    const summary = value === null ? "Unavailable · missing qualified readback"
+    const summary = value === null
+        ? (support.unavailable === null ? "Not read yet · tap to read" : "Unavailable · missing qualified readback")
         : `${support.reading === "last-known" ? "Last known · " : ""}${settingValueLabel(value)}${unit ? ` ${unit}` : ""}`;
     return <YStack gap="$1">
         <Button accessibilityRole="button" height="auto" minHeight={48} padding="$3"
