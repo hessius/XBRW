@@ -617,6 +617,7 @@ export default class MachineControls {
         this.lease.check();
         const tokens = Object.freeze({session: this.session, transaction: ++this.transaction});
         const protocol = this.qualification.protocol;
+        if (command.kind === "pour") protocol.actualWaterSource(this.machine.info, this.machine.infoAt);
         const plan = (protocol.prepare ?? protocol.plan).call(protocol, command, tokens);
         if (!Number.isFinite(plan.deadlineMs) || plan.deadlineMs <= 0) throw new Error("A qualified deadline is required.");
         if (command.kind === "inspect" && command.recovery && (plan.frame !== null || !plan.refreshInfo)) {
@@ -763,6 +764,12 @@ export default class MachineControls {
                 if (preflightCancelled()) throw new Error("Control open cancelled before attachment.");
                 if (this.disposed) throw new Error("The shared control owner was reset.");
                 if (this.snapshot.phase !== "closed") throw new Error("A control session is already owned.");
+                if (tool === "pour") {
+                    await this.machine.ensurePourWaterForControl();
+                    if (preflightCancelled()) throw new Error("Control open cancelled before attachment.");
+                    if (this.disposed) throw new Error("The shared control owner was reset.");
+                    if (this.snapshot.phase !== "closed") throw new Error("A control session is already owned.");
+                }
                 const {profile: latestProfile} = this.select();
                 if ((tool === "grind" && !latestProfile.grind) || (tool === "pour" && !latestProfile.pour)) {
                     throw new Error("Tool unsupported.");

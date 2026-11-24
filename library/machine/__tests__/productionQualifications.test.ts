@@ -193,12 +193,22 @@ describe("Studio production qualifications", () => {
 
     it("executes Pour target and continuous (vol=0), live temp (4510 float32 ack), live pattern (8016) and stop (4507)", async () => {
         const s = await studioSetup();
-        const flow30Bits = 0x41F00000; // float32(30.0)
+        const floatBits = (value: number): number => {
+            const buf = new ArrayBuffer(4);
+            new DataView(buf).setFloat32(0, value, true);
+            return new DataView(buf).getInt32(0, true);
+        };
+        const flow30Bits = floatBits(30.0);
+        const vol600Bits = floatBits(600.0);
+        const temp620Bits = floatBits(620.0);
         const captured4510 = hexBytes("5802079e1110000000c10000c8430000");
         const valid4510 = notification(0x9E, 0x11, captured4510.slice(10, 14));
         s.radio.syntheticWrite = (frame) => {
             const code = frame[3] | (frame[4] << 8);
-            if (code === 8007) s.radio.emit(event(8007));
+            if (code === 8007) {
+                expect(Array.from(frame)).toEqual(Array.from(buildType1(8007, [0, floatBits(250.0)])));
+                s.radio.emit(event(8007));
+            }
             if (code === 4506) s.radio.emit(event(4506));
             if (code === 4510) {
                 expect(Array.from(frame)).toEqual(Array.from(buildType1(4510, [400])));
@@ -213,25 +223,53 @@ describe("Studio production qualifications", () => {
         };
         await s.controls.open(studioIdentity, "pour");
         await s.controls.startPour({
-            mode: "target", temperatureC: 25, pattern: "circular", volumeMl: 60, flowMlPerSecond: 3
+            mode: "target", temperatureC: 62, pattern: "circular", volumeMl: 60, flowMlPerSecond: 3
         });
         expect(s.radio.written.map((f) => Array.from(f))).toContainEqual(
-            Array.from(buildType1(4506, [250, 1, 60, flow30Bits]))
+            Array.from(buildType1(4506, [flow30Bits, vol600Bits, temp620Bits, 0, 1]))
         );
         await s.controls.setTemperature(40);
         await s.controls.setPattern("spiral");
         expect(s.controls.getSnapshot()).toMatchObject({phase: "running", temperatureC: 40, pattern: "spiral"});
         await s.controls.stop();
         await s.controls.startPour({
-            mode: "continuous", temperatureC: 25, pattern: "circular", flowMlPerSecond: 3
+            mode: "continuous", temperatureC: 62, pattern: "spiral", flowMlPerSecond: 3
         });
         expect(s.radio.written.map((f) => Array.from(f))).toContainEqual(
-            Array.from(buildType1(4506, [250, 1, 0, flow30Bits]))
+            Array.from(buildType1(4506, [flow30Bits, 0, temp620Bits, 0, 2]))
+        );
+        await s.controls.stop();
+        await s.controls.startPour({
+            mode: "target", temperatureC: 62, pattern: "centered", volumeMl: 60, flowMlPerSecond: 3
+        });
+        expect(s.radio.written.map((f) => Array.from(f))).toContainEqual(
+            Array.from(buildType1(4506, [flow30Bits, vol600Bits, temp620Bits, 0, 0]))
         );
         await s.controls.stop();
         await s.controls.close();
         expect(s.controls.getSnapshot().phase).toBe("closed");
         s.controls.dispose();
+
+        // Tap-fed Studio reports waterFeed = 1 in arg 3 of 4506.
+        const tapIdentity = {deviceId: "studio-5af231", serial: "J15A02A45H038"};
+        const tap = await studioSetup(j15H038Captured);
+        tap.radio.syntheticWrite = (frame) => {
+            const code = frame[3] | (frame[4] << 8);
+            if (code === 8007) tap.radio.emit(event(8007));
+            if (code === 4506) tap.radio.emit(event(4506));
+            if (code === 4507) tap.radio.emit(event(4507));
+            if (code === 8013) tap.radio.emit(event(8013));
+        };
+        await tap.controls.open(tapIdentity, "pour");
+        await tap.controls.startPour({
+            mode: "target", temperatureC: 62, pattern: "centered", volumeMl: 60, flowMlPerSecond: 3
+        });
+        expect(tap.radio.written.map((f) => Array.from(f))).toContainEqual(
+            Array.from(buildType1(4506, [flow30Bits, vol600Bits, temp620Bits, 1, 0]))
+        );
+        await tap.controls.stop();
+        await tap.controls.close();
+        tap.controls.dispose();
     });
 
     it("never leaks tuning readings across machine switches or disconnect/reconnect", async () => {
@@ -590,5 +628,20 @@ describe("Studio production qualifications", () => {
         } finally {
             jest.useRealTimers();
         }
+    });
+
+    it("maps 0x0C NO_WATER during Studio tool entry directly to +WATER refusal", () => {
+        const protocol = new StudioControlProtocol();
+        const tokens = {session: 1, transaction: 1};
+        protocol.plan({kind: "enter", tool: "pour"}, tokens);
+        const feedback = protocol.decode(Uint8Array.from(status(MACHINE_STATE.NO_WATER)));
+        expect(feedback).toEqual({
+            session: 1,
+            transaction: 1,
+            value: {
+                kind: "refused",
+                reason: expect.stringMatching(/\+WATER.*Refill the water tank/i)
+            }
+        });
     });
 });

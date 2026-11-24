@@ -11,7 +11,10 @@ import type {SlotAcquireOptions, SlotIdentity} from "@/library/slots/slotWriter"
 import {sameBytes} from "@/library/slots/slotModel";
 
 import {BrewOwnershipError, BrewUploadError, ControlOperationError, RadioUnavailableError, SlotOperationError} from "./errors";
-import type {ControlIdentity, ToolId} from "./controlModel";
+import {
+    LOW_WATER_POUR_MESSAGE, NO_BEANS_CONTROL_MESSAGE, NO_WATER_CONTROL_MESSAGE,
+    type ControlIdentity, type ToolId
+} from "./controlModel";
 import type {ControlRecoverySnapshot, ControlRecoveryStore, ControlTerminalProof} from "./controlRecovery";
 
 import {frameLogText, historyLine} from "./frameLog";
@@ -324,6 +327,7 @@ export default class Machine {
     private unsettledCommand = false;
     private lastControlTxAt = 0;
     private controlStateSeen = false;
+    private faultClearedByWaterEvent = false;
     private controlStore: ControlRecoveryStore | undefined;
     private controlSession: {token: symbol; invalidate: (error: Error) => void} | null = null;
 
@@ -385,7 +389,7 @@ export default class Machine {
         if (fresh) return;
         if (this.controlProbeBlocked(this.generation)) return;
         const expiredFault = this.state !== null && FAULT_BLOCKS[this.state] !== undefined
-            && Date.now() - this.stateAt > STATE_FRESH_MS;
+            && (this.faultClearedByWaterEvent || Date.now() - this.stateAt > STATE_FRESH_MS);
         const passiveWaitOnly = this.state === MACHINE_STATE.DISPENSING && !this.controlStateSeen;
         const canProbe = this.state === null
             || STARTABLE.has(this.state)
@@ -558,6 +562,55 @@ export default class Machine {
         return probe;
     }
 
+    /**
+     * Checks tank water availability before entering Pour so a low or empty tank
+     * does not trigger `+WATER` (`0x0C`) on hardware during tool entry (`8007`).
+     * Refreshes stale/low vitals once when needed so refilling before Retry recovers cleanly.
+     */
+    async ensurePourWaterForControl(): Promise<void> {
+        if (this.state === MACHINE_STATE.NO_WATER) {
+            throw new ControlOperationError(NO_WATER_CONTROL_MESSAGE);
+        }
+        if (this.state === MACHINE_STATE.NO_BEANS) {
+            throw new ControlOperationError(NO_BEANS_CONTROL_MESSAGE);
+        }
+        if (this.info === null || this.info.waterFeed !== "tank") return;
+        if (this.info.waterEnough && this.waterPresent !== false) return;
+
+        const generation = this.generation;
+        if (!this.controlProbeBlocked(generation)) {
+            if (this.frameGapMs > 0 && this.lastControlTxAt > 0) {
+                const remaining = this.frameGapMs - (Date.now() - this.lastControlTxAt);
+                if (remaining > 0) {
+                    await new Promise<void>((resolve) => {
+                        const timer = setTimeout(resolve, remaining);
+                        timer.unref?.();
+                    });
+                }
+            }
+            if (!this.controlProbeBlocked(generation)) {
+                const op = {generation};
+                const finish = this.beginOrdinaryOperation(op);
+                try {
+                    await this.askInfo();
+                    if (generation === this.generation) this.lastControlTxAt = Date.now();
+                } finally {
+                    finish();
+                }
+            }
+        }
+        if (generation !== this.generation || !this.isConnected()) return;
+        if (this.state === MACHINE_STATE.NO_WATER) {
+            throw new ControlOperationError(NO_WATER_CONTROL_MESSAGE);
+        }
+        if (this.state === MACHINE_STATE.NO_BEANS) {
+            throw new ControlOperationError(NO_BEANS_CONTROL_MESSAGE);
+        }
+        if (this.info?.waterFeed === "tank" && (!this.info.waterEnough || this.waterPresent === false)) {
+            throw new ControlOperationError(LOW_WATER_POUR_MESSAGE);
+        }
+    }
+
     acquireControlSession(identity: ControlIdentity, purpose: ControlPurpose): ControlSession {
         return this.acquireControlLease(identity, purpose);
     }
@@ -604,16 +657,21 @@ export default class Machine {
                 refuse("The machine is busy or unavailable for controls.");
             }
             if (!requireNormal) return;
+            const refuseNonNormal = (): never => {
+                if (this.state === MACHINE_STATE.NO_WATER) return refuse(NO_WATER_CONTROL_MESSAGE);
+                if (this.state === MACHINE_STATE.NO_BEANS) return refuse(NO_BEANS_CONTROL_MESSAGE);
+                return refuse("Controls require a fresh known normal machine state.");
+            };
             if (!atAcquisition && (purpose === "grind" || purpose === "pour")) {
                 const toolReadyState = purpose === "grind" ? 0x02 : 0x03;
                 if (this.state === null || (!STARTABLE.has(this.state) && this.state !== toolReadyState)) {
-                    refuse("Controls require a fresh known normal machine state.");
+                    refuseNonNormal();
                 }
                 return;
             }
             if (this.state === null || !STARTABLE.has(this.state)
                 || (atAcquisition && Date.now() - this.stateAt > STATE_FRESH_MS)) {
-                refuse("Controls require a fresh known normal machine state.");
+                refuseNonNormal();
             }
         };
         assertAvailable(purpose !== "recovery" && !inspectionOnly, true);
@@ -1624,6 +1682,7 @@ export default class Machine {
         if (parsed.kind === "status") {
             this.state = parsed.state;
             this.stateAt = Date.now();
+            this.faultClearedByWaterEvent = false;
             if (STARTABLE.has(parsed.state)) {
                 this.unsettledCommand = false;
                 this.controlStateSeen = false;
@@ -1642,6 +1701,9 @@ export default class Machine {
             // Kept whether or not a brew is running: it is the tank, and the
             // next brew's pre-flight is what reads it.
             this.waterPresent = parsed.value !== 0;
+            if (this.waterPresent && this.state === MACHINE_STATE.NO_WATER) {
+                this.faultClearedByWaterEvent = true;
+            }
         }
         if (parsed.kind === "event") this.onEvent(parsed.code, parsed.value);
         // Proof of life during the drawdown. Handled after the frame, so an
@@ -2774,6 +2836,7 @@ export default class Machine {
         this.controlStateProbe = null;
         this.lastControlTxAt = 0;
         this.controlStateSeen = false;
+        this.faultClearedByWaterEvent = false;
         this.state = null;
         this.stateAt = 0;
         // Last, so a listener reading `isConnected()` or `info` sees the link

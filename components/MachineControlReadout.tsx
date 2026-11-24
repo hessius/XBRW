@@ -279,3 +279,112 @@ export function MachineToolActions({
         </YStack>
     );
 }
+
+export type ToolNoticeTone = "warn" | "danger" | "muted";
+
+export function classifyToolNotice(message: string): {tone: ToolNoticeTone; kicker: string} {
+    if (/\+WATER|water tank|water supply/i.test(message)) return {tone: "warn", kicker: "ADD WATER"};
+    if (/waiting for beans|fill the hopper/i.test(message)) return {tone: "warn", kicker: "ADD BEANS"};
+    if (/fresh known normal machine state|return to normal/i.test(message)) return {tone: "warn", kicker: "MACHINE NOT READY"};
+    return {tone: "danger", kicker: "TOOL ERROR"};
+}
+
+export function retryButtonEmphasis(message: string | null): "primary" | "warn" {
+    return message !== null && classifyToolNotice(message).tone === "warn" ? "warn" : "primary";
+}
+
+export type ToolNoticeBannerProps = {
+    message: string;
+    variant?: "full" | "inline";
+    tone?: ToolNoticeTone;
+    kicker?: string;
+    testID?: string;
+};
+
+export function ToolNoticeBanner({
+    message, variant = "full", tone, kicker, testID
+}: ToolNoticeBannerProps) {
+    const {palette} = useAppearance();
+    const isFull = variant === "full";
+    const classified = classifyToolNotice(message);
+    const resolvedTone = tone ?? classified.tone;
+    const resolvedKicker = kicker ?? classified.kicker;
+    const accentColor = resolvedTone === "warn" ? palette.warn : resolvedTone === "muted" ? palette.muted : palette.danger;
+    const surfaceColor = isFull ? palette.surface : palette.raised;
+
+    return (
+        <YStack
+            testID={testID}
+            accessible
+            accessibilityRole="alert"
+            gap="$1"
+            paddingHorizontal="$3"
+            paddingVertical="$2.5"
+            borderRadius="$4"
+            backgroundColor={mix(surfaceColor, accentColor, 0.09)}
+            borderWidth={1}
+            borderColor={mix(palette.line, accentColor, 0.45)}
+            borderLeftWidth={3}
+            borderLeftColor={accentColor}>
+            <DotMatrixText fontSize={11} weight="bold" letterSpacing={1.6} color={accentColor}>
+                {resolvedKicker}
+            </DotMatrixText>
+            <Text selectable fontSize={isFull ? 13.5 : 13} lineHeight={isFull ? 19 : 18} color={palette.text}>
+                {message}
+            </Text>
+        </YStack>
+    );
+}
+
+export type ToolActionButtonProps = {
+    label: string;
+    displayLabel?: string;
+    variant?: "full" | "inline";
+    emphasis?: "primary" | "warn" | "secondary";
+    disabled?: boolean;
+    onPress: () => void;
+    testID?: string;
+};
+
+export function ToolActionButton({
+    label, displayLabel, variant = "full", emphasis = "primary", disabled = false, onPress, testID
+}: ToolActionButtonProps) {
+    const {palette} = useAppearance();
+    const isFull = variant === "full";
+    const surfaceColor = isFull ? palette.surface : palette.raised;
+    const accentColor = emphasis === "warn"
+        ? palette.warn
+        : emphasis === "secondary"
+            ? palette.line
+            : isFull ? palette.brand : palette.success;
+    const backgroundColor = emphasis === "secondary" ? surfaceColor : mix(surfaceColor, accentColor, 0.14);
+    const borderWidth = emphasis === "primary" && isFull ? 1.5 : 1;
+
+    return (
+        <Button
+            testID={testID}
+            accessibilityRole="button"
+            accessibilityLabel={label}
+            accessibilityState={{disabled, busy: disabled}}
+            disabled={disabled}
+            onPress={onPress}
+            backgroundColor={backgroundColor}
+            color={palette.text}
+            borderRadius="$4"
+            minHeight={isFull ? 44 : 42}
+            height="auto"
+            paddingVertical="$2.5"
+            paddingHorizontal="$3.5"
+            opacity={disabled ? 0.5 : 1}
+            pressStyle={{opacity: 0.72}}
+            style={{borderWidth, borderColor: accentColor}}>
+            <DotMatrixText
+                fontSize={isFull ? 12 : 11}
+                weight={emphasis === "secondary" ? "bold" : "extrabold"}
+                letterSpacing={1.8}
+                color={palette.text}>
+                {displayLabel ?? label.toUpperCase()}
+            </DotMatrixText>
+        </Button>
+    );
+}

@@ -3,7 +3,7 @@ import {useWindowDimensions} from "react-native";
 import {useSafeAreaFrame, useSafeAreaInsets} from "react-native-safe-area-context";
 import {Text, XStack, YStack} from "tamagui";
 import DotMatrixText from "@/components/DotMatrixText";
-import {inlineFieldsMaxHeight, MachineToolActions, ToolFieldsScroller} from "@/components/MachineControlReadout";
+import {inlineFieldsMaxHeight, MachineToolActions, ToolFieldsScroller, ToolNoticeBanner} from "@/components/MachineControlReadout";
 import {formatScaleGrams} from "@/components/ScaleTool";
 import ToolHeroStage from "@/components/ToolHeroStage";
 import ToolParameterDeck from "@/components/ToolParameterDeck";
@@ -152,7 +152,7 @@ export default function PourTool({
                 onModeChange={onModeChange}
             />
             {explanation !== null && <Text color={palette.muted}>{explanation}</Text>}
-            {error !== null && <Text color={palette.danger}>{error}</Text>}
+            {error !== null && <ToolNoticeBanner variant={variant} message={error}/>}
         </YStack>
     );
 

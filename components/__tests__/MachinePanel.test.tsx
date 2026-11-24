@@ -777,4 +777,36 @@ describe("MachinePanel inline tool mode", () => {
         notifySpy.mockRestore();
         s.controls.dispose();
     });
+
+    it("surfaces styled ADD WATER guidance and RETRY OPENING TOOL in inline workbench on NO_WATER and opens after refill", async () => {
+        const s = await controlFixture();
+        s.respond((item) => s.accept(item));
+        s.radio.emit(status(MACHINE_STATE.NO_WATER));
+        await draw({
+            machineId: identity.deviceId,
+            machineSerial: identity.serial,
+            machineModel: "Studio",
+            vitals: {...vitals, waterEnough: false},
+            controls: s.controls
+        });
+
+        await fireEvent.press(screen.getByRole("button", {name: "Grind"}));
+        await waitFor(() => expect(screen.getByText(/\+WATER.*Refill the water tank/i)).toBeTruthy());
+        expect(screen.getByText("ADD WATER")).toBeTruthy();
+        expect(screen.getByTestId("inline-tool-error")).toHaveProp("accessibilityRole", "alert");
+        const retryBtn = screen.getByRole("button", {name: "Retry opening tool"});
+        expect(retryBtn).toBeEnabled();
+        expect(screen.getByText("RETRY OPENING TOOL")).toBeTruthy();
+        expect(retryBtn).toHaveStyle({borderColor: palette.warn});
+        expect(s.planned).toEqual([]);
+
+        await act(async () => {
+            s.radio.emit(status(MACHINE_STATE.IDLE));
+            await flushControls();
+        });
+        await fireEvent.press(retryBtn);
+        await waitFor(() => expect(s.controls.getSnapshot().phase).toBe("ready"));
+        expect(screen.queryByTestId("inline-tool-error")).toBeNull();
+        s.controls.dispose();
+    });
 });

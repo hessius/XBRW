@@ -1078,3 +1078,27 @@ it("offers Reconcile connected machine when connected settings leave unknown wit
     await press("Reconcile connected machine");
     await waitFor(() => expect(s.controls.getSnapshot().phase).toBe("closed"));
 });
+
+it("shows styled ADD WATER guidance and RETRY OPENING TOOL button when +WATER (0x0C) blocks entry, and opens after refill", async () => {
+    const s = await fixture();
+    mockParams.tool = "pour";
+    s.radio.emit(status(MACHINE_STATE.NO_WATER));
+    await renderWithProviders(<MachineToolScreen controls={s.controls}/>);
+
+    await waitFor(() => expect(screen.getByText(/\+WATER.*Refill the water tank/i)).toBeTruthy());
+    expect(screen.getByText("ADD WATER")).toBeTruthy();
+    expect(screen.getByTestId("full-tool-error")).toHaveProp("accessibilityRole", "alert");
+    const retryBtn = screen.getByRole("button", {name: "Retry opening tool"});
+    expect(retryBtn).toBeEnabled();
+    expect(screen.getByText("RETRY OPENING TOOL")).toBeTruthy();
+    expect(retryBtn).toHaveStyle({borderColor: palette.warn});
+    expect(s.sent).toEqual([]);
+
+    await act(async () => {
+        s.radio.emit(status(MACHINE_STATE.IDLE));
+        await flushControls();
+    });
+    await press("Retry opening tool");
+    await waitFor(() => expect(s.controls.getSnapshot().phase).toBe("ready"));
+    expect(screen.queryByTestId("full-tool-error")).toBeNull();
+});

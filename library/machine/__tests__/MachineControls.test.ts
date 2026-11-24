@@ -1139,3 +1139,27 @@ it("distinguishes connected-without-readings from serial mismatch in describeToo
     );
     controls.dispose();
 });
+
+it("blocks opening Pour before sending enter when tank water is low, refreshes vitals on retry, and opens after refill", async () => {
+    const s = await setup();
+    let enterCount = 0;
+    s.respond((item) => {
+        if (item.command.kind === "enter") enterCount += 1;
+        accept(s.radio, item);
+    });
+    const lowTank = machineInfoFrame({serial: identity.serial, model: "test", firmware: "test", waterEnough: 0});
+    const okTank = machineInfoFrame({serial: identity.serial, model: "test", firmware: "test", waterEnough: 1});
+    s.radio.infoReply = lowTank;
+    s.radio.emit(lowTank);
+
+    await expect(s.controls.open(identity, "pour")).rejects.toThrow(/water tank is low/i);
+    expect(enterCount).toBe(0);
+    expect(s.controls.getSnapshot().phase).toBe("closed");
+
+    // Simulate refilling tank: askInfo refreshes 40521 on retry without requiring manual refresh first.
+    s.radio.infoReply = okTank;
+    await s.controls.open(identity, "pour");
+    expect(enterCount).toBe(1);
+    expect(s.controls.getSnapshot().phase).toBe("ready");
+    s.controls.dispose();
+});
