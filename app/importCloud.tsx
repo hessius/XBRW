@@ -1,10 +1,14 @@
 import {useAppearance} from "@/hooks/useAppearance";
 import router from "@/hooks/steadyRouter";
 import React, {useState} from "react";
+import {Pressable} from "react-native";
 import {FlatList} from "react-native-gesture-handler";
-import {Button, Input, Text, YStack, type ColorTokens} from "tamagui";
+import {Button, Input, Text, XStack, YStack, type ColorTokens} from "tamagui";
 
 import CloudImportRow from "@/components/CloudImportRow";
+import Collapsible from "@/components/Collapsible";
+import DotIcon from "@/components/DotIcon";
+import LinkText from "@/components/LinkText";
 import {notify} from "@/components/XbrwToast";
 import ScreenHeader from "@/components/ScreenHeader";
 
@@ -41,8 +45,10 @@ function recipes(count: number): string {
     return `${count} recipe${count === 1 ? "" : "s"}`;
 }
 
+const XBLOOM_COLLECTIVE_URL = "https://collective.xbloom.com/";
+
 const ERRORS: Record<CloudErrorKind, string> = {
-    credentials: "Email or password not accepted. Accounts created with Google or Apple cannot sign in here.",
+    credentials: "Email or password not accepted. If you created your account with Google or Apple, set a password using the help below.",
     unauthorised: "That sign-in has expired. Please sign in again.",
     network: "Could not reach xBloom. Check your connection.",
     server: "xBloom could not answer that just now.",
@@ -65,6 +71,8 @@ export default function ImportCloudScreen() {
     const bottomInset = useBottomInset();
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
+    const [socialHelpOverride, setSocialHelpOverride] = useState<boolean | null>(null);
+    const socialHelpOpen = socialHelpOverride ?? (cloud.error === "credentials");
 
     const selected = cloud.plan?.entries.filter((e) => e.selected) ?? [];
 
@@ -108,6 +116,7 @@ export default function ImportCloudScreen() {
     function submit() {
         const secret = password;
         setPassword("");
+        setSocialHelpOverride(null);
         void cloud.submitSignIn(email, secret);
     }
 
@@ -202,9 +211,9 @@ export default function ImportCloudScreen() {
                             </Text>
 
                             <Text color={palette.dim} fontSize={13}>
-                                Only xBloom accounts with an email and password can
-                                sign in here. Accounts created with Google or Apple
-                                cannot be used. You can still import recipes one by
+                                Sign in with your xBloom email and password. If you
+                                created your account with Google or Apple, you can
+                                set a password for it below, or import recipes one by
                                 one using share links from the xBloom app.
                             </Text>
 
@@ -237,6 +246,59 @@ export default function ImportCloudScreen() {
                                 onPress={() => submit()}>
                                 {cloud.status === "signingIn" ? "Signing in…" : "Sign in"}
                             </Button>
+
+                            <YStack borderTopWidth={1} borderTopColor={palette.line} paddingTop="$2">
+                                <Pressable
+                                    testID="social-signin-help-toggle"
+                                    accessibilityRole="button"
+                                    accessibilityLabel="Signed up with Google or Apple? How to set a password"
+                                    accessibilityState={{expanded: socialHelpOpen}}
+                                    onPress={() => setSocialHelpOverride(!socialHelpOpen)}
+                                    style={({pressed}) => ({
+                                        minHeight: 44,
+                                        justifyContent: "center",
+                                        opacity: pressed ? 0.7 : 1,
+                                    })}>
+                                    <XStack alignItems="center" justifyContent="space-between" gap="$3">
+                                        <XStack alignItems="center" gap="$2.5" flex={1}>
+                                            <DotIcon name="help" size={14} color={palette.dim}/>
+                                            <Text color={palette.text} fontSize={14} fontWeight="500" flexShrink={1}>
+                                                Signed up with Google or Apple?
+                                            </Text>
+                                        </XStack>
+                                        <DotIcon
+                                            name={socialHelpOpen ? "chevron-up" : "chevron-down"}
+                                            size={14}
+                                            color={palette.dim}/>
+                                    </XStack>
+                                </Pressable>
+
+                                <Collapsible open={socialHelpOpen}>
+                                    <YStack gap="$2.5" paddingTop="$2" paddingBottom="$1">
+                                        <Text color={palette.dim} fontSize={13} lineHeight={19}>
+                                            xBloom only lets third party apps sign in with an email
+                                            and password, so you first need to attach a password to
+                                            your account:
+                                        </Text>
+                                        <Text color={palette.dim} fontSize={13} lineHeight={19}>
+                                            1. Open collective.xbloom.com in your browser and tap Log in.
+                                        </Text>
+                                        <Text color={palette.dim} fontSize={13} lineHeight={19}>
+                                            2. Tap Forgot password and enter the email address on your
+                                            xBloom account.
+                                        </Text>
+                                        <Text color={palette.dim} fontSize={13} lineHeight={19}>
+                                            3. Follow the recovery email to set a password, then return
+                                            here and sign in with that email and password.
+                                        </Text>
+                                        <LinkText
+                                            label="Open collective.xbloom.com"
+                                            url={XBLOOM_COLLECTIVE_URL}
+                                            accessibilityLabel="Open collective.xbloom.com in your browser"
+                                            fontSize={13}/>
+                                    </YStack>
+                                </Collapsible>
+                            </YStack>
                         </>
                     )}
 
