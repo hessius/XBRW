@@ -1,5 +1,5 @@
 import React from "react";
-import {StyleSheet, type StyleProp, type TextStyle} from "react-native";
+import {Platform, StyleSheet, type StyleProp, type TextStyle} from "react-native";
 import {fireEvent, screen} from "@testing-library/react-native";
 
 import {RailSearchChip, RailSearchField} from "@/components/RailSearch";
@@ -119,6 +119,21 @@ describe("RailSearchField", () => {
 
         expect(onChangeText).toHaveBeenCalledWith("eth");
         expect(onClear).toHaveBeenCalled();
+    });
+
+    it("asks Android to focus on attach, so one tap opens the keyboard", async () => {
+        const os = Platform.OS;
+        try {
+            Platform.OS = "android";
+            await renderWithProviders(field());
+            expect(screen.getByTestId("rail-search-input").props.autoFocus).toBe(true);
+
+            Platform.OS = "ios";
+            await renderWithProviders(field());
+            expect(screen.getByTestId("rail-search-input").props.autoFocus).toBe(false);
+        } finally {
+            Platform.OS = os;
+        }
     });
 
     it("tells its owner when the keyboard is dismissed", async () => {
